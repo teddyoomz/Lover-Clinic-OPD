@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <!-- iOS PWA (ต้อง "เพิ่มลงหน้าจอ" ใน Safari เพื่อรับ Push) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LoverClinic" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lover Clinic OPD System</title>
+    <style>
+      /* Default accent color — overridden at runtime from Firestore settings */
+      :root {
+        --accent: #dc2626;
+        --accent-rgb: 220,38,38;
+      }
+      /* Prevent FOUC: hide body until theme CSS loads */
+      body { opacity: 0; transition: opacity 0.15s ease; }
+      body.ready { opacity: 1; }
+    </style>
+    <!-- Apply saved theme BEFORE first paint to prevent flash -->
+    <script>
+      (function() {
+        var t = localStorage.getItem('app-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>document.body.classList.add('ready');</script>
+  </body>
+</html>

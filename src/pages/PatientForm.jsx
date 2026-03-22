@@ -1,0 +1,1018 @@
+import { useState, useEffect, useRef } from 'react';
+import { doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import {
+  ArrowLeft, Activity, AlertCircle, CheckCircle2, Clock, Edit3,
+  TimerOff, User, Phone, MapPin, HeartPulse, Pill, CheckSquare, Flame, Globe, Lock
+} from 'lucide-react';
+import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
+import {
+  hexToRgb, THAI_MONTHS, EN_MONTHS, YEARS_BE, YEARS_CE,
+  COUNTRY_CODES, defaultFormData
+} from '../utils.js';
+import ThemeToggle from '../components/ThemeToggle.jsx';
+import ClinicLogo from '../components/ClinicLogo.jsx';
+
+export default function PatientForm({ db, appId, user, sessionId, isSimulation, onBack, clinicSettings = {}, theme, setTheme }) {
+  const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
+  const ac = cs.accentColor;
+  const acRgb = hexToRgb(ac);
+  const [formData, setFormData] = useState(defaultFormData);
+  const [language, setLanguage] = useState('th');
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sessionExists, setSessionExists] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); 
+  const [sessionType, setSessionType] = useState('intake');
+  const [customTemplate, setCustomTemplate] = useState(null);
+  const originalDataRef = useRef(null); // เก็บ snapshot ข้อมูลก่อนแก้ไข สำหรับ diff notification
+
+  useEffect(() => {
+    setFormData(prev => {
+      if (!prev.dobYear) return prev;
+      let year = parseInt(prev.dobYear);
+      if (language === 'en' && year > 2400) return { ...prev, dobYear: (year - 543).toString() };
+      else if (language === 'th' && year < 2400) return { ...prev, dobYear: (year + 543).toString() };
+      return prev;
+    });
+  }, [language]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const unsubscribe = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), (snapshot) => {
+      if (!snapshot.exists()) { setSessionExists(false); return; }
+      const data = snapshot.data();
+      const currentFormType = data.formType || 'intake';
+      setSessionType(currentFormType);
+      
+      if (currentFormType === 'custom' && data.customTemplate) {
+        setCustomTemplate(data.customTemplate);
+      }
+
+      if (data.isArchived) { setIsClosed(true); return; }
+
+      if (data.createdAt && !data.isPermanent) {
+        if (Date.now() - data.createdAt.toMillis() > SESSION_TIMEOUT_MS) { setIsExpired(true); return; }
+      }
+      
+      if (data.status === 'completed' && data.patientData) {
+        let pd = { ...data.patientData };
+        if (pd.visitReason && !pd.visitReasons) pd.visitReasons = [pd.visitReason];
+        if (!pd.visitReasons) pd.visitReasons = [];
+        if (pd.hrtGoal && !pd.hrtGoals) pd.hrtGoals = [pd.hrtGoal];
+        if (!pd.hrtGoals) pd.hrtGoals = [];
+        
+        if (pd.dobYear) {
+          let year = parseInt(pd.dobYear);
+          if (language === 'en' && year > 2400) pd.dobYear = (year - 543).toString();
+          if (language === 'th' && year < 2400) pd.dobYear = (year + 543).toString();
+        }
+
+        setFormData(pd);
+        if (!originalDataRef.current && !isEditing) originalDataRef.current = { ...pd };
+        if (!isEditing) setIsSuccess(true);
+      }
+    });
+    return () => unsubscribe();
+  }, [db, appId, user, sessionId, isEditing]);
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+    
+    if ((name === 'phone' && !formData.isInternationalPhone) || (name === 'emergencyPhone' && !formData.isInternationalEmergencyPhone)) {
+      finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
+    } else if ((name === 'phone' && formData.isInternationalPhone) || (name === 'emergencyPhone' && formData.isInternationalEmergencyPhone)) {
+      finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
+    }
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
+  };
+
+  const handleCustomCheckboxChange = (qId, option) => {
+    setFormData(prev => {
+      const current = Array.isArray(prev[qId]) ? prev[qId] : [];
+      const updated = current.includes(option) ? current.filter(o => o !== option) : [...current, option];
+      return { ...prev, [qId]: updated };
+    });
+  };
+
+  const handleReasonToggle = (reason) => {
+    setFormData(prev => {
+      const current = prev.visitReasons || [];
+      return { ...prev, visitReasons: current.includes(reason) ? current.filter(r => r !== reason) : [...current, reason] };
+    });
+  };
+
+  const handleHowFoundUsToggle = (channel) => {
+    setFormData(prev => {
+      const current = prev.howFoundUs || [];
+      return { ...prev, howFoundUs: current.includes(channel) ? current.filter(c => c !== channel) : [...current, channel] };
+    });
+  };
+
+  const handleGoalToggle = (goal) => {
+    setFormData(prev => {
+      const current = prev.hrtGoals || [];
+      return { ...prev, hrtGoals: current.includes(goal) ? current.filter(g => g !== goal) : [...current, goal] };
+    });
+  };
+
+  const handleDobChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      if (newData.dobDay && newData.dobMonth && newData.dobYear) {
+        const today = new Date();
+        let birthYearAD = parseInt(newData.dobYear);
+        if (birthYearAD > 2400) birthYearAD -= 543; 
+        const birthMonth = parseInt(newData.dobMonth) - 1; 
+        const birthDate = parseInt(newData.dobDay);
+        let calculatedAge = today.getFullYear() - birthYearAD;
+        if (today.getMonth() < birthMonth || (today.getMonth() === birthMonth && today.getDate() < birthDate)) {
+          calculatedAge--;
+        }
+        newData.age = calculatedAge >= 0 ? calculatedAge.toString() : '0';
+      }
+      return newData;
+    });
+  };
+
+  const getChangedSections = (oldData, newData) => {
+    const sections = [];
+    const diff = (fields) => fields.some(f => {
+      const a = Array.isArray(oldData[f]) ? JSON.stringify(oldData[f]) : String(oldData[f] ?? '');
+      const b = Array.isArray(newData[f]) ? JSON.stringify(newData[f]) : String(newData[f] ?? '');
+      return a !== b;
+    });
+    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address'])) sections.push('ข้อมูลส่วนตัว');
+    if (diff(['phone','phoneCountryCode','isInternationalPhone','emergencyName','emergencyPhone','emergencyRelation','emergencyPhoneCountryCode'])) sections.push('ข้อมูลติดต่อ');
+    if (diff(['visitReasons','visitReasonOther','hrtGoals','hrtTransType','hrtOtherDetail'])) sections.push('สาเหตุที่มา');
+    const healthFields = ['hasAllergies','allergiesDetail','hasUnderlying','currentMedication','pregnancy','ud_hypertension','ud_diabetes','ud_lung','ud_kidney','ud_heart','ud_blood','ud_other','ud_otherDetail'];
+    if (diff(healthFields)) sections.push('ประวัติสุขภาพ');
+    const scoreFields = Object.keys({...oldData,...newData}).filter(k => k.startsWith('adam_') || k.startsWith('iief_') || k.startsWith('mrs_') || k === 'symp_pe');
+    if (diff(scoreFields)) sections.push('แบบประเมิน');
+    if (diff(['howFoundUs'])) sections.push('ช่องทางที่รู้จัก');
+    return sections;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!sessionId || isExpired) return;
+    
+    if (sessionType === 'intake') {
+      if (!formData.howFoundUs || formData.howFoundUs.length === 0) {
+        alert(language === 'en' ? "Please select how you found our clinic." : "กรุณาเลือกช่องทางที่ท่านรู้จักคลินิกอย่างน้อย 1 ช่องทาง");
+        return;
+      }
+      if (!formData.visitReasons || formData.visitReasons.length === 0) {
+        alert(language === 'en' ? "Please select at least one visit reason." : "กรุณาเลือกสาเหตุที่มาพบแพทย์อย่างน้อย 1 ข้อ");
+        return;
+      }
+      if (formData.visitReasons.includes('เสริมฮอร์โมน') && formData.hrtGoals.length === 0) {
+        alert(language === 'en' ? "Please select at least one goal for HRT." : "กรุณาเลือกเป้าหมายของการเสริมฮอร์โมนอย่างน้อย 1 ข้อ");
+        return;
+      }
+    }
+
+    const thaiPhoneRegex = /^0\d{9}$/;
+    if (sessionType === 'intake') {
+        if (!formData.isInternationalPhone && !thaiPhoneRegex.test(formData.phone)) {
+            alert(language === 'en' ? "Please enter a valid Thai 10-digit phone number starting with 0." : "กรุณากรอกเบอร์โทรศัพท์ของท่านให้ถูกต้อง (เบอร์ไทยต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0)");
+            return;
+        }
+        if (!formData.isInternationalEmergencyPhone && formData.emergencyPhone && !thaiPhoneRegex.test(formData.emergencyPhone)) {
+            alert(language === 'en' ? "Please enter a valid Thai 10-digit emergency phone number." : "กรุณากรอกเบอร์โทรติดต่อฉุกเฉินให้ถูกต้อง");
+            return;
+        }
+    }
+
+    if ((sessionType === 'intake' || sessionType === 'custom') && formData.dobDay && formData.dobMonth && formData.dobYear && formData.age) {
+        const today = new Date();
+        let birthYearAD = parseInt(formData.dobYear);
+        if (birthYearAD > 2400) birthYearAD -= 543;
+        const birthMonth = parseInt(formData.dobMonth) - 1; 
+        const birthDate = parseInt(formData.dobDay);
+        let calculatedAge = today.getFullYear() - birthYearAD;
+        if (today.getMonth() < birthMonth || (today.getMonth() === birthMonth && today.getDate() < birthDate)) { calculatedAge--; }
+        if (parseInt(formData.age) !== calculatedAge) {
+            alert(language === 'en' ? `Age mismatch: Calculated age is ${calculatedAge} years. Please correct.` : `ข้อมูลอายุไม่ตรงกับปีเกิด (อายุจริงคือ ${calculatedAge} ปี) กรุณาตรวจสอบ`);
+            return;
+        }
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+        status: 'completed', patientData: formData, [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(), isUnread: true
+      });
+      // แจ้งเตือน push — fire and forget (ไม่ await เพื่อไม่ block UI)
+      const changedSections = isEditing && originalDataRef.current
+        ? getChangedSections(originalDataRef.current, formData)
+        : [];
+      fetch('https://us-central1-loverclinic-opd-4c39b.cloudfunctions.net/sendPushOnSubmit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, changedSections })
+      }).catch(() => {});
+      setIsSuccess(true); setIsEditing(false); window.scrollTo(0, 0); 
+    } catch (error) {
+      alert(language === 'en' ? "System Error: Cannot submit data." : "เกิดข้อผิดพลาดของระบบ");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const LanguageToggle = () => (
+    <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+      {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
+      <div className="flex bg-[#111] border border-[#333] rounded-lg overflow-hidden">
+        <button type="button" onClick={() => setLanguage('th')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-400 hover:text-white'}`} style={language === 'th' ? {backgroundColor: ac, color: '#fff'} : {}}>TH</button>
+        <button type="button" onClick={() => setLanguage('en')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-400 hover:text-white'}`} style={language === 'en' ? {backgroundColor: ac, color: '#fff'} : {}}>EN</button>
+      </div>
+    </div>
+  );
+
+  if (!sessionId || !sessionExists) {
+    return (
+      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative">
+        <LanguageToggle />
+        <div className="w-24 h-24 bg-[#111] border border-[#333] rounded-full flex items-center justify-center mx-auto mb-8 text-gray-600"><AlertCircle size={40} /></div>
+        <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
+        <p className="text-gray-400 mb-8 text-base tracking-wider">{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
+        {isSimulation && <button onClick={onBack} className="text-red-500 font-bold text-base uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:text-red-400 transition-colors"><ArrowLeft size={20} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
+      </div>
+    );
+  }
+
+  if (isClosed) {
+    return (
+      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative">
+        <LanguageToggle />
+        <div className="bg-[#0a0a0a] p-8 sm:p-10 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-[#222]">
+          <div className="w-20 h-20 bg-gray-900 border border-gray-700 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-500"><Lock size={32} /></div>
+          <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
+          <p className="text-gray-400 mb-10 text-base leading-relaxed">{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-gray-400 hover:text-white text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors"><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        </div>
+      </div>
+    );
+  }
+
+  if (isExpired) {
+    return (
+      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative">
+        <LanguageToggle />
+        <div className="bg-[#0a0a0a] p-8 sm:p-10 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-[#222]">
+          <div className="w-20 h-20 bg-red-950/30 border border-red-900/50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)]"><TimerOff size={32} /></div>
+          <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Session Expired' : 'คิวหมดอายุ'}</h2>
+          <p className="text-gray-400 mb-10 text-base leading-relaxed">{language === 'en' ? 'For security reasons, sessions expire after 2 hours.' : 'ระบบจำกัดเวลาของคิวไว้ที่ 2 ชั่วโมง กรุณาขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-gray-400 hover:text-white text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors"><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        </div>
+      </div>
+    );
+  }
+
+  if (isSuccess && !isEditing) {
+    const lineUrl = cs.lineOfficialUrl?.trim();
+    return (
+      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative">
+        <LanguageToggle />
+        <div className="bg-[#0a0a0a] rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-green-900/30 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]"></div>
+
+          {/* Success header */}
+          <div className="px-8 pt-10 pb-6">
+            <div className="w-20 h-20 bg-green-950/30 border border-green-900/50 rounded-full flex items-center justify-center mx-auto mb-5 text-green-500 shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+              <CheckCircle2 size={36} />
+            </div>
+            <h2 className="text-xl font-black uppercase tracking-widest text-white mb-3">
+              {language === 'en' ? 'Submission Successful' : 'ส่งข้อมูลสำเร็จ'}
+            </h2>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              {language === 'en'
+                ? 'Your information has been submitted. Please wait to be called by our staff.'
+                : 'ข้อมูลของท่านถูกส่งเรียบร้อยแล้ว กรุณารอเจ้าหน้าที่เรียกชื่อเพื่อพบแพทย์'}
+            </p>
+          </div>
+
+          {/* LINE CTA — แสดงเฉพาะถ้าตั้งค่า lineOfficialUrl ไว้ */}
+          {lineUrl && (
+            <div className="mx-4 mb-4 p-4 rounded-2xl border border-[#06C755]/25 bg-[#06C755]/5">
+              {/* Header badge */}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#06C755] border border-[#06C755]/40 px-2 py-0.5 rounded-full">
+                  {language === 'en' ? '⚠ Required Step' : '⚠ ขั้นตอนสำคัญ'}
+                </span>
+              </div>
+              {/* Title */}
+              <p className="text-sm font-black text-white text-left mb-1.5">
+                {language === 'en'
+                  ? 'Add our LINE Official Account'
+                  : 'เพิ่มเพื่อน LINE Official Account ของคลินิก'}
+              </p>
+              {/* Description */}
+              <p className="text-xs text-gray-400 text-left leading-relaxed mb-4">
+                {language === 'en'
+                  ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
+                  : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
+              </p>
+              {/* LINE Button */}
+              <a
+                href={lineUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-white font-black text-sm tracking-wider transition-all active:scale-95"
+                style={{backgroundColor: '#06C755', boxShadow: '0 4px 20px rgba(6,199,85,0.35)'}}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                  <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+                </svg>
+                {language === 'en' ? 'Add LINE Official Account' : 'เพิ่มเพื่อน LINE Official'}
+              </a>
+            </div>
+          )}
+
+          {/* Edit + simulation buttons */}
+          <div className="px-4 pb-8">
+            <button
+              onClick={() => { setIsSuccess(false); setIsEditing(true); }}
+              className="w-full bg-[#111] border border-[#333] hover:bg-[#1a1a1a] hover:border-[#444] text-white py-4 rounded-xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 mb-5 transition-colors"
+            >
+              <Edit3 size={16} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
+            </button>
+            {isSimulation && (
+              <button onClick={onBack} className="text-gray-500 text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto hover:text-white transition-colors">
+                <ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const selectedReasons = formData.visitReasons || [];
+  const selectedGoals = formData.hrtGoals || [];
+  
+  const isIntake = sessionType === 'intake';
+  const isFollowUp = sessionType.startsWith('followup_');
+  const isCustom = sessionType === 'custom';
+  
+  const isPerfMode = isIntake ? selectedReasons.includes('สมรรถภาพทางเพศ') : sessionType === 'followup_ed';
+  const isHrtMode = isIntake ? selectedReasons.includes('เสริมฮอร์โมน') : (sessionType === 'followup_adam' || sessionType === 'followup_mrs');
+  const showAdam = (isIntake && (isPerfMode || selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)'))) || sessionType === 'followup_adam';
+  const showMrs = (isIntake && selectedGoals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || sessionType === 'followup_mrs';
+
+  const getHeaderTitle = () => {
+    if (isEditing) return language === 'en' ? 'Update Patient Data' : 'แก้ไขประวัติผู้ป่วย (Update)';
+    if (isCustom) return customTemplate?.title || 'Custom Form';
+    if (isFollowUp) return language === 'en' ? 'Follow-Up Assessment' : 'ติดตามการรักษา';
+    return language === 'en' ? 'New Patient Form' : 'แบบฟอร์มผู้ป่วยใหม่ (Intake)';
+  };
+
+  const inputClass = "pf-input";
+  const labelClass = "pf-label";
+  const sectionHeaderClass = "pf-section-title";
+
+  // Hero text colors — adapt to theme (hero bg is light in light mode)
+  const isLightHero = theme === 'light' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
+  const heroText    = isLightHero ? '#0f172a'             : '#ffffff';
+  const heroMuted   = isLightHero ? '#64748b'             : 'rgba(255,255,255,0.5)';
+  const heroFaint   = isLightHero ? '#94a3b8'             : 'rgba(255,255,255,0.4)';
+  const heroGlass   = isLightHero ? 'rgba(0,0,0,0.05)'   : 'rgba(255,255,255,0.06)';
+  const heroGlassBd = isLightHero ? 'rgba(0,0,0,0.10)'   : 'rgba(255,255,255,0.10)';
+
+  const visitReasonOptions = [
+    { value: 'สมรรถภาพทางเพศ', th: 'สมรรถภาพทางเพศ', en: 'Erectile Dysfunction / Sexual Health' },
+    { value: 'โรคระบบทางเดินปัสสาวะ', th: 'โรคระบบทางเดินปัสสาวะ', en: 'Urology / Urinary Tract Issues' },
+    { value: 'ดูแลสุขภาพองค์รวม', th: 'ดูแลสุขภาพองค์รวม', en: 'General Health / Wellness' },
+    { value: 'เสริมฮอร์โมน', th: 'เสริมฮอร์โมน', en: 'Hormone Replacement Therapy (HRT)' },
+    { value: 'โรคติดต่อทางเพศสัมพันธ์', th: 'โรคติดต่อทางเพศสัมพันธ์', en: 'STD / STI Testing & Treatment' },
+    { value: 'ขลิบ', th: 'ขลิบ', en: 'Circumcision' },
+    { value: 'ทำหมัน', th: 'ทำหมัน', en: 'Vasectomy' },
+    { value: 'เลาะสารเหลว', th: 'เลาะสารเหลว', en: 'Foreign Body Removal (Genital)' },
+    { value: 'อื่นๆ', th: 'อื่นๆ', en: 'Others' }
+  ];
+
+  const hrtGoalOptions = [
+    { value: 'ออกกำลังกาย', th: 'ออกกำลังกาย', en: 'Fitness / Bodybuilding' },
+    { value: 'อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)', th: 'อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)', en: 'Male Hormone Deficiency / Andropause' },
+    { value: 'อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)', th: 'อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)', en: 'Female Menopause' },
+    { value: 'ฮอร์โมนเพื่อการข้ามเพศ', th: 'ฮอร์โมนเพื่อการข้ามเพศ', en: 'Transgender HRT' },
+    { value: 'อื่นๆ', th: 'อื่นๆ', en: 'Others' }
+  ];
+
+  return (
+    <div className="pf-outer">
+      <div className="pf-card">
+
+        {/* ── Hero Header — always dark ── */}
+        <div className="pf-hero">
+          {/* Lang + theme toggles */}
+          <div className="pf-lang-toggle">
+            {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
+            <div style={{ display: 'flex', background: heroGlass, border: `1px solid ${heroGlassBd}`, borderRadius: '8px', overflow: 'hidden' }}>
+              <button type="button" onClick={() => setLanguage('th')}
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'th' ? '#fff' : heroFaint, backgroundColor: language === 'th' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                TH
+              </button>
+              <button type="button" onClick={() => setLanguage('en')}
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'en' ? '#fff' : heroFaint, backgroundColor: language === 'en' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                EN
+              </button>
+            </div>
+          </div>
+
+          {/* Back button (simulation mode) */}
+          {isSimulation && (
+            <button onClick={onBack}
+              style={{ position: 'absolute', top: 16, left: 16, padding: '8px', background: heroGlass, border: `1px solid ${heroGlassBd}`, borderRadius: '8px', color: heroMuted, cursor: 'pointer', transition: 'all 0.15s', zIndex: 20 }}
+              title="ออกจากการจำลอง">
+              <ArrowLeft size={18} />
+            </button>
+          )}
+
+          {/* Logo — centered */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+            <ClinicLogo className="h-20 sm:h-24" forceLight={false} clinicSettings={cs} center={true} theme={theme} />
+          </div>
+
+          {/* Form title */}
+          <h1 style={{ fontSize: '22px', fontWeight: 900, color: heroText, letterSpacing: '0.01em', lineHeight: 1.3, margin: '0 0 4px', textShadow: isLightHero ? 'none' : '0 2px 20px rgba(0,0,0,0.5)' }}>
+            {getHeaderTitle()}
+          </h1>
+          {isCustom && customTemplate?.description && (
+            <p style={{ color: isLightHero ? '#3b82f6' : 'rgba(147,197,253,0.9)', fontSize: '13px', marginTop: '8px', maxWidth: '80%', margin: '8px auto 0' }}>{customTemplate.description}</p>
+          )}
+
+          {/* Session pill */}
+          {!isCustom && (
+            <div className="pf-session-pill">
+              <span className="pf-session-dot" />
+              <span className="pf-session-id">{sessionId}</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Form body ── */}
+        <form onSubmit={handleSubmit} className="pf-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          <section className={`pf-section ${isCustom ? 'blue' : 'accent'}`}>
+            <div className={sectionHeaderClass}>
+              <User size={16} style={{color: isCustom ? '#3b82f6' : ac, flexShrink: 0}}/>
+              {language === 'en' ? 'Patient Information' : 'ข้อมูลผู้ป่วย'}
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="w-full sm:w-1/3">
+                  <label className={labelClass}>{language === 'en' ? 'Title' : 'คำนำหน้า'} <span className="text-red-600">*</span></label>
+                  <select name="prefix" value={formData.prefix || ''} onChange={handleInputChange} required className={inputClass}>
+                    <option value="นาย">{language === 'en' ? 'Mr.' : 'นาย'}</option>
+                    <option value="นาง">{language === 'en' ? 'Mrs.' : 'นาง'}</option>
+                    <option value="นางสาว">{language === 'en' ? 'Ms.' : 'นางสาว'}</option>
+                    <option value="ด.ช.">{language === 'en' ? 'Master (ด.ช.)' : 'ด.ช. (เด็กชาย)'}</option>
+                    <option value="ด.ญ.">{language === 'en' ? 'Miss (ด.ญ.)' : 'ด.ญ. (เด็กหญิง)'}</option>
+                    <option value="ไม่ระบุ">{language === 'en' ? 'Prefer not to say' : 'ไม่ระบุ'}</option>
+                  </select>
+                </div>
+                <div className="w-full sm:w-2/3">
+                  <label className={labelClass}>{language === 'en' ? 'First Name' : 'ชื่อจริง'} <span className="text-red-600">*</span></label>
+                  <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'First Name' : 'ชื่อจริง'} className={inputClass}/>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-4">
+                {(!isFollowUp && !isCustom) && (
+                  <div className="w-full sm:w-1/2">
+                    <label className={labelClass}>{language === 'en' ? 'Last Name' : 'นามสกุล'} <span className="text-red-600">*</span></label>
+                    <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Last Name' : 'นามสกุล'} className={inputClass}/>
+                  </div>
+                )}
+                
+                {(isFollowUp || isCustom) && (
+                  <div className="w-full sm:w-1/2">
+                    <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="text-red-600">*</span></label>
+                    <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ปี'} className={`${inputClass} bg-blue-950/20 border-blue-900/50 text-blue-400 font-bold text-center text-xl`} />
+                  </div>
+                )}
+                
+                {(isFollowUp || isCustom) && (
+                   <div className="w-full sm:w-1/2">
+                    <label className={labelClass}>{language === 'en' ? 'Date' : 'วันที่บันทึก'} <span className="text-red-600">*</span></label>
+                    <input type="date" name="assessmentDate" value={formData.assessmentDate || ''} onChange={handleInputChange} required className={inputClass}/>
+                   </div>
+                )}
+
+                {(!isFollowUp && !isCustom) && (
+                  <div className="w-full sm:w-1/2">
+                    <label className={labelClass}>{language === 'en' ? 'Gender' : 'เพศ'} <span className="text-red-600">*</span></label>
+                    <select name="gender" value={formData.gender || ''} onChange={handleInputChange} required className={inputClass}>
+                      <option value="" disabled>-- {language === 'en' ? 'Select' : 'เลือก'} --</option>
+                      <option value="ชาย">{language === 'en' ? 'Male' : 'ชาย'}</option>
+                      <option value="หญิง">{language === 'en' ? 'Female' : 'หญิง'}</option>
+                      <option value="LGBTQ+">LGBTQ+</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {(!isFollowUp && !isCustom) && (
+                <>
+                  <div className="flex flex-col gap-4">
+                    <div className="w-full">
+                      <label className={labelClass}>{language === 'en' ? 'Date of Birth (CE)' : 'วันเกิด (พ.ศ.)'} <span className="text-red-600">*</span></label>
+                      <div className="flex flex-wrap sm:flex-nowrap gap-3">
+                        <select name="dobDay" value={formData.dobDay || ''} onChange={handleDobChange} required className={`${inputClass} flex-1 sm:w-1/3 min-w-[80px] text-center px-2`}>
+                          <option value="" disabled>{language === 'en' ? 'Day' : 'วัน'}</option>
+                          {[...Array(31)].map((_, i) => <option key={i+1} value={(i+1).toString().padStart(2, '0')}>{i+1}</option>)}
+                        </select>
+                        <select name="dobMonth" value={formData.dobMonth || ''} onChange={handleDobChange} required className={`${inputClass} flex-1 sm:w-1/3 min-w-[120px] text-center px-2`}>
+                          <option value="" disabled>{language === 'en' ? 'Month' : 'เดือน'}</option>
+                          {(language === 'en' ? EN_MONTHS : THAI_MONTHS).map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        </select>
+                        <select name="dobYear" value={formData.dobYear || ''} onChange={handleDobChange} required className={`${inputClass} flex-1 sm:w-1/3 min-w-[90px] text-center px-2`}>
+                          <option value="" disabled>{language === 'en' ? 'Year' : 'ปี พ.ศ.'}</option>
+                          {(language === 'en' ? YEARS_CE : YEARS_BE).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="w-full">
+                      <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="text-red-600">*</span></label>
+                      <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ระบุเป็นตัวเลข'} className={`${inputClass} bg-red-950/20 border-red-900/50 text-red-500 font-bold text-center text-xl`} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Current Address' : 'ที่อยู่ปัจจุบัน'} <span className="text-red-600">*</span></label>
+                    <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, City, etc.' : 'บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด...'} required className={inputClass + " resize-none transition-shadow"}></textarea>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className={labelClass}>{language === 'en' ? 'Phone Number' : 'เบอร์โทรศัพท์'} <span className="text-red-600">*</span></label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-gray-400 hover:text-white transition-colors">
+                        <input type="checkbox" name="isInternationalPhone" checked={!!formData.isInternationalPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500" />
+                        {language === 'en' ? 'Intl. Number' : 'เบอร์ชาวต่างชาติ'}
+                      </label>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      {formData.isInternationalPhone && (
+                        <select name="phoneCountryCode" value={formData.phoneCountryCode || '+66'} onChange={handleInputChange} className={`${inputClass} w-full sm:w-1/3 px-3 py-3 sm:py-4 text-sm sm:text-base`}>
+                          {COUNTRY_CODES.map(c => <option key={`p-${c.code}-${c.label}`} value={c.code}>{c.label} ({c.code})</option>)}
+                        </select>
+                      )}
+                      <input type="tel" name="phone" value={formData.phone || ''} onChange={handleInputChange} required placeholder={formData.isInternationalPhone ? "Phone Number" : "08X-XXX-XXXX"} maxLength={formData.isInternationalPhone ? "15" : "10"} className={`${inputClass} w-full sm:flex-1`}/>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {(!isFollowUp && !isCustom) && (
+            <section className="pf-section orange">
+              <div className={sectionHeaderClass} style={{color: '#f97316'}}>
+                <AlertCircle size={16} style={{color:'#f97316', flexShrink:0}}/>
+                {language === 'en' ? 'Emergency Contact' : 'บุคคลติดต่อฉุกเฉิน'}
+              </div>
+              <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
+                <div>
+                  <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Contact Name' : 'ชื่อผู้ติดต่อ'} <span className="text-red-600">*</span></label>
+                  <input type="text" name="emergencyName" value={formData.emergencyName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Full Name' : 'ชื่อ-สกุล'} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="w-full sm:w-1/2">
+                    <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Relationship' : 'ความสัมพันธ์'} <span className="text-red-600">*</span></label>
+                    <input type="text" name="emergencyRelation" value={formData.emergencyRelation || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'e.g., Father, Spouse' : 'เช่น บิดา, คู่สมรส'} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
+                  </div>
+                  <div className="w-full sm:w-1/2">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-bold text-orange-500 tracking-wide">{language === 'en' ? 'Phone Number' : 'เบอร์โทร'} <span className="text-red-600">*</span></label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-orange-600/50 hover:text-orange-400 transition-colors">
+                        <input type="checkbox" name="isInternationalEmergencyPhone" checked={!!formData.isInternationalEmergencyPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-orange-600 bg-black border-[#444] focus:ring-orange-500" />
+                        {language === 'en' ? 'Intl.' : 'เบอร์ต่างชาติ'}
+                      </label>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {formData.isInternationalEmergencyPhone && (
+                        <select name="emergencyPhoneCountryCode" value={formData.emergencyPhoneCountryCode || '+66'} onChange={handleInputChange} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 w-full px-3 py-3 sm:py-4 text-sm sm:text-base`}>
+                          {COUNTRY_CODES.map(c => <option key={`e-${c.code}-${c.label}`} value={c.code}>{c.label} ({c.code})</option>)}
+                        </select>
+                      )}
+                      <input type="tel" name="emergencyPhone" value={formData.emergencyPhone || ''} onChange={handleInputChange} required placeholder={formData.isInternationalEmergencyPhone ? "Phone Number" : "เบอร์ติดต่อ 10 หลัก"} maxLength={formData.isInternationalEmergencyPhone ? "15" : "10"} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50 w-full`}/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* DYNAMIC CUSTOM FORM RENDERER */}
+          {isCustom && customTemplate && (
+            <div className="space-y-6 bg-gradient-to-br from-[#0a1128] to-[#0a0a0a] p-5 sm:p-8 rounded-2xl border border-blue-900/30">
+              <h3 className="text-lg sm:text-xl font-black text-blue-400 tracking-wide border-b border-blue-900/30 pb-4 mb-6">
+                ตอบแบบสอบถาม (Questionnaire)
+              </h3>
+              {customTemplate.questions.map((q, idx) => (
+                <div key={q.id} className="bg-[#111] p-5 rounded-xl border border-[#222] shadow-sm">
+                   <label className="block text-base sm:text-lg font-bold text-gray-200 mb-4 leading-relaxed">
+                     <span className="text-blue-500 mr-2">{idx+1}.</span>{q.label}
+                   </label>
+                   
+                   {q.type === 'text' && (
+                     <input type="text" name={q.id} value={formData[q.id] || ''} onChange={handleInputChange} required={q.required} placeholder="คำตอบของคุณ..." className={inputClass} />
+                   )}
+                   
+                   {q.type === 'textarea' && (
+                     <textarea name={q.id} value={formData[q.id] || ''} onChange={handleInputChange} required={q.required} rows="4" placeholder="คำตอบของคุณ..." className={inputClass + " resize-none"} />
+                   )}
+
+                   {q.type === 'radio' && (
+                     <div className="space-y-3">
+                       {q.options.map(opt => (
+                         <label key={opt} className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${formData[q.id] === opt ? 'bg-[#0a1128] border-blue-600' : 'bg-[#141414] border-[#333] hover:bg-[#1a1a1a]'}`}>
+                           <input type="radio" name={q.id} value={opt} checked={formData[q.id] === opt} onChange={handleInputChange} required={q.required} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] focus:ring-blue-600 shrink-0"/>
+                           <span className={`text-base font-medium break-words leading-tight ${formData[q.id] === opt ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
+                         </label>
+                       ))}
+                     </div>
+                   )}
+
+                   {q.type === 'checkbox' && (
+                     <div className="space-y-3">
+                       {q.options.map(opt => {
+                         const isSelected = Array.isArray(formData[q.id]) && formData[q.id].includes(opt);
+                         return (
+                           <label key={opt} className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-[#0a1128] border-blue-600' : 'bg-[#141414] border-[#333] hover:bg-[#1a1a1a]'}`}>
+                             <input type="checkbox" checked={isSelected} onChange={() => handleCustomCheckboxChange(q.id, opt)} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] rounded focus:ring-blue-600 shrink-0"/>
+                             <span className={`text-base font-medium break-words leading-tight ${isSelected ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
+                           </label>
+                         );
+                       })}
+                     </div>
+                   )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* STANDARD INTAKE FORMS RENDERER (HIDES IF CUSTOM) */}
+          {isIntake && !isCustom && (
+            <>
+              <section className="pf-section accent">
+                <div className={sectionHeaderClass}>
+                  <Activity size={16} style={{color: ac, flexShrink:0}}/>
+                  {language === 'en' ? 'Chief Complaint / Visit Reason' : 'สาเหตุที่มาพบแพทย์'}
+                  <span style={{color: '#ef4444', marginLeft: 2}}>*</span>
+                </div>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                  {visitReasonOptions.map(reason => {
+                    const isSelected = selectedReasons.includes(reason.value);
+                    return (
+                      <label key={reason.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={isSelected ? {borderColor: ac, background: `${ac}0d`} : {}}>
+                        <input type="checkbox" checked={isSelected} onChange={() => handleReasonToggle(reason.value)} style={{display:'none'}} />
+                        <div className="pf-reason-check" style={isSelected ? {background: ac, borderColor: ac} : {}}>
+                          {isSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <span className="pf-reason-text">{language === 'en' ? reason.en : reason.th}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {selectedReasons.includes('อื่นๆ') && (
+                  <input type="text" name="visitReasonOther" value={formData.visitReasonOther || ''} onChange={handleInputChange} required placeholder={language === 'en' ? "Please specify..." : "โปรดระบุรายละเอียดเพิ่มเติม..."} className={inputClass + " animate-in fade-in mt-4"}/>
+                )}
+
+                {isHrtMode && (
+                  <div className="pf-section orange animate-fade-up" style={{marginTop:'12px'}}>
+                    <div className={sectionHeaderClass} style={{color:'#f97316', marginBottom:'14px'}}>
+                      <span style={{width:3,height:12,background:'#f97316',borderRadius:2,flexShrink:0}}/>
+                      {language === 'en' ? 'HRT Goals' : 'เป้าหมายการเสริมฮอร์โมน'}
+                      <span style={{color:'#ef4444',marginLeft:2}}>*</span>
+                    </div>
+                    <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
+                      {hrtGoalOptions.map(goal => {
+                        const isGoalSelected = selectedGoals.includes(goal.value);
+                        return (
+                          <div key={goal.value} className="group">
+                            <label className={`pf-reason-card${isGoalSelected ? ' selected' : ''}`} style={isGoalSelected ? {borderColor:'#f97316', background:'rgba(249,115,22,0.06)'} : {}}>
+                              <input type="checkbox" checked={isGoalSelected} onChange={() => handleGoalToggle(goal.value)} style={{display:'none'}} />
+                              <div className="pf-reason-check" style={isGoalSelected ? {background:'#f97316',borderColor:'#f97316'} : {}}>
+                                {isGoalSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
+                              <span className="pf-reason-text">{language === 'en' ? goal.en : goal.th}</span>
+                            </label>
+                            
+                            {goal.value === 'ฮอร์โมนเพื่อการข้ามเพศ' && isGoalSelected && (
+                               <div className="mt-3 ml-4 pl-4 sm:ml-5 sm:pl-5 border-l-2 border-[#333] space-y-3 animate-in fade-in">
+                                 <label className="flex items-center gap-3 cursor-pointer p-2">
+                                   <input type="radio" name="hrtTransType" value="ทรานส์เมน / เสริมฮอร์โมนเพศชาย" required checked={formData.hrtTransType === 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'} onChange={handleInputChange} className="w-5 h-5 text-blue-500 bg-black border-[#444] shrink-0" />
+                                   <span className="text-sm sm:text-base font-bold text-gray-300 break-words leading-tight">{language === 'en' ? 'Trans Man / Masculinizing HRT' : 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'}</span>
+                                 </label>
+                                 <label className="flex items-center gap-3 cursor-pointer p-2">
+                                   <input type="radio" name="hrtTransType" value="ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง" required checked={formData.hrtTransType === 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'} onChange={handleInputChange} className="w-5 h-5 text-pink-500 bg-black border-[#444] shrink-0" />
+                                   <span className="text-sm sm:text-base font-bold text-gray-300 break-words leading-tight">{language === 'en' ? 'Trans Woman / Feminizing HRT' : 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'}</span>
+                                 </label>
+                               </div>
+                            )}
+
+                            {goal.value === 'อื่นๆ' && isGoalSelected && (
+                               <div className="mt-3 ml-10 animate-in fade-in">
+                                  <input type="text" name="hrtOtherDetail" value={formData.hrtOtherDetail || ''} onChange={handleInputChange} required placeholder={language === 'en' ? "Please specify..." : "โปรดระบุเป้าหมาย..."} className={inputClass + " border-orange-900/50 focus:border-orange-500 focus:ring-orange-500"} />
+                               </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="pf-section red">
+                <div className={sectionHeaderClass}>
+                  <HeartPulse size={16} style={{color:'#ef4444', flexShrink:0}}/>
+                  {language === 'en' ? 'Medical History' : 'ประวัติทางการแพทย์'}
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Drug / Food Allergies' : 'ประวัติการแพ้ยา และ อาหาร'} <span style={{color:'#ef4444'}}>*</span></label>
+                    <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
+                      <label className={`pf-radio-card${formData.hasAllergies === 'ไม่มี' ? ' selected-no' : ''}`}>
+                        <input type="radio" name="hasAllergies" value="ไม่มี" checked={formData.hasAllergies === 'ไม่มี'} onChange={handleInputChange} style={{display:'none'}} required/>
+                        <span>{language === 'en' ? '✓ None (NKDA)' : '✓ ไม่มีประวัติแพ้'}</span>
+                      </label>
+                      <label className={`pf-radio-card${formData.hasAllergies === 'มี' ? ' selected-yes' : ''}`}>
+                        <input type="radio" name="hasAllergies" value="มี" checked={formData.hasAllergies === 'มี'} onChange={handleInputChange} style={{display:'none'}}/>
+                        <span>{language === 'en' ? '⚠ Yes, I have' : '⚠ มีประวัติแพ้'}</span>
+                      </label>
+                    </div>
+                    {formData.hasAllergies === 'มี' && (
+                      <input type="text" name="allergiesDetail" value={formData.allergiesDetail || ''} onChange={handleInputChange} required placeholder={language === 'en' ? "Please specify what you are allergic to" : "โปรดระบุสิ่งที่ท่านแพ้ (ยา, อาหาร, ฯลฯ)"} className={inputClass + " animate-fade-in"} style={{borderColor:'#fca5a5'}}/>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Underlying Diseases' : 'โรคประจำตัว'} <span style={{color:'#ef4444'}}>*</span></label>
+                    <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
+                      <label className={`pf-radio-card${formData.hasUnderlying === 'ไม่มี' ? ' selected-no' : ''}`}>
+                        <input type="radio" name="hasUnderlying" value="ไม่มี" checked={formData.hasUnderlying === 'ไม่มี'} onChange={handleInputChange} style={{display:'none'}} required/>
+                        <span>{language === 'en' ? '✓ None' : '✓ ไม่มีโรคประจำตัว'}</span>
+                      </label>
+                      <label className={`pf-radio-card${formData.hasUnderlying === 'มี' ? ' selected-yes' : ''}`}>
+                        <input type="radio" name="hasUnderlying" value="มี" checked={formData.hasUnderlying === 'มี'} onChange={handleInputChange} style={{display:'none'}}/>
+                        <span>{language === 'en' ? '⚠ Yes, I have' : '⚠ มีโรคประจำตัว'}</span>
+                      </label>
+                    </div>
+                    
+                    {formData.hasUnderlying === 'มี' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-black border border-orange-900/30 rounded-xl animate-in fade-in">
+                        {[
+                          { n: 'ud_hypertension', th: 'ความดันโลหิตสูง', en: 'Hypertension' },
+                          { n: 'ud_diabetes', th: 'เบาหวาน', en: 'Diabetes' },
+                          { n: 'ud_lung', th: 'โรคปอด', en: 'Lung Disease' },
+                          { n: 'ud_kidney', th: 'โรคไต', en: 'Kidney Disease' },
+                          { n: 'ud_heart', th: 'โรคหัวใจ', en: 'Heart Disease' },
+                          { n: 'ud_blood', th: 'โรคโลหิต', en: 'Blood Disease' }
+                        ].map(ud => (
+                          <label key={ud.n} className="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" name={ud.n} checked={!!formData[ud.n]} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[#111] border-[#333] focus:ring-orange-500 shrink-0"/>
+                            <span className="text-gray-300 font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? ud.en : ud.th}</span>
+                          </label>
+                        ))}
+                        <label className="flex items-center gap-3 cursor-pointer group col-span-1 sm:col-span-2 mt-2">
+                          <input type="checkbox" name="ud_other" checked={!!formData.ud_other} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[#111] border-[#333] focus:ring-orange-500 shrink-0"/>
+                          <span className="text-gray-300 font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? 'Other' : 'โรคอื่นๆ'}</span>
+                        </label>
+                        {formData.ud_other && (
+                          <input type="text" name="ud_otherDetail" value={formData.ud_otherDetail || ''} onChange={handleInputChange} required placeholder={language === 'en' ? "Please specify" : "โปรดระบุชื่อโรค..."} className={`${inputClass} col-span-1 sm:col-span-2 mt-2 border-orange-900/50 py-3`}/>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-gray-300 tracking-wide mb-2 flex items-center gap-2"><Pill size={16}/> {language === 'en' ? 'Current Medications' : 'ยาที่ใช้ประจำในปัจจุบัน'}</label>
+                    <textarea name="currentMedication" value={formData.currentMedication || ''} onChange={handleInputChange} rows="3" placeholder={language === 'en' ? "Please list all current medications, or leave blank if none" : "ระบุชื่อยาที่กำลังรับประทาน หรือ เว้นว่างไว้หากไม่มี"} className={inputClass + " resize-none"}></textarea>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {(!isCustom && (isPerfMode || showAdam || showMrs)) && (
+            <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-8 sm:space-y-10 bg-gradient-to-b from-[#110505] to-[#0a0a0a] p-4 sm:p-8 rounded-2xl border border-red-900/20 w-full">
+              
+              {!isFollowUp && (
+                <div className="bg-red-950/40 border border-red-900/50 rounded-2xl p-5 sm:p-6 flex gap-4 items-start shadow-inner">
+                  <AlertCircle className="text-red-500 shrink-0 mt-1" size={28} />
+                  <div>
+                    <h4 className="text-red-500 font-black text-sm sm:text-base tracking-wide mb-2">{language === 'en' ? 'Patient Notice' : 'คำแนะนำสำหรับผู้ป่วย'}</h4>
+                    <p className="text-gray-300 text-sm sm:text-base leading-relaxed font-medium">
+                      {language === 'en' ? 'The following questionnaires are clinical screening tools to assist the physician.' : 'แบบทดสอบต่อไปนี้เป็น "เครื่องมือคัดกรองทางคลินิก" เพื่อช่วยแพทย์ในการประเมินเบื้องต้น'} <br className="hidden sm:block"/>
+                      <span className="text-red-400 font-bold">{language === 'en' ? 'Results are not a definitive diagnosis.' : 'ผลคะแนนไม่ใช่การวินิจฉัยขั้นสุดท้าย'}</span> {language === 'en' ? 'The physician will make the final evaluation.' : 'แพทย์จะเป็นผู้พิจารณาและวินิจฉัยอีกครั้ง'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {isPerfMode && isIntake && (
+                <section className="bg-[#141414] p-5 sm:p-6 rounded-2xl border border-[#222] shadow-inner mb-6">
+                  <div className="mb-4 border-b border-[#222] pb-4">
+                    <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-center gap-3"><span className="w-2 h-2 bg-red-600 rounded-full shrink-0"></span> {language === 'en' ? 'Part 1: Primary Symptoms' : 'ส่วนที่ 1: การประเมินอาการเบื้องต้น'}</h3>
+                  </div>
+                  <label className={`flex items-center gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors ${formData.symp_pe ? 'bg-[#1a0505] border-red-900/50' : 'bg-[#0f0f0f] border-[#222] hover:bg-[#1a1a1a]'}`}>
+                    <input type="checkbox" name="symp_pe" checked={!!formData.symp_pe} onChange={handleInputChange} className="w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
+                    <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-snug ${formData.symp_pe ? 'text-red-400' : 'text-gray-300'}`}>{language === 'en' ? 'Experiencing Premature Ejaculation (PE)' : 'ข้าพเจ้ามีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย'}</span>
+                  </label>
+                </section>
+              )}
+
+              {showAdam && (
+                <section className="bg-[#141414] p-5 sm:p-6 rounded-2xl border border-[#222] shadow-inner">
+                  <div className="mb-5 border-b border-[#222] pb-4">
+                    <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-start gap-3 leading-snug">
+                      <span className="w-2 h-2 bg-red-600 rounded-full shrink-0 mt-2"></span> 
+                      <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? `Part ${isPerfMode ? '2' : '1'}` : `ส่วนที่ ${isPerfMode ? '2' : '1'}`)}: {language === 'en' ? 'Androgen Deficiency in Aging Males (ADAM)' : 'พร่องฮอร์โมนเพศชาย (ADAM)'}</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-gray-400 mt-2 ml-5 font-medium">{language === 'en' ? 'Select all symptoms that you are experiencing' : 'กรุณาเลือกในทุกหัวข้อที่ท่านกำลังมีอาการ'}</p>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      { n: 'adam_1', th: 'ความต้องการทางเพศลดลง', en: 'Decreased libido (sex drive)' },
+                      { n: 'adam_2', th: 'รู้สึกขาดพลังงาน', en: 'Lack of energy' },
+                      { n: 'adam_3', th: 'ความแข็งแรงหรือความทนทานลดลง', en: 'Decrease in strength or endurance' },
+                      { n: 'adam_4', th: 'ส่วนสูงลดลง', en: 'Lost height' },
+                      { n: 'adam_5', th: 'ซึมเศร้า ความสุขในชีวิตลดลง', en: 'Decreased enjoyment of life / feeling sad' },
+                      { n: 'adam_6', th: 'อารมณ์แปรปรวน หงุดหงิดง่าย', en: 'Mood swings / easily annoyed' },
+                      { n: 'adam_7', th: 'การแข็งตัวของอวัยวะเพศลดลง', en: 'Erections are less strong' },
+                      { n: 'adam_8', th: 'ความสามารถในการเล่นกีฬาหรือออกกำลังกายลดลง', en: 'Deterioration in ability to play sports' },
+                      { n: 'adam_9', th: 'ง่วงนอนหลังทานอาหารเย็น', en: 'Falling asleep after dinner' },
+                      { n: 'adam_10', th: 'ประสิทธิภาพการทำงานลดลง', en: 'Decreased work performance' }
+                    ].map((item, idx) => (
+                      <label key={item.n} className={`flex items-start gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors ${formData[item.n] ? 'bg-[#1a0505] border-red-900/50' : 'bg-[#0f0f0f] border-[#222] hover:bg-[#1a1a1a]'}`}>
+                        <input type="checkbox" name={item.n} checked={!!formData[item.n]} onChange={handleInputChange} className="mt-0.5 w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
+                        <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-relaxed ${formData[item.n] ? 'text-red-400' : 'text-gray-400'}`}>{idx+1}. {language === 'en' ? item.en : item.th}</span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {showMrs && (
+                <section className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-5 sm:p-8 rounded-2xl border border-pink-900/40 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-pink-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-lg">MRS</div>
+                  <div className="mb-6 border-b border-pink-900/30 pb-4 relative z-10 pr-8">
+                    <h3 className="text-base sm:text-lg font-black text-white tracking-wide flex items-start gap-3 leading-snug">
+                      <Activity size={20} className="text-pink-500 shrink-0 mt-0.5"/> 
+                      <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? 'Part 1' : 'ส่วนที่ 1')}: {language === 'en' ? 'Menopause Rating Scale (MRS)' : 'อาการวัยทอง (MRS)'}</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-gray-300 mt-2 ml-8">{language === 'en' ? 'Please select the severity of the following symptoms' : 'กรุณาเลือกระดับความรุนแรงของอาการต่อไปนี้'}</p>
+                  </div>
+                  
+                  <div className="space-y-4 relative z-10">
+                    {[
+                      { n: 'mrs_1', th: '1. อาการร้อนวูบวาบ เหงื่อออก', en: '1. Hot flushes, sweating' },
+                      { n: 'mrs_2', th: '2. อาการทางหัวใจ (ใจสั่น หัวใจเต้นเร็ว)', en: '2. Heart discomfort (unusual beating, skipping, racing)' },
+                      { n: 'mrs_3', th: '3. ปัญหาการนอนหลับ (นอนไม่หลับ ตื่นกลางดึก)', en: '3. Sleep problems (difficulty falling asleep/staying asleep)' },
+                      { n: 'mrs_4', th: '4. อารมณ์ซึมเศร้า (เศร้าหมอง หดหู่)', en: '4. Depressive mood (feeling down, sad, lacking drive)' },
+                      { n: 'mrs_5', th: '5. อารมณ์หงุดหงิดง่าย', en: '5. Irritability (feeling nervous, inner tension, aggressive)' },
+                      { n: 'mrs_6', th: '6. วิตกกังวล กระวนกระวาย', en: '6. Anxiety (inner restlessness, feeling panicky)' },
+                      { n: 'mrs_7', th: '7. อ่อนเพลียทั้งร่างกายและจิตใจ (ไม่มีแรง)', en: '7. Physical and mental exhaustion' },
+                      { n: 'mrs_8', th: '8. ปัญหาทางเพศ (ความต้องการลดลง)', en: '8. Sexual problems (change in sexual desire/activity)' },
+                      { n: 'mrs_9', th: '9. ปัญหาทางเดินปัสสาวะ (ปัสสาวะบ่อย/แสบขัด)', en: '9. Bladder problems (difficulty in urinating, increased need)' },
+                      { n: 'mrs_10', th: '10. อาการช่องคลอดแห้ง', en: '10. Dryness of vagina' },
+                      { n: 'mrs_11', th: '11. อาการปวดข้อและกล้ามเนื้อ', en: '11. Joint and muscular discomfort' }
+                    ].map((item) => (
+                      <div key={item.n} className="bg-[#0a0a0a] p-4 sm:p-5 rounded-xl border border-[#222]">
+                        <label className="block text-base sm:text-lg font-bold text-gray-200 mb-3 sm:mb-4 leading-snug">{language === 'en' ? item.en : item.th}</label>
+                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} border-[#333] text-pink-500 font-bold px-4 py-4 sm:py-4 focus:border-pink-600 focus:ring-pink-600 cursor-pointer`}>
+                          <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Severity' : 'เลือกระดับความรุนแรง'} --</option>
+                          <option value="0" className="text-white">{language === 'en' ? 'None (0)' : 'ไม่มีอาการ (0)'}</option>
+                          <option value="1" className="text-white">{language === 'en' ? 'Mild (1)' : 'เล็กน้อย (1)'}</option>
+                          <option value="2" className="text-white">{language === 'en' ? 'Moderate (2)' : 'ปานกลาง (2)'}</option>
+                          <option value="3" className="text-white">{language === 'en' ? 'Severe (3)' : 'รุนแรง (3)'}</option>
+                          <option value="4" className="text-white">{language === 'en' ? 'Very Severe (4)' : 'รุนแรงมากที่สุด (4)'}</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {isPerfMode && (
+                <section className="bg-gradient-to-br from-[#1a0505] to-black p-5 sm:p-8 rounded-2xl border border-red-900/40 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-red-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.5)]">IIEF-5</div>
+                  <div className="mb-6 border-b border-red-900/30 pb-4 relative z-10 pr-8">
+                    <h3 className="text-base sm:text-lg font-black text-white tracking-wide flex items-start gap-3 leading-snug">
+                      <Flame size={20} className="text-red-500 shrink-0 mt-0.5"/> 
+                      <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? 'Part 3' : 'ส่วนที่ 3')}: {language === 'en' ? 'Erectile Dysfunction (IIEF-5)' : 'ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)'}</span>
+                    </h3>
+                    <p className="text-sm sm:text-base text-gray-300 mt-2 ml-8 leading-relaxed">{language === 'en' ? 'Please select the answer that best describes your situation' : 'กรุณาเลือกคำตอบที่ตรงกับตัวท่านมากที่สุด'} <br className="hidden sm:block"/><span className="text-red-500 font-black">{language === 'en' ? '(over the past 4 weeks)' : '(ในช่วง 4 สัปดาห์ที่ผ่านมา)'}</span></p>
+                  </div>
+                  
+                  <div className="space-y-5 relative z-10">
+                    {[
+                      { 
+                        n: 'iief_1', 
+                        th: '1. ท่านมีความมั่นใจว่าสามารถมีอวัยวะเพศแข็งตัวและสอดใส่ได้ มากน้อยเพียงใด?', 
+                        en: '1. How do you rate your confidence that you could get and keep an erection?',
+                        oth: ['น้อยมาก / ไม่มีเลย (1)', 'น้อย (2)', 'ปานกลาง (3)', 'สูง (4)', 'สูงมาก (5)'],
+                        oen: ['Very low (1)', 'Low (2)', 'Moderate (3)', 'High (4)', 'Very high (5)']
+                      },
+                      { 
+                        n: 'iief_2', 
+                        th: '2. เมื่อมีการกระตุ้นทางเพศ อวัยวะเพศท่านแข็งตัวพอที่จะสอดใส่ได้บ่อยแค่ไหน?', 
+                        en: '2. When you had erections with sexual stimulation, how often were your erections hard enough for penetration?',
+                        oth: ['แทบไม่เคย / ไม่เคยเลย (1)', 'น้อยครั้ง (น้อยกว่าครึ่ง) (2)', 'บางครั้ง (ประมาณครึ่งหนึ่ง) (3)', 'บ่อยครั้ง (มากกว่าครึ่ง) (4)', 'เกือบทุกครั้ง / ทุกครั้ง (5)'],
+                        oen: ['Almost never/never (1)', 'A few times (2)', 'Sometimes (3)', 'Most times (4)', 'Almost always/always (5)']
+                      },
+                      { 
+                        n: 'iief_3', 
+                        th: '3. เมื่อสอดใส่อวัยวะเพศเข้าไปแล้ว ท่านสามารถคงความแข็งตัวได้บ่อยเพียงใด?', 
+                        en: '3. During sexual intercourse, how often were you able to maintain your erection after you had penetrated your partner?',
+                        oth: ['แทบไม่เคย / ไม่เคยเลย (1)', 'น้อยครั้ง (น้อยกว่าครึ่ง) (2)', 'บางครั้ง (ประมาณครึ่งหนึ่ง) (3)', 'บ่อยครั้ง (มากกว่าครึ่ง) (4)', 'เกือบทุกครั้ง / ทุกครั้ง (5)'],
+                        oen: ['Almost never/never (1)', 'A few times (2)', 'Sometimes (3)', 'Most times (4)', 'Almost always/always (5)']
+                      },
+                      { 
+                        n: 'iief_4', 
+                        th: '4. ระหว่างการมีเพศสัมพันธ์ การคงความแข็งตัวจนเสร็จกิจ ยากมากน้อยแค่ไหน?', 
+                        en: '4. During sexual intercourse, how difficult was it to maintain your erection to completion of intercourse?',
+                        oth: ['ยากมากที่สุด (1)', 'ยากมาก (2)', 'ยาก (3)', 'ค่อนข้างยาก (4)', 'ไม่ยากเลย (5)'],
+                        oen: ['Extremely difficult (1)', 'Very difficult (2)', 'Difficult (3)', 'Slightly difficult (4)', 'Not difficult (5)']
+                      },
+                      { 
+                        n: 'iief_5', 
+                        th: '5. ท่านพึงพอใจกับการมีเพศสัมพันธ์บ่อยแค่ไหน?', 
+                        en: '5. When you attempted sexual intercourse, how often was it satisfactory for you?',
+                        oth: ['แทบไม่เคย / ไม่เคยเลย (1)', 'น้อยครั้ง (น้อยกว่าครึ่ง) (2)', 'บางครั้ง (ประมาณครึ่งหนึ่ง) (3)', 'บ่อยครั้ง (มากกว่าครึ่ง) (4)', 'เกือบทุกครั้ง / ทุกครั้ง (5)'],
+                        oen: ['Almost never/never (1)', 'A few times (2)', 'Sometimes (3)', 'Most times (4)', 'Almost always/always (5)']
+                      }
+                    ].map((item) => (
+                      <div key={item.n} className="bg-[#0a0a0a] p-4 sm:p-5 rounded-xl border border-[#222]">
+                        <label className="block text-base sm:text-lg font-bold text-gray-200 mb-3 sm:mb-4 leading-relaxed">{language === 'en' ? item.en : item.th}</label>
+                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} border-[#333] text-red-500 font-bold px-4 py-4 sm:py-4 focus:border-red-600 focus:ring-red-600 max-w-full break-words cursor-pointer`}>
+                          <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Answer' : 'เลือกคำตอบ'} --</option>
+                          {(language === 'en' ? item.oen : item.oth).map((opt, i) => <option key={i} value={i+1} className="text-white">{opt}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+
+          {/* ── How Found Us (intake only) ── */}
+          {isIntake && !isCustom && (
+            <section className="pf-section accent">
+              <div className={sectionHeaderClass}>
+                <Globe size={16} style={{color: ac, flexShrink:0}}/>
+                {language === 'en' ? 'How Did You Find Us?' : 'ท่านรู้จักคลินิกได้อย่างไร?'}
+                <span style={{color:'#ef4444', marginLeft:2}}>*</span>
+              </div>
+              <p style={{fontSize:'12px', color:'var(--tx-muted)', marginBottom:'14px'}}>{language === 'en' ? 'Select all that apply' : 'เลือกได้มากกว่า 1 ช่องทาง'}</p>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                {[
+                  { value: 'Facebook', th: 'Facebook', en: 'Facebook' },
+                  { value: 'Google', th: 'Google', en: 'Google' },
+                  { value: 'Line', th: 'Line', en: 'Line' },
+                  { value: 'AI', th: 'AI (ChatGPT / Claude ฯลฯ)', en: 'AI (ChatGPT / Claude etc.)' },
+                  { value: 'ป้ายตามที่ต่างๆ', th: 'ป้ายตามที่ต่างๆ', en: 'Billboard / Signage' },
+                  { value: 'รู้จักจากคนรู้จัก', th: 'รู้จักจากคนรู้จัก', en: 'Word of Mouth' },
+                ].map(ch => {
+                  const isSelected = (formData.howFoundUs || []).includes(ch.value);
+                  return (
+                    <label key={ch.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={isSelected ? {borderColor: ac, background: `${ac}0d`} : {}}>
+                      <input type="checkbox" checked={isSelected} onChange={() => handleHowFoundUsToggle(ch.value)} style={{display:'none'}} />
+                      <div className="pf-reason-check" style={isSelected ? {background: ac, borderColor: ac} : {}}>
+                        {isSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+                      <span className="pf-reason-text">{language === 'en' ? ch.en : ch.th}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* ── Submit CTA ── */}
+          <div style={{display:'flex', flexDirection:'column', gap:'10px', paddingTop:'8px'}}>
+            <button type="submit" disabled={isSubmitting} className="pf-submit"
+              style={{background: isEditing ? '#2563eb' : ac, boxShadow: isEditing ? '0 4px 20px rgba(37,99,235,0.35)' : `0 4px 20px rgba(${acRgb},0.35)`}}>
+              {isSubmitting
+                ? <><div className="spinner" style={{borderTopColor:'#fff', borderColor:'rgba(255,255,255,0.2)'}}/> {language === 'en' ? 'Submitting...' : 'กำลังบันทึก...'}</>
+                : <><CheckCircle2 size={20}/> {isEditing ? (language === 'en' ? 'Confirm Update' : 'ยืนยันการแก้ไขข้อมูล') : (language === 'en' ? 'Submit' : 'ส่งข้อมูล')}</>}
+            </button>
+            {isEditing && (
+              <button type="button" onClick={() => { setIsEditing(false); setIsSuccess(true); window.scrollTo(0, 0); }}
+                style={{width:'100%', padding:'12px', borderRadius:'10px', fontSize:'14px', fontWeight:'600', color:'var(--tx-muted)', background:'var(--bg-surface)', border:'1.5px solid var(--bd-strong)', cursor:'pointer', transition:'all 0.15s'}}>
+                {language === 'en' ? 'Cancel' : 'ยกเลิก'}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

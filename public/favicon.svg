@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="#dc2626"/>
+
+  <!-- Heart shape (white) -->
+  <path d="M32 48 C32 48 14 36 14 24 C14 18 18.5 14 24 14 C27.5 14 30.5 15.8 32 18.5 C33.5 15.8 36.5 14 40 14 C45.5 14 50 18 50 24 C50 36 32 48 32 48Z" fill="white" opacity="0.15"/>
+
+  <!-- LC text -->
+  <text x="32" y="40" font-family="Arial, sans-serif" font-size="22" font-weight="900" fill="white" text-anchor="middle" letter-spacing="-1">LC</text>
+</svg>
