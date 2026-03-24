@@ -1,7 +1,7 @@
 // ─── Lover Clinic Content Script : Bridge (LoverClinic page ↔ Extension) ─────
 // Runs on: https://lover-clinic-app.vercel.app/*
 
-const FORWARD_TYPES = ['LC_FILL_PROCLINIC', 'LC_DELETE_PROCLINIC', 'LC_OPEN_EDIT_PROCLINIC'];
+const FORWARD_TYPES = ['LC_FILL_PROCLINIC', 'LC_DELETE_PROCLINIC', 'LC_OPEN_EDIT_PROCLINIC', 'LC_UPDATE_PROCLINIC'];
 
 // 1. Forward postMessage from the web page → background service worker
 window.addEventListener('message', (event) => {
@@ -23,7 +23,7 @@ window.addEventListener('message', (event) => {
 
 // 2. Forward background results → web page
 chrome.runtime.onMessage.addListener((msg) => {
-  if (['LC_BROKER_RESULT', 'LC_DELETE_RESULT'].includes(msg.type)) {
+  if (['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(msg.type)) {
     window.postMessage(msg, '*');
   }
 });

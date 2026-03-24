@@ -89,7 +89,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // รับผลลัพธ์จาก Broker Extension
   useEffect(() => {
     const handler = async (event) => {
-      if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT'].includes(event.data?.type)) return;
+      if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
       const { type, sessionId, success, error, proClinicId } = event.data;
 
       if (type === 'LC_BROKER_RESULT') {
@@ -125,6 +125,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             setTimeout(() => setToastMsg(null), 5000);
           }
         } catch (e) { console.error('broker delete result:', e); }
+      }
+
+      if (type === 'LC_UPDATE_RESULT') {
+        try {
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+          if (success) {
+            // Keep brokerStatus='done', just update sync timestamp
+            await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerError: null });
+          } else {
+            // Update failed → mark failed so button turns red
+            await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` });
+          }
+        } catch (e) { console.error('broker update result:', e); }
       }
     };
     window.addEventListener('message', handler);
@@ -226,6 +239,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       if (prevSessionsRef.current.length > 0 && isNotifEnabled) {
         let updatedSessions = [];
+        let brokerSyncSessions = [];
         data.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
@@ -234,6 +248,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             // Only notify when: session is unread AND (just became unread, OR patientData actually changed)
             if (newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
               updatedSessions.push(newS);
+            }
+            // Auto-sync ProClinic: patientData changed AND session was already synced
+            if (
+              oldStr !== newStr && newStr !== '{}' && newS.patientData &&
+              newS.brokerStatus === 'done' && newS.brokerProClinicId
+            ) {
+              brokerSyncSessions.push(newS);
             }
           }
         });
@@ -244,6 +265,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           setToastMsg(`อัปเดตข้อมูลประวัติ: ${names}`);
           setTimeout(() => setToastMsg(null), 5000);
         }
+
+        // Trigger ProClinic auto-sync for changed sessions
+        brokerSyncSessions.forEach(session => {
+          const d = session.patientData;
+          const reasons = getReasons(d);
+          const pmh = [];
+          if (d?.hasUnderlying === 'มี') {
+            if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
+            if (d.ud_diabetes)     pmh.push('เบาหวาน');
+            if (d.ud_lung)         pmh.push('โรคปอด');
+            if (d.ud_kidney)       pmh.push('โรคไต');
+            if (d.ud_heart)        pmh.push('โรคหัวใจ');
+            if (d.ud_blood)        pmh.push('โรคโลหิต');
+            if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
+          }
+          const patient = {
+            prefix: d?.prefix || '', firstName: d?.firstName || '',
+            lastName: d?.lastName || '', phone: d?.phone || '',
+            age: d?.age || '', reasons,
+            allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
+            underlying: pmh.join(', '),
+          };
+          window.postMessage({
+            type: 'LC_UPDATE_PROCLINIC',
+            sessionId: session.id,
+            proClinicId: session.brokerProClinicId,
+            patient,
+          }, '*');
+        });
       }
       prevSessionsRef.current = data;
       setSessions(data);

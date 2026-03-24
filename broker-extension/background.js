@@ -32,6 +32,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     sendResponse({ received: true });
   }
+  if (msg.type === 'LC_UPDATE_PROCLINIC') {
+    const loverclinicTabId = sender.tab?.id;
+    handleUpdateRequest(msg, loverclinicTabId);
+    sendResponse({ received: true });
+  }
   return true;
 });
 
@@ -210,6 +215,72 @@ async function handleDeleteRequest(msg, loverclinicTabId) {
   }
 }
 
+// ─── Update handler ──────────────────────────────────────────────────────────
+async function handleUpdateRequest(msg, loverclinicTabId) {
+  const { sessionId, proClinicId, patient } = msg;
+  if (!proClinicId) {
+    reportBack(loverclinicTabId, { type: 'LC_UPDATE_RESULT', sessionId, success: false, error: 'ไม่พบ ProClinic ID' });
+    return;
+  }
+  try {
+    const pcTab = await getOrCreateProclinicTab();
+    const editUrl = `${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`;
+    await chrome.tabs.update(pcTab.id, { url: editUrl });
+    await waitForTabLoad(pcTab.id);
+
+    const tabInfo = await chrome.tabs.get(pcTab.id);
+    if (tabInfo.url?.includes('/login')) {
+      throw new Error('ProClinic: ยังไม่ได้ login — กรุณา login ใน tab ProClinic ก่อน');
+    }
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: pcTab.id },
+      world: 'MAIN',
+      func: fillAndSubmitProClinicEditForm,
+      args: [patient],
+    });
+
+    const fillResult = results?.[0]?.result;
+    if (fillResult?.error) throw new Error(fillResult.error);
+
+    // Wait for nav away from edit page
+    await waitForNavAwayFromEdit(pcTab.id, proClinicId);
+
+    const afterTab = await chrome.tabs.get(pcTab.id);
+    const stillOnEdit = afterTab.url?.includes(`/customer/${proClinicId}/edit`);
+    if (stillOnEdit) {
+      const errResults = await chrome.scripting.executeScript({
+        target: { tabId: pcTab.id },
+        world: 'MAIN',
+        func: () => {
+          const el = document.querySelector('.invalid-feedback:not([style*="none"]), .alert-danger, .text-danger');
+          return el ? el.textContent.trim().substring(0, 300) : 'ProClinic ไม่ยอมรับการแก้ไข';
+        },
+      });
+      throw new Error(errResults?.[0]?.result || 'ProClinic ไม่ยอมรับการแก้ไข');
+    }
+
+    reportBack(loverclinicTabId, { type: 'LC_UPDATE_RESULT', sessionId, success: true });
+  } catch(err) {
+    reportBack(loverclinicTabId, { type: 'LC_UPDATE_RESULT', sessionId, success: false, error: err.message });
+  }
+}
+
+function waitForNavAwayFromEdit(tabId, proClinicId) {
+  return new Promise((resolve) => {
+    let done = false;
+    const listener = (id, info) => {
+      if (id === tabId && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        done = true;
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => { if (!done) { chrome.tabs.onUpdated.removeListener(listener); resolve(); } }, 10000);
+  });
+}
+
 // ─── Form filler (runs in ProClinic page context via executeScript) ───────────
 function fillAndSubmitProClinicForm(patient) {
   try {
@@ -301,6 +372,77 @@ function fillAndSubmitProClinicForm(patient) {
 
     return { ok: true };
   } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// ─── Edit form filler (same fields, used for update) ─────────────────────────
+function fillAndSubmitProClinicEditForm(patient) {
+  try {
+    function setNativeVal(el, value) {
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (setter) setter.call(el, value);
+      else el.value = value;
+      el.dispatchEvent(new Event('input',  { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function fillInput(name, value) {
+      if (!value && value !== 0) return;
+      const el = document.querySelector(`input[name="${name}"], textarea[name="${name}"]`);
+      if (el) setNativeVal(el, String(value));
+    }
+    function fillSelect(name, value) {
+      if (!value) return;
+      const el = document.querySelector(`select[name="${name}"]`);
+      if (!el) return;
+      el.value = value;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    function fillTextarea(name, value) {
+      if (!value) return;
+      const el = document.querySelector(`textarea[name="${name}"]`);
+      if (el) { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+
+    const VALID_PREFIXES = ['นาย','นาง','นางสาว','ด.ช.','ด.ญ.','Mr.','Ms.','Mrs.','Miss','ดร.','คุณ'];
+    const prefix = VALID_PREFIXES.includes(patient.prefix) ? patient.prefix : '';
+    if (prefix) fillSelect('prefix', prefix);
+
+    fillInput('firstname', patient.firstName);
+    fillInput('lastname',  patient.lastName);
+    fillInput('telephone_number', patient.phone);
+
+    const genderMap = {
+      'นาย':'ชาย','ด.ช.':'ชาย','Mr.':'ชาย',
+      'นาง':'หญิง','นางสาว':'หญิง','ด.ญ.':'หญิง','Ms.':'หญิง','Mrs.':'หญิง','Miss':'หญิง',
+    };
+    const gender = genderMap[patient.prefix] || '';
+    if (gender) fillSelect('gender', gender);
+
+    if (patient.age && !isNaN(parseInt(patient.age))) {
+      const birthYearCE = new Date().getFullYear() - parseInt(patient.age);
+      const dobInput = document.querySelector('input.flatpickr-input[name="birthdate"]');
+      if (dobInput?._flatpickr) dobInput._flatpickr.setDate(new Date(birthYearCE, 0, 1), true);
+    }
+
+    const notes = [];
+    if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
+    if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
+    if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
+    if (notes.length) fillTextarea('note', notes.join('\n'));
+
+    // Auto-confirm and submit
+    window.confirm = () => true;
+    setTimeout(() => {
+      const btn = document.querySelector('button[type="submit"]');
+      if (btn) btn.click();
+    }, 400);
+
+    return { ok: true };
+  } catch(e) {
     return { error: e.message };
   }
 }
