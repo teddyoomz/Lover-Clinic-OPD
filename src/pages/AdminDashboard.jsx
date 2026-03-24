@@ -48,6 +48,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const prevSessionsRef = useRef([]);
+  // ป้องกัน auto-sync ซ้ำ: sessionId → JSON string ของ patientData ที่ sync ไปล่าสุด
+  // ถ้า snapshot ส่ง patientData เดิมมาอีก (เช่น จาก isUnread=false update) จะไม่ re-trigger
+  const lastAutoSyncedStrRef = useRef({});
   const [hasNewUpdate, setHasNewUpdate] = useState(false);
   const [summaryLang, setSummaryLang] = useState('en');
   const [archivedSessions, setArchivedSessions] = useState([]);
@@ -90,7 +93,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const handler = async (event) => {
       if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
-      const { type, sessionId, success, error, proClinicId } = event.data;
+      const { type, sessionId, success, error, proClinicId, proClinicHN } = event.data;
 
       if (type === 'LC_BROKER_RESULT') {
         // Cancel timeout since we got a real response
@@ -108,6 +111,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               brokerFilledAt: new Date().toISOString(),
               brokerError: null,
               ...(proClinicId ? { brokerProClinicId: proClinicId } : {}),
+              ...(proClinicHN  ? { brokerProClinicHN: proClinicHN }  : {}),
             });
           } else {
             await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
@@ -119,7 +123,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         try {
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
           if (success) {
-            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null });
+            // ── ซ่อนปุ่ม ProClinic ทันที ก่อน Firestore roundtrip ──────────────
+            setViewingSession(prev =>
+              prev?.id === sessionId
+                ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
+                : prev
+            );
+            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null });
           } else {
             setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${error}`);
             setTimeout(() => setToastMsg(null), 5000);
@@ -128,13 +138,36 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
 
       if (type === 'LC_UPDATE_RESULT') {
+        // ยกเลิก timeout + clear pending (กรณีที่ triggered มาจาก handleOpdClick กดปุ่มแดง retry)
+        // auto-sync ไม่ได้ตั้ง timer ไว้ → cancel เป็น no-op
+        if (brokerTimers.current[sessionId]) {
+          clearTimeout(brokerTimers.current[sessionId]);
+          delete brokerTimers.current[sessionId];
+        }
+        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
         try {
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
           if (success) {
-            // Keep brokerStatus='done', just update sync timestamp
-            await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerError: null });
+            const syncAt = new Date().toISOString();
+            // Immediate UI update ก่อน Firestore roundtrip
+            setViewingSession(prev =>
+              prev?.id === sessionId
+                ? { ...prev, brokerStatus: 'done', brokerError: null, brokerLastAutoSyncAt: syncAt }
+                : prev
+            );
+            await updateDoc(ref, {
+              brokerStatus: 'done',
+              brokerFilledAt: syncAt,
+              brokerLastAutoSyncAt: syncAt,
+              brokerError: null,
+            });
           } else {
             // Update failed → mark failed so button turns red
+            setViewingSession(prev =>
+              prev?.id === sessionId
+                ? { ...prev, brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` }
+                : prev
+            );
             await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` });
           }
         } catch (e) { console.error('broker update result:', e); }
@@ -249,15 +282,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             if (newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
               updatedSessions.push(newS);
             }
+            // ── ตัดสายวงจร: isUnread true→false = admin กด Report ──────────────────
+            // snapshot นี้เกิดจาก updateDoc({ isUnread:false }) ของ admin
+            // Firestore SDK อาจแนบ patientData เวอร์ชันใหม่จาก local cache มาด้วย
+            // ทำให้ oldStr≠newStr แม้ admin ไม่ได้แตะ patientData เลย → ห้าม auto-sync เด็ดขาด
+            // stamp lastAutoSyncedStr=newStr เพื่อป้องกัน re-trigger ใน snapshot ถัดไป
+            if (oldS.isUnread && !newS.isUnread) {
+              lastAutoSyncedStrRef.current[newS.id] = newStr;
+              return; // forEach return = skip to next session (no auto-sync for this snapshot)
+            }
             // Auto-sync ProClinic: patientData changed AND session was ALREADY done+linked
-            // (oldS.brokerStatus === 'done' ป้องกัน sync ตอน transition pending→done)
-            // (oldS.brokerProClinicId เท่ากัน ป้องกัน sync ตอนที่ ID เพิ่งถูก set ใหม่)
             if (
               oldStr !== newStr && newStr !== '{}' && newS.patientData &&
               newS.brokerStatus === 'done' && newS.brokerProClinicId &&
               oldS.brokerStatus === 'done' &&
-              oldS.brokerProClinicId === newS.brokerProClinicId
+              oldS.brokerProClinicId === newS.brokerProClinicId &&
+              lastAutoSyncedStrRef.current[newS.id] !== newStr
             ) {
+              lastAutoSyncedStrRef.current[newS.id] = newStr;
               brokerSyncSessions.push(newS);
             }
           }
@@ -295,6 +337,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             type: 'LC_UPDATE_PROCLINIC',
             sessionId: session.id,
             proClinicId: session.brokerProClinicId,
+            proClinicHN: session.brokerProClinicHN || null,
             patient,
           }, '*');
         });
@@ -311,14 +354,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (latestSession) {
         const currentStr = JSON.stringify(viewingSession.patientData || {});
         const latestStr = JSON.stringify(latestSession.patientData || {});
-        if (currentStr !== latestStr || viewingSession.updatedAt?.toMillis() !== latestSession.updatedAt?.toMillis()) {
-          setHasNewUpdate(true);
+        // เปรียบเทียบเฉพาะ patientData — ไม่รวม updatedAt เพราะ Firestore serverTimestamp
+        // มี 2 snapshots (local estimated + server actual) ทำให้ toMillis() ต่างกัน → false positive banner
+        const dataOutOfSync = currentStr !== latestStr;
+
+        // Sync broker fields ให้ viewingSession ทันทีที่ Firestore อัปเดต
+        const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt'];
+        const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
+
+        if (brokerChanged) {
+          // viewingSession กำลังจะถูก update → รอ render ถัดไปค่อย evaluate banner
+          // (ป้องกัน banner กระพริบ และป้องกัน banner ค้างหลัง auto-sync)
+          setViewingSession(latestSession);
+        } else {
+          // viewingSession เสถียรแล้ว → ตัดสินใจ banner ได้เลย
+          if (dataOutOfSync) {
+            setHasNewUpdate(true);   // มีข้อมูลใหม่ที่ admin ยังไม่เห็น
+          } else {
+            setHasNewUpdate(false);  // ข้อมูลตรงกันแล้ว → ซ่อน banner
+          }
         }
       }
     } else {
       setHasNewUpdate(false);
     }
-  }, [sessions, viewingSession]);
+  }, [sessions, viewingSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatRemainingTime = (session) => {
     if (session.isPermanent) return 'ถาวร (ลิงก์ล่วงหน้า)';
@@ -420,9 +480,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setViewingSession(session);
     setHasNewUpdate(false);
     if (session.isUnread) {
-       try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
-       } catch(e) { console.error('updateDoc isUnread:', e); }
+      // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
+      // ไม่ว่า LOCAL snapshot จะยิงมาด้วย patientData version ไหน guard จะบล็อกก่อนเสมอ
+      // เพราะ isUnread:false ไม่มีส่วนเกี่ยวกับ ProClinic sync เลย
+      lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
+      } catch(e) { console.error('updateDoc isUnread:', e); }
     }
   };
 
@@ -480,15 +544,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionId = session.id;
     const d = session.patientData;
 
-    // If already recorded → undo
-    if (session.opdRecordedAt) {
-      try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          opdRecordedAt: null, brokerStatus: null, brokerError: null,
-        });
-      } catch(e) { console.error('undoOpd:', e); }
-      return;
-    }
+    // If already recorded successfully → block (ต้องลบจากหน้าประวัติเท่านั้น)
+    if (session.opdRecordedAt && session.brokerStatus === 'done') return;
 
     // Build patient payload
     const reasons = getReasons(d);
@@ -523,7 +580,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch(e) { console.error('broker pending update:', e); }
 
     // Dispatch to extension via postMessage (content script will forward to background)
-    window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
+    // ถ้ามี HN / ProClinic ID อยู่แล้ว → ผู้ป่วยมีอยู่ใน ProClinic แล้ว → ส่ง update ไม่ใช่ fill ใหม่
+    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
+    if (hasExistingProClinic) {
+      window.postMessage({
+        type: 'LC_UPDATE_PROCLINIC',
+        sessionId,
+        proClinicId: session.brokerProClinicId || null,
+        proClinicHN:  session.brokerProClinicHN  || null,
+        patient,
+      }, '*');
+    } else {
+      window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
+    }
 
     // ─── 10-second timeout: if no result, mark failed ──────────────────────
     if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
@@ -547,13 +616,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const handleProClinicDelete = (session) => {
     const proClinicId = session.brokerProClinicId;
-    if (!proClinicId) return;
     if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
-    window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId }, '*');
+    const d = session.patientData || {};
+    const patient = {
+      prefix: d.prefix || '', firstName: d.firstName || '',
+      lastName: d.lastName || '', phone: d.phone || '',
+    };
+    window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId, proClinicHN: session.brokerProClinicHN || null, patient }, '*');
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
   const unreadCount = sessions.filter(s => s.isUnread).length;
+  const PROCLINIC_ORIGIN = 'https://trial.proclinicth.com';
+  const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
 
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden">
@@ -770,16 +845,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       )}
                       {d && (() => {
                         const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
-                        const isFailed  = !isPending && session.brokerStatus === 'failed';
+                        const isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done';
+                        const isFailed  = !isPending && !isDone && session.brokerStatus === 'failed';
                         return (
                           <button
                             onClick={() => handleOpdClick(session)}
-                            disabled={isPending}
-                            title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'ส่งข้อมูลบันทึกลง ProClinic'}
+                            disabled={isPending || isDone}
+                            title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
                             className={`p-2 rounded-lg border transition-all ${
+                              isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
                               isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
                               isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                              session.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]' :
                               'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
                             }`}
                           ><ClipboardCheck size={15}/></button>
@@ -852,9 +928,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {session.opdRecordedAt && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                       <ClipboardCheck size={13} className="text-[var(--opd-color)] shrink-0" />
-                      <div className="flex flex-col min-w-0">
+                      <div className="flex flex-col min-w-0 gap-0.5">
                         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
-                        <span className="text-[9px] text-[var(--opd-color)] font-mono">{formatBangkokTime(session.opdRecordedAt)}</span>
+                        <span className="text-[9px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
+                          {formatBangkokTime(session.opdRecordedAt)}
+                          {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
+                        </span>
+                        {session.brokerLastAutoSyncAt && (
+                          <span className="text-[8px] text-[var(--opd-color)] opacity-70 font-mono flex items-center gap-1">
+                            🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(session.brokerLastAutoSyncAt)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -962,16 +1046,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           {session.status === 'completed' && data && (() => {
                             const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
-                            const isFailed  = !isPending && session.brokerStatus === 'failed';
+                            const isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done';
+                            const isFailed  = !isPending && !isDone && session.brokerStatus === 'failed';
                             return (
                               <button
                                 onClick={() => handleOpdClick(session)}
-                                disabled={isPending}
-                                title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'ส่งข้อมูลบันทึกลง ProClinic'}
+                                disabled={isPending || isDone}
+                                title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
                                 className={`p-2 rounded-lg border transition-all ${
+                                  isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
                                   isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
                                   isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                                  session.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]' :
                                   'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
                                 }`}
                               ><ClipboardCheck size={15} /></button>
@@ -1076,9 +1161,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {session.opdRecordedAt && (
                         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                           <ClipboardCheck size={14} className="text-[var(--opd-color)] shrink-0" />
-                          <div className="flex flex-col min-w-0">
+                          <div className="flex flex-col min-w-0 gap-0.5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
-                            <span className="text-[9px] text-[var(--opd-color)] font-mono">{formatBangkokTime(session.opdRecordedAt)}</span>
+                            <span className="text-[9px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
+                              {formatBangkokTime(session.opdRecordedAt)}
+                                {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
+                              {session.brokerProClinicId && (
+                                <a href={getProClinicUrl(session.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="px-1 py-px rounded border border-emerald-800/50 text-emerald-500 hover:text-emerald-300 font-black tracking-wider text-[8px] transition-colors"
+                                  title={getProClinicUrl(session.brokerProClinicId)}>↗</a>
+                              )}
+                            </span>
+                            {session.brokerLastAutoSyncAt && (
+                              <span className="text-[8px] text-[var(--opd-color)] opacity-70 font-mono flex items-center gap-1">
+                                🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(session.brokerLastAutoSyncAt)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1123,7 +1222,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   if (latest) {
                     setViewingSession(latest);
                     setHasNewUpdate(false);
-                    if (latest.isUnread) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
+                    if (latest.isUnread) {
+                      lastAutoSyncedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
+                      updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
+                    }
                   }
                 }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
                   คลิกเพื่อโหลดข้อมูลล่าสุด
@@ -1162,13 +1264,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 {(() => {
                   const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
                   const isFailed  = !isPending && viewingSession.brokerStatus === 'failed';
+                  const isDone    = !isPending && !!viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done';
                   return (
                     <button
                       onClick={() => handleOpdClick(viewingSession)}
-                      disabled={isPending}
-                      title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${viewingSession.brokerError || ''}` : viewingSession.opdRecordedAt ? 'กดเพื่อยกเลิก' : 'ส่งข้อมูลไป ProClinic'}
+                      disabled={isPending || isDone}
+                      title={
+                        isPending ? 'กำลังส่งข้อมูลไป ProClinic...' :
+                        isDone    ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' :
+                        isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || ''}` :
+                        viewingSession.opdRecordedAt ? 'ส่งข้อมูลไป ProClinic' : 'ส่งข้อมูลไป ProClinic'
+                      }
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${
                         isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
+                        isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
                         isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
                         viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_12px_rgba(20,184,166,0.2)]' :
                         'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'
@@ -1192,10 +1301,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
-                  <p className="text-[10px] text-[var(--opd-color)] font-mono mt-0.5">บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}</p>
+                  <p className="text-[10px] text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
+                    {viewingSession.brokerProClinicHN && (
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] text-[var(--opd-color)] font-black tracking-wider">
+                        HN {viewingSession.brokerProClinicHN}
+                      </span>
+                    )}
+                  </p>
+                  {viewingSession.brokerLastAutoSyncAt && (
+                    <p className="text-[9px] text-[var(--opd-color)] opacity-70 font-mono mt-0.5 flex items-center gap-1">
+                      🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(viewingSession.brokerLastAutoSyncAt)}
+                    </p>
+                  )}
                 </div>
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {viewingSession.brokerProClinicId && (<>
+                    <a href={getProClinicUrl(viewingSession.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
+                      className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
+                      title={getProClinicUrl(viewingSession.brokerProClinicId)}>
+                      ProClinic ↗
+                    </a>
                     <button onClick={() => handleProClinicEdit(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
                       แก้ไขใน ProClinic
@@ -1205,10 +1331,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       ลบจาก ProClinic
                     </button>
                   </>)}
-                  <button onClick={() => handleOpdClick(viewingSession)}
-                    className="text-[9px] font-black uppercase tracking-widest text-[var(--opd-color)] hover:opacity-60 transition-opacity whitespace-nowrap">
-                    ยกเลิก
-                  </button>
                 </div>
               </div>
             )}
