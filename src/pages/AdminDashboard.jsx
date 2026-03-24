@@ -1254,7 +1254,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Buttons — always full labels, wrap to next line when space is tight */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
+                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id, { suppressNotif: true }); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
                   <Edit3 size={13} /> แก้ไขข้อมูล
                 </button>

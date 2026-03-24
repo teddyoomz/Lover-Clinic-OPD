@@ -19,6 +19,7 @@ export default function App() {
   const [viewingSession, setViewingSession] = useState(null);
   const [adminView, setAdminView] = useState('dashboard');
   const [simulatedSessionId, setSimulatedSessionId] = useState(null);
+  const [simulationSuppressNotif, setSimulationSuppressNotif] = useState(false);
   const [clinicSettings, setClinicSettings] = useState(() => ({
     ...DEFAULT_CLINIC_SETTINGS,
     clinicName: localStorage.getItem('clinic-name') || DEFAULT_CLINIC_SETTINGS.clinicName,
@@ -88,11 +89,12 @@ export default function App() {
             setPrintMode={setPrintMode}
             clinicSettings={clinicSettings}
             theme={theme} setTheme={setTheme}
-            onSimulateScan={(id) => { setSimulatedSessionId(id); setAdminView('simulation'); }}
+            onSimulateScan={(id, opts) => { setSimulatedSessionId(id); setSimulationSuppressNotif(!!opts?.suppressNotif); setAdminView('simulation'); }}
           />
         ) : (
           <PatientForm
             db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
+            suppressNotif={simulationSuppressNotif}
             onBack={() => setAdminView('dashboard')} clinicSettings={clinicSettings}
             theme={theme} setTheme={setTheme}
           />

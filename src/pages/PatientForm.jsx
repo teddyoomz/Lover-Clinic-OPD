@@ -12,7 +12,7 @@ import {
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 
-export default function PatientForm({ db, appId, user, sessionId, isSimulation, onBack, clinicSettings = {}, theme, setTheme }) {
+export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
@@ -205,7 +205,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     setIsSubmitting(true);
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        status: 'completed', patientData: formData, [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(), isUnread: true
+        status: 'completed', patientData: formData, [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(), isUnread: !suppressNotif
       });
       // แจ้งเตือน push — fire and forget (ไม่ await เพื่อไม่ block UI)
       const changedSections = isEditing && originalDataRef.current
