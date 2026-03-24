@@ -249,10 +249,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             if (newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
               updatedSessions.push(newS);
             }
-            // Auto-sync ProClinic: patientData changed AND session was already synced
+            // Auto-sync ProClinic: patientData changed AND session was ALREADY done+linked
+            // (oldS.brokerStatus === 'done' ป้องกัน sync ตอน transition pending→done)
+            // (oldS.brokerProClinicId เท่ากัน ป้องกัน sync ตอนที่ ID เพิ่งถูก set ใหม่)
             if (
               oldStr !== newStr && newStr !== '{}' && newS.patientData &&
-              newS.brokerStatus === 'done' && newS.brokerProClinicId
+              newS.brokerStatus === 'done' && newS.brokerProClinicId &&
+              oldS.brokerStatus === 'done' &&
+              oldS.brokerProClinicId === newS.brokerProClinicId
             ) {
               brokerSyncSessions.push(newS);
             }
