@@ -12,6 +12,8 @@ npm run build
 vercel --prod
 ```
 **ห้าม deploy โดยไม่ commit ก่อน**
+**ทุกครั้งที่แก้โค้ดเสร็จ → commit + deploy ให้อัตโนมัติเลย ไม่ต้องรอให้ user สั่ง**
+> ยกเว้น broker-extension/ อย่างเดียว → commit เฉยๆ ไม่ต้อง vercel --prod (เป็น Chrome Extension ไม่ใช่ web app)
 
 ## 🌿 Branch
 - Production: `master`
