@@ -58,19 +58,24 @@ async function doAutoLogin(tabId) {
       setVal(emailEl, email);
       setVal(passEl,  password);
 
-      // ติ๊ก checkbox ยอมรับเงื่อนไข (ถ้ามี)
+      // ติ๊ก checkbox ยอมรับเงื่อนไข — ใช้ native setter เพื่อ update React state ถูกต้อง
       const checkbox = document.querySelector('input[type="checkbox"]');
       if (checkbox && !checkbox.checked) {
-        checkbox.click();
+        const checkedSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
+        if (checkedSetter) checkedSetter.call(checkbox, true);
+        else checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('click',  { bubbles: true }));
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // รอให้ React process state ก่อนกด submit
-      await new Promise(r => setTimeout(r, 600));
-
+      // รอปุ่มให้ React enable เองตามธรรมชาติ (ไม่ force remove disabled)
       const btn = document.querySelector('button[type="submit"], input[type="submit"]');
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        const b = document.querySelector('button[type="submit"], input[type="submit"]');
+        if (b && !b.disabled) break;
+      }
       if (btn) {
-        btn.removeAttribute('disabled'); // force-enable กรณี React ยังไม่ update
         btn.click();
       } else {
         const form = document.querySelector('form');
