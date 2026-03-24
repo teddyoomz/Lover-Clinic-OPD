@@ -66,16 +66,17 @@ async function doAutoLogin(tabId) {
       setVal(passEl, password);
       await wait(400);
 
-      // ติ๊ก checkbox — ใช้ native setter + 'change' เท่านั้น (ไม่ dispatch 'click' เพราะ toggle กลับ)
+      // ติ๊ก checkbox — ใช้ native setter + events ครบ
       const checkbox = document.querySelector('input[type="checkbox"]');
       if (checkbox && !checkbox.checked) {
         const checkedSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
         if (checkedSetter) checkedSetter.call(checkbox, true); else checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('input',  { bubbles: true }));
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // รอ React re-render + validate form (ProClinic ช้า)
-      await wait(1200);
+      // รอ React re-render + validate form (เพิ่มเป็น 1500ms เพื่อให้ ProClinic ประมวลผล state ครบ)
+      await wait(1500);
 
       // ProClinic ใช้ type="button" ไม่ใช่ type="submit" — หาจาก btn-primary หรือปุ่มแรกในฟอร์ม
       const btn = document.querySelector('button.btn-primary')
