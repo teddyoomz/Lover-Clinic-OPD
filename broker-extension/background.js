@@ -23,6 +23,27 @@ chrome.storage.onChanged.addListener((changes) => {
 // Track last status per session for popup display
 const statusMap = {};
 
+// ─── Session Keepalive (ทุก 20 นาที) ──────────────────────────────────────────
+// ป้องกัน session หมดอายุโดยไม่ต้อง login ซ้ำบ่อยๆ
+// chrome.alarms ทำงานได้แม้ service worker หลับ — Chrome จะปลุก SW เมื่อ alarm ดัง
+chrome.alarms.create('pcKeepalive', { periodInMinutes: 20 });
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== 'pcKeepalive') return;
+  try {
+    const tabs = await chrome.tabs.query({ url: `${PROCLINIC_ORIGIN()}/*` });
+    if (tabs.length === 0) return; // ไม่มี ProClinic tab เปิดอยู่ → ข้าม
+    await chrome.scripting.executeScript({
+      target: { tabId: tabs[0].id },
+      world: 'MAIN',
+      func: async (origin) => {
+        try { await fetch(`${origin}/admin/api/stat`, { credentials: 'include' }); } catch {}
+      },
+      args: [_proclinicOrigin],
+    });
+  } catch (e) { console.log('[pcKeepalive]', e.message); }
+});
+
 // ─── Auto-login ───────────────────────────────────────────────────────────────
 
 /**
@@ -57,14 +78,14 @@ async function doAutoLogin(tabId) {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       };
 
-      // กรอก email → รอ → กรอก password → รอ (simulate human typing)
+      // กรอก email → รอ → กรอก password → รอ
       emailEl.focus();
       setVal(emailEl, email);
-      await wait(400);
+      await wait(100);
 
       passEl.focus();
       setVal(passEl, password);
-      await wait(400);
+      await wait(100);
 
       // ติ๊ก checkbox — ใช้ native setter + events ครบ
       const checkbox = document.querySelector('input[type="checkbox"]');
@@ -75,8 +96,8 @@ async function doAutoLogin(tabId) {
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // รอ React re-render + validate form (เพิ่มเป็น 1500ms เพื่อให้ ProClinic ประมวลผล state ครบ)
-      await wait(1500);
+      // รอ React re-render (ลดจาก 1500ms → 600ms เพราะ reCAPTCHA ใช้เวลาเองอยู่แล้ว)
+      await wait(600);
 
       // ProClinic ใช้ type="button" ไม่ใช่ type="submit" — หาจาก btn-primary หรือปุ่มแรกในฟอร์ม
       const btn = document.querySelector('button.btn-primary')
