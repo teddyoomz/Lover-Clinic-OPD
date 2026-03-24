@@ -56,6 +56,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
+  const brokerTimers = useRef({}); // sessionId → timeout id
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -75,6 +76,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const handler = async (event) => {
       if (event.data?.type !== 'LC_BROKER_RESULT') return;
       const { sessionId, success, error } = event.data;
+      // Cancel timeout since we got a real response
+      if (brokerTimers.current[sessionId]) {
+        clearTimeout(brokerTimers.current[sessionId]);
+        delete brokerTimers.current[sessionId];
+      }
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
       try {
         const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
@@ -433,6 +439,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     // Dispatch to extension via postMessage (content script will forward to background)
     window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
+
+    // ─── 10-second timeout: if no result, mark failed ──────────────────────
+    if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
+    brokerTimers.current[sessionId] = setTimeout(async () => {
+      delete brokerTimers.current[sessionId];
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          brokerStatus: 'failed',
+          brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+        });
+      } catch(e) { console.error('broker timeout update:', e); }
+    }, 10000);
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;

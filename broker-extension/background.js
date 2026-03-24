@@ -225,6 +225,9 @@ function fillAndSubmitProClinicForm(patient) {
     clickRadio('customer_type-1');
     clickRadio('customer_type_2-1');
 
+    // ── Override confirm dialog → always OK ──────────────────────────────────
+    window.confirm = () => true;
+
     // ── Submit ───────────────────────────────────────────────────────────────
     setTimeout(() => {
       const btn = document.querySelector('button[type="submit"]');
