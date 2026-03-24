@@ -65,11 +65,15 @@ async function doAutoLogin(tabId) {
 }
 
 /**
- * ตรวจว่า tab อยู่หน้า login หรือเปล่า ถ้าใช่ → auto-login
+ * ตรวจว่า tab อยู่หน้า login หรือเปล่า ถ้าใช่ → navigate ไป /login clean แล้ว auto-login
+ * ProClinic อาจ redirect เป็น /login/admin/customer/xxx/edit (404) แทน /login
+ * → ต้อง navigate ไป /login จริงๆ ก่อนเสมอ
  */
 async function ensureLoggedIn(tabId) {
   const info = await chrome.tabs.get(tabId);
   if (info.url?.includes('/login')) {
+    // navigate ไปหน้า login จริงๆ ก่อน (ป้องกัน /login/some/path ที่เป็น 404)
+    await navigateAndWait(tabId, PROCLINIC_LOGIN_URL());
     await doAutoLogin(tabId);
   }
 }
@@ -151,6 +155,7 @@ async function handleFillRequest(msg, loverclinicTabId) {
 
     const tabInfo = await chrome.tabs.get(pcTab.id);
     if (tabInfo.url?.includes('/login')) {
+      await navigateAndWait(pcTab.id, PROCLINIC_LOGIN_URL());
       await doAutoLogin(pcTab.id);
       await navigateAndWait(pcTab.id, PROCLINIC_CREATE_URL());
     }
@@ -281,6 +286,7 @@ async function handleUpdateRequest(msg, loverclinicTabId) {
 
     const tabInfo = await chrome.tabs.get(pcTab.id);
     if (tabInfo.url?.includes('/login')) {
+      await navigateAndWait(pcTab.id, PROCLINIC_LOGIN_URL());
       await doAutoLogin(pcTab.id);
       await navigateAndWait(pcTab.id, editUrl);
     }
