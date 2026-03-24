@@ -74,8 +74,8 @@ async function doAutoLogin(tabId) {
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // รอ React re-render
-      await wait(600);
+      // รอ React re-render + validate form (ProClinic ช้า)
+      await wait(1200);
 
       // ProClinic ใช้ type="button" ไม่ใช่ type="submit" — หาจาก btn-primary หรือปุ่มแรกในฟอร์ม
       const btn = document.querySelector('button.btn-primary')
@@ -92,6 +92,9 @@ async function doAutoLogin(tabId) {
     },
     args: [creds.pc_email, creds.pc_password],
   });
+
+  // รอให้ browser เริ่ม navigate จริงก่อน (btn.click() async — executeScript return ก่อน navigation start)
+  await new Promise(r => setTimeout(r, 500));
 
   // รอ redirect หลัง login สำเร็จ (รอนานสุด 10 วิ)
   await waitForTabReady(tabId, 10000);
