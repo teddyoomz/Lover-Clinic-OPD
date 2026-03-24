@@ -3,7 +3,7 @@
   "name": "Lover Clinic → ProClinic Broker",
   "version": "1.0.0",
   "description": "ส่งข้อมูลคนไข้จาก Lover Clinic ไปกรอกใน ProClinic อัตโนมัติ",
-  "permissions": ["tabs", "scripting", "storage", "activeTab"],
+  "permissions": ["tabs", "scripting", "storage", "activeTab", "alarms"],
   "host_permissions": [
     "https://lover-clinic-app.vercel.app/*",
     "https://trial.proclinicth.com/*",
