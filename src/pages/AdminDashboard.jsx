@@ -270,7 +270,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         return timeB - timeA;
       });
 
-      if (prevSessionsRef.current.length > 0 && isNotifEnabled) {
+      if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
         let brokerSyncSessions = [];
         data.forEach(newS => {
@@ -278,8 +278,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           if (oldS) {
             const oldStr = JSON.stringify(oldS.patientData || {});
             const newStr = JSON.stringify(newS.patientData || {});
-            // Only notify when: session is unread AND (just became unread, OR patientData actually changed)
-            if (newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
+            // Only notify when notifications enabled AND session is unread AND patientData changed
+            if (isNotifEnabled && newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
               updatedSessions.push(newS);
             }
             // ── ตัดสายวงจร: isUnread true→false = admin กด Report ──────────────────
@@ -305,14 +305,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }
         });
 
-        if (updatedSessions.length > 0) {
+        if (isNotifEnabled && updatedSessions.length > 0) {
           playNotificationSound(notifVolume);
           const names = updatedSessions.map(s => s.sessionName || s.patientData?.firstName || s.id).join(', ');
           setToastMsg(`อัปเดตข้อมูลประวัติ: ${names}`);
           setTimeout(() => setToastMsg(null), 5000);
         }
 
-        // Trigger ProClinic auto-sync for changed sessions
+        // Trigger ProClinic auto-sync for changed sessions (ทำงานเสมอ ไม่ขึ้นกับ isNotifEnabled)
         brokerSyncSessions.forEach(session => {
           const d = session.patientData;
           const reasons = getReasons(d);
@@ -1254,6 +1254,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Buttons — always full labels, wrap to next line when space is tight */}
               <div className="flex items-center gap-1.5 flex-wrap">
+                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                  <Edit3 size={13} /> แก้ไขข้อมูล
+                </button>
                 {!isCustom && (
                   <>
                     <button onClick={() => setPrintMode('dashboard')}
