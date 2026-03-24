@@ -71,6 +71,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (localStorage.getItem('lc_push_enabled') === 'true') setPushEnabled(true);
   }, []);
 
+  // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load (ไม่มี timer แล้ว)
+  useEffect(() => {
+    const allSessions = [...sessions, ...archivedSessions];
+    allSessions.forEach(async (s) => {
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
+        try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
+            brokerStatus: 'failed',
+            brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+          });
+        } catch(e) { console.error('clear stale broker pending:', e); }
+      }
+    });
+  }, [sessions, archivedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // รับผลลัพธ์จาก Broker Extension
   useEffect(() => {
     const handler = async (event) => {
