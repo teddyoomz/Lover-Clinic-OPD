@@ -6,10 +6,31 @@ const PROCLINIC_ORIGIN    = 'https://trial.proclinicth.com';
 // Track last status per session for popup display
 const statusMap = {};
 
+// ─── Serial queue: ทำได้ทีละ operation เท่านั้น (ป้องกัน race condition บน ProClinic tab) ──
+let proclinicBusy = false;
+const proclinicQueue = [];
+
+function enqueueProClinic(fn) {
+  return new Promise((resolve, reject) => {
+    proclinicQueue.push(() => fn().then(resolve).catch(reject));
+    drainQueue();
+  });
+}
+
+async function drainQueue() {
+  if (proclinicBusy || proclinicQueue.length === 0) return;
+  proclinicBusy = true;
+  const task = proclinicQueue.shift();
+  try { await task(); } finally {
+    proclinicBusy = false;
+    drainQueue();
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'LC_FILL_PROCLINIC') {
     const loverclinicTabId = sender.tab?.id;
-    handleFillRequest(msg, loverclinicTabId);
+    enqueueProClinic(() => handleFillRequest(msg, loverclinicTabId));
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_GET_STATUS') {
@@ -21,7 +42,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'LC_DELETE_PROCLINIC') {
     const loverclinicTabId = sender.tab?.id;
-    handleDeleteRequest(msg, loverclinicTabId);
+    enqueueProClinic(() => handleDeleteRequest(msg, loverclinicTabId));
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_OPEN_EDIT_PROCLINIC') {
@@ -34,7 +55,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'LC_UPDATE_PROCLINIC') {
     const loverclinicTabId = sender.tab?.id;
-    handleUpdateRequest(msg, loverclinicTabId);
+    enqueueProClinic(() => handleUpdateRequest(msg, loverclinicTabId));
     sendResponse({ received: true });
   }
   return true;
