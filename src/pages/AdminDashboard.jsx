@@ -364,15 +364,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         if (brokerChanged) {
           // viewingSession กำลังจะถูก update → รอ render ถัดไปค่อย evaluate banner
-          // (ป้องกัน banner กระพริบ และป้องกัน banner ค้างหลัง auto-sync)
           setViewingSession(latestSession);
-        } else {
-          // viewingSession เสถียรแล้ว → ตัดสินใจ banner ได้เลย
-          if (dataOutOfSync) {
-            setHasNewUpdate(true);   // มีข้อมูลใหม่ที่ admin ยังไม่เห็น
+        } else if (dataOutOfSync) {
+          // ตรวจว่า latestStr เป็น version ที่เรา "รู้จักแล้ว" หรือเปล่า
+          // (snapshot นี้เกิดจาก isUnread transition ไม่ใช่ patient edit จริง)
+          // snapshot listener stamp lastAutoSyncedStr=newStr ตอน isUnread true→false
+          // ถ้า match → viewingSession แค่ stale จากการ render เก่า → update เงียบๆ ไม่โชว์ banner
+          if (lastAutoSyncedStrRef.current[viewingSession.id] === latestStr) {
+            setViewingSession(latestSession);
+            setHasNewUpdate(false);
           } else {
-            setHasNewUpdate(false);  // ข้อมูลตรงกันแล้ว → ซ่อน banner
+            setHasNewUpdate(true);   // patient edit จริง → โชว์ banner
           }
+        } else {
+          setHasNewUpdate(false);    // ข้อมูลตรงกันแล้ว → ซ่อน banner
         }
       }
     } else {
