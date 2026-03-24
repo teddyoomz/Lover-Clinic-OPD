@@ -55,6 +55,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -68,6 +69,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     if (localStorage.getItem('lc_push_enabled') === 'true') setPushEnabled(true);
   }, []);
+
+  // รับผลลัพธ์จาก Broker Extension
+  useEffect(() => {
+    const handler = async (event) => {
+      if (event.data?.type !== 'LC_BROKER_RESULT') return;
+      const { sessionId, success, error } = event.data;
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+      try {
+        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+        if (success) {
+          await updateDoc(ref, {
+            opdRecordedAt: new Date().toISOString(),
+            brokerStatus: 'done',
+            brokerFilledAt: new Date().toISOString(),
+            brokerError: null,
+          });
+        } else {
+          await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
+        }
+      } catch (e) { console.error('broker result update:', e); }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [db, appId]);
 
   const enablePushNotifications = async () => {
     setPushLoading(true);
@@ -359,12 +384,55 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch(e) { console.error('restoreToQueue:', e); }
   };
 
-  const toggleOpdRecorded = async (sessionId, currentVal) => {
+  // ─── OPD / Broker button ────────────────────────────────────────────────────
+  const handleOpdClick = async (session) => {
+    const sessionId = session.id;
+    const d = session.patientData;
+
+    // If already recorded → undo
+    if (session.opdRecordedAt) {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          opdRecordedAt: null, brokerStatus: null, brokerError: null,
+        });
+      } catch(e) { console.error('undoOpd:', e); }
+      return;
+    }
+
+    // Build patient payload
+    const reasons = getReasons(d);
+    const pmh = [];
+    if (d?.hasUnderlying === 'มี') {
+      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
+      if (d.ud_diabetes)     pmh.push('เบาหวาน');
+      if (d.ud_lung)         pmh.push('โรคปอด');
+      if (d.ud_kidney)       pmh.push('โรคไต');
+      if (d.ud_heart)        pmh.push('โรคหัวใจ');
+      if (d.ud_blood)        pmh.push('โรคโลหิต');
+      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
+    }
+
+    const patient = {
+      prefix:     d?.prefix    || '',
+      firstName:  d?.firstName || '',
+      lastName:   d?.lastName  || '',
+      phone:      d?.phone     || '',
+      age:        d?.age       || '',
+      reasons,
+      allergies:  d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
+      underlying: pmh.join(', '),
+    };
+
+    // Set pending in Firestore + local state
+    setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        opdRecordedAt: currentVal ? null : new Date().toISOString(),
+        brokerStatus: 'pending', brokerError: null,
       });
-    } catch(e) { console.error('toggleOpdRecorded:', e); }
+    } catch(e) { console.error('broker pending update:', e); }
+
+    // Dispatch to extension via postMessage (content script will forward to background)
+    window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
@@ -583,15 +651,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <FileText size={15}/>
                         </button>
                       )}
-                      {d && (
-                        <button
-                          onClick={() => toggleOpdRecorded(session.id, session.opdRecordedAt)}
-                          title={session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'กดเพื่อบันทึกลง OPD Card'}
-                          className={`p-2 rounded-lg border transition-all ${session.opdRecordedAt
-                            ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]'
-                            : 'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'}`}
-                        ><ClipboardCheck size={15}/></button>
-                      )}
+                      {d && (() => {
+                        const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
+                        const isFailed  = !isPending && session.brokerStatus === 'failed';
+                        return (
+                          <button
+                            onClick={() => handleOpdClick(session)}
+                            disabled={isPending}
+                            title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'ส่งข้อมูลบันทึกลง ProClinic'}
+                            className={`p-2 rounded-lg border transition-all ${
+                              isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
+                              isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
+                              session.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]' :
+                              'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
+                            }`}
+                          ><ClipboardCheck size={15}/></button>
+                        );
+                      })()}
                       <button onClick={() => setSessionToRestore(session)}
                         className="p-2 bg-orange-950/30 hover:bg-orange-900/50 text-orange-400 hover:text-orange-300 rounded-lg border border-orange-900/50 transition-colors" title="กลับเข้าคิวใหม่">
                         <RotateCcw size={15}/>
@@ -767,15 +843,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.status === 'completed' && data && (
                             <button onClick={() => handleViewSession(session)} className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูข้อมูล"><FileText size={15} /></button>
                           )}
-                          {session.status === 'completed' && data && (
-                            <button
-                              onClick={() => toggleOpdRecorded(session.id, session.opdRecordedAt)}
-                              title={session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'กดเพื่อบันทึกลง OPD Card'}
-                              className={`p-2 rounded-lg border transition-all ${session.opdRecordedAt
-                                ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]'
-                                : 'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'}`}
-                            ><ClipboardCheck size={15} /></button>
-                          )}
+                          {session.status === 'completed' && data && (() => {
+                            const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
+                            const isFailed  = !isPending && session.brokerStatus === 'failed';
+                            return (
+                              <button
+                                onClick={() => handleOpdClick(session)}
+                                disabled={isPending}
+                                title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : session.opdRecordedAt ? 'กดเพื่อยกเลิก: บันทึก OPD แล้ว' : 'ส่งข้อมูลบันทึกลง ProClinic'}
+                                className={`p-2 rounded-lg border transition-all ${
+                                  isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
+                                  isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
+                                  session.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)]' :
+                                  'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
+                                }`}
+                              ><ClipboardCheck size={15} /></button>
+                            );
+                          })()}
                           <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบ"><Trash2 size={15} /></button>
                         </div>
                       </div>
@@ -958,16 +1042,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </button>
                   </>
                 )}
-                <button
-                  onClick={() => toggleOpdRecorded(viewingSession.id, viewingSession.opdRecordedAt)}
-                  title={viewingSession.opdRecordedAt ? 'กดเพื่อยกเลิก' : 'บันทึกลง OPD Card'}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${viewingSession.opdRecordedAt
-                    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_12px_rgba(20,184,166,0.2)]'
-                    : 'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'}`}
-                >
-                  <ClipboardCheck size={13} />
-                  {viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'}
-                </button>
+                {(() => {
+                  const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
+                  const isFailed  = !isPending && viewingSession.brokerStatus === 'failed';
+                  return (
+                    <button
+                      onClick={() => handleOpdClick(viewingSession)}
+                      disabled={isPending}
+                      title={isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${viewingSession.brokerError || ''}` : viewingSession.opdRecordedAt ? 'กดเพื่อยกเลิก' : 'ส่งข้อมูลไป ProClinic'}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${
+                        isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
+                        isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
+                        viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_12px_rgba(20,184,166,0.2)]' :
+                        'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'
+                      }`}
+                    >
+                      <ClipboardCheck size={13} />
+                      {isPending ? 'กำลังส่ง...' : isFailed ? 'ล้มเหลว' : viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'}
+                    </button>
+                  );
+                })()}
                 <button onClick={closeViewSession} className="p-1.5 bg-[#1a1a1a] hover:bg-red-600 text-gray-400 hover:text-white rounded border border-[#333] hover:border-red-600 transition-all shrink-0">
                   <X size={16} />
                 </button>
@@ -986,7 +1080,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <button
                   onClick={() => toggleOpdRecorded(viewingSession.id, viewingSession.opdRecordedAt)}
                   className="ml-auto text-[9px] font-black uppercase tracking-widest text-[var(--opd-color)] hover:opacity-60 transition-opacity whitespace-nowrap"
+                  onClick={() => handleOpdClick(viewingSession)}
                 >ยกเลิก</button>
+              </div>
+            )}
+            {viewingSession.brokerStatus === 'failed' && (
+              <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 flex items-center gap-3 shrink-0">
+                <X size={16} className="text-red-400 shrink-0" />
+                <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
+                <button
+                  onClick={() => handleOpdClick(viewingSession)}
+                  className="ml-auto text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
+                >ลองใหม่</button>
               </div>
             )}
             <div className="p-4 md:p-6 overflow-y-auto bg-[var(--bg-base)] flex-1 custom-scrollbar">
