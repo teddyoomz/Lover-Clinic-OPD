@@ -44,6 +44,8 @@ async function doAutoLogin(tabId) {
       const passEl  = document.querySelector('input[name="password"], input[type="password"]');
       if (!emailEl || !passEl) return { error: 'ไม่พบ form login' };
 
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+
       // ใช้ native setter เพื่อ trigger React controlled input
       const setVal = (el, val) => {
         const setter = Object.getOwnPropertyDescriptor(
@@ -55,26 +57,31 @@ async function doAutoLogin(tabId) {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       };
 
+      // กรอก email → รอ → กรอก password → รอ (simulate human typing)
+      emailEl.focus();
       setVal(emailEl, email);
-      setVal(passEl,  password);
+      await wait(400);
 
-      // ติ๊ก checkbox ยอมรับเงื่อนไข — ใช้ native setter เพื่อ update React state ถูกต้อง
+      passEl.focus();
+      setVal(passEl, password);
+      await wait(400);
+
+      // ติ๊ก checkbox — ใช้ native setter + 'change' เท่านั้น (ไม่ dispatch 'click' เพราะ toggle กลับ)
       const checkbox = document.querySelector('input[type="checkbox"]');
       if (checkbox && !checkbox.checked) {
         const checkedSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
-        if (checkedSetter) checkedSetter.call(checkbox, true);
-        else checkbox.checked = true;
-        checkbox.dispatchEvent(new Event('click',  { bubbles: true }));
+        if (checkedSetter) checkedSetter.call(checkbox, true); else checkbox.checked = true;
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // รอปุ่มให้ React enable เองตามธรรมชาติ (ไม่ force remove disabled)
-      const btn = document.querySelector('button[type="submit"], input[type="submit"]');
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 100));
-        const b = document.querySelector('button[type="submit"], input[type="submit"]');
-        if (b && !b.disabled) break;
-      }
+      // รอ React re-render
+      await wait(600);
+
+      // ProClinic ใช้ type="button" ไม่ใช่ type="submit" — หาจาก btn-primary หรือปุ่มแรกในฟอร์ม
+      const btn = document.querySelector('button.btn-primary')
+        || document.querySelector('form button')
+        || document.querySelector('button');
+
       if (btn) {
         btn.click();
       } else {
