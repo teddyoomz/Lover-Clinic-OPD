@@ -1,11 +1,78 @@
 // ─── Lover Clinic → ProClinic Broker : Background Service Worker ───────────
 
-const PROCLINIC_ORIGIN     = 'https://trial.proclinicth.com';
-const PROCLINIC_CREATE_URL = `${PROCLINIC_ORIGIN}/admin/customer/create`;
-const PROCLINIC_LIST_URL   = `${PROCLINIC_ORIGIN}/admin/customer`;
+// Default URL (trial) — เปลี่ยนได้ผ่าน popup settings → จะเก็บใน chrome.storage.local (pc_url)
+const PROCLINIC_DEFAULT_ORIGIN = 'https://trial.proclinicth.com';
+
+let _proclinicOrigin = PROCLINIC_DEFAULT_ORIGIN;
+function PROCLINIC_ORIGIN()     { return _proclinicOrigin; }
+function PROCLINIC_LOGIN_URL()  { return `${_proclinicOrigin}/login`; }
+function PROCLINIC_CREATE_URL() { return `${_proclinicOrigin}/admin/customer/create`; }
+function PROCLINIC_LIST_URL()   { return `${_proclinicOrigin}/admin/customer`; }
+
+// โหลด URL จาก storage ตอน service worker เริ่ม
+chrome.storage.local.get(['pc_url'], (data) => {
+  if (data.pc_url) _proclinicOrigin = data.pc_url.replace(/\/$/, '');
+});
+// อัพเดท URL เมื่อ settings เปลี่ยน (กรณี popup save ขณะ service worker ทำงานอยู่)
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.pc_url?.newValue) {
+    _proclinicOrigin = changes.pc_url.newValue.replace(/\/$/, '');
+  }
+});
 
 // Track last status per session for popup display
 const statusMap = {};
+
+// ─── Auto-login ───────────────────────────────────────────────────────────────
+
+/**
+ * กรอก email/password แล้ว submit หน้า login ProClinic
+ * Credentials อ่านจาก chrome.storage.local (pc_email, pc_password)
+ */
+async function doAutoLogin(tabId) {
+  const creds = await chrome.storage.local.get(['pc_email', 'pc_password']);
+  if (!creds.pc_email || !creds.pc_password) {
+    await chrome.tabs.update(tabId, { active: true });
+    throw new Error('ProClinic: session หมดอายุ — กรุณากรอก email/password ในหน้าต่าง extension ก่อน');
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: (email, password) => {
+      const emailEl = document.querySelector('input[name="email"], input[type="email"]');
+      const passEl  = document.querySelector('input[name="password"], input[type="password"]');
+      if (!emailEl || !passEl) return { error: 'ไม่พบ form login' };
+      emailEl.value = email;
+      passEl.value  = password;
+      emailEl.dispatchEvent(new Event('input',  { bubbles: true }));
+      passEl.dispatchEvent(new Event('input',   { bubbles: true }));
+      const btn = document.querySelector('button[type="submit"], input[type="submit"]');
+      if (btn) btn.click();
+      return { ok: true };
+    },
+    args: [creds.pc_email, creds.pc_password],
+  });
+
+  // รอ redirect หลัง login สำเร็จ (รอนานสุด 10 วิ)
+  await waitForTabReady(tabId, 10000);
+
+  const afterInfo = await chrome.tabs.get(tabId);
+  if (afterInfo.url?.includes('/login')) {
+    await chrome.tabs.update(tabId, { active: true });
+    throw new Error('ProClinic: login ไม่สำเร็จ — ตรวจสอบ email/password ใน extension popup');
+  }
+}
+
+/**
+ * ตรวจว่า tab อยู่หน้า login หรือเปล่า ถ้าใช่ → auto-login
+ */
+async function ensureLoggedIn(tabId) {
+  const info = await chrome.tabs.get(tabId);
+  if (info.url?.includes('/login')) {
+    await doAutoLogin(tabId);
+  }
+}
 
 // ─── Serial queue ─────────────────────────────────────────────────────────────
 let proclinicBusy = false;
@@ -56,7 +123,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'LC_OPEN_EDIT_PROCLINIC') {
     const { proClinicId } = msg;
-    const editUrl = `${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`;
+    const editUrl = `${PROCLINIC_ORIGIN()}/admin/customer/${proClinicId}/edit`;
     getOrCreateProclinicTab().then(tab => {
       chrome.tabs.update(tab.id, { url: editUrl, active: true });
     });
@@ -80,12 +147,12 @@ async function handleFillRequest(msg, loverclinicTabId) {
 
   try {
     const pcTab = await getOrCreateProclinicTab();
-    await navigateAndWait(pcTab.id, PROCLINIC_CREATE_URL);
+    await navigateAndWait(pcTab.id, PROCLINIC_CREATE_URL());
 
     const tabInfo = await chrome.tabs.get(pcTab.id);
     if (tabInfo.url?.includes('/login')) {
-      await chrome.tabs.update(pcTab.id, { active: true });
-      throw new Error('ProClinic: ยังไม่ได้ login — กรุณา login ใน tab ProClinic ก่อน');
+      await doAutoLogin(pcTab.id);
+      await navigateAndWait(pcTab.id, PROCLINIC_CREATE_URL());
     }
 
     const results = await chrome.scripting.executeScript({
@@ -120,7 +187,7 @@ async function handleFillRequest(msg, loverclinicTabId) {
     let proClinicHN = null;
     if (proClinicId) {
       try {
-        await navigateAndWait(pcTab.id, `${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`);
+        await navigateAndWait(pcTab.id, `${PROCLINIC_ORIGIN()}/admin/customer/${proClinicId}/edit`);
         const hnResults = await chrome.scripting.executeScript({
           target: { tabId: pcTab.id },
           world: 'MAIN',
@@ -157,7 +224,7 @@ async function handleDeleteRequest(msg, loverclinicTabId) {
       targetId = await searchAndResolveId(pcTab, patient || {}, proClinicHN, 'delete');
     } else {
       // Navigate to list page to get fresh CSRF token
-      await navigateAndWait(pcTab.id, PROCLINIC_LIST_URL);
+      await navigateAndWait(pcTab.id, PROCLINIC_LIST_URL());
     }
 
     // ── Delete via POST _method=DELETE ────────────────────────────────────────
@@ -177,7 +244,7 @@ async function handleDeleteRequest(msg, loverclinicTabId) {
           return { ok: res.ok, status: res.status };
         } catch(e) { return { error: e.message }; }
       },
-      args: [targetId, PROCLINIC_ORIGIN],
+      args: [targetId, PROCLINIC_ORIGIN()],
     });
 
     const r = results?.[0]?.result;
@@ -209,12 +276,13 @@ async function handleUpdateRequest(msg, loverclinicTabId) {
 
     // ── Navigate to edit page เพื่อดึง CSRF token + form values ปัจจุบัน ────
     // (ไม่ต้องรอ redirect หลัง save — ใช้ fetch แทน)
-    const editUrl = `${PROCLINIC_ORIGIN}/admin/customer/${targetId}/edit`;
+    const editUrl = `${PROCLINIC_ORIGIN()}/admin/customer/${targetId}/edit`;
     await navigateAndWait(pcTab.id, editUrl);
 
     const tabInfo = await chrome.tabs.get(pcTab.id);
     if (tabInfo.url?.includes('/login')) {
-      throw new Error('ProClinic: ยังไม่ได้ login — กรุณา login ใน tab ProClinic ก่อน');
+      await doAutoLogin(pcTab.id);
+      await navigateAndWait(pcTab.id, editUrl);
     }
 
     // ── ส่ง form ผ่าน fetch (ไม่ navigate tab → ป้องกัน redirect loop + CAPTCHA) ──
@@ -224,7 +292,7 @@ async function handleUpdateRequest(msg, loverclinicTabId) {
       target: { tabId: pcTab.id },
       world: 'MAIN',
       func: submitProClinicEditViaFetch,
-      args: [patient, targetId, PROCLINIC_ORIGIN],
+      args: [patient, targetId, PROCLINIC_ORIGIN()],
     });
     const r = results?.[0]?.result;
     if (r?.error) throw new Error(r.error);
@@ -274,7 +342,7 @@ async function searchAndResolveId(pcTab, patient, proClinicHN, operation) {
  * Navigate to search URL แล้ว extract customer list จากหน้าผลลัพธ์
  */
 async function searchProClinicCustomers(pcTab, query) {
-  const searchUrl = `${PROCLINIC_ORIGIN}/admin/customer?q=${encodeURIComponent(query)}`;
+  const searchUrl = `${PROCLINIC_ORIGIN()}/admin/customer?q=${encodeURIComponent(query)}`;
   // delay 1200ms — รอ search results render ใน DOM ให้ครบก่อน execute script
   await navigateAndWait(pcTab.id, searchUrl, 1200);
 
@@ -580,7 +648,7 @@ function waitForTabReady(tabId, timeoutMs = 15000) {
 }
 
 async function getOrCreateProclinicTab() {
-  const tabs = await chrome.tabs.query({ url: `${PROCLINIC_ORIGIN}/*` });
+  const tabs = await chrome.tabs.query({ url: `${PROCLINIC_ORIGIN()}/*` });
   if (tabs.length > 0) {
     // รอ tab ที่มีอยู่ให้พร้อมก่อน (กรณี tab กำลัง loading อยู่)
     const tab = tabs[0];
@@ -590,14 +658,16 @@ async function getOrCreateProclinicTab() {
   }
 
   // สร้าง tab ใหม่ แล้วรอให้โหลดเสร็จก่อน return
-  const newTab = await chrome.tabs.create({ url: PROCLINIC_LIST_URL, active: false });
+  const newTab = await chrome.tabs.create({ url: PROCLINIC_LOGIN_URL(), active: false });
   await waitForTabReady(newTab.id);
 
-  // ตรวจ login
-  const info = await chrome.tabs.get(newTab.id);
-  if (info.url?.includes('/login')) {
-    await chrome.tabs.update(newTab.id, { active: true });
-    throw new Error('ProClinic: ยังไม่ได้ login — กรุณา login ใน tab ProClinic ก่อน');
+  // auto-login ถ้าจำเป็น (session หมดอายุ หรือยังไม่ได้ login)
+  await ensureLoggedIn(newTab.id);
+
+  // navigate ไป list page หลัง login สำเร็จ
+  const afterInfo = await chrome.tabs.get(newTab.id);
+  if (!afterInfo.url?.includes('/login')) {
+    await navigateAndWait(newTab.id, PROCLINIC_LIST_URL());
   }
 
   return newTab;

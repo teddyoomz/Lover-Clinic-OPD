@@ -65,3 +65,74 @@ document.getElementById('clearBtn').addEventListener('click', () => {
     render({});
   });
 });
+
+// ─── Settings Panel ───────────────────────────────────────────────────────────
+
+const settingsBtn   = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const pcUrl         = document.getElementById('pcUrl');
+const pcEmail       = document.getElementById('pcEmail');
+const pcPassword    = document.getElementById('pcPassword');
+const togglePass    = document.getElementById('togglePass');
+const saveBtn       = document.getElementById('saveBtn');
+const saveMsg       = document.getElementById('saveMsg');
+const credStatus    = document.getElementById('credStatus');
+
+// Toggle settings panel
+settingsBtn.addEventListener('click', () => {
+  const isOpen = settingsPanel.classList.toggle('open');
+  settingsBtn.style.color = isOpen ? '#aaa' : '#555';
+});
+
+// Show/hide password
+togglePass.addEventListener('click', () => {
+  const isText = pcPassword.type === 'text';
+  pcPassword.type = isText ? 'password' : 'text';
+  togglePass.textContent = isText ? '👁' : '🙈';
+});
+
+// Load saved settings on open
+chrome.storage.local.get(['pc_url', 'pc_email', 'pc_password'], (data) => {
+  if (data.pc_url)      pcUrl.value      = data.pc_url;
+  if (data.pc_email)    pcEmail.value    = data.pc_email;
+  if (data.pc_password) pcPassword.value = data.pc_password;
+  updateCredStatus(!!data.pc_email && !!data.pc_password);
+});
+
+function updateCredStatus(hasCreds) {
+  if (hasCreds) {
+    credStatus.textContent = '✓ บันทึก settings แล้ว';
+    credStatus.className = 'cred-status saved';
+  } else {
+    credStatus.textContent = 'ยังไม่มี credentials — extension จะ auto-login ไม่ได้';
+    credStatus.className = 'cred-status';
+  }
+}
+
+// Save settings
+saveBtn.addEventListener('click', () => {
+  const url      = pcUrl.value.trim().replace(/\/$/, '');
+  const email    = pcEmail.value.trim();
+  const password = pcPassword.value;
+
+  if (!email || !password) {
+    saveMsg.textContent = '⚠ กรุณากรอก email และ password';
+    saveMsg.style.color = '#f59e0b';
+    return;
+  }
+  if (url && !/^https?:\/\/.+/.test(url)) {
+    saveMsg.textContent = '⚠ URL ต้องขึ้นต้นด้วย https://';
+    saveMsg.style.color = '#f59e0b';
+    return;
+  }
+
+  const toSave = { pc_email: email, pc_password: password };
+  if (url) toSave.pc_url = url;
+
+  chrome.storage.local.set(toSave, () => {
+    saveMsg.textContent = '✓ บันทึกแล้ว';
+    saveMsg.style.color = '#16a34a';
+    updateCredStatus(true);
+    setTimeout(() => { saveMsg.textContent = ''; }, 2000);
+  });
+});
