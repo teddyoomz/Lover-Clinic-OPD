@@ -89,27 +89,43 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // รับผลลัพธ์จาก Broker Extension
   useEffect(() => {
     const handler = async (event) => {
-      if (event.data?.type !== 'LC_BROKER_RESULT') return;
-      const { sessionId, success, error } = event.data;
-      // Cancel timeout since we got a real response
-      if (brokerTimers.current[sessionId]) {
-        clearTimeout(brokerTimers.current[sessionId]);
-        delete brokerTimers.current[sessionId];
-      }
-      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-      try {
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-        if (success) {
-          await updateDoc(ref, {
-            opdRecordedAt: new Date().toISOString(),
-            brokerStatus: 'done',
-            brokerFilledAt: new Date().toISOString(),
-            brokerError: null,
-          });
-        } else {
-          await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
+      if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT'].includes(event.data?.type)) return;
+      const { type, sessionId, success, error, proClinicId } = event.data;
+
+      if (type === 'LC_BROKER_RESULT') {
+        // Cancel timeout since we got a real response
+        if (brokerTimers.current[sessionId]) {
+          clearTimeout(brokerTimers.current[sessionId]);
+          delete brokerTimers.current[sessionId];
         }
-      } catch (e) { console.error('broker result update:', e); }
+        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+        try {
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+          if (success) {
+            await updateDoc(ref, {
+              opdRecordedAt: new Date().toISOString(),
+              brokerStatus: 'done',
+              brokerFilledAt: new Date().toISOString(),
+              brokerError: null,
+              ...(proClinicId ? { brokerProClinicId: proClinicId } : {}),
+            });
+          } else {
+            await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
+          }
+        } catch (e) { console.error('broker result update:', e); }
+      }
+
+      if (type === 'LC_DELETE_RESULT') {
+        try {
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+          if (success) {
+            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null });
+          } else {
+            setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${error}`);
+            setTimeout(() => setToastMsg(null), 5000);
+          }
+        } catch (e) { console.error('broker delete result:', e); }
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -467,6 +483,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       } catch(e) { console.error('broker timeout update:', e); }
     }, 10000);
+  };
+
+  const handleProClinicEdit = (session) => {
+    const proClinicId = session.brokerProClinicId;
+    if (!proClinicId) return;
+    window.postMessage({ type: 'LC_OPEN_EDIT_PROCLINIC', proClinicId }, '*');
+  };
+
+  const handleProClinicDelete = (session) => {
+    const proClinicId = session.brokerProClinicId;
+    if (!proClinicId) return;
+    if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
+    window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId }, '*');
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
@@ -1103,19 +1132,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
             
             {viewingSession.opdRecordedAt && (
-              <div className="px-4 sm:px-6 py-3 bg-[var(--opd-bg)] border-b border-[var(--opd-bd)] flex items-center gap-3 shrink-0">
+              <div className="px-4 sm:px-6 py-3 bg-[var(--opd-bg)] border-b border-[var(--opd-bd)] flex items-center gap-3 shrink-0 flex-wrap">
                 <div className="p-1.5 rounded-lg bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)]">
                   <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อยแล้ว</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
                   <p className="text-[10px] text-[var(--opd-color)] font-mono mt-0.5">บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}</p>
                 </div>
-                <button
-                  onClick={() => toggleOpdRecorded(viewingSession.id, viewingSession.opdRecordedAt)}
-                  className="ml-auto text-[9px] font-black uppercase tracking-widest text-[var(--opd-color)] hover:opacity-60 transition-opacity whitespace-nowrap"
-                  onClick={() => handleOpdClick(viewingSession)}
-                >ยกเลิก</button>
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
+                  {viewingSession.brokerProClinicId && (<>
+                    <button onClick={() => handleProClinicEdit(viewingSession)}
+                      className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
+                      แก้ไขใน ProClinic
+                    </button>
+                    <button onClick={() => handleProClinicDelete(viewingSession)}
+                      className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
+                      ลบจาก ProClinic
+                    </button>
+                  </>)}
+                  <button onClick={() => handleOpdClick(viewingSession)}
+                    className="text-[9px] font-black uppercase tracking-widest text-[var(--opd-color)] hover:opacity-60 transition-opacity whitespace-nowrap">
+                    ยกเลิก
+                  </button>
+                </div>
               </div>
             )}
             {viewingSession.brokerStatus === 'failed' && (

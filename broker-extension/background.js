@@ -19,6 +19,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     Object.keys(statusMap).forEach(k => delete statusMap[k]);
     sendResponse({ ok: true });
   }
+  if (msg.type === 'LC_DELETE_PROCLINIC') {
+    const loverclinicTabId = sender.tab?.id;
+    handleDeleteRequest(msg, loverclinicTabId);
+    sendResponse({ received: true });
+  }
+  if (msg.type === 'LC_OPEN_EDIT_PROCLINIC') {
+    const { proClinicId } = msg;
+    const editUrl = `${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`;
+    getOrCreateProclinicTab().then(tab => {
+      chrome.tabs.update(tab.id, { url: editUrl, active: true });
+    });
+    sendResponse({ received: true });
+  }
   return true;
 });
 
@@ -74,10 +87,12 @@ async function handleFillRequest(msg, loverclinicTabId) {
       throw new Error(errResults?.[0]?.result || 'ProClinic ไม่ยอมรับข้อมูล');
     }
 
-    // ✓ Success
+    // ✓ Success — extract ProClinic customer ID from redirect URL
+    const proClinicId = extractCustomerId(afterTab.url);
+
     setStatus(sessionId, 'done', null);
     updateBadge('✓');
-    reportBack(loverclinicTabId, { type: 'LC_BROKER_RESULT', sessionId, success: true });
+    reportBack(loverclinicTabId, { type: 'LC_BROKER_RESULT', sessionId, success: true, proClinicId });
 
   } catch (err) {
     setStatus(sessionId, 'failed', err.message);
@@ -143,6 +158,56 @@ function updateBadge(text) {
   chrome.action.setBadgeBackgroundColor({
     color: text === '✓' ? '#16a34a' : text === '✗' ? '#dc2626' : '#f59e0b',
   });
+}
+
+function extractCustomerId(url) {
+  if (!url) return null;
+  // /admin/customer/13585 → "13585"
+  const m = url.match(/\/admin\/customer\/(\d+)/);
+  return m ? m[1] : null;
+}
+
+// ─── Delete handler ───────────────────────────────────────────────────────────
+async function handleDeleteRequest(msg, loverclinicTabId) {
+  const { sessionId, proClinicId } = msg;
+  if (!proClinicId) {
+    reportBack(loverclinicTabId, { type: 'LC_DELETE_RESULT', sessionId, success: false, error: 'ไม่พบ ProClinic customer ID' });
+    return;
+  }
+  try {
+    const pcTab = await getOrCreateProclinicTab();
+    // Navigate to customer list to get a fresh CSRF token
+    await chrome.tabs.update(pcTab.id, { url: `${PROCLINIC_ORIGIN}/admin/customer` });
+    await waitForTabLoad(pcTab.id);
+
+    // Get CSRF token and send DELETE via fetch inside the page
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: pcTab.id },
+      world: 'MAIN',
+      func: async (customerId, origin) => {
+        try {
+          const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+          if (!csrf) return { error: 'ไม่พบ CSRF token' };
+          const res = await fetch(`${origin}/admin/customer/${customerId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': csrf },
+            body: `_method=DELETE&_token=${encodeURIComponent(csrf)}`,
+            credentials: 'include',
+          });
+          return { ok: res.ok, status: res.status };
+        } catch(e) { return { error: e.message }; }
+      },
+      args: [proClinicId, PROCLINIC_ORIGIN],
+    });
+
+    const r = results?.[0]?.result;
+    if (r?.error) throw new Error(r.error);
+    if (!r?.ok) throw new Error(`Server ตอบกลับ status ${r?.status}`);
+
+    reportBack(loverclinicTabId, { type: 'LC_DELETE_RESULT', sessionId, success: true });
+  } catch(err) {
+    reportBack(loverclinicTabId, { type: 'LC_DELETE_RESULT', sessionId, success: false, error: err.message });
+  }
 }
 
 // ─── Form filler (runs in ProClinic page context via executeScript) ───────────
