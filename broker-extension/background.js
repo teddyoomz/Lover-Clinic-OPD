@@ -47,6 +47,9 @@ async function doAutoLogin(tabId) {
       passEl.value  = password;
       emailEl.dispatchEvent(new Event('input',  { bubbles: true }));
       passEl.dispatchEvent(new Event('input',   { bubbles: true }));
+      // ติ๊ก checkbox ยอมรับเงื่อนไข (ถ้ามี)
+      const checkbox = document.querySelector('input[type="checkbox"]');
+      if (checkbox && !checkbox.checked) checkbox.click();
       const btn = document.querySelector('button[type="submit"], input[type="submit"]');
       if (btn) btn.click();
       return { ok: true };
