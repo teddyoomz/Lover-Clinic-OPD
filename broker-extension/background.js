@@ -39,19 +39,43 @@ async function doAutoLogin(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
     world: 'MAIN',
-    func: (email, password) => {
+    func: async (email, password) => {
       const emailEl = document.querySelector('input[name="email"], input[type="email"]');
       const passEl  = document.querySelector('input[name="password"], input[type="password"]');
       if (!emailEl || !passEl) return { error: 'ไม่พบ form login' };
-      emailEl.value = email;
-      passEl.value  = password;
-      emailEl.dispatchEvent(new Event('input',  { bubbles: true }));
-      passEl.dispatchEvent(new Event('input',   { bubbles: true }));
+
+      // ใช้ native setter เพื่อ trigger React controlled input
+      const setVal = (el, val) => {
+        const setter = Object.getOwnPropertyDescriptor(
+          el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+          'value'
+        )?.set;
+        if (setter) setter.call(el, val); else el.value = val;
+        el.dispatchEvent(new Event('input',  { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      setVal(emailEl, email);
+      setVal(passEl,  password);
+
       // ติ๊ก checkbox ยอมรับเงื่อนไข (ถ้ามี)
       const checkbox = document.querySelector('input[type="checkbox"]');
-      if (checkbox && !checkbox.checked) checkbox.click();
+      if (checkbox && !checkbox.checked) {
+        checkbox.click();
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      // รอให้ React process state ก่อนกด submit
+      await new Promise(r => setTimeout(r, 600));
+
       const btn = document.querySelector('button[type="submit"], input[type="submit"]');
-      if (btn) btn.click();
+      if (btn) {
+        btn.removeAttribute('disabled'); // force-enable กรณี React ยังไม่ update
+        btn.click();
+      } else {
+        const form = document.querySelector('form');
+        if (form) { form.requestSubmit ? form.requestSubmit() : form.submit(); }
+      }
       return { ok: true };
     },
     args: [creds.pc_email, creds.pc_password],
