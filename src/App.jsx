@@ -82,7 +82,8 @@ export default function App() {
   return (
     <>
       <div className={`min-h-screen bg-[#050505] font-sans text-gray-200 ${printMode !== null ? 'hidden' : 'block print:hidden'}`}>
-        {adminView === 'dashboard' ? (
+        {/* AdminDashboard stays mounted always — keeps Firestore listener alive for auto-sync */}
+        <div className={adminView === 'simulation' ? 'hidden' : ''}>
           <AdminDashboard
             db={db} appId={appId} user={user} auth={auth}
             viewingSession={viewingSession} setViewingSession={setViewingSession}
@@ -91,7 +92,8 @@ export default function App() {
             theme={theme} setTheme={setTheme}
             onSimulateScan={(id, opts) => { setSimulatedSessionId(id); setSimulationSuppressNotif(!!opts?.suppressNotif); setAdminView('simulation'); }}
           />
-        ) : (
+        </div>
+        {adminView === 'simulation' && (
           <PatientForm
             db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
             suppressNotif={simulationSuppressNotif}
