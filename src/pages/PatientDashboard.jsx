@@ -15,7 +15,9 @@ const TX = {
     notfound: 'ไม่พบข้อมูล', notfoundSub: 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว',
     unknown: 'ไม่ระบุชื่อ',
     syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
-    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', syncLast: 'ข้อมูลล่าสุด',
+    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ',
+    syncTimeout: 'Sync ไม่สำเร็จ', syncLast: 'ข้อมูลล่าสุด',
+    resync: 'ลอง Sync ใหม่',
     apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
     noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
     noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
@@ -28,7 +30,9 @@ const TX = {
     notfound: 'Not Found', notfoundSub: 'This URL is invalid or has expired.',
     unknown: 'Unknown',
     syncReq: 'Requesting...', syncIng: 'Syncing data',
-    syncDone: 'Synced', syncFail: 'Sync failed', syncLast: 'Last sync',
+    syncDone: 'Synced', syncFail: 'Sync failed',
+    syncTimeout: 'Sync failed', syncLast: 'Last sync',
+    resync: 'Retry Sync',
     apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
     noCourses: 'No active courses', noData: 'No course data yet',
     noDataSub: 'Data will appear after the clinic syncs from the system.',
@@ -127,11 +131,13 @@ function CourseCard({ c, expired, accentRgb, tx }) {
 // ── SyncChip ──────────────────────────────────────────────────────────────────
 
 function SyncChip({ syncStatus, syncTimeStr, latestCourses, tx }) {
+  const failLabel = syncTimeStr ? `${tx.syncFail} — ${tx.syncLast} ${syncTimeStr}` : tx.syncFail;
   const configs = {
     requesting: { icon: <RefreshCw size={11} className="animate-spin shrink-0" />, label: tx.syncReq, cls: 'text-gray-400 border-gray-700/60 bg-gray-900/40' },
     syncing:    { icon: <Loader2   size={11} className="animate-spin shrink-0" />, label: tx.syncIng,  cls: 'text-teal-300 border-teal-800/60 bg-teal-950/40' },
     done:       { icon: <CheckCircle2 size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncDone} — ${syncTimeStr}` : tx.syncDone, cls: 'text-emerald-400 border-emerald-800/60 bg-emerald-950/40' },
-    error:      { icon: <XCircle   size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncFail} — ${tx.syncLast} ${syncTimeStr}` : tx.syncFail, cls: 'text-red-400 border-red-700/60 bg-red-950/50' },
+    error:      { icon: <XCircle   size={11} className="shrink-0" />, label: failLabel, cls: 'text-red-400 border-red-700/60 bg-red-950/50' },
+    timeout:    { icon: <XCircle   size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncTimeout} — ${tx.syncLast} ${syncTimeStr}` : tx.syncTimeout, cls: 'text-amber-400 border-amber-700/60 bg-amber-950/50' },
   };
   const chip = configs[syncStatus];
   if (!chip) return null;
@@ -203,17 +209,53 @@ function SectionHeader({ icon, label, count, accent, meta }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
+
 export default function PatientDashboard({ token, clinicSettings, theme, setTheme }) {
   const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);
+  const [syncTimedOut, setSyncTimedOut] = useState(false);
   const [language, setLanguage]       = useState('th');
   const refreshRequestedRef = useRef(false);
   const prevFetchedAtRef    = useRef(null);
+  const syncTimeoutRef      = useRef(null);
+  const sessionIdRef        = useRef(null);
 
   const ac    = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const tx    = TX[language];
+
+  // Cleanup timeout on unmount
+  useEffect(() => () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }, []);
+
+  function startSyncTimeout() {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(() => {
+      syncTimeoutRef.current = null;
+      setSyncTimedOut(true);
+    }, SYNC_TIMEOUT_MS);
+  }
+
+  function clearSyncTimeout() {
+    if (syncTimeoutRef.current) { clearTimeout(syncTimeoutRef.current); syncTimeoutRef.current = null; }
+  }
+
+  async function handleResync() {
+    if (!sessionIdRef.current) return;
+    setSyncTimedOut(false);
+    setJustSynced(false);
+    refreshRequestedRef.current = true;
+    startSyncTimeout();
+    try {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionIdRef.current);
+      await updateDoc(ref, { coursesRefreshRequest: serverTimestamp() });
+    } catch(e) {
+      console.error(e);
+      clearSyncTimeout();
+      setSyncTimedOut(true);
+    }
+  }
 
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
@@ -226,12 +268,15 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
       const d = snap.docs[0];
       const data = { id: d.id, ...d.data() };
       if (!data.patientLinkEnabled) { setStatus('disabled'); return; }
+      sessionIdRef.current = data.id;
       setSessionData(data);
       setStatus('done');
 
       const newFetchedAt = data.latestCourses?.fetchedAt || null;
       if (newFetchedAt && newFetchedAt !== prevFetchedAtRef.current) {
         prevFetchedAtRef.current = newFetchedAt;
+        clearSyncTimeout();
+        setSyncTimedOut(false);
         if (data.latestCourses?.success !== false) setJustSynced(true);
       }
 
@@ -242,7 +287,9 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         if (!stillCoolingDown && !alreadyPending) {
           refreshRequestedRef.current = true;
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id);
-          updateDoc(ref, { coursesRefreshRequest: serverTimestamp() }).catch(console.error);
+          updateDoc(ref, { coursesRefreshRequest: serverTimestamp() })
+            .then(startSyncTimeout)
+            .catch(console.error);
         }
       }
     }, () => setStatus('notfound'));
@@ -309,7 +356,8 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
 
   const isCoursesJob = sessionData.brokerJob?.type === 'LC_GET_COURSES';
   const syncStatus =
-    sessionData.coursesRefreshRequest                              ? 'requesting'
+    syncTimedOut                                                   ? 'timeout'
+    : sessionData.coursesRefreshRequest                            ? 'requesting'
     : (sessionData.brokerStatus === 'pending' && isCoursesJob)    ? 'syncing'
     : sessionData.latestCourses?.success === false                 ? 'error'
     : justSynced                                                   ? 'done'
@@ -381,13 +429,23 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
 
           {/* Sync chip strip */}
           {syncStatus !== 'idle' && (
-            <div className="px-5 pb-4 pt-1 flex justify-center">
+            <div className="px-5 pb-4 pt-1 flex flex-col items-center gap-2.5">
               <SyncChip
                 syncStatus={syncStatus}
                 syncTimeStr={syncTimeStr}
                 latestCourses={sessionData.latestCourses}
                 tx={tx}
               />
+              {(syncStatus === 'timeout' || syncStatus === 'error') && (
+                <button
+                  onClick={handleResync}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[11px] font-bold transition-all active:scale-95"
+                  style={{ color: ac, borderColor: `rgba(${acRgb},0.35)`, background: `rgba(${acRgb},0.08)` }}
+                >
+                  <RefreshCw size={11} />
+                  {tx.resync}
+                </button>
+              )}
             </div>
           )}
         </div>
