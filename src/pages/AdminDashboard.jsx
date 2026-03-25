@@ -532,7 +532,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           !autoSyncInFlightRef.current.has(s.id) // รอ LC_UPDATE_PROCLINIC เสร็จก่อน ป้องกัน edit+courses queue พร้อมกัน
         ) {
           const last = s.lastCoursesAutoFetch;
-          const COURSES_REFRESH_COOLDOWN_MS = 30000; // 30 วิ — debounce กัน multi-tab trigger ซ้ำ
+          const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
           if (last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return; // ยัง cool down
           autoCoursesRequestedRef.current.add(s.id);
           const jobId = `courses_auto_${s.id}_${Date.now()}`;
@@ -922,7 +922,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleGetCourses = async (session) => {
     const jobId = `courses_${session.id}_${Date.now()}`;
     coursesJobIdRef.current = jobId;
-    autoCoursesRequestedRef.current.add(session.id); // ป้องกัน auto-trigger ซ้อนทับ manual trigger
     setCoursesPanel({
       sessionId: session.id,
       patientName: session.sessionName || session.patientData?.firstName || '',
