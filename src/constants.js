@@ -7,7 +7,7 @@ export const DEFAULT_CLINIC_SETTINGS = {
   logoUrlLight: '',
   accentColor: '#dc2626',
   lineOfficialUrl: '',
-  patientSyncCooldownMins: 60, // 0 = ไม่จำกัด, 1-99999 = นาที
+  patientSyncCooldownMins: 0, // 0 = ไม่จำกัด, 1-99999 = นาที
 };
 
 export const PRESET_COLORS = [
