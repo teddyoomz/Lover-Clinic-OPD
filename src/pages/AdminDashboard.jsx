@@ -109,6 +109,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
   const brokerTimers = useRef({}); // sessionId → timeout id
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
+  const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -154,10 +155,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const handler = async (event) => {
       if (event.data?.type === 'LC_COURSES_RESULT') {
         const { sessionId, success, error, patientName, courses, expiredCourses } = event.data;
+        const jobId = coursesJobIdRef.current;
+        coursesJobIdRef.current = null; // consume → ป้องกัน onSnapshot double-fire
         setCoursesPanel(prev => prev?.sessionId === sessionId
           ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], error: error || '' }
           : prev
         );
+        // Write result to Firestore so other devices (iPhone) receive it via onSnapshot
+        if (sessionId) {
+          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], patientName: patientName || '', jobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
+            brokerJob: null,
+          }).catch(e => console.error('latestCourses write:', e));
+        }
         return;
       }
       if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
@@ -465,6 +475,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               }
             } catch(e) { console.error('relay timeout:', e); }
           }, 15000);
+        }
+      });
+
+      // ─── Relay LC_GET_COURSES jobs (ไม่ใช้ brokerStatus — ไม่กระทบ OPD flow) ──
+      allDocs.forEach(newS => {
+        const job = newS.brokerJob;
+        if (job?.id && job.type === 'LC_GET_COURSES' && !forwardedJobsRef.current.has(job.id)) {
+          forwardedJobsRef.current.add(job.id);
+          window.postMessage({ type: 'LC_GET_COURSES', sessionId: newS.id, proClinicId: job.proClinicId || null }, '*');
+        }
+      });
+
+      // ─── Detect LC_GET_COURSES result จาก Firestore (cross-device delivery) ──
+      allDocs.forEach(s => {
+        const lc = s.latestCourses;
+        if (lc?.jobId && lc.jobId === coursesJobIdRef.current) {
+          coursesJobIdRef.current = null; // consume
+          setCoursesPanel(prev => prev?.sessionId === s.id
+            ? { ...prev, status: lc.success === false ? 'error' : 'done',
+                patientName: lc.patientName || prev.patientName,
+                courses: lc.courses || [], expiredCourses: lc.expiredCourses || [],
+                error: lc.error || '' }
+            : prev
+          );
         }
       });
 
@@ -836,18 +870,34 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     window.open(`${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`, '_blank');
   };
 
-  const handleGetCourses = (session) => {
+  const handleGetCourses = async (session) => {
+    const jobId = `courses_${session.id}_${Date.now()}`;
+    coursesJobIdRef.current = jobId;
     setCoursesPanel({
       sessionId: session.id,
       patientName: session.sessionName || session.patientData?.firstName || '',
       hn: session.brokerProClinicHN || '',
       status: 'loading', courses: [], expiredCourses: [], error: '',
     });
-    window.postMessage({
-      type: 'LC_GET_COURSES',
-      sessionId: session.id,
-      proClinicId: session.brokerProClinicId,
-    }, '*');
+    // Fast path: same browser (extension รับ postMessage โดยตรง)
+    forwardedJobsRef.current.add(jobId);
+    window.postMessage({ type: 'LC_GET_COURSES', sessionId: session.id, proClinicId: session.brokerProClinicId }, '*');
+    // Cross-device path: write brokerJob → Cloud PC relay ผ่าน onSnapshot
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+        brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: session.brokerProClinicId || null },
+      });
+    } catch(e) { console.error('courses job write:', e); }
+    // 15s timeout → แสดง error ถ้า extension ไม่ตอบ
+    const _jid = jobId;
+    setTimeout(() => {
+      if (coursesJobIdRef.current !== _jid) return; // ได้รับผลแล้ว
+      coursesJobIdRef.current = null;
+      setCoursesPanel(prev => (prev?.sessionId === session.id && prev.status === 'loading')
+        ? { ...prev, status: 'error', error: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง' }
+        : prev
+      );
+    }, 15000);
   };
 
   const handleProClinicDelete = async (session) => {
