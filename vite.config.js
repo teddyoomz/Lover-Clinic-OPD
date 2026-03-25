@@ -1,9 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { writeFileSync } from 'fs'
+
+function versionPlugin() {
+  return {
+    name: 'version-json',
+    closeBundle() {
+      writeFileSync('dist/version.json', JSON.stringify({ v: Date.now().toString() }))
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), versionPlugin()],
   build: {
     rollupOptions: {
       output: {

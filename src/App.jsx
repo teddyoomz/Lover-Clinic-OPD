@@ -60,6 +60,24 @@ export default function App() {
     return () => window.removeEventListener('afterprint', handler);
   }, []);
 
+  // Auto-reload เมื่อ deploy version ใหม่ (poll ทุก 60 วิ)
+  useEffect(() => {
+    let baseline = null;
+    const check = async () => {
+      try {
+        const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const { v } = await res.json();
+        if (v === 'dev') return; // dev mode ไม่ reload
+        if (baseline === null) { baseline = v; return; }
+        if (v !== baseline) window.location.reload();
+      } catch { /* network error — skip */ }
+    };
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const ac = clinicSettings.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
