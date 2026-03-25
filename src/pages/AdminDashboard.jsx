@@ -1204,6 +1204,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">
+          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
           {/* Push notification test mode */}
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -1229,7 +1230,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <p className="text-xs text-orange-700 mt-3 text-center">ผู้ป่วยกรอกแบบฟอร์มแล้วจะไม่มีแจ้งเตือนส่งไปยังอุปกรณ์ใดๆ</p>
             )}
           </div>
-          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
         </div>
       ) : adminMode === 'formBuilder' ? (
         <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('dashboard')} />
