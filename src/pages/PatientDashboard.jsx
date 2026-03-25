@@ -386,7 +386,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
             center
             theme="dark"
           />
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-gray-600 mt-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-600 mt-1">
             {tx.headerSub}
           </p>
         </div>
