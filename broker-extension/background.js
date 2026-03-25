@@ -516,7 +516,7 @@ function findBestMatch(customers, patient) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── FORM FILLER: สร้างลูกค้าใหม่ (runs inside ProClinic page) ───────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function fillAndSubmitProClinicForm(patient) {
+async function fillAndSubmitProClinicForm(patient) {
   try {
     function setNativeVal(el, value) {
       const proto = el.tagName === 'TEXTAREA'
@@ -570,9 +570,22 @@ function fillAndSubmitProClinicForm(patient) {
     const dobInput = document.querySelector('[name="birthdate"]');
     if (dobInput) {
       // flatpickr wrap mode → instance อยู่บน parent (div.input-with-icon.right.datepicker)
-      const fp = dobInput._flatpickr
+      // รอให้ flatpickr initialize ก่อน (สูงสุด 3 วินาที)
+      let fp = dobInput._flatpickr
         || dobInput.parentElement?._flatpickr
         || dobInput.closest('.datepicker, .flatpickr-wrapper, [data-wrap]')?._flatpickr;
+      if (!fp) {
+        await new Promise(resolve => {
+          let attempts = 0;
+          const check = setInterval(() => {
+            fp = dobInput._flatpickr
+              || dobInput.parentElement?._flatpickr
+              || dobInput.closest('.datepicker, .flatpickr-wrapper, [data-wrap]')?._flatpickr;
+            if (fp || ++attempts >= 30) { clearInterval(check); resolve(); }
+          }, 100);
+        });
+      }
+
       let dobDate = null;
       if (patient.dobDay && patient.dobMonth && patient.dobYear) {
         let year = parseInt(patient.dobYear);
