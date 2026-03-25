@@ -531,6 +531,16 @@ function fillAndSubmitProClinicForm(patient) {
       const el = document.querySelector(`textarea[name="${name}"]`);
       if (el) { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }
     }
+    function fillSelectByText(name, text) {
+      if (!text) return;
+      const el = document.querySelector(`select[name="${name}"]`);
+      if (!el) return;
+      const t = text.toLowerCase();
+      const opt = Array.from(el.options).find(o =>
+        o.text.toLowerCase().includes(t) || t.includes(o.text.toLowerCase())
+      );
+      if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
     function clickRadio(id) {
       const el = document.getElementById(id);
       if (el) { el.checked = true; el.click(); }
@@ -543,6 +553,7 @@ function fillAndSubmitProClinicForm(patient) {
     fillInput('firstname', patient.firstName);
     fillInput('lastname',  patient.lastName);
     fillInput('telephone_number', patient.phone);
+    fillInput('address', patient.address);
 
     const genderMap = {
       'นาย':'ชาย','ด.ช.':'ชาย','Mr.':'ชาย',
@@ -551,17 +562,31 @@ function fillAndSubmitProClinicForm(patient) {
     const gender = genderMap[patient.prefix] || '';
     if (gender) fillSelect('gender', gender);
 
-    if (patient.age && !isNaN(parseInt(patient.age))) {
-      const birthYearCE = new Date().getFullYear() - parseInt(patient.age);
-      const dobInput = document.querySelector('input.flatpickr-input[name="birthdate"]');
-      if (dobInput?._flatpickr) dobInput._flatpickr.setDate(new Date(birthYearCE, 0, 1), true);
+    // วันเกิด: ใช้ dob จริงถ้ามี, fallback ใช้ age ประมาณ
+    const dobInput = document.querySelector('input.flatpickr-input[name="birthdate"]');
+    if (dobInput?._flatpickr) {
+      if (patient.dobDay && patient.dobMonth && patient.dobYear) {
+        let year = parseInt(patient.dobYear);
+        if (year > 2400) year -= 543; // พ.ศ. → ค.ศ.
+        dobInput._flatpickr.setDate(new Date(year, parseInt(patient.dobMonth) - 1, parseInt(patient.dobDay)), true);
+      } else if (patient.age && !isNaN(parseInt(patient.age))) {
+        dobInput._flatpickr.setDate(new Date(new Date().getFullYear() - parseInt(patient.age), 0, 1), true);
+      }
     }
 
-    const notes = [];
-    if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
-    if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
-    if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
-    if (notes.length) fillTextarea('note', notes.join('\n'));
+    // ที่มาของลูกค้า (dropdown) — ใช้ค่าแรกจาก howFoundUs
+    if (patient.howFoundUs?.length) fillSelectByText('how_know_us', patient.howFoundUs[0]);
+
+    // หมายเหตุ → Clinical Summary ทั้งดุ้น (fallback สร้างจาก fields)
+    if (patient.clinicalSummary) {
+      fillTextarea('note', patient.clinicalSummary);
+    } else {
+      const notes = [];
+      if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
+      if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
+      if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
+      if (notes.length) fillTextarea('note', notes.join('\n'));
+    }
 
     fillInput('contact_1_firstname',        patient.emergencyName);
     fillInput('contact_1_lastname',         patient.emergencyRelation);
@@ -604,10 +629,11 @@ async function submitProClinicEditViaFetch(patient, customerId, origin) {
     // Override ด้วย patient data ของเรา
     const VALID_PREFIXES = ['นาย','นาง','นางสาว','ด.ช.','ด.ญ.','Mr.','Ms.','Mrs.','Miss','ดร.','คุณ'];
     const prefix = VALID_PREFIXES.includes(patient.prefix) ? patient.prefix : null;
-    if (prefix) formData.set('prefix', prefix);
+    if (prefix)            formData.set('prefix', prefix);
     if (patient.firstName) formData.set('firstname', patient.firstName);
     if (patient.lastName)  formData.set('lastname',  patient.lastName);
     if (patient.phone)     formData.set('telephone_number', patient.phone);
+    if (patient.address)   formData.set('address', patient.address);
 
     const genderMap = {
       'นาย':'ชาย','ด.ช.':'ชาย','Mr.':'ชาย',
@@ -616,11 +642,39 @@ async function submitProClinicEditViaFetch(patient, customerId, origin) {
     const gender = genderMap[patient.prefix];
     if (gender) formData.set('gender', gender);
 
-    const notes = [];
-    if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
-    if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
-    if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
-    if (notes.length) formData.set('note', notes.join('\n'));
+    // วันเกิด: ใช้ dob จริงถ้ามี, fallback ใช้ age ประมาณ
+    if (patient.dobDay && patient.dobMonth && patient.dobYear) {
+      let year = parseInt(patient.dobYear);
+      if (year > 2400) year -= 543; // พ.ศ. → ค.ศ.
+      const mm = String(parseInt(patient.dobMonth)).padStart(2, '0');
+      const dd = String(parseInt(patient.dobDay)).padStart(2, '0');
+      formData.set('birthdate', `${year}-${mm}-${dd}`);
+    } else if (patient.age && !isNaN(parseInt(patient.age))) {
+      const year = new Date().getFullYear() - parseInt(patient.age);
+      formData.set('birthdate', `${year}-01-01`);
+    }
+
+    // ที่มาของลูกค้า — ใช้ค่าแรกจาก howFoundUs
+    // (fetch ส่ง value ตรงๆ → ต้องตรงกับ option value ใน ProClinic)
+    if (patient.howFoundUs?.length) {
+      const howMap = {
+        'Facebook': 'Facebook', 'Google': 'Google', 'Line': 'Line',
+        'AI': 'อื่นๆ', 'ป้ายตามที่ต่างๆ': 'ป้ายโฆษณา', 'รู้จักจากคนรู้จัก': 'เพื่อนแนะนำ',
+      };
+      const mapped = howMap[patient.howFoundUs[0]] || patient.howFoundUs[0];
+      formData.set('how_know_us', mapped);
+    }
+
+    // หมายเหตุ → Clinical Summary ทั้งดุ้น (fallback สร้างจาก fields)
+    if (patient.clinicalSummary) {
+      formData.set('note', patient.clinicalSummary);
+    } else {
+      const notes = [];
+      if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
+      if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
+      if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
+      if (notes.length) formData.set('note', notes.join('\n'));
+    }
 
     if (patient.emergencyName)     formData.set('contact_1_firstname',        patient.emergencyName);
     if (patient.emergencyRelation) formData.set('contact_1_lastname',         patient.emergencyRelation);
