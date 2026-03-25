@@ -55,7 +55,11 @@ export default function PatientDashboard({ token, clinicSettings }) {
       // Rate limit: 1 ชั่วโมงต่อ session — ป้องกัน extension ทำงานหนักหรือโดนแกล้ง
       if (!refreshRequestedRef.current && data.brokerProClinicId) {
         const last = data.lastCoursesAutoFetch;
-        const shouldRequest = !last || (Date.now() - last.toMillis()) > COURSES_REFRESH_COOLDOWN_MS;
+        // deny ทันทีถ้า: (1) ยังอยู่ใน cooldown หรือ (2) request ก่อนหน้ายังค้างอยู่ใน Firestore
+        // → ป้องกันลูกค้า refresh รัวๆ สร้าง queue request — ปัดทิ้ง ไม่เอาเข้า queue
+        const stillCoolingDown = last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS;
+        const alreadyPending   = !!data.coursesRefreshRequest;
+        const shouldRequest    = !stillCoolingDown && !alreadyPending;
         if (shouldRequest) {
           refreshRequestedRef.current = true; // mark ทันทีก่อน async write เพื่อป้องกัน double-trigger
           const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id);
