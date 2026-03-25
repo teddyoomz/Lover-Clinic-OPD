@@ -161,11 +161,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], error: error || '' }
           : prev
         );
-        // Write result to Firestore so other devices (iPhone) receive it via onSnapshot
+        // Write result to Firestore: restore brokerStatus + deliver to other devices (iPhone)
         if (sessionId) {
           updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            brokerStatus: 'done', brokerError: null, brokerJob: null,
             latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], patientName: patientName || '', jobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
-            brokerJob: null,
           }).catch(e => console.error('latestCourses write:', e));
         }
         return;
@@ -452,16 +452,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           !brokerTimers.current[newS.id]
         ) {
           forwardedJobsRef.current.add(job.id);
-          setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
           if (job.type === 'LC_UPDATE_PROCLINIC') {
+            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
             window.postMessage({ type: 'LC_UPDATE_PROCLINIC', sessionId: newS.id,
               proClinicId: job.proClinicId || null, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
           } else if (job.type === 'LC_DELETE_PROCLINIC') {
+            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
             window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: newS.id,
               proClinicId: job.proClinicId, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
+          } else if (job.type === 'LC_GET_COURSES') {
+            // Courses: ไม่ต้องมี OPD spinner และไม่ต้องมี fail-timer (modal จัดการ timeout เอง)
+            window.postMessage({ type: 'LC_GET_COURSES', sessionId: newS.id, proClinicId: job.proClinicId || null }, '*');
+            return; // ← early return: ข้าม setBrokerPending + brokerTimers ด้านล่าง
           } else {
+            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
             window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId: newS.id, patient: job.patient }, '*');
           }
+          // OPD timer (courses ข้ามไปแล้วจาก early return)
           const _sid = newS.id;
           brokerTimers.current[_sid] = setTimeout(async () => {
             delete brokerTimers.current[_sid];
@@ -475,15 +482,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               }
             } catch(e) { console.error('relay timeout:', e); }
           }, 15000);
-        }
-      });
-
-      // ─── Relay LC_GET_COURSES jobs (ไม่ใช้ brokerStatus — ไม่กระทบ OPD flow) ──
-      allDocs.forEach(newS => {
-        const job = newS.brokerJob;
-        if (job?.id && job.type === 'LC_GET_COURSES' && !forwardedJobsRef.current.has(job.id)) {
-          forwardedJobsRef.current.add(job.id);
-          window.postMessage({ type: 'LC_GET_COURSES', sessionId: newS.id, proClinicId: job.proClinicId || null }, '*');
         }
       });
 
@@ -879,24 +877,33 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       hn: session.brokerProClinicHN || '',
       status: 'loading', courses: [], expiredCourses: [], error: '',
     });
-    // Fast path: same browser (extension รับ postMessage โดยตรง)
+    // Pattern เดียวกับ handleOpdClick: fast-path postMessage + Firestore job queue
     forwardedJobsRef.current.add(jobId);
     window.postMessage({ type: 'LC_GET_COURSES', sessionId: session.id, proClinicId: session.brokerProClinicId }, '*');
-    // Cross-device path: write brokerJob → Cloud PC relay ผ่าน onSnapshot
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+        brokerStatus: 'pending', brokerError: null,
         brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: session.brokerProClinicId || null },
       });
     } catch(e) { console.error('courses job write:', e); }
-    // 15s timeout → แสดง error ถ้า extension ไม่ตอบ
+    // 15s local timeout → แสดง error + คืน brokerStatus กลับเป็น done
+    const _sid = session.id;
     const _jid = jobId;
-    setTimeout(() => {
-      if (coursesJobIdRef.current !== _jid) return; // ได้รับผลแล้ว
+    setTimeout(async () => {
+      if (coursesJobIdRef.current !== _jid) return;
       coursesJobIdRef.current = null;
-      setCoursesPanel(prev => (prev?.sessionId === session.id && prev.status === 'loading')
+      setCoursesPanel(prev => (prev?.sessionId === _sid && prev.status === 'loading')
         ? { ...prev, status: 'error', error: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง' }
         : prev
       );
+      try {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid));
+        if (snap.exists() && snap.data()?.brokerJob?.id === _jid) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid), {
+            brokerStatus: 'done', brokerError: null, brokerJob: null,
+          });
+        }
+      } catch(e) { console.error('courses timeout cleanup:', e); }
     }, 15000);
   };
 
