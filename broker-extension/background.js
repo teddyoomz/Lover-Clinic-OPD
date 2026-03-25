@@ -569,8 +569,10 @@ function fillAndSubmitProClinicForm(patient) {
     // วันเกิด: ใช้ dob จริงถ้ามี, fallback ใช้ age ประมาณ
     const dobInput = document.querySelector('[name="birthdate"]');
     if (dobInput) {
+      // flatpickr wrap mode → instance อยู่บน parent, ไม่ใช่ input เอง
       const fp = dobInput._flatpickr
-        || document.querySelector('input.flatpickr-input[placeholder]')?._flatpickr;
+        || dobInput.parentElement?._flatpickr
+        || dobInput.closest('.flatpickr-wrapper, [data-wrap]')?._flatpickr;
       let dobDate = null;
       if (patient.dobDay && patient.dobMonth && patient.dobYear) {
         let year = parseInt(patient.dobYear);
