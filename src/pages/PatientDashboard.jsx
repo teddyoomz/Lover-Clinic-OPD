@@ -260,6 +260,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   const prevFetchedAtRef    = useRef(null);
   const syncTimeoutRef      = useRef(null);
   const sessionIdRef        = useRef(null);
+  const refreshRequestedRef = useRef(false);
 
   // อัพเดท countdown ทุก 30 วิ
   useEffect(() => {
@@ -325,6 +326,20 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         clearSyncTimeout();
         setSyncTimedOut(false);
         if (data.latestCourses?.success !== false) setJustSynced(true);
+      }
+
+      // Auto-sync on first load if not in cooldown
+      if (!refreshRequestedRef.current && data.brokerProClinicId) {
+        const last = data.lastCoursesAutoFetch;
+        const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
+        const stillCoolingDown = cooldown > 0 && last && (Date.now() - last.toMillis()) < cooldown;
+        if (!stillCoolingDown && !data.coursesRefreshRequest) {
+          refreshRequestedRef.current = true;
+          updateDoc(
+            doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id),
+            { coursesRefreshRequest: serverTimestamp() }
+          ).then(startSyncTimeout).catch(console.error);
+        }
       }
 
     }, () => setStatus('notfound'));
