@@ -574,19 +574,24 @@ function fillAndSubmitProClinicForm(patient) {
       }
     }
 
-    // ที่มาของลูกค้า (dropdown) — ใช้ค่าแรกจาก howFoundUs
-    if (patient.howFoundUs?.length) fillSelectByText('how_know_us', patient.howFoundUs[0]);
-
-    // หมายเหตุ → Clinical Summary ทั้งดุ้น (fallback สร้างจาก fields)
-    if (patient.clinicalSummary) {
-      fillTextarea('note', patient.clinicalSummary);
-    } else {
-      const notes = [];
-      if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
-      if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
-      if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
-      if (notes.length) fillTextarea('note', notes.join('\n'));
+    // ที่มาของลูกค้า → source dropdown + source_detail text
+    if (patient.howFoundUs?.length) {
+      const HOW_MAP = {
+        'Facebook':'Facebook','Google':'Google','Line':'Line',
+        'AI':'ChatGPT','ป้ายตามที่ต่างๆ':'อื่นๆ','รู้จักจากคนรู้จัก':'เพื่อนแนะนำ',
+      };
+      const mapped = HOW_MAP[patient.howFoundUs[0]] || patient.howFoundUs[0];
+      fillSelect('source', mapped);
+      fillInput('source_detail', patient.howFoundUs.join(', '));
     }
+
+    // ช่องที่มีความหมายตรงกัน
+    if (patient.reasons?.length) fillTextarea('symptoms', patient.reasons.join(', '));
+    if (patient.underlying)      fillTextarea('congenital_disease', patient.underlying);
+    if (patient.allergies)       fillTextarea('history_of_drug_allergy', patient.allergies);
+
+    // หมายเหตุ → Clinical Summary ทั้งดุ้น
+    fillTextarea('note', patient.clinicalSummary || '');
 
     fillInput('contact_1_firstname',        patient.emergencyName);
     fillInput('contact_1_lastname',         patient.emergencyRelation);
@@ -654,27 +659,23 @@ async function submitProClinicEditViaFetch(patient, customerId, origin) {
       formData.set('birthdate', `${year}-01-01`);
     }
 
-    // ที่มาของลูกค้า — ใช้ค่าแรกจาก howFoundUs
-    // (fetch ส่ง value ตรงๆ → ต้องตรงกับ option value ใน ProClinic)
+    // ที่มาของลูกค้า → source dropdown + source_detail text
     if (patient.howFoundUs?.length) {
-      const howMap = {
-        'Facebook': 'Facebook', 'Google': 'Google', 'Line': 'Line',
-        'AI': 'อื่นๆ', 'ป้ายตามที่ต่างๆ': 'ป้ายโฆษณา', 'รู้จักจากคนรู้จัก': 'เพื่อนแนะนำ',
+      const HOW_MAP = {
+        'Facebook':'Facebook','Google':'Google','Line':'Line',
+        'AI':'ChatGPT','ป้ายตามที่ต่างๆ':'อื่นๆ','รู้จักจากคนรู้จัก':'เพื่อนแนะนำ',
       };
-      const mapped = howMap[patient.howFoundUs[0]] || patient.howFoundUs[0];
-      formData.set('how_know_us', mapped);
+      formData.set('source', HOW_MAP[patient.howFoundUs[0]] || patient.howFoundUs[0]);
+      formData.set('source_detail', patient.howFoundUs.join(', '));
     }
 
-    // หมายเหตุ → Clinical Summary ทั้งดุ้น (fallback สร้างจาก fields)
-    if (patient.clinicalSummary) {
-      formData.set('note', patient.clinicalSummary);
-    } else {
-      const notes = [];
-      if (patient.reasons?.length) notes.push('เหตุผลที่มา: ' + patient.reasons.join(', '));
-      if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
-      if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
-      if (notes.length) formData.set('note', notes.join('\n'));
-    }
+    // ช่องที่มีความหมายตรงกัน
+    if (patient.reasons?.length) formData.set('symptoms',               patient.reasons.join(', '));
+    if (patient.underlying)      formData.set('congenital_disease',     patient.underlying);
+    if (patient.allergies)       formData.set('history_of_drug_allergy', patient.allergies);
+
+    // หมายเหตุ → Clinical Summary ทั้งดุ้น
+    if (patient.clinicalSummary) formData.set('note', patient.clinicalSummary);
 
     if (patient.emergencyName)     formData.set('contact_1_firstname',        patient.emergencyName);
     if (patient.emergencyRelation) formData.set('contact_1_lastname',         patient.emergencyRelation);
