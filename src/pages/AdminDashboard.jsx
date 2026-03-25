@@ -61,6 +61,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [pushLoading, setPushLoading] = useState(false);
   const [globalPushMuted, setGlobalPushMuted] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPage,   setHistoryPage]   = useState(1);
   const brokerTimers = useRef({}); // sessionId → timeout id
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
 
@@ -988,23 +990,67 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
       ) : adminMode === 'formBuilder' ? (
         <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('dashboard')} />
-      ) : adminMode === 'history' ? (
+      ) : adminMode === 'history' ? (() => {
+        const PAGE_SIZE = 10;
+        const q = historySearch.trim().toLowerCase();
+        const filtered = q
+          ? archivedSessions.filter(s => {
+              const d = s.patientData;
+              const hn = (s.brokerProClinicHN || '').toLowerCase();
+              const fn = (d?.firstName || '').toLowerCase();
+              const ln = (d?.lastName  || '').toLowerCase();
+              const ph = (d?.phone     || '').replace(/\D/g, '');
+              return hn.includes(q) || fn.includes(q) || ln.includes(q) || ph.includes(q.replace(/\D/g, ''));
+            })
+          : archivedSessions;
+        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        const page = Math.min(historyPage, totalPages);
+        const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+        return (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
           {/* Header */}
-          <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex items-center gap-3">
-            <History size={20} className="text-amber-500" />
-            <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-amber-500">ประวัติผู้ป่วย (Archive)</h2>
-            <span className="ml-auto text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
+          <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <History size={20} className="text-amber-500" />
+              <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-amber-500">ประวัติผู้ป่วย (Archive)</h2>
+              <span className="ml-auto text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
+            </div>
+            {/* Search box */}
+            <div className="relative">
+              <input
+                type="text"
+                value={historySearch}
+                onChange={e => { setHistorySearch(e.target.value); setHistoryPage(1); }}
+                placeholder="ค้นหา HN, ชื่อ, นามสกุล, เบอร์โทร..."
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-xl px-4 py-2.5 pr-9 text-sm text-[var(--tx-heading)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-amber-700/60 transition-colors"
+              />
+              {historySearch ? (
+                <button onClick={() => { setHistorySearch(''); setHistoryPage(1); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] hover:text-amber-400">
+                  <X size={14}/>
+                </button>
+              ) : (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+              )}
+            </div>
+            {/* Search result count */}
+            {q && (
+              <p className="text-xs text-[var(--tx-muted)]">
+                พบ <span className="text-amber-400 font-bold">{filtered.length}</span> รายการ
+              </p>
+            )}
           </div>
 
           {/* Card list */}
           <div className="divide-y divide-[var(--bd)]">
-            {archivedSessions.length === 0 ? (
+            {filtered.length === 0 ? (
               <div className="p-16 text-center text-gray-600 flex flex-col items-center gap-4">
                 <History size={36} className="opacity-20 text-amber-600" />
-                <p className="text-xs tracking-wider uppercase font-bold">ไม่มีประวัติในระบบ</p>
+                <p className="text-xs tracking-wider uppercase font-bold">{q ? 'ไม่พบรายการที่ตรงกัน' : 'ไม่มีประวัติในระบบ'}</p>
               </div>
-            ) : archivedSessions.map(session => {
+            ) : pageItems.map(session => {
               const d = session.patientData;
               const formType = session.formType || 'intake';
               const isFollowUp = formType.startsWith('followup_');
@@ -1139,8 +1185,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               );
             })}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-[var(--bd)] flex items-center justify-between gap-3">
+              <button
+                onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-4 py-2 rounded-xl text-xs font-bold border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >← ก่อนหน้า</button>
+
+              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setHistoryPage(n)}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold border transition-colors ${
+                      n === page
+                        ? 'bg-amber-700 text-white border-amber-600'
+                        : 'border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'
+                    }`}
+                  >{n}</button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-4 py-2 rounded-xl text-xs font-bold border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >ถัดไป →</button>
+            </div>
+          )}
         </div>
-      ) : (
+        );
+      })() : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
