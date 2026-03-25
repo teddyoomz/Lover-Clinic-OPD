@@ -18,11 +18,15 @@ function CourseCard({ c, expired }) {
           }`}>{c.status}</span>
         )}
       </div>
-      {c.type && <p className="text-[11px] text-gray-500">{c.type}</p>}
+      {c.product && (
+        <p className="text-[11px] text-gray-500 flex items-center gap-1">
+          <span>{c.product}</span>
+          {c.qty && c.qty !== c.product && <span className="font-mono font-bold text-gray-300">· {c.qty}</span>}
+        </p>
+      )}
       <div className="flex flex-wrap gap-3 text-[10px] font-mono">
         {expiryText && <span className={`${expired ? 'text-red-500' : 'text-gray-500'}`}>{expiryText}</span>}
         {hasValue && <span className="text-teal-500">{c.value}</span>}
-        {c.remaining && <span className="text-gray-500">{c.remaining}</span>}
       </div>
     </div>
   );
