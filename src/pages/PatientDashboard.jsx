@@ -78,7 +78,9 @@ export default function PatientDashboard({ token, clinicSettings }) {
   const d = sessionData.patientData || {};
   const courses = sessionData.latestCourses?.courses || [];
   const expiredCourses = sessionData.latestCourses?.expiredCourses || [];
-  const patientName = sessionData.latestCourses?.patientName || `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
+  const plName = sessionData.latestCourses?.patientName;
+  const formName = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
+  const patientName = (plName && plName !== '0') ? plName : formName;
   const hn = sessionData.brokerProClinicHN || '';
 
   return (

@@ -991,11 +991,12 @@ function scrapeProClinicCourses() {
   }
 
   try {
-    const patientName = (
+    const rawName = (
       document.querySelector('h5.mb-0')?.innerText?.trim() ||
       document.querySelector('.customer-name')?.innerText?.trim() ||
       document.title.split('|')[0].trim()
     );
+    const patientName = (rawName && rawName !== '0') ? rawName : '';
     const coursePag  = getPaginationInfo('#course-tab');
     const expiredPag = getPaginationInfo('#expired-course-tab');
     return {
