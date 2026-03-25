@@ -126,6 +126,20 @@ async function doAutoLogin(tabId) {
     await chrome.tabs.update(tabId, { active: true });
     throw new Error('ProClinic: login ไม่สำเร็จ — ตรวจสอบ email/password ใน extension popup');
   }
+
+  // ลอง dismiss Chrome Password Manager "Change your password" dialog (ถ้ามี)
+  // dialog นี้เป็น Chrome native UI — dispatch keyboard Enter/Escape เพื่อหวังว่า Chrome จะปิดให้
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: () => {
+        ['keydown','keyup'].forEach(type => {
+          document.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+        });
+      },
+    });
+  } catch {}
 }
 
 /**
