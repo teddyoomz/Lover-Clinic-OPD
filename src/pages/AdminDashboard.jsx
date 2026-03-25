@@ -161,6 +161,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const { sessionId, success, error, patientName, courses, expiredCourses } = event.data;
         const jobId = coursesJobIdRef.current;
         coursesJobIdRef.current = null; // consume → ป้องกัน onSnapshot double-fire
+        // ปลดล็อก auto-trigger สำหรับ session นี้ → patient เปิดลิงก์ครั้งถัดไปได้ trigger ใหม่
+        autoCoursesRequestedRef.current.delete(sessionId);
         setCoursesPanel(prev => prev?.sessionId === sessionId
           ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], error: error || '' }
           : prev
