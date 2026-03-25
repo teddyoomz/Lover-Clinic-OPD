@@ -21,6 +21,49 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 
+// ── CourseCard: stable top-level component (ห้ามวางไว้ใน render function) ─────
+function CourseCard({ c, expired }) {
+  const hasValue   = c.value && !c.value.includes('0.00');
+  const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
+  const daysMatch  = (c.expiry || '').match(/ภายใน (\d+) วัน|หมดอายุแล้ว (\d+) วัน/);
+  const daysLeft   = daysMatch ? (daysMatch[1] ? parseInt(daysMatch[1]) : -parseInt(daysMatch[2])) : null;
+  const urgentColor = daysLeft !== null && daysLeft <= 30 && daysLeft > 0 ? 'text-amber-400'
+    : daysLeft !== null && daysLeft <= 0 ? 'text-red-500' : 'text-gray-400';
+  return (
+    <div className={`rounded-xl border p-3.5 flex flex-col gap-2.5 transition-colors ${expired ? 'border-red-900/30 bg-red-950/10' : 'border-[#1e1e1e] bg-[#111] hover:border-teal-900/40'}`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className={`font-bold text-sm leading-tight ${expired ? 'text-red-300' : 'text-white'}`}>{c.name}</span>
+        {c.status && (
+          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
+            expired ? 'bg-red-950/40 border border-red-900/50 text-red-400' :
+            c.status === 'กำลังใช้งาน' ? 'bg-teal-950/40 border border-teal-900/50 text-teal-400' :
+            'bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400'
+          }`}>{expired ? 'หมดอายุ' : c.status}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        {c.product && (
+          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+            <Package size={11} className="shrink-0 text-gray-600"/>
+            <span>{c.product}</span>
+            {c.qty && c.qty !== c.product && <><span className="text-gray-500">·</span><span className="font-mono font-bold text-gray-300">{c.qty}</span></>}
+          </span>
+        )}
+        {c.expiry && (
+          <span className={`flex items-center gap-1.5 text-xs font-mono ${urgentColor}`}>
+            <CalendarClock size={11} className="shrink-0"/>{expiryText}
+          </span>
+        )}
+      </div>
+      {c.value && (
+        <div className={`flex items-center gap-1.5 text-xs font-bold mt-0.5 ${hasValue ? (expired ? 'text-red-400' : 'text-teal-400') : 'text-gray-600'}`}>
+          <Banknote size={12} className="shrink-0"/>{c.value}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminDashboard({ db, appId, user, auth, viewingSession, setViewingSession, setPrintMode, onSimulateScan, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
   const ac = cs.accentColor;
@@ -2104,90 +2147,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               )}
 
-              {coursesPanel.status === 'done' && (() => {
-                const CourseCard = ({ c, expired }) => {
-                  const isNoExpiry = c.expiry === 'ไม่มีวันหมดอายุ';
-                  const hasValue = c.value && !c.value.includes('0.00');
-                  const valueNum = parseFloat((c.value || '').replace(/[^0-9.]/g, ''));
-                  const expiryText = c.expiry.replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
-                  const daysMatch = c.expiry.match(/ภายใน (\d+) วัน|หมดอายุแล้ว (\d+) วัน/);
-                  const daysLeft = daysMatch ? (daysMatch[1] ? parseInt(daysMatch[1]) : -parseInt(daysMatch[2])) : null;
-                  const urgentColor = daysLeft !== null && daysLeft <= 30 && daysLeft > 0 ? 'text-amber-400' : daysLeft !== null && daysLeft <= 0 ? 'text-red-500' : 'text-gray-400';
-
-                  return (
-                    <div className={`rounded-xl border p-3.5 flex flex-col gap-2.5 transition-colors ${expired ? 'border-red-900/30 bg-red-950/10' : 'border-[#1e1e1e] bg-[#111] hover:border-teal-900/40'}`}>
-                      {/* Name + status */}
-                      <div className="flex items-start justify-between gap-2">
-                        <span className={`font-bold text-sm leading-tight ${expired ? 'text-red-300' : 'text-white'}`}>{c.name}</span>
-                        {c.status && (
-                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
-                            expired ? 'bg-red-950/40 border border-red-900/50 text-red-400' :
-                            c.status === 'กำลังใช้งาน' ? 'bg-teal-950/40 border border-teal-900/50 text-teal-400' :
-                            'bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400'
-                          }`}>{expired ? 'หมดอายุ' : c.status}</span>
-                        )}
-                      </div>
-
-                      {/* Details row */}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                        {/* Product + qty */}
-                        {c.product && (
-                          <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <Package size={11} className="shrink-0 text-gray-600"/>
-                            <span>{c.product}</span>
-                            {c.qty && c.qty !== c.product && <span className="text-gray-500">·</span>}
-                            {c.qty && c.qty !== c.product && <span className="font-mono font-bold text-gray-300">{c.qty}</span>}
-                          </span>
-                        )}
-                        {/* Expiry */}
-                        {c.expiry && (
-                          <span className={`flex items-center gap-1.5 text-xs font-mono ${urgentColor}`}>
-                            <CalendarClock size={11} className="shrink-0"/>
-                            {expiryText}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Value */}
-                      {c.value && (
-                        <div className={`flex items-center gap-1.5 text-xs font-bold mt-0.5 ${hasValue ? (expired ? 'text-red-400' : 'text-teal-400') : 'text-gray-600'}`}>
-                          <Banknote size={12} className="shrink-0"/>
-                          {c.value}
-                        </div>
-                      )}
+              {coursesPanel.status === 'done' && (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package size={14} className="text-teal-500"/>
+                      <h4 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h4>
+                      <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{coursesPanel.courses.length}</span>
                     </div>
-                  );
-                };
-
-                return (
-                  <>
-                    {/* Active courses */}
+                    {coursesPanel.courses.length === 0
+                      ? <p className="text-xs text-gray-600 italic py-4 text-center">ไม่มีคอร์สคงเหลือ</p>
+                      : <div className="flex flex-col gap-2">{coursesPanel.courses.map((c, i) => <CourseCard key={i} c={c} expired={false}/>)}</div>
+                    }
+                  </div>
+                  {coursesPanel.expiredCourses.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <Package size={14} className="text-teal-500"/>
-                        <h4 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h4>
-                        <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{coursesPanel.courses.length}</span>
+                        <PackageX size={14} className="text-red-500"/>
+                        <h4 className="text-xs font-black uppercase tracking-widest text-red-500">คอร์สหมดอายุ</h4>
+                        <span className="text-[10px] font-bold text-red-700 bg-red-950/30 px-2 py-0.5 rounded-full border border-red-900/30">{coursesPanel.expiredCourses.length}</span>
                       </div>
-                      {coursesPanel.courses.length === 0
-                        ? <p className="text-xs text-gray-600 italic py-4 text-center">ไม่มีคอร์สคงเหลือ</p>
-                        : <div className="flex flex-col gap-2">{coursesPanel.courses.map((c, i) => <CourseCard key={i} c={c} expired={false}/>)}</div>
-                      }
+                      <div className="flex flex-col gap-2">{coursesPanel.expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true}/>)}</div>
                     </div>
-
-                    {/* Expired courses */}
-                    {coursesPanel.expiredCourses.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <PackageX size={14} className="text-red-500"/>
-                          <h4 className="text-xs font-black uppercase tracking-widest text-red-500">คอร์สหมดอายุ</h4>
-                          <span className="text-[10px] font-bold text-red-700 bg-red-950/30 px-2 py-0.5 rounded-full border border-red-900/30">{coursesPanel.expiredCourses.length}</span>
-                        </div>
-                        <div className="flex flex-col gap-2">{coursesPanel.expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true}/>)}</div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+                  )}
+                </>
+              )}
             </div>
 
             {/* Footer */}
