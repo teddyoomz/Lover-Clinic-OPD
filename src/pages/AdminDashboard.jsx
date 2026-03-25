@@ -931,7 +931,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       } catch(e) { console.error('handleOpenPatientView:', e); return; }
     }
-    window.open(`/?patient=${token}&admin=1`, '_blank');
+    window.location.href = `/?patient=${token}&admin=1`;
   };
 
   const handleGetCourses = async (session) => {
