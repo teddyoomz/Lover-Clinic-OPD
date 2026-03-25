@@ -295,25 +295,29 @@ export default function PatientDashboard({ token, clinicSettings }) {
 
         {/* Patient info card */}
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] overflow-hidden">
-          <div className="p-5 flex items-center gap-4">
+          {/* Accent top bar */}
+          <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.6), transparent)` }} />
+
+          <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
             {/* Avatar */}
-            <div className="w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center text-lg font-black select-none"
-              style={{ background: `rgba(${acRgb},0.15)`, border: `1px solid rgba(${acRgb},0.3)`, color: ac }}>
+            <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none shadow-lg"
+              style={{ background: `radial-gradient(135deg, rgba(${acRgb},0.3) 0%, rgba(${acRgb},0.1) 100%)`, border: `1.5px solid rgba(${acRgb},0.45)`, color: ac, boxShadow: `0 0 20px rgba(${acRgb},0.15)` }}>
               {getInitials(patientName)}
             </div>
+
             {/* Info */}
-            <div className="flex flex-col gap-1 min-w-0">
-              <p className="text-lg sm:text-xl font-black text-white leading-tight truncate">{patientName || 'ไม่ระบุชื่อ'}</p>
-              <div className="flex items-center flex-wrap gap-2 mt-0.5">
+            <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
+              <p className="text-xl font-black text-white leading-snug">{patientName || 'ไม่ระบุชื่อ'}</p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border"
-                    style={{ color: ac, borderColor: `rgba(${acRgb},0.4)`, background: `rgba(${acRgb},0.1)` }}>
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
+                    style={{ color: ac, background: `rgba(${acRgb},0.12)`, border: `1px solid rgba(${acRgb},0.3)` }}>
                     HN {hn}
                   </span>
                 )}
                 {d.phone && (
-                  <span className="text-[11px] text-gray-500 flex items-center gap-1">
-                    <Phone size={10} className="text-gray-600" /> {d.phone}
+                  <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                    <Phone size={11} className="text-gray-600" />{d.phone}
                   </span>
                 )}
               </div>
@@ -322,7 +326,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
 
           {/* Sync chip strip */}
           {syncStatus !== 'idle' && (
-            <div className="px-5 pb-4">
+            <div className="px-5 pb-4 pt-1">
               <SyncChip
                 syncStatus={syncStatus}
                 syncTimeStr={syncTimeStr}
