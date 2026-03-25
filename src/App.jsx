@@ -10,6 +10,7 @@ import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates
 import AdminLogin from './pages/AdminLogin.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import PatientForm from './pages/PatientForm.jsx';
+import PatientDashboard from './pages/PatientDashboard.jsx';
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -27,6 +28,7 @@ export default function App() {
 
   const params = new URLSearchParams(window.location.search);
   const sessionFromUrl = params.get('session');
+  const patientFromUrl = params.get('patient');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), (snap) => {
@@ -83,6 +85,14 @@ export default function App() {
 
   if (isInitializing) {
     return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลดระบบ {clinicSettings.clinicName}...</div>;
+  }
+
+  if (patientFromUrl) {
+    return (
+      <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
+        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} />
+      </div>
+    );
   }
 
   if (sessionFromUrl) {

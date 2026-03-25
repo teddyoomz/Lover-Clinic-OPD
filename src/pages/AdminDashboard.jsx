@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import {
@@ -110,6 +110,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const brokerTimers = useRef({}); // sessionId → timeout id
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
+  const [qrDisplayMode, setQrDisplayMode] = useState('session'); // 'session' | 'patientLink'
+  const [patientLinkModal, setPatientLinkModal] = useState(null); // session id
+  const [patientLinkLoading, setPatientLinkLoading] = useState(false);
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -666,6 +669,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const getSessionUrl = (sessionId) => `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
   const getQRUrl = (sessionId) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getSessionUrl(sessionId))}&margin=10&color=000000&ecc=Q`;
+  const getPatientLinkUrl = (token) => `${window.location.origin}${window.location.pathname}?patient=${token}`;
+  const getPatientLinkQRUrl = (token) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getPatientLinkUrl(token))}&margin=10&color=000000&ecc=Q`;
 
   const handleCopyToClipboard = (text, isUrl = false) => {
     const textArea = document.createElement("textarea");
@@ -911,6 +916,41 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       } catch(e) { console.error('courses timeout cleanup:', e); }
     }, 15000);
+  };
+
+  // ─── Patient Link handlers ───────────────────────────────────────────────────
+  const handleGeneratePatientLink = async (sessionId) => {
+    setPatientLinkLoading(true);
+    const token = Math.random().toString(36).substr(2, 10) + Math.random().toString(36).substr(2, 10);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+        patientLinkToken: token, patientLinkEnabled: true,
+      });
+      setSelectedQR(sessionId);
+      setQrDisplayMode('patientLink');
+    } catch(e) { console.error('generatePatientLink:', e); }
+    setPatientLinkLoading(false);
+  };
+
+  const handleTogglePatientLink = async (session) => {
+    setPatientLinkLoading(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+        patientLinkEnabled: !session.patientLinkEnabled,
+      });
+    } catch(e) { console.error('togglePatientLink:', e); }
+    setPatientLinkLoading(false);
+  };
+
+  const handleDeletePatientLink = async (sessionId) => {
+    setPatientLinkLoading(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+        patientLinkToken: null, patientLinkEnabled: false,
+      });
+      if (qrDisplayMode === 'patientLink') setQrDisplayMode('session');
+    } catch(e) { console.error('deletePatientLink:', e); }
+    setPatientLinkLoading(false);
   };
 
   const handleProClinicDelete = async (session) => {
@@ -1377,33 +1417,67 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} style={{color: ac}} /> QR Code / ลิงก์
               </h2>
-              {selectedQR ? (
+              {selectedQR ? (() => {
+                const plToken = activeSessionInfo?.patientLinkToken;
+                const plEnabled = activeSessionInfo?.patientLinkEnabled;
+                const isPlMode = qrDisplayMode === 'patientLink' && !!plToken;
+                const qrSrc = isPlMode ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
+                const linkUrl = isPlMode ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
+                const tokenLabel = isPlMode ? 'Patient Link Token' : 'รหัสคิว (Token)';
+                const tokenValue = isPlMode ? plToken : selectedQR;
+                return (
                 <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
+                  {/* Mode toggle — show only when patient link token exists */}
+                  {plToken && (
+                    <div className="flex w-full rounded-xl overflow-hidden border border-[var(--bd)] text-xs font-bold uppercase tracking-wider">
+                      <button onClick={() => setQrDisplayMode('session')} className={`flex-1 py-2 transition-colors ${qrDisplayMode === 'session' ? 'bg-[var(--bg-hover2)] text-[var(--tx-heading)]' : 'text-gray-600 hover:text-gray-400'}`}>QR คิว</button>
+                      <button onClick={() => setQrDisplayMode('patientLink')} className={`flex-1 py-2 transition-colors flex items-center justify-center gap-1 ${qrDisplayMode === 'patientLink' ? 'bg-purple-950/40 text-purple-300' : 'text-gray-600 hover:text-purple-400'}`}>
+                        <Link size={11}/> ลิงก์ถาวร
+                      </button>
+                    </div>
+                  )}
                   <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden" style={{boxShadow: `0 0 40px rgba(${acRgb},0.25)`}}>
-                    <img src={getQRUrl(selectedQR)} alt="Auth QR" className="w-full h-full object-contain" />
+                    <img src={qrSrc} alt="QR" className="w-full h-full object-contain" />
                   </div>
                   <div className="w-full text-center">
                     <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{activeSessionInfo?.sessionName || 'ไม่มีชื่อคิว'}</h3>
+                    {isPlMode && (
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                        {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                      </span>
+                    )}
                   </div>
                   <div className="w-full text-left">
-                    <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">รหัสคิว (Token)</p>
-                    <p className="font-mono text-xl sm:text-2xl font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all" style={{color: ac}}>{selectedQR}</p>
+                    <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">{tokenLabel}</p>
+                    <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all" style={{color: isPlMode ? '#a855f7' : ac}}>{tokenValue}</p>
                   </div>
                   <div className="w-full text-left">
                     <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
                     <div className="flex items-center gap-2">
-                      <input readOnly value={getSessionUrl(selectedQR)} className="flex-1 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
-                      <button onClick={() => handleCopyToClipboard(getSessionUrl(selectedQR), true)} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
+                      <input readOnly value={linkUrl} className="flex-1 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
+                      <button onClick={() => handleCopyToClipboard(linkUrl, true)} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
                         {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500" /> : <ClipboardList size={18} />}
                       </button>
                     </div>
                   </div>
                   <div className="w-full h-px bg-[var(--bd)] my-2"></div>
-                  <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
-                    <Eye size={16}/> จำลองหน้าจอมือถือ
-                  </button>
+                  {isPlMode ? (
+                    <div className="w-full flex gap-2">
+                      <button onClick={() => activeSessionInfo && handleTogglePatientLink(activeSessionInfo)} disabled={patientLinkLoading} className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border ${plEnabled ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-white' : 'bg-green-950/30 border-green-900/50 text-green-400 hover:bg-green-900/40'}`}>
+                        {plEnabled ? <><ToggleLeft size={15}/> ปิด</> : <><ToggleRight size={15}/> เปิด</>}
+                      </button>
+                      <button onClick={() => handleDeletePatientLink(selectedQR)} disabled={patientLinkLoading} className="p-3 rounded-xl border border-red-900/40 text-red-500 hover:bg-red-950/30 transition-colors" title="ลบลิงก์ถาวร">
+                        <Trash2 size={15}/>
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                      <Eye size={16}/> จำลองหน้าจอมือถือ
+                    </button>
+                  )}
                 </div>
-              ) : (
+                );
+              })() : (
                 <div className="py-20 w-full text-gray-600 flex flex-col items-center bg-[var(--bg-elevated)] rounded-2xl border border-dashed border-[var(--bd)]">
                   <Flame size={48} className="mb-4 opacity-20 text-red-500" />
                   <p className="text-xs sm:text-sm uppercase tracking-widest text-center px-4 leading-relaxed font-bold">กดสร้างคิวใหม่ด้านบน<br/>เพื่อแสดง QR Code และลิงก์</p>
@@ -1463,6 +1537,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {/* Action buttons */}
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={() => setSelectedQR(session.id)} className="p-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-input)] text-gray-400 hover:text-[var(--tx-heading)] rounded-lg border border-[var(--bd)] transition-colors" title="QR"><QrCode size={15} /></button>
+                          <button
+                            onClick={() => setPatientLinkModal(session.id)}
+                            title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ถาวร: เปิดใช้งาน' : 'ลิงก์ถาวร: ปิดใช้งาน') : 'สร้างลิงก์ถาวร'}
+                            className={`p-2 rounded-lg border transition-all ${
+                              session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
+                              session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
+                              'bg-[var(--bg-hover)] text-gray-600 border-dashed border-[var(--bd)] hover:text-gray-400'
+                            }`}
+                          >
+                            {session.patientLinkToken && !session.patientLinkEnabled ? <Unlink size={15}/> : <Link size={15}/>}
+                          </button>
                           {session.status === 'completed' && data && (
                             <button onClick={() => handleViewSession(session)} className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูข้อมูล"><FileText size={15} /></button>
                           )}
@@ -2315,6 +2400,70 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         </div>
       )}
+
+      {/* Patient Link Modal */}
+      {patientLinkModal && (() => {
+        const plSession = sessions.find(s => s.id === patientLinkModal) || archivedSessions.find(s => s.id === patientLinkModal);
+        if (!plSession) { setPatientLinkModal(null); return null; }
+        const plToken = plSession.patientLinkToken;
+        const plEnabled = plSession.patientLinkEnabled;
+        return (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPatientLinkModal(null)}>
+            <div className="bg-[#0a0a0a] rounded-2xl border border-[#222] w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" style={{boxShadow: '0 0 60px rgba(168,85,247,0.15)'}} onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center gap-3 p-5 border-b border-[#1a1a1a]">
+                <div className="w-9 h-9 rounded-xl bg-purple-950/60 border border-purple-900/50 flex items-center justify-center shrink-0">
+                  <Link size={16} className="text-purple-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black uppercase tracking-widest text-purple-400">ลิงก์ถาวรของผู้ป่วย</p>
+                  <p className="text-sm font-bold text-white truncate">{plSession.sessionName || plSession.id}</p>
+                </div>
+                <button onClick={() => setPatientLinkModal(null)} className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[#1a1a1a] transition-colors"><X size={16}/></button>
+              </div>
+              {/* Body */}
+              <div className="p-5 flex flex-col gap-4">
+                {!plToken ? (
+                  <>
+                    <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ถาวรเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
+                    <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
+                      {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ถาวร
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">สถานะ</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                        {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">ลิงก์</p>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={getPatientLinkUrl(plToken)} className="flex-1 bg-[#141414] border border-[#2a2a2a] text-gray-500 text-[10px] p-2.5 rounded-lg outline-none font-mono" />
+                        <button onClick={() => handleCopyToClipboard(getPatientLinkUrl(plToken), true)} className="p-2.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400 hover:text-white transition-colors shrink-0"><ClipboardList size={14}/></button>
+                        <a href={getPatientLinkUrl(plToken)} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400 hover:text-purple-400 transition-colors shrink-0"><ExternalLink size={14}/></a>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => { setSelectedQR(plSession.id); setQrDisplayMode('patientLink'); setPatientLinkModal(null); }} className="flex-1 py-2.5 rounded-xl border border-purple-900/50 text-purple-400 hover:bg-purple-950/30 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5">
+                        <QrCode size={13}/> QR
+                      </button>
+                      <button onClick={() => { handleTogglePatientLink(plSession); }} disabled={patientLinkLoading} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${plEnabled ? 'border-[#2a2a2a] text-gray-400 hover:text-white hover:border-[#444]' : 'border-green-900/50 text-green-400 hover:bg-green-950/30'}`}>
+                        {plEnabled ? <><ToggleLeft size={13}/> ปิด</> : <><ToggleRight size={13}/> เปิด</>}
+                      </button>
+                      <button onClick={() => { handleDeletePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="p-2.5 rounded-xl border border-red-900/30 text-red-500 hover:bg-red-950/30 transition-colors disabled:opacity-60" title="ลบลิงก์">
+                        <Trash2 size={14}/>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delete Modal */}
       {sessionToDelete && (
