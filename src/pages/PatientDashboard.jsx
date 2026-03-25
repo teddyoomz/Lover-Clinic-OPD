@@ -334,17 +334,27 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   // ── Loading ────────────────────────────────────────────────────────────────
   // ── Controls bar (reused in loading/error/main screens) ───────────────────
   const Controls = () => (
-    <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-      {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-      <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden backdrop-blur-sm">
-        <button onClick={() => setLanguage('th')}
-          className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-          style={language === 'th' ? { backgroundColor: ac } : {}}>TH</button>
-        <button onClick={() => setLanguage('en')}
-          className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-          style={language === 'en' ? { backgroundColor: ac } : {}}>EN</button>
+    <>
+      {isAdminView && (
+        <button
+          onClick={() => window.history.back()}
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm text-xs font-bold text-gray-300 hover:text-white transition-colors"
+        >
+          ← Admin
+        </button>
+      )}
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+        {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
+        <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden backdrop-blur-sm">
+          <button onClick={() => setLanguage('th')}
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+            style={language === 'th' ? { backgroundColor: ac } : {}}>TH</button>
+          <button onClick={() => setLanguage('en')}
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+            style={language === 'en' ? { backgroundColor: ac } : {}}>EN</button>
+        </div>
       </div>
-    </div>
+    </>
   );
 
   if (status === 'loading') {
