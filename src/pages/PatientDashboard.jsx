@@ -17,7 +17,7 @@ const TX = {
     syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
     syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ',
     syncTimeout: 'Sync ไม่สำเร็จ', syncLast: 'ข้อมูลล่าสุด',
-    resync: 'ลอง Sync ใหม่',
+    resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที', cooldownPrefix: 'Sync ได้อีก',
     apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
     noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
     noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
@@ -32,7 +32,7 @@ const TX = {
     syncReq: 'Requesting...', syncIng: 'Syncing data',
     syncDone: 'Synced', syncFail: 'Sync failed',
     syncTimeout: 'Sync failed', syncLast: 'Last sync',
-    resync: 'Retry Sync',
+    resync: 'Retry Sync', cooldownMin: 'min', cooldownPrefix: 'Retry in',
     apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
     noCourses: 'No active courses', noData: 'No course data yet',
     noDataSub: 'Data will appear after the clinic syncs from the system.',
@@ -43,7 +43,7 @@ const TX = {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = debug; ตั้งเป็น 3600000 สำหรับ production
+const COURSES_REFRESH_COOLDOWN_MS = 3_600_000; // 1 ชั่วโมง — rate limit ฝั่ง PatientDashboard
 
 function formatSyncTime(fetchedAt) {
   if (!fetchedAt) return null;
@@ -217,10 +217,17 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   const [justSynced, setJustSynced]   = useState(false);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
   const [language, setLanguage]       = useState('th');
+  const [, forceUpdate]               = useState(0); // ticker สำหรับ countdown
   const refreshRequestedRef = useRef(false);
   const prevFetchedAtRef    = useRef(null);
   const syncTimeoutRef      = useRef(null);
   const sessionIdRef        = useRef(null);
+
+  // อัพเดท countdown ทุก 30 วิ
+  useEffect(() => {
+    const id = setInterval(() => forceUpdate(n => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const ac    = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -243,6 +250,9 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
 
   async function handleResync() {
     if (!sessionIdRef.current) return;
+    // cooldown guard
+    const lastFetch = sessionData?.lastCoursesAutoFetch;
+    if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
     setSyncTimedOut(false);
     setJustSynced(false);
     refreshRequestedRef.current = true;
@@ -365,6 +375,21 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
 
   const hasData = sessionData.latestCourses != null;
 
+  // ─── Cooldown ───────────────────────────────────────────────────────────────
+  const lastAutoFetch = sessionData.lastCoursesAutoFetch;
+  const cooldownRemainingMs = lastAutoFetch
+    ? Math.max(0, COURSES_REFRESH_COOLDOWN_MS - (Date.now() - lastAutoFetch.toMillis()))
+    : 0;
+  const inCooldown   = cooldownRemainingMs > 0;
+  const cooldownMins = Math.ceil(cooldownRemainingMs / 60_000);
+  const cooldownLabel = inCooldown
+    ? `${tx.cooldownPrefix} ${cooldownMins} ${tx.cooldownMin}`
+    : tx.resync;
+  // แสดงปุ่มเมื่อมีข้อมูลแล้ว หรืออยู่ใน cooldown หรือ sync ล้มเหลว
+  const showResyncButton =
+    syncStatus !== 'requesting' && syncStatus !== 'syncing' &&
+    (hasData || inCooldown || syncStatus === 'timeout' || syncStatus === 'error');
+
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200">
 
@@ -436,14 +461,18 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
                 latestCourses={sessionData.latestCourses}
                 tx={tx}
               />
-              {(syncStatus === 'timeout' || syncStatus === 'error') && (
+              {showResyncButton && (
                 <button
-                  onClick={handleResync}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[11px] font-bold transition-all active:scale-95"
-                  style={{ color: ac, borderColor: `rgba(${acRgb},0.35)`, background: `rgba(${acRgb},0.08)` }}
+                  onClick={inCooldown ? undefined : handleResync}
+                  disabled={inCooldown}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[11px] font-bold transition-all ${inCooldown ? 'cursor-default opacity-60' : 'active:scale-95 hover:opacity-90'}`}
+                  style={inCooldown
+                    ? { color: '#6b7280', borderColor: 'rgba(107,114,128,0.25)', background: 'rgba(107,114,128,0.06)' }
+                    : { color: ac, borderColor: `rgba(${acRgb},0.35)`, background: `rgba(${acRgb},0.08)` }
+                  }
                 >
-                  <RefreshCw size={11} />
-                  {tx.resync}
+                  <RefreshCw size={11} className={inCooldown ? '' : (syncStatus === 'timeout' || syncStatus === 'error') ? '' : 'opacity-60'} />
+                  {cooldownLabel}
                 </button>
               )}
             </div>
