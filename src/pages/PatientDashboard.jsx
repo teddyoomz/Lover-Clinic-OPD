@@ -250,7 +250,7 @@ const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
 
 export default function PatientDashboard({ token, clinicSettings, theme, setTheme, isAdminView }) {
   // cooldown ที่ admin กำหนด (0 = ไม่จำกัด); admin view ไม่มี cooldown
-  const COURSES_REFRESH_COOLDOWN_MS = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
+  const COURSES_REFRESH_COOLDOWN_MS = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
   const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);
@@ -261,12 +261,33 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   const syncTimeoutRef      = useRef(null);
   const sessionIdRef        = useRef(null);
   const refreshRequestedRef = useRef(false);
+  const sessionDataRef      = useRef(null); // ref สำหรับใช้ใน timer callback
 
   // อัพเดท countdown ทุก 30 วิ
   useEffect(() => {
     const id = setInterval(() => forceUpdate(n => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Schedule auto-sync เมื่อ cooldown หมดอายุ (กรณีเปิดหน้าค้างไว้)
+  useEffect(() => {
+    if (!sessionData?.brokerProClinicId || refreshRequestedRef.current) return;
+    const last = sessionData.lastCoursesAutoFetch;
+    const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
+    if (cooldown <= 0 || !last) return;
+    const remaining = cooldown - (Date.now() - last.toMillis());
+    if (remaining <= 0) return; // หมดแล้ว snapshot จะจัดการ
+    const id = setTimeout(() => {
+      const d = sessionDataRef.current;
+      if (!d || refreshRequestedRef.current || d.coursesRefreshRequest) return;
+      refreshRequestedRef.current = true;
+      updateDoc(
+        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', d.id),
+        { coursesRefreshRequest: serverTimestamp() }
+      ).then(startSyncTimeout).catch(console.error);
+    }, remaining + 200);
+    return () => clearTimeout(id);
+  }, [sessionData?.lastCoursesAutoFetch]);
 
   const ac    = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -329,9 +350,10 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
       }
 
       // Auto-sync on first load if not in cooldown
+      sessionDataRef.current = data;
       if (!refreshRequestedRef.current && data.brokerProClinicId) {
         const last = data.lastCoursesAutoFetch;
-        const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
+        const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
         const stillCoolingDown = cooldown > 0 && last && (Date.now() - last.toMillis()) < cooldown;
         if (!stillCoolingDown && !data.coursesRefreshRequest) {
           refreshRequestedRef.current = true;
