@@ -144,8 +144,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
                 : prev
             );
-            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null });
+            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
           } else {
+            await updateDoc(ref, { brokerStatus: null, brokerJob: null });
             setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${error}`);
             setTimeout(() => setToastMsg(null), 5000);
           }
@@ -379,6 +380,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           if (job.type === 'LC_UPDATE_PROCLINIC') {
             window.postMessage({ type: 'LC_UPDATE_PROCLINIC', sessionId: newS.id,
               proClinicId: job.proClinicId || null, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
+          } else if (job.type === 'LC_DELETE_PROCLINIC') {
+            window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: newS.id,
+              proClinicId: job.proClinicId, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
           } else {
             window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId: newS.id, patient: job.patient }, '*');
           }
@@ -765,7 +769,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     window.postMessage({ type: 'LC_OPEN_EDIT_PROCLINIC', proClinicId }, '*');
   };
 
-  const handleProClinicDelete = (session) => {
+  const handleProClinicDelete = async (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
     const d = session.patientData || {};
@@ -774,6 +778,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       lastName: d.lastName || '', phone: d.phone || '',
       emergencyName: d.emergencyName || '', emergencyRelation: d.emergencyRelation || '', emergencyPhone: d.emergencyPhone || '',
     };
+    const jobId = `${session.id}_del_${Date.now()}`;
+    const brokerJob = { id: jobId, type: 'LC_DELETE_PROCLINIC', proClinicId, proClinicHN: session.brokerProClinicHN || null, patient };
+    forwardedJobsRef.current.add(jobId);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+        brokerJob, brokerStatus: 'pending', brokerError: null,
+      });
+    } catch(e) { console.error('delete job write:', e); }
+    // Fast path: same-device
     window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId, proClinicHN: session.brokerProClinicHN || null, patient }, '*');
   };
 
