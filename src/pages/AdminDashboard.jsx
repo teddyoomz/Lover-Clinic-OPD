@@ -239,6 +239,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
           if (success) {
             const syncAt = new Date().toISOString();
+            // ⚠️ ตรวจ Firestore ก่อนเขียน: ถ้า auto-trigger เพิ่งเขียน LC_GET_COURSES job ไว้
+            // → ห้ามล้าง brokerJob/brokerStatus ทับ ไม่งั้น relay device จะไม่เห็น job → extension ไม่ได้รับ LC_GET_COURSES
+            const snap = await getDoc(ref);
+            const currentJob = snap.data()?.brokerJob;
+            const coursesJobPending = currentJob?.type === 'LC_GET_COURSES';
             // Immediate UI update ก่อน Firestore roundtrip
             setViewingSession(prev =>
               prev?.id === sessionId
@@ -246,11 +251,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 : prev
             );
             await updateDoc(ref, {
-              brokerStatus: 'done',
               brokerFilledAt: syncAt,
               brokerLastAutoSyncAt: syncAt,
               brokerError: null,
-              brokerJob: null,
+              // ถ้ามี LC_GET_COURSES รอ relay อยู่ → ไม่แตะ brokerStatus/brokerJob
+              ...(!coursesJobPending ? { brokerStatus: 'done', brokerJob: null } : {}),
             });
           } else {
             // Update failed → mark failed so button turns red
@@ -459,7 +464,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         if (
           newS.brokerStatus === 'pending' && job?.id &&
           !forwardedJobsRef.current.has(job.id) &&
-          !brokerTimers.current[newS.id]
+          (job.type === 'LC_GET_COURSES' || !brokerTimers.current[newS.id])
         ) {
           forwardedJobsRef.current.add(job.id);
           if (job.type === 'LC_UPDATE_PROCLINIC') {
