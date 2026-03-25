@@ -532,7 +532,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           !autoSyncInFlightRef.current.has(s.id) // รอ LC_UPDATE_PROCLINIC เสร็จก่อน ป้องกัน edit+courses queue พร้อมกัน
         ) {
           const last = s.lastCoursesAutoFetch;
-          const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
+          const COURSES_REFRESH_COOLDOWN_MS = 3600000; // 1 ชั่วโมง — ป้องกัน auto-fetch รัวๆ
           if (last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return; // ยัง cool down
           autoCoursesRequestedRef.current.add(s.id);
           const jobId = `courses_auto_${s.id}_${Date.now()}`;
