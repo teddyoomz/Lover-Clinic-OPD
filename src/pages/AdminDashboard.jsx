@@ -422,7 +422,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   useEffect(() => {
     if (viewingSession) {
-      const latestSession = sessions.find(s => s.id === viewingSession.id);
+      const latestSession = sessions.find(s => s.id === viewingSession.id)
+        || archivedSessions.find(s => s.id === viewingSession.id);
       if (latestSession) {
         const currentStr = JSON.stringify(viewingSession.patientData || {});
         const latestStr = JSON.stringify(latestSession.patientData || {});
@@ -453,7 +454,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } else {
       setHasNewUpdate(false);
     }
-  }, [sessions, viewingSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessions, archivedSessions, viewingSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatRemainingTime = (session) => {
     if (session.isPermanent) return 'ถาวร (ลิงก์ล่วงหน้า)';
