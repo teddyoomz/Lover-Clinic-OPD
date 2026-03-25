@@ -481,7 +481,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             clinicSettings={clinicSettings}
             className="h-14 sm:h-16 md:h-20 max-w-[200px] sm:max-w-[240px]"
             center
-            theme="dark"
+            theme={theme}
           />
           <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-600 mt-1">
             {tx.headerSub}

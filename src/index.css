@@ -586,6 +586,114 @@ html.theme-transitioning *::after {
 }
 
 /* =====================================================
+   TEAL — PatientDashboard CourseCard (active) & SyncButton
+   ===================================================== */
+[data-theme="light"] .bg-teal-950\/\[0\.18\],
+[data-theme="auto"] .bg-teal-950\/\[0\.18\]    { background-color: rgba(204,251,241,0.35) !important; }
+
+[data-theme="light"] .bg-teal-950\/20,
+[data-theme="auto"] .bg-teal-950\/20           { background-color: rgba(204,251,241,0.45) !important; }
+
+[data-theme="light"] .bg-teal-950\/40,
+[data-theme="auto"] .bg-teal-950\/40           { background-color: rgba(153,246,228,0.35) !important; }
+
+[data-theme="light"] .bg-teal-950\/60,
+[data-theme="auto"] .bg-teal-950\/60           { background-color: rgba(153,246,228,0.55) !important; }
+
+[data-theme="light"] .border-teal-700\/40,
+[data-theme="auto"] .border-teal-700\/40       { border-color: rgba(15,118,110,0.28) !important; }
+
+[data-theme="light"] .border-teal-800\/60,
+[data-theme="auto"] .border-teal-800\/60       { border-color: rgba(15,118,110,0.38) !important; }
+
+[data-theme="light"] .border-teal-900\/40,
+[data-theme="auto"] .border-teal-900\/40       { border-color: rgba(15,118,110,0.22) !important; }
+
+[data-theme="light"] .text-teal-300,
+[data-theme="auto"] .text-teal-300             { color: #0d9488 !important; }
+
+[data-theme="light"] .text-teal-400,
+[data-theme="auto"] .text-teal-400             { color: #0d9488 !important; }
+
+/* =====================================================
+   VIOLET — PatientDashboard AppointmentCard
+   ===================================================== */
+[data-theme="light"] .bg-violet-950\/\[0\.22\],
+[data-theme="auto"] .bg-violet-950\/\[0\.22\]  { background-color: rgba(237,233,254,0.5) !important; }
+
+[data-theme="light"] .bg-violet-900\/\[0\.35\],
+[data-theme="auto"] .bg-violet-900\/\[0\.35\]  { background-color: rgba(221,214,254,0.6) !important; }
+
+[data-theme="light"] .border-violet-800\/30,
+[data-theme="auto"] .border-violet-800\/30     { border-color: rgba(109,40,217,0.2) !important; }
+
+[data-theme="light"] .border-violet-800\/20,
+[data-theme="auto"] .border-violet-800\/20     { border-color: rgba(109,40,217,0.15) !important; }
+
+[data-theme="light"] .text-violet-300,
+[data-theme="auto"] .text-violet-300           { color: #6d28d9 !important; }
+
+[data-theme="light"] .text-violet-400\/70,
+[data-theme="auto"] .text-violet-400\/70       { color: rgba(109,40,217,0.7) !important; }
+
+/* =====================================================
+   YELLOW — PatientDashboard SyncButton ready state
+   ===================================================== */
+[data-theme="light"] .text-yellow-300,
+[data-theme="auto"] .text-yellow-300           { color: #a16207 !important; }
+
+[data-theme="light"] .bg-yellow-950\/50,
+[data-theme="auto"] .bg-yellow-950\/50         { background-color: rgba(254,249,195,0.85) !important; }
+
+[data-theme="light"] .border-yellow-600\/40,
+[data-theme="auto"] .border-yellow-600\/40     { border-color: rgba(161,98,7,0.3) !important; }
+
+[data-theme="light"] .hover\:bg-yellow-950\/50:hover,
+[data-theme="auto"] .hover\:bg-yellow-950\/50:hover { background-color: rgba(254,240,138,0.6) !important; }
+
+/* =====================================================
+   RED — PatientDashboard CourseCard expired (missing variants)
+   ===================================================== */
+[data-theme="light"] .border-red-900\/40,
+[data-theme="auto"] .border-red-900\/40        { border-color: rgba(239,68,68,0.35) !important; }
+
+[data-theme="light"] .border-red-900\/30,
+[data-theme="auto"] .border-red-900\/30        { border-color: rgba(239,68,68,0.28) !important; }
+
+[data-theme="light"] .text-red-300\/80,
+[data-theme="auto"] .text-red-300\/80          { color: rgba(185,28,28,0.85) !important; }
+
+[data-theme="light"] .text-red-500\/80,
+[data-theme="auto"] .text-red-500\/80          { color: rgba(185,28,28,0.8) !important; }
+
+/* =====================================================
+   GRAY — SyncButton & PatientDashboard misc states
+   ===================================================== */
+[data-theme="light"] .bg-gray-900\/20,
+[data-theme="auto"] .bg-gray-900\/20           { background-color: rgba(241,245,249,0.8) !important; }
+
+[data-theme="light"] .bg-gray-900\/40,
+[data-theme="auto"] .bg-gray-900\/40           { background-color: rgba(226,232,240,0.8) !important; }
+
+[data-theme="light"] .border-gray-700\/30,
+[data-theme="auto"] .border-gray-700\/30       { border-color: rgba(203,213,225,0.8) !important; }
+
+[data-theme="light"] .border-gray-700\/60,
+[data-theme="auto"] .border-gray-700\/60       { border-color: rgba(148,163,184,0.8) !important; }
+
+[data-theme="light"] .text-gray-700,
+[data-theme="auto"] .text-gray-700             { color: var(--tx-faint) !important; }
+
+/* =====================================================
+   BLACK/WHITE — Controls bar backdrop (Admin back btn, lang switcher)
+   ===================================================== */
+[data-theme="light"] .bg-black\/40,
+[data-theme="auto"] .bg-black\/40              { background-color: rgba(255,255,255,0.88) !important; }
+
+[data-theme="light"] .border-white\/10,
+[data-theme="auto"] .border-white\/10          { border-color: var(--bd) !important; }
+
+/* =====================================================
    SCROLLBAR — Theme Aware
    ===================================================== */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }

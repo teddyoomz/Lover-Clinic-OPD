@@ -42,11 +42,11 @@ export default function AdminLogin({ auth, clinicSettings = {}, theme, setTheme 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-xs font-bold text-gray-400 mb-1 tracking-wider uppercase">อีเมลระบบ</label>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" style={{'--tw-ring-color': ac}} placeholder="admin@example.com" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = '#333'; }} />
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" style={{'--tw-ring-color': ac}} placeholder="admin@example.com" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = ''; }} />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-400 mb-1 tracking-wider uppercase">รหัสผ่าน</label>
-            <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" placeholder="••••••••" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = '#333'; }} />
+            <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" placeholder="••••••••" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = ''; }} />
           </div>
           <button type="submit" disabled={isLoading} className="w-full text-white py-3.5 rounded-lg font-bold text-sm uppercase tracking-wider active:scale-95 transition-all disabled:opacity-70 mt-6 flex justify-center items-center gap-2" style={{backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.4)`}}>
             {isLoading ? 'กำลังตรวจสอบ...' : <><Lock size={16} /> เข้าสู่ระบบ</>}
