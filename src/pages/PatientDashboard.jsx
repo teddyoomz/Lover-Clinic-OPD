@@ -262,6 +262,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   const sessionIdRef        = useRef(null);
   const refreshRequestedRef = useRef(false);
   const sessionDataRef      = useRef(null); // ref สำหรับใช้ใน timer callback
+  const cooldownMsRef       = useRef(0);   // sync กับ COURSES_REFRESH_COOLDOWN_MS ทุก render
 
   // อัพเดท countdown ทุก 30 วิ
   useEffect(() => {
@@ -288,6 +289,9 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     }, remaining + 200);
     return () => clearTimeout(id);
   }, [sessionData?.lastCoursesAutoFetch]);
+
+  // sync ref ทุก render เพื่อให้ snapshot callback ใช้ค่า cooldown ล่าสุดเสมอ
+  cooldownMsRef.current = COURSES_REFRESH_COOLDOWN_MS;
 
   const ac    = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -353,7 +357,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
       sessionDataRef.current = data;
       if (!refreshRequestedRef.current && data.brokerProClinicId) {
         const _last = data.lastCoursesAutoFetch;
-        const _cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
+        const _cooldown = cooldownMsRef.current;
         const _cooling = _cooldown > 0 && _last && (Date.now() - _last.toMillis()) < _cooldown;
         if (!_cooling) {
           refreshRequestedRef.current = true;
