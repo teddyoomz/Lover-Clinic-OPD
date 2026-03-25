@@ -50,7 +50,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const prevSessionsRef = useRef([]);
   // ป้องกัน auto-sync ซ้ำ: sessionId → JSON string ของ patientData ที่ sync ไปล่าสุด
   // ถ้า snapshot ส่ง patientData เดิมมาอีก (เช่น จาก isUnread=false update) จะไม่ re-trigger
-  const lastAutoSyncedStrRef = useRef({});
+  const lastAutoSyncedStrRef = useRef({}); // dedup auto-sync (ป้องกัน sync ซ้ำ)
+  const lastViewedStrRef = useRef({});     // banner suppression (admin เห็นแล้ว → ไม่โชว์ false banner)
   const [hasNewUpdate, setHasNewUpdate] = useState(false);
   const [summaryLang, setSummaryLang] = useState('en');
   const [archivedSessions, setArchivedSessions] = useState([]);
@@ -288,7 +289,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             // ทำให้ oldStr≠newStr แม้ admin ไม่ได้แตะ patientData เลย → ห้าม auto-sync เด็ดขาด
             // stamp lastAutoSyncedStr=newStr เพื่อป้องกัน re-trigger ใน snapshot ถัดไป
             if (oldS.isUnread && !newS.isUnread) {
-              lastAutoSyncedStrRef.current[newS.id] = newStr;
+              lastViewedStrRef.current[newS.id] = newStr;     // banner: admin เห็นแล้ว
+              lastAutoSyncedStrRef.current[newS.id] = newStr; // auto-sync dedup
               return; // forEach return = skip to next session (no auto-sync for this snapshot)
             }
             // Auto-sync ProClinic: patientData changed AND session was ALREADY done+linked
@@ -370,7 +372,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // (snapshot นี้เกิดจาก isUnread transition ไม่ใช่ patient edit จริง)
           // snapshot listener stamp lastAutoSyncedStr=newStr ตอน isUnread true→false
           // ถ้า match → viewingSession แค่ stale จากการ render เก่า → update เงียบๆ ไม่โชว์ banner
-          if (lastAutoSyncedStrRef.current[viewingSession.id] === latestStr) {
+          if (lastViewedStrRef.current[viewingSession.id] === latestStr) {
             setViewingSession(latestSession);
             setHasNewUpdate(false);
           } else {
@@ -488,6 +490,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
       // ไม่ว่า LOCAL snapshot จะยิงมาด้วย patientData version ไหน guard จะบล็อกก่อนเสมอ
       // เพราะ isUnread:false ไม่มีส่วนเกี่ยวกับ ProClinic sync เลย
+      lastViewedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
       lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
@@ -1228,6 +1231,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     setViewingSession(latest);
                     setHasNewUpdate(false);
                     if (latest.isUnread) {
+                      lastViewedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
                       lastAutoSyncedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
                       updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
                     }
