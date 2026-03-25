@@ -368,7 +368,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       }
       // ─── Relay broker jobs จากเครื่องอื่น (เช่น iPhone ไม่มี extension) ────────
-      data.forEach(newS => {
+      // ใช้ allDocs เพื่อรวม archived sessions ด้วย (history page ก็ใช้ได้)
+      allDocs.forEach(newS => {
         const job = newS.brokerJob;
         if (
           newS.brokerStatus === 'pending' && job?.id &&
