@@ -766,7 +766,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleProClinicEdit = (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!proClinicId) return;
-    window.postMessage({ type: 'LC_OPEN_EDIT_PROCLINIC', proClinicId }, '*');
+    window.open(`${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`, '_blank');
   };
 
   const handleProClinicDelete = async (session) => {
