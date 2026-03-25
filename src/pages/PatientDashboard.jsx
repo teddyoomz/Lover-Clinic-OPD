@@ -407,8 +407,6 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     : 0;
   const inCooldown   = cooldownRemainingMs > 0;
   const cooldownMins = Math.ceil(cooldownRemainingMs / 60_000);
-  // แสดงปุ่มเสมอ ยกเว้นตอนกำลัง sync
-  const showSyncButton = syncStatus !== 'requesting' && syncStatus !== 'syncing';
 
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200">
@@ -473,18 +471,16 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
           </div>
 
           {/* Sync button strip */}
-          {showSyncButton && (
-            <div className="px-5 pb-4 pt-1 flex justify-center">
-              <SyncButton
-                syncStatus={syncStatus}
-                syncTimeStr={syncTimeStr}
-                inCooldown={inCooldown}
-                cooldownMins={cooldownMins}
-                onResync={handleResync}
-                tx={tx}
-              />
-            </div>
-          )}
+          <div className="px-5 pb-4 pt-1 flex justify-center">
+            <SyncButton
+              syncStatus={syncStatus}
+              syncTimeStr={syncTimeStr}
+              inCooldown={inCooldown}
+              cooldownMins={cooldownMins}
+              onResync={handleResync}
+              tx={tx}
+            />
+          </div>
         </div>
 
         {/* ── Appointments ───────────────────────────────────────────────────── */}
