@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle } from 'lucide-react';
+import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
 
 export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack, theme, setTheme }) {
   const [settings, setSettings] = useState({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
+  const initialCooldownRef = useRef(clinicSettings?.patientSyncCooldownMins ?? DEFAULT_CLINIC_SETTINGS.patientSyncCooldownMins);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [logoPreview, setLogoPreview] = useState(settings.logoUrl || '');
@@ -74,6 +75,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMsg('');
+    const newCooldown = Math.max(0, Math.min(99999, parseInt(settings.patientSyncCooldownMins, 10) || 0));
+    const cooldownChanged = newCooldown !== initialCooldownRef.current;
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), {
         clinicName: settings.clinicName.trim() || DEFAULT_CLINIC_SETTINGS.clinicName,
@@ -82,10 +85,28 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         logoUrlLight: settings.logoUrlLight || '',
         accentColor: settings.accentColor,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
+        patientSyncCooldownMins: newCooldown,
         updatedAt: serverTimestamp(),
       });
-      setSaveMsg('บันทึกสำเร็จ!');
-      setTimeout(() => setSaveMsg(''), 3000);
+      // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
+      if (cooldownChanged) {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'));
+        const batches = [];
+        let batch = writeBatch(db);
+        let count = 0;
+        snap.forEach(d => {
+          if (d.data().lastCoursesAutoFetch) {
+            batch.update(d.ref, { lastCoursesAutoFetch: null });
+            count++;
+            if (count % 400 === 0) { batches.push(batch); batch = writeBatch(db); }
+          }
+        });
+        if (count % 400 !== 0) batches.push(batch);
+        await Promise.all(batches.map(b => b.commit()));
+        initialCooldownRef.current = newCooldown;
+      }
+      setSaveMsg('บันทึกสำเร็จ!' + (cooldownChanged ? ' รีเซ็ต cooldown ทุก session แล้ว' : ''));
+      setTimeout(() => setSaveMsg(''), 4000);
     } catch (err) {
       console.error(err);
       setSaveMsg('เกิดข้อผิดพลาด ไม่สามารถบันทึกได้');
@@ -267,6 +288,36 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               ทดสอบลิ้งค์
             </a>
           )}
+        </div>
+
+        {/* Patient Sync Cooldown */}
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-[#222]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Timer size={14} style={{color: ac}}/> Patient Sync Cooldown
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            จำกัดให้ลูกค้า sync ข้อมูลคอร์สได้กี่ครั้งต่อชั่วโมง —&nbsp;
+            <span className="text-white font-bold">0 = ไม่จำกัด</span>,&nbsp;
+            1–99999 = นาทีต่อครั้ง (เช่น 60 = ชั่วโมงละครั้ง)<br/>
+            <span className="text-yellow-600">การเปลี่ยนค่านี้จะรีเซ็ต cooldown ของทุก session ทันที</span>
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              max="99999"
+              step="1"
+              value={settings.patientSyncCooldownMins ?? 60}
+              onChange={e => setSettings(prev => ({ ...prev, patientSyncCooldownMins: Math.max(0, Math.min(99999, parseInt(e.target.value, 10) || 0)) }))}
+              className="w-32 bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-lg font-mono font-bold text-center"
+            />
+            <span className="text-sm text-gray-500">นาที</span>
+            <span className="text-xs text-gray-600">
+              {(settings.patientSyncCooldownMins ?? 60) === 0
+                ? '(ไม่จำกัด)'
+                : `(${settings.patientSyncCooldownMins ?? 60} นาทีต่อครั้ง)`}
+            </span>
+          </div>
         </div>
 
         {/* Save Button */}

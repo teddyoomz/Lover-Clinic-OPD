@@ -43,7 +43,8 @@ const TX = {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const COURSES_REFRESH_COOLDOWN_MS = 3_600_000; // 1 ชั่วโมง — rate limit ฝั่ง PatientDashboard
+// cooldown อ่านจาก clinicSettings.patientSyncCooldownMins (set โดย admin)
+// ค่า default fallback 60 นาที ถ้ายังไม่ได้ตั้งค่า
 
 function formatSyncTime(fetchedAt) {
   if (!fetchedAt) return null;
@@ -212,6 +213,8 @@ function SectionHeader({ icon, label, count, accent, meta }) {
 const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
 
 export default function PatientDashboard({ token, clinicSettings, theme, setTheme }) {
+  // cooldown ที่ admin กำหนด (0 = ไม่จำกัด)
+  const COURSES_REFRESH_COOLDOWN_MS = ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
   const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);
