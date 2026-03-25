@@ -211,6 +211,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     sendResponse({ received: true });
   }
+  if (msg.type === 'LC_GET_COURSES') {
+    enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId));
+    sendResponse({ received: true });
+  }
   if (msg.type === 'LC_GET_STATUS')   sendResponse(statusMap);
   if (msg.type === 'LC_CLEAR_STATUS') {
     Object.keys(statusMap).forEach(k => delete statusMap[k]);
@@ -876,6 +880,85 @@ function updateBadge(text) {
   chrome.action.setBadgeBackgroundColor({
     color: text === '✓' ? '#16a34a' : text === '✗' ? '#dc2626' : '#f59e0b',
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── HANDLER: ดึงคอร์ส/บริการคงเหลือจาก ProClinic ───────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGetCoursesRequest(msg, loverclinicTabId) {
+  const { sessionId, proClinicId } = msg;
+  try {
+    if (!proClinicId) throw new Error('ไม่พบ ProClinic ID — กรุณาบันทึกลง ProClinic ก่อน');
+    const pcTab = await getOrCreateProclinicTab();
+    const customerUrl = `${PROCLINIC_ORIGIN()}/admin/customer/${proClinicId}`;
+    await navigateAndWait(pcTab.id, customerUrl);
+
+    const tabInfo = await chrome.tabs.get(pcTab.id);
+    if (tabInfo.url?.includes('/login')) {
+      await navigateAndWait(pcTab.id, PROCLINIC_LOGIN_URL());
+      await doAutoLogin(pcTab.id);
+      await navigateAndWait(pcTab.id, customerUrl);
+    }
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: pcTab.id },
+      world: 'MAIN',
+      func: scrapeProClinicCourses,
+    });
+    const data = results?.[0]?.result;
+    if (data?.error) throw new Error(data.error);
+
+    reportBack(loverclinicTabId, {
+      type: 'LC_COURSES_RESULT', sessionId,
+      success: true,
+      patientName: data?.patientName || '',
+      courses: data?.courses || [],
+      expiredCourses: data?.expiredCourses || [],
+    });
+  } catch(err) {
+    reportBack(loverclinicTabId, { type: 'LC_COURSES_RESULT', sessionId, success: false, error: err.message });
+  }
+}
+
+// ─── SCRAPER: รันใน ProClinic page context ────────────────────────────────────
+function scrapeProClinicCourses() {
+  function extractCourses(tabSelector) {
+    const tab = document.querySelector(tabSelector);
+    if (!tab) return [];
+    const cards = tab.querySelectorAll('.card');
+    return Array.from(cards).map(card => {
+      const body = card.querySelector('.card-body') || card;
+      const lis = body.querySelectorAll('li');
+      const li0 = lis[0], li1 = lis[1];
+
+      const h6 = li0 ? li0.querySelector('h6') : null;
+      const nameNode = h6 ? Array.from(h6.childNodes).find(n => n.nodeType === 3) : null;
+      const name = nameNode ? nameNode.textContent.trim() : (h6 ? h6.innerText.split('\n')[0].trim() : '');
+
+      const expiry = (li0?.querySelector('p.small') || {}).innerText?.trim() || '';
+      const value  = (li0?.querySelector('.text-gray-2.small.mt-1') || {}).innerText?.trim() || '';
+      const status = (li0?.querySelector('.badge') || {}).innerText?.trim() || '';
+      const product = li1 ? li1.innerText.trim().split('\n')[0].trim() : '';
+      const qty    = (li1?.querySelector('.float-end') || {}).innerText?.trim() || '';
+
+      return { name, expiry, value, status, product, qty };
+    }).filter(c => c.name);
+  }
+
+  try {
+    const patientName = (
+      document.querySelector('h5.mb-0')?.innerText?.trim() ||
+      document.querySelector('.customer-name')?.innerText?.trim() ||
+      document.title.split('|')[0].trim()
+    );
+    return {
+      patientName,
+      courses: extractCourses('#course-tab'),
+      expiredCourses: extractCourses('#expired-course-tab'),
+    };
+  } catch(e) {
+    return { error: e.message };
+  }
 }
 
 function extractCustomerId(url) {

@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import {
@@ -63,6 +63,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
+  const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
   const brokerTimers = useRef({}); // sessionId → timeout id
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
 
@@ -108,6 +109,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // รับผลลัพธ์จาก Broker Extension
   useEffect(() => {
     const handler = async (event) => {
+      if (event.data?.type === 'LC_COURSES_RESULT') {
+        const { sessionId, success, error, patientName, courses, expiredCourses } = event.data;
+        setCoursesPanel(prev => prev?.sessionId === sessionId
+          ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], error: error || '' }
+          : prev
+        );
+        return;
+      }
       if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
       const { type, sessionId, success, error, proClinicId, proClinicHN } = event.data;
 
@@ -784,6 +793,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     window.open(`${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`, '_blank');
   };
 
+  const handleGetCourses = (session) => {
+    setCoursesPanel({
+      sessionId: session.id,
+      patientName: session.sessionName || session.patientData?.firstName || '',
+      hn: session.brokerProClinicHN || '',
+      status: 'loading', courses: [], expiredCourses: [], error: '',
+    });
+    window.postMessage({
+      type: 'LC_GET_COURSES',
+      sessionId: session.id,
+      proClinicId: session.brokerProClinicId,
+    }, '*');
+  };
+
   const handleProClinicDelete = async (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
@@ -1121,6 +1144,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         className="p-2 bg-orange-950/30 hover:bg-orange-900/50 text-orange-400 hover:text-orange-300 rounded-lg border border-orange-900/50 transition-colors" title="กลับเข้าคิวใหม่">
                         <RotateCcw size={15}/>
                       </button>
+                      {session.brokerProClinicId && (
+                        <button onClick={() => handleGetCourses(session)}
+                          className="p-2 bg-teal-950/30 hover:bg-teal-900/50 text-teal-400 hover:text-teal-300 rounded-lg border border-teal-900/50 transition-colors" title="ดูคอร์สและบริการคงเหลือ">
+                          <Search size={15}/>
+                        </button>
+                      )}
                       <button onClick={() => setSessionToHardDelete(session.id)}
                         className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบถาวร">
                         <Trash2 size={15}/>
@@ -1635,6 +1664,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       title={getProClinicUrl(viewingSession.brokerProClinicId)}>
                       ProClinic ↗
                     </a>
+                    <button onClick={() => handleGetCourses(viewingSession)}
+                      className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
+                      <Search size={9}/> คอร์สคงเหลือ
+                    </button>
                     <button onClick={() => handleProClinicEdit(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
                       แก้ไขใน ProClinic
@@ -2028,6 +2061,148 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <button onClick={() => setShowNamePrompt(false)} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded font-bold text-xs uppercase tracking-wider border border-[#333]">ยกเลิก</button>
               <button onClick={confirmCreateSession} disabled={isGenerating} className="flex-1 px-4 py-3 rounded font-bold text-xs uppercase tracking-wider disabled:opacity-70" style={{backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.4)`}}>
                 {isGenerating ? 'กำลังสร้าง...' : 'สร้างคิว'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Courses Panel Modal ══════════════════════════════════════════════════ */}
+      {coursesPanel && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70]" onClick={() => setCoursesPanel(null)}>
+          <div
+            className="bg-[#0a0a0a] rounded-t-2xl sm:rounded-2xl border border-[#1e1e1e] w-full sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
+            style={{boxShadow: '0 -4px 60px rgba(0,0,0,0.8)'}}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 p-5 border-b border-[#1a1a1a] shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-teal-950/60 border border-teal-900/50 flex items-center justify-center shrink-0">
+                <Package size={16} className="text-teal-400" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-black uppercase tracking-widest text-teal-400">คอร์ส & บริการคงเหลือ</span>
+                <span className="text-sm font-bold text-white truncate">{coursesPanel.patientName || '—'}{coursesPanel.hn ? <span className="text-teal-500 ml-2 font-mono text-xs">HN {coursesPanel.hn}</span> : ''}</span>
+              </div>
+              <button onClick={() => setCoursesPanel(null)} className="ml-auto p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[#1a1a1a] transition-colors shrink-0"><X size={16}/></button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 p-4 sm:p-5 flex flex-col gap-5">
+
+              {coursesPanel.status === 'loading' && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-600">
+                  <Loader2 size={28} className="animate-spin text-teal-600" />
+                  <p className="text-xs font-bold uppercase tracking-widest">กำลังดึงข้อมูลจาก ProClinic...</p>
+                </div>
+              )}
+
+              {coursesPanel.status === 'error' && (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-red-600">
+                  <PackageX size={28} />
+                  <p className="text-xs font-bold uppercase tracking-widest">{coursesPanel.error || 'เกิดข้อผิดพลาด'}</p>
+                </div>
+              )}
+
+              {coursesPanel.status === 'done' && (() => {
+                const CourseCard = ({ c, expired }) => {
+                  const isNoExpiry = c.expiry === 'ไม่มีวันหมดอายุ';
+                  const hasValue = c.value && !c.value.includes('0.00');
+                  const valueNum = parseFloat((c.value || '').replace(/[^0-9.]/g, ''));
+                  const expiryText = c.expiry.replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
+                  const daysMatch = c.expiry.match(/ภายใน (\d+) วัน|หมดอายุแล้ว (\d+) วัน/);
+                  const daysLeft = daysMatch ? (daysMatch[1] ? parseInt(daysMatch[1]) : -parseInt(daysMatch[2])) : null;
+                  const urgentColor = daysLeft !== null && daysLeft <= 30 && daysLeft > 0 ? 'text-amber-400' : daysLeft !== null && daysLeft <= 0 ? 'text-red-500' : 'text-gray-400';
+
+                  return (
+                    <div className={`rounded-xl border p-3.5 flex flex-col gap-2.5 transition-colors ${expired ? 'border-red-900/30 bg-red-950/10' : 'border-[#1e1e1e] bg-[#111] hover:border-teal-900/40'}`}>
+                      {/* Name + status */}
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={`font-bold text-sm leading-tight ${expired ? 'text-red-300' : 'text-white'}`}>{c.name}</span>
+                        {c.status && (
+                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
+                            expired ? 'bg-red-950/40 border border-red-900/50 text-red-400' :
+                            c.status === 'กำลังใช้งาน' ? 'bg-teal-950/40 border border-teal-900/50 text-teal-400' :
+                            'bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400'
+                          }`}>{expired ? 'หมดอายุ' : c.status}</span>
+                        )}
+                      </div>
+
+                      {/* Details row */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        {/* Product + qty */}
+                        {c.product && (
+                          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <Package size={11} className="shrink-0 text-gray-600"/>
+                            <span>{c.product}</span>
+                            {c.qty && c.qty !== c.product && <span className="text-gray-500">·</span>}
+                            {c.qty && c.qty !== c.product && <span className="font-mono font-bold text-gray-300">{c.qty}</span>}
+                          </span>
+                        )}
+                        {/* Expiry */}
+                        {c.expiry && (
+                          <span className={`flex items-center gap-1.5 text-xs font-mono ${urgentColor}`}>
+                            <CalendarClock size={11} className="shrink-0"/>
+                            {expiryText}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Value */}
+                      {c.value && (
+                        <div className={`flex items-center gap-1.5 text-xs font-bold mt-0.5 ${hasValue ? (expired ? 'text-red-400' : 'text-teal-400') : 'text-gray-600'}`}>
+                          <Banknote size={12} className="shrink-0"/>
+                          {c.value}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                return (
+                  <>
+                    {/* Active courses */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Package size={14} className="text-teal-500"/>
+                        <h4 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h4>
+                        <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{coursesPanel.courses.length}</span>
+                      </div>
+                      {coursesPanel.courses.length === 0
+                        ? <p className="text-xs text-gray-600 italic py-4 text-center">ไม่มีคอร์สคงเหลือ</p>
+                        : <div className="flex flex-col gap-2">{coursesPanel.courses.map((c, i) => <CourseCard key={i} c={c} expired={false}/>)}</div>
+                      }
+                    </div>
+
+                    {/* Expired courses */}
+                    {coursesPanel.expiredCourses.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <PackageX size={14} className="text-red-500"/>
+                          <h4 className="text-xs font-black uppercase tracking-widest text-red-500">คอร์สหมดอายุ</h4>
+                          <span className="text-[10px] font-bold text-red-700 bg-red-950/30 px-2 py-0.5 rounded-full border border-red-900/30">{coursesPanel.expiredCourses.length}</span>
+                        </div>
+                        <div className="flex flex-col gap-2">{coursesPanel.expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true}/>)}</div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-[#1a1a1a] shrink-0 flex items-center justify-between">
+              <p className="text-[10px] text-gray-700 font-mono">ข้อมูลดึงจาก ProClinic แบบ Real-time</p>
+              <button
+                onClick={() => {
+                  const s = sessions.find(x => x.id === coursesPanel.sessionId) || archivedSessions.find(x => x.id === coursesPanel.sessionId);
+                  if (s) handleGetCourses(s);
+                }}
+                disabled={coursesPanel.status === 'loading'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-[#2a2a2a] text-gray-500 hover:text-teal-400 hover:border-teal-900/50 disabled:opacity-40 transition-colors"
+              >
+                <RotateCcw size={11} className={coursesPanel.status === 'loading' ? 'animate-spin' : ''}/>
+                รีเฟรช
               </button>
             </div>
           </div>
