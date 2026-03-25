@@ -220,9 +220,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
                       <span className="text-xs text-gray-400">{[a.branch, a.room].filter(Boolean).join('  ')}</span>
                     </div>
                   )}
-                  {a.notes && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">โน้ต: {a.notes}</p>
-                  )}
+
                 </div>
               ))}
             </div>
