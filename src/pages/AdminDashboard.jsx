@@ -1296,6 +1296,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <Search size={15}/>
                         </button>
                       )}
+                      <button
+                        onClick={() => setPatientLinkModal(session.id)}
+                        title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ถาวร: เปิดใช้งาน' : 'ลิงก์ถาวร: ปิดใช้งาน') : 'สร้างลิงก์ถาวร'}
+                        className={`p-2 rounded-lg border transition-all ${
+                          session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
+                          session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
+                          'bg-[var(--bg-hover)] text-gray-600 border-dashed border-[var(--bd)] hover:text-gray-400'
+                        }`}
+                      >
+                        {session.patientLinkToken && !session.patientLinkEnabled ? <Unlink size={15}/> : <Link size={15}/>}
+                      </button>
                       <button onClick={() => setSessionToHardDelete(session.id)}
                         className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบถาวร">
                         <Trash2 size={15}/>
