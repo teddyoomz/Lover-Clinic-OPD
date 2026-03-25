@@ -1225,9 +1225,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
                 <button onClick={() => {
                   const latest = sessions.find(s => s.id === viewingSession.id);
+                  setHasNewUpdate(false);
                   if (latest) {
                     setViewingSession(latest);
-                    setHasNewUpdate(false);
                     if (latest.isUnread) {
                       lastViewedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
                       lastAutoSyncedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
@@ -1235,7 +1235,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     }
                   }
                 }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
-                  คลิกเพื่อโหลดข้อมูลล่าสุด
+                  ✓ รับทราบ
                 </button>
               </div>
             )}
@@ -1299,7 +1299,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </button>
                   );
                 })()}
-                <button onClick={closeViewSession} className="p-1.5 bg-[#1a1a1a] hover:bg-red-600 text-gray-400 hover:text-white rounded border border-[#333] hover:border-red-600 transition-all shrink-0">
+                <button onClick={() => {
+                  if (hasNewUpdate && !window.confirm('⚠️ มีข้อมูลอัปเดตใหม่ที่คุณยังไม่ได้รับทราบ\nต้องการปิดหน้านี้จริงๆ หรือไม่?')) return;
+                  closeViewSession();
+                }} className="p-1.5 bg-[#1a1a1a] hover:bg-red-600 text-gray-400 hover:text-white rounded border border-[#333] hover:border-red-600 transition-all shrink-0">
                   <X size={16} />
                 </button>
               </div>
