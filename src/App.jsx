@@ -25,6 +25,7 @@ export default function App() {
     ...DEFAULT_CLINIC_SETTINGS,
     clinicName: localStorage.getItem('clinic-name') || DEFAULT_CLINIC_SETTINGS.clinicName,
   }));
+  const [clinicSettingsLoaded, setClinicSettingsLoaded] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
   const sessionFromUrl = params.get('session');
@@ -32,6 +33,7 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), (snap) => {
+      setClinicSettingsLoaded(true);
       if (snap.exists()) {
         const data = snap.data();
         const merged = { ...DEFAULT_CLINIC_SETTINGS, ...data };
@@ -41,7 +43,7 @@ export default function App() {
       } else {
         applyThemeColor(DEFAULT_CLINIC_SETTINGS.accentColor);
       }
-    }, () => applyThemeColor(DEFAULT_CLINIC_SETTINGS.accentColor));
+    }, () => { setClinicSettingsLoaded(true); applyThemeColor(DEFAULT_CLINIC_SETTINGS.accentColor); });
     return () => unsub();
   }, []);
 
@@ -91,7 +93,7 @@ export default function App() {
     const isAdminView = params.get('admin') === '1';
     return (
       <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
-        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} isAdminView={isAdminView} />
+        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} clinicSettingsLoaded={clinicSettingsLoaded} theme={theme} setTheme={setTheme} isAdminView={isAdminView} />
       </div>
     );
   }

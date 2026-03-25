@@ -248,7 +248,7 @@ function SectionHeader({ icon, label, count, accent, meta }) {
 
 const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
 
-export default function PatientDashboard({ token, clinicSettings, theme, setTheme, isAdminView }) {
+export default function PatientDashboard({ token, clinicSettings, clinicSettingsLoaded, theme, setTheme, isAdminView }) {
   // cooldown ที่ admin กำหนด (0 = ไม่จำกัด); admin view ไม่มี cooldown
   const COURSES_REFRESH_COOLDOWN_MS = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
   const [status, setStatus]           = useState('loading');
@@ -269,6 +269,22 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     const id = setInterval(() => forceUpdate(n => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Auto-sync on page load: รอจน clinicSettings โหลดจาก Firestore ก่อน เพื่อให้ cooldown ถูกต้อง
+  useEffect(() => {
+    if (!clinicSettingsLoaded || !sessionData?.brokerProClinicId || refreshRequestedRef.current) return;
+    const last = sessionData.lastCoursesAutoFetch;
+    const cooling = cooldownMsRef.current > 0 && last && (Date.now() - last.toMillis()) < cooldownMsRef.current;
+    if (!cooling) {
+      refreshRequestedRef.current = true;
+      setSyncTimedOut(false);
+      setJustSynced(false);
+      updateDoc(
+        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionData.id),
+        { coursesRefreshRequest: serverTimestamp() }
+      ).then(startSyncTimeout).catch(e => { console.error(e); clearSyncTimeout(); setSyncTimedOut(true); });
+    }
+  }, [clinicSettingsLoaded, sessionData?.id]);
 
   // Schedule auto-sync เมื่อ cooldown หมดอายุ (กรณีเปิดหน้าค้างไว้)
   useEffect(() => {
@@ -353,20 +369,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         if (data.latestCourses?.success !== false) setJustSynced(true);
       }
 
-      // Auto-sync: fires if not in cooldown; ถ้าติด cooldown แสดงข้อมูลเก่า + countdown
       sessionDataRef.current = data;
-      if (!refreshRequestedRef.current && data.brokerProClinicId) {
-        const _last = data.lastCoursesAutoFetch;
-        const _cooldown = cooldownMsRef.current;
-        const _cooling = _cooldown > 0 && _last && (Date.now() - _last.toMillis()) < _cooldown;
-        if (!_cooling) {
-          refreshRequestedRef.current = true;
-          updateDoc(
-            doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id),
-            { coursesRefreshRequest: serverTimestamp() }
-          ).then(startSyncTimeout).catch(console.error);
-        }
-      }
 
     }, () => setStatus('notfound'));
     return () => unsub();
