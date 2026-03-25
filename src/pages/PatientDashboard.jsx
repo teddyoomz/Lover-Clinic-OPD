@@ -30,6 +30,19 @@ function CourseCard({ c, expired }) {
 
 const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
 
+function formatSyncTime(fetchedAt) {
+  if (!fetchedAt) return null;
+  try {
+    const d = new Date(fetchedAt);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return `${time} น.`;
+    const date = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    return `${date} ${time} น.`;
+  } catch { return null; }
+}
+
 export default function PatientDashboard({ token, clinicSettings }) {
   const [status, setStatus] = useState('loading'); // loading | disabled | notfound | done
   const [sessionData, setSessionData] = useState(null);
@@ -122,10 +135,12 @@ export default function PatientDashboard({ token, clinicSettings }) {
     : 'idle';
 
   // chip config ตาม syncStatus
+  const fetchedAt = sessionData.latestCourses?.fetchedAt || null;
+  const syncTimeStr = formatSyncTime(fetchedAt);
   const syncChip = {
     requesting: { icon: <RefreshCw size={11} className="animate-spin" />, label: 'กำลังส่งคำขอ...', cls: 'text-gray-400 border-gray-700 bg-gray-900/40' },
     syncing:    { icon: <Loader2 size={11} className="animate-spin" />,   label: 'กำลัง Sync',     cls: 'text-teal-400 border-teal-800 bg-teal-950/40' },
-    done:       { icon: <CheckCircle2 size={11} />,                        label: 'Sync เสร็จแล้ว', cls: 'text-green-400 border-green-800 bg-green-950/40' },
+    done:       { icon: <CheckCircle2 size={11} />,                        label: syncTimeStr ? `Sync เสร็จ — ${syncTimeStr}` : 'Sync เสร็จแล้ว', cls: 'text-green-400 border-green-800 bg-green-950/40' },
     error:      { icon: <XCircle size={11} />,                             label: 'Sync ไม่สำเร็จ', cls: 'text-red-400 border-red-800 bg-red-950/40' },
     idle:       null,
   }[syncStatus];
@@ -179,10 +194,13 @@ export default function PatientDashboard({ token, clinicSettings }) {
           <>
             {courses.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <Package size={14} className="text-teal-500" />
                   <h3 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h3>
                   <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{courses.length}</span>
+                  {syncTimeStr && syncStatus === 'idle' && (
+                    <span className="ml-auto text-[10px] text-gray-600 font-mono">อัพเดท {syncTimeStr}</span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2">
                   {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} />)}
