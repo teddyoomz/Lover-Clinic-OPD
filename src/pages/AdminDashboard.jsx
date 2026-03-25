@@ -334,6 +334,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             age: d?.age || '', reasons,
             allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
             underlying: pmh.join(', '),
+            emergencyName:     d?.emergencyName     || '',
+            emergencyRelation: d?.emergencyRelation || '',
+            emergencyPhone:    d?.emergencyPhone    || '',
           };
           window.postMessage({
             type: 'LC_UPDATE_PROCLINIC',
@@ -575,6 +578,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       reasons,
       allergies:  d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
       underlying: pmh.join(', '),
+      emergencyName:     d?.emergencyName     || '',
+      emergencyRelation: d?.emergencyRelation || '',
+      emergencyPhone:    d?.emergencyPhone    || '',
     };
 
     // Set pending in Firestore + local state
@@ -627,6 +633,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const patient = {
       prefix: d.prefix || '', firstName: d.firstName || '',
       lastName: d.lastName || '', phone: d.phone || '',
+      emergencyName: d.emergencyName || '', emergencyRelation: d.emergencyRelation || '', emergencyPhone: d.emergencyPhone || '',
     };
     window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId, proClinicHN: session.brokerProClinicHN || null, patient }, '*');
   };

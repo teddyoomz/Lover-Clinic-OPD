@@ -563,6 +563,10 @@ function fillAndSubmitProClinicForm(patient) {
     if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
     if (notes.length) fillTextarea('note', notes.join('\n'));
 
+    fillInput('contact_1_firstname',        patient.emergencyName);
+    fillInput('contact_1_lastname',         patient.emergencyRelation);
+    fillInput('contact_1_telephone_number', patient.emergencyPhone);
+
     clickRadio('customer_type-1');    // คนไทย
     clickRadio('customer_type_2-1'); // ลูกค้าทั่วไป
 
@@ -617,6 +621,10 @@ async function submitProClinicEditViaFetch(patient, customerId, origin) {
     if (patient.allergies)        notes.push('แพ้: ' + patient.allergies);
     if (patient.underlying)       notes.push('โรคประจำตัว: ' + patient.underlying);
     if (notes.length) formData.set('note', notes.join('\n'));
+
+    if (patient.emergencyName)     formData.set('contact_1_firstname',        patient.emergencyName);
+    if (patient.emergencyRelation) formData.set('contact_1_lastname',         patient.emergencyRelation);
+    if (patient.emergencyPhone)    formData.set('contact_1_telephone_number', patient.emergencyPhone);
 
     const body = new URLSearchParams(formData).toString();
 
