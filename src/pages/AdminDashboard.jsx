@@ -365,22 +365,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
 
         if (brokerChanged) {
-          // viewingSession กำลังจะถูก update → รอ render ถัดไปค่อย evaluate banner
+          // อัพเดท broker fields เงียบๆ — ไม่แตะ hasNewUpdate
+          // (broker sync เสร็จไม่ใช่เหตุผลที่จะซ่อน banner ที่ patient เพิ่งส่งมา)
           setViewingSession(latestSession);
         } else if (dataOutOfSync) {
-          // ตรวจว่า latestStr เป็น version ที่เรา "รู้จักแล้ว" หรือเปล่า
-          // (snapshot นี้เกิดจาก isUnread transition ไม่ใช่ patient edit จริง)
-          // snapshot listener stamp lastAutoSyncedStr=newStr ตอน isUnread true→false
-          // ถ้า match → viewingSession แค่ stale จากการ render เก่า → update เงียบๆ ไม่โชว์ banner
           if (lastViewedStrRef.current[viewingSession.id] === latestStr) {
+            // stale session จาก isUnread transition — update เงียบๆ ไม่โชว์ banner
             setViewingSession(latestSession);
             setHasNewUpdate(false);
           } else {
             setHasNewUpdate(true);   // patient edit จริง → โชว์ banner
           }
-        } else {
-          setHasNewUpdate(false);    // ข้อมูลตรงกันแล้ว → ซ่อน banner
         }
+        // else: ข้อมูลตรงกัน — ไม่แตะ hasNewUpdate
+        // banner จะหายได้เฉพาะเมื่อ user กด "โหลดข้อมูล" หรือปิด session เท่านั้น
       }
     } else {
       setHasNewUpdate(false);
