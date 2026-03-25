@@ -90,7 +90,7 @@ export default function App() {
   if (patientFromUrl) {
     return (
       <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
-        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} />
+        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />
       </div>
     );
   }

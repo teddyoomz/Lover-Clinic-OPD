@@ -3,8 +3,39 @@ import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp }
 import { db, appId } from '../firebase.js';
 import { hexToRgb } from '../utils.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import { Package, PackageX, CalendarClock, Phone, AlertCircle, Loader2,
          CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope } from 'lucide-react';
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+const TX = {
+  th: {
+    loading: 'กำลังโหลด', headerSub: 'ข้อมูลผู้ป่วย',
+    disabled: 'ลิงก์ถูกปิดชั่วคราว', disabledSub: 'กรุณาติดต่อคลินิกเพื่อขอลิงก์ใหม่',
+    notfound: 'ไม่พบข้อมูล', notfoundSub: 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว',
+    unknown: 'ไม่ระบุชื่อ',
+    syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
+    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', syncLast: 'ข้อมูลล่าสุด',
+    apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
+    noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
+    noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
+    syncingCourses: 'กำลัง Sync ข้อมูลคอร์ส...', requesting: 'กำลังส่งคำขอไปยังคลินิก...',
+    updatedAt: 'อัพเดท', poweredBy: 'จัดทำโดย', active: 'กำลังใช้งาน',
+  },
+  en: {
+    loading: 'Loading', headerSub: 'Patient Dashboard',
+    disabled: 'Link Disabled', disabledSub: 'Please contact the clinic for a new link.',
+    notfound: 'Not Found', notfoundSub: 'This URL is invalid or has expired.',
+    unknown: 'Unknown',
+    syncReq: 'Requesting...', syncIng: 'Syncing data',
+    syncDone: 'Synced', syncFail: 'Sync failed', syncLast: 'Last sync',
+    apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
+    noCourses: 'No active courses', noData: 'No course data yet',
+    noDataSub: 'Data will appear after the clinic syncs from the system.',
+    syncingCourses: 'Syncing course data...', requesting: 'Sending request to clinic...',
+    updatedAt: 'Updated', poweredBy: 'Powered by', active: 'Active',
+  },
+};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,12 +124,12 @@ function CourseCard({ c, expired, accentRgb }) {
 
 // ── SyncChip ──────────────────────────────────────────────────────────────────
 
-function SyncChip({ syncStatus, syncTimeStr, latestCourses }) {
+function SyncChip({ syncStatus, syncTimeStr, latestCourses, tx }) {
   const configs = {
-    requesting: { icon: <RefreshCw size={11} className="animate-spin shrink-0" />, label: 'กำลังส่งคำขอ...', cls: 'text-gray-400 border-gray-700/60 bg-gray-900/40' },
-    syncing:    { icon: <Loader2   size={11} className="animate-spin shrink-0" />, label: 'กำลัง Sync ข้อมูล', cls: 'text-teal-300 border-teal-800/60 bg-teal-950/40' },
-    done:       { icon: <CheckCircle2 size={11} className="shrink-0" />, label: syncTimeStr ? `Sync เสร็จ — ${syncTimeStr}` : 'Sync เสร็จแล้ว', cls: 'text-emerald-400 border-emerald-800/60 bg-emerald-950/40' },
-    error:      { icon: <XCircle   size={11} className="shrink-0" />, label: syncTimeStr ? `Sync ไม่สำเร็จ — ข้อมูลล่าสุด ${syncTimeStr}` : 'Sync ไม่สำเร็จ', cls: 'text-red-400 border-red-700/60 bg-red-950/50' },
+    requesting: { icon: <RefreshCw size={11} className="animate-spin shrink-0" />, label: tx.syncReq, cls: 'text-gray-400 border-gray-700/60 bg-gray-900/40' },
+    syncing:    { icon: <Loader2   size={11} className="animate-spin shrink-0" />, label: tx.syncIng,  cls: 'text-teal-300 border-teal-800/60 bg-teal-950/40' },
+    done:       { icon: <CheckCircle2 size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncDone} — ${syncTimeStr}` : tx.syncDone, cls: 'text-emerald-400 border-emerald-800/60 bg-emerald-950/40' },
+    error:      { icon: <XCircle   size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncFail} — ${tx.syncLast} ${syncTimeStr}` : tx.syncFail, cls: 'text-red-400 border-red-700/60 bg-red-950/50' },
   };
   const chip = configs[syncStatus];
   if (!chip) return null;
@@ -169,15 +200,17 @@ function SectionHeader({ icon, label, count, accent, meta }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function PatientDashboard({ token, clinicSettings }) {
-  const [status, setStatus]         = useState('loading');
+export default function PatientDashboard({ token, clinicSettings, theme, setTheme }) {
+  const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);
+  const [language, setLanguage]       = useState('th');
   const refreshRequestedRef = useRef(false);
   const prevFetchedAtRef    = useRef(null);
 
-  const ac       = clinicSettings?.accentColor || '#dc2626';
-  const acRgb    = hexToRgb(ac);
+  const ac    = clinicSettings?.accentColor || '#dc2626';
+  const acRgb = hexToRgb(ac);
+  const tx    = TX[language];
 
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
@@ -214,11 +247,27 @@ export default function PatientDashboard({ token, clinicSettings }) {
   }, [token]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Controls bar (reused in loading/error/main screens) ───────────────────
+  const Controls = () => (
+    <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+      {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
+      <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden backdrop-blur-sm">
+        <button onClick={() => setLanguage('th')}
+          className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+          style={language === 'th' ? { backgroundColor: ac } : {}}>TH</button>
+        <button onClick={() => setLanguage('en')}
+          className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+          style={language === 'en' ? { backgroundColor: ac } : {}}>EN</button>
+      </div>
+    </div>
+  );
+
   if (status === 'loading') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-[#050505]">
+      <div className="relative flex flex-col items-center justify-center min-h-screen gap-4 bg-[#050505]">
+        <Controls />
         <Loader2 size={28} className="animate-spin" style={{ color: ac }} />
-        <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-600">กำลังโหลด</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-600">{tx.loading}</p>
       </div>
     );
   }
@@ -226,18 +275,17 @@ export default function PatientDashboard({ token, clinicSettings }) {
   // ── Error / disabled ───────────────────────────────────────────────────────
   if (status === 'notfound' || status === 'disabled') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-5 bg-[#050505] px-8 text-center">
+      <div className="relative flex flex-col items-center justify-center min-h-screen gap-5 bg-[#050505] px-8 text-center">
+        <Controls />
         <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
           <AlertCircle size={28} className="text-gray-600" />
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm font-black uppercase tracking-widest text-gray-400">
-            {status === 'disabled' ? 'ลิงก์ถูกปิดชั่วคราว' : 'ไม่พบข้อมูล'}
+            {status === 'disabled' ? tx.disabled : tx.notfound}
           </p>
           <p className="text-xs text-gray-600 max-w-[260px] leading-relaxed">
-            {status === 'disabled'
-              ? 'กรุณาติดต่อคลินิกเพื่อขอลิงก์ใหม่'
-              : 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว'}
+            {status === 'disabled' ? tx.disabledSub : tx.notfoundSub}
           </p>
         </div>
       </div>
@@ -277,6 +325,9 @@ export default function PatientDashboard({ token, clinicSettings }) {
         <div className="absolute bottom-0 left-0 right-0 h-px"
           style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.25), transparent)` }} />
 
+        {/* Controls top-right */}
+        <Controls />
+
         <div className="relative flex flex-col items-center gap-3 pt-10 pb-8 px-6">
           <ClinicLogo
             clinicSettings={clinicSettings}
@@ -285,7 +336,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
             theme="dark"
           />
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-gray-600 mt-1">
-            ข้อมูลผู้ป่วย
+            {tx.headerSub}
           </p>
         </div>
       </div>
@@ -307,7 +358,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
 
             {/* Info */}
             <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              <p className="text-xl font-black text-white leading-snug">{patientName || 'ไม่ระบุชื่อ'}</p>
+              <p className="text-xl font-black text-white leading-snug">{patientName || tx.unknown}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
@@ -331,6 +382,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
                 syncStatus={syncStatus}
                 syncTimeStr={syncTimeStr}
                 latestCourses={sessionData.latestCourses}
+                tx={tx}
               />
             </div>
           )}
@@ -341,7 +393,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
           <section>
             <SectionHeader
               icon={<CalendarClock size={14} />}
-              label="นัดหมายถัดไป"
+              label={tx.apptLabel}
               count={appointments.length}
               accent="#a78bfa"
             />
@@ -358,10 +410,10 @@ export default function PatientDashboard({ token, clinicSettings }) {
               <section>
                 <SectionHeader
                   icon={<Package size={14} />}
-                  label="คอร์สของฉัน"
+                  label={tx.coursesLabel}
                   count={courses.length}
                   accent="#2dd4bf"
-                  meta={syncStatus === 'idle' && syncTimeStr ? `อัพเดท ${syncTimeStr}` : undefined}
+                  meta={syncStatus === 'idle' && syncTimeStr ? `${tx.updatedAt} ${syncTimeStr}` : undefined}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} />)}
@@ -372,7 +424,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
             {courses.length === 0 && (
               <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-8 text-center flex flex-col items-center gap-2">
                 <Package size={28} className="text-gray-700" />
-                <p className="text-xs font-black uppercase tracking-widest text-gray-600">ไม่มีคอร์สคงเหลือ</p>
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noCourses}</p>
               </div>
             )}
 
@@ -380,7 +432,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
               <section>
                 <SectionHeader
                   icon={<PackageX size={14} />}
-                  label="คอร์สหมดอายุ"
+                  label={tx.expiredLabel}
                   count={expiredCourses.length}
                   accent="#f87171"
                 />
@@ -394,22 +446,22 @@ export default function PatientDashboard({ token, clinicSettings }) {
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-10 flex flex-col items-center gap-3">
             <Loader2 size={24} className="animate-spin text-gray-600" />
             <p className="text-xs font-black uppercase tracking-widest text-gray-600">
-              {syncStatus === 'syncing' ? 'กำลัง Sync ข้อมูลคอร์ส...' : 'กำลังส่งคำขอไปยังคลินิก...'}
+              {syncStatus === 'syncing' ? tx.syncingCourses : tx.requesting}
             </p>
           </div>
         ) : (
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-10 flex flex-col items-center gap-2">
             <CalendarClock size={28} className="text-gray-700" />
-            <p className="text-xs font-black uppercase tracking-widest text-gray-600">ยังไม่มีข้อมูลคอร์ส</p>
+            <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noData}</p>
             <p className="text-[10px] text-gray-700 text-center max-w-[220px] leading-relaxed mt-0.5">
-              ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ
+              {tx.noDataSub}
             </p>
           </div>
         )}
 
         {/* Footer */}
         <p className="text-center text-[10px] text-gray-700 pt-2">
-          จัดทำโดย {clinicSettings?.clinicName || 'คลินิก'}
+          {tx.poweredBy} {clinicSettings?.clinicName || 'คลินิก'}
         </p>
       </div>
     </div>
