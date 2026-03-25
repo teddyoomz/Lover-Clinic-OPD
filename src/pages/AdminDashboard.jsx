@@ -59,6 +59,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [globalPushMuted, setGlobalPushMuted] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   const brokerTimers = useRef({}); // sessionId → timeout id
 
@@ -74,6 +75,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     if (localStorage.getItem('lc_push_enabled') === 'true') setPushEnabled(true);
   }, []);
+
+  // โหลด / subscribe globalPushMuted จาก Firestore
+  useEffect(() => {
+    if (!db || !appId) return;
+    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'settings');
+    const unsub = onSnapshot(settingsRef, (snap) => {
+      if (snap.exists()) setGlobalPushMuted(!!snap.data().globalPushMuted);
+    });
+    return () => unsub();
+  }, [db, appId]);
 
   // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load (ไม่มี timer แล้ว)
   useEffect(() => {
@@ -630,6 +641,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   // ─── Manual Resync ─────────────────────────────────────────────────────────
   // เหมือน handleOpdClick แต่ไม่บล็อกเมื่อ done — ใช้กด sync ซ้ำด้วยตนเอง
+  const toggleGlobalPushMuted = async () => {
+    const next = !globalPushMuted;
+    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'settings');
+    try { await setDoc(settingsRef, { globalPushMuted: next }, { merge: true }); } catch(e) { console.error('toggle push muted:', e); }
+  };
+
   const handleResync = async (session) => {
     const sessionId = session.id;
     const d = session.patientData;
@@ -689,7 +706,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
         });
       } catch(e) { console.error('resync timeout update:', e); }
-    }, 10000);
+    }, 15000);
   };
 
   const handleProClinicEdit = (session) => {
@@ -778,6 +795,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       )}
                       <p className="text-[9px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
                     </div>
+                  <div className="pt-3 border-t border-[#222]">
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><BellOff size={12}/> โหมดทดสอบ</p>
+                    <button onClick={toggleGlobalPushMuted} className={`w-full py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border ${globalPushMuted ? 'bg-orange-950/40 border-orange-800/50 text-orange-400 hover:bg-orange-900/40' : 'bg-[#1a1a1a] hover:bg-[#222] border-[#333] text-gray-400'}`}>
+                      {globalPushMuted ? <><BellOff size={11}/> ปิด Push ทุกเครื่อง — กดเพื่อเปิด</> : <><Bell size={11}/> ส่ง Push ปกติ — กดเพื่อปิด</>}
+                    </button>
+                    {globalPushMuted && <p className="text-[9px] text-orange-600 mt-1.5 text-center">Push ถูกปิดทั่วระบบ — ผู้ป่วยกรอกแล้วจะไม่มีแจ้งเตือน</p>}
+                  </div>
                   </div>
                 </div>
               )}
@@ -865,6 +889,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <button onClick={enablePushNotifications} disabled={pushLoading} className="w-full bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-gray-300 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"><Smartphone size={11}/> {pushLoading ? 'กำลังตั้งค่า...' : 'เปิดการแจ้งเตือน'}</button>
                     )}
                     <p className="text-[9px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
+                  </div>
+                  <div className="pt-3 border-t border-[#222]">
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><BellOff size={12}/> โหมดทดสอบ</p>
+                    <button onClick={toggleGlobalPushMuted} className={`w-full py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border ${globalPushMuted ? 'bg-orange-950/40 border-orange-800/50 text-orange-400 hover:bg-orange-900/40' : 'bg-[#1a1a1a] hover:bg-[#222] border-[#333] text-gray-400'}`}>
+                      {globalPushMuted ? <><BellOff size={11}/> ปิด Push ทุกเครื่อง — กดเพื่อเปิด</> : <><Bell size={11}/> ส่ง Push ปกติ — กดเพื่อปิด</>}
+                    </button>
+                    {globalPushMuted && <p className="text-[9px] text-orange-600 mt-1.5 text-center">Push ถูกปิดทั่วระบบ — ผู้ป่วยกรอกแล้วจะไม่มีแจ้งเตือน</p>}
                   </div>
                 </div>
               </div>
