@@ -15,9 +15,8 @@ const TX = {
     notfound: 'ไม่พบข้อมูล', notfoundSub: 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว',
     unknown: 'ไม่ระบุชื่อ',
     syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
-    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ',
-    syncTimeout: 'Sync ไม่สำเร็จ', syncLast: 'ข้อมูลล่าสุด',
-    resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที', cooldownPrefix: 'Sync ได้อีก',
+    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', readySync: 'พร้อม Sync ใหม่',
+    resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที',
     apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
     noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
     noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
@@ -30,9 +29,8 @@ const TX = {
     notfound: 'Not Found', notfoundSub: 'This URL is invalid or has expired.',
     unknown: 'Unknown',
     syncReq: 'Requesting...', syncIng: 'Syncing data',
-    syncDone: 'Synced', syncFail: 'Sync failed',
-    syncTimeout: 'Sync failed', syncLast: 'Last sync',
-    resync: 'Retry Sync', cooldownMin: 'min', cooldownPrefix: 'Retry in',
+    syncDone: 'Synced', syncFail: 'Sync failed', readySync: 'Ready to Sync',
+    resync: 'Retry Sync', cooldownMin: 'min',
     apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
     noCourses: 'No active courses', noData: 'No course data yet',
     noDataSub: 'Data will appear after the clinic syncs from the system.',
@@ -129,27 +127,57 @@ function CourseCard({ c, expired, accentRgb, tx }) {
   );
 }
 
-// ── SyncChip ──────────────────────────────────────────────────────────────────
+// ── SyncButton — unified status chip + resync button ─────────────────────────
 
-function SyncChip({ syncStatus, syncTimeStr, latestCourses, tx }) {
-  const failLabel = syncTimeStr ? `${tx.syncFail} — ${tx.syncLast} ${syncTimeStr}` : tx.syncFail;
-  const configs = {
-    requesting: { icon: <RefreshCw size={11} className="animate-spin shrink-0" />, label: tx.syncReq, cls: 'text-gray-400 border-gray-700/60 bg-gray-900/40' },
-    syncing:    { icon: <Loader2   size={11} className="animate-spin shrink-0" />, label: tx.syncIng,  cls: 'text-teal-300 border-teal-800/60 bg-teal-950/40' },
-    done:       { icon: <CheckCircle2 size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncDone} — ${syncTimeStr}` : tx.syncDone, cls: 'text-emerald-400 border-emerald-800/60 bg-emerald-950/40' },
-    error:      { icon: <XCircle   size={11} className="shrink-0" />, label: failLabel, cls: 'text-red-400 border-red-700/60 bg-red-950/50' },
-    timeout:    { icon: <XCircle   size={11} className="shrink-0" />, label: syncTimeStr ? `${tx.syncTimeout} — ${tx.syncLast} ${syncTimeStr}` : tx.syncTimeout, cls: 'text-amber-400 border-amber-700/60 bg-amber-950/50' },
-  };
-  const chip = configs[syncStatus];
-  if (!chip) return null;
+function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResync, tx }) {
+  // Loading states → non-interactive chip
+  if (syncStatus === 'requesting' || syncStatus === 'syncing') {
+    const isReq = syncStatus === 'requesting';
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isReq ? 'text-gray-400 border-gray-700/60 bg-gray-900/40' : 'text-teal-300 border-teal-800/60 bg-teal-950/40'}`}>
+        {isReq
+          ? <RefreshCw size={11} className="animate-spin shrink-0" />
+          : <Loader2   size={11} className="animate-spin shrink-0" />}
+        <span>{isReq ? tx.syncReq : tx.syncIng}</span>
+      </div>
+    );
+  }
+
+  // idle + no sync time + no cooldown → nothing to show
+  if (syncStatus === 'idle' && !syncTimeStr && !inCooldown) return null;
+
+  const isError = syncStatus === 'timeout' || syncStatus === 'error';
+  const isReady = !inCooldown;
+
+  // Build label
+  let icon, label;
+  if (isReady) {
+    icon = <RefreshCw size={11} className="shrink-0" />;
+    const base = isError ? tx.resync : tx.readySync;
+    label = syncTimeStr ? `${base} — ${syncTimeStr}` : base;
+  } else {
+    const base = isError ? tx.syncFail : tx.syncDone;
+    const timeStr = syncTimeStr ? ` — ${syncTimeStr}` : '';
+    const countdown = `  |  ⏰ ${cooldownMins} ${tx.cooldownMin}`;
+    icon = isError
+      ? <XCircle      size={11} className="shrink-0" />
+      : <CheckCircle2 size={11} className="shrink-0" />;
+    label = `${base}${timeStr}${countdown}`;
+  }
+
   return (
-    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${chip.cls}`}>
-      {chip.icon}
-      <span>{chip.label}</span>
-      {syncStatus === 'error' && latestCourses?.error && (
-        <span className="text-red-600 font-normal truncate max-w-[140px]">— {latestCourses.error}</span>
-      )}
-    </div>
+    <button
+      onClick={isReady ? onResync : undefined}
+      disabled={!isReady}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all ${
+        isReady
+          ? 'cursor-pointer text-yellow-300 border-yellow-600/40 bg-yellow-950/30 hover:bg-yellow-950/50 active:scale-95'
+          : 'cursor-default text-gray-500 border-gray-700/30 bg-gray-900/20'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -385,13 +413,8 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     : 0;
   const inCooldown   = cooldownRemainingMs > 0;
   const cooldownMins = Math.ceil(cooldownRemainingMs / 60_000);
-  const cooldownLabel = inCooldown
-    ? `${tx.cooldownPrefix} ${cooldownMins} ${tx.cooldownMin}`
-    : tx.resync;
-  // แสดงปุ่มเมื่อมีข้อมูลแล้ว หรืออยู่ใน cooldown หรือ sync ล้มเหลว
-  const showResyncButton =
-    syncStatus !== 'requesting' && syncStatus !== 'syncing' &&
-    (hasData || inCooldown || syncStatus === 'timeout' || syncStatus === 'error');
+  const showSyncButton =
+    syncStatus !== 'idle' || !!syncTimeStr || inCooldown;
 
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200">
@@ -455,29 +478,17 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
             </div>
           </div>
 
-          {/* Sync chip strip */}
-          {syncStatus !== 'idle' && (
-            <div className="px-5 pb-4 pt-1 flex flex-col items-center gap-2.5">
-              <SyncChip
+          {/* Sync button strip */}
+          {showSyncButton && (
+            <div className="px-5 pb-4 pt-1 flex justify-center">
+              <SyncButton
                 syncStatus={syncStatus}
                 syncTimeStr={syncTimeStr}
-                latestCourses={sessionData.latestCourses}
+                inCooldown={inCooldown}
+                cooldownMins={cooldownMins}
+                onResync={handleResync}
                 tx={tx}
               />
-              {showResyncButton && (
-                <button
-                  onClick={inCooldown ? undefined : handleResync}
-                  disabled={inCooldown}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[11px] font-bold transition-all ${inCooldown ? 'cursor-default opacity-60' : 'active:scale-95 hover:opacity-90'}`}
-                  style={inCooldown
-                    ? { color: '#6b7280', borderColor: 'rgba(107,114,128,0.25)', background: 'rgba(107,114,128,0.06)' }
-                    : { color: ac, borderColor: `rgba(${acRgb},0.35)`, background: `rgba(${acRgb},0.08)` }
-                  }
-                >
-                  <RefreshCw size={11} className={inCooldown ? '' : (syncStatus === 'timeout' || syncStatus === 'error') ? '' : 'opacity-60'} />
-                  {cooldownLabel}
-                </button>
-              )}
             </div>
           )}
         </div>
