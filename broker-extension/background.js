@@ -934,6 +934,7 @@ async function handleGetCoursesRequest(msg, loverclinicTabId) {
     }
 
     // ── ดึงนัดหมายทั้งหมด ─────────────────────────────────────────────────────
+    console.log('[LC_GET_COURSES] appt debug:', JSON.stringify(page1._apptDebug));
     let allAppointments = [];
     if (page1.appointmentsUrl) {
       await navigateAndWait(pcTab.id, page1.appointmentsUrl);
@@ -1013,9 +1014,12 @@ function scrapeProClinicCourses() {
     const expiredPag = getPaginationInfo('#expired-course-tab');
 
     // หา URL ของหน้านัดหมายทั้งหมด — ปุ่ม "ดูทั้งหมด" ข้างหัวข้อนัดหมาย
-    const apptLink = Array.from(document.querySelectorAll('a'))
-      .find(a => /ดูทั้งหมด/.test(a.textContent) && /appointment/i.test(a.href));
+    // ลอง broad selector ก่อน แล้วค่อย fallback
+    const allLinks = Array.from(document.querySelectorAll('a[href]'));
+    const apptLink = allLinks.find(a => /ดูทั้งหมด/.test(a.textContent));
     const appointmentsUrl = apptLink?.href || null;
+    // debug: ส่ง href กลับมาด้วยเพื่อตรวจสอบ
+    const _apptDebug = { found: !!apptLink, url: appointmentsUrl, allViewAllLinks: allLinks.filter(a => /ดูทั้งหมด/.test(a.textContent)).map(a => a.href) };
 
     return {
       patientName,
@@ -1026,6 +1030,7 @@ function scrapeProClinicCourses() {
       expiredParam:   expiredPag.param,
       expiredMaxPage: expiredPag.maxPage,
       appointmentsUrl,
+      _apptDebug,
     };
   } catch(e) {
     return { error: e.message };
