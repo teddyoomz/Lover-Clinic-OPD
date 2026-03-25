@@ -545,16 +545,6 @@ function fillAndSubmitProClinicForm(patient) {
       const el = document.querySelector(`textarea[name="${name}"]`);
       if (el) { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }
     }
-    function fillSelectByText(name, text) {
-      if (!text) return;
-      const el = document.querySelector(`select[name="${name}"]`);
-      if (!el) return;
-      const t = text.toLowerCase();
-      const opt = Array.from(el.options).find(o =>
-        o.text.toLowerCase().includes(t) || t.includes(o.text.toLowerCase())
-      );
-      if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
-    }
     function clickRadio(id) {
       const el = document.getElementById(id);
       if (el) { el.checked = true; el.click(); }

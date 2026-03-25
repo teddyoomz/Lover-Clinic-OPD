@@ -2,6 +2,7 @@
 
 > ไฟล์: `src/pages/AdminDashboard.jsx`
 > Component ที่ซับซ้อนที่สุดในโปรเจ็ค — มี Firestore listener, auto-sync, broker logic
+> อัพเดทล่าสุด: 2026-03-25
 
 ---
 
@@ -24,40 +25,65 @@
 | `hasNewUpdate` | state | banner "มีข้อมูลอัปเดต" |
 | `adminMode` | state | 'dashboard' / 'formBuilder' / 'clinicSettings' / 'history' |
 | `prevSessionsRef` | useRef | sessions ก่อนหน้าสำหรับ detect changes ใน onSnapshot |
-| `lastAutoSyncedStrRef` | useRef | `{[sessionId]: JSON.stringify(patientData)}` — guard ป้องกัน auto-sync ซ้ำ |
+| `lastAutoSyncedStrRef` | useRef | `{[sessionId]: jsonStr}` — guard ป้องกัน auto-sync ซ้ำ |
+| `lastViewedStrRef` | useRef | `{[sessionId]: jsonStr}` — guard ป้องกัน banner false positive จาก isUnread→false transition |
 | `brokerPending` | state | `{[sessionId]: true}` — spinner state |
+| `brokerTimers` | useRef | `{[sessionId]: timeoutId}` — 10s timeout สำหรับ broker |
 | `pushEnabled` | state | FCM push เปิดอยู่บน device นี้ไหม |
+
+> **⚠️ lastViewedStrRef vs lastAutoSyncedStrRef**:
+> - `lastViewedStrRef` — stamp เมื่อ admin เห็น session แล้ว → ป้องกัน banner false positive
+> - `lastAutoSyncedStrRef` — stamp เมื่อ auto-sync ส่งแล้ว → ป้องกัน sync ซ้ำ
+> - ทั้งคู่ stamp พร้อมกันใน `handleViewSession` และ cut-the-wire guard
 
 ---
 
 ## useEffects
 
-| บรรทัด | ทำอะไร |
+| ประมาณบรรทัด | ทำอะไร |
 |--------|---------|
 | ~53 | `setInterval` อัพเดท `currentTime` ทุก 10วิ (สำหรับ countdown) |
 | ~59 | `onSnapshot` form_templates collection |
 | ~66 | `onSnapshot` opd_sessions — **หลัก** (auto-cleanup, broker auto-sync, notification) |
-| ~134 | track `viewingSession` vs latest session → set `hasNewUpdate` / auto-update broker fields |
+| ~360 | track `viewingSession` vs latest session → set `hasNewUpdate` / auto-update broker fields |
 
 ---
 
-## onSnapshot opd_sessions — Logic (บรรทัด ~66-132)
+## onSnapshot opd_sessions — Logic
 
 ```
 forEach session ใหม่:
-  1. auto-expire: ถ้า pending + >2ชม → deleteDoc
-  2. auto-archive: ถ้า completed + >2ชม → isArchived:true
+  1. auto-expire: pending + >2ชม → deleteDoc
+  2. auto-archive: completed + >2ชม → isArchived:true
   3. แยก active vs archived sessions
   4. เปรียบเทียบกับ prevSessionsRef:
-     a. Notification sound: newS.isUnread===true AND (!oldS.isUnread OR patientData เปลี่ยน)
-     b. Auto-sync: ดูหัวข้อด้านล่าง
+     a. Notification (isNotifEnabled only): newS.isUnread===true AND (!oldS.isUnread OR patientData เปลี่ยน)
+     b. Cut-the-wire guard: oldS.isUnread→!newS.isUnread → stamp both refs → SKIP sync (forEach return)
+     c. Auto-sync: ดูหัวข้อด้านล่าง
   5. prevSessionsRef.current = newSessions
   6. setSessions / setArchivedSessions
 ```
 
 ---
 
-## Auto-sync Trigger (onSnapshot ~line 263)
+## Cut-the-Wire Guard (isUnread transition)
+
+```js
+// ใน onSnapshot forEach — หัวใจสำคัญป้องกัน false auto-sync + false banner
+if (oldS.isUnread && !newS.isUnread) {
+  lastViewedStrRef.current[newS.id]     = newStr; // banner: admin เห็นแล้ว
+  lastAutoSyncedStrRef.current[newS.id] = newStr; // auto-sync: อย่า trigger
+  return; // forEach return = skip ทุกอย่างสำหรับ session นี้
+}
+```
+
+> ทำไมต้อง stamp ก่อน write isUnread:false ใน handleViewSession ด้วย?
+> เพราะ LOCAL snapshot อาจ fire ก่อนที่ forEach จะ reach บรรทัดนี้ใน next snapshot
+> double-stamp ทั้งใน handleViewSession + onSnapshot guard = safe ทุกกรณี
+
+---
+
+## Auto-sync Trigger (onSnapshot)
 
 ```js
 // เงื่อนไขที่จะส่ง LC_UPDATE_PROCLINIC ไปยัง extension:
@@ -72,108 +98,148 @@ if (
   && lastAutoSyncedStrRef.current[newS.id] !== newStr  // ป้องกัน re-trigger ด้วย data เดิม
 ) {
   lastAutoSyncedStrRef.current[newS.id] = newStr;
+  brokerSyncSessions.push(newS);
   // → window.postMessage(LC_UPDATE_PROCLINIC, { patient, proClinicId, proClinicHN, sessionId })
 }
+// ⚠️ ทำงานเสมอ — ไม่ขึ้นกับ isNotifEnabled
 ```
-
-> **⚠️ `lastAutoSyncedStrRef` คือกุญแจสำคัญ** — ป้องกัน false auto-sync
-> ดู `docs/BUGS.md` สำหรับ bug ที่เกิดจากตัวนี้ไม่ทำงาน
 
 ---
 
-## Banner Logic (useEffect ~line 134)
+## Banner Logic (useEffect ~line 360)
 
 ```js
-// ตรวจสอบทุกครั้งที่ sessions หรือ viewingSession เปลี่ยน:
 const latestSession = sessions.find(s => s.id === viewingSession?.id);
-
 const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN',
                       'brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt'];
 const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
 
 if (brokerChanged) {
-  setViewingSession(latestSession);  // auto-update ไม่แสดง banner
-} else {
-  const currentStr = JSON.stringify(viewingSession.patientData || {});
-  const latestStr  = JSON.stringify(latestSession.patientData || {});
-  const dataOutOfSync = currentStr !== latestStr;  // ⚠️ ไม่เปรียบ updatedAt (serverTimestamp 2x)
-  dataOutOfSync ? setHasNewUpdate(true) : setHasNewUpdate(false);
+  setViewingSession(latestSession); // อัพเดท broker fields เงียบๆ — ไม่แตะ hasNewUpdate
+} else if (dataOutOfSync) {
+  if (lastViewedStrRef.current[viewingSession.id] === latestStr) {
+    setViewingSession(latestSession);
+    setHasNewUpdate(false); // stale จาก isUnread transition → ไม่โชว์ banner
+  } else {
+    setHasNewUpdate(true);  // patient edit จริง → โชว์ banner
+  }
 }
+// else: ไม่แตะ hasNewUpdate → banner ยังอยู่ถ้าเคยขึ้นแล้ว
+
+// banner หายได้เฉพาะเมื่อ:
+// 1. user กดปุ่ม "✓ รับทราบ" (setHasNewUpdate(false) + setViewingSession(latestSession))
+// 2. user ปิด session (closeViewSession → setHasNewUpdate(false))
+// 3. กด X แล้วมี confirm dialog ถ้า hasNewUpdate=true
 ```
 
 ---
 
-## handleViewSession (บรรทัด ~474)
+## handleViewSession
 
 ```js
-// เรียกเมื่อ admin คลิกเข้าดู session (Report button)
 const handleViewSession = async (session) => {
   setViewingSession(session);
   setHasNewUpdate(false);
   if (session.isUnread) {
-    // ⚠️ BUG AREA — ดู docs/BUGS.md
-    // FIX ที่ต้องทำ: ก่อน updateDoc ให้ set lastAutoSyncedStrRef ก่อน
+    // stamp ทั้งสอง ref ก่อน write — ป้องกัน LOCAL snapshot false trigger
+    lastViewedStrRef.current[session.id]     = JSON.stringify(session.patientData || {});
     lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
-    prevSessionsRef.current = prevSessionsRef.current.map(s =>
-      s.id === session.id ? { ...session, isUnread: false } : s
-    );
-    await updateDoc(doc(db, ..., session.id), { isUnread: false });
+    await updateDoc(..., { isUnread: false });
   }
 };
 ```
-> **TODO**: เพิ่ม `lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {})` ก่อน `updateDoc`
 
 ---
 
-## OPD Button States (บรรทัด ~590)
+## Patient Object (ส่งไป ProClinic)
+
+```js
+const patient = {
+  prefix, firstName, lastName, phone, age, reasons,
+  dobDay, dobMonth, dobYear,   // วันเกิดจริง (BE หรือ CE — background.js แปลงเอง)
+  address,
+  howFoundUs,                  // array — ['Facebook', 'Google', ...]
+  allergies,
+  underlying,                  // pmh string: 'ความดัน, เบาหวาน, ...'
+  emergencyName, emergencyRelation, emergencyPhone,
+  clinicalSummary,             // generateClinicalSummary(d, formType, customTemplate, 'th')
+};
+```
+
+> patient object นี้ build ใน 2 ที่:
+> 1. `handleOpdClick` / `handleResync` — กดปุ่ม manual
+> 2. auto-sync forEach ใน onSnapshot — trigger อัตโนมัติเมื่อ patientData เปลี่ยน
+
+---
+
+## OPD / Broker Button States
 
 ```js
 isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done'
 isPending = brokerPending[id] || session.brokerStatus === 'pending'
 isFailed  = !isPending && !isDone && session.brokerStatus === 'failed'
-// Button disabled={isPending || isDone}
+// OPD button: disabled={isPending || isDone}
+// Resync button: disabled={isPending} — ทำงานได้แม้ isDone
 ```
 
-### Broker button onClick logic:
+### Broker message ที่ส่ง:
 ```js
 if (brokerProClinicId || brokerProClinicHN) {
-  // มี record อยู่แล้ว → UPDATE
-  postMessage(LC_UPDATE_PROCLINIC, { ..., proClinicId, proClinicHN, sessionId })
+  postMessage('LC_UPDATE_PROCLINIC', { proClinicId, proClinicHN, sessionId, patient })
 } else {
-  // ยังไม่มี → CREATE
-  postMessage(LC_FILL_PROCLINIC, { ..., sessionId })
+  postMessage('LC_FILL_PROCLINIC', { sessionId, patient })
 }
 ```
 
 ---
 
-## JSX Layout
+## Simulation vs Report Edit
+
+| | Simulation (ปุ่มจำลองหน้าจอ) | Report Edit (ปุ่มแก้ไขข้อมูล) |
+|---|---|---|
+| `suppressNotif` | false | true |
+| `isUnread` ที่เขียน | true | false |
+| Notification | ✅ ส่ง | ❌ ไม่ส่ง |
+| ProClinic auto-sync | ✅ (isUnread:true → onSnapshot ตรวจ patientData เปลี่ยน) | ✅ (patientData เปลี่ยน + brokerStatus:done) |
+| AdminDashboard mounted | ✅ (display:none, Firestore listener ยังทำงาน) | ✅ |
+
+---
+
+## JSX Layout (Session Detail / Report)
 
 ```
-Header (nav bar)
-├── หน้าคิว (badge unreadCount) | จัดการแบบฟอร์ม | ตั้งค่า | ประวัติ
-adminMode === 'clinicSettings' → <ClinicSettingsPanel>
-adminMode === 'formBuilder'   → <CustomFormBuilder>
-adminMode === 'history'       → Archive table + Hard Delete modal
-adminMode === 'dashboard'     → (default)
-  ├── Session list table (รหัสคิว | ข้อมูลผู้ป่วย | สาเหตุ | สถานะ | actions)
-  ├── QR panel (selectedQR)
-  └── Session detail overlay (viewingSession)
-      ├── "มีข้อมูลอัปเดต" banner (hasNewUpdate)
-      ├── Patient summary
-      └── Clinical summary + print buttons
+Report Header
+├── ปุ่ม "แก้ไขข้อมูล" (blue) — เปิด simulation suppressNotif
+├── ปุ่ม "Resync ProClinic" (teal) — handleResync, ทำงานแม้ isDone
+├── ปุ่ม "พิมพ์สรุป A4" / "พิมพ์ฟอร์มมาตรฐาน" (intake/custom only)
+├── ปุ่ม "บันทึกลง OPD" — handleOpdClick, disabled ถ้า done
+└── ปุ่ม X (ปิด) — confirm dialog ถ้า hasNewUpdate
+
+Banner (hasNewUpdate)
+├── ข้อความ "มีข้อมูลอัปเดตใหม่"
+└── ปุ่ม "✓ รับทราบ" — setViewingSession(latest) + setHasNewUpdate(false)
+
+OPD Info bar (opdRecordedAt)
+└── แสดง ProClinic ID, HN, sync time
+
+Error bar (brokerStatus==='failed')
+└── ปุ่ม retry → handleOpdClick
 ```
 
 ---
 
 ## Functions หลัก
 
-| Function | บรรทัด | คำอธิบาย |
-|----------|--------|-----------|
-| `confirmCreateSession()` | ~177 | สร้าง session ใน Firestore |
-| `deleteSession(id)` | ~220 | soft delete (archive ถ้ามีข้อมูล) |
-| `hardDeleteSession(id)` | ~238 | deleteDoc ถาวร |
-| `handleViewSession(session)` | ~474 | เปิด detail + mark isUnread:false |
-| `closeViewSession()` | ~255 | ปิด detail panel |
-| `enablePushNotifications()` | ~58 | request permission → getToken → save Firestore |
-| `disablePushNotifications()` | ~90 | clear localStorage + reset state |
+| Function | คำอธิบาย |
+|----------|-----------|
+| `confirmCreateSession()` | สร้าง session ใน Firestore |
+| `deleteSession(id)` | soft delete (archive ถ้ามีข้อมูล) |
+| `hardDeleteSession(id)` | deleteDoc ถาวร |
+| `handleViewSession(session)` | เปิด report + mark isUnread:false + stamp refs |
+| `closeViewSession()` | ปิด report panel |
+| `handleOpdClick(session)` | ส่งไป ProClinic (บล็อกถ้า done แล้ว) |
+| `handleResync(session)` | ส่งไป ProClinic ซ้ำ (ไม่บล็อกถ้า done — manual resync) |
+| `handleProClinicEdit(session)` | เปิดหน้า edit ProClinic (LC_OPEN_EDIT_PROCLINIC) |
+| `handleProClinicDelete(session)` | ลบจาก ProClinic + ล้าง HN/ID ใน Firestore |
+| `enablePushNotifications()` | request permission → getToken → save Firestore |
+| `generateClinicalSummary(d, formType, tpl, lang)` | import จาก utils.js |

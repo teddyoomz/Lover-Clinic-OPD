@@ -2,6 +2,7 @@
 
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b` | Deploy: Vercel
+> อัพเดทล่าสุด: 2026-03-25
 
 ---
 
@@ -45,7 +46,7 @@ artifacts/{appId}/public/data/
 ### Session ID Prefixes
 | Prefix | ประเภท |
 |--------|--------|
-| `LC-XXXXXX` | intake ทั่วไป |
+| `LC-XXXXXX` | intake ทั่วไป (prefix ตาม clinic name) |
 | `PRM-XXXXXX` | permanent link |
 | `FW-ED-XXXXXX` | Follow-up IIEF |
 | `FW-AD-XXXXXX` | Follow-up ADAM |
@@ -68,6 +69,22 @@ artifacts/{appId}/public/data/
 
 ---
 
+## 🤖 Broker (ProClinic Auto-sync) Flow
+
+```
+PatientForm submit / admin กดปุ่ม / แก้ข้อมูล
+  → AdminDashboard: window.postMessage(LC_FILL_PROCLINIC | LC_UPDATE_PROCLINIC, patient)
+  → content-loverclinic.js: forward → chrome.runtime.sendMessage
+  → background.js: enqueueProClinic → handleFillRequest | handleUpdateRequest
+  → ProClinic: fill form (UI) หรือ fetch PUT (update)
+  → background.js: window.postMessage(LC_BROKER_RESULT | LC_UPDATE_RESULT)
+  → AdminDashboard: updateDoc { brokerStatus:'done', brokerProClinicId, brokerProClinicHN }
+```
+
+ดูรายละเอียดทั้งหมดใน `docs/EXTENSION.md`
+
+---
+
 ## 🗝️ Key Design Decisions
 
 1. **Soft delete** — session ที่มี patientData → archive (isArchived:true), ไม่ deleteDoc
@@ -75,9 +92,11 @@ artifacts/{appId}/public/data/
 3. **Notification sound** — ดังเฉพาะ `isUnread: false→true` หรือ patientData เปลี่ยนขณะ isUnread:true
 4. **QR/Link** — `window.location.origin + ?session=ID`, QR ผ่าน qrserver.com API
 5. **Bilingual** — PatientForm รองรับ TH/EN
-6. **isClosed vs isExpired** — PatientForm ใช้ 2 state แยก: `isClosed` (admin archive) แสดง Lock icon; `isExpired` (2ชม.) แสดง TimerOff; render isClosed ก่อน
-7. **howFoundUs** — required field สุดท้ายใน intake form, multi-select
-8. **Timestamps** — Queue table: QR time (col1); submit/edit time (status col). History: 4 timestamps
+6. **isClosed vs isExpired** — PatientForm ใช้ 2 state แยก: `isClosed` (admin archive); `isExpired` (2ชม.)
+7. **howFoundUs** — required field สุดท้ายใน intake form, multi-select array
+8. **Timestamps** — Queue table: QR time; History: 4 timestamps
+9. **AdminDashboard always mounted** — ระหว่าง simulation PatientForm แสดง AdminDashboard ซ่อนด้วย `display:none` เพื่อ Firestore listener ยังทำงาน
+10. **Simulation suppressNotif** — simulation จาก QR = `isUnread:true` (แจ้ง + sync); Report edit = `isUnread:false` (ไม่แจ้ง แต่ยัง sync)
 
 ---
 
@@ -86,11 +105,13 @@ artifacts/{appId}/public/data/
 | Quirk | รายละเอียด |
 |-------|-----------|
 | Vite OXC parser | ห้าม IIFE `{(() => {...})()}` ใน JSX → ใช้ pre-computed var |
-| Firestore snapshot 2x | write ที่มี `serverTimestamp()` fires 2 ครั้ง (local + server confirm) |
+| Firestore snapshot 2x | write ที่มี `serverTimestamp()` fires 2 ครั้ง (local + server confirm) — ห้าม compare timestamps |
 | Phone validation | Thai: `/^0\d{9}$/`, international: กรอง non-digit เท่านั้น |
-| DOB year | BE ถ้า year > 2400, CE ถ้า year < 2400 |
+| DOB year | BE ถ้า year > 2400, CE ถ้า year < 2400 — background.js แปลงเอง |
 | Missing icon import | → JS runtime error → component crash → จอดำ; ตรวจ lucide-react imports ก่อน |
 | logo.jpg | เก็บที่ `/public/logo.jpg` |
+| Chrome Extension reload | แก้ background.js/manifest.json/content script → reload ที่ chrome://extensions เสมอ |
+| ProClinic button type | `type="button"` ไม่ใช่ `type="submit"` → ใช้ selector `button.btn-primary` |
 
 ---
 
@@ -103,11 +124,25 @@ artifacts/{appId}/public/data/
 | `calculateIIEFScore(d)` | sum iief_1..5 |
 | `getIIEFInterpretation(score)` | → {text, color, bg} |
 | `calculateMRS(d)` | → {score, text, color, bg} |
-| `generateClinicalSummary(d, formType, customTemplate, lang)` | clinical summary text TH/EN |
+| `generateClinicalSummary(d, formType, customTemplate, lang)` | clinical summary text TH/EN — ใช้ generate patient.clinicalSummary ส่งไป ProClinic |
+| `getReasons(d)` | แปลง visitReasons[] + other → array of strings |
 | `playNotificationSound(volume)` | เล่นเสียง "ดิ๊ง" ด้วย AudioContext |
 
-### defaultFormData fields (utils.js line 48)
-`prefix, firstName, lastName, gender, dobDay, dobMonth, dobYear, age, address, phone, isInternationalPhone, phoneCountryCode, emergencyName, emergencyRelation, emergencyPhone, visitReasons[], visitReasonOther, hrtGoals[], hrtTransType, hasAllergies, allergiesDetail, hasUnderlying, ud_*, currentMedication, pregnancy, howFoundUs[], symp_pe, adam_1..10, iief_1..5, mrs_1..11, assessmentDate`
+### defaultFormData fields (utils.js)
+```
+prefix, firstName, lastName, gender,
+dobDay, dobMonth, dobYear, age,
+address, phone, isInternationalPhone, phoneCountryCode,
+emergencyName, emergencyRelation, emergencyPhone, isInternationalEmergencyPhone, emergencyPhoneCountryCode,
+visitReasons[], visitReasonOther,
+hrtGoals[], hrtTransType, hrtOtherDetail,
+hasAllergies, allergiesDetail,
+hasUnderlying, ud_hypertension, ud_diabetes, ud_lung, ud_kidney, ud_heart, ud_blood, ud_other, ud_otherDetail,
+currentMedication, pregnancy,
+howFoundUs[],
+symp_pe, adam_1..10, iief_1..5, mrs_1..11,
+assessmentDate
+```
 
 ---
 
@@ -117,7 +152,13 @@ artifacts/{appId}/public/data/
 isInitializing          → loading screen
 sessionFromUrl (?session=) → <PatientForm> (ไม่ต้อง login)
 !user || user.isAnonymous  → <AdminLogin>
-else                    → <AdminDashboard> หรือ <PatientForm isSimulation>
+else                    →
+  adminView === 'simulation':
+    <div style="display:none"> <AdminDashboard/> </div>   ← always mounted
+    <PatientForm isSimulation suppressNotif={simulationSuppressNotif}/>
+  else:
+    <AdminDashboard onSimulateScan={(id, opts) => ...}/>
 ```
 - `signInAnonymously` อัตโนมัติเมื่อมี session URL + ยังไม่ได้ login
 - `onSnapshot clinic_settings/main` → sync clinic settings realtime
+- `simulationSuppressNotif` — false = simulation จาก QR (แจ้ง), true = Report edit (ไม่แจ้ง)

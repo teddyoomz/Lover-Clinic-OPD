@@ -3,6 +3,7 @@
 > ไฟล์: `broker-extension/`
 > หน้าที่: Bridge ระหว่าง LoverClinic ↔ ProClinic
 > **ไม่มี auto-deploy** — ต้อง reload ที่ `chrome://extensions` เอง
+> อัพเดทล่าสุด: 2026-03-25
 
 ---
 
@@ -23,7 +24,7 @@
 |------|--------|
 | `background.js` | Service Worker หลัก — logic ทั้งหมด |
 | `content-loverclinic.js` | Bridge บน lover-clinic-app.vercel.app — forward postMessage ↔ extension |
-| `manifest.json` | MV3 config, permissions: tabs/scripting/activeTab/storage |
+| `manifest.json` | MV3 config, permissions: `tabs, scripting, activeTab, storage, alarms` |
 | `popup.html/js` | UI แสดง session status (pending/done/failed) |
 
 ---
@@ -31,12 +32,46 @@
 ## ProClinic URLs
 
 ```js
-const PROCLINIC_ORIGIN     = 'https://trial.proclinicth.com'
-const PROCLINIC_CREATE_URL = 'https://trial.proclinicth.com/admin/customer/create'
-const PROCLINIC_LIST_URL   = 'https://trial.proclinicth.com/admin/customer'
-// Edit: PROCLINIC_ORIGIN + '/admin/customer/{id}/edit'
-// Search: PROCLINIC_LIST_URL + '?search={query}'
+PROCLINIC_DEFAULT_ORIGIN = 'https://trial.proclinicth.com'  // เปลี่ยนได้ใน popup settings
+PROCLINIC_CREATE_URL = ORIGIN + '/admin/customer/create'
+PROCLINIC_LIST_URL   = ORIGIN + '/admin/customer'
+PROCLINIC_LOGIN_URL  = ORIGIN + '/login'
+// Edit:   ORIGIN + '/admin/customer/{id}/edit'
+// Search: ORIGIN + '/admin/customer?search={query}'
 ```
+
+---
+
+## Session Keepalive
+
+```js
+// chrome.alarms ทุก 20 นาที — ป้องกัน ProClinic session หมดอายุ
+// Chrome จะปลุก Service Worker เมื่อ alarm ดัง แม้ SW หลับอยู่
+chrome.alarms.create('pcKeepalive', { periodInMinutes: 20 });
+// → executeScript ping '/admin/api/stat' จาก ProClinic tab (ใช้ credentials ของ tab)
+// ⚠️ ต้องมี permission "alarms" ใน manifest.json
+```
+
+---
+
+## Auto-login Flow
+
+```
+ensureLoggedIn(tabId):
+  1. ตรวจ URL — ถ้ามี '/login' → navigateAndWait(PROCLINIC_LOGIN_URL) (clean URL ป้องกัน 404)
+  2. doAutoLogin(tabId):
+     a. อ่าน pc_email, pc_password จาก chrome.storage.local
+     b. fillInput(email) → wait 100ms → fillInput(password) → wait 100ms
+     c. tick checkbox (native setter + input/change events)
+     d. wait 600ms (reCAPTCHA ต้องใช้เวลา)
+     e. click button.btn-primary (ProClinic ใช้ type="button" ไม่ใช่ type="submit")
+     f. wait 500ms → waitForTabReady (timeout 10s)
+     g. ตรวจ URL: ยังอยู่ /login → throw error
+     h. dispatch Escape key (ลอง dismiss Chrome "Change your password" dialog)
+```
+
+> **Chrome "Change your password" dialog**: Chrome native UI — dispatch Escape อาจช่วยได้บางกรณี
+> วิธีแน่ชัดกว่า: ปิดใน `chrome://password-manager/settings` → "Warn you about password breaches"
 
 ---
 
@@ -46,8 +81,8 @@ const PROCLINIC_LIST_URL   = 'https://trial.proclinicth.com/admin/customer'
 |------|--------|-----------|
 | `LC_FILL_PROCLINIC` | Page → Extension | สร้างลูกค้าใหม่ใน ProClinic |
 | `LC_DELETE_PROCLINIC` | Page → Extension | ลบลูกค้า |
-| `LC_UPDATE_PROCLINIC` | Page → Extension | แก้ไขข้อมูล (auto-sync) |
-| `LC_OPEN_EDIT_PROCLINIC` | Page → Extension | เปิดหน้า edit (manual) |
+| `LC_UPDATE_PROCLINIC` | Page → Extension | แก้ไขข้อมูล (auto-sync หรือ manual resync) |
+| `LC_OPEN_EDIT_PROCLINIC` | Page → Extension | เปิดหน้า edit (ปุ่ม ProClinic icon) |
 | `LC_BROKER_RESULT` | Extension → Page | ผล create |
 | `LC_DELETE_RESULT` | Extension → Page | ผล delete |
 | `LC_UPDATE_RESULT` | Extension → Page | ผล update |
@@ -75,22 +110,23 @@ function enqueueProClinic(fn, sessionId = null) {
 // LC_FILL_PROCLINIC   → enqueueProClinic(fn)                 // no sessionId
 ```
 
-> ⚠️ Chrome MV3 service workers อาจ restart ระหว่าง session → `syncInFlightSessions` reset → dedup ไม่ guaranteed
-> การป้องกันที่น่าเชื่อถือกว่าคือ guard ใน AdminDashboard (`lastAutoSyncedStrRef`)
+> ⚠️ Chrome MV3 SW อาจ restart ระหว่าง session → `syncInFlightSessions` reset → dedup ไม่ guaranteed
+> Guard หลักคือ `lastAutoSyncedStrRef` ใน AdminDashboard (persistent ตลอด session React)
 
 ---
 
 ## CREATE Flow (`handleFillRequest`)
 
 ```
-1. navigateAndWait(createURL)
-2. executeScript(fillAndSubmitProClinicForm)  — click submit หลัง 400ms
-3. waitForNavAwayFromCreate  — รอ navigation event ถัดไป (NEXT event ไม่ใช่ current state)
-4. check !url.includes('/create') → extract proClinicId จาก URL
-5. navigateAndWait(editURL)  — เพื่อดึง HN
-6. executeScript: document.querySelector('input[name="hn_no"]')?.value
-7. reportBack LC_BROKER_RESULT { proClinicId, proClinicHN }
-   → AdminDashboard: updateDoc { brokerStatus:'done', brokerProClinicId, brokerProClinicHN }
+1. getOrCreateProclinicTab() → ensureLoggedIn()
+2. navigateAndWait(createURL)
+3. executeScript(fillAndSubmitProClinicForm)  — click submit หลัง 400ms
+4. waitForNavAwayFromCreate  — รอ navigation event ถัดไป (NEXT event ไม่ใช่ current state)
+5. check !url.includes('/create') → extract proClinicId จาก URL
+6. navigateAndWait(editURL)  — เพื่อดึง HN
+7. executeScript: document.querySelector('input[name="hn_no"]')?.value
+8. reportBack LC_BROKER_RESULT { proClinicId, proClinicHN }
+   → AdminDashboard: updateDoc { brokerStatus:'done', brokerProClinicId, brokerProClinicHN, opdRecordedAt }
 ```
 
 ---
@@ -98,15 +134,17 @@ function enqueueProClinic(fn, sessionId = null) {
 ## UPDATE Flow (`handleUpdateRequest`) — FETCH-BASED ⚡
 
 ```
-1. searchAndResolveId(HN → phone → name)
-2. navigateAndWait(editURL)  — ดึง CSRF + form values เท่านั้น (ไม่ navigate จริง)
-3. executeScript(submitProClinicEditViaFetch):
-   → FormData(form) — เก็บ hidden fields ทั้งหมด
-   → override: prefix, firstname, lastname, telephone_number, gender, note
+1. ensureLoggedIn()
+2. searchAndResolveId(HN → phone → name)
+3. navigateAndWait(editURL)  — ดึง CSRF + form values
+4. executeScript(submitProClinicEditViaFetch):
+   → FormData(form) — เก็บ hidden fields ทั้งหมด (hn_no, customer_id ฯลฯ)
+   → override ด้วย patient data (ดู Field Mapping ด้านล่าง)
    → fetch PUT redirect:'manual'
    → response.type==='opaqueredirect' → SUCCESS ✓ (server ส่ง 302)
-   → response.type==='basic' status 200 → FAIL (validation error, no redirect)
-4. reportBack LC_UPDATE_RESULT
+   → response.type==='basic' status 200 → FAIL (validation error)
+5. reportBack LC_UPDATE_RESULT
+   → AdminDashboard: updateDoc { brokerStatus:'done', brokerLastAutoSyncAt }
 ```
 
 > ⚠️ ProClinic ALWAYS redirects กลับ /edit หลัง save — ตรวจ URL ไม่ได้!
@@ -119,8 +157,9 @@ function enqueueProClinic(fn, sessionId = null) {
 ```
 1. searchAndResolveId (ถ้าไม่มี proClinicId)
 2. navigateAndWait(listURL)  — ดึง CSRF
-3. executeScript: fetch POST _method=DELETE + check res.ok
+3. executeScript: fetch POST _method=DELETE
 4. reportBack LC_DELETE_RESULT
+   → AdminDashboard: updateDoc { brokerProClinicId:null, brokerProClinicHN:null, brokerStatus:null, ... }
 ```
 
 ---
@@ -129,14 +168,50 @@ function enqueueProClinic(fn, sessionId = null) {
 
 ```
 Round 1: HN search   → searchProClinicCustomers(HN) → เอาตัวแรก (HN unique)
-Round 2: Phone       → searchProClinicCustomers(phone) → findBestMatch
-Round 3: Name        → searchProClinicCustomers("firstname lastname") → findBestMatch
+Round 2: Phone       → searchProClinicCustomers(phone) → findBestMatch(score)
+Round 3: Name        → searchProClinicCustomers("firstname lastname") → findBestMatch(score)
 → throw ถ้าไม่เจอ
 
-searchProClinicCustomers:
-  navigateAndWait(searchURL, 1200ms delay)  — รอ DOM render
-  executeScript(extractCustomersFromSearchResults)
-  → returns [{id, name, phone}]
+findBestMatch scoring:
+  phone match = +100 (most reliable)
+  name token match = +10 each
+  fallback: customers[0] ถ้า score > 0
+```
+
+---
+
+## ProClinic Form Field Mapping (ครบทุกช่อง)
+
+> ใช้ทั้ง `fillAndSubmitProClinicForm` (CREATE) และ `submitProClinicEditViaFetch` (UPDATE)
+
+| ProClinic field | name attribute | ที่มา (patient object) | หมายเหตุ |
+|----------------|---------------|----------------------|----------|
+| คำนำหน้า | `prefix` | `patient.prefix` | validate กับ VALID_PREFIXES ก่อน |
+| ชื่อ | `firstname` | `patient.firstName` | |
+| นามสกุล | `lastname` | `patient.lastName` | |
+| เบอร์ติดต่อ | `telephone_number` | `patient.phone` | |
+| เพศ | `gender` | derive จาก prefix (นาย→ชาย, นาง→หญิง ฯลฯ) | |
+| วันเกิด | `birthdate` | `patient.dobDay/Month/Year` | BE→CE auto-convert (year>2400 → -543); fallback: age |
+| ที่อยู่ | `address` | `patient.address` | |
+| ที่มาของลูกค้า | `source` (select) | `patient.howFoundUs[0]` + HOW_MAP | |
+| รายละเอียดที่มา | `source_detail` | `patient.howFoundUs.join(', ')` | ทุกค่าที่เลือก |
+| อาการที่ต้องรักษา | `symptoms` | `patient.reasons.join(', ')` | |
+| โรคประจำตัว | `congenital_disease` | `patient.underlying` | pmh string |
+| ประวัติแพ้ยา | `history_of_drug_allergy` | `patient.allergies` | |
+| หมายเหตุ | `note` | `patient.clinicalSummary` | Clinical Summary ภาษาไทยเต็มๆ |
+| ผู้ติดต่อ ชื่อ | `contact_1_firstname` | `patient.emergencyName` | |
+| ผู้ติดต่อ นามสกุล | `contact_1_lastname` | `patient.emergencyRelation` | ใส่ความสัมพันธ์ (ProClinic ไม่มีช่อง relation) |
+| ผู้ติดต่อ เบอร์ | `contact_1_telephone_number` | `patient.emergencyPhone` | |
+
+### HOW_MAP (howFoundUs → source dropdown value)
+```js
+'Facebook'         → 'Facebook'
+'Google'           → 'Google'
+'Line'             → 'Line'
+'AI'               → 'ChatGPT'
+'ป้ายตามที่ต่างๆ' → 'อื่นๆ'
+'รู้จักจากคนรู้จัก' → 'เพื่อนแนะนำ'
+// fallback: ส่ง value ตรงๆ ถ้าไม่มีใน map
 ```
 
 ---
@@ -153,19 +228,15 @@ searchProClinicCustomers:
 // CSRF
 'meta[name="csrf-token"]'
 
-// Edit form (แรกในหน้า)
-'form'
-```
+// Login
+'input[name="email"]'
+'input[name="password"]'
+'input[type="checkbox"]'   // remember me / captcha confirm
+'button.btn-primary'       // ปุ่ม login (type="button" ไม่ใช่ type="submit")
 
----
-
-## ProClinic Form Fields (PUT /admin/customer/{id})
-
-```
-Fields ที่เราเขียน: prefix, firstname, lastname, telephone_number, gender, note
-Required: _method=PUT, _token={csrf}
-ห้ามแตะ: hn_no  — ProClinic กำหนดเอง
-ที่เหลือ: อ่านจาก FormData(form) แล้วส่งต่อเลย
+// Edit form
+'form'  // FormData(form) ดึงทุก field
+'input.flatpickr-input[name="birthdate"]'  // flatpickr — ใช้ ._flatpickr.setDate()
 ```
 
 ---
@@ -177,4 +248,5 @@ getOrCreateProclinicTab()       // หา/สร้าง ProClinic tab + รอ
 navigateAndWait(tabId, url, delayMs=800, timeoutMs=15000)
   // ⚠️ ตั้ง listener ก่อน navigate เสมอ — ป้องกัน race condition
 waitForTabReady(tabId)          // รอ tab ที่กำลัง loading
+ensureLoggedIn(tabId)           // ตรวจ /login → navigate + doAutoLogin
 ```
