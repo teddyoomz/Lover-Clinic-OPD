@@ -60,10 +60,11 @@ function parseDateParts(dateStr = '') {
   return m ? { day: m[1], rest: m[2] } : { day: '', rest: dateStr };
 }
 
-function getInitials(name = '') {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase() || '?';
+function getInitials(firstName = '', lastName = '') {
+  const f = firstName.trim()[0] || '';
+  const l = lastName.trim()[0] || '';
+  if (f || l) return (f + l).toUpperCase();
+  return '?';
 }
 
 // ── CourseCard ────────────────────────────────────────────────────────────────
@@ -502,7 +503,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none shadow-lg"
               style={{ background: `radial-gradient(135deg, rgba(${acRgb},0.35) 0%, rgba(${acRgb},0.12) 100%)`, border: `1.5px solid rgba(${acRgb},0.5)`, color: ac, boxShadow: `0 0 28px rgba(${acRgb},0.25), 0 0 0 4px rgba(${acRgb},0.06)` }}>
-              {getInitials(patientName)}
+              {getInitials(d.firstName || patientName, d.lastName)}
             </div>
 
             {/* Info */}
