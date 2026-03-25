@@ -28,7 +28,7 @@ function CourseCard({ c, expired }) {
   );
 }
 
-const ONE_HOUR_MS = 3600000;
+const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
 
 export default function PatientDashboard({ token, clinicSettings }) {
   const [status, setStatus] = useState('loading'); // loading | disabled | notfound | done
@@ -55,7 +55,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
       // Rate limit: 1 ชั่วโมงต่อ session — ป้องกัน extension ทำงานหนักหรือโดนแกล้ง
       if (!refreshRequestedRef.current && data.brokerProClinicId) {
         const last = data.lastCoursesAutoFetch;
-        const shouldRequest = !last || (Date.now() - last.toMillis()) > ONE_HOUR_MS;
+        const shouldRequest = !last || (Date.now() - last.toMillis()) > COURSES_REFRESH_COOLDOWN_MS;
         if (shouldRequest) {
           refreshRequestedRef.current = true; // mark ทันทีก่อน async write เพื่อป้องกัน double-trigger
           const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id);
