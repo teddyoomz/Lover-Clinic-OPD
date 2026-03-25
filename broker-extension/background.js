@@ -933,12 +933,23 @@ async function handleGetCoursesRequest(msg, loverclinicTabId) {
       }
     }
 
+    // ── ดึงนัดหมายทั้งหมด ─────────────────────────────────────────────────────
+    let allAppointments = [];
+    if (page1.appointmentsUrl) {
+      await navigateAndWait(pcTab.id, page1.appointmentsUrl);
+      const apptResult = await chrome.scripting.executeScript({
+        target: { tabId: pcTab.id }, world: 'MAIN', func: scrapeProClinicAppointments,
+      });
+      allAppointments = apptResult?.[0]?.result?.appointments || [];
+    }
+
     reportBack(loverclinicTabId, {
       type: 'LC_COURSES_RESULT', sessionId,
       success: true,
       patientName,
       courses: allCourses,
       expiredCourses: allExpired,
+      appointments: allAppointments,
     });
   } catch(err) {
     reportBack(loverclinicTabId, { type: 'LC_COURSES_RESULT', sessionId, success: false, error: err.message });
@@ -1000,6 +1011,12 @@ function scrapeProClinicCourses() {
     const patientName = (rawName && rawName !== '0') ? rawName : '';
     const coursePag  = getPaginationInfo('#course-tab');
     const expiredPag = getPaginationInfo('#expired-course-tab');
+
+    // หา URL ของหน้านัดหมายทั้งหมด — ปุ่ม "ดูทั้งหมด" ข้างหัวข้อนัดหมาย
+    const apptLink = Array.from(document.querySelectorAll('a'))
+      .find(a => /ดูทั้งหมด/.test(a.textContent) && /appointment/i.test(a.href));
+    const appointmentsUrl = apptLink?.href || null;
+
     return {
       patientName,
       courses:        extractCourses('#course-tab'),
@@ -1008,9 +1025,60 @@ function scrapeProClinicCourses() {
       expiredCourses: extractCourses('#expired-course-tab'),
       expiredParam:   expiredPag.param,
       expiredMaxPage: expiredPag.maxPage,
+      appointmentsUrl,
     };
   } catch(e) {
     return { error: e.message };
+  }
+}
+
+// ─── SCRAPER: ดึงนัดหมายจากหน้า appointment list ─────────────────────────────
+function scrapeProClinicAppointments() {
+  try {
+    const appointments = [];
+    document.querySelectorAll('.card').forEach(card => {
+      const body = card.querySelector('.card-body') || card;
+
+      // หา date|time line — มี "|" คั่นระหว่างวันที่และเวลา
+      let dateTimeText = '';
+      body.querySelectorAll('b, strong, h5, h6, .fw-bold, .font-weight-bold').forEach(el => {
+        const t = el.innerText?.trim();
+        if (t && t.includes('|') && !dateTimeText) dateTimeText = t;
+      });
+      if (!dateTimeText) {
+        // fallback: scan lines ของ card
+        const line = (body.innerText || '').split('\n').find(l => l.includes('|') && /\d{1,2}:\d{2}/.test(l));
+        if (line) dateTimeText = line.trim();
+      }
+      if (!dateTimeText) return; // ไม่ใช่ card นัดหมาย
+
+      const pipe = dateTimeText.indexOf('|');
+      const date = dateTimeText.slice(0, pipe).trim();
+      const time = dateTimeText.slice(pipe + 1).trim();
+
+      // ตัด text ของปุ่มออก เพื่อไม่ให้ปน
+      const btnTexts = new Set(Array.from(body.querySelectorAll('a.btn, button')).map(el => el.innerText?.trim()).filter(Boolean));
+
+      // อ่าน <p> elements สำหรับ doctor/branch/room/notes
+      const pLines = Array.from(body.querySelectorAll('p, li'))
+        .map(el => el.innerText?.trim())
+        .filter(t => t && !btnTexts.has(t) && !t.includes('|'));
+
+      const doctor   = pLines.find(l => /คุณ|นพ\.|พญ\.|ดร\./.test(l)) || '';
+      const branchLine = pLines.find(l => /สาขา/.test(l)) || '';
+      // branch + room อาจอยู่ใน line เดียวกัน
+      const branchMatch = branchLine.match(/สาขา[^\t\n]*/);
+      const roomMatch   = branchLine.match(/ห้อง\s*\S+/);
+      const branch = branchMatch ? branchMatch[0].trim() : '';
+      const room   = roomMatch   ? roomMatch[0].trim()   : (pLines.find(l => /ห้อง/.test(l)) || '');
+      const notesLine = pLines.find(l => /โน้ต|หมายเหตุ|note/i.test(l)) || '';
+      const notes = notesLine.replace(/^(โน้ต|หมายเหตุ|note)[:\s]*/i, '').trim();
+
+      appointments.push({ date, time, doctor, branch, room, notes });
+    });
+    return { appointments };
+  } catch(e) {
+    return { appointments: [], error: e.message };
   }
 }
 

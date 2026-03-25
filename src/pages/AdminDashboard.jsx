@@ -159,13 +159,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const handler = async (event) => {
       if (event.data?.type === 'LC_COURSES_RESULT') {
-        const { sessionId, success, error, patientName, courses, expiredCourses } = event.data;
+        const { sessionId, success, error, patientName, courses, expiredCourses, appointments } = event.data;
         const jobId = coursesJobIdRef.current;
         coursesJobIdRef.current = null; // consume → ป้องกัน onSnapshot double-fire
         // ปลดล็อก auto-trigger สำหรับ session นี้ → patient เปิดลิงก์ครั้งถัดไปได้ trigger ใหม่
         autoCoursesRequestedRef.current.delete(sessionId);
         setCoursesPanel(prev => prev?.sessionId === sessionId
-          ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], error: error || '' }
+          ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], appointments: appointments || [], error: error || '' }
           : prev
         );
         // Write result to Firestore: restore brokerStatus + deliver to other devices (iPhone)
@@ -177,7 +177,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             const firestoreJobId = snap.data()?.brokerJob?.id || jobId;
             updateDoc(ref, {
               brokerStatus: 'done', brokerError: null, brokerJob: null,
-              latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], patientName: patientName || '', jobId: firestoreJobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
+              latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], appointments: appointments || [], patientName: patientName || '', jobId: firestoreJobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
             }).catch(e => console.error('latestCourses write:', e));
           }).catch(e => console.error('getDoc for courses result:', e));
         }

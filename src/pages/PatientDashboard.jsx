@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
-import { Package, PackageX, CalendarClock, Phone, User, AlertCircle, Loader2, Link, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { Package, PackageX, CalendarClock, Phone, User, AlertCircle, Loader2, Link, CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope } from 'lucide-react';
 
 function CourseCard({ c, expired }) {
   const hasValue = c.value && !c.value.includes('0.00');
@@ -126,6 +126,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
   const d = sessionData.patientData || {};
   const courses = sessionData.latestCourses?.courses || [];
   const expiredCourses = sessionData.latestCourses?.expiredCourses || [];
+  const appointments = sessionData.latestCourses?.appointments || [];
   const plName = sessionData.latestCourses?.patientName;
 
   // Sync status: requesting → syncing → done/error
@@ -189,6 +190,42 @@ export default function PatientDashboard({ token, clinicSettings }) {
             {syncStatus === 'error' && sessionData.latestCourses?.error && (
               <span className="text-red-600 font-normal truncate ml-1">— {sessionData.latestCourses.error}</span>
             )}
+          </div>
+        )}
+
+        {/* Appointments section */}
+        {appointments.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarClock size={14} className="text-purple-400" />
+              <h3 className="text-xs font-black uppercase tracking-widest text-purple-400">นัดหมายถัดไป</h3>
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-950/30 px-2 py-0.5 rounded-full border border-purple-900/30">{appointments.length}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {appointments.map((a, i) => (
+                <div key={i} className="rounded-xl border border-purple-900/20 bg-purple-950/10 p-3.5 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Clock size={11} className="text-purple-400 shrink-0" />
+                    <span className="text-sm font-bold text-white">{a.date}{a.time ? ` · ${a.time}` : ''}</span>
+                  </div>
+                  {a.doctor && (
+                    <div className="flex items-center gap-1.5">
+                      <Stethoscope size={11} className="text-purple-500 shrink-0" />
+                      <span className="text-xs text-gray-300">{a.doctor}</span>
+                    </div>
+                  )}
+                  {(a.branch || a.room) && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <MapPin size={11} className="text-purple-500 shrink-0" />
+                      <span className="text-xs text-gray-400">{[a.branch, a.room].filter(Boolean).join('  ')}</span>
+                    </div>
+                  )}
+                  {a.notes && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">โน้ต: {a.notes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
