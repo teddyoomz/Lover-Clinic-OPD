@@ -900,20 +900,44 @@ async function handleGetCoursesRequest(msg, loverclinicTabId) {
       await navigateAndWait(pcTab.id, customerUrl);
     }
 
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: pcTab.id },
-      world: 'MAIN',
-      func: scrapeProClinicCourses,
-    });
-    const data = results?.[0]?.result;
-    if (data?.error) throw new Error(data.error);
+    async function scrape() {
+      const r = await chrome.scripting.executeScript({ target: { tabId: pcTab.id }, world: 'MAIN', func: scrapeProClinicCourses });
+      return r?.[0]?.result;
+    }
+
+    // ── Page 1 ────────────────────────────────────────────────────────────────
+    const page1 = await scrape();
+    if (page1?.error) throw new Error(page1.error);
+
+    let allCourses = page1.courses || [];
+    let allExpired = page1.expiredCourses || [];
+    const patientName = page1.patientName || '';
+
+    // ── Additional course pages ───────────────────────────────────────────────
+    // page1.courseParam = ชื่อ query param ที่ ProClinic ใช้ เช่น 'course_page'
+    if (page1.courseParam && page1.courseMaxPage > 1) {
+      for (let p = 2; p <= page1.courseMaxPage; p++) {
+        await navigateAndWait(pcTab.id, `${customerUrl}?${page1.courseParam}=${p}`);
+        const pageN = await scrape();
+        if (pageN?.courses) allCourses = [...allCourses, ...pageN.courses];
+      }
+    }
+
+    // ── Additional expired-course pages ──────────────────────────────────────
+    if (page1.expiredParam && page1.expiredMaxPage > 1) {
+      for (let p = 2; p <= page1.expiredMaxPage; p++) {
+        await navigateAndWait(pcTab.id, `${customerUrl}?${page1.expiredParam}=${p}`);
+        const pageN = await scrape();
+        if (pageN?.expiredCourses) allExpired = [...allExpired, ...pageN.expiredCourses];
+      }
+    }
 
     reportBack(loverclinicTabId, {
       type: 'LC_COURSES_RESULT', sessionId,
       success: true,
-      patientName: data?.patientName || '',
-      courses: data?.courses || [],
-      expiredCourses: data?.expiredCourses || [],
+      patientName,
+      courses: allCourses,
+      expiredCourses: allExpired,
     });
   } catch(err) {
     reportBack(loverclinicTabId, { type: 'LC_COURSES_RESULT', sessionId, success: false, error: err.message });
@@ -922,27 +946,48 @@ async function handleGetCoursesRequest(msg, loverclinicTabId) {
 
 // ─── SCRAPER: รันใน ProClinic page context ────────────────────────────────────
 function scrapeProClinicCourses() {
+  // ── ดึง courses จาก cards ────────────────────────────────────────────────
   function extractCourses(tabSelector) {
     const tab = document.querySelector(tabSelector);
     if (!tab) return [];
-    const cards = tab.querySelectorAll('.card');
-    return Array.from(cards).map(card => {
+    return Array.from(tab.querySelectorAll('.card')).map(card => {
       const body = card.querySelector('.card-body') || card;
       const lis = body.querySelectorAll('li');
       const li0 = lis[0], li1 = lis[1];
-
-      const h6 = li0 ? li0.querySelector('h6') : null;
+      const h6 = li0?.querySelector('h6');
       const nameNode = h6 ? Array.from(h6.childNodes).find(n => n.nodeType === 3) : null;
-      const name = nameNode ? nameNode.textContent.trim() : (h6 ? h6.innerText.split('\n')[0].trim() : '');
-
-      const expiry = (li0?.querySelector('p.small') || {}).innerText?.trim() || '';
-      const value  = (li0?.querySelector('.text-gray-2.small.mt-1') || {}).innerText?.trim() || '';
-      const status = (li0?.querySelector('.badge') || {}).innerText?.trim() || '';
+      const name    = nameNode ? nameNode.textContent.trim() : (h6 ? h6.innerText.split('\n')[0].trim() : '');
+      const expiry  = li0?.querySelector('p.small')?.innerText?.trim() || '';
+      const value   = li0?.querySelector('.text-gray-2.small.mt-1')?.innerText?.trim() || '';
+      const status  = li0?.querySelector('.badge')?.innerText?.trim() || '';
       const product = li1 ? li1.innerText.trim().split('\n')[0].trim() : '';
-      const qty    = (li1?.querySelector('.float-end') || {}).innerText?.trim() || '';
-
+      const qty     = li1?.querySelector('.float-end')?.innerText?.trim() || '';
       return { name, expiry, value, status, product, qty };
     }).filter(c => c.name);
+  }
+
+  // ── ตรวจ pagination: คืน { param, maxPage } ──────────────────────────────
+  // อ่าน param name จาก href จริงใน DOM ไม่ hard-code เผื่อ ProClinic เปลี่ยน URL pattern
+  function getPaginationInfo(tabSelector) {
+    const tab = document.querySelector(tabSelector);
+    if (!tab) return { param: null, maxPage: 1 };
+    // pagination อาจอยู่ใน tab pane, sibling, หรือ parent
+    const pane = tab.closest('.tab-pane') || tab;
+    const candidates = [
+      pane.querySelector('ul.pagination'),
+      pane.nextElementSibling?.matches?.('ul.pagination') ? pane.nextElementSibling : null,
+      pane.parentElement?.querySelector('ul.pagination'),
+    ];
+    const pag = candidates.find(Boolean);
+    if (!pag) return { param: null, maxPage: 1 };
+
+    let param = null, maxPage = 1;
+    pag.querySelectorAll('a[href]').forEach(a => {
+      // จับ query param แรกที่ลงท้ายด้วย _page หรือ page เช่น course_page, expired_course_page
+      const m = a.href.match(/[?&]([a-z_]*page)=(\d+)/i);
+      if (m) { param = param || m[1]; maxPage = Math.max(maxPage, parseInt(m[2])); }
+    });
+    return { param, maxPage };
   }
 
   try {
@@ -951,10 +996,16 @@ function scrapeProClinicCourses() {
       document.querySelector('.customer-name')?.innerText?.trim() ||
       document.title.split('|')[0].trim()
     );
+    const coursePag  = getPaginationInfo('#course-tab');
+    const expiredPag = getPaginationInfo('#expired-course-tab');
     return {
       patientName,
-      courses: extractCourses('#course-tab'),
+      courses:        extractCourses('#course-tab'),
+      courseParam:    coursePag.param,
+      courseMaxPage:  coursePag.maxPage,
       expiredCourses: extractCourses('#expired-course-tab'),
+      expiredParam:   expiredPag.param,
+      expiredMaxPage: expiredPag.maxPage,
     };
   } catch(e) {
     return { error: e.message };
