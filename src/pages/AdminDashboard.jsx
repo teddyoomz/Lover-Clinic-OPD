@@ -894,13 +894,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       )}
                       <p className="text-[9px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
                     </div>
-                  <div className="pt-3 border-t border-[#222]">
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><BellOff size={12}/> โหมดทดสอบ</p>
-                    <button onClick={toggleGlobalPushMuted} className={`w-full py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border ${globalPushMuted ? 'bg-orange-950/40 border-orange-800/50 text-orange-400 hover:bg-orange-900/40' : 'bg-[#1a1a1a] hover:bg-[#222] border-[#333] text-gray-400'}`}>
-                      {globalPushMuted ? <><BellOff size={11}/> ปิด Push ทุกเครื่อง — กดเพื่อเปิด</> : <><Bell size={11}/> ส่ง Push ปกติ — กดเพื่อปิด</>}
-                    </button>
-                    {globalPushMuted && <p className="text-[9px] text-orange-600 mt-1.5 text-center">Push ถูกปิดทั่วระบบ — ผู้ป่วยกรอกแล้วจะไม่มีแจ้งเตือน</p>}
-                  </div>
                   </div>
                 </div>
               )}
@@ -989,13 +982,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     )}
                     <p className="text-[9px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
                   </div>
-                  <div className="pt-3 border-t border-[#222]">
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><BellOff size={12}/> โหมดทดสอบ</p>
-                    <button onClick={toggleGlobalPushMuted} className={`w-full py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border ${globalPushMuted ? 'bg-orange-950/40 border-orange-800/50 text-orange-400 hover:bg-orange-900/40' : 'bg-[#1a1a1a] hover:bg-[#222] border-[#333] text-gray-400'}`}>
-                      {globalPushMuted ? <><BellOff size={11}/> ปิด Push ทุกเครื่อง — กดเพื่อเปิด</> : <><Bell size={11}/> ส่ง Push ปกติ — กดเพื่อปิด</>}
-                    </button>
-                    {globalPushMuted && <p className="text-[9px] text-orange-600 mt-1.5 text-center">Push ถูกปิดทั่วระบบ — ผู้ป่วยกรอกแล้วจะไม่มีแจ้งเตือน</p>}
-                  </div>
                 </div>
               </div>
             )}
@@ -1008,7 +994,34 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       </header>
 
       {adminMode === 'clinicSettings' ? (
-        <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
+        <div className="flex flex-col gap-6">
+          {/* Push notification test mode */}
+          <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <BellOff size={18} className="text-orange-500" />
+              <h3 className="text-sm font-bold tracking-widest uppercase text-orange-500">โหมดทดสอบ — การแจ้งเตือน</h3>
+              {globalPushMuted && (
+                <span className="ml-auto text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-orange-950/40 border border-orange-800/50 text-orange-400">ปิดอยู่</span>
+              )}
+            </div>
+            <button
+              onClick={toggleGlobalPushMuted}
+              className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border ${
+                globalPushMuted
+                  ? 'bg-orange-950/40 border-orange-800/50 text-orange-400 hover:bg-orange-900/40'
+                  : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'
+              }`}
+            >
+              {globalPushMuted
+                ? <><BellOff size={15}/> Push ถูกปิดทั่วระบบ — กดเพื่อเปิดใช้งาน</>
+                : <><Bell size={15}/> Push เปิดปกติ — กดเพื่อปิดสำหรับทดสอบ</>}
+            </button>
+            {globalPushMuted && (
+              <p className="text-xs text-orange-700 mt-3 text-center">ผู้ป่วยกรอกแบบฟอร์มแล้วจะไม่มีแจ้งเตือนส่งไปยังอุปกรณ์ใดๆ</p>
+            )}
+          </div>
+          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
+        </div>
       ) : adminMode === 'formBuilder' ? (
         <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('dashboard')} />
       ) : adminMode === 'history' ? (
@@ -1524,7 +1537,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Buttons — always full labels, wrap to next line when space is tight */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id, { suppressNotif: true }); }}
+                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
                   <Edit3 size={13} /> แก้ไขข้อมูล
                 </button>
