@@ -62,6 +62,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [globalPushMuted, setGlobalPushMuted] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   const brokerTimers = useRef({}); // sessionId → timeout id
+  const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -90,7 +91,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const allSessions = [...sessions, ...archivedSessions];
     allSessions.forEach(async (s) => {
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
+      // ข้าม session ที่มี brokerJob — รอ relay จาก onSnapshot
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !s.brokerJob) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
@@ -122,11 +124,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               brokerStatus: 'done',
               brokerFilledAt: new Date().toISOString(),
               brokerError: null,
+              brokerJob: null,
               ...(proClinicId ? { brokerProClinicId: proClinicId } : {}),
               ...(proClinicHN  ? { brokerProClinicHN: proClinicHN }  : {}),
             });
           } else {
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
+            await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ', brokerJob: null });
           }
         } catch (e) { console.error('broker result update:', e); }
       }
@@ -172,6 +175,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               brokerFilledAt: syncAt,
               brokerLastAutoSyncAt: syncAt,
               brokerError: null,
+              brokerJob: null,
             });
           } else {
             // Update failed → mark failed so button turns red
@@ -180,7 +184,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 ? { ...prev, brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` }
                 : prev
             );
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` });
+            await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}`, brokerJob: null });
           }
         } catch (e) { console.error('broker update result:', e); }
       }
@@ -362,6 +366,38 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }, '*');
         });
       }
+      // ─── Relay broker jobs จากเครื่องอื่น (เช่น iPhone ไม่มี extension) ────────
+      data.forEach(newS => {
+        const job = newS.brokerJob;
+        if (
+          newS.brokerStatus === 'pending' && job?.id &&
+          !forwardedJobsRef.current.has(job.id) &&
+          !brokerTimers.current[newS.id]
+        ) {
+          forwardedJobsRef.current.add(job.id);
+          setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
+          if (job.type === 'LC_UPDATE_PROCLINIC') {
+            window.postMessage({ type: 'LC_UPDATE_PROCLINIC', sessionId: newS.id,
+              proClinicId: job.proClinicId || null, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
+          } else {
+            window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId: newS.id, patient: job.patient }, '*');
+          }
+          const _sid = newS.id;
+          brokerTimers.current[_sid] = setTimeout(async () => {
+            delete brokerTimers.current[_sid];
+            setBrokerPending(prev => { const n = {...prev}; delete n[_sid]; return n; });
+            try {
+              const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid));
+              if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid), {
+                  brokerStatus: 'failed', brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+                });
+              }
+            } catch(e) { console.error('relay timeout:', e); }
+          }, 15000);
+        }
+      });
+
       prevSessionsRef.current = data;
       setSessions(data);
     }, (error) => console.error("Firestore Error:", error));
@@ -602,21 +638,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
     };
 
-    // Set pending in Firestore + local state
+    // Set pending in Firestore + local state (เขียน brokerJob เพื่อให้เครื่องอื่น relay ได้)
+    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
+    const jobId = `${sessionId}_${Date.now()}`;
+    const brokerJob = hasExistingProClinic
+      ? { id: jobId, type: 'LC_UPDATE_PROCLINIC', patient,
+          proClinicId: session.brokerProClinicId || null, proClinicHN: session.brokerProClinicHN || null }
+      : { id: jobId, type: 'LC_FILL_PROCLINIC', patient };
     setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
+    forwardedJobsRef.current.add(jobId); // ป้องกัน onSnapshot relay ซ้ำ
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        brokerStatus: 'pending', brokerError: null,
+        brokerStatus: 'pending', brokerError: null, brokerJob,
       });
     } catch(e) { console.error('broker pending update:', e); }
 
-    // Dispatch to extension via postMessage (content script will forward to background)
-    // ถ้ามี HN / ProClinic ID อยู่แล้ว → ผู้ป่วยมีอยู่ใน ProClinic แล้ว → ส่ง update ไม่ใช่ fill ใหม่
-    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
+    // Fast path: dispatch ทันทีถ้า extension อยู่บนเครื่องเดียวกัน
     if (hasExistingProClinic) {
       window.postMessage({
-        type: 'LC_UPDATE_PROCLINIC',
-        sessionId,
+        type: 'LC_UPDATE_PROCLINIC', sessionId,
         proClinicId: session.brokerProClinicId || null,
         proClinicHN:  session.brokerProClinicHN  || null,
         patient,
@@ -625,18 +665,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
     }
 
-    // ─── 10-second timeout: if no result, mark failed ──────────────────────
+    // Timeout: เช็ค status ก่อน fail เผื่อ Cloud PC ประมวลผลเสร็จก่อน timer นี้
     if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
     brokerTimers.current[sessionId] = setTimeout(async () => {
       delete brokerTimers.current[sessionId];
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          brokerStatus: 'failed',
-          brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-        });
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
+        if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            brokerStatus: 'failed',
+            brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+          });
+        }
       } catch(e) { console.error('broker timeout update:', e); }
-    }, 10000);
+    }, 15000);
   };
 
   // ─── Manual Resync ─────────────────────────────────────────────────────────
@@ -676,18 +719,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
     };
 
+    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
+    const jobId = `${sessionId}_${Date.now()}`;
+    const brokerJob = hasExistingProClinic
+      ? { id: jobId, type: 'LC_UPDATE_PROCLINIC', patient,
+          proClinicId: session.brokerProClinicId || null, proClinicHN: session.brokerProClinicHN || null }
+      : { id: jobId, type: 'LC_FILL_PROCLINIC', patient };
     setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
+    forwardedJobsRef.current.add(jobId);
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        brokerStatus: 'pending', brokerError: null,
+        brokerStatus: 'pending', brokerError: null, brokerJob,
       });
     } catch(e) { console.error('resync pending update:', e); }
 
-    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
     if (hasExistingProClinic) {
       window.postMessage({
-        type: 'LC_UPDATE_PROCLINIC',
-        sessionId,
+        type: 'LC_UPDATE_PROCLINIC', sessionId,
         proClinicId: session.brokerProClinicId || null,
         proClinicHN:  session.brokerProClinicHN  || null,
         patient,
@@ -701,10 +749,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       delete brokerTimers.current[sessionId];
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          brokerStatus: 'failed',
-          brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-        });
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
+        if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            brokerStatus: 'failed', brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+          });
+        }
       } catch(e) { console.error('resync timeout update:', e); }
     }, 15000);
   };
