@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
-import { Package, PackageX, CalendarClock, Phone, User, AlertCircle, Loader2, Link } from 'lucide-react';
+import { Package, PackageX, CalendarClock, Phone, User, AlertCircle, Loader2, Link, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 
 function CourseCard({ c, expired }) {
   const hasValue = c.value && !c.value.includes('0.00');
@@ -33,7 +33,9 @@ const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); 
 export default function PatientDashboard({ token, clinicSettings }) {
   const [status, setStatus] = useState('loading'); // loading | disabled | notfound | done
   const [sessionData, setSessionData] = useState(null);
+  const [justSynced, setJustSynced] = useState(false); // flash "Sync เสร็จ" หลัง fetch
   const refreshRequestedRef = useRef(false); // ส่ง coursesRefreshRequest แล้วในครั้งนี้หรือยัง
+  const prevFetchedAtRef = useRef(null);     // ตรวจว่า latestCourses.fetchedAt เปลี่ยนไหม
 
   const ac = clinicSettings?.accentColor || '#dc2626';
 
@@ -50,6 +52,16 @@ export default function PatientDashboard({ token, clinicSettings }) {
       if (!data.patientLinkEnabled) { setStatus('disabled'); return; }
       setSessionData(data);
       setStatus('done');
+
+      // ตรวจ fetchedAt เปลี่ยนไหม → flash "Sync เสร็จ"
+      const newFetchedAt = data.latestCourses?.fetchedAt || null;
+      if (newFetchedAt && newFetchedAt !== prevFetchedAtRef.current) {
+        prevFetchedAtRef.current = newFetchedAt;
+        if (data.latestCourses?.success !== false) {
+          setJustSynced(true);
+          setTimeout(() => setJustSynced(false), 8000); // แสดง 8 วินาทีแล้วหาย
+        }
+      }
 
       // Auto-trigger courses refresh เมื่อลูกค้าเปิดลิงก์
       // Rate limit: 1 ชั่วโมงต่อ session — ป้องกัน extension ทำงานหนักหรือโดนแกล้ง
@@ -98,8 +110,25 @@ export default function PatientDashboard({ token, clinicSettings }) {
   const d = sessionData.patientData || {};
   const courses = sessionData.latestCourses?.courses || [];
   const expiredCourses = sessionData.latestCourses?.expiredCourses || [];
-  const isRefreshing = !!sessionData.coursesRefreshRequest;
   const plName = sessionData.latestCourses?.patientName;
+
+  // Sync status: requesting → syncing → done/error
+  const isCoursesJob = sessionData.brokerJob?.type === 'LC_GET_COURSES';
+  const syncStatus =
+    sessionData.coursesRefreshRequest             ? 'requesting'  // PatientDashboard เพิ่งส่ง request รอ admin รับ
+    : (sessionData.brokerStatus === 'pending' && isCoursesJob) ? 'syncing'  // extension กำลัง fetch
+    : sessionData.latestCourses?.success === false ? 'error'      // fetch ล่าสุดล้มเหลว
+    : justSynced                                   ? 'done'       // flash หลัง fetch เสร็จ
+    : 'idle';
+
+  // chip config ตาม syncStatus
+  const syncChip = {
+    requesting: { icon: <RefreshCw size={11} className="animate-spin" />, label: 'กำลังส่งคำขอ...', cls: 'text-gray-400 border-gray-700 bg-gray-900/40' },
+    syncing:    { icon: <Loader2 size={11} className="animate-spin" />,   label: 'กำลัง Sync',     cls: 'text-teal-400 border-teal-800 bg-teal-950/40' },
+    done:       { icon: <CheckCircle2 size={11} />,                        label: 'Sync เสร็จแล้ว', cls: 'text-green-400 border-green-800 bg-green-950/40' },
+    error:      { icon: <XCircle size={11} />,                             label: 'Sync ไม่สำเร็จ', cls: 'text-red-400 border-red-800 bg-red-950/40' },
+    idle:       null,
+  }[syncStatus];
   const formName = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
   const patientName = (plName && plName !== '0') ? plName : formName;
   const hn = sessionData.brokerProClinicHN || '';
@@ -134,6 +163,17 @@ export default function PatientDashboard({ token, clinicSettings }) {
           </div>
         </div>
 
+        {/* Sync status chip */}
+        {syncChip && (
+          <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-bold ${syncChip.cls}`}>
+            {syncChip.icon}
+            <span>{syncChip.label}</span>
+            {syncStatus === 'error' && sessionData.latestCourses?.error && (
+              <span className="text-red-600 font-normal truncate ml-1">— {sessionData.latestCourses.error}</span>
+            )}
+          </div>
+        )}
+
         {/* Courses section */}
         {sessionData.latestCourses ? (
           <>
@@ -143,7 +183,6 @@ export default function PatientDashboard({ token, clinicSettings }) {
                   <Package size={14} className="text-teal-500" />
                   <h3 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h3>
                   <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{courses.length}</span>
-                  {isRefreshing && <Loader2 size={12} className="animate-spin text-gray-600 ml-auto" />}
                 </div>
                 <div className="flex flex-col gap-2">
                   {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} />)}
@@ -169,10 +208,12 @@ export default function PatientDashboard({ token, clinicSettings }) {
               </div>
             )}
           </>
-        ) : isRefreshing ? (
+        ) : (syncStatus === 'requesting' || syncStatus === 'syncing') ? (
           <div className="bg-[#0f0f0f] rounded-xl border border-[#1e1e1e] p-6 text-center flex flex-col items-center gap-2">
             <Loader2 size={22} className="animate-spin text-gray-600" />
-            <p className="text-xs text-gray-600 font-bold uppercase tracking-widest">กำลังดึงข้อมูลคอร์ส...</p>
+            <p className="text-xs text-gray-600 font-bold uppercase tracking-widest">
+              {syncStatus === 'syncing' ? 'กำลัง Sync ข้อมูลคอร์ส...' : 'กำลังส่งคำขอไปยังคลินิก...'}
+            </p>
           </div>
         ) : (
           <div className="bg-[#0f0f0f] rounded-xl border border-[#1e1e1e] p-6 text-center">
