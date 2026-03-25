@@ -71,8 +71,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
       if (newFetchedAt && newFetchedAt !== prevFetchedAtRef.current) {
         prevFetchedAtRef.current = newFetchedAt;
         if (data.latestCourses?.success !== false) {
-          setJustSynced(true);
-          setTimeout(() => setJustSynced(false), 8000); // แสดง 8 วินาทีแล้วหาย
+          setJustSynced(true); // แสดงค้างไว้ตลอด ไม่ fade out
         }
       }
 
