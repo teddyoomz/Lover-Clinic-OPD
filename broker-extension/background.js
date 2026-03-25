@@ -567,14 +567,31 @@ function fillAndSubmitProClinicForm(patient) {
     if (gender) fillSelect('gender', gender);
 
     // วันเกิด: ใช้ dob จริงถ้ามี, fallback ใช้ age ประมาณ
-    const dobInput = document.querySelector('input.flatpickr-input[name="birthdate"]');
-    if (dobInput?._flatpickr) {
+    const dobInput = document.querySelector('[name="birthdate"]');
+    if (dobInput) {
+      const fp = dobInput._flatpickr
+        || document.querySelector('input.flatpickr-input[placeholder]')?._flatpickr;
+      let dobDate = null;
       if (patient.dobDay && patient.dobMonth && patient.dobYear) {
         let year = parseInt(patient.dobYear);
         if (year > 2400) year -= 543; // พ.ศ. → ค.ศ.
-        dobInput._flatpickr.setDate(new Date(year, parseInt(patient.dobMonth) - 1, parseInt(patient.dobDay)), true);
+        dobDate = new Date(year, parseInt(patient.dobMonth) - 1, parseInt(patient.dobDay));
       } else if (patient.age && !isNaN(parseInt(patient.age))) {
-        dobInput._flatpickr.setDate(new Date(new Date().getFullYear() - parseInt(patient.age), 0, 1), true);
+        dobDate = new Date(new Date().getFullYear() - parseInt(patient.age), 0, 1);
+      }
+      if (dobDate) {
+        if (fp) {
+          fp.setDate(dobDate, true);
+        } else {
+          // fallback: set value directly (YYYY-MM-DD)
+          const yyyy = dobDate.getFullYear();
+          const mm = String(dobDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(dobDate.getDate()).padStart(2, '0');
+          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          nativeSetter.call(dobInput, `${yyyy}-${mm}-${dd}`);
+          dobInput.dispatchEvent(new Event('input', { bubbles: true }));
+          dobInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }
     }
 
