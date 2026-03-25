@@ -628,6 +628,70 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }, 10000);
   };
 
+  // ─── Manual Resync ─────────────────────────────────────────────────────────
+  // เหมือน handleOpdClick แต่ไม่บล็อกเมื่อ done — ใช้กด sync ซ้ำด้วยตนเอง
+  const handleResync = async (session) => {
+    const sessionId = session.id;
+    const d = session.patientData;
+    const reasons = getReasons(d);
+    const pmh = [];
+    if (d?.hasUnderlying === 'มี') {
+      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
+      if (d.ud_diabetes)     pmh.push('เบาหวาน');
+      if (d.ud_lung)         pmh.push('โรคปอด');
+      if (d.ud_kidney)       pmh.push('โรคไต');
+      if (d.ud_heart)        pmh.push('โรคหัวใจ');
+      if (d.ud_blood)        pmh.push('โรคโลหิต');
+      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
+    }
+    const patient = {
+      prefix: d?.prefix || '', firstName: d?.firstName || '',
+      lastName: d?.lastName || '', phone: d?.phone || '',
+      age: d?.age || '', reasons,
+      dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
+      address: d?.address || '',
+      howFoundUs: d?.howFoundUs || [],
+      allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
+      underlying: pmh.join(', '),
+      emergencyName:     d?.emergencyName     || '',
+      emergencyRelation: d?.emergencyRelation || '',
+      emergencyPhone:    d?.emergencyPhone    || '',
+      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
+    };
+
+    setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+        brokerStatus: 'pending', brokerError: null,
+      });
+    } catch(e) { console.error('resync pending update:', e); }
+
+    const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
+    if (hasExistingProClinic) {
+      window.postMessage({
+        type: 'LC_UPDATE_PROCLINIC',
+        sessionId,
+        proClinicId: session.brokerProClinicId || null,
+        proClinicHN:  session.brokerProClinicHN  || null,
+        patient,
+      }, '*');
+    } else {
+      window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
+    }
+
+    if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
+    brokerTimers.current[sessionId] = setTimeout(async () => {
+      delete brokerTimers.current[sessionId];
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          brokerStatus: 'failed',
+          brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+        });
+      } catch(e) { console.error('resync timeout update:', e); }
+    }, 10000);
+  };
+
   const handleProClinicEdit = (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!proClinicId) return;
@@ -1275,6 +1339,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
                   <Edit3 size={13} /> แก้ไขข้อมูล
                 </button>
+                {(() => {
+                  const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
+                  return (
+                    <button
+                      onClick={() => handleResync(viewingSession)}
+                      disabled={isPending}
+                      title="บันทึกข้อมูลลง ProClinic อีกครั้ง (manual resync)"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${
+                        isPending
+                          ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse cursor-not-allowed'
+                          : 'bg-teal-950/20 hover:bg-teal-900/40 text-teal-400 border-teal-800/50'
+                      }`}
+                    >
+                      <RotateCcw size={13} className={isPending ? 'animate-spin' : ''} />
+                      {isPending ? 'กำลังส่ง...' : 'Resync ProClinic'}
+                    </button>
+                  );
+                })()}
                 {!isCustom && (
                   <>
                     <button onClick={() => setPrintMode('dashboard')}
