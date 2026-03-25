@@ -367,6 +367,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }, '*');
         });
       }
+      // ─── Sync brokerPending local state กับ Firestore ─────────────────────────
+      // กรณี Cloud PC ทำงานเสร็จแล้วเขียนผลกลับ Firestore แต่ iPhone ไม่ได้รับ LC_BROKER_RESULT
+      // → clear brokerPending + timer เพื่อให้ปุ่มและ bubble อัปเดตพร้อมกัน
+      allDocs.forEach(s => {
+        if (brokerTimers.current[s.id] && s.brokerStatus !== 'pending') {
+          clearTimeout(brokerTimers.current[s.id]);
+          delete brokerTimers.current[s.id];
+          setBrokerPending(prev => { const n = { ...prev }; delete n[s.id]; return n; });
+        }
+      });
+
       // ─── Relay broker jobs จากเครื่องอื่น (เช่น iPhone ไม่มี extension) ────────
       // ใช้ allDocs เพื่อรวม archived sessions ด้วย (history page ก็ใช้ได้)
       allDocs.forEach(newS => {
