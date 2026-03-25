@@ -16,7 +16,7 @@ const TX = {
     unknown: 'ไม่ระบุชื่อ',
     syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
     syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', readySync: 'พร้อม Sync ใหม่',
-    resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที',
+    syncData: 'Sync ข้อมูล', resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที',
     apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
     noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
     noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
@@ -30,7 +30,7 @@ const TX = {
     unknown: 'Unknown',
     syncReq: 'Requesting...', syncIng: 'Syncing data',
     syncDone: 'Synced', syncFail: 'Sync failed', readySync: 'Ready to Sync',
-    resync: 'Retry Sync', cooldownMin: 'min',
+    syncData: 'Sync Data', resync: 'Retry Sync', cooldownMin: 'min',
     apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
     noCourses: 'No active courses', noData: 'No course data yet',
     noDataSub: 'Data will appear after the clinic syncs from the system.',
@@ -143,9 +143,6 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
     );
   }
 
-  // idle + no sync time + no cooldown → nothing to show
-  if (syncStatus === 'idle' && !syncTimeStr && !inCooldown) return null;
-
   const isError = syncStatus === 'timeout' || syncStatus === 'error';
   const isReady = !inCooldown;
 
@@ -153,16 +150,27 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
   let icon, label;
   if (isReady) {
     icon = <RefreshCw size={11} className="shrink-0" />;
-    const base = isError ? tx.resync : tx.readySync;
-    label = syncTimeStr ? `${base} — ${syncTimeStr}` : base;
+    if (!syncTimeStr) {
+      // ไม่มีเวลาเก่า = ยังไม่เคย sync หรือ timeout ที่ไม่มีข้อมูล
+      label = tx.syncData;
+    } else {
+      const base = isError ? tx.resync : tx.readySync;
+      label = `${base} — ${syncTimeStr}`;
+    }
   } else {
-    const base = isError ? tx.syncFail : tx.syncDone;
-    const timeStr = syncTimeStr ? ` — ${syncTimeStr}` : '';
-    const countdown = `  |  ⏰ ${cooldownMins} ${tx.cooldownMin}`;
-    icon = isError
-      ? <XCircle      size={11} className="shrink-0" />
-      : <CheckCircle2 size={11} className="shrink-0" />;
-    label = `${base}${timeStr}${countdown}`;
+    // ใน cooldown
+    const countdown = `⏰ ${cooldownMins} ${tx.cooldownMin}`;
+    if (!syncTimeStr) {
+      // ไม่มีเวลาเก่า → แสดงแค่ countdown
+      icon = <CheckCircle2 size={11} className="shrink-0" />;
+      label = countdown;
+    } else {
+      const base = isError ? tx.syncFail : tx.syncDone;
+      icon = isError
+        ? <XCircle      size={11} className="shrink-0" />
+        : <CheckCircle2 size={11} className="shrink-0" />;
+      label = `${base} — ${syncTimeStr}  |  ${countdown}`;
+    }
   }
 
   return (
@@ -249,7 +257,6 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
   const [syncTimedOut, setSyncTimedOut] = useState(false);
   const [language, setLanguage]       = useState('th');
   const [, forceUpdate]               = useState(0); // ticker สำหรับ countdown
-  const refreshRequestedRef = useRef(false);
   const prevFetchedAtRef    = useRef(null);
   const syncTimeoutRef      = useRef(null);
   const sessionIdRef        = useRef(null);
@@ -286,7 +293,6 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
     setSyncTimedOut(false);
     setJustSynced(false);
-    refreshRequestedRef.current = true;
     startSyncTimeout();
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionIdRef.current);
@@ -321,18 +327,6 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         if (data.latestCourses?.success !== false) setJustSynced(true);
       }
 
-      if (!refreshRequestedRef.current && data.brokerProClinicId) {
-        const last = data.lastCoursesAutoFetch;
-        const stillCoolingDown = last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS;
-        const alreadyPending   = !!data.coursesRefreshRequest;
-        if (!stillCoolingDown && !alreadyPending) {
-          refreshRequestedRef.current = true;
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id);
-          updateDoc(ref, { coursesRefreshRequest: serverTimestamp() })
-            .then(startSyncTimeout)
-            .catch(console.error);
-        }
-      }
     }, () => setStatus('notfound'));
     return () => unsub();
   }, [token]);
@@ -413,8 +407,8 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
     : 0;
   const inCooldown   = cooldownRemainingMs > 0;
   const cooldownMins = Math.ceil(cooldownRemainingMs / 60_000);
-  const showSyncButton =
-    syncStatus !== 'idle' || !!syncTimeStr || inCooldown;
+  // แสดงปุ่มเสมอ ยกเว้นตอนกำลัง sync
+  const showSyncButton = syncStatus !== 'requesting' && syncStatus !== 'syncing';
 
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200">
