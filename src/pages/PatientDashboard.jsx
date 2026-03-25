@@ -65,7 +65,7 @@ function getInitials(name = '') {
 
 // ── CourseCard ────────────────────────────────────────────────────────────────
 
-function CourseCard({ c, expired, accentRgb }) {
+function CourseCard({ c, expired, accentRgb, tx }) {
   const hasValue  = c.value && !c.value.includes('0.00');
   const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
   const isActive  = c.status === 'กำลังใช้งาน';
@@ -86,7 +86,7 @@ function CourseCard({ c, expired, accentRgb }) {
             expired  ? 'bg-red-950/50 border border-red-900/50 text-red-400'
             : isActive ? 'bg-teal-950/60 border border-teal-800/60 text-teal-300'
             : 'bg-white/5 border border-white/10 text-gray-500'
-          }`}>{c.status}</span>
+          }`}>{isActive ? tx.active : c.status}</span>
         )}
       </div>
 
@@ -416,7 +416,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
                   meta={syncStatus === 'idle' && syncTimeStr ? `${tx.updatedAt} ${syncTimeStr}` : undefined}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} />)}
+                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} tx={tx} />)}
                 </div>
               </section>
             )}
@@ -437,7 +437,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
                   accent="#f87171"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} />)}
+                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} />)}
                 </div>
               </section>
             )}
