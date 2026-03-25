@@ -810,6 +810,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const PROCLINIC_ORIGIN = 'https://trial.proclinicth.com';
   const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
 
+  // ── History page computed vars (ต้องอยู่นอก JSX — OXC parser ไม่รองรับ IIFE) ──
+  const HISTORY_PAGE_SIZE = 10;
+  const historyQ = historySearch.trim().toLowerCase();
+  const historyFiltered = historyQ
+    ? archivedSessions.filter(s => {
+        const d = s.patientData;
+        const hn = (s.brokerProClinicHN || '').toLowerCase();
+        const fn = (d?.firstName || '').toLowerCase();
+        const ln = (d?.lastName  || '').toLowerCase();
+        const ph = (d?.phone     || '').replace(/\D/g, '');
+        return hn.includes(historyQ) || fn.includes(historyQ) || ln.includes(historyQ) || ph.includes(historyQ.replace(/\D/g, ''));
+      })
+    : archivedSessions;
+  const historyTotalPages = Math.max(1, Math.ceil(historyFiltered.length / HISTORY_PAGE_SIZE));
+  const historyCurrentPage = Math.min(historyPage, historyTotalPages);
+  const historyPageItems = historyFiltered.slice(
+    (historyCurrentPage - 1) * HISTORY_PAGE_SIZE,
+    historyCurrentPage * HISTORY_PAGE_SIZE
+  );
+
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden">
       
@@ -990,23 +1010,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
       ) : adminMode === 'formBuilder' ? (
         <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('dashboard')} />
-      ) : adminMode === 'history' ? (() => {
-        const PAGE_SIZE = 10;
-        const q = historySearch.trim().toLowerCase();
-        const filtered = q
-          ? archivedSessions.filter(s => {
-              const d = s.patientData;
-              const hn = (s.brokerProClinicHN || '').toLowerCase();
-              const fn = (d?.firstName || '').toLowerCase();
-              const ln = (d?.lastName  || '').toLowerCase();
-              const ph = (d?.phone     || '').replace(/\D/g, '');
-              return hn.includes(q) || fn.includes(q) || ln.includes(q) || ph.includes(q.replace(/\D/g, ''));
-            })
-          : archivedSessions;
-        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-        const page = Math.min(historyPage, totalPages);
-        const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-        return (
+      ) : adminMode === 'history' ? (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
           {/* Header */}
           <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex flex-col gap-3">
@@ -1036,21 +1040,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               )}
             </div>
             {/* Search result count */}
-            {q && (
+            {historyQ && (
               <p className="text-xs text-[var(--tx-muted)]">
-                พบ <span className="text-amber-400 font-bold">{filtered.length}</span> รายการ
+                พบ <span className="text-amber-400 font-bold">{historyFiltered.length}</span> รายการ
               </p>
             )}
           </div>
 
           {/* Card list */}
           <div className="divide-y divide-[var(--bd)]">
-            {filtered.length === 0 ? (
+            {historyFiltered.length === 0 ? (
               <div className="p-16 text-center text-gray-600 flex flex-col items-center gap-4">
                 <History size={36} className="opacity-20 text-amber-600" />
-                <p className="text-xs tracking-wider uppercase font-bold">{q ? 'ไม่พบรายการที่ตรงกัน' : 'ไม่มีประวัติในระบบ'}</p>
+                <p className="text-xs tracking-wider uppercase font-bold">{historyQ ? 'ไม่พบรายการที่ตรงกัน' : 'ไม่มีประวัติในระบบ'}</p>
               </div>
-            ) : pageItems.map(session => {
+            ) : historyPageItems.map(session => {
               const d = session.patientData;
               const formType = session.formType || 'intake';
               const isFollowUp = formType.startsWith('followup_');
@@ -1187,21 +1191,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {historyTotalPages > 1 && (
             <div className="p-4 border-t border-[var(--bd)] flex items-center justify-between gap-3">
               <button
                 onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
+                disabled={historyCurrentPage <= 1}
                 className="px-4 py-2 rounded-xl text-xs font-bold border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >← ก่อนหน้า</button>
 
               <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                {Array.from({ length: historyTotalPages }, (_, i) => i + 1).map(n => (
                   <button
                     key={n}
                     onClick={() => setHistoryPage(n)}
                     className={`w-8 h-8 rounded-lg text-xs font-bold border transition-colors ${
-                      n === page
+                      n === historyCurrentPage
                         ? 'bg-amber-700 text-white border-amber-600'
                         : 'border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'
                     }`}
@@ -1210,15 +1214,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
 
               <button
-                onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                onClick={() => setHistoryPage(p => Math.min(historyTotalPages, p + 1))}
+                disabled={historyCurrentPage >= historyTotalPages}
                 className="px-4 py-2 rounded-xl text-xs font-bold border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >ถัดไป →</button>
             </div>
           )}
         </div>
-        );
-      })() : (
+      ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
