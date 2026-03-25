@@ -937,6 +937,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleGetCourses = async (session) => {
     const jobId = `courses_${session.id}_${Date.now()}`;
     coursesJobIdRef.current = jobId;
+    // ป้องกัน auto-trigger race: ถ้า coursesRefreshRequest มาพร้อมกับการกดปุ่มนี้
+    // auto-trigger loop จะเห็น set นี้และไม่ส่ง LC_GET_COURSES ซ้ำ
+    autoCoursesRequestedRef.current.add(session.id);
     setCoursesPanel({
       sessionId: session.id,
       patientName: session.sessionName || session.patientData?.firstName || '',
