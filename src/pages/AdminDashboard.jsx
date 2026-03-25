@@ -110,6 +110,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const brokerTimers = useRef({}); // sessionId → timeout id
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
+  const autoCoursesRequestedRef = useRef(new Set()); // sessionId ที่ auto-trigger แล้วใน session นี้
   const [qrDisplayMode, setQrDisplayMode] = useState('session'); // 'session' | 'patientLink'
   const [patientLinkModal, setPatientLinkModal] = useState(null); // session id
   const [patientLinkLoading, setPatientLinkLoading] = useState(false);
@@ -506,6 +507,34 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 error: lc.error || '' }
             : prev
           );
+        }
+      });
+
+      // ─── Auto-trigger courses refresh เมื่อลูกค้าเปิดลิงก์ ────────────────────
+      // PatientDashboard เขียน coursesRefreshRequest → admin detect แล้ว queue LC_GET_COURSES
+      // Rate limit ฝั่งนี้: ตรวจ lastCoursesAutoFetch อีกชั้น ป้องกัน double-trigger จากหลาย tab
+      allDocs.forEach(s => {
+        if (
+          s.coursesRefreshRequest &&
+          s.brokerProClinicId &&
+          s.brokerStatus !== 'pending' &&
+          !autoCoursesRequestedRef.current.has(s.id)
+        ) {
+          const last = s.lastCoursesAutoFetch;
+          const ONE_HOUR_MS = 3600000;
+          if (last && (Date.now() - last.toMillis()) < ONE_HOUR_MS) return; // ยัง cool down
+          autoCoursesRequestedRef.current.add(s.id);
+          const jobId = `courses_auto_${s.id}_${Date.now()}`;
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
+          // เคลียร์ request + stamp fetch time ทันที (rate limit + ป้องกัน tab อื่น trigger ซ้ำ)
+          updateDoc(ref, {
+            coursesRefreshRequest: null,
+            lastCoursesAutoFetch: serverTimestamp(),
+            brokerStatus: 'pending', brokerError: null,
+            brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: s.brokerProClinicId || null },
+          }).catch(e => console.error('auto courses trigger:', e));
+          forwardedJobsRef.current.add(jobId);
+          window.postMessage({ type: 'LC_GET_COURSES', sessionId: s.id, proClinicId: s.brokerProClinicId }, '*');
         }
       });
 

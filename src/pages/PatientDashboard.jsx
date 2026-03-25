@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useState, useEffect, useRef } from 'react';
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
 import { Package, PackageX, CalendarClock, Phone, User, AlertCircle, Loader2, Link } from 'lucide-react';
 
@@ -28,9 +28,12 @@ function CourseCard({ c, expired }) {
   );
 }
 
+const ONE_HOUR_MS = 3600000;
+
 export default function PatientDashboard({ token, clinicSettings }) {
   const [status, setStatus] = useState('loading'); // loading | disabled | notfound | done
   const [sessionData, setSessionData] = useState(null);
+  const refreshRequestedRef = useRef(false); // ส่ง coursesRefreshRequest แล้วในครั้งนี้หรือยัง
 
   const ac = clinicSettings?.accentColor || '#dc2626';
 
@@ -40,14 +43,27 @@ export default function PatientDashboard({ token, clinicSettings }) {
       collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'),
       where('patientLinkToken', '==', token)
     );
-    getDocs(q).then(snap => {
+    const unsub = onSnapshot(q, (snap) => {
       if (snap.empty) { setStatus('notfound'); return; }
-      const doc = snap.docs[0];
-      const data = { id: doc.id, ...doc.data() };
+      const d = snap.docs[0];
+      const data = { id: d.id, ...d.data() };
       if (!data.patientLinkEnabled) { setStatus('disabled'); return; }
       setSessionData(data);
       setStatus('done');
-    }).catch(() => setStatus('notfound'));
+
+      // Auto-trigger courses refresh เมื่อลูกค้าเปิดลิงก์
+      // Rate limit: 1 ชั่วโมงต่อ session — ป้องกัน extension ทำงานหนักหรือโดนแกล้ง
+      if (!refreshRequestedRef.current && data.brokerProClinicId) {
+        const last = data.lastCoursesAutoFetch;
+        const shouldRequest = !last || (Date.now() - last.toMillis()) > ONE_HOUR_MS;
+        if (shouldRequest) {
+          refreshRequestedRef.current = true; // mark ทันทีก่อน async write เพื่อป้องกัน double-trigger
+          const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id);
+          updateDoc(sessionRef, { coursesRefreshRequest: serverTimestamp() }).catch(console.error);
+        }
+      }
+    }, () => setStatus('notfound'));
+    return () => unsub();
   }, [token]);
 
   if (status === 'loading') {
@@ -78,6 +94,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
   const d = sessionData.patientData || {};
   const courses = sessionData.latestCourses?.courses || [];
   const expiredCourses = sessionData.latestCourses?.expiredCourses || [];
+  const isRefreshing = !!sessionData.coursesRefreshRequest;
   const plName = sessionData.latestCourses?.patientName;
   const formName = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
   const patientName = (plName && plName !== '0') ? plName : formName;
@@ -122,6 +139,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
                   <Package size={14} className="text-teal-500" />
                   <h3 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h3>
                   <span className="text-[10px] font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{courses.length}</span>
+                  {isRefreshing && <Loader2 size={12} className="animate-spin text-gray-600 ml-auto" />}
                 </div>
                 <div className="flex flex-col gap-2">
                   {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} />)}
@@ -147,6 +165,11 @@ export default function PatientDashboard({ token, clinicSettings }) {
               </div>
             )}
           </>
+        ) : isRefreshing ? (
+          <div className="bg-[#0f0f0f] rounded-xl border border-[#1e1e1e] p-6 text-center flex flex-col items-center gap-2">
+            <Loader2 size={22} className="animate-spin text-gray-600" />
+            <p className="text-xs text-gray-600 font-bold uppercase tracking-widest">กำลังดึงข้อมูลคอร์ส...</p>
+          </div>
         ) : (
           <div className="bg-[#0f0f0f] rounded-xl border border-[#1e1e1e] p-6 text-center">
             <CalendarClock size={24} className="text-gray-700 mx-auto mb-2" />
