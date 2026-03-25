@@ -355,7 +355,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         const last = data.lastCoursesAutoFetch;
         const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
         const stillCoolingDown = cooldown > 0 && last && (Date.now() - last.toMillis()) < cooldown;
-        if (!stillCoolingDown && !data.coursesRefreshRequest) {
+        if (!stillCoolingDown) {
           refreshRequestedRef.current = true;
           updateDoc(
             doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id),
