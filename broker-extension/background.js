@@ -192,7 +192,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const lcTabId = sender.tab?.id;
 
   if (msg.type === 'LC_FILL_PROCLINIC') {
-    enqueueProClinic(() => handleFillRequest(msg, lcTabId));
+    enqueueProClinic(() => handleFillRequest(msg, lcTabId), msg.sessionId);
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_DELETE_PROCLINIC') {
@@ -212,7 +212,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_GET_COURSES') {
-    enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId));
+    // sessionId dedup: ป้องกัน double-queue เมื่อ relay + auto-trigger ยิงพร้อมกัน
+    enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId), msg.sessionId);
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_GET_STATUS')   sendResponse(statusMap);

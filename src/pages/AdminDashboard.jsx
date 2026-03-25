@@ -111,6 +111,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
   const autoCoursesRequestedRef = useRef(new Set()); // sessionId ที่ auto-trigger แล้วใน session นี้
+  const autoSyncInFlightRef     = useRef(new Set()); // sessionId ที่ brokerSyncSessions กำลัง LC_UPDATE อยู่ → block auto-trigger courses จนกว่าจะเสร็จ
   const [qrDisplayMode, setQrDisplayMode] = useState('session'); // 'session' | 'patientLink'
   const [patientLinkModal, setPatientLinkModal] = useState(null); // session id
   const [patientLinkLoading, setPatientLinkLoading] = useState(false);
@@ -230,6 +231,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
 
       if (type === 'LC_UPDATE_RESULT') {
+        autoSyncInFlightRef.current.delete(sessionId); // ปลดล็อก auto-trigger courses
         // ยกเลิก timeout + clear pending (กรณีที่ triggered มาจาก handleOpdClick กดปุ่มแดง retry)
         // auto-sync ไม่ได้ตั้ง timer ไว้ → cancel เป็น no-op
         if (brokerTimers.current[sessionId]) {
@@ -413,6 +415,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         // Trigger ProClinic auto-sync for changed sessions (ทำงานเสมอ ไม่ขึ้นกับ isNotifEnabled)
         brokerSyncSessions.forEach(session => {
+          autoSyncInFlightRef.current.add(session.id); // block auto-trigger courses จนกว่า LC_UPDATE_RESULT จะ clear
           const d = session.patientData;
           const reasons = getReasons(d);
           const pmh = [];
@@ -525,7 +528,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           s.coursesRefreshRequest &&
           s.brokerProClinicId &&
           s.brokerStatus !== 'pending' &&
-          !autoCoursesRequestedRef.current.has(s.id)
+          !autoCoursesRequestedRef.current.has(s.id) &&
+          !autoSyncInFlightRef.current.has(s.id) // รอ LC_UPDATE_PROCLINIC เสร็จก่อน ป้องกัน edit+courses queue พร้อมกัน
         ) {
           const last = s.lastCoursesAutoFetch;
           const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
