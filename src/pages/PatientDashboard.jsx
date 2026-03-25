@@ -140,7 +140,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
     requesting: { icon: <RefreshCw size={11} className="animate-spin" />, label: 'กำลังส่งคำขอ...', cls: 'text-gray-400 border-gray-700 bg-gray-900/40' },
     syncing:    { icon: <Loader2 size={11} className="animate-spin" />,   label: 'กำลัง Sync',     cls: 'text-teal-400 border-teal-800 bg-teal-950/40' },
     done:       { icon: <CheckCircle2 size={11} />,                        label: syncTimeStr ? `Sync เสร็จ — ${syncTimeStr}` : 'Sync เสร็จแล้ว', cls: 'text-green-400 border-green-800 bg-green-950/40' },
-    error:      { icon: <XCircle size={11} />,                             label: 'Sync ไม่สำเร็จ', cls: 'text-red-400 border-red-800 bg-red-950/40' },
+    error:      { icon: <XCircle size={11} />,                             label: syncTimeStr ? `Sync ไม่สำเร็จ — ข้อมูลล่าสุด ${syncTimeStr}` : 'Sync ไม่สำเร็จ', cls: 'text-red-400 border-red-700 bg-red-950/60' },
     idle:       null,
   }[syncStatus];
   const formName = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
