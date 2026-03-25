@@ -820,7 +820,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const fn = (d?.firstName || '').toLowerCase();
         const ln = (d?.lastName  || '').toLowerCase();
         const ph = (d?.phone     || '').replace(/\D/g, '');
-        return hn.includes(historyQ) || fn.includes(historyQ) || ln.includes(historyQ) || ph.includes(historyQ.replace(/\D/g, ''));
+        const phQ = historyQ.replace(/\D/g, '');
+        return hn.includes(historyQ) || fn.includes(historyQ) || ln.includes(historyQ) || (phQ.length > 0 && ph.includes(phQ));
       })
     : archivedSessions;
   const historyTotalPages = Math.max(1, Math.ceil(historyFiltered.length / HISTORY_PAGE_SIZE));
