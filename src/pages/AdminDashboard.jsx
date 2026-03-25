@@ -2175,10 +2175,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ══ Courses Panel Modal ══════════════════════════════════════════════════ */}
       {coursesPanel && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-[70]" onClick={() => setCoursesPanel(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setCoursesPanel(null)}>
           <div
-            className="bg-[#0a0a0a] rounded-t-2xl sm:rounded-2xl border border-[#1e1e1e] w-full sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
-            style={{boxShadow: '0 -4px 60px rgba(0,0,0,0.8)'}}
+            className="bg-[#0a0a0a] rounded-2xl border border-[#1e1e1e] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{boxShadow: '0 0 80px rgba(0,0,0,0.8)'}}
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
