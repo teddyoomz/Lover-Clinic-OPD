@@ -237,9 +237,6 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     parts.push(`ประวัติโรคประจำตัว  : ${pmh.length > 0 ? pmh.join(', ') : 'ปฏิเสธโรคประจำตัว'}`);
     parts.push(`ประวัติการแพ้ยา/อาหาร : ${d.hasAllergies === 'มี' ? `แพ้ ${d.allergiesDetail}` : 'ปฏิเสธประวัติการแพ้ยาและอาหาร'}`);
     parts.push(`ยาที่ใช้ประจำ       : ${d.currentMedication || 'ไม่มี'}`);
-    if (d.howFoundUs && d.howFoundUs.length > 0) {
-      parts.push(`รู้จักคลินิกจาก     : ${d.howFoundUs.join(', ')}`);
-    }
 
     const hasScreening = reasons.includes('สมรรถภาพทางเพศ')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)')
@@ -309,9 +306,6 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     parts.push(`Past Medical History: ${pmh.length > 0 ? pmh.join(', ') : 'No known underlying diseases'}`);
     parts.push(`Drug and Food Allergy: ${d.hasAllergies === 'มี' ? `Allergy to ${d.allergiesDetail}` : 'No known drug or food allergies'}`);
     parts.push(`Current Medications : ${d.currentMedication || 'None'}`);
-    if (d.howFoundUs && d.howFoundUs.length > 0) {
-      parts.push(`Referral Source     : ${d.howFoundUs.join(', ')}`);
-    }
 
     const hasScreening = reasons.includes('สมรรถภาพทางเพศ')
       || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)')

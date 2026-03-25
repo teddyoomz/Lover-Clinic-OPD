@@ -927,9 +927,9 @@ select.pf-input {
   color: #ef4444;
 }
 .pf-radio-card.selected-no {
-  border-color: var(--bd-stronger);
-  background: var(--bg-elevated);
-  color: var(--tx-heading);
+  border-color: #22c55e;
+  background: rgba(34,197,94,0.08);
+  color: #22c55e;
 }
 
 /* ── Submit CTA ── */
