@@ -919,6 +919,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     window.open(`${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`, '_blank');
   };
 
+  // เปิด PatientDashboard ใน new tab (admin view — ไม่มี cooldown)
+  const handleOpenPatientView = async (session) => {
+    let token = session.patientLinkToken;
+    const enabled = session.patientLinkEnabled;
+    if (!token || !enabled) {
+      token = Math.random().toString(36).substr(2, 10) + Math.random().toString(36).substr(2, 10);
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+          patientLinkToken: token, patientLinkEnabled: true,
+        });
+      } catch(e) { console.error('handleOpenPatientView:', e); return; }
+    }
+    window.open(`/?patient=${token}&admin=1`, '_blank');
+  };
+
   const handleGetCourses = async (session) => {
     const jobId = `courses_${session.id}_${Date.now()}`;
     coursesJobIdRef.current = jobId;
@@ -1906,9 +1921,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       title={getProClinicUrl(viewingSession.brokerProClinicId)}>
                       ProClinic ↗
                     </a>
-                    <button onClick={() => handleGetCourses(viewingSession)}
+                    <button onClick={() => handleOpenPatientView(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
-                      <Search size={9}/> คอร์สคงเหลือ
+                      <Search size={9}/> คอร์สคงเหลือ ↗
                     </button>
                     <button onClick={() => handleProClinicEdit(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">

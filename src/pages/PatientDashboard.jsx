@@ -212,9 +212,9 @@ function SectionHeader({ icon, label, count, accent, meta }) {
 
 const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
 
-export default function PatientDashboard({ token, clinicSettings, theme, setTheme }) {
-  // cooldown ที่ admin กำหนด (0 = ไม่จำกัด)
-  const COURSES_REFRESH_COOLDOWN_MS = ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
+export default function PatientDashboard({ token, clinicSettings, theme, setTheme, isAdminView }) {
+  // cooldown ที่ admin กำหนด (0 = ไม่จำกัด); admin view ไม่มี cooldown
+  const COURSES_REFRESH_COOLDOWN_MS = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 60) * 60_000);
   const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);

@@ -88,9 +88,10 @@ export default function App() {
   }
 
   if (patientFromUrl) {
+    const isAdminView = params.get('admin') === '1';
     return (
       <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
-        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />
+        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} isAdminView={isAdminView} />
       </div>
     );
   }
