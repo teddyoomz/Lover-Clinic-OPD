@@ -349,11 +349,13 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
         if (data.latestCourses?.success !== false) setJustSynced(true);
       }
 
-      // Auto-sync on first load if not in cooldown
+      // Auto-sync: fires if not in cooldown; ถ้าติด cooldown แสดงข้อมูลเก่า + countdown
       sessionDataRef.current = data;
-      // Auto-sync fires on every fresh page load — cooldown ใช้แค่ปุ่ม manual resync
       if (!refreshRequestedRef.current && data.brokerProClinicId) {
-        {
+        const _last = data.lastCoursesAutoFetch;
+        const _cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
+        const _cooling = _cooldown > 0 && _last && (Date.now() - _last.toMillis()) < _cooldown;
+        if (!_cooling) {
           refreshRequestedRef.current = true;
           updateDoc(
             doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', data.id),
