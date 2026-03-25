@@ -326,7 +326,7 @@ export default function PatientDashboard({ token, clinicSettings }) {
 
           {/* Sync chip strip */}
           {syncStatus !== 'idle' && (
-            <div className="px-5 pb-4 pt-1">
+            <div className="px-5 pb-4 pt-1 flex justify-center">
               <SyncChip
                 syncStatus={syncStatus}
                 syncTimeStr={syncTimeStr}
