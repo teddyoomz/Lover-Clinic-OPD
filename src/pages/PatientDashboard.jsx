@@ -70,12 +70,14 @@ function CourseCard({ c, expired, accentRgb, tx }) {
   const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
   const isActive  = c.status === 'กำลังใช้งาน';
 
+  const cardBase = expired
+    ? { className: 'rounded-2xl border border-red-900/40 bg-red-950/10 p-4 flex flex-col gap-2.5', style: { boxShadow: 'var(--shadow-card)' } }
+    : isActive
+    ? { className: 'rounded-2xl border border-teal-700/40 bg-teal-950/[0.18] p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 0 1px rgba(45,212,191,0.06), var(--shadow-card)' } }
+    : { className: 'rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-4 flex flex-col gap-2.5', style: { boxShadow: 'var(--shadow-card)' } };
+
   return (
-    <div className={`rounded-2xl border p-4 flex flex-col gap-2.5 transition-all ${
-      expired  ? 'border-red-900/30 bg-red-950/10'
-      : isActive ? 'border-teal-800/40 bg-teal-950/10'
-      : 'border-white/5 bg-white/[0.03]'
-    }`}>
+    <div className={cardBase.className} style={cardBase.style}>
       {/* Name + status */}
       <div className="flex items-start justify-between gap-2">
         <span className={`font-bold text-sm leading-snug ${expired ? 'text-red-300/80' : 'text-white'}`}>
@@ -95,7 +97,7 @@ function CourseCard({ c, expired, accentRgb, tx }) {
         <p className="text-[11px] text-gray-500 flex items-center gap-1.5 leading-relaxed">
           <span>{c.product}</span>
           {c.qty && c.qty !== c.product && (
-            <span className="font-mono font-bold text-gray-300 bg-white/5 px-1.5 py-0.5 rounded-md">
+            <span className="font-mono font-bold text-gray-300 bg-[#1a1a1a] px-1.5 py-0.5 rounded-md">
               {c.qty}
             </span>
           )}
@@ -108,7 +110,7 @@ function CourseCard({ c, expired, accentRgb, tx }) {
           {expiryText && (
             <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border ${
               expired ? 'text-red-500/80 border-red-900/30 bg-red-950/20'
-              : 'text-gray-500 border-white/5 bg-white/[0.02]'
+              : 'text-gray-500 border-[#1a1a1a] bg-[#0f0f0f]'
             }`}>{expiryText}</span>
           )}
           {hasValue && (
@@ -149,11 +151,12 @@ function SyncChip({ syncStatus, syncTimeStr, latestCourses, tx }) {
 function AppointmentCard({ a }) {
   const { day, rest } = parseDateParts(a.date);
   return (
-    <div className="rounded-2xl border border-violet-900/25 bg-violet-950/10 overflow-hidden flex">
+    <div className="rounded-2xl border border-violet-800/30 bg-violet-950/[0.22] overflow-hidden flex"
+      style={{ boxShadow: 'var(--shadow-card)' }}>
       {/* Date sidebar */}
-      <div className="flex flex-col items-center justify-center px-4 py-4 bg-violet-950/20 border-r border-violet-900/20 min-w-[60px] gap-0.5">
+      <div className="flex flex-col items-center justify-center px-4 py-4 bg-violet-900/[0.35] border-r border-violet-800/20 min-w-[64px] gap-0.5">
         <span className="text-2xl font-black text-white leading-none">{day}</span>
-        <span className="text-[9px] font-bold text-violet-400 text-center leading-tight">{rest}</span>
+        <span className="text-[9px] font-bold text-violet-300 text-center leading-tight">{rest}</span>
       </div>
       {/* Details */}
       <div className="flex flex-col gap-1.5 px-4 py-3.5 flex-1 min-w-0">
@@ -321,7 +324,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
       <div className="relative overflow-hidden">
         {/* Radial glow */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(ellipse 80% 60% at 50% -10%, rgba(${acRgb},0.18) 0%, transparent 70%)` }} />
+          style={{ background: `radial-gradient(ellipse 90% 70% at 50% -5%, rgba(${acRgb},0.22) 0%, transparent 70%)` }} />
         <div className="absolute bottom-0 left-0 right-0 h-px"
           style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.25), transparent)` }} />
 
@@ -345,14 +348,15 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-12 pt-5 flex flex-col gap-5">
 
         {/* Patient info card */}
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] overflow-hidden">
+        <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] overflow-hidden"
+          style={{ boxShadow: 'var(--shadow-panel), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
           {/* Accent top bar */}
-          <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.6), transparent)` }} />
+          <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.8), transparent)` }} />
 
           <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none shadow-lg"
-              style={{ background: `radial-gradient(135deg, rgba(${acRgb},0.3) 0%, rgba(${acRgb},0.1) 100%)`, border: `1.5px solid rgba(${acRgb},0.45)`, color: ac, boxShadow: `0 0 20px rgba(${acRgb},0.15)` }}>
+              style={{ background: `radial-gradient(135deg, rgba(${acRgb},0.35) 0%, rgba(${acRgb},0.12) 100%)`, border: `1.5px solid rgba(${acRgb},0.5)`, color: ac, boxShadow: `0 0 28px rgba(${acRgb},0.25), 0 0 0 4px rgba(${acRgb},0.06)` }}>
               {getInitials(patientName)}
             </div>
 
@@ -422,7 +426,7 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
             )}
 
             {courses.length === 0 && (
-              <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-8 text-center flex flex-col items-center gap-2">
+              <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-8 text-center flex flex-col items-center gap-2">
                 <Package size={28} className="text-gray-700" />
                 <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noCourses}</p>
               </div>
@@ -443,14 +447,14 @@ export default function PatientDashboard({ token, clinicSettings, theme, setThem
             )}
           </>
         ) : (syncStatus === 'requesting' || syncStatus === 'syncing') ? (
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-10 flex flex-col items-center gap-3">
+          <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-10 flex flex-col items-center gap-3">
             <Loader2 size={24} className="animate-spin text-gray-600" />
             <p className="text-xs font-black uppercase tracking-widest text-gray-600">
               {syncStatus === 'syncing' ? tx.syncingCourses : tx.requesting}
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-10 flex flex-col items-center gap-2">
+          <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-10 flex flex-col items-center gap-2">
             <CalendarClock size={28} className="text-gray-700" />
             <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noData}</p>
             <p className="text-[10px] text-gray-700 text-center max-w-[220px] leading-relaxed mt-0.5">
