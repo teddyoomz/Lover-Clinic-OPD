@@ -86,6 +86,8 @@ ensureLoggedIn(tabId):
 | `LC_BROKER_RESULT` | Extension → Page | ผล create |
 | `LC_DELETE_RESULT` | Extension → Page | ผล delete |
 | `LC_UPDATE_RESULT` | Extension → Page | ผล update |
+| `LC_GET_COURSES` | Page → Extension | ดึงคอร์ส/บริการคงเหลือจาก ProClinic |
+| `LC_COURSES_RESULT` | Extension → Page | ผล courses (courses[], expiredCourses[], patientName) |
 | `LC_GET_STATUS` | Popup → Extension | ขอ statusMap |
 | `LC_CLEAR_STATUS` | Popup → Extension | clear statusMap |
 
@@ -108,6 +110,7 @@ function enqueueProClinic(fn, sessionId = null) {
 }
 // LC_UPDATE_PROCLINIC → enqueueProClinic(fn, msg.sessionId)  // deduplicate by sessionId
 // LC_FILL_PROCLINIC   → enqueueProClinic(fn)                 // no sessionId
+// LC_GET_COURSES      → enqueueProClinic(fn)                 // no sessionId (read-only)
 ```
 
 > ⚠️ Chrome MV3 SW อาจ restart ระหว่าง session → `syncInFlightSessions` reset → dedup ไม่ guaranteed
@@ -149,6 +152,41 @@ function enqueueProClinic(fn, sessionId = null) {
 
 > ⚠️ ProClinic ALWAYS redirects กลับ /edit หลัง save — ตรวจ URL ไม่ได้!
 > ใช้ `redirect:'manual'` + ตรวจ `response.type` แทน
+
+---
+
+## GET_COURSES Flow (`handleGetCoursesRequest`) — READ-ONLY ⚡
+
+```
+1. getOrCreateProclinicTab() → ensureLoggedIn()
+2. navigateAndWait('/admin/customer/${proClinicId}')  — หน้าโปรไฟล์ (ไม่ใช่ /edit)
+3. executeScript(scrapeProClinicCourses):
+   → extractCourses('#course-tab')      — คอร์สคงเหลือ
+   → extractCourses('#expired-course-tab') — คอร์สหมดอายุ
+   → return { patientName, courses[], expiredCourses[] }
+4. reportBack LC_COURSES_RESULT
+   → Cloud PC AdminDashboard: getDoc(session) → write latestCourses.jobId = brokerJob.id
+   → Firestore onSnapshot บน iPhone: match latestCourses.jobId → update coursesPanel
+```
+
+> ⚠️ read-only — ไม่มีการ submit form หรือแก้ไขข้อมูลใดๆ ใน ProClinic
+> ⚠️ ต้องอ่าน jobId จาก Firestore (getDoc) ก่อนเขียน latestCourses — ไม่ใช่จาก ref local
+
+### scrapeProClinicCourses selectors
+
+```js
+// Tabs
+'#course-tab'           // คอร์สคงเหลือ
+'#expired-course-tab'   // คอร์สหมดอายุ
+
+// ภายในแต่ละ .card
+'li:first-child h6'                         // ชื่อคอร์ส (text node แรก)
+'li:first-child p.small.text-gray--2.mb-0'  // วันหมดอายุ
+'li:first-child .text-gray-2.small.mt-1'    // มูลค่าคงเหลือ
+'li:first-child .badge'                     // สถานะ (active/expired ฯลฯ)
+'li:nth-child(2)'                           // ประเภทสินค้า/จำนวน
+'li:nth-child(2) .float-end'                // จำนวนคงเหลือ
+```
 
 ---
 

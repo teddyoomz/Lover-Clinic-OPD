@@ -1,7 +1,7 @@
 # Bug History & Resolved Fixes
 
 > อ่านไฟล์นี้ก่อนแตะ AdminDashboard.jsx หรือ broker-extension/
-> อัพเดทล่าสุด: 2026-03-25
+> อัพเดทล่าสุด: 2026-03-25 (courses cross-device)
 
 ---
 
@@ -27,6 +27,13 @@
 | Login "ตรวจพบการส่งข้อมูลที่ผิดปกติ" | ใช้ `btn.removeAttribute('disabled')` ก่อน click | ลบวิธีนั้นออก ใช้ native setter + รอ button enable เองตามธรรมชาติ |
 | Service Worker registration failed (status 15) | ขาด `"alarms"` permission ใน manifest.json | เพิ่ม `"alarms"` ใน permissions array |
 | Session ProClinic หมดอายุกลางวัน | ไม่มี keepalive | `chrome.alarms` ทุก 20 นาที ping `/admin/api/stat` จาก ProClinic tab |
+
+### LC_GET_COURSES (ดูคอร์สคงเหลือ) — Cross-device
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| กดจาก iPhone → extension ไป edit/fill ProClinic รัวๆ แทนที่จะ query | relay block มี `else` fallback → job type ที่ไม่รู้จักถูกส่งเป็น `LC_FILL_PROCLINIC` ถ้า `brokerStatus==='pending'`; cross-device ทำให้ Cloud PC ไม่มี jobId ใน `forwardedJobsRef` → relay old block fires, ตกไป `else` → fill รัวๆ | เพิ่ม `else if (job.type === 'LC_GET_COURSES')` ก่อน `else` ใน relay block; ใช้ `return` เพื่อข้าม OPD timer; ตั้ง `brokerStatus:'pending'` ด้วยเหมือนปุ่มอื่น |
+| กดจาก iPhone → ข้อมูลคอร์สไม่มาแสดงบน iPhone | `coursesJobIdRef.current` เป็น `null` บน Cloud PC (relay device) → เขียน `latestCourses.jobId = null` → iPhone ตรวจ `null === jobId` = false → panel ไม่อัพเดท | ในตัว handler `LC_COURSES_RESULT` บน Cloud PC: ดึง jobId จริงด้วย `getDoc(ref).then(snap => snap.data()?.brokerJob?.id)` ก่อนเขียน `latestCourses` |
 
 ### AdminDashboard
 
@@ -76,6 +83,41 @@ write ที่มี serverTimestamp() → Firestore fires snapshot 2 ครั
   2. SERVER: timestamp = actual server time
 ห้าม compare timestamps ระหว่าง 2 snapshots → false positive
 เปรียบเทียบเฉพาะ patientData (JSON.stringify) แทน
+```
+
+### กฎทองของ Firestore relay block (ห้ามลืม)
+
+```
+1. ทุก job type ใหม่ต้องมี explicit else-if ใน relay block ก่อน else fallback เสมอ
+   else fallback = LC_FILL_PROCLINIC → สร้างคนใหม่ใน ProClinic ผิดทันที
+
+2. job ที่ไม่ต้องการ OPD spinner หรือ fail-timer → ใช้ return เพื่อ early exit
+   return ใน forEach callback = ข้ามแค่ iteration นั้น ไม่ออกจาก loop
+
+3. forwardedJobsRef ใช้ dedup ต่อ device เท่านั้น
+   cross-device: device A add jobId → device B ไม่รู้จัก jobId นั้น
+   → relay block บน device B จะยิง (ถ้า condition อื่นผ่าน) → ต้องออกแบบให้ถูกต้อง
+
+4. brokerStatus: 'pending' ต้องเขียนก่อนทุกครั้งที่ใช้ relay block เป็น gate
+   ถ้าไม่เขียน → relay gate ไม่ผ่าน → cross-device ไม่ทำงาน
+```
+
+### coursesJobIdRef pattern (cross-device result delivery)
+
+```js
+// ปัญหา: ref ที่ set บน device ที่กดปุ่ม ≠ ref บน relay device
+// device กดปุ่ม (iPhone): coursesJobIdRef.current = jobId
+// relay device (Cloud PC): coursesJobIdRef.current = null
+
+// ❌ Wrong: ใช้ ref โดยตรง → jobId = null บน Cloud PC
+latestCourses: { jobId: coursesJobIdRef.current }  // null!
+
+// ✅ Correct: ดึง jobId จาก Firestore ก่อนเขียน result
+getDoc(ref).then(snap => {
+  const firestoreJobId = snap.data()?.brokerJob?.id || localJobId;
+  updateDoc(ref, { latestCourses: { jobId: firestoreJobId, ... } });
+});
+// → iPhone onSnapshot: lc.jobId === coursesJobIdRef.current → match ✓
 ```
 
 ### fetch + redirect:'manual' pattern (ProClinic save)
