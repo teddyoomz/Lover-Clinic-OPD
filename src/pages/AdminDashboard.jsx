@@ -922,6 +922,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleGetCourses = async (session) => {
     const jobId = `courses_${session.id}_${Date.now()}`;
     coursesJobIdRef.current = jobId;
+    autoCoursesRequestedRef.current.add(session.id); // ป้องกัน auto-trigger ซ้อนทับ manual trigger
     setCoursesPanel({
       sessionId: session.id,
       patientName: session.sessionName || session.patientData?.firstName || '',

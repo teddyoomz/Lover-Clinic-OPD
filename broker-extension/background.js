@@ -192,7 +192,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const lcTabId = sender.tab?.id;
 
   if (msg.type === 'LC_FILL_PROCLINIC') {
-    enqueueProClinic(() => handleFillRequest(msg, lcTabId), msg.sessionId);
+    enqueueProClinic(() => handleFillRequest(msg, lcTabId), msg.sessionId ? `${msg.type}_${msg.sessionId}` : null);
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_DELETE_PROCLINIC') {
@@ -200,7 +200,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_UPDATE_PROCLINIC') {
-    enqueueProClinic(() => handleUpdateRequest(msg, lcTabId), msg.sessionId);
+    enqueueProClinic(() => handleUpdateRequest(msg, lcTabId), msg.sessionId ? `${msg.type}_${msg.sessionId}` : null);
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_OPEN_EDIT_PROCLINIC') {
@@ -212,8 +212,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_GET_COURSES') {
-    // sessionId dedup: ป้องกัน double-queue เมื่อ relay + auto-trigger ยิงพร้อมกัน
-    enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId), msg.sessionId);
+    // key = type+sessionId: ป้องกัน double-queue แต่ไม่บล็อก LC_UPDATE_PROCLINIC session เดียวกัน
+    enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId), msg.sessionId ? `${msg.type}_${msg.sessionId}` : null);
     sendResponse({ received: true });
   }
   if (msg.type === 'LC_GET_STATUS')   sendResponse(statusMap);
