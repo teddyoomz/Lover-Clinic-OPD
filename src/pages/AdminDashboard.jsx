@@ -162,11 +162,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           : prev
         );
         // Write result to Firestore: restore brokerStatus + deliver to other devices (iPhone)
+        // ⚠️ jobId จาก coursesJobIdRef อาจเป็น null ถ้าเป็น Cloud PC ที่ relay (ไม่ใช่ผู้กดปุ่ม)
+        // → ดึง jobId จริงจาก brokerJob ใน Firestore doc แทน
         if (sessionId) {
-          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-            brokerStatus: 'done', brokerError: null, brokerJob: null,
-            latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], patientName: patientName || '', jobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
-          }).catch(e => console.error('latestCourses write:', e));
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+          getDoc(ref).then(snap => {
+            const firestoreJobId = snap.data()?.brokerJob?.id || jobId;
+            updateDoc(ref, {
+              brokerStatus: 'done', brokerError: null, brokerJob: null,
+              latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], patientName: patientName || '', jobId: firestoreJobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
+            }).catch(e => console.error('latestCourses write:', e));
+          }).catch(e => console.error('getDoc for courses result:', e));
         }
         return;
       }
