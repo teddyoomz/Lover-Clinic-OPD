@@ -1,6 +1,6 @@
 // ─── Broker Client Abstraction ──────────────────────────────────────────────
 // Unified interface for ProClinic operations.
-// brokerMode === 'script' → calls Vercel API routes directly (async/await)
+// brokerMode === 'script' → calls Vercel API routes (credentials from env vars)
 // brokerMode === 'extension' → uses window.postMessage to Chrome Extension
 
 // ─── Script Mode (Vercel API) ───────────────────────────────────────────────
@@ -41,22 +41,15 @@ async function apiFetch(endpoint, body) {
       });
       return retryRes.json();
     }
-    // Extension not available or no cookies — return original error with sessionExpired flag
     return data;
   }
 
   return data;
 }
 
-function getCredentials(clinicSettings) {
-  return {
-    origin: clinicSettings.proClinicOrigin || 'https://trial.proclinicth.com',
-    email: clinicSettings.proClinicEmail || '',
-    password: clinicSettings.proClinicPassword || '',
-  };
-}
-
 // ─── Public API ─────────────────────────────────────────────────────────────
+// Script mode: credentials come from Vercel env vars (not from frontend)
+// Only non-credential data (patient, proClinicId, etc.) is sent in request body
 
 /**
  * Create new customer in ProClinic
@@ -65,21 +58,18 @@ function getCredentials(clinicSettings) {
  */
 export function fillProClinic(brokerMode, clinicSettings, sessionId, patient) {
   if (brokerMode === 'script') {
-    return apiFetch('create', { ...getCredentials(clinicSettings), patient });
+    return apiFetch('create', { patient });
   }
-  // Extension mode
   window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
   return null;
 }
 
 /**
  * Update existing customer in ProClinic
- * Script mode: returns { success, error }
- * Extension mode: fires postMessage, returns null
  */
 export function updateProClinic(brokerMode, clinicSettings, sessionId, proClinicId, proClinicHN, patient) {
   if (brokerMode === 'script') {
-    return apiFetch('update', { ...getCredentials(clinicSettings), proClinicId, proClinicHN, patient });
+    return apiFetch('update', { proClinicId, proClinicHN, patient });
   }
   window.postMessage({ type: 'LC_UPDATE_PROCLINIC', sessionId, proClinicId, proClinicHN, patient }, '*');
   return null;
@@ -87,12 +77,10 @@ export function updateProClinic(brokerMode, clinicSettings, sessionId, proClinic
 
 /**
  * Delete customer from ProClinic
- * Script mode: returns { success, error }
- * Extension mode: fires postMessage, returns null
  */
 export function deleteProClinic(brokerMode, clinicSettings, sessionId, proClinicId, proClinicHN, patient) {
   if (brokerMode === 'script') {
-    return apiFetch('delete', { ...getCredentials(clinicSettings), proClinicId, proClinicHN, patient });
+    return apiFetch('delete', { proClinicId, proClinicHN, patient });
   }
   window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId, proClinicId, proClinicHN, patient }, '*');
   return null;
@@ -100,31 +88,27 @@ export function deleteProClinic(brokerMode, clinicSettings, sessionId, proClinic
 
 /**
  * Get courses for a customer from ProClinic
- * Script mode: returns { success, patientName, courses, expiredCourses, appointments, error }
- * Extension mode: fires postMessage, returns null
  */
 export function getCourses(brokerMode, clinicSettings, sessionId, proClinicId) {
   if (brokerMode === 'script') {
-    return apiFetch('courses', { ...getCredentials(clinicSettings), proClinicId });
+    return apiFetch('courses', { proClinicId });
   }
   window.postMessage({ type: 'LC_GET_COURSES', sessionId, proClinicId }, '*');
   return null;
 }
 
 /**
- * Search customers in ProClinic
- * Script mode only (not used in extension mode)
+ * Search customers in ProClinic (script mode only)
  */
 export function searchCustomers(clinicSettings, query) {
-  return apiFetch('search', { ...getCredentials(clinicSettings), query });
+  return apiFetch('search', { query });
 }
 
 /**
- * Test ProClinic login credentials
- * Script mode only
+ * Test ProClinic login (script mode only)
  */
 export function testLogin(clinicSettings) {
-  return apiFetch('login', getCredentials(clinicSettings));
+  return apiFetch('login', {});
 }
 
 /**
@@ -134,5 +118,4 @@ export function openEditPage(brokerMode, proClinicId) {
   if (brokerMode === 'extension') {
     window.postMessage({ type: 'LC_OPEN_EDIT_PROCLINIC', proClinicId }, '*');
   }
-  // Script mode: no equivalent (could open in new tab but not needed)
 }

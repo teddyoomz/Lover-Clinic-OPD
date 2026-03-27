@@ -140,7 +140,11 @@ export async function performLogin(origin, email, password) {
 
 // ─── Create session (login once, reuse for multiple requests) ────────────────
 
-export async function createSession(origin, email, password) {
+export async function createSession(originArg, emailArg, passwordArg) {
+  // Vercel env vars take priority over request body
+  const origin   = process.env.PROCLINIC_ORIGIN   || originArg;
+  const email    = process.env.PROCLINIC_EMAIL     || emailArg;
+  const password = process.env.PROCLINIC_PASSWORD  || passwordArg;
   // Load cached cookies — use immediately, no test request
   let cookies = await loadCachedCookies(origin);
 

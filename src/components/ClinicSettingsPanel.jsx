@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer, Cable, Zap, Chrome, Wifi, WifiOff, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer, Cable, Zap, Chrome, Wifi, WifiOff, Eye, EyeOff, Lock } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -90,9 +90,13 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
         patientSyncCooldownMins: newCooldown,
         brokerMode: settings.brokerMode || 'extension',
-        proClinicOrigin: settings.proClinicOrigin?.trim() || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
-        proClinicEmail: settings.proClinicEmail?.trim() || '',
-        proClinicPassword: settings.proClinicPassword || '',
+        // Credentials: only save to Firestore in Extension mode (Extension reads from here)
+        // Server API mode uses Vercel env vars — never store in Firestore
+        ...(settings.brokerMode !== 'script' ? {
+          proClinicOrigin: settings.proClinicOrigin?.trim() || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
+          proClinicEmail: settings.proClinicEmail?.trim() || '',
+          proClinicPassword: settings.proClinicPassword || '',
+        } : {}),
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -370,81 +374,75 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </div>
 
           {/* ProClinic Credentials */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic URL</label>
-              <input
-                type="text"
-                value={settings.proClinicOrigin || ''}
-                onChange={e => setSettings(prev => ({...prev, proClinicOrigin: e.target.value}))}
-                placeholder="https://trial.proclinicth.com"
-                className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm font-mono"
-              />
+          {settings.brokerMode === 'script' ? (
+            <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4">
+              <div className="flex items-center gap-2 text-cyan-400 text-sm font-bold mb-2">
+                <Lock size={14} /> Credentials เก็บใน Vercel Environment
+              </div>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                ProClinic URL, Email, Password ถูกเก็บใน Vercel Environment Variables อย่างปลอดภัย
+                — ไม่อัพไป GitHub, ไม่เก็บใน Firestore
+              </p>
+              <p className="text-[10px] text-gray-600 mt-1.5">
+                แก้ไขที่: Vercel Dashboard → Settings → Environment Variables
+              </p>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Email</label>
-              <input
-                type="email"
-                value={settings.proClinicEmail || ''}
-                onChange={e => setSettings(prev => ({...prev, proClinicEmail: e.target.value}))}
-                placeholder="demo12@proclinic.com"
-                className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Password</label>
-              <div className="relative">
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic URL</label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={settings.proClinicPassword || ''}
-                  onChange={e => setSettings(prev => ({...prev, proClinicPassword: e.target.value}))}
-                  placeholder="••••••"
-                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 pr-12 outline-none focus:border-cyan-500 transition-all text-sm"
+                  type="text"
+                  value={settings.proClinicOrigin || ''}
+                  onChange={e => setSettings(prev => ({...prev, proClinicOrigin: e.target.value}))}
+                  placeholder="https://trial.proclinicth.com"
+                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm font-mono"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                </button>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Email</label>
+                <input
+                  type="email"
+                  value={settings.proClinicEmail || ''}
+                  onChange={e => setSettings(prev => ({...prev, proClinicEmail: e.target.value}))}
+                  placeholder="demo12@proclinic.com"
+                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={settings.proClinicPassword || ''}
+                    onChange={e => setSettings(prev => ({...prev, proClinicPassword: e.target.value}))}
+                    placeholder="••••••"
+                    className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 pr-12 outline-none focus:border-cyan-500 transition-all text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Test Connection Button */}
-          {settings.brokerMode === 'script' && settings.proClinicEmail && settings.proClinicPassword && (
+          {settings.brokerMode === 'script' && (
             <div className="mt-4 flex items-center gap-3">
               <button
                 onClick={async () => {
                   setTestingConnection(true);
                   setTestResult('');
                   try {
-                    // Step 1: Ask extension to share cookies first (if available)
-                    try {
-                      await new Promise((resolve) => {
-                        const timeout = setTimeout(resolve, 3000); // max 3s wait
-                        const handler = (e) => {
-                          if (e.data?.type === 'LC_SHARE_COOKIES_RESULT') {
-                            window.removeEventListener('message', handler);
-                            clearTimeout(timeout);
-                            console.log('[test] extension shared cookies:', e.data);
-                            resolve();
-                          }
-                        };
-                        window.addEventListener('message', handler);
-                        window.postMessage({ type: 'LC_SHARE_COOKIES_NOW' }, '*');
-                      });
-                    } catch {}
-                    // Step 2: Test connection via API
                     const res = await fetch('/api/proclinic/login', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        origin: settings.proClinicOrigin || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
-                        email: settings.proClinicEmail,
-                        password: settings.proClinicPassword,
-                      }),
+                      body: JSON.stringify({}),
                     });
                     const data = await res.json();
                     setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}`);
