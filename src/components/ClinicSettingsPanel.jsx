@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer, Cable, Zap, Chrome, Wifi, WifiOff, Eye, EyeOff } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -16,6 +16,9 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const [logoTabLight, setLogoTabLight] = useState('upload');
   const fileInputRef = useRef(null);
   const fileInputRefLight = useRef(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -86,6 +89,10 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         accentColor: settings.accentColor,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
         patientSyncCooldownMins: newCooldown,
+        brokerMode: settings.brokerMode || 'extension',
+        proClinicOrigin: settings.proClinicOrigin?.trim() || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
+        proClinicEmail: settings.proClinicEmail?.trim() || '',
+        proClinicPassword: settings.proClinicPassword || '',
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -318,6 +325,131 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 : `(${settings.patientSyncCooldownMins ?? 60} นาทีต่อครั้ง)`}
             </span>
           </div>
+        </div>
+
+        {/* ProClinic Integration */}
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-[#222]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Cable size={14} style={{color: '#06b6d4'}}/> ProClinic Integration
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">เชื่อมต่อระบบ ProClinic สำหรับส่ง/ดึงข้อมูลผู้ป่วยอัตโนมัติ</p>
+
+          {/* Broker Mode Toggle */}
+          <div className="mb-5">
+            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Broker Mode</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setSettings(prev => ({...prev, brokerMode: 'script'}))}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  settings.brokerMode === 'script'
+                    ? 'border-cyan-500 bg-cyan-950/20'
+                    : 'border-[#333] bg-[#141414] hover:border-[#444]'
+                }`}
+              >
+                <Zap size={20} className={settings.brokerMode === 'script' ? 'text-cyan-400' : 'text-gray-500'} />
+                <div className="text-left">
+                  <div className={`text-sm font-bold ${settings.brokerMode === 'script' ? 'text-cyan-400' : 'text-gray-400'}`}>Server API</div>
+                  <div className="text-[10px] text-gray-600">เร็ว เสถียร ไม่ต้อง Extension</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setSettings(prev => ({...prev, brokerMode: 'extension'}))}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  settings.brokerMode === 'extension'
+                    ? 'border-orange-500 bg-orange-950/20'
+                    : 'border-[#333] bg-[#141414] hover:border-[#444]'
+                }`}
+              >
+                <Chrome size={20} className={settings.brokerMode === 'extension' ? 'text-orange-400' : 'text-gray-500'} />
+                <div className="text-left">
+                  <div className={`text-sm font-bold ${settings.brokerMode === 'extension' ? 'text-orange-400' : 'text-gray-400'}`}>Extension</div>
+                  <div className="text-[10px] text-gray-600">ใช้ Chrome Extension เดิม</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* ProClinic Credentials */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic URL</label>
+              <input
+                type="text"
+                value={settings.proClinicOrigin || ''}
+                onChange={e => setSettings(prev => ({...prev, proClinicOrigin: e.target.value}))}
+                placeholder="https://trial.proclinicth.com"
+                className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Email</label>
+              <input
+                type="email"
+                value={settings.proClinicEmail || ''}
+                onChange={e => setSettings(prev => ({...prev, proClinicEmail: e.target.value}))}
+                placeholder="demo12@proclinic.com"
+                className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={settings.proClinicPassword || ''}
+                  onChange={e => setSettings(prev => ({...prev, proClinicPassword: e.target.value}))}
+                  placeholder="••••••"
+                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 pr-12 outline-none focus:border-cyan-500 transition-all text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Test Connection Button */}
+          {settings.brokerMode === 'script' && settings.proClinicEmail && settings.proClinicPassword && (
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setTestingConnection(true);
+                  setTestResult('');
+                  try {
+                    const res = await fetch('/api/proclinic/login', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        origin: settings.proClinicOrigin || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
+                        email: settings.proClinicEmail,
+                        password: settings.proClinicPassword,
+                      }),
+                    });
+                    const data = await res.json();
+                    setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}`);
+                  } catch (err) {
+                    setTestResult(`✗ ${err.message}`);
+                  } finally {
+                    setTestingConnection(false);
+                    setTimeout(() => setTestResult(''), 8000);
+                  }
+                }}
+                disabled={testingConnection}
+                className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-cyan-950/30 border border-cyan-800 text-cyan-400 hover:bg-cyan-900/40 disabled:opacity-50"
+              >
+                {testingConnection ? <><Wifi size={14} className="animate-pulse"/> กำลังทดสอบ...</> : <><Wifi size={14}/> ทดสอบการเชื่อมต่อ</>}
+              </button>
+              {testResult && (
+                <span className={`text-sm font-bold ${testResult.startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>
+                  {testResult}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Save Button */}

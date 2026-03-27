@@ -32,9 +32,13 @@ window.addEventListener('message', (event) => {
   });
 });
 
-// 2. Forward background results → web page
+// 2. Forward background results → web page + handle session cookies
 chrome.runtime.onMessage.addListener((msg) => {
   if (['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT', 'LC_COURSES_RESULT'].includes(msg.type)) {
+    window.postMessage(msg, '*');
+  }
+  // Session cookies from extension → forward to page for Firestore caching
+  if (msg.type === 'LC_SESSION_COOKIES') {
     window.postMessage(msg, '*');
   }
 });

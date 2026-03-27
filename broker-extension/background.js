@@ -41,6 +41,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       },
       args: [_proclinicOrigin],
     });
+    // Refresh shared cookies after keepalive
+    shareSessionCookies();
   } catch (e) { console.log('[pcKeepalive]', e.message); }
 });
 
@@ -140,6 +142,36 @@ async function doAutoLogin(tabId) {
       },
     });
   } catch {}
+
+  // Share cookies with Vercel API routes via Firestore
+  shareSessionCookies();
+}
+
+/**
+ * Extract ProClinic cookies and send to LoverClinic tab for Firestore caching
+ * This allows Vercel API routes to reuse the extension's session
+ */
+async function shareSessionCookies() {
+  try {
+    const url = new URL(PROCLINIC_ORIGIN());
+    const cookies = await chrome.cookies.getAll({ domain: url.hostname });
+    if (!cookies || cookies.length === 0) return;
+
+    // Format as Set-Cookie-like strings for the API session manager
+    const cookieStrings = cookies.map(c => `${c.name}=${c.value}`);
+
+    // Send to LoverClinic tab
+    const lcTabs = await chrome.tabs.query({ url: 'https://lover-clinic-app.vercel.app/*' });
+    for (const tab of lcTabs) {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'LC_SESSION_COOKIES',
+        origin: PROCLINIC_ORIGIN(),
+        cookies: cookieStrings,
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.log('[shareSessionCookies]', e.message);
+  }
 }
 
 /**

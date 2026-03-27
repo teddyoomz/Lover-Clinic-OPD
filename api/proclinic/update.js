@@ -1,0 +1,78 @@
+// POST /api/proclinic/update — Update existing customer in ProClinic
+import { createSession, handleCors } from './_lib/session.js';
+import { extractCSRF, extractSearchResults, findBestMatch, extractFormFields, extractValidationErrors } from './_lib/scraper.js';
+import { buildUpdateFormData } from './_lib/fields.js';
+
+async function resolveCustomerId(session, origin, proClinicId, proClinicHN, patient) {
+  if (proClinicId) return proClinicId;
+
+  if (proClinicHN) {
+    const hnHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(proClinicHN)}`);
+    const hnResults = extractSearchResults(hnHtml);
+    if (hnResults.length > 0) return hnResults[0].id;
+  }
+
+  if (patient?.phone) {
+    const phoneHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(patient.phone)}`);
+    const phoneResults = extractSearchResults(phoneHtml);
+    const match = findBestMatch(phoneResults, patient);
+    if (match) return match.id;
+  }
+
+  const query = [patient?.firstName, patient?.lastName].filter(Boolean).join(' ');
+  if (!query.trim()) throw new Error('ไม่มีข้อมูล HN / เบอร์ / ชื่อ สำหรับค้นหา ProClinic');
+
+  const nameHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(query)}`);
+  const nameResults = extractSearchResults(nameHtml);
+  const match = findBestMatch(nameResults, patient);
+  if (match) return match.id;
+
+  throw new Error(`ค้นหา HN:"${proClinicHN}" / ชื่อ:"${query}" ใน ProClinic ไม่พบ`);
+}
+
+export default async function handler(req, res) {
+  if (handleCors(req, res)) return;
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    const { origin, email, password, proClinicId, proClinicHN, patient } = req.body;
+    if (!origin || !patient) {
+      return res.status(400).json({ success: false, error: 'Missing origin or patient data' });
+    }
+
+    const session = await createSession(origin, email, password);
+    const targetId = await resolveCustomerId(session, origin, proClinicId, proClinicHN, patient);
+
+    // GET edit page → CSRF + existing form fields
+    const editHtml = await session.fetchText(`${origin}/admin/customer/${targetId}/edit`);
+    const csrf = extractCSRF(editHtml);
+    if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า edit');
+
+    const existingFields = extractFormFields(editHtml);
+    const formData = buildUpdateFormData(patient, existingFields, csrf);
+
+    // POST update
+    const updateRes = await session.fetch(`${origin}/admin/customer/${targetId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN': csrf,
+      },
+      body: formData.toString(),
+      redirect: 'manual',
+    });
+
+    const status = updateRes.status;
+    if (status >= 300 && status < 400) {
+      return res.status(200).json({ success: true });
+    }
+
+    const bodyHtml = await updateRes.text();
+    const errors = extractValidationErrors(bodyHtml);
+    if (errors) throw new Error(errors);
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return res.status(200).json({ success: false, error: err.message });
+  }
+}
