@@ -209,8 +209,10 @@ export async function createSession(originArg, emailArg, passwordArg) {
       }
       const text = await res.text();
 
-      // Auto re-login if response is a login page
-      if (text.includes('name="email"') && text.includes('name="password"') && text.includes('<form')) {
+      // Auto re-login if response is the LOGIN page specifically
+      // Detection: login page has action="/login" — customer pages don't
+      const isLoginPage = text.includes('action="/login"') || (text.includes('/login') && text.includes('name="password"') && !text.includes('admin/customer'));
+      if (isLoginPage) {
         console.log('[session] fetchText got login page — auto re-login & retry');
         try {
           await reLogin();
@@ -222,7 +224,7 @@ export async function createSession(originArg, emailArg, passwordArg) {
           };
           const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
           const retryText = await retryRes.text();
-          if (retryText.includes('name="email"') && retryText.includes('name="password"') && retryText.includes('<form')) {
+          if (retryText.includes('action="/login"') || (retryText.includes('/login') && retryText.includes('name="password"') && !retryText.includes('admin/customer'))) {
             throw new SessionExpiredError('Re-login สำเร็จแต่ session ยังใช้ไม่ได้ — ตรวจสอบ email/password');
           }
           return retryText;
