@@ -195,6 +195,7 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
     }
   }
 
+  const isDone = !isError && syncStatus === 'done';
   return (
     <button
       onClick={isReady ? onResync : undefined}
@@ -202,6 +203,8 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all ${
         isReady
           ? 'cursor-pointer text-yellow-300 border-yellow-600/40 bg-yellow-950/30 hover:bg-yellow-950/50 active:scale-95'
+          : isDone
+          ? 'cursor-default text-emerald-400 border-emerald-700/40 bg-emerald-950/30'
           : 'cursor-default text-gray-500 border-gray-700/30 bg-gray-900/20'
       }`}
     >
