@@ -1,12 +1,12 @@
 // ─── ProClinic Session Manager ─────────────────────────────────────────────
 // Strategy:
-//   1. Try cached cookies from Firestore (saved by Extension or previous API login)
-//   2. If expired → try server-side login (may fail if reCAPTCHA enforced)
-//   3. If reCAPTCHA blocks → return clear error asking user to use Extension mode
+//   1. Try cached cookies from Firestore (saved by previous API login)
+//   2. If expired → server-side re-login automatically
+//   3. fetchText auto-detects login page → re-login transparently
 
 import { extractCSRF } from './scraper.js';
 
-// Custom error class for session expiry detection
+// Custom error class for session expiry detection (fallback when re-login also fails)
 export class SessionExpiredError extends Error {
   constructor(message) {
     super(message);
@@ -97,7 +97,7 @@ async function saveCookies(origin, cookies) {
   }
 }
 
-// ─── Login flow (may fail due to reCAPTCHA v3) ──────────────────────────────
+// ─── Login flow ──────────────────────────────────────────────────────────────
 
 export async function performLogin(origin, email, password) {
   // Step 1: GET /login → CSRF + initial cookies
@@ -110,9 +110,6 @@ export async function performLogin(origin, email, password) {
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า login');
 
   let cookies = parseSetCookies(loginPageRes);
-
-  // Check for reCAPTCHA v3 (form-token field)
-  const hasRecaptcha = loginHtml.includes('grecaptcha') || loginHtml.includes('g-recaptcha') || loginHtml.includes('form-token');
 
   // Step 2: POST /login
   const body = new URLSearchParams({
@@ -139,14 +136,12 @@ export async function performLogin(origin, email, password) {
 
   // Success: redirected to dashboard (not back to /login)
   if (status >= 300 && status < 400 && !location.includes('/login')) {
+    console.log('[session] performLogin success — saving cookies');
     await saveCookies(origin, cookies);
     return { success: true, cookies };
   }
 
-  // Failed — likely reCAPTCHA
-  if (hasRecaptcha) {
-    throw new Error('ProClinic ใช้ reCAPTCHA v3 — ต้องใช้ Extension login ก่อน แล้วระบบจะใช้ session ต่อได้');
-  }
+  // Failed
   throw new Error('Login ไม่สำเร็จ — ตรวจสอบ email/password');
 }
 
@@ -157,12 +152,13 @@ export async function createSession(origin, email, password) {
   let cookies = await loadCachedCookies(origin);
 
   if (!cookies) {
-    // No cache — try login (may fail with reCAPTCHA)
+    // No cache → login
+    console.log('[session] no cached cookies — performing login');
     try {
       const result = await performLogin(origin, email, password);
       cookies = result.cookies;
     } catch (e) {
-      throw new SessionExpiredError(`ไม่พบ session — ${e.message}`);
+      throw new SessionExpiredError(`Login ล้มเหลว: ${e.message}`);
     }
   }
 
@@ -176,12 +172,13 @@ export async function createSession(origin, email, password) {
   });
 
   if (testRes.status >= 300 || testRes.status === 401) {
-    // Session expired — try login
+    // Session expired → auto re-login
+    console.log('[session] cached session expired — re-logging in');
     try {
       const result = await performLogin(origin, email, password);
       cookies = result.cookies;
     } catch (e) {
-      throw new SessionExpiredError(`Session หมดอายุ — กรุณาให้ Extension แชร์ cookies ใหม่`);
+      throw new SessionExpiredError(`Session หมดอายุ + re-login ล้มเหลว: ${e.message}`);
     }
   } else {
     // Session valid — update cookies from response
@@ -192,22 +189,31 @@ export async function createSession(origin, email, password) {
     }
   }
 
+  // Shared state for the session — allows fetchText to trigger re-login
+  const sessionState = { origin, email, password, cookies };
+
+  async function reLogin() {
+    console.log('[session] mid-request re-login triggered');
+    const result = await performLogin(origin, email, password);
+    sessionState.cookies = result.cookies;
+  }
+
   // Return session object
   return {
-    cookies,
+    cookies: sessionState.cookies,
     fetch: async (url, options = {}) => {
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...options.headers,
-        'Cookie': cookiesToHeader(cookies),
+        'Cookie': cookiesToHeader(sessionState.cookies),
       };
       const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'manual' });
       const newC = parseSetCookies(res);
       if (newC.length) {
         for (const c of newC) {
           const name = c.split('=')[0].trim();
-          const idx = cookies.findIndex(x => x.split('=')[0].trim() === name);
-          if (idx >= 0) cookies[idx] = c; else cookies.push(c);
+          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
+          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
         }
       }
       return res;
@@ -216,20 +222,40 @@ export async function createSession(origin, email, password) {
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...options.headers,
-        'Cookie': cookiesToHeader(cookies),
+        'Cookie': cookiesToHeader(sessionState.cookies),
       };
       const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'follow' });
       const newC = parseSetCookies(res);
       if (newC.length) {
         for (const c of newC) {
           const name = c.split('=')[0].trim();
-          const idx = cookies.findIndex(x => x.split('=')[0].trim() === name);
-          if (idx >= 0) cookies[idx] = c; else cookies.push(c);
+          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
+          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
         }
       }
       const text = await res.text();
+
+      // Auto re-login if response is a login page
       if (text.includes('name="email"') && text.includes('name="password"') && text.includes('<form')) {
-        throw new SessionExpiredError('Session หมดอายุ — กรุณาให้ Extension แชร์ cookies ใหม่');
+        console.log('[session] fetchText got login page — auto re-login & retry');
+        try {
+          await reLogin();
+          // Retry the original request with new cookies
+          const retryHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            ...options.headers,
+            'Cookie': cookiesToHeader(sessionState.cookies),
+          };
+          const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+          const retryText = await retryRes.text();
+          if (retryText.includes('name="email"') && retryText.includes('name="password"') && retryText.includes('<form')) {
+            throw new SessionExpiredError('Re-login สำเร็จแต่ session ยังใช้ไม่ได้ — ตรวจสอบ email/password');
+          }
+          return retryText;
+        } catch (e) {
+          if (e instanceof SessionExpiredError) throw e;
+          throw new SessionExpiredError(`Auto re-login ล้มเหลว: ${e.message}`);
+        }
       }
       return text;
     },
