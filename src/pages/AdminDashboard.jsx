@@ -1260,8 +1260,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <RotateCcw size={15}/>
                       </button>
                       {session.brokerProClinicId && (
-                        <button onClick={() => handleGetCourses(session)}
-                          className="p-2 bg-teal-950/30 hover:bg-teal-900/50 text-teal-400 hover:text-teal-300 rounded-lg border border-teal-900/50 transition-colors" title="คอร์สและนัดหมาย">
+                        <button onClick={() => handleOpenPatientView(session)}
+                          className="p-2 bg-teal-950/30 hover:bg-teal-900/50 text-teal-400 hover:text-teal-300 rounded-lg border border-teal-900/50 transition-colors" title="ดูหน้าข้อมูลผู้ป่วย (admin)">
                           <Search size={15}/>
                         </button>
                       )}
