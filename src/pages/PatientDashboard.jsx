@@ -387,14 +387,16 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   }
 
   async function handleResync() {
-    if (!sessionIdRef.current) return;
+    // ใช้ ref เพื่อหลีกเลี่ยง stale closure (state อาจ lag หลัง snapshot fire)
+    const sd = sessionDataRef.current;
+    if (!sessionIdRef.current || !sd) return;
     // cooldown guard
-    const lastFetch = sessionData?.lastCoursesAutoFetch;
-    if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
-    // เรียก API ตรงเสมอ — patient page ต้อง self-sufficient ไม่พึ่ง AdminDashboard relay
-    if (sessionData?.brokerProClinicId) {
+    const lastFetch = sd.lastCoursesAutoFetch;
+    if (lastFetch && (Date.now() - lastFetch.toMillis()) < cooldownMsRef.current) return;
+    // เรียก API ตรง
+    if (sd.brokerProClinicId) {
       refreshRequestedRef.current = true;
-      return fetchCoursesViaApi(sessionIdRef.current, sessionData.brokerProClinicId);
+      return fetchCoursesViaApi(sessionIdRef.current, sd.brokerProClinicId);
     }
   }
 
