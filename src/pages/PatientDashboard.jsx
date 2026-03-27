@@ -363,7 +363,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sid);
       await updateDoc(ref, { lastCoursesAutoFetch: serverTimestamp(), coursesRefreshRequest: null });
-      const result = await broker.getCourses('script', clinicSettings, sid, proClinicId);
+      const result = await broker.getCourses(proClinicId);
       clearSyncTimeout();
       setScriptSyncing(false);
       // Set justSynced BEFORE Firestore write so snapshot doesn't briefly show wrong state

@@ -109,7 +109,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [historyPage,   setHistoryPage]   = useState(1);
   const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
   const brokerTimers = useRef({}); // sessionId → timeout id
-  const forwardedJobsRef = useRef(new Set()); // jobId ที่ relay แล้ว → ป้องกัน double-dispatch
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
   const autoCoursesRequestedRef = useRef(new Set()); // sessionId ที่ auto-trigger แล้วใน session นี้
   const autoSyncInFlightRef     = useRef(new Set()); // sessionId ที่ brokerSyncSessions กำลัง LC_UPDATE อยู่ → block auto-trigger courses จนกว่าจะเสร็จ
@@ -140,153 +139,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [db, appId]);
 
-  // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load (ไม่มี timer แล้ว)
+  // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load
   useEffect(() => {
     const allSessions = [...sessions, ...archivedSessions];
     allSessions.forEach(async (s) => {
-      // ข้าม session ที่มี brokerJob — รอ relay จาก onSnapshot
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !s.brokerJob) {
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
-            brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+            brokerError: 'หมดเวลา — API ไม่ตอบสนอง',
           });
         } catch(e) { console.error('clear stale broker pending:', e); }
       }
     });
   }, [sessions, archivedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // รับผลลัพธ์จาก Broker Extension
-  useEffect(() => {
-    const handler = async (event) => {
-      // Extension shares ProClinic session cookies → cache in Firestore for API routes
-      if (event.data?.type === 'LC_SESSION_COOKIES') {
-        const { origin, cookies } = event.data;
-        if (origin && cookies?.length) {
-          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'proclinic_session'), {
-            origin, cookies, updatedAt: new Date().toISOString(),
-          }).catch(e => console.error('[session cookies] save error:', e));
-        }
-        return;
-      }
-      if (event.data?.type === 'LC_COURSES_RESULT') {
-        const { sessionId, success, error, patientName, courses, expiredCourses, appointments } = event.data;
-        const jobId = coursesJobIdRef.current;
-        coursesJobIdRef.current = null; // consume → ป้องกัน onSnapshot double-fire
-        // ปลดล็อก auto-trigger สำหรับ session นี้ → patient เปิดลิงก์ครั้งถัดไปได้ trigger ใหม่
-        autoCoursesRequestedRef.current.delete(sessionId);
-        setCoursesPanel(prev => prev?.sessionId === sessionId
-          ? { ...prev, status: success ? 'done' : 'error', patientName: patientName || prev.patientName, courses: courses || [], expiredCourses: expiredCourses || [], appointments: appointments || [], error: error || '' }
-          : prev
-        );
-        // Write result to Firestore: restore brokerStatus + deliver to other devices (iPhone)
-        // ⚠️ jobId จาก coursesJobIdRef อาจเป็น null ถ้าเป็น Cloud PC ที่ relay (ไม่ใช่ผู้กดปุ่ม)
-        // → ดึง jobId จริงจาก brokerJob ใน Firestore doc แทน
-        if (sessionId) {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          getDoc(ref).then(snap => {
-            const firestoreJobId = snap.data()?.brokerJob?.id || jobId;
-            updateDoc(ref, {
-              brokerStatus: 'done', brokerError: null, brokerJob: null,
-              latestCourses: { courses: courses || [], expiredCourses: expiredCourses || [], appointments: appointments || [], patientName: patientName || '', jobId: firestoreJobId, fetchedAt: new Date().toISOString(), success: !!success, error: error || null },
-            }).catch(e => console.error('latestCourses write:', e));
-          }).catch(e => console.error('getDoc for courses result:', e));
-        }
-        return;
-      }
-      if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
-      const { type, sessionId, success, error, proClinicId, proClinicHN } = event.data;
-
-      if (type === 'LC_BROKER_RESULT') {
-        // Cancel timeout since we got a real response
-        if (brokerTimers.current[sessionId]) {
-          clearTimeout(brokerTimers.current[sessionId]);
-          delete brokerTimers.current[sessionId];
-        }
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            await updateDoc(ref, {
-              opdRecordedAt: new Date().toISOString(),
-              brokerStatus: 'done',
-              brokerFilledAt: new Date().toISOString(),
-              brokerError: null,
-              brokerJob: null,
-              ...(proClinicId ? { brokerProClinicId: proClinicId } : {}),
-              ...(proClinicHN  ? { brokerProClinicHN: proClinicHN }  : {}),
-            });
-          } else {
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ', brokerJob: null });
-          }
-        } catch (e) { console.error('broker result update:', e); }
-      }
-
-      if (type === 'LC_DELETE_RESULT') {
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            // ── ซ่อนปุ่ม ProClinic ทันที ก่อน Firestore roundtrip ──────────────
-            setViewingSession(prev =>
-              prev?.id === sessionId
-                ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
-                : prev
-            );
-            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
-          } else {
-            await updateDoc(ref, { brokerStatus: null, brokerJob: null });
-            setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${error}`);
-            setTimeout(() => setToastMsg(null), 5000);
-          }
-        } catch (e) { console.error('broker delete result:', e); }
-      }
-
-      if (type === 'LC_UPDATE_RESULT') {
-        autoSyncInFlightRef.current.delete(sessionId); // ปลดล็อก auto-trigger courses
-        // ยกเลิก timeout + clear pending (กรณีที่ triggered มาจาก handleOpdClick กดปุ่มแดง retry)
-        // auto-sync ไม่ได้ตั้ง timer ไว้ → cancel เป็น no-op
-        if (brokerTimers.current[sessionId]) {
-          clearTimeout(brokerTimers.current[sessionId]);
-          delete brokerTimers.current[sessionId];
-        }
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            const syncAt = new Date().toISOString();
-            // ⚠️ ตรวจ Firestore ก่อนเขียน: ถ้า auto-trigger เพิ่งเขียน LC_GET_COURSES job ไว้
-            // → ห้ามล้าง brokerJob/brokerStatus ทับ ไม่งั้น relay device จะไม่เห็น job → extension ไม่ได้รับ LC_GET_COURSES
-            const snap = await getDoc(ref);
-            const currentJob = snap.data()?.brokerJob;
-            const coursesJobPending = currentJob?.type === 'LC_GET_COURSES';
-            // Immediate UI update ก่อน Firestore roundtrip
-            setViewingSession(prev =>
-              prev?.id === sessionId
-                ? { ...prev, brokerStatus: 'done', brokerError: null, brokerLastAutoSyncAt: syncAt }
-                : prev
-            );
-            await updateDoc(ref, {
-              brokerFilledAt: syncAt,
-              brokerLastAutoSyncAt: syncAt,
-              brokerError: null,
-              // ถ้ามี LC_GET_COURSES รอ relay อยู่ → ไม่แตะ brokerStatus/brokerJob
-              ...(!coursesJobPending ? { brokerStatus: 'done', brokerJob: null } : {}),
-            });
-          } else {
-            // Update failed → mark failed so button turns red
-            setViewingSession(prev =>
-              prev?.id === sessionId
-                ? { ...prev, brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` }
-                : prev
-            );
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}`, brokerJob: null });
-          }
-        } catch (e) { console.error('broker update result:', e); }
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [db, appId]);
 
   const enablePushNotifications = async () => {
     setPushLoading(true);
@@ -426,7 +293,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         // Trigger ProClinic auto-sync for changed sessions (ทำงานเสมอ ไม่ขึ้นกับ isNotifEnabled)
         brokerSyncSessions.forEach(session => {
-          autoSyncInFlightRef.current.add(session.id); // block auto-trigger courses จนกว่า LC_UPDATE_RESULT จะ clear
+          autoSyncInFlightRef.current.add(session.id);
           const d = session.patientData;
           const reasons = getReasons(d);
           const pmh = [];
@@ -453,33 +320,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             emergencyPhone:    d?.emergencyPhone    || '',
             clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
           };
-          if (clinicSettings.brokerMode === 'script') {
-            // Script mode: fire-and-forget API call (auto-sync, result handled via Firestore)
-            broker.updateProClinic('script', clinicSettings, session.id,
-              session.brokerProClinicId, session.brokerProClinicHN || null, patient)
-              .then(result => {
-                autoSyncInFlightRef.current.delete(session.id);
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-                if (result?.success) {
-                  updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerLastAutoSyncAt: new Date().toISOString(), brokerError: null, brokerStatus: 'done', brokerJob: null }).catch(() => {});
-                } else {
-                  updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'auto-sync failed', brokerJob: null }).catch(() => {});
-                }
-              }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
-          } else {
-            window.postMessage({
-              type: 'LC_UPDATE_PROCLINIC',
-              sessionId: session.id,
-              proClinicId: session.brokerProClinicId,
-              proClinicHN: session.brokerProClinicHN || null,
-              patient,
-            }, '*');
-          }
+          broker.updateProClinic(session.brokerProClinicId, session.brokerProClinicHN || null, patient)
+            .then(result => {
+              autoSyncInFlightRef.current.delete(session.id);
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+              if (result?.success) {
+                updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerLastAutoSyncAt: new Date().toISOString(), brokerError: null, brokerStatus: 'done', brokerJob: null }).catch(() => {});
+              } else {
+                updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'auto-sync failed', brokerJob: null }).catch(() => {});
+              }
+            }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
         });
       }
       // ─── Sync brokerPending local state กับ Firestore ─────────────────────────
-      // กรณี Cloud PC ทำงานเสร็จแล้วเขียนผลกลับ Firestore แต่ iPhone ไม่ได้รับ LC_BROKER_RESULT
-      // → clear brokerPending + timer เพื่อให้ปุ่มและ bubble อัปเดตพร้อมกัน
       allDocs.forEach(s => {
         if (brokerTimers.current[s.id] && s.brokerStatus !== 'pending') {
           clearTimeout(brokerTimers.current[s.id]);
@@ -488,55 +341,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       });
 
-      // ─── Relay broker jobs จากเครื่องอื่น (เช่น iPhone ไม่มี extension) ────────
-      // Relay only in extension mode — script mode handles jobs directly via API
-      // ใช้ allDocs เพื่อรวม archived sessions ด้วย (history page ก็ใช้ได้)
-      if (clinicSettings.brokerMode !== 'script') allDocs.forEach(newS => {
-        const job = newS.brokerJob;
-        if (
-          newS.brokerStatus === 'pending' && job?.id &&
-          !forwardedJobsRef.current.has(job.id) &&
-          (job.type === 'LC_GET_COURSES' || !brokerTimers.current[newS.id])
-        ) {
-          forwardedJobsRef.current.add(job.id);
-          if (job.type === 'LC_UPDATE_PROCLINIC') {
-            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
-            window.postMessage({ type: 'LC_UPDATE_PROCLINIC', sessionId: newS.id,
-              proClinicId: job.proClinicId || null, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
-          } else if (job.type === 'LC_DELETE_PROCLINIC') {
-            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
-            window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: newS.id,
-              proClinicId: job.proClinicId, proClinicHN: job.proClinicHN || null, patient: job.patient }, '*');
-          } else if (job.type === 'LC_GET_COURSES') {
-            // Courses: ไม่ต้องมี OPD spinner และไม่ต้องมี fail-timer (modal จัดการ timeout เอง)
-            window.postMessage({ type: 'LC_GET_COURSES', sessionId: newS.id, proClinicId: job.proClinicId || null }, '*');
-            return; // ← early return: ข้าม setBrokerPending + brokerTimers ด้านล่าง
-          } else {
-            setBrokerPending(prev => ({ ...prev, [newS.id]: true }));
-            window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId: newS.id, patient: job.patient }, '*');
-          }
-          // OPD timer (courses ข้ามไปแล้วจาก early return)
-          const _sid = newS.id;
-          brokerTimers.current[_sid] = setTimeout(async () => {
-            delete brokerTimers.current[_sid];
-            setBrokerPending(prev => { const n = {...prev}; delete n[_sid]; return n; });
-            try {
-              const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid));
-              if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid), {
-                  brokerStatus: 'failed', brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-                });
-              }
-            } catch(e) { console.error('relay timeout:', e); }
-          }, 15000);
-        }
-      });
-
       // ─── Detect LC_GET_COURSES result จาก Firestore (cross-device delivery) ──
       allDocs.forEach(s => {
         const lc = s.latestCourses;
         if (lc?.jobId && lc.jobId === coursesJobIdRef.current) {
-          coursesJobIdRef.current = null; // consume
+          coursesJobIdRef.current = null;
           setCoursesPanel(prev => prev?.sessionId === s.id
             ? { ...prev, status: lc.success === false ? 'error' : 'done',
                 patientName: lc.patientName || prev.patientName,
@@ -548,48 +357,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
 
       // ─── Auto-trigger courses refresh เมื่อลูกค้าเปิดลิงก์ ────────────────────
-      // PatientDashboard เขียน coursesRefreshRequest → admin detect แล้ว queue LC_GET_COURSES
-      // Rate limit ฝั่งนี้: ตรวจ lastCoursesAutoFetch อีกชั้น ป้องกัน double-trigger จากหลาย tab
       allDocs.forEach(s => {
         if (
           s.coursesRefreshRequest &&
           s.brokerProClinicId &&
           s.brokerStatus !== 'pending' &&
           !autoCoursesRequestedRef.current.has(s.id) &&
-          !autoSyncInFlightRef.current.has(s.id) // รอ LC_UPDATE_PROCLINIC เสร็จก่อน ป้องกัน edit+courses queue พร้อมกัน
+          !autoSyncInFlightRef.current.has(s.id)
         ) {
           const last = s.lastCoursesAutoFetch;
-          const COURSES_REFRESH_COOLDOWN_MS = 0; // 0 = ไม่มี cooldown (debug); ตั้งเป็น 3600000 เพื่อ limit 1 ชั่วโมง
-          if (last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return; // ยัง cool down
+          const COURSES_REFRESH_COOLDOWN_MS = 0;
+          if (last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
           autoCoursesRequestedRef.current.add(s.id);
           const jobId = `courses_auto_${s.id}_${Date.now()}`;
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
-          // เคลียร์ request + stamp fetch time ทันที (rate limit + ป้องกัน tab อื่น trigger ซ้ำ)
           updateDoc(ref, {
             coursesRefreshRequest: null,
             lastCoursesAutoFetch: serverTimestamp(),
             brokerStatus: 'pending', brokerError: null,
             brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: s.brokerProClinicId || null },
           }).catch(e => console.error('auto courses trigger:', e));
-          forwardedJobsRef.current.add(jobId);
-          if (clinicSettings.brokerMode === 'script') {
-            broker.getCourses('script', clinicSettings, s.id, s.brokerProClinicId)
-              .then(result => {
-                autoCoursesRequestedRef.current.delete(s.id);
-                const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
-                updateDoc(cRef, {
-                  brokerStatus: 'done', brokerError: null, brokerJob: null,
-                  latestCourses: {
-                    courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
-                    appointments: result?.appointments || [], patientName: result?.patientName || '',
-                    jobId, fetchedAt: new Date().toISOString(),
-                    success: !!result?.success, error: result?.error || null,
-                  },
-                }).catch(() => {});
-              }).catch(() => { autoCoursesRequestedRef.current.delete(s.id); });
-          } else {
-            window.postMessage({ type: 'LC_GET_COURSES', sessionId: s.id, proClinicId: s.brokerProClinicId }, '*');
-          }
+          broker.getCourses(s.brokerProClinicId)
+            .then(result => {
+              autoCoursesRequestedRef.current.delete(s.id);
+              const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
+              updateDoc(cRef, {
+                brokerStatus: 'done', brokerError: null, brokerJob: null,
+                latestCourses: {
+                  courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
+                  appointments: result?.appointments || [], patientName: result?.patientName || '',
+                  jobId, fetchedAt: new Date().toISOString(),
+                  success: !!result?.success, error: result?.error || null,
+                },
+              }).catch(() => {});
+            }).catch(() => { autoCoursesRequestedRef.current.delete(s.id); });
         }
       });
 
@@ -836,7 +637,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
     };
 
-    // Set pending in Firestore + local state (เขียน brokerJob เพื่อให้เครื่องอื่น relay ได้)
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
     const jobId = `${sessionId}_${Date.now()}`;
     const brokerJob = hasExistingProClinic
@@ -844,74 +644,42 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           proClinicId: session.brokerProClinicId || null, proClinicHN: session.brokerProClinicHN || null }
       : { id: jobId, type: 'LC_FILL_PROCLINIC', patient };
     setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
-    forwardedJobsRef.current.add(jobId); // ป้องกัน onSnapshot relay ซ้ำ
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
         brokerStatus: 'pending', brokerError: null, brokerJob,
       });
     } catch(e) { console.error('broker pending update:', e); }
 
-    // ─── Script mode: await API directly ─────────────────────────────────────
-    if (clinicSettings.brokerMode === 'script') {
-      try {
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-        let result;
-        if (hasExistingProClinic) {
-          result = await broker.updateProClinic('script', clinicSettings, sessionId,
-            session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
-        } else {
-          result = await broker.fillProClinic('script', clinicSettings, sessionId, patient);
-        }
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        if (result?.success) {
-          await updateDoc(ref, {
-            opdRecordedAt: new Date().toISOString(),
-            brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
-            brokerError: null, brokerJob: null,
-            ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
-            ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
-          });
-        } else {
-          await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
-        }
-      } catch(e) {
-        console.error('script broker error:', e);
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-            brokerStatus: 'failed', brokerError: e.message, brokerJob: null,
-          });
-        } catch(_) {}
+    try {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+      let result;
+      if (hasExistingProClinic) {
+        result = await broker.updateProClinic(
+          session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
+      } else {
+        result = await broker.fillProClinic(patient);
       }
-      return;
-    }
-
-    // ─── Extension mode: postMessage + timeout ────────────────────────────────
-    if (hasExistingProClinic) {
-      window.postMessage({
-        type: 'LC_UPDATE_PROCLINIC', sessionId,
-        proClinicId: session.brokerProClinicId || null,
-        proClinicHN:  session.brokerProClinicHN  || null,
-        patient,
-      }, '*');
-    } else {
-      window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
-    }
-
-    if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
-    brokerTimers.current[sessionId] = setTimeout(async () => {
-      delete brokerTimers.current[sessionId];
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+      if (result?.success) {
+        await updateDoc(ref, {
+          opdRecordedAt: new Date().toISOString(),
+          brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+          brokerError: null, brokerJob: null,
+          ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
+          ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
+        });
+      } else {
+        await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
+      }
+    } catch(e) {
+      console.error('broker error:', e);
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
       try {
-        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
-        if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-            brokerStatus: 'failed',
-            brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-          });
-        }
-      } catch(e) { console.error('broker timeout update:', e); }
-    }, 15000);
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          brokerStatus: 'failed', brokerError: e.message, brokerJob: null,
+        });
+      } catch(_) {}
+    }
   };
 
   // ─── Manual Resync ─────────────────────────────────────────────────────────
@@ -958,74 +726,43 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           proClinicId: session.brokerProClinicId || null, proClinicHN: session.brokerProClinicHN || null }
       : { id: jobId, type: 'LC_FILL_PROCLINIC', patient };
     setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
-    forwardedJobsRef.current.add(jobId);
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
         brokerStatus: 'pending', brokerError: null, brokerJob,
       });
     } catch(e) { console.error('resync pending update:', e); }
 
-    // ─── Script mode ────────────────────────────────────────────────────────
-    if (clinicSettings.brokerMode === 'script') {
-      try {
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-        let result;
-        if (hasExistingProClinic) {
-          result = await broker.updateProClinic('script', clinicSettings, sessionId,
-            session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
-        } else {
-          result = await broker.fillProClinic('script', clinicSettings, sessionId, patient);
-        }
-        autoSyncInFlightRef.current.delete(sessionId);
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        if (result?.success) {
-          const syncAt = new Date().toISOString();
-          setViewingSession(prev => prev?.id === sessionId
-            ? { ...prev, brokerStatus: 'done', brokerError: null, brokerLastAutoSyncAt: syncAt } : prev);
-          await updateDoc(ref, {
-            brokerFilledAt: syncAt, brokerLastAutoSyncAt: syncAt,
-            brokerError: null, brokerStatus: 'done', brokerJob: null,
-            ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
-            ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
-          });
-        } else {
-          setViewingSession(prev => prev?.id === sessionId
-            ? { ...prev, brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ' } : prev);
-          await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
-        }
-      } catch(e) {
-        console.error('resync script error:', e);
-        autoSyncInFlightRef.current.delete(sessionId);
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+    try {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+      let result;
+      if (hasExistingProClinic) {
+        result = await broker.updateProClinic(
+          session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
+      } else {
+        result = await broker.fillProClinic(patient);
       }
-      return;
-    }
-
-    // ─── Extension mode ──────────────────────────────────────────────────────
-    if (hasExistingProClinic) {
-      window.postMessage({
-        type: 'LC_UPDATE_PROCLINIC', sessionId,
-        proClinicId: session.brokerProClinicId || null,
-        proClinicHN:  session.brokerProClinicHN  || null,
-        patient,
-      }, '*');
-    } else {
-      window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
-    }
-
-    if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
-    brokerTimers.current[sessionId] = setTimeout(async () => {
-      delete brokerTimers.current[sessionId];
+      autoSyncInFlightRef.current.delete(sessionId);
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-      try {
-        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
-        if (snap.exists() && snap.data()?.brokerStatus === 'pending') {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-            brokerStatus: 'failed', brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-          });
-        }
-      } catch(e) { console.error('resync timeout update:', e); }
-    }, 15000);
+      if (result?.success) {
+        const syncAt = new Date().toISOString();
+        setViewingSession(prev => prev?.id === sessionId
+          ? { ...prev, brokerStatus: 'done', brokerError: null, brokerLastAutoSyncAt: syncAt } : prev);
+        await updateDoc(ref, {
+          brokerFilledAt: syncAt, brokerLastAutoSyncAt: syncAt,
+          brokerError: null, brokerStatus: 'done', brokerJob: null,
+          ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
+          ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
+        });
+      } else {
+        setViewingSession(prev => prev?.id === sessionId
+          ? { ...prev, brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ' } : prev);
+        await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
+      }
+    } catch(e) {
+      console.error('resync error:', e);
+      autoSyncInFlightRef.current.delete(sessionId);
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+    }
   };
 
   const handleProClinicEdit = (session) => {
@@ -1061,67 +798,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       hn: session.brokerProClinicHN || '',
       status: 'loading', courses: [], expiredCourses: [], error: '',
     });
-    // ─── Script mode: await API directly ─────────────────────────────────────
-    if (clinicSettings.brokerMode === 'script') {
-      try {
-        const result = await broker.getCourses('script', clinicSettings, session.id, session.brokerProClinicId);
-        coursesJobIdRef.current = null;
-        autoCoursesRequestedRef.current.delete(session.id);
-        setCoursesPanel(prev => prev?.sessionId === session.id
-          ? { ...prev, status: result?.success ? 'done' : 'error',
-              patientName: result?.patientName || prev.patientName,
-              courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
-              appointments: result?.appointments || [], error: result?.error || '' }
-          : prev
-        );
-        // Write to Firestore for cross-device delivery
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-        await updateDoc(ref, {
-          brokerStatus: 'done', brokerError: null, brokerJob: null,
-          latestCourses: {
-            courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
-            appointments: result?.appointments || [], patientName: result?.patientName || '',
-            jobId, fetchedAt: new Date().toISOString(),
-            success: !!result?.success, error: result?.error || null,
-          },
-        });
-      } catch(e) {
-        console.error('courses script error:', e);
-        coursesJobIdRef.current = null;
-        autoCoursesRequestedRef.current.delete(session.id);
-        setCoursesPanel(prev => prev?.sessionId === session.id
-          ? { ...prev, status: 'error', error: e.message } : prev);
-      }
-      return;
-    }
-
-    // ─── Extension mode: postMessage + Firestore job queue ────────────────────
-    forwardedJobsRef.current.add(jobId);
-    window.postMessage({ type: 'LC_GET_COURSES', sessionId: session.id, proClinicId: session.brokerProClinicId }, '*');
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
-        brokerStatus: 'pending', brokerError: null,
-        brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: session.brokerProClinicId || null },
-      });
-    } catch(e) { console.error('courses job write:', e); }
-    const _sid = session.id;
-    const _jid = jobId;
-    setTimeout(async () => {
-      if (coursesJobIdRef.current !== _jid) return;
+      const result = await broker.getCourses(session.brokerProClinicId);
       coursesJobIdRef.current = null;
-      setCoursesPanel(prev => (prev?.sessionId === _sid && prev.status === 'loading')
-        ? { ...prev, status: 'error', error: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง' }
+      autoCoursesRequestedRef.current.delete(session.id);
+      setCoursesPanel(prev => prev?.sessionId === session.id
+        ? { ...prev, status: result?.success ? 'done' : 'error',
+            patientName: result?.patientName || prev.patientName,
+            courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
+            appointments: result?.appointments || [], error: result?.error || '' }
         : prev
       );
-      try {
-        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid));
-        if (snap.exists() && snap.data()?.brokerJob?.id === _jid) {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', _sid), {
-            brokerStatus: 'done', brokerError: null, brokerJob: null,
-          });
-        }
-      } catch(e) { console.error('courses timeout cleanup:', e); }
-    }, 15000);
+      // Write to Firestore for cross-device delivery
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+      await updateDoc(ref, {
+        brokerStatus: 'done', brokerError: null, brokerJob: null,
+        latestCourses: {
+          courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
+          appointments: result?.appointments || [], patientName: result?.patientName || '',
+          jobId, fetchedAt: new Date().toISOString(),
+          success: !!result?.success, error: result?.error || null,
+        },
+      });
+    } catch(e) {
+      console.error('courses error:', e);
+      coursesJobIdRef.current = null;
+      autoCoursesRequestedRef.current.delete(session.id);
+      setCoursesPanel(prev => prev?.sessionId === session.id
+        ? { ...prev, status: 'error', error: e.message } : prev);
+    }
   };
 
   // ─── Patient Link handlers ───────────────────────────────────────────────────
@@ -1170,36 +875,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     };
     const jobId = `${session.id}_del_${Date.now()}`;
     const brokerJob = { id: jobId, type: 'LC_DELETE_PROCLINIC', proClinicId, proClinicHN: session.brokerProClinicHN || null, patient };
-    forwardedJobsRef.current.add(jobId);
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
         brokerJob, brokerStatus: 'pending', brokerError: null,
       });
     } catch(e) { console.error('delete job write:', e); }
 
-    // ─── Script mode ────────────────────────────────────────────────────────
-    if (clinicSettings.brokerMode === 'script') {
-      try {
-        const result = await broker.deleteProClinic('script', clinicSettings, session.id,
-          proClinicId, session.brokerProClinicHN || null, patient);
-        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-        if (result?.success) {
-          setViewingSession(prev => prev?.id === session.id
-            ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
-            : prev);
-          await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
-            brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
-        } else {
-          await updateDoc(ref, { brokerStatus: null, brokerJob: null });
-          setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
-          setTimeout(() => setToastMsg(null), 5000);
-        }
-      } catch(e) { console.error('delete script error:', e); }
-      return;
-    }
-
-    // ─── Extension mode ──────────────────────────────────────────────────────
-    window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId, proClinicHN: session.brokerProClinicHN || null, patient }, '*');
+    try {
+      const result = await broker.deleteProClinic(
+        proClinicId, session.brokerProClinicHN || null, patient);
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+      if (result?.success) {
+        setViewingSession(prev => prev?.id === session.id
+          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
+          : prev);
+        await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
+          brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
+      } else {
+        await updateDoc(ref, { brokerStatus: null, brokerJob: null });
+        setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
+        setTimeout(() => setToastMsg(null), 5000);
+      }
+    } catch(e) { console.error('delete error:', e); }
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;

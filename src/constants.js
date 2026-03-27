@@ -8,10 +8,7 @@ export const DEFAULT_CLINIC_SETTINGS = {
   accentColor: '#dc2626',
   lineOfficialUrl: '',
   patientSyncCooldownMins: 0, // 0 = ไม่จำกัด, 1-99999 = นาที
-  brokerMode: 'extension', // 'extension' | 'script'
   proClinicOrigin: 'https://trial.proclinicth.com',
-  proClinicEmail: '',
-  proClinicPassword: '',
 };
 
 export const PRESET_COLORS = [

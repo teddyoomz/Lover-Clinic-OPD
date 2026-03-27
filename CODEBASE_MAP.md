@@ -543,7 +543,7 @@ hn_no  ← ห้ามแตะ! ProClinic กำหนดเอง
 ```
 ที่เหลือ (address, citizen_id ฯลฯ) → อ่านจาก FormData(form) แล้วส่งต่อเลย
 
-### AdminDashboard.jsx — Broker Logic
+### AdminDashboard.jsx — Broker Logic (Server API only, no Extension)
 
 **Auto-sync Trigger** (ใน Firestore onSnapshot ~line 263)
 ```js
@@ -556,7 +556,7 @@ if (
   && lastAutoSyncedStrRef.current[newS.id] !== newStr  // ป้องกัน re-trigger ด้วย data เดิม
 ) {
   lastAutoSyncedStrRef.current[newS.id] = newStr;
-  → window.postMessage(LC_UPDATE_PROCLINIC, { patient, proClinicId, proClinicHN })
+  → broker.updateProClinic(proClinicId, proClinicHN, patient)  // Server API
 }
 ```
 > `lastAutoSyncedStrRef` = `useRef({})` → sessionId → JSON.stringify(patientData) ที่ sync ล่าสุด
