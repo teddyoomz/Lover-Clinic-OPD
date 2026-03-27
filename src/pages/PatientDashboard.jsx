@@ -287,31 +287,29 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const sessionDataRef      = useRef(null); // ref สำหรับใช้ใน timer callback
   const cooldownMsRef       = useRef(0);   // sync กับ COURSES_REFRESH_COOLDOWN_MS ทุก render
 
-  // อัพเดท countdown ทุก 30 วิ
+  // อัพเดท countdown ทุก 30 วิ + ยิง re-render ตรงๆ เมื่อ cooldown หมดพอดี
   useEffect(() => {
     const id = setInterval(() => forceUpdate(n => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    const last = sessionData?.lastCoursesAutoFetch;
+    if (!last || COURSES_REFRESH_COOLDOWN_MS <= 0) return;
+    const remaining = COURSES_REFRESH_COOLDOWN_MS - (Date.now() - last.toMillis());
+    if (remaining <= 0) return;
+    const id = setTimeout(() => forceUpdate(n => n + 1), remaining + 50);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.lastCoursesAutoFetch?.toMillis?.(), COURSES_REFRESH_COOLDOWN_MS]);
 
-  // Auto-sync on page load: รอจน clinicSettings โหลดจาก Firestore ก่อน เพื่อให้ cooldown ถูกต้อง
+  // Auto-sync on page load: เรียก API ตรงเสมอ (ไม่พึ่ง AdminDashboard relay — patient page ต้อง self-sufficient)
   useEffect(() => {
     if (!clinicSettingsLoaded || !sessionData?.brokerProClinicId || refreshRequestedRef.current) return;
     const last = sessionData.lastCoursesAutoFetch;
     const cooling = cooldownMsRef.current > 0 && last && (Date.now() - last.toMillis()) < cooldownMsRef.current;
     if (!cooling) {
       refreshRequestedRef.current = true;
-      // Script mode: call API directly (no AdminDashboard relay needed)
-      if (clinicSettings?.brokerMode === 'script') {
-        fetchCoursesViaApi(sessionData.id, sessionData.brokerProClinicId);
-        return;
-      }
-      // Extension mode: relay via Firestore → AdminDashboard → Extension
-      setSyncTimedOut(false);
-      setJustSynced(false);
-      updateDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionData.id),
-        { coursesRefreshRequest: serverTimestamp() }
-      ).then(startSyncTimeout).catch(e => { console.error(e); clearSyncTimeout(); setSyncTimedOut(true); });
+      fetchCoursesViaApi(sessionData.id, sessionData.brokerProClinicId);
     }
   }, [clinicSettingsLoaded, sessionData?.id]);
 
@@ -322,19 +320,14 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     const cooldown = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
     if (cooldown <= 0 || !last) return;
     const remaining = cooldown - (Date.now() - last.toMillis());
-    if (remaining <= 0) return; // หมดแล้ว snapshot จะจัดการ
+    if (remaining <= 0) return;
     const id = setTimeout(() => {
       const d = sessionDataRef.current;
       if (!d || refreshRequestedRef.current || d.coursesRefreshRequest) return;
       refreshRequestedRef.current = true;
-      if (clinicSettings?.brokerMode === 'script' && d.brokerProClinicId) {
+      if (d.brokerProClinicId) {
         fetchCoursesViaApi(d.id, d.brokerProClinicId);
-        return;
       }
-      updateDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', d.id),
-        { coursesRefreshRequest: serverTimestamp() }
-      ).then(startSyncTimeout).catch(console.error);
     }, remaining + 200);
     return () => clearTimeout(id);
   }, [sessionData?.lastCoursesAutoFetch]);
@@ -398,22 +391,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     // cooldown guard
     const lastFetch = sessionData?.lastCoursesAutoFetch;
     if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
-    // Script mode: call API directly
-    if (clinicSettings?.brokerMode === 'script' && sessionData?.brokerProClinicId) {
+    // เรียก API ตรงเสมอ — patient page ต้อง self-sufficient ไม่พึ่ง AdminDashboard relay
+    if (sessionData?.brokerProClinicId) {
       refreshRequestedRef.current = true;
       return fetchCoursesViaApi(sessionIdRef.current, sessionData.brokerProClinicId);
-    }
-    // Extension mode: relay via Firestore
-    setSyncTimedOut(false);
-    setJustSynced(false);
-    startSyncTimeout();
-    try {
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionIdRef.current);
-      await updateDoc(ref, { coursesRefreshRequest: serverTimestamp() });
-    } catch(e) {
-      console.error(e);
-      clearSyncTimeout();
-      setSyncTimedOut(true);
     }
   }
 
