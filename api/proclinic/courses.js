@@ -7,9 +7,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { origin, email, password, proClinicId } = req.body;
-    if (!origin || !proClinicId) {
-      return res.status(400).json({ success: false, error: 'Missing origin or proClinicId' });
+    const { origin, email, password, proClinicId } = req.body || {};
+    if (!proClinicId) {
+      return res.status(400).json({ success: false, error: 'Missing proClinicId' });
     }
 
     const session = await createSession(origin, email, password);

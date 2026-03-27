@@ -145,6 +145,9 @@ export async function createSession(originArg, emailArg, passwordArg) {
   const origin   = process.env.PROCLINIC_ORIGIN   || originArg;
   const email    = process.env.PROCLINIC_EMAIL     || emailArg;
   const password = process.env.PROCLINIC_PASSWORD  || passwordArg;
+  if (!origin || !email || !password) {
+    throw new Error('ไม่พบ ProClinic credentials — ตั้งค่า PROCLINIC_ORIGIN/EMAIL/PASSWORD ใน Vercel Environment Variables');
+  }
   // Load cached cookies — use immediately, no test request
   let cookies = await loadCachedCookies(origin);
 

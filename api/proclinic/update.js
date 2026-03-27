@@ -35,9 +35,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { origin, email, password, proClinicId, proClinicHN, patient } = req.body;
-    if (!origin || !patient) {
-      return res.status(400).json({ success: false, error: 'Missing origin or patient data' });
+    const { origin, email, password, proClinicId, proClinicHN, patient } = req.body || {};
+    if (!patient) {
+      return res.status(400).json({ success: false, error: 'Missing patient data' });
     }
 
     const session = await createSession(origin, email, password);

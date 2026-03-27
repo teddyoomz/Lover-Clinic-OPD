@@ -32,8 +32,16 @@ function computeBirthdate(patient) {
 
 // ─── Build form data for CREATE ─────────────────────────────────────────────
 
-export function buildCreateFormData(patient, csrf) {
+export function buildCreateFormData(patient, csrf, defaultFields = {}) {
   const params = new URLSearchParams();
+
+  // Start with all default form fields from the create page (hidden fields, selects, etc.)
+  for (const [key, val] of Object.entries(defaultFields)) {
+    if (key !== '_token') {
+      params.set(key, val);
+    }
+  }
+
   params.set('_token', csrf);
 
   const prefix = VALID_PREFIXES.includes(patient.prefix) ? patient.prefix : '';
