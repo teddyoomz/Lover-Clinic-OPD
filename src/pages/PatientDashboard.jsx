@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
 import { hexToRgb } from '../utils.js';
+import * as broker from '../lib/brokerClient.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { Package, PackageX, CalendarClock, Phone, AlertCircle, Loader2,
@@ -15,7 +16,7 @@ const TX = {
     notfound: 'ไม่พบข้อมูล', notfoundSub: 'URL นี้ไม่ถูกต้องหรือหมดอายุแล้ว',
     unknown: 'ไม่ระบุชื่อ',
     syncReq: 'กำลังส่งคำขอ...', syncIng: 'กำลัง Sync ข้อมูล',
-    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', readySync: 'พร้อม Sync ใหม่',
+    syncDone: 'Sync เสร็จ', syncFail: 'Sync ไม่สำเร็จ', readySync: 'Sync ล่าสุด',
     syncData: 'Sync ข้อมูล', resync: 'ลอง Sync ใหม่', cooldownMin: 'นาที',
     apptLabel: 'นัดหมายถัดไป', coursesLabel: 'คอร์สของฉัน', expiredLabel: 'คอร์สหมดอายุ',
     noCourses: 'ไม่มีคอร์สคงเหลือ', noData: 'ยังไม่มีข้อมูลคอร์ส',
@@ -29,7 +30,7 @@ const TX = {
     notfound: 'Not Found', notfoundSub: 'This URL is invalid or has expired.',
     unknown: 'Unknown',
     syncReq: 'Requesting...', syncIng: 'Syncing data',
-    syncDone: 'Synced', syncFail: 'Sync failed', readySync: 'Ready to Sync',
+    syncDone: 'Synced', syncFail: 'Sync failed', readySync: 'Last sync',
     syncData: 'Sync Data', resync: 'Retry Sync', cooldownMin: 'min',
     apptLabel: 'Upcoming Appointments', coursesLabel: 'My Courses', expiredLabel: 'Expired Courses',
     noCourses: 'No active courses', noData: 'No course data yet',
@@ -44,20 +45,39 @@ const TX = {
 // cooldown อ่านจาก clinicSettings.patientSyncCooldownMins (set โดย admin)
 // ค่า default fallback 60 นาที ถ้ายังไม่ได้ตั้งค่า
 
-function formatSyncTime(fetchedAt) {
+function formatSyncTime(fetchedAt, lang = 'th') {
   if (!fetchedAt) return null;
   try {
     const d = new Date(fetchedAt);
+    const locale = lang === 'en' ? 'en-US' : 'th-TH';
     const isToday = d.toDateString() === new Date().toDateString();
-    const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    if (isToday) return `${time} น.`;
-    return `${d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} ${time} น.`;
+    const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return lang === 'en' ? time : `${time} น.`;
+    const dateStr = d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    return lang === 'en' ? `${dateStr} ${time}` : `${dateStr} ${time} น.`;
   } catch { return null; }
 }
 
-function parseDateParts(dateStr = '') {
+function parseDateParts(dateStr = '', lang = 'th') {
   const m = dateStr.match(/^(\d+)\s+(.+)$/);
-  return m ? { day: m[1], rest: m[2] } : { day: '', rest: dateStr };
+  if (!m) return { day: '', rest: dateStr };
+  let rest = m[2];
+  if (lang === 'en') rest = translateThaiDate(rest);
+  return { day: m[1], rest };
+}
+
+const TH_MONTHS = { 'มกราคม':'January','กุมภาพันธ์':'February','มีนาคม':'March','เมษายน':'April','พฤษภาคม':'May','มิถุนายน':'June','กรกฎาคม':'July','สิงหาคม':'August','กันยายน':'September','ตุลาคม':'October','พฤศจิกายน':'November','ธันวาคม':'December',
+  'ม.ค.':'Jan','ก.พ.':'Feb','มี.ค.':'Mar','เม.ย.':'Apr','พ.ค.':'May','มิ.ย.':'Jun','ก.ค.':'Jul','ส.ค.':'Aug','ก.ย.':'Sep','ต.ค.':'Oct','พ.ย.':'Nov','ธ.ค.':'Dec' };
+
+function translateThaiDate(str) {
+  let out = str;
+  for (const [th, en] of Object.entries(TH_MONTHS)) out = out.replace(th, en);
+  return out;
+}
+
+function translateThaiUnit(str, lang) {
+  if (lang !== 'en' || !str) return str;
+  return str.replace(/ครั้ง/g, 'times').replace(/ซีซี/g, 'cc').replace(/หน่วย/g, 'units');
 }
 
 function getInitials(firstName = '', lastName = '') {
@@ -69,9 +89,10 @@ function getInitials(firstName = '', lastName = '') {
 
 // ── CourseCard ────────────────────────────────────────────────────────────────
 
-function CourseCard({ c, expired, accentRgb, tx }) {
+function CourseCard({ c, expired, accentRgb, tx, lang }) {
   const hasValue  = c.value && !c.value.includes('0.00');
-  const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', '∞');
+  const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', lang === 'en' ? 'No expiry' : 'ไม่มีวันหมดอายุ');
+  const qtyText = translateThaiUnit(c.qty, lang);
   const isActive  = c.status === 'กำลังใช้งาน';
 
   const cardBase = expired
@@ -100,9 +121,9 @@ function CourseCard({ c, expired, accentRgb, tx }) {
       {c.product && (
         <p className="text-[11px] text-gray-500 flex items-center gap-1.5 leading-relaxed">
           <span>{c.product}</span>
-          {c.qty && c.qty !== c.product && (
+          {qtyText && qtyText !== c.product && (
             <span className="font-mono font-bold text-gray-300 bg-[#1a1a1a] px-1.5 py-0.5 rounded-md">
-              {c.qty}
+              {qtyText}
             </span>
           )}
         </p>
@@ -192,8 +213,8 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
 
 // ── AppointmentCard ───────────────────────────────────────────────────────────
 
-function AppointmentCard({ a }) {
-  const { day, rest } = parseDateParts(a.date);
+function AppointmentCard({ a, lang }) {
+  const { day, rest } = parseDateParts(a.date, lang);
   return (
     <div className="rounded-2xl border border-violet-800/30 bg-violet-950/[0.22] overflow-hidden flex"
       style={{ boxShadow: 'var(--shadow-card)' }}>
@@ -256,6 +277,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const [sessionData, setSessionData] = useState(null);
   const [justSynced, setJustSynced]   = useState(false);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
+  const [scriptSyncing, setScriptSyncing] = useState(false); // local loading state for script mode
   const [language, setLanguage]       = useState('th');
   const [, forceUpdate]               = useState(0); // ticker สำหรับ countdown
   const prevFetchedAtRef    = useRef(null);
@@ -278,6 +300,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     const cooling = cooldownMsRef.current > 0 && last && (Date.now() - last.toMillis()) < cooldownMsRef.current;
     if (!cooling) {
       refreshRequestedRef.current = true;
+      // Script mode: call API directly (no AdminDashboard relay needed)
+      if (clinicSettings?.brokerMode === 'script') {
+        fetchCoursesViaApi(sessionData.id, sessionData.brokerProClinicId);
+        return;
+      }
+      // Extension mode: relay via Firestore → AdminDashboard → Extension
       setSyncTimedOut(false);
       setJustSynced(false);
       updateDoc(
@@ -299,6 +327,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       const d = sessionDataRef.current;
       if (!d || refreshRequestedRef.current || d.coursesRefreshRequest) return;
       refreshRequestedRef.current = true;
+      if (clinicSettings?.brokerMode === 'script' && d.brokerProClinicId) {
+        fetchCoursesViaApi(d.id, d.brokerProClinicId);
+        return;
+      }
       updateDoc(
         doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', d.id),
         { coursesRefreshRequest: serverTimestamp() }
@@ -329,11 +361,49 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     if (syncTimeoutRef.current) { clearTimeout(syncTimeoutRef.current); syncTimeoutRef.current = null; }
   }
 
+  // Script mode: call courses API directly and write results to Firestore
+  async function fetchCoursesViaApi(sid, proClinicId) {
+    setSyncTimedOut(false);
+    setJustSynced(false);
+    setScriptSyncing(true);
+    startSyncTimeout();
+    try {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sid);
+      await updateDoc(ref, { lastCoursesAutoFetch: serverTimestamp(), coursesRefreshRequest: null });
+      const result = await broker.getCourses('script', clinicSettings, sid, proClinicId);
+      clearSyncTimeout();
+      setScriptSyncing(false);
+      // Set justSynced BEFORE Firestore write so snapshot doesn't briefly show wrong state
+      if (result?.success) setJustSynced(true);
+      else setSyncTimedOut(true);
+      await updateDoc(ref, {
+        brokerStatus: 'done', brokerError: null, brokerJob: null,
+        latestCourses: {
+          courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
+          appointments: result?.appointments || [], patientName: result?.patientName || '',
+          jobId: `courses_patient_${sid}_${Date.now()}`, fetchedAt: new Date().toISOString(),
+          success: !!result?.success, error: result?.error || null,
+        },
+      });
+    } catch (e) {
+      console.error('fetchCoursesViaApi:', e);
+      clearSyncTimeout();
+      setScriptSyncing(false);
+      setSyncTimedOut(true);
+    }
+  }
+
   async function handleResync() {
     if (!sessionIdRef.current) return;
     // cooldown guard
     const lastFetch = sessionData?.lastCoursesAutoFetch;
     if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
+    // Script mode: call API directly
+    if (clinicSettings?.brokerMode === 'script' && sessionData?.brokerProClinicId) {
+      refreshRequestedRef.current = true;
+      return fetchCoursesViaApi(sessionIdRef.current, sessionData.brokerProClinicId);
+    }
+    // Extension mode: relay via Firestore
     setSyncTimedOut(false);
     setJustSynced(false);
     startSyncTimeout();
@@ -440,13 +510,14 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const plName        = sessionData.latestCourses?.patientName;
   const hn            = sessionData.brokerProClinicHN || '';
   const fetchedAt     = sessionData.latestCourses?.fetchedAt || null;
-  const syncTimeStr   = formatSyncTime(fetchedAt);
+  const syncTimeStr   = formatSyncTime(fetchedAt, language);
   const formName      = `${d.prefix || ''} ${d.firstName || ''} ${d.lastName || ''}`.trim();
   const patientName   = (plName && plName !== '0') ? plName : formName;
 
   const isCoursesJob = sessionData.brokerJob?.type === 'LC_GET_COURSES';
   const syncStatus =
     syncTimedOut                                                   ? 'timeout'
+    : scriptSyncing                                                ? 'syncing'
     : sessionData.coursesRefreshRequest                            ? 'requesting'
     : (sessionData.brokerStatus === 'pending' && isCoursesJob)    ? 'syncing'
     : sessionData.latestCourses?.success === false                 ? 'error'
@@ -457,7 +528,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
   // ─── Cooldown ───────────────────────────────────────────────────────────────
   const lastAutoFetch = sessionData.lastCoursesAutoFetch;
-  const cooldownRemainingMs = lastAutoFetch
+  const cooldownRemainingMs = (COURSES_REFRESH_COOLDOWN_MS > 0 && lastAutoFetch)
     ? Math.max(0, COURSES_REFRESH_COOLDOWN_MS - (Date.now() - lastAutoFetch.toMillis()))
     : 0;
   const inCooldown   = cooldownRemainingMs > 0;
@@ -548,7 +619,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               accent="#a78bfa"
             />
             <div className="flex flex-col gap-2.5">
-              {appointments.map((a, i) => <AppointmentCard key={i} a={a} />)}
+              {appointments.map((a, i) => <AppointmentCard key={i} a={a} lang={language} />)}
             </div>
           </section>
         )}
@@ -566,7 +637,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   meta={syncStatus === 'idle' && syncTimeStr ? `${tx.updatedAt} ${syncTimeStr}` : undefined}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} tx={tx} />)}
+                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} tx={tx} lang={language} />)}
                 </div>
               </section>
             )}
@@ -587,7 +658,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   accent="#f87171"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} />)}
+                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} lang={language} />)}
                 </div>
               </section>
             )}
