@@ -8,7 +8,16 @@ async function apiFetch(endpoint, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.json();
+  if (!res.ok) {
+    console.warn(`[broker] ${endpoint} HTTP ${res.status}`);
+    return { success: false, error: `HTTP ${res.status}` };
+  }
+  try {
+    return await res.json();
+  } catch {
+    console.warn(`[broker] ${endpoint} invalid JSON response`);
+    return { success: false, error: 'Invalid response' };
+  }
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────

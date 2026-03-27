@@ -813,6 +813,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // เปิด PatientDashboard ใน new tab (admin view — ไม่มี cooldown)
   const [patientViewUrl, setPatientViewUrl] = useState(null);
 
+  // Listen for close message from iframe
+  useEffect(() => {
+    const handler = (e) => { if (e.data?.type === 'close-patient-view') setPatientViewUrl(null); };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   const handleOpenPatientView = async (session) => {
     let token = session.patientLinkToken;
     const enabled = session.patientLinkEnabled;

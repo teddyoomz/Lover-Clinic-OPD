@@ -383,7 +383,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         },
       });
     } catch (e) {
-      console.error('fetchCoursesViaApi:', e);
+      console.warn('fetchCoursesViaApi:', e.message || e);
       clearSyncTimeout();
       setScriptSyncing(false);
       setSyncTimedOut(true);
@@ -442,7 +442,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     <>
       {isAdminView && (
         <button
-          onClick={() => window.history.back()}
+          onClick={() => { if (window.parent !== window) window.parent.postMessage({ type: 'close-patient-view' }, '*'); else window.history.back(); }}
           className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm text-xs font-bold text-gray-300 hover:text-white transition-colors"
         >
           ← Admin
