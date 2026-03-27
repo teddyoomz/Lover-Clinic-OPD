@@ -48,6 +48,15 @@ export default async function handler(req, res) {
 
     // GET edit page → CSRF + existing form fields
     const editHtml = await session.fetchText(`${base}/admin/customer/${targetId}/edit`);
+
+    // ตรวจว่า customer ยังมีอยู่ — ถ้าถูกลบแล้ว จะไม่มี form edit หรือ CSRF
+    const isEditPage = editHtml.includes(`customer/${targetId}`) && editHtml.includes('name="firstname"');
+    if (!isEditPage) {
+      const err = new Error(`Customer ID ${targetId} ไม่พบใน ProClinic (อาจถูกลบไปแล้ว)`);
+      err.notFound = true;
+      throw err;
+    }
+
     const csrf = extractCSRF(editHtml);
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า edit');
 
