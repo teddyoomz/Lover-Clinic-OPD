@@ -5,8 +5,8 @@ import { hexToRgb } from '../utils.js';
 import * as broker from '../lib/brokerClient.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
-import { Package, PackageX, CalendarClock, Phone, AlertCircle, Loader2,
-         CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope } from 'lucide-react';
+import { Package, PackageX, CalendarClock, Phone, PhoneCall, AlertCircle, Loader2,
+         CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope, MessageCircle } from 'lucide-react';
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const TX = {
@@ -594,6 +594,78 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             />
           </div>
         </div>
+
+        {/* ── Contact Buttons (LINE + Call) ────────────────────────────────── */}
+        {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
+          <div className="grid gap-3" style={{ gridTemplateColumns: clinicSettings?.lineOfficialUrl && clinicSettings?.clinicPhone ? '1fr 1fr' : '1fr' }}>
+
+            {/* LINE Official */}
+            {clinicSettings?.lineOfficialUrl && (
+              <a
+                href={clinicSettings.lineOfficialUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative rounded-2xl overflow-hidden transition-all duration-300 active:scale-[0.97]"
+              >
+                {/* Animated gradient border */}
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#06C755] via-[#06C755]/60 to-[#00E676] opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute inset-[1.5px] rounded-[14.5px] bg-[#0f0f0f] transition-colors duration-300" />
+
+                {/* Glow pulse */}
+                <div className="absolute -inset-1 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(6,199,85,0.15) 0%, transparent 70%)' }} />
+
+                {/* Content */}
+                <div className="relative flex flex-col items-center gap-2.5 py-5 px-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#06C755]/10 border border-[#06C755]/20 group-hover:bg-[#06C755]/20 group-hover:border-[#06C755]/40 group-hover:shadow-[0_0_20px_rgba(6,199,85,0.3)] transition-all duration-300">
+                    <svg width="22" height="22" viewBox="0 0 24 24" className="fill-[#06C755] group-hover:scale-110 transition-transform duration-300"><path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs font-black uppercase tracking-widest text-[#06C755]">LINE</span>
+                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">{language === 'en' ? 'Add Friend' : 'เพิ่มเพื่อน'}</span>
+                  </div>
+                </div>
+              </a>
+            )}
+
+            {/* Call Clinic */}
+            {clinicSettings?.clinicPhone && (
+              <a
+                href={`tel:${clinicSettings.clinicPhone.replace(/[^0-9+]/g, '')}`}
+                className="group relative rounded-2xl overflow-hidden transition-all duration-300 active:scale-[0.97]"
+              >
+                {/* Animated gradient border */}
+                <div className="absolute inset-0 rounded-2xl opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{ background: `linear-gradient(135deg, rgba(${acRgb},1), rgba(${acRgb},0.5), rgba(${acRgb},0.8))` }} />
+                <div className="absolute inset-[1.5px] rounded-[14.5px] bg-[#0f0f0f] transition-colors duration-300" />
+
+                {/* Glow pulse */}
+                <div className="absolute -inset-1 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  style={{ background: `radial-gradient(ellipse at 50% 50%, rgba(${acRgb},0.15) 0%, transparent 70%)` }} />
+
+                {/* Content */}
+                <div className="relative flex flex-col items-center gap-2.5 py-5 px-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center border transition-all duration-300 group-hover:shadow-[0_0_20px_var(--phone-glow)]"
+                    style={{
+                      background: `rgba(${acRgb},0.1)`,
+                      borderColor: `rgba(${acRgb},0.2)`,
+                      '--phone-glow': `rgba(${acRgb},0.3)`,
+                    }}>
+                    <PhoneCall size={20} className="group-hover:scale-110 transition-transform duration-300 group-hover:animate-[wiggle_0.5s_ease-in-out]" style={{ color: ac }} />
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs font-black uppercase tracking-widest" style={{ color: ac }}>
+                      {language === 'en' ? 'Call' : 'โทร'}
+                    </span>
+                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors font-mono">
+                      {clinicSettings.clinicPhone}
+                    </span>
+                  </div>
+                </div>
+              </a>
+            )}
+          </div>
+        )}
 
         {/* ── Appointments ───────────────────────────────────────────────────── */}
         {appointments.length > 0 && (

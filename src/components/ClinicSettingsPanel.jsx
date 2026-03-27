@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Timer, Cable, Wifi, Lock } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -88,6 +88,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         logoUrlLight: settings.logoUrlLight || '',
         accentColor: settings.accentColor,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
+        clinicPhone: settings.clinicPhone?.trim() || '',
         patientSyncCooldownMins: newCooldown,
         // Credentials stored in Vercel Environment Variables (not in Firestore)
         updatedAt: serverTimestamp(),
@@ -292,6 +293,21 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               ทดสอบลิ้งค์
             </a>
           )}
+        </div>
+
+        {/* Clinic Phone */}
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-[#222]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Phone size={14} style={{color: ac}}/> เบอร์โทรคลินิก (Clinic Phone)
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">เบอร์โทรที่จะแสดงให้ผู้ป่วยกดโทรได้จากหน้าข้อมูลผู้ป่วย</p>
+          <input
+            type="tel"
+            value={settings.clinicPhone || ''}
+            onChange={e => setSettings(prev => ({ ...prev, clinicPhone: e.target.value }))}
+            placeholder="02-xxx-xxxx หรือ 08x-xxx-xxxx"
+            className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono"
+          />
         </div>
 
         {/* Patient Sync Cooldown */}

@@ -7,6 +7,7 @@ export const DEFAULT_CLINIC_SETTINGS = {
   logoUrlLight: '',
   accentColor: '#dc2626',
   lineOfficialUrl: '',
+  clinicPhone: '',
   patientSyncCooldownMins: 0, // 0 = ไม่จำกัด, 1-99999 = นาที
   proClinicOrigin: 'https://trial.proclinicth.com',
 };
