@@ -141,11 +141,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [db, appId]);
 
-  // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load
+  // เคลียร์ brokerStatus: 'pending' ที่ค้างอยู่ใน Firestore ตอน load (ครั้งเดียว)
+  const stalePendingCleared = useRef(false);
   useEffect(() => {
+    if (stalePendingCleared.current) return;
     const allSessions = [...sessions, ...archivedSessions];
+    if (allSessions.length === 0) return; // ยังไม่โหลด
+    stalePendingCleared.current = true;
     allSessions.forEach(async (s) => {
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !brokerPendingRef.current[s.id] && !autoSyncInFlightRef.current.has(s.id) && !autoCoursesRequestedRef.current.has(s.id)) {
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
