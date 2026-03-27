@@ -181,6 +181,26 @@
       padding: 4px 0 0;
     }
     .cred-status.saved { color: #16a34a44; }
+    .btn-share {
+      width: 100%;
+      background: #1a2a3e;
+      border: 1px solid #3b82f644;
+      border-radius: 4px;
+      color: #60a5fa;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px;
+      letter-spacing: 0.05em;
+    }
+    .btn-share:hover { background: #1e3a5e; }
+    .btn-share:disabled { opacity: 0.5; cursor: not-allowed; }
+    .share-msg {
+      font-size: 10px;
+      text-align: center;
+      margin-top: 6px;
+      min-height: 14px;
+    }
   </style>
 </head>
 <body>
@@ -218,6 +238,11 @@
     <button class="btn-save" id="saveBtn">บันทึก</button>
     <div class="save-msg" id="saveMsg"></div>
     <div class="cred-status" id="credStatus"></div>
+    <div style="margin-top:10px; border-top: 1px solid #2a2a2a; padding-top:10px">
+      <div class="settings-title">Session Sharing</div>
+      <button class="btn-share" id="shareBtn">🔗 แชร์ Session ไปยัง Web App</button>
+      <div class="share-msg" id="shareMsg"></div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

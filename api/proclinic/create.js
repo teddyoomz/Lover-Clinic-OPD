@@ -1,6 +1,6 @@
 // POST /api/proclinic/create — Create new customer in ProClinic
 import { createSession, handleCors } from './_lib/session.js';
-import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors } from './_lib/scraper.js';
+import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields } from './_lib/scraper.js';
 import { buildCreateFormData } from './_lib/fields.js';
 
 export default async function handler(req, res) {
@@ -20,8 +20,9 @@ export default async function handler(req, res) {
     const csrf = extractCSRF(createHtml);
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า create');
 
-    // Step 2: Build form data and POST
-    const formData = buildCreateFormData(patient, csrf);
+    // Step 2: Extract all default form fields, then overlay patient data
+    const defaultFields = extractFormFields(createHtml);
+    const formData = buildCreateFormData(patient, csrf, defaultFields);
 
     const submitRes = await session.fetch(`${origin}/admin/customer`, {
       method: 'POST',
@@ -50,7 +51,9 @@ export default async function handler(req, res) {
     }
 
     if (!proClinicId) {
-      throw new Error('สร้างลูกค้าไม่สำเร็จ — ไม่พบ ProClinic ID');
+      let bodySnippet = '';
+      try { bodySnippet = (await submitRes.text()).substring(0, 300); } catch {}
+      throw new Error(`สร้างลูกค้าไม่สำเร็จ — status=${status}, location=${location || 'none'}, body=${bodySnippet}`);
     }
 
     // Step 4: Extract HN from edit page
@@ -62,6 +65,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, proClinicId, proClinicHN });
   } catch (err) {
-    return res.status(200).json({ success: false, error: err.message });
+    const resp = { success: false, error: err.message };
+    if (err.sessionExpired) resp.sessionExpired = true;
+    return res.status(200).json(resp);
   }
 }

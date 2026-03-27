@@ -109,6 +109,43 @@ function updateCredStatus(hasCreds) {
   }
 }
 
+// ─── Share Cookies Button ─────────────────────────────────────────────────────
+
+const shareBtn = document.getElementById('shareBtn');
+const shareMsg = document.getElementById('shareMsg');
+
+shareBtn.addEventListener('click', () => {
+  shareBtn.disabled = true;
+  shareBtn.textContent = '⏳ กำลังแชร์...';
+  shareMsg.textContent = '';
+
+  chrome.runtime.sendMessage({ type: 'LC_SHARE_COOKIES_NOW' }, (res) => {
+    shareBtn.disabled = false;
+    shareBtn.textContent = '🔗 แชร์ Session ไปยัง Web App';
+
+    if (chrome.runtime.lastError) {
+      shareMsg.textContent = '✗ ไม่สามารถเชื่อมต่อ background script';
+      shareMsg.style.color = '#ef4444';
+      return;
+    }
+
+    if (res?.error) {
+      shareMsg.textContent = `✗ ${res.error}`;
+      shareMsg.style.color = '#ef4444';
+    } else if (res?.cookieCount > 0) {
+      const parts = [`✓ แชร์ ${res.cookieCount} cookies`];
+      if (res.written) parts.push('→ Firestore');
+      if (res.relayedToTabs > 0) parts.push(`→ ${res.relayedToTabs} tab`);
+      shareMsg.textContent = parts.join(' ');
+      shareMsg.style.color = '#16a34a';
+    } else {
+      shareMsg.textContent = '⚠ ไม่พบ cookies ของ ProClinic — ลอง login ก่อน';
+      shareMsg.style.color = '#f59e0b';
+    }
+    setTimeout(() => { shareMsg.textContent = ''; }, 5000);
+  });
+});
+
 // Save settings
 saveBtn.addEventListener('click', () => {
   const url      = pcUrl.value.trim().replace(/\/$/, '');

@@ -1520,7 +1520,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </button>
                       {session.brokerProClinicId && (
                         <button onClick={() => handleGetCourses(session)}
-                          className="p-2 bg-teal-950/30 hover:bg-teal-900/50 text-teal-400 hover:text-teal-300 rounded-lg border border-teal-900/50 transition-colors" title="ดูคอร์สและบริการคงเหลือ">
+                          className="p-2 bg-teal-950/30 hover:bg-teal-900/50 text-teal-400 hover:text-teal-300 rounded-lg border border-teal-900/50 transition-colors" title="คอร์สและนัดหมาย">
                           <Search size={15}/>
                         </button>
                       )}
@@ -2096,7 +2096,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </a>
                     <button onClick={() => handleOpenPatientView(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
-                      <Search size={9}/> คอร์สคงเหลือ ↗
+                      <Search size={9}/> คอร์สและนัดหมาย ↗
                     </button>
                     <button onClick={() => handleProClinicEdit(viewingSession)}
                       className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
@@ -2111,13 +2111,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             )}
             {viewingSession.brokerStatus === 'failed' && (
-              <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 flex items-center gap-3 shrink-0">
-                <X size={16} className="text-red-400 shrink-0" />
-                <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
-                <button
-                  onClick={() => handleOpdClick(viewingSession)}
-                  className="ml-auto text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
-                >ลองใหม่</button>
+              <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 shrink-0">
+                <div className="flex items-center gap-3">
+                  <X size={16} className="text-red-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
+                  <button
+                    onClick={() => handleOpdClick(viewingSession)}
+                    className="ml-auto text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
+                  >ลองใหม่</button>
+                </div>
+                {(viewingSession.brokerError || '').includes('Session หมดอายุ') && (
+                  <p className="text-[10px] text-amber-400 mt-2 ml-7">💡 กดปุ่ม "แชร์ Session" ใน Extension Popup แล้วกด "ลองใหม่"</p>
+                )}
               </div>
             )}
             <div className="p-4 md:p-6 overflow-y-auto bg-[var(--bg-base)] flex-1 custom-scrollbar">

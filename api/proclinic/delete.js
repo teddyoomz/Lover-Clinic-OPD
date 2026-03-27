@@ -56,6 +56,8 @@ export default async function handler(req, res) {
 
     throw new Error(`Server ตอบกลับ status ${deleteRes.status}`);
   } catch (err) {
-    return res.status(200).json({ success: false, error: err.message });
+    const resp = { success: false, error: err.message };
+    if (err.sessionExpired) resp.sessionExpired = true;
+    return res.status(200).json(resp);
   }
 }

@@ -6,6 +6,15 @@
 
 import { extractCSRF } from './scraper.js';
 
+// Custom error class for session expiry detection
+export class SessionExpiredError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SessionExpiredError';
+    this.sessionExpired = true;
+  }
+}
+
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
@@ -153,7 +162,7 @@ export async function createSession(origin, email, password) {
       const result = await performLogin(origin, email, password);
       cookies = result.cookies;
     } catch (e) {
-      throw new Error(`${e.message}\n\nวิธีแก้: เปิด Extension login ProClinic 1 ครั้ง แล้วระบบจะ cache session ไว้ใช้ต่อ`);
+      throw new SessionExpiredError(`ไม่พบ session — ${e.message}`);
     }
   }
 
@@ -172,7 +181,7 @@ export async function createSession(origin, email, password) {
       const result = await performLogin(origin, email, password);
       cookies = result.cookies;
     } catch (e) {
-      throw new Error(`Session หมดอายุ: ${e.message}\n\nวิธีแก้: เปิด Extension login ProClinic 1 ครั้ง`);
+      throw new SessionExpiredError(`Session หมดอายุ — กรุณาให้ Extension แชร์ cookies ใหม่`);
     }
   } else {
     // Session valid — update cookies from response
@@ -220,7 +229,7 @@ export async function createSession(origin, email, password) {
       }
       const text = await res.text();
       if (text.includes('name="email"') && text.includes('name="password"') && text.includes('<form')) {
-        throw new Error('Session หมดอายุ — กรุณาให้ Extension login ProClinic ใหม่');
+        throw new SessionExpiredError('Session หมดอายุ — กรุณาให้ Extension แชร์ cookies ใหม่');
       }
       return text;
     },

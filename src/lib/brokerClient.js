@@ -5,13 +5,47 @@
 
 // ─── Script Mode (Vercel API) ───────────────────────────────────────────────
 
+// Ask extension to re-share ProClinic cookies (returns promise that resolves when done or timeout)
+function requestExtensionCookieShare() {
+  return new Promise((resolve) => {
+    const handler = (event) => {
+      if (event.data?.type === 'LC_SHARE_COOKIES_RESULT') {
+        window.removeEventListener('message', handler);
+        resolve(event.data);
+      }
+    };
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'LC_SHARE_COOKIES_NOW' }, '*');
+    setTimeout(() => { window.removeEventListener('message', handler); resolve(null); }, 4000);
+  });
+}
+
 async function apiFetch(endpoint, body) {
   const res = await fetch(`/api/proclinic/${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.json();
+  const data = await res.json();
+
+  // Auto-retry once if session expired: ask extension to re-share cookies then retry
+  if (data.sessionExpired) {
+    console.log('[broker] session expired — requesting extension cookie re-share...');
+    const shareResult = await requestExtensionCookieShare();
+    if (shareResult?.cookieCount > 0) {
+      console.log('[broker] cookies re-shared, retrying API call...');
+      const retryRes = await fetch(`/api/proclinic/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return retryRes.json();
+    }
+    // Extension not available or no cookies — return original error with sessionExpired flag
+    return data;
+  }
+
+  return data;
 }
 
 function getCredentials(clinicSettings) {
