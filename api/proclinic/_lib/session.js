@@ -1,8 +1,8 @@
 // ─── ProClinic Session Manager ─────────────────────────────────────────────
 // Strategy:
-//   1. Try cached cookies from Firestore (saved by previous API login)
-//   2. If expired → server-side re-login automatically
-//   3. fetchText auto-detects login page → re-login transparently
+//   1. Load cached cookies from Firestore → use immediately (no test request)
+//   2. If no cache → performLogin → save cookies
+//   3. fetchText auto-detects login page → re-login + retry transparently
 
 import { extractCSRF } from './scraper.js';
 
@@ -61,13 +61,6 @@ async function loadCachedCookies(origin) {
 
     const docOrigin = doc.fields.origin?.stringValue;
     if (docOrigin !== origin) return null;
-
-    // Check if cookies are not too old (max 4 hours)
-    const updatedAt = doc.fields.updatedAt?.stringValue;
-    if (updatedAt) {
-      const age = Date.now() - new Date(updatedAt).getTime();
-      if (age > 4 * 60 * 60 * 1000) return null;
-    }
 
     // Extract cookie strings from Firestore array format
     const cookieValues = doc.fields.cookies?.arrayValue?.values;
@@ -148,11 +141,11 @@ export async function performLogin(origin, email, password) {
 // ─── Create session (login once, reuse for multiple requests) ────────────────
 
 export async function createSession(origin, email, password) {
-  // Try cached cookies first
+  // Load cached cookies — use immediately, no test request
   let cookies = await loadCachedCookies(origin);
 
   if (!cookies) {
-    // No cache → login
+    // No cache → login once, then cache for all future requests
     console.log('[session] no cached cookies — performing login');
     try {
       const result = await performLogin(origin, email, password);
@@ -162,34 +155,7 @@ export async function createSession(origin, email, password) {
     }
   }
 
-  // Test if cached session is still valid
-  const testRes = await fetch(`${origin}/admin/api/stat`, {
-    headers: {
-      'Cookie': cookiesToHeader(cookies),
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    redirect: 'manual',
-  });
-
-  if (testRes.status >= 300 || testRes.status === 401) {
-    // Session expired → auto re-login
-    console.log('[session] cached session expired — re-logging in');
-    try {
-      const result = await performLogin(origin, email, password);
-      cookies = result.cookies;
-    } catch (e) {
-      throw new SessionExpiredError(`Session หมดอายุ + re-login ล้มเหลว: ${e.message}`);
-    }
-  } else {
-    // Session valid — update cookies from response
-    const newCookies = parseSetCookies(testRes);
-    if (newCookies.length) {
-      cookies = mergeCookies(cookies, newCookies);
-      await saveCookies(origin, cookies);
-    }
-  }
-
-  // Shared state for the session — allows fetchText to trigger re-login
+  // Shared state for the session — fetchText auto re-logins if expired
   const sessionState = { origin, email, password, cookies };
 
   async function reLogin() {
