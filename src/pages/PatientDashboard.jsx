@@ -96,9 +96,9 @@ function CourseCard({ c, expired, accentRgb, tx, lang }) {
   const isActive  = c.status === 'กำลังใช้งาน';
 
   const cardBase = expired
-    ? { className: 'rounded-2xl border border-red-900/40 bg-red-950/10 p-4 flex flex-col gap-2.5', style: { boxShadow: 'var(--shadow-card)' } }
+    ? { className: 'rounded-2xl border border-red-900/40 bg-red-950/10 p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 10px rgba(239,68,68,0.06), var(--shadow-card)' } }
     : isActive
-    ? { className: 'rounded-2xl border border-teal-700/40 bg-teal-950/[0.18] p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 0 1px rgba(45,212,191,0.06), var(--shadow-card)' } }
+    ? { className: 'rounded-2xl border border-teal-700/40 bg-teal-950/[0.18] p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 12px rgba(45,212,191,0.08), 0 0 0 1px rgba(45,212,191,0.06), var(--shadow-card)' } }
     : { className: 'rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-4 flex flex-col gap-2.5', style: { boxShadow: 'var(--shadow-card)' } };
 
   return (
@@ -217,7 +217,7 @@ function AppointmentCard({ a, lang }) {
   const { day, rest } = parseDateParts(a.date, lang);
   return (
     <div className="rounded-2xl border border-violet-800/30 bg-violet-950/[0.22] overflow-hidden flex"
-      style={{ boxShadow: 'var(--shadow-card)' }}>
+      style={{ boxShadow: '0 0 15px rgba(139,92,246,0.08), var(--shadow-card)' }}>
       {/* Date sidebar */}
       <div className="flex flex-col items-center justify-center px-4 py-4 bg-violet-900/[0.35] border-r border-violet-800/20 min-w-[64px] gap-0.5">
         <span className="text-2xl font-black text-white leading-none">{day}</span>
@@ -253,11 +253,11 @@ function AppointmentCard({ a, lang }) {
 function SectionHeader({ icon, label, count, accent, meta }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <span style={{ color: accent }}>{icon}</span>
+      <span style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }}>{icon}</span>
       <h3 className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: accent }}>{label}</h3>
       {count != null && (
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-          style={{ color: accent, borderColor: `${accent}40`, background: `${accent}10` }}>
+          style={{ color: accent, borderColor: `${accent}40`, background: `${accent}10`, boxShadow: `0 0 8px ${accent}15` }}>
           {count}
         </span>
       )}
@@ -526,11 +526,11 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
       {/* ── Hero header ─────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden">
-        {/* Radial glow */}
+        {/* Radial glow — intensified */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(ellipse 90% 70% at 50% -5%, rgba(${acRgb},0.22) 0%, transparent 70%)` }} />
+          style={{ background: `radial-gradient(ellipse 90% 80% at 50% -10%, rgba(${acRgb},0.30) 0%, transparent 65%)` }} />
         <div className="absolute bottom-0 left-0 right-0 h-px"
-          style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.25), transparent)` }} />
+          style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.35), transparent)` }} />
 
         {/* Controls top-right */}
         <Controls />
@@ -552,15 +552,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-12 pt-5 flex flex-col gap-5">
 
         {/* Patient info card */}
-        <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] overflow-hidden"
-          style={{ boxShadow: 'var(--shadow-panel), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+        <div className="rounded-2xl border bg-[#0f0f0f] overflow-hidden"
+          style={{ borderColor: `rgba(${acRgb},0.15)`, boxShadow: `var(--shadow-panel), 0 0 30px rgba(${acRgb},0.06), inset 0 1px 0 rgba(255,255,255,0.04)` }}>
           {/* Accent top bar */}
           <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.8), transparent)` }} />
 
           <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
-            {/* Avatar */}
+            {/* Avatar — glowing red ring */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
-              style={{ background: 'radial-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)', border: '1.5px solid rgba(255,255,255,0.20)', color: '#e5e5e5', boxShadow: '0 0 20px rgba(255,255,255,0.06), 0 0 0 4px rgba(255,255,255,0.03)' }}>
+              style={{
+                background: `radial-gradient(135deg, rgba(${acRgb},0.12) 0%, rgba(0,0,0,0.6) 100%)`,
+                border: `2px solid rgba(${acRgb},0.5)`,
+                color: '#e5e5e5',
+                boxShadow: `0 0 18px rgba(${acRgb},0.35), 0 0 40px rgba(${acRgb},0.12), inset 0 0 12px rgba(${acRgb},0.08)`,
+              }}>
               {getInitials(d.firstName || patientName, d.lastName)}
             </div>
 
@@ -598,8 +603,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
         {/* ── Contact Buttons (LINE + Call) ────────────────────────────────── */}
         {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
-          <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] overflow-hidden"
-            style={{ boxShadow: `var(--shadow-panel), 0 0 40px rgba(${acRgb},0.04)` }}>
+          <div className="rounded-2xl border bg-[#0f0f0f] overflow-hidden"
+            style={{ borderColor: `rgba(${acRgb},0.12)`, boxShadow: `var(--shadow-panel), 0 0 25px rgba(${acRgb},0.05)` }}>
             {/* Accent top bar */}
             <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.35) 25%, rgba(${acRgb},0.3) 50%, rgba(${acRgb},0.35) 75%, transparent 95%)` }} />
 
@@ -618,8 +623,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                     style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(6,199,85,0.08) 0%, transparent 70%)' }} />
 
                   {/* Icon */}
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(6,199,85,0.15)]"
-                    style={{ background: 'rgba(6,199,85,0.08)', borderColor: 'rgba(6,199,85,0.18)' }}>
+                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_20px_rgba(6,199,85,0.25),0_0_40px_rgba(6,199,85,0.08)]"
+                    style={{ background: 'rgba(6,199,85,0.08)', borderColor: 'rgba(6,199,85,0.22)', boxShadow: '0 0 8px rgba(6,199,85,0.08)' }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" className="group-hover:scale-110 transition-transform duration-300" style={{ fill: '#06C755' }}><path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
                   </div>
 
@@ -655,8 +660,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                     style={{ background: `radial-gradient(ellipse at 30% 50%, rgba(${acRgb},0.08) 0%, transparent 70%)` }} />
 
                   {/* Icon */}
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300"
-                    style={{ background: `rgba(${acRgb},0.08)`, borderColor: `rgba(${acRgb},0.18)`, '--phone-glow': `rgba(${acRgb},0.15)` }}>
+                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_20px_var(--phone-glow),0_0_40px_var(--phone-glow2)]"
+                    style={{ background: `rgba(${acRgb},0.08)`, borderColor: `rgba(${acRgb},0.22)`, boxShadow: `0 0 8px rgba(${acRgb},0.10)`, '--phone-glow': `rgba(${acRgb},0.30)`, '--phone-glow2': `rgba(${acRgb},0.08)` }}>
                     <PhoneCall size={18} className="group-hover:scale-110 transition-transform duration-300 group-hover:animate-[wiggle_0.5s_ease-in-out]" style={{ color: ac }} />
                   </div>
 
