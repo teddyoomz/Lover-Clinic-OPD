@@ -108,6 +108,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
   const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
+  const brokerPendingRef = useRef(brokerPending);
+  brokerPendingRef.current = brokerPending;
   const brokerTimers = useRef({}); // sessionId → timeout id
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
   const autoCoursesRequestedRef = useRef(new Set()); // sessionId ที่ auto-trigger แล้วใน session นี้
@@ -143,7 +145,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const allSessions = [...sessions, ...archivedSessions];
     allSessions.forEach(async (s) => {
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !brokerPendingRef.current[s.id] && !autoSyncInFlightRef.current.has(s.id)) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
