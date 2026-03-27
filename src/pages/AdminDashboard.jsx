@@ -837,12 +837,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       } catch(e) { console.error('handleOpenPatientView:', e); return; }
     }
-    // เปิด iframe = admin กำลังดูข้อมูล → clear banner + sync viewingSession
+    // เปิด iframe = admin กำลังดูข้อมูล → clear banner + sync viewingSession (เฉพาะเมื่อ report เปิดอยู่แล้ว)
     setHasNewUpdate(false);
-    const latest = sessions.find(s => s.id === session.id) || archivedSessions.find(s => s.id === session.id);
-    if (latest) {
-      setViewingSession(latest);
-      lastViewedStrRef.current[session.id] = JSON.stringify(latest.patientData || {});
+    if (viewingSession) {
+      const latest = sessions.find(s => s.id === session.id) || archivedSessions.find(s => s.id === session.id);
+      if (latest) {
+        setViewingSession(latest);
+        lastViewedStrRef.current[session.id] = JSON.stringify(latest.patientData || {});
+      }
     }
     setPatientViewUrl(`/?patient=${token}&admin=1`);
   };
