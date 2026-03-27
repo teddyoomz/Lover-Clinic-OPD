@@ -287,11 +287,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const sessionDataRef      = useRef(null); // ref สำหรับใช้ใน timer callback
   const cooldownMsRef       = useRef(0);   // sync กับ COURSES_REFRESH_COOLDOWN_MS ทุก render
 
-  // อัพเดท countdown ทุก 30 วิ
+  // อัพเดท countdown ทุก 30 วิ + ยิง re-render ตรงๆ เมื่อ cooldown หมดพอดี
   useEffect(() => {
     const id = setInterval(() => forceUpdate(n => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    const last = sessionData?.lastCoursesAutoFetch;
+    if (!last || COURSES_REFRESH_COOLDOWN_MS <= 0) return;
+    const remaining = COURSES_REFRESH_COOLDOWN_MS - (Date.now() - last.toMillis());
+    if (remaining <= 0) return;
+    const id = setTimeout(() => forceUpdate(n => n + 1), remaining + 50);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionData?.lastCoursesAutoFetch?.toMillis?.(), COURSES_REFRESH_COOLDOWN_MS]);
 
   // Auto-sync on page load: รอจน clinicSettings โหลดจาก Firestore ก่อน เพื่อให้ cooldown ถูกต้อง
   useEffect(() => {
