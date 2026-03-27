@@ -815,7 +815,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   // Listen for close message from iframe
   useEffect(() => {
-    const handler = (e) => { if (e.data?.type === 'close-patient-view') setPatientViewUrl(null); };
+    const handler = (e) => {
+      if (e.data?.type === 'close-patient-view') {
+        setPatientViewUrl(null);
+        // Sync viewingSession ให้เป็นล่าสุดเมื่อปิด iframe — ป้องกัน stale banner
+        setHasNewUpdate(false);
+      }
+    };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
@@ -830,6 +836,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           patientLinkToken: token, patientLinkEnabled: true,
         });
       } catch(e) { console.error('handleOpenPatientView:', e); return; }
+    }
+    // เปิด iframe = admin กำลังดูข้อมูล → clear banner + sync viewingSession
+    setHasNewUpdate(false);
+    const latest = sessions.find(s => s.id === session.id) || archivedSessions.find(s => s.id === session.id);
+    if (latest) {
+      setViewingSession(latest);
+      lastViewedStrRef.current[session.id] = JSON.stringify(latest.patientData || {});
     }
     setPatientViewUrl(`/?patient=${token}&admin=1`);
   };
