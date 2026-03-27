@@ -671,10 +671,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-white">
+                    <span className={`text-[11px] font-black text-white ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
-                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors font-mono truncate">
+                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors tracking-wide truncate">
                       {clinicSettings.clinicPhone}
                     </span>
                   </div>
