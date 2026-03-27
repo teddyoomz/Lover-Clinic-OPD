@@ -1,0 +1,602 @@
+# LoverClinic OPD System — Codebase Map
+> อัพเดทล่าสุด: 2026-03-25 (Broker Extension: ProClinic auto-sync, fetch-based update, HN tracking)
+> Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
+> Firebase Project: `loverclinic-opd-4c39b`
+
+---
+
+## 📁 โครงสร้างไฟล์
+
+```
+functions/
+├── index.js                    — Cloud Function: onPatientSubmit (Firestore trigger → FCM push)
+├── package.json                — node 20, firebase-functions v6, firebase-admin v12
+firebase.json                   — Firebase deploy config (functions source)
+.firebaserc                     — Firebase project: loverclinic-opd-4c39b
+public/
+├── firebase-messaging-sw.js    — Service Worker รับ push ขณะ app ปิด/หน้าจอล็อค
+├── manifest.json               — PWA manifest สำหรับ iOS "เพิ่มลงหน้าจอ"
+src/
+├── main.jsx                    — Entry point
+├── App.jsx                     — Root routing + auth + clinic settings
+├── firebase.js                 — Firebase init, exports: app, auth, db, appId
+├── constants.js                — SESSION_TIMEOUT_MS, DEFAULT_CLINIC_SETTINGS, PRESET_COLORS
+├── utils.js                    — Helper functions, defaultFormData, clinical logic
+├── hooks/
+│   └── useTheme.js             — Dark/Light/Auto theme hook
+├── components/
+│   ├── ClinicLogo.jsx          — Logo component (custom URL / /logo.jpg / text fallback)
+│   ├── ThemeToggle.jsx         — Theme toggle button
+│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo)
+│   ├── CustomFormBuilder.jsx   — Admin form builder for custom templates
+│   └── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
+└── pages/
+    ├── AdminLogin.jsx          — Login page
+    ├── AdminDashboard.jsx      — Admin main page (queue, history, settings nav)
+    └── PatientForm.jsx         — Patient intake/follow-up form (QR scan target)
+```
+
+---
+
+## 🔥 Firestore Collection Path
+
+```
+artifacts/{appId}/public/data/
+├── opd_sessions/{sessionId}    — Session documents
+│     fields: status, patientData, createdAt, updatedAt, submittedAt,
+│             isUnread, isArchived, archivedAt, isPermanent,
+│             formType, customTemplate, sessionName
+├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
+└── form_templates/{id}         — Custom form templates
+```
+
+### Push Notification Firestore path (new)
+```
+artifacts/{appId}/public/data/push_config/tokens
+  fields: tokens: [{token: string, userAgent: string, createdAt: Timestamp}]
+```
+- เก็บ FCM device token ทุก device ที่เปิด push
+- Cloud Function อ่าน tokens นี้แล้วส่ง multicast push
+- Auto-clean token ที่หมดอายุ (invalid-registration-token)
+
+### Session lifecycle
+- สร้าง → `status:'pending', patientData:null`
+- ผู้ป่วยกรอก → `status:'completed', patientData:{...}, isUnread:true, submittedAt`
+- แพทย์อ่าน → `isUnread:false`
+- ลบ (ไม่มีข้อมูล) → `deleteDoc` ทันที
+- ลบ (มีข้อมูล) → `isArchived:true, archivedAt` (soft delete → ประวัติ)
+- ลบถาวรจากประวัติ → `deleteDoc`
+- หมดอายุ 2 ชม. + ไม่มีข้อมูล → auto `deleteDoc` (ใน onSnapshot)
+- หมดอายุ 2 ชม. + มีข้อมูล → auto `isArchived:true` (ใน onSnapshot)
+
+### Session ID prefixes
+- `LC-XXXXXX` — intake ทั่วไป (ใช้ 3 ตัวแรกของ clinicName)
+- `PRM-XXXXXX` — permanent link
+- `FW-ED-XXXXXX` — Follow-up IIEF
+- `FW-AD-XXXXXX` — Follow-up ADAM
+- `FW-MR-XXXXXX` — Follow-up MRS
+- `CST-XXXXXX` — Custom form
+
+---
+
+## 📄 src/constants.js
+
+| Export | ค่า | ใช้ที่ |
+|--------|-----|--------|
+| `SESSION_TIMEOUT_MS` | `2 * 60 * 60 * 1000` (2 ชม.) | filter sessions, expire check |
+| `DEFAULT_CLINIC_SETTINGS` | `{clinicName:'Lover Clinic', accentColor:'#dc2626', ...}` | fallback ทุกที่ |
+| `PRESET_COLORS` | array 10 สี | ClinicSettingsPanel color picker |
+
+---
+
+## 📄 src/utils.js
+
+### Constants/Data
+| Export | บรรทัด | คำอธิบาย |
+|--------|--------|-----------|
+| `hexToRgb(hex)` | 1 | แปลง hex → "r,g,b" string สำหรับ rgba() |
+| `applyThemeColor(hex)` | 8 | set CSS vars `--accent`, `--accent-rgb` บน :root |
+| `THAI_MONTHS` | 14 | array {value, label} เดือนภาษาไทย |
+| `EN_MONTHS` | 21 | array {value, label} เดือนภาษาอังกฤษ |
+| `YEARS_BE` | 29 | array ปีพ.ศ. 120 ปีย้อนหลัง |
+| `YEARS_CE` | 30 | array ปีค.ศ. 120 ปีย้อนหลัง |
+| `COUNTRY_CODES` | 32 | array {code, label} รหัสโทรศัพท์ ~40 ประเทศ |
+
+### defaultFormData (บรรทัด 48)
+Fields ทั้งหมดใน patient intake form:
+- `prefix, firstName, lastName, gender`
+- `dobDay, dobMonth, dobYear, age`
+- `address, phone, isInternationalPhone, phoneCountryCode`
+- `emergencyName, emergencyRelation, emergencyPhone, isInternationalEmergencyPhone, emergencyPhoneCountryCode`
+- `visitReasons[], visitReasonOther`
+- `hrtGoals[], hrtTransType, hrtOtherDetail`
+- `hasAllergies, allergiesDetail`
+- `hasUnderlying, ud_hypertension, ud_diabetes, ud_lung, ud_kidney, ud_heart, ud_blood, ud_other, ud_otherDetail`
+- `currentMedication, pregnancy`
+- `howFoundUs[]` — ช่องทางที่รู้จักคลินิก (required)
+- `symp_pe` — อาการหลั่งเร็ว
+- `adam_1..adam_10` — ADAM scale checkboxes
+- `iief_1..iief_5` — IIEF-5 scale scores
+- `mrs_1..mrs_11` — MRS scale scores
+- `assessmentDate` — วันที่ประเมิน (สำหรับ follow-up)
+
+### Functions
+| Export | บรรทัด | คำอธิบาย |
+|--------|--------|-----------|
+| `formatPhoneNumberDisplay(phone, isInt, code)` | 69 | format display เบอร์โทร |
+| `formatBangkokTime(timestamp)` | 69 | แปลง Firestore Timestamp → string GMT+7 Bangkok เช่น "21 มี.ค. 67 14:30" |
+| `getReasons(d)` | 74 | ดึง visitReasons array (รองรับ field เก่า visitReason) |
+| `getHrtGoals(d)` | 81 | ดึง hrtGoals array (รองรับ field เก่า hrtGoal) |
+| `calculateADAM(d)` | 88 | คำนวณ ADAM score → {positive, total, text, color, bg} |
+| `calculateIIEFScore(d)` | 101 | sum iief_1..5 → number |
+| `getIIEFInterpretation(score)` | 105 | แปล IIEF score → {text, color, bg} |
+| `calculateMRS(d)` | 114 | คำนวณ MRS score → {score, text, color, bg} |
+| `generateClinicalSummary(d, formType, customTemplate, lang)` | 123 | สร้าง clinical summary text (TH/EN) ใช้ copy ใน dashboard |
+| `renderDobFormat(d)` | 341 | format วันเกิด → "1 มกราคม 2540" |
+| `playNotificationSound(volume)` | 351 | เล่นเสียง "ดิ๊ง" สองโน้ต (880Hz + 1108Hz) ด้วย AudioContext |
+
+---
+
+## 📄 src/App.jsx
+
+### State (บรรทัด 16-25)
+| State | ใช้ทำอะไร |
+|-------|-----------|
+| `user` | Firebase auth user |
+| `isInitializing` | loading state ก่อน auth ready |
+| `printMode` | null / 'official' / 'dashboard' — เปิด print view |
+| `viewingSession` | session object ที่กำลังดูอยู่ (ส่งลง AdminDashboard) |
+| `adminView` | 'dashboard' / 'simulation' — สลับ AdminDashboard ↔ PatientForm simulation |
+| `simulatedSessionId` | sessionId ที่ simulate scan |
+| `clinicSettings` | merged clinic settings object |
+
+### Logic
+- `sessionFromUrl` — ถ้ามี `?session=` ใน URL → แสดง PatientForm (สำหรับผู้ป่วย)
+- `signInAnonymously` — ถ้ามี session URL + ไม่ได้ login → auth anonymous อัตโนมัติ
+- `onSnapshot clinic_settings/main` — sync clinic settings realtime
+- `afterprint` event → reset `printMode`
+
+### Routing logic
+1. `isInitializing` → loading screen
+2. `sessionFromUrl` → `<PatientForm>` (ไม่ต้อง login)
+3. `!user || user.isAnonymous` → `<AdminLogin>`
+4. else → `<AdminDashboard>` หรือ `<PatientForm isSimulation>`
+
+---
+
+## 📄 src/pages/AdminDashboard.jsx
+
+### Props
+```js
+{ db, appId, user, auth, viewingSession, setViewingSession,
+  setPrintMode, onSimulateScan, clinicSettings, theme, setTheme }
+```
+
+### State (บรรทัด 25-51)
+| State | บรรทัด | คำอธิบาย |
+|-------|--------|-----------|
+| `sessions` | 25 | active sessions array (realtime) |
+| `formTemplates` | 26 | custom form templates array |
+| `isGenerating` | 27 | กำลังสร้าง session ใหม่ |
+| `selectedQR` | 28 | sessionId ที่แสดง QR panel |
+| `sessionToDelete` | 29 | sessionId ที่กำลังจะลบ (confirm modal) |
+| `currentTime` | 30 | Date.now() อัพเดททุก 10วิ (สำหรับ countdown) |
+| `isCopied` | 31 | feedback ปุ่ม copy QR |
+| `isLinkCopied` | 32 | feedback ปุ่ม copy link |
+| `showSessionModal` | 33 | modal เลือกประเภท session |
+| `sessionModalTab` | 34 | 'standard' / 'custom' |
+| `showNamePrompt` | 36 | modal ใส่ชื่อ session |
+| `pendingConfig` | 37 | config รอสร้าง {isPermanent, formType, customTemplate} |
+| `sessionNameInput` | 38 | ชื่อ session ที่กรอก |
+| `editingNameId` | 39 | sessionId ที่กำลัง edit ชื่อ inline |
+| `editingNameValue` | 40 | ค่าชื่อที่กำลัง edit |
+| `adminMode` | 41 | 'dashboard' / 'formBuilder' / 'clinicSettings' / 'history' |
+| `isNotifEnabled` | 43 | เปิด/ปิดเสียงแจ้งเตือน |
+| `notifVolume` | 44 | ระดับเสียง 0-1 |
+| `showNotifSettings` | 45 | dropdown ตั้งค่าเสียง |
+| `toastMsg` | 46 | ข้อความ toast notification |
+| `prevSessionsRef` | 47 | useRef — เก็บ sessions ก่อนหน้าสำหรับ detect changes |
+| `hasNewUpdate` | 48 | มีข้อมูลอัพเดทขณะดู session detail |
+| `summaryLang` | 49 | 'en' / 'th' ภาษา clinical summary |
+| `archivedSessions` | 50 | archived sessions array (ประวัติ) |
+| `sessionToHardDelete` | 51 | sessionId ที่จะลบถาวร (confirm modal) |
+| `pushEnabled` | ~53 | push เปิดอยู่บน device นี้ไหม (sync กับ localStorage `lc_push_enabled`) |
+| `pushLoading` | ~54 | กำลัง request permission / get FCM token |
+
+### Computed (บรรทัด 288-289)
+```js
+const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
+const unreadCount = sessions.filter(s => s.isUnread).length; // ใช้กับ badge บน nav
+```
+
+### useEffects
+| บรรทัด | ทำอะไร |
+|--------|---------|
+| 53-56 | `setInterval` อัพเดท `currentTime` ทุก 10วิ |
+| 59-64 | `onSnapshot` form_templates collection |
+| 66-132 | `onSnapshot` opd_sessions — หลัก: auto-cleanup, set archivedSessions, set sessions, notification logic |
+| 134-148 | track `viewingSession` vs latest `sessions` → set `hasNewUpdate` |
+
+### Notification Sound Logic (บรรทัด 107-127)
+เสียงดังเมื่อ: `newS.isUnread === true` AND (`!oldS.isUnread` OR `patientData` changed)
+- ไม่ดังตอนแพทย์อ่าน (isUnread: true→false)
+- ดังเมื่อผู้ป่วยส่งฟอร์มครั้งแรก หรือแก้ไขซ้ำก่อนแพทย์อ่าน
+
+### Functions
+| Function | บรรทัด | คำอธิบาย |
+|----------|--------|-----------|
+| `formatRemainingTime(session)` | 149 | คำนวณเวลาเหลือ → string |
+| `getBadgeForFormType(formType, customTemplate)` | 162 | JSX badge chip ตามประเภท form |
+| `openNamePrompt(config)` | 170 | เปิด modal ใส่ชื่อ session |
+| `confirmCreateSession()` | 177 | สร้าง session ใน Firestore |
+| `deleteSession(sessionId)` | 220 | soft delete (archive ถ้ามีข้อมูล, ลบถ้าไม่มี) |
+| `hardDeleteSession(sessionId)` | 238 | ลบถาวรจาก Firestore |
+| `handleViewSession(session)` | 245 | เปิด detail + mark isUnread:false |
+| `closeViewSession()` | 255 | ปิด detail panel |
+| `getSessionUrl(sessionId)` | 260 | สร้าง URL สำหรับผู้ป่วย |
+| `getQRUrl(sessionId)` | 261 | สร้าง QR image URL (qrserver.com API) |
+| `handleCopyToClipboard(text, isUrl)` | 263 | copy text ด้วย execCommand |
+| `handleEditName(id, currentName)` | 276 | เริ่ม inline edit ชื่อ session |
+| `saveEditedName(id)` | 281 | บันทึกชื่อ session ใหม่ |
+| `enablePushNotifications()` | ~58 | request permission → getToken → save to Firestore push_config/tokens |
+| `disablePushNotifications()` | ~90 | clear localStorage + reset pushEnabled state |
+
+### JSX Layout (return บรรทัด 291+)
+```
+<div> wrapper
+├── Toast notification (fixed bottom-right)
+├── <header> — Nav bar
+│   ├── Row 1: Logo + mobile icon buttons
+│   ├── Row 2: Nav tabs (mobile, md:hidden)
+│   │   └── หน้าคิว (badge unreadCount) | จัดการ | ตั้งค่า | ประวัติ
+│   └── Desktop nav (hidden md:flex)
+│       └── หน้าคิว (badge unreadCount) | จัดการแบบฟอร์ม | ตั้งค่า | ประวัติ | + สร้างคิว | 🔔 | logout
+├── adminMode === 'clinicSettings' → <ClinicSettingsPanel>
+├── adminMode === 'formBuilder' → <CustomFormBuilder>
+├── adminMode === 'history' → Archive table + Hard Delete modal
+└── adminMode === 'dashboard' (default)
+    ├── Left: Session list table
+    │   ├── Columns: รหัสคิว | ข้อมูลผู้ป่วย | สาเหตุที่มา | สถานะ | actions
+    │   └── Modals: sessionModal, namePrompt, deleteConfirm
+    ├── Right: QR panel (selectedQR)
+    └── Bottom overlay: Session detail viewer (viewingSession)
+        ├── "มีข้อมูลอัพเดท" banner (hasNewUpdate)
+        ├── Patient summary sections
+        └── Clinical summary copy + print buttons
+```
+
+---
+
+## 📄 src/pages/PatientForm.jsx
+
+### Props
+```js
+{ db, appId, user, sessionId, isSimulation, onBack, clinicSettings, theme, setTheme }
+```
+
+### State (บรรทัด 19-29)
+| State | คำอธิบาย |
+|-------|-----------|
+| `formData` | form values ทั้งหมด (defaultFormData) |
+| `language` | 'th' / 'en' — ภาษา UI |
+| `isSubmitting` | กำลัง submit |
+| `sessionExists` | session มีอยู่ใน Firestore ไหม |
+| `isExpired` | session หมดอายุ (2 ชม.) — แสดง UI "หมดอายุ" |
+| `isClosed` | session ถูก admin archive — แสดง UI "คลินิกปิดคิวนี้แล้ว" (Lock icon) |
+| `isSuccess` | submit สำเร็จ |
+| `isEditing` | กำลัง edit หลัง submit |
+| `sessionType` | 'intake' / 'followup_ed' / 'followup_adam' / 'followup_mrs' / 'custom' |
+| `customTemplate` | template object สำหรับ custom form |
+
+### useEffects
+| บรรทัด | ทำอะไร |
+|--------|---------|
+| 30-38 | แปลงปีเกิด BE↔CE เมื่อ language เปลี่ยน |
+| 40-73 | `onSnapshot` session doc — load data, check expire, check isArchived → setIsClosed, set sessionType |
+
+### Functions
+| Function | บรรทัด | คำอธิบาย |
+|----------|--------|-----------|
+| `handleInputChange(e)` | 76 | generic input handler (กรอง non-digit สำหรับ phone) |
+| `handleCustomCheckboxChange(qId, option)` | 88 | toggle checkbox สำหรับ custom form |
+| `handleReasonToggle(reason)` | 96 | toggle visitReasons array |
+| `handleHowFoundUsToggle(channel)` | 103 | toggle howFoundUs array |
+| `handleGoalToggle(goal)` | 110 | toggle hrtGoals array |
+| `handleDobChange(e)` | 117 | update DOB + auto-calculate age |
+| `handleSubmit(e)` | 137 | validate + updateDoc Firestore |
+
+### handleSubmit validation order (บรรทัด 141-180)
+1. (intake only) `howFoundUs` ต้องเลือก ≥1
+2. (intake only) `visitReasons` ต้องเลือก ≥1
+3. (intake only) ถ้าเลือก HRT ต้องมี `hrtGoals` ≥1
+4. (intake only) validate เบอร์โทร (Thai 10 digit หรือ international)
+5. (intake/custom) validate อายุตรงกับวันเกิด
+6. `updateDoc` → `{status:'completed', patientData:formData, submittedAt/updatedAt: serverTimestamp(), isUnread:true}`
+
+### Firestore write on submit (บรรทัด 184-186)
+```js
+updateDoc(sessionRef, {
+  status: 'completed',
+  patientData: formData,
+  [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(),
+  isUnread: true
+})
+```
+
+### Form sections rendered (intake)
+1. ข้อมูลส่วนตัว (prefix, name, gender, DOB, age, address)
+2. ข้อมูลการติดต่อ (phone, emergency contact)
+3. สาเหตุที่มา (visitReasons multi-select)
+4. HRT goals (ถ้าเลือก HRT)
+5. โรคประจำตัว (hasUnderlying + checkboxes)
+6. ยาที่ใช้ / การตั้งครรภ์
+7. แบบคัดกรอง (ADAM/IIEF/PE ถ้าเลือก ED; MRS ถ้าเลือก HRT female)
+8. **รู้จักคลินิกได้อย่างไร** (howFoundUs multi-select — REQUIRED)
+9. Submit button
+
+### LanguageToggle component (บรรทัด 195)
+Inline component ด้านบนขวา — สลับ TH/EN
+
+---
+
+## 📄 src/components/ClinicLogo.jsx
+
+### Props
+| Prop | Default | คำอธิบาย |
+|------|---------|-----------|
+| `className` | `"py-4"` | class สำหรับ img/div wrapper |
+| `showText` | `true` | แสดง subtitle |
+| `forceLight` | `false` | ใช้ใน dark overlay → invert logo |
+| `printMode` | `false` | ใช้ใน print → ไม่ filter |
+| `clinicSettings` | `null` | ถ้า null ใช้ DEFAULT |
+| `center` | `false` | center text logo |
+
+### Logic
+1. ถ้า `logoUrl` ตั้งไว้ → แสดง custom logo
+2. ถ้าไม่มี → ลอง `/logo.jpg`
+3. ถ้า error → แสดง text logo จาก clinicName
+
+---
+
+## 📄 src/hooks/useTheme.js
+
+- `THEME_KEY` = `'app-theme'` (localStorage key)
+- `THEMES` = [{value:'dark'|'light'|'auto', label, icon}]
+- `useTheme()` → `{theme, resolvedTheme, setTheme}`
+- set `data-theme` attribute บน `<html>` เมื่อเปลี่ยน
+
+---
+
+## 🎨 Theme & Color System
+
+- CSS var `--accent` = accent color hex (เช่น `#dc2626`)
+- CSS var `--accent-rgb` = "220,38,38"
+- CSS var `--bg-base`, `--tx-heading` etc. — defined ใน index.css ตาม `data-theme`
+- `applyThemeColor(hex)` ใน utils.js — set CSS vars
+- ถูกเรียกจาก App.jsx ทุกครั้งที่ clinic_settings เปลี่ยน
+
+---
+
+## 🗝️ Key Design Decisions
+
+0. **Push Notification flow** — Patient submits → Firestore `isUnread: false→true` → Cloud Function triggers → sends FCM multicast → admin device receives push (แม้หน้าจอล็อค). Admin กด push → เปิดแอป. iOS ต้องติดตั้ง PWA ก่อน (iOS 16.4+, Add to Home Screen in Safari)
+1. **Soft delete** — sessions ที่มี patientData → archive (isArchived:true), ไม่ deleteDoc
+2. **Auto-cleanup** — ทำใน onSnapshot callback ของ AdminDashboard (ไม่มี background job)
+3. **Notification sound** — ดังเฉพาะ `isUnread: false→true` หรือ patientData เปลี่ยนขณะ isUnread:true
+4. **isUnread badge** — แสดงบน "หน้าคิว" nav tab (ไม่แสดงบน "ประวัติ")
+5. **QR/Link** — ใช้ `window.location.origin + ?session=ID`, QR ผ่าน qrserver.com API
+6. **No IIFE in JSX** — Vite OXC parser ไม่รองรับ IIFE ใน JSX → ใช้ pre-computed variables แทน
+7. **howFoundUs** — required field สุดท้ายใน intake form, multi-select; แสดงใน session detail viewer (Globe icon, blue chips)
+8. **Bilingual** — PatientForm รองรับ TH/EN, default EN สำหรับแพทย์
+9. **isClosed vs isExpired** — PatientForm ใช้ 2 state แยก: `isClosed` (admin archive) แสดง Lock icon + "คลินิกปิดคิวนี้แล้ว"; `isExpired` (2 ชม.) แสดง TimerOff + "หมดอายุ"; render isClosed ก่อน isExpired
+10. **Timestamps in tables** — Queue table: QR time (QrCode icon, gray) ใน col 1; submit/edit time (CheckCircle2/Edit3, green/blue) ใน status col. History table: 4 timestamps (Gen/กรอก/แก้ไข/เก็บ) ด้วย icons+colors
+
+---
+
+## ⚠️ จุดระวัง / Known Quirks
+
+- **Vite OXC parser** — ห้ามใช้ `{(() => { ... })()}` IIFE ใน JSX → ใช้ pre-computed var แทน
+- **Firestore snapshot fires 2x** สำหรับ write ที่มี `serverTimestamp()` (local estimate + server confirm) → notification logic ต้องตรวจ isUnread ไม่ใช่แค่ patientData
+- **isNotifEnabled/notifVolume** ใน dependency array ของ sessions useEffect → ถ้าเปลี่ยน จะ re-subscribe onSnapshot (prevSessionsRef ยังคงเดิม)
+- **Phone validation** — Thai domestic: `/^0\d{9}$/`, international: แค่กรอง non-digit
+- **DOB year** — BE (พ.ศ.) ถ้า year > 2400, CE (ค.ศ.) ถ้า year < 2400
+- **logo.jpg** — เก็บไว้ที่ `/public/logo.jpg`
+- **Missing icon import → black screen** — ถ้า import lucide-react icon ขาด จะเกิด JS runtime error → component crash → จอดำ; ตรวจ import ก่อนเสมอ
+- **Archive link fix** — PatientForm ตรวจ `data.isArchived` ใน onSnapshot → setIsClosed(true) และ return ทันที ป้องกันการกรอกซ้ำ
+- **VAPID Key** — ต้อง generate ใน Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair แล้วใส่ใน `VAPID_KEY` constant ใน AdminDashboard.jsx
+- **Cloud Functions deploy** — `cd F:\LoverClinic-app\functions && npm install` แล้ว `firebase deploy --only functions` จาก root
+- **iOS Push** — ต้องใช้ iOS 16.4+, เปิดจาก Safari แล้ว Share → "เพิ่มลงหน้าจอ (Add to Home Screen)" ก่อนถึงจะรับ push ได้
+- **FCM token lifecycle** — token เก็บใน Firestore `push_config/tokens`, auto-cleanup เมื่อ invalid (Cloud Function ทำ)
+
+---
+
+## 🔌 Broker Extension (broker-extension/)
+
+### ภาพรวม
+Chrome Extension MV3 ที่ทำหน้าที่ bridge ระหว่าง LoverClinic กับ ProClinic
+- **ไม่มี auto-deploy** — ต้องก็อปไฟล์ใส่ Chrome Extensions ด้วยตัวเอง
+- **Reload ที่ chrome://extensions เมื่อแก้**: `background.js`, `manifest.json`, `content-loverclinic.js`
+- **ไม่ต้อง reload เมื่อแก้**: `popup.html`, `popup.js`
+
+### Files
+| ไฟล์ | หน้าที่ |
+|------|--------|
+| `manifest.json` | MV3 config, permissions: tabs/scripting/activeTab/storage |
+| `background.js` | Service Worker หลัก — logic ทั้งหมด |
+| `content-loverclinic.js` | Bridge script บน lover-clinic-app.vercel.app — forward postMessage ↔ extension |
+| `popup.html/js` | UI แสดง session status (pending/done/failed) |
+
+### ProClinic URL
+```
+const PROCLINIC_ORIGIN     = 'https://trial.proclinicth.com'
+const PROCLINIC_CREATE_URL = 'https://trial.proclinicth.com/admin/customer/create'
+const PROCLINIC_LIST_URL   = 'https://trial.proclinicth.com/admin/customer'
+```
+
+### Firestore broker fields (เพิ่มใน opd_sessions)
+```
+brokerStatus: null | 'pending' | 'done' | 'failed'
+brokerProClinicId: string | null    // ProClinic customer ID (numeric)
+brokerProClinicHN: string | null    // HN เช่น "000485" — ไม่เปลี่ยน ใช้ค้นหา
+brokerError: string | null
+opdRecordedAt: ISO string | null    // เวลาบันทึก OPD ครั้งแรก
+brokerFilledAt: ISO string | null   // เวลา fill ล่าสุด
+brokerLastAutoSyncAt: ISO string | null  // เวลา auto-sync ล่าสุด
+```
+
+### Message Types
+| Type | ทิศทาง | คำอธิบาย |
+|------|--------|-----------|
+| `LC_FILL_PROCLINIC` | Page → Extension | สร้างลูกค้าใหม่ใน ProClinic |
+| `LC_DELETE_PROCLINIC` | Page → Extension | ลบลูกค้าออกจาก ProClinic |
+| `LC_UPDATE_PROCLINIC` | Page → Extension | แก้ไขข้อมูลลูกค้าใน ProClinic (auto-sync) |
+| `LC_OPEN_EDIT_PROCLINIC` | Page → Extension | เปิดหน้า edit ProClinic (manual) |
+| `LC_BROKER_RESULT` | Extension → Page | ผล create |
+| `LC_DELETE_RESULT` | Extension → Page | ผล delete |
+| `LC_UPDATE_RESULT` | Extension → Page | ผล update |
+| `LC_GET_STATUS` | Popup → Extension | ขอ statusMap |
+| `LC_CLEAR_STATUS` | Popup → Extension | clear statusMap |
+
+### background.js — Architecture
+
+**Serial Queue** (ป้องกัน race condition บน shared ProClinic tab)
+```js
+enqueueProClinic(fn)  // ทุก handler ต้องผ่านนี้
+```
+
+**Tab Management**
+```js
+getOrCreateProclinicTab()      // หา/สร้าง ProClinic tab + รอ login check
+navigateAndWait(tabId, url, delayMs=800, timeoutMs=15000)
+  // ⚠️ ตั้ง listener ก่อน navigate เสมอ — ป้องกัน race condition
+waitForTabReady(tabId)         // รอ tab ที่กำลัง loading
+```
+
+**CREATE Flow** (`handleFillRequest`)
+```
+1. navigateAndWait(createURL)
+2. executeScript(fillAndSubmitProClinicForm)  ← click submit หลัง 400ms
+3. waitForNavAwayFromCreate  ← รอ navigation event ถัดไป (NEXT event, ไม่ใช่ current state)
+4. check !url.includes('/create') → extract proClinicId จาก URL
+5. navigateAndWait(editURL)  ← เพื่อดึง HN
+6. executeScript: document.querySelector('input[name="hn_no"]')?.value
+7. reportBack LC_BROKER_RESULT { proClinicId, proClinicHN }
+```
+
+**UPDATE Flow** (`handleUpdateRequest`) — ⚠️ FETCH-BASED (ไม่ navigate tab!)
+```
+1. searchAndResolveId(HN → phone → name)
+2. navigateAndWait(editURL)  ← แค่ดึง CSRF + form values
+3. executeScript(submitProClinicEditViaFetch)
+   → FormData(form) เพื่อเก็บ hidden fields ทั้งหมด
+   → override: prefix, firstname, lastname, telephone_number, gender, note
+   → fetch PUT redirect:'manual'
+   → type==='opaqueredirect' → SUCCESS ✓ (server sent 302)
+   → type==='basic' status 200 → FAIL (validation error, no redirect)
+4. reportBack LC_UPDATE_RESULT
+```
+> ⚠️ ProClinic ALWAYS redirects กลับ /edit หลัง save สำเร็จ — ตรวจ URL ไม่ได้!
+> ใช้ `redirect:'manual'` + ตรวจ response.type แทน
+
+**DELETE Flow** (`handleDeleteRequest`)
+```
+1. searchAndResolveId ถ้าไม่มี proClinicId
+2. navigateAndWait(listURL)  ← ดึง CSRF
+3. executeScript: fetch POST _method=DELETE + check res.ok
+4. reportBack LC_DELETE_RESULT
+```
+
+**Search Flow** (`searchAndResolveId`)
+```
+Round 1: HN search  → searchProClinicCustomers(HN) → เอาตัวแรก (HN unique)
+Round 2: Phone      → searchProClinicCustomers(phone) → findBestMatch
+Round 3: Name       → searchProClinicCustomers("firstname lastname") → findBestMatch
+→ throw ถ้าไม่เจอ
+
+searchProClinicCustomers:
+  navigateAndWait(searchURL, 1200ms)  ← 1200ms รอ DOM render
+  executeScript(extractCustomersFromSearchResults)
+  → returns [{id, name, phone}]
+```
+
+### ProClinic DOM Selectors (สำคัญ)
+```js
+// Customer ID จาก list
+'button.btn-delete[data-url]'  // data-url="/admin/customer/{id}"
+
+// HN (อยู่ที่ edit page เท่านั้น)
+'input[name="hn_no"]'  // value เช่น "000485"
+
+// CSRF
+'meta[name="csrf-token"]'
+
+// Edit form
+'form'  // form แรกในหน้า
+```
+
+### ProClinic Form Fields (PUT /admin/customer/{id})
+ดูจาก FormData(form) จริงๆ มี fields เยอะมาก key ที่เราแตะ:
+```
+prefix, firstname, lastname, telephone_number, gender, note
+_method=PUT, _token={csrf}  ← ต้องมีเสมอ
+hn_no  ← ห้ามแตะ! ProClinic กำหนดเอง
+```
+ที่เหลือ (address, citizen_id ฯลฯ) → อ่านจาก FormData(form) แล้วส่งต่อเลย
+
+### AdminDashboard.jsx — Broker Logic
+
+**Auto-sync Trigger** (ใน Firestore onSnapshot ~line 263)
+```js
+if (
+  oldStr !== newStr              // patientData เปลี่ยน
+  && newS.brokerStatus === 'done'
+  && newS.brokerProClinicId
+  && oldS.brokerStatus === 'done'          // ป้องกัน sync ตอน pending→done
+  && oldS.brokerProClinicId === newS.brokerProClinicId  // ป้องกัน sync ตอน ID set ใหม่
+  && lastAutoSyncedStrRef.current[newS.id] !== newStr  // ป้องกัน re-trigger ด้วย data เดิม
+) {
+  lastAutoSyncedStrRef.current[newS.id] = newStr;
+  → window.postMessage(LC_UPDATE_PROCLINIC, { patient, proClinicId, proClinicHN })
+}
+```
+> `lastAutoSyncedStrRef` = `useRef({})` → sessionId → JSON.stringify(patientData) ที่ sync ล่าสุด
+> ป้องกัน snapshot ที่ Firestore batch เข้าด้วยกัน (เช่น `isUnread=false` + broker update)
+> ทำให้ prevRef มี patientData เก่า → guard oldStr !== newStr ผ่าน → re-trigger
+
+**Banner Logic** (useEffect ~line 332) — ⚠️ ต้องไม่ evaluate banner ขณะ brokerChanged
+```js
+const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
+if (brokerChanged) {
+  setViewingSession(latestSession);  // รอ render ถัดไป (ป้องกัน flash + banner ค้าง)
+} else {
+  dataOutOfSync ? setHasNewUpdate(true) : setHasNewUpdate(false);
+}
+// → Banner หายอัตโนมัติหลัง auto-sync สำเร็จ
+```
+
+**brokerFields ที่ sync อัตโนมัติ**:
+```js
+['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError',
+ 'opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt']
+```
+
+**OPD Button States**
+```js
+isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done'
+isPending = brokerPending[id] || session.brokerStatus === 'pending'
+isFailed  = !isPending && !isDone && session.brokerStatus === 'failed'
+// disabled={isPending || isDone}  ← ป้องกัน double-click
+```
+
+### Bug History (Broker Extension)
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| Extension ไม่เปิด ProClinic tab ได้ | race condition: navigate เร็วกว่า listener | `navigateAndWait` ตั้ง listener ก่อน navigate |
+| Search ไม่เจอเมื่อชื่อ+เบอร์เปลี่ยน | ไม่มี unique key ค้นหา | ดึง HN หลัง create, store `brokerProClinicHN`, ใช้ search |
+| Update → button แดงเสมอแม้ save สำเร็จ | ProClinic redirects กลับ /edit เสมอ | เปลี่ยนเป็น fetch + `redirect:'manual'` + ตรวจ `type==='opaqueredirect'` |
+| ProClinic refresh รัวๆ → CAPTCHA | URL-based detect บังคับ navigate 3 ครั้ง | fetch approach → navigate tab แค่ 1 ครั้ง (ดึง CSRF เท่านั้น) |
+| Banner "มีข้อมูลอัปเดต" ไม่หาย | ไม่มีโค้ด clear banner | brokerChanged → skip → render ถัดไป clear อัตโนมัติ |
+| Auto-sync fire ซ้ำหลัง create | guard `oldS.brokerProClinicId === newS.brokerProClinicId` ขาด | เพิ่ม guard ใน onSnapshot |
+| Auto-sync รัวๆ หลังกด Report | Firestore อาจ batch snapshot (isUnread=false + broker update) ทำให้ prevRef stale | `lastAutoSyncedStrRef` track patientData ที่ sync แล้ว → skip ถ้า data เดิม |
+| กดปุ่มแดง (retry) → สร้างคนใหม่ใน ProClinic | `handleOpdClick` ส่ง `LC_FILL_PROCLINIC` เสมอ แม้ผู้ป่วยมี HN อยู่แล้ว | ถ้า `brokerProClinicId \|\| brokerProClinicHN` มีอยู่ → ส่ง `LC_UPDATE_PROCLINIC` แทน |
+| กดปุ่มแดง retry → spinner ไม่หาย | `LC_UPDATE_RESULT` handler ไม่ clear `brokerPending` / timeout | เพิ่ม `clearTimeout` + `setBrokerPending(...)` ใน `LC_UPDATE_RESULT` handler |
