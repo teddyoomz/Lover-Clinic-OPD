@@ -1,5 +1,5 @@
-// POST /api/proclinic/login — Test ProClinic credentials
-import { performLogin, handleCors } from './_lib/session.js';
+// POST /api/proclinic/login — Test ProClinic connection (try cached session first)
+import { createSession, handleCors } from './_lib/session.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Missing origin, email, or password' });
     }
 
-    await performLogin(origin, email, password);
+    await createSession(origin, email, password);
     return res.status(200).json({ success: true });
   } catch (err) {
     return res.status(200).json({ success: false, error: err.message });

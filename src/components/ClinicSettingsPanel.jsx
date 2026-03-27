@@ -420,6 +420,23 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                   setTestingConnection(true);
                   setTestResult('');
                   try {
+                    // Step 1: Ask extension to share cookies first (if available)
+                    try {
+                      await new Promise((resolve) => {
+                        const timeout = setTimeout(resolve, 3000); // max 3s wait
+                        const handler = (e) => {
+                          if (e.data?.type === 'LC_SHARE_COOKIES_RESULT') {
+                            window.removeEventListener('message', handler);
+                            clearTimeout(timeout);
+                            console.log('[test] extension shared cookies:', e.data);
+                            resolve();
+                          }
+                        };
+                        window.addEventListener('message', handler);
+                        window.postMessage({ type: 'LC_SHARE_COOKIES_NOW' }, '*');
+                      });
+                    } catch {}
+                    // Step 2: Test connection via API
                     const res = await fetch('/api/proclinic/login', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },

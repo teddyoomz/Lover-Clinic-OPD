@@ -133,6 +133,12 @@ saveBtn.addEventListener('click', () => {
     saveMsg.textContent = '✓ บันทึกแล้ว';
     saveMsg.style.color = '#16a34a';
     updateCredStatus(true);
-    setTimeout(() => { saveMsg.textContent = ''; }, 2000);
+    // Also share existing cookies to Firestore immediately
+    chrome.runtime.sendMessage({ type: 'LC_SHARE_COOKIES_NOW' }, (res) => {
+      if (res?.ok) {
+        saveMsg.textContent = '✓ บันทึกแล้ว + แชร์ session สำเร็จ';
+      }
+      setTimeout(() => { saveMsg.textContent = ''; }, 3000);
+    });
   });
 });

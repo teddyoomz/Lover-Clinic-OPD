@@ -4,28 +4,11 @@
 //   2. If expired → try server-side login (may fail if reCAPTCHA enforced)
 //   3. If reCAPTCHA blocks → return clear error asking user to use Extension mode
 
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { extractCSRF } from './scraper.js';
 
-// ─── Firebase Admin (singleton) ─────────────────────────────────────────────
-let _db = null;
-function getDb() {
-  if (_db) return _db;
-  if (getApps().length === 0) {
-    const saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (saKey) {
-      initializeApp({ credential: cert(JSON.parse(saKey)) });
-    } else {
-      // Fallback: use project ID only (works in some Vercel setups)
-      initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'loverclinic-opd-4c39b' });
-    }
-  }
-  _db = getFirestore();
-  return _db;
-}
-
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
 
 // ─── Cookie helpers ─────────────────────────────────────────────────────────
 
@@ -58,22 +41,29 @@ function mergeCookies(existing, incoming) {
   return [...map.values()];
 }
 
-// ─── Firestore cookie cache ─────────────────────────────────────────────────
+// ─── Firestore cookie cache (via REST API — no firebase-admin needed) ─────
 
 async function loadCachedCookies(origin) {
   try {
-    const db = getDb();
-    const docPath = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
-    const snap = await db.doc(docPath).get();
-    if (!snap.exists) return null;
-    const data = snap.data();
-    if (data.origin !== origin) return null;
+    const res = await fetch(`${FIRESTORE_BASE}/${SESSION_DOC_PATH}`);
+    if (!res.ok) return null;
+    const doc = await res.json();
+    if (!doc.fields) return null;
+
+    const docOrigin = doc.fields.origin?.stringValue;
+    if (docOrigin !== origin) return null;
+
     // Check if cookies are not too old (max 4 hours)
-    if (data.updatedAt) {
-      const age = Date.now() - new Date(data.updatedAt).getTime();
+    const updatedAt = doc.fields.updatedAt?.stringValue;
+    if (updatedAt) {
+      const age = Date.now() - new Date(updatedAt).getTime();
       if (age > 4 * 60 * 60 * 1000) return null;
     }
-    return data.cookies || null;
+
+    // Extract cookie strings from Firestore array format
+    const cookieValues = doc.fields.cookies?.arrayValue?.values;
+    if (!cookieValues || cookieValues.length === 0) return null;
+    return cookieValues.map(v => v.stringValue).filter(Boolean);
   } catch (e) {
     console.error('[session] loadCachedCookies error:', e.message);
     return null;
@@ -82,11 +72,16 @@ async function loadCachedCookies(origin) {
 
 async function saveCookies(origin, cookies) {
   try {
-    const db = getDb();
-    const docPath = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
-    await db.doc(docPath).set({
-      origin, cookies,
-      updatedAt: new Date().toISOString(),
+    await fetch(`${FIRESTORE_BASE}/${SESSION_DOC_PATH}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          origin: { stringValue: origin },
+          cookies: { arrayValue: { values: cookies.map(s => ({ stringValue: s })) } },
+          updatedAt: { stringValue: new Date().toISOString() },
+        },
+      }),
     });
   } catch (e) {
     console.error('[session] saveCookies error:', e.message);

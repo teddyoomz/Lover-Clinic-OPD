@@ -160,7 +160,30 @@ async function shareSessionCookies() {
     // Format as Set-Cookie-like strings for the API session manager
     const cookieStrings = cookies.map(c => `${c.name}=${c.value}`);
 
-    // Send to LoverClinic tab
+    // Strategy 1: Write directly to Firestore via REST API (no tab dependency)
+    const firestoreUrl = 'https://firestore.googleapis.com/v1/projects/loverclinic-opd-4c39b/databases/(default)/documents/artifacts/loverclinic-opd-4c39b/public/data/clinic_settings/proclinic_session';
+    const firestoreBody = {
+      fields: {
+        origin: { stringValue: PROCLINIC_ORIGIN() },
+        cookies: { arrayValue: { values: cookieStrings.map(s => ({ stringValue: s })) } },
+        updatedAt: { stringValue: new Date().toISOString() },
+      },
+    };
+    // Strategy 1: Try Firestore REST API directly (no auth needed if rules allow public write)
+    let written = false;
+    try {
+      const fsRes = await fetch(firestoreUrl, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(firestoreBody),
+      });
+      if (fsRes.ok) {
+        console.log('[shareSessionCookies] written to Firestore directly:', cookieStrings.length, 'cookies');
+        written = true;
+      }
+    } catch {}
+
+    // Strategy 2: Always also relay via LoverClinic tab (in case REST failed or rules block)
     const lcTabs = await chrome.tabs.query({ url: 'https://lover-clinic-app.vercel.app/*' });
     for (const tab of lcTabs) {
       chrome.tabs.sendMessage(tab.id, {
@@ -169,8 +192,13 @@ async function shareSessionCookies() {
         cookies: cookieStrings,
       }).catch(() => {});
     }
+    if (!written && lcTabs.length === 0) {
+      console.log('[shareSessionCookies] no LoverClinic tab open — cookies not shared');
+    }
+    return { cookieCount: cookieStrings.length, written, relayedToTabs: lcTabs.length };
   } catch (e) {
     console.log('[shareSessionCookies]', e.message);
+    return { error: e.message };
   }
 }
 
@@ -247,6 +275,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // sessionId dedup: ป้องกัน double-queue เมื่อ relay + auto-trigger ยิงพร้อมกัน
     enqueueProClinic(() => handleGetCoursesRequest(msg, lcTabId), msg.sessionId);
     sendResponse({ received: true });
+  }
+  if (msg.type === 'LC_SHARE_COOKIES_NOW') {
+    shareSessionCookies().then((result) => {
+      sendResponse({ ok: true, ...result });
+      // Also send result to LoverClinic tabs so page can see it
+      chrome.tabs.query({ url: 'https://lover-clinic-app.vercel.app/*' }).then(tabs => {
+        for (const tab of tabs) {
+          chrome.tabs.sendMessage(tab.id, { type: 'LC_SHARE_COOKIES_RESULT', ...result }).catch(() => {});
+        }
+      });
+    }).catch(e => sendResponse({ error: e.message }));
+    return true; // async sendResponse
   }
   if (msg.type === 'LC_GET_STATUS')   sendResponse(statusMap);
   if (msg.type === 'LC_CLEAR_STATUS') {

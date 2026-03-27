@@ -1,7 +1,7 @@
 // ─── Lover Clinic Content Script : Bridge (LoverClinic page ↔ Extension) ─────
 // Runs on: https://lover-clinic-app.vercel.app/*
 
-const FORWARD_TYPES = ['LC_FILL_PROCLINIC', 'LC_DELETE_PROCLINIC', 'LC_OPEN_EDIT_PROCLINIC', 'LC_UPDATE_PROCLINIC', 'LC_GET_COURSES'];
+const FORWARD_TYPES = ['LC_FILL_PROCLINIC', 'LC_DELETE_PROCLINIC', 'LC_OPEN_EDIT_PROCLINIC', 'LC_UPDATE_PROCLINIC', 'LC_GET_COURSES', 'LC_SHARE_COOKIES_NOW'];
 
 // Result type ที่ต้อง report กลับเมื่อ extension ไม่ตอบ
 const FAILURE_RESULT_TYPE = {
@@ -34,7 +34,7 @@ window.addEventListener('message', (event) => {
 
 // 2. Forward background results → web page + handle session cookies
 chrome.runtime.onMessage.addListener((msg) => {
-  if (['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT', 'LC_COURSES_RESULT'].includes(msg.type)) {
+  if (['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT', 'LC_COURSES_RESULT', 'LC_SHARE_COOKIES_RESULT'].includes(msg.type)) {
     window.postMessage(msg, '*');
   }
   // Session cookies from extension → forward to page for Firestore caching
