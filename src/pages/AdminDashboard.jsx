@@ -56,7 +56,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
-  const brokerTimers = useRef({}); // sessionId → timeout id
 
   // *** ใส่ VAPID Key ที่ได้จาก Firebase Console → Project Settings → Cloud Messaging → Web Push certificates ***
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
@@ -75,74 +74,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const allSessions = [...sessions, ...archivedSessions];
     allSessions.forEach(async (s) => {
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id]) {
+      if (s.brokerStatus === 'pending' && !brokerPending[s.id]) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
-            brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
+            brokerError: 'หมดเวลา — API ไม่ตอบสนอง',
           });
         } catch(e) { console.error('clear stale broker pending:', e); }
       }
     });
   }, [sessions, archivedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // รับผลลัพธ์จาก Broker Extension
-  useEffect(() => {
-    const handler = async (event) => {
-      if (!['LC_BROKER_RESULT', 'LC_DELETE_RESULT', 'LC_UPDATE_RESULT'].includes(event.data?.type)) return;
-      const { type, sessionId, success, error, proClinicId } = event.data;
-
-      if (type === 'LC_BROKER_RESULT') {
-        // Cancel timeout since we got a real response
-        if (brokerTimers.current[sessionId]) {
-          clearTimeout(brokerTimers.current[sessionId]);
-          delete brokerTimers.current[sessionId];
-        }
-        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            await updateDoc(ref, {
-              opdRecordedAt: new Date().toISOString(),
-              brokerStatus: 'done',
-              brokerFilledAt: new Date().toISOString(),
-              brokerError: null,
-              ...(proClinicId ? { brokerProClinicId: proClinicId } : {}),
-            });
-          } else {
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: error || 'ไม่ทราบสาเหตุ' });
-          }
-        } catch (e) { console.error('broker result update:', e); }
-      }
-
-      if (type === 'LC_DELETE_RESULT') {
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null });
-          } else {
-            setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${error}`);
-            setTimeout(() => setToastMsg(null), 5000);
-          }
-        } catch (e) { console.error('broker delete result:', e); }
-      }
-
-      if (type === 'LC_UPDATE_RESULT') {
-        try {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-          if (success) {
-            // Keep brokerStatus='done', just update sync timestamp
-            await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerError: null });
-          } else {
-            // Update failed → mark failed so button turns red
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${error || 'ไม่ทราบสาเหตุ'}` });
-          }
-        } catch (e) { console.error('broker update result:', e); }
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [db, appId]);
 
   const enablePushNotifications = async () => {
     setPushLoading(true);
@@ -270,8 +212,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           setTimeout(() => setToastMsg(null), 5000);
         }
 
-        // Trigger ProClinic auto-sync for changed sessions
-        brokerSyncSessions.forEach(session => {
+        // Trigger ProClinic auto-sync for changed sessions (via Vercel API)
+        brokerSyncSessions.forEach(async (session) => {
           const d = session.patientData;
           const reasons = getReasons(d);
           const pmh = [];
@@ -291,12 +233,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
             underlying: pmh.join(', '),
           };
-          window.postMessage({
-            type: 'LC_UPDATE_PROCLINIC',
-            sessionId: session.id,
-            proClinicId: session.brokerProClinicId,
-            patient,
-          }, '*');
+          try {
+            const resp = await fetch('/api/proclinic/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ patient, proClinicId: session.brokerProClinicId }),
+            });
+            const result = await resp.json();
+            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+            if (result.success) {
+              await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerError: null });
+            } else {
+              await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${result.error || 'ไม่ทราบสาเหตุ'}` });
+            }
+          } catch (e) {
+            console.error('auto-sync ProClinic error:', e);
+            try {
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+              await updateDoc(ref, { brokerStatus: 'failed', brokerError: `อัปเดต ProClinic ไม่สำเร็จ: ${e.message}` });
+            } catch(e2) { console.error('auto-sync update failed:', e2); }
+          }
         });
       }
       prevSessionsRef.current = data;
@@ -475,17 +431,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch(e) { console.error('restoreToQueue:', e); }
   };
 
-  // ─── OPD / Broker button ────────────────────────────────────────────────────
+  // ─── OPD / ProClinic button (via Vercel API) ────────────────────────────────
   const handleOpdClick = async (session) => {
     const sessionId = session.id;
     const d = session.patientData;
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
 
     // If already recorded → undo
     if (session.opdRecordedAt) {
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          opdRecordedAt: null, brokerStatus: null, brokerError: null,
-        });
+        await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null });
       } catch(e) { console.error('undoOpd:', e); }
       return;
     }
@@ -517,39 +472,67 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     // Set pending in Firestore + local state
     setBrokerPending(prev => ({ ...prev, [sessionId]: true }));
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        brokerStatus: 'pending', brokerError: null,
-      });
+      await updateDoc(ref, { brokerStatus: 'pending', brokerError: null });
     } catch(e) { console.error('broker pending update:', e); }
 
-    // Dispatch to extension via postMessage (content script will forward to background)
-    window.postMessage({ type: 'LC_FILL_PROCLINIC', sessionId, patient }, '*');
+    // Call Vercel API instead of Chrome Extension
+    try {
+      const resp = await fetch('/api/proclinic/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient }),
+      });
+      const result = await resp.json();
+      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
 
-    // ─── 10-second timeout: if no result, mark failed ──────────────────────
-    if (brokerTimers.current[sessionId]) clearTimeout(brokerTimers.current[sessionId]);
-    brokerTimers.current[sessionId] = setTimeout(async () => {
-      delete brokerTimers.current[sessionId];
+      if (result.success) {
+        await updateDoc(ref, {
+          opdRecordedAt: new Date().toISOString(),
+          brokerStatus: 'done',
+          brokerFilledAt: new Date().toISOString(),
+          brokerError: null,
+          ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
+        });
+      } else {
+        await updateDoc(ref, { brokerStatus: 'failed', brokerError: result.error || 'ไม่ทราบสาเหตุ' });
+      }
+    } catch (err) {
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          brokerStatus: 'failed',
-          brokerError: 'หมดเวลา — ไม่พบ Extension หรือ Extension ไม่ตอบสนอง',
-        });
-      } catch(e) { console.error('broker timeout update:', e); }
-    }, 10000);
+        await updateDoc(ref, { brokerStatus: 'failed', brokerError: `เชื่อมต่อ API ไม่ได้: ${err.message}` });
+      } catch(e) { console.error('broker error update:', e); }
+    }
   };
 
   const handleProClinicEdit = (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!proClinicId) return;
-    window.postMessage({ type: 'LC_OPEN_EDIT_PROCLINIC', proClinicId }, '*');
+    window.open(`https://trial.proclinicth.com/admin/customer/${proClinicId}/edit`, '_blank');
   };
 
-  const handleProClinicDelete = (session) => {
+  const handleProClinicDelete = async (session) => {
     const proClinicId = session.brokerProClinicId;
     if (!proClinicId) return;
     if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
-    window.postMessage({ type: 'LC_DELETE_PROCLINIC', sessionId: session.id, proClinicId }, '*');
+
+    try {
+      const resp = await fetch('/api/proclinic/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proClinicId }),
+      });
+      const result = await resp.json();
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+      if (result.success) {
+        await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null, brokerProClinicId: null });
+      } else {
+        setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result.error}`);
+        setTimeout(() => setToastMsg(null), 5000);
+      }
+    } catch (err) {
+      setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 5000);
+    }
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
