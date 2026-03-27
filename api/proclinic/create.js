@@ -14,9 +14,10 @@ export default async function handler(req, res) {
     }
 
     const session = await createSession(origin, email, password);
+    const base = session.origin;
 
     // Step 1: GET create page for CSRF
-    const createHtml = await session.fetchText(`${origin}/admin/customer/create`);
+    const createHtml = await session.fetchText(`${base}/admin/customer/create`);
     const csrf = extractCSRF(createHtml);
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า create');
 
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     const defaultFields = extractFormFields(createHtml);
     const formData = buildCreateFormData(patient, csrf, defaultFields);
 
-    const submitRes = await session.fetch(`${origin}/admin/customer`, {
+    const submitRes = await session.fetch(`${base}/admin/customer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
     // Step 4: Extract HN from edit page
     let proClinicHN = null;
     try {
-      const editHtml = await session.fetchText(`${origin}/admin/customer/${proClinicId}/edit`);
+      const editHtml = await session.fetchText(`${base}/admin/customer/${proClinicId}/edit`);
       proClinicHN = extractHN(editHtml);
     } catch (_) { /* non-fatal */ }
 

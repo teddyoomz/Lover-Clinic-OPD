@@ -1,4 +1,4 @@
-// POST /api/proclinic/login — Test ProClinic connection (try cached session first)
+// POST /api/proclinic/login — Test ProClinic connection
 import { createSession, handleCors } from './_lib/session.js';
 
 export default async function handler(req, res) {

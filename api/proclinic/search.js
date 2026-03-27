@@ -13,7 +13,8 @@ export default async function handler(req, res) {
     }
 
     const session = await createSession(origin, email, password);
-    const html = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(query)}`);
+    const base = session.origin;
+    const html = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(query)}`);
     const customers = extractSearchResults(html);
 
     return res.status(200).json({ success: true, customers });

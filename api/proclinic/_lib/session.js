@@ -171,8 +171,9 @@ export async function createSession(originArg, emailArg, passwordArg) {
     sessionState.cookies = result.cookies;
   }
 
-  // Return session object
+  // Return session object (origin exposed so API routes can build URLs)
   return {
+    origin,
     cookies: sessionState.cookies,
     fetch: async (url, options = {}) => {
       const headers = {

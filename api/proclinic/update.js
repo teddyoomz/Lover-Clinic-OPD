@@ -3,17 +3,17 @@ import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractSearchResults, findBestMatch, extractFormFields, extractValidationErrors } from './_lib/scraper.js';
 import { buildUpdateFormData } from './_lib/fields.js';
 
-async function resolveCustomerId(session, origin, proClinicId, proClinicHN, patient) {
+async function resolveCustomerId(session, base, proClinicId, proClinicHN, patient) {
   if (proClinicId) return proClinicId;
 
   if (proClinicHN) {
-    const hnHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(proClinicHN)}`);
+    const hnHtml = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(proClinicHN)}`);
     const hnResults = extractSearchResults(hnHtml);
     if (hnResults.length > 0) return hnResults[0].id;
   }
 
   if (patient?.phone) {
-    const phoneHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(patient.phone)}`);
+    const phoneHtml = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(patient.phone)}`);
     const phoneResults = extractSearchResults(phoneHtml);
     const match = findBestMatch(phoneResults, patient);
     if (match) return match.id;
@@ -22,7 +22,7 @@ async function resolveCustomerId(session, origin, proClinicId, proClinicHN, pati
   const query = [patient?.firstName, patient?.lastName].filter(Boolean).join(' ');
   if (!query.trim()) throw new Error('ไม่มีข้อมูล HN / เบอร์ / ชื่อ สำหรับค้นหา ProClinic');
 
-  const nameHtml = await session.fetchText(`${origin}/admin/customer?q=${encodeURIComponent(query)}`);
+  const nameHtml = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(query)}`);
   const nameResults = extractSearchResults(nameHtml);
   const match = findBestMatch(nameResults, patient);
   if (match) return match.id;
@@ -41,10 +41,11 @@ export default async function handler(req, res) {
     }
 
     const session = await createSession(origin, email, password);
-    const targetId = await resolveCustomerId(session, origin, proClinicId, proClinicHN, patient);
+    const base = session.origin;
+    const targetId = await resolveCustomerId(session, base, proClinicId, proClinicHN, patient);
 
     // GET edit page → CSRF + existing form fields
-    const editHtml = await session.fetchText(`${origin}/admin/customer/${targetId}/edit`);
+    const editHtml = await session.fetchText(`${base}/admin/customer/${targetId}/edit`);
     const csrf = extractCSRF(editHtml);
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า edit');
 
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
     const formData = buildUpdateFormData(patient, existingFields, csrf);
 
     // POST update
-    const updateRes = await session.fetch(`${origin}/admin/customer/${targetId}`, {
+    const updateRes = await session.fetch(`${base}/admin/customer/${targetId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

@@ -13,7 +13,8 @@ export default async function handler(req, res) {
     }
 
     const session = await createSession(origin, email, password);
-    const customerUrl = `${origin}/admin/customer/${proClinicId}`;
+    const base = session.origin;
+    const customerUrl = `${base}/admin/customer/${proClinicId}`;
 
     // Page 1
     const page1Html = await session.fetchText(customerUrl);
