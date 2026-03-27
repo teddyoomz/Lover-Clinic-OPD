@@ -518,7 +518,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     ? Math.max(0, COURSES_REFRESH_COOLDOWN_MS - (Date.now() - lastAutoFetch.toMillis()))
     : 0;
   const inCooldown   = cooldownRemainingMs > 0;
-  const cooldownMins = Math.ceil(cooldownRemainingMs / 60_000);
+  const configuredMins = clinicSettings?.patientSyncCooldownMins ?? 0;
+  const cooldownMins = Math.min(Math.ceil(cooldownRemainingMs / 60_000), configuredMins);
 
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200">
@@ -622,7 +623,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="text-xs font-black uppercase tracking-widest text-[#06C755]">LINE</span>
-                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">{language === 'en' ? 'Add Friend' : 'เพิ่มเพื่อน'}</span>
+                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">{language === 'en' ? 'Contact Clinic' : 'ติดต่อคลินิก'}</span>
                   </div>
                 </div>
               </a>
