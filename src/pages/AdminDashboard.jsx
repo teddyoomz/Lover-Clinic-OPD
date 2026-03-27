@@ -674,6 +674,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
           ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
         });
+      } else if (result?.notFound) {
+        // HN ไม่เจอใน ProClinic → ถอด HN/OPD แล้วลอง create ใหม่อัตโนมัติ
+        await updateDoc(ref, {
+          brokerProClinicId: null, brokerProClinicHN: null,
+          opdRecordedAt: null, brokerLastAutoSyncAt: null,
+          brokerStatus: null, brokerError: null, brokerJob: null,
+        });
+        setToastMsg('HN ไม่พบใน ProClinic — ถอด HN แล้ว กำลังบันทึกใหม่...');
+        setTimeout(() => setToastMsg(null), 3000);
+        // ลอง create ใหม่
+        const createResult = await broker.fillProClinic(patient);
+        if (createResult?.success) {
+          await updateDoc(ref, {
+            opdRecordedAt: new Date().toISOString(),
+            brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+            brokerError: null, brokerJob: null,
+            ...(createResult.proClinicId ? { brokerProClinicId: createResult.proClinicId } : {}),
+            ...(createResult.proClinicHN ? { brokerProClinicHN: createResult.proClinicHN } : {}),
+          });
+        } else {
+          await updateDoc(ref, { brokerStatus: 'failed', brokerError: createResult?.error || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+        }
       } else {
         await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
       }
@@ -759,6 +781,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
           ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
         });
+      } else if (result?.notFound) {
+        // HN ไม่เจอใน ProClinic → ถอด HN/OPD ออก พร้อมบันทึกใหม่
+        setViewingSession(prev => prev?.id === sessionId
+          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null } : prev);
+        await updateDoc(ref, {
+          brokerStatus: null, brokerError: null, brokerJob: null,
+          brokerProClinicId: null, brokerProClinicHN: null,
+          opdRecordedAt: null, brokerLastAutoSyncAt: null,
+        });
+        setToastMsg('HN ไม่พบใน ProClinic — ถอด HN ออกแล้ว พร้อมบันทึกใหม่');
+        setTimeout(() => setToastMsg(null), 5000);
       } else {
         setViewingSession(prev => prev?.id === sessionId
           ? { ...prev, brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ' } : prev);

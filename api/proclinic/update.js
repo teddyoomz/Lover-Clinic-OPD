@@ -27,7 +27,9 @@ async function resolveCustomerId(session, base, proClinicId, proClinicHN, patien
   const match = findBestMatch(nameResults, patient);
   if (match) return match.id;
 
-  throw new Error(`ค้นหา HN:"${proClinicHN}" / ชื่อ:"${query}" ใน ProClinic ไม่พบ`);
+  const err = new Error(`ค้นหา HN:"${proClinicHN}" / ชื่อ:"${query}" ใน ProClinic ไม่พบ`);
+  err.notFound = true;
+  throw err;
 }
 
 export default async function handler(req, res) {
@@ -76,6 +78,7 @@ export default async function handler(req, res) {
   } catch (err) {
     const resp = { success: false, error: err.message };
     if (err.sessionExpired) resp.sessionExpired = true;
+    if (err.notFound) resp.notFound = true;
     return res.status(200).json(resp);
   }
 }
