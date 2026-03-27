@@ -145,7 +145,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     const allSessions = [...sessions, ...archivedSessions];
     allSessions.forEach(async (s) => {
-      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !brokerPendingRef.current[s.id] && !autoSyncInFlightRef.current.has(s.id)) {
+      if (s.brokerStatus === 'pending' && !brokerTimers.current[s.id] && !brokerPendingRef.current[s.id] && !autoSyncInFlightRef.current.has(s.id) && !autoCoursesRequestedRef.current.has(s.id)) {
         try {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
             brokerStatus: 'failed',
@@ -877,6 +877,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     };
     const jobId = `${session.id}_del_${Date.now()}`;
     const brokerJob = { id: jobId, type: 'LC_DELETE_PROCLINIC', proClinicId, proClinicHN: session.brokerProClinicHN || null, patient };
+    setBrokerPending(prev => ({ ...prev, [session.id]: true }));
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
         brokerJob, brokerStatus: 'pending', brokerError: null,
@@ -886,6 +887,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     try {
       const result = await broker.deleteProClinic(
         proClinicId, session.brokerProClinicHN || null, patient);
+      setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
       if (result?.success) {
         setViewingSession(prev => prev?.id === session.id
@@ -898,7 +900,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
         setTimeout(() => setToastMsg(null), 5000);
       }
-    } catch(e) { console.error('delete error:', e); }
+    } catch(e) {
+      setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
+      console.error('delete error:', e);
+    }
   };
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
