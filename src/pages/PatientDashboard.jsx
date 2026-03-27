@@ -390,9 +390,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     // ใช้ ref เพื่อหลีกเลี่ยง stale closure (state อาจ lag หลัง snapshot fire)
     const sd = sessionDataRef.current;
     if (!sessionIdRef.current || !sd) return;
-    // cooldown guard
-    const lastFetch = sd.lastCoursesAutoFetch;
-    if (lastFetch && (Date.now() - lastFetch.toMillis()) < cooldownMsRef.current) return;
+    // cooldown guard (skip เมื่อ cooldown = 0 เช่น admin view)
+    const cooldownMs = cooldownMsRef.current;
+    if (cooldownMs > 0) {
+      const lastFetch = sd.lastCoursesAutoFetch;
+      if (lastFetch && (Date.now() - lastFetch.toMillis()) < cooldownMs) return;
+    }
     // เรียก API ตรง
     if (sd.brokerProClinicId) {
       refreshRequestedRef.current = true;
