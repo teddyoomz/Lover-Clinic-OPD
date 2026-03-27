@@ -560,7 +560,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
           <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none shadow-lg"
-              style={{ background: `radial-gradient(135deg, rgba(${acRgb},0.35) 0%, rgba(${acRgb},0.12) 100%)`, border: `1.5px solid rgba(${acRgb},0.5)`, color: ac, boxShadow: `0 0 28px rgba(${acRgb},0.25), 0 0 0 4px rgba(${acRgb},0.06)` }}>
+              style={{ background: 'radial-gradient(135deg, rgba(202,138,4,0.30) 0%, rgba(202,138,4,0.10) 100%)', border: '1.5px solid rgba(202,138,4,0.45)', color: '#d4a017', boxShadow: '0 0 28px rgba(202,138,4,0.20), 0 0 0 4px rgba(202,138,4,0.06)' }}>
               {getInitials(d.firstName || patientName, d.lastName)}
             </div>
 
@@ -570,7 +570,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
-                    style={{ color: ac, background: `rgba(${acRgb},0.12)`, border: `1px solid rgba(${acRgb},0.3)` }}>
+                    style={{ color: '#d4a017', background: 'rgba(202,138,4,0.10)', border: '1px solid rgba(202,138,4,0.25)' }}>
                     HN {hn}
                   </span>
                 )}
@@ -600,8 +600,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
           <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] overflow-hidden"
             style={{ boxShadow: `var(--shadow-panel), 0 0 40px rgba(${acRgb},0.04)` }}>
-            {/* Accent top bar — red neon line */}
-            <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 5%, rgba(${acRgb},0.6) 30%, rgba(202,138,4,0.4) 50%, rgba(${acRgb},0.6) 70%, transparent 95%)` }} />
+            {/* Accent top bar */}
+            <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.4) 30%, rgba(255,255,255,0.06) 50%, rgba(202,138,4,0.4) 70%, transparent 95%)' }} />
 
             <div className="grid" style={{ gridTemplateColumns: clinicSettings?.lineOfficialUrl && clinicSettings?.clinicPhone ? '1fr auto 1fr' : '1fr' }}>
 
@@ -612,21 +612,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group relative flex items-center gap-3.5 px-5 py-4 transition-all duration-300 active:scale-[0.98]"
-                  style={{ '--btn-glow': `rgba(${acRgb},0.08)` }}
                 >
                   {/* Hover glow */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-400 pointer-events-none"
-                    style={{ background: `radial-gradient(ellipse at 30% 50%, rgba(${acRgb},0.08) 0%, transparent 70%)` }} />
+                    style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(6,199,85,0.08) 0%, transparent 70%)' }} />
 
                   {/* Icon */}
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_16px_var(--btn-glow)]"
-                    style={{ background: `rgba(${acRgb},0.08)`, borderColor: `rgba(${acRgb},0.15)` }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" className="group-hover:scale-110 transition-transform duration-300" style={{ fill: ac }}><path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
+                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(6,199,85,0.15)]"
+                    style={{ background: 'rgba(6,199,85,0.08)', borderColor: 'rgba(6,199,85,0.18)' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" className="group-hover:scale-110 transition-transform duration-300" style={{ fill: '#06C755' }}><path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
                   </div>
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-white">LINE</span>
+                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#06C755]">LINE</span>
                     <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors truncate">
                       {language === 'en' ? 'Contact Clinic' : 'ติดต่อคลินิก'}
                     </span>
@@ -634,7 +633,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className="ml-auto shrink-0 text-gray-700 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all duration-300">
+                    className="ml-auto shrink-0 text-gray-700 group-hover:text-[#06C755]/60 group-hover:translate-x-0.5 transition-all duration-300">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -642,7 +641,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
               {/* Divider */}
               {clinicSettings?.lineOfficialUrl && clinicSettings?.clinicPhone && (
-                <div className="w-px self-stretch my-3" style={{ background: `linear-gradient(180deg, transparent, rgba(${acRgb},0.2), rgba(202,138,4,0.15), transparent)` }} />
+                <div className="w-px self-stretch my-3" style={{ background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.06), transparent)' }} />
               )}
 
               {/* Call Clinic */}
@@ -650,21 +649,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                 <a
                   href={`tel:${clinicSettings.clinicPhone.replace(/[^0-9+]/g, '')}`}
                   className="group relative flex items-center gap-3.5 px-5 py-4 transition-all duration-300 active:scale-[0.98]"
-                  style={{ '--btn-glow': `rgba(${acRgb},0.08)` }}
                 >
                   {/* Hover glow */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-400 pointer-events-none"
-                    style={{ background: `radial-gradient(ellipse at 30% 50%, rgba(${acRgb},0.08) 0%, transparent 70%)` }} />
+                    style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(202,138,4,0.08) 0%, transparent 70%)' }} />
 
                   {/* Icon */}
-                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_16px_var(--btn-glow)]"
-                    style={{ background: `rgba(${acRgb},0.08)`, borderColor: `rgba(${acRgb},0.15)` }}>
-                    <PhoneCall size={18} className="group-hover:scale-110 transition-transform duration-300 group-hover:animate-[wiggle_0.5s_ease-in-out]" style={{ color: ac }} />
+                  <div className="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(202,138,4,0.15)]"
+                    style={{ background: 'rgba(202,138,4,0.08)', borderColor: 'rgba(202,138,4,0.18)' }}>
+                    <PhoneCall size={18} className="group-hover:scale-110 transition-transform duration-300 group-hover:animate-[wiggle_0.5s_ease-in-out]" style={{ color: '#d4a017' }} />
                   </div>
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-white">
+                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#d4a017]">
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
                     <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors font-mono truncate">
@@ -674,7 +672,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className="ml-auto shrink-0 text-gray-700 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all duration-300">
+                    className="ml-auto shrink-0 text-gray-700 group-hover:text-[#d4a017]/60 group-hover:translate-x-0.5 transition-all duration-300">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -682,7 +680,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             </div>
 
             {/* Bottom accent line */}
-            <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 10%, rgba(${acRgb},0.15) 50%, transparent 90%)` }} />
+            <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(6,199,85,0.12) 30%, rgba(255,255,255,0.04) 50%, rgba(202,138,4,0.12) 70%, transparent 90%)' }} />
           </div>
         )}
 
