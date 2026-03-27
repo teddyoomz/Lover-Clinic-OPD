@@ -8,6 +8,10 @@ async function apiFetch(endpoint, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    return { success: false, error: `API returned non-JSON (${res.status})` };
+  }
   return res.json();
 }
 
