@@ -204,9 +204,10 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
         isReady
           ? 'cursor-pointer text-yellow-300 border-yellow-600/40 bg-yellow-950/30 hover:bg-yellow-950/50 active:scale-95'
           : isDone
-          ? 'cursor-default text-emerald-400 border-emerald-700/40 bg-emerald-950/30'
+          ? 'cursor-default'
           : 'cursor-default text-gray-500 border-gray-700/30 bg-gray-900/20'
       }`}
+      {...(isDone && !isReady ? { style: { color: '#059669', borderColor: 'rgba(5,150,105,0.5)', background: 'rgba(5,150,105,0.08)' } } : {})}
     >
       {icon}
       <span>{label}</span>
