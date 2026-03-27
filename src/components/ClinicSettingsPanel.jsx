@@ -18,7 +18,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const fileInputRefLight = useRef(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  // showPassword removed — credentials no longer in settings UI
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -90,13 +90,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
         patientSyncCooldownMins: newCooldown,
         brokerMode: settings.brokerMode || 'extension',
-        // Credentials: only save to Firestore in Extension mode (Extension reads from here)
-        // Server API mode uses Vercel env vars — never store in Firestore
-        ...(settings.brokerMode !== 'script' ? {
-          proClinicOrigin: settings.proClinicOrigin?.trim() || DEFAULT_CLINIC_SETTINGS.proClinicOrigin,
-          proClinicEmail: settings.proClinicEmail?.trim() || '',
-          proClinicPassword: settings.proClinicPassword || '',
-        } : {}),
+        // Credentials are NOT stored in Firestore (security)
+        // Server API: Vercel env vars | Extension: chrome.storage.local
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -373,63 +368,33 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             </div>
           </div>
 
-          {/* ProClinic Credentials */}
-          {settings.brokerMode === 'script' ? (
-            <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4">
-              <div className="flex items-center gap-2 text-cyan-400 text-sm font-bold mb-2">
-                <Lock size={14} /> Credentials เก็บใน Vercel Environment
-              </div>
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                ProClinic URL, Email, Password ถูกเก็บใน Vercel Environment Variables อย่างปลอดภัย
-                — ไม่อัพไป GitHub, ไม่เก็บใน Firestore
-              </p>
-              <p className="text-[10px] text-gray-600 mt-1.5">
-                แก้ไขที่: Vercel Dashboard → Settings → Environment Variables
-              </p>
+          {/* ProClinic Credentials Info */}
+          <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4">
+            <div className="flex items-center gap-2 text-cyan-400 text-sm font-bold mb-2">
+              <Lock size={14} /> Credentials เก็บอย่างปลอดภัย
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic URL</label>
-                <input
-                  type="text"
-                  value={settings.proClinicOrigin || ''}
-                  onChange={e => setSettings(prev => ({...prev, proClinicOrigin: e.target.value}))}
-                  placeholder="https://trial.proclinicth.com"
-                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Email</label>
-                <input
-                  type="email"
-                  value={settings.proClinicEmail || ''}
-                  onChange={e => setSettings(prev => ({...prev, proClinicEmail: e.target.value}))}
-                  placeholder="demo12@proclinic.com"
-                  className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none focus:border-cyan-500 transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">ProClinic Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={settings.proClinicPassword || ''}
-                    onChange={e => setSettings(prev => ({...prev, proClinicPassword: e.target.value}))}
-                    placeholder="••••••"
-                    className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 pr-12 outline-none focus:border-cyan-500 transition-all text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+            {settings.brokerMode === 'script' ? (
+              <>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  ProClinic URL, Email, Password เก็บใน Vercel Environment Variables
+                  — ไม่อัพไป GitHub, ไม่เก็บใน Firestore
+                </p>
+                <p className="text-[10px] text-gray-600 mt-1.5">
+                  แก้ไขที่: Vercel Dashboard → Project Settings → Environment Variables
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  ตั้งค่า ProClinic URL, Email, Password ผ่าน Extension Popup
+                  — เก็บใน Chrome Storage เฉพาะเครื่องนี้
+                </p>
+                <p className="text-[10px] text-gray-600 mt-1.5">
+                  คลิกไอคอน Extension → กดเกียร์ ⚙ → กรอก credentials → บันทึก
+                </p>
+              </>
+            )}
+          </div>
 
           {/* Test Connection Button */}
           {settings.brokerMode === 'script' && (
