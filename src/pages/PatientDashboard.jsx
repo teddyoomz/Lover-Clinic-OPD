@@ -300,18 +300,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     const cooling = cooldownMsRef.current > 0 && last && (Date.now() - last.toMillis()) < cooldownMsRef.current;
     if (!cooling) {
       refreshRequestedRef.current = true;
-      // Script mode: call API directly (no AdminDashboard relay needed)
-      if (clinicSettings?.brokerMode === 'script') {
-        fetchCoursesViaApi(sessionData.id, sessionData.brokerProClinicId);
-        return;
-      }
-      // Extension mode: relay via Firestore → AdminDashboard → Extension
-      setSyncTimedOut(false);
-      setJustSynced(false);
-      updateDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionData.id),
-        { coursesRefreshRequest: serverTimestamp() }
-      ).then(startSyncTimeout).catch(e => { console.error(e); clearSyncTimeout(); setSyncTimedOut(true); });
+      // Always call API directly — no AdminDashboard relay needed (works for both script + extension modes)
+      fetchCoursesViaApi(sessionData.id, sessionData.brokerProClinicId);
     }
   }, [clinicSettingsLoaded, sessionData?.id]);
 
@@ -327,14 +317,9 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       const d = sessionDataRef.current;
       if (!d || refreshRequestedRef.current || d.coursesRefreshRequest) return;
       refreshRequestedRef.current = true;
-      if (clinicSettings?.brokerMode === 'script' && d.brokerProClinicId) {
+      if (d.brokerProClinicId) {
         fetchCoursesViaApi(d.id, d.brokerProClinicId);
-        return;
       }
-      updateDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', d.id),
-        { coursesRefreshRequest: serverTimestamp() }
-      ).then(startSyncTimeout).catch(console.error);
     }, remaining + 200);
     return () => clearTimeout(id);
   }, [sessionData?.lastCoursesAutoFetch]);
@@ -398,22 +383,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     // cooldown guard
     const lastFetch = sessionData?.lastCoursesAutoFetch;
     if (lastFetch && (Date.now() - lastFetch.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
-    // Script mode: call API directly
-    if (clinicSettings?.brokerMode === 'script' && sessionData?.brokerProClinicId) {
+    // Always call API directly — works for both script + extension modes
+    if (sessionData?.brokerProClinicId) {
       refreshRequestedRef.current = true;
       return fetchCoursesViaApi(sessionIdRef.current, sessionData.brokerProClinicId);
-    }
-    // Extension mode: relay via Firestore
-    setSyncTimedOut(false);
-    setJustSynced(false);
-    startSyncTimeout();
-    try {
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionIdRef.current);
-      await updateDoc(ref, { coursesRefreshRequest: serverTimestamp() });
-    } catch(e) {
-      console.error(e);
-      clearSyncTimeout();
-      setSyncTimedOut(true);
     }
   }
 
