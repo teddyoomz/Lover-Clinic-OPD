@@ -561,9 +561,9 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             {/* Avatar — glowing red ring */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
               style={{
-                background: `radial-gradient(135deg, rgba(${acRgb},0.12) 0%, rgba(0,0,0,0.6) 100%)`,
+                background: `radial-gradient(135deg, rgba(${acRgb},0.12) 0%, var(--bg-card) 100%)`,
                 border: `2px solid rgba(${acRgb},0.5)`,
-                color: '#e5e5e5',
+                color: 'var(--tx-primary)',
                 boxShadow: `0 0 18px rgba(${acRgb},0.35), 0 0 40px rgba(${acRgb},0.12), inset 0 0 12px rgba(${acRgb},0.08)`,
               }}>
               {getInitials(d.firstName || patientName, d.lastName)}
@@ -575,7 +575,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
-                    style={{ color: '#d4d4d4', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                    style={{ color: 'var(--tx-secondary)', background: 'var(--bg-hover)', border: '1px solid var(--bd)' }}>
                     HN {hn}
                   </span>
                 )}
