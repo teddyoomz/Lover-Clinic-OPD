@@ -811,6 +811,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   // เปิด PatientDashboard ใน new tab (admin view — ไม่มี cooldown)
+  const [patientViewUrl, setPatientViewUrl] = useState(null);
+
   const handleOpenPatientView = async (session) => {
     let token = session.patientLinkToken;
     const enabled = session.patientLinkEnabled;
@@ -822,7 +824,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       } catch(e) { console.error('handleOpenPatientView:', e); return; }
     }
-    window.location.href = `/?patient=${token}&admin=1`;
+    setPatientViewUrl(`/?patient=${token}&admin=1`);
   };
 
   const handleGetCourses = async (session) => {
@@ -2449,6 +2451,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         );
       })()}
+
+      {/* Patient View Modal (iframe popup) */}
+      {patientViewUrl && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col" onClick={() => setPatientViewUrl(null)}>
+          <div className="flex items-center justify-between px-4 py-2 bg-[#0a0a0a]/90 border-b border-[#333] shrink-0">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">ข้อมูลผู้ป่วย — Admin View</span>
+            <button onClick={() => setPatientViewUrl(null)} className="text-gray-500 hover:text-white text-xl font-bold px-2 transition-colors">&times;</button>
+          </div>
+          <div className="flex-1 p-2 sm:p-4" onClick={e => e.stopPropagation()}>
+            <iframe src={patientViewUrl} className="w-full h-full rounded-xl border border-[#333]" style={{background:'#0a0a0a', boxShadow:`0 0 40px rgba(${acRgb},0.12)`}} />
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {sessionToDelete && (
