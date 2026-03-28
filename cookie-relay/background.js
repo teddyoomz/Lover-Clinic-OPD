@@ -248,16 +248,22 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'LC_SYNC_COOKIES') {
-    // Try sync first, if no cookies → auto-login
-    syncCookies().then(async (result) => {
-      if (result.needsLogin) {
-        console.log('[CookieRelay] No valid cookies — attempting auto-login');
-        const loginResult = await autoLogin();
-        sendResponse(loginResult);
-      } else {
-        sendResponse(result);
-      }
-    });
+    if (msg.forceLogin) {
+      // Server says cookies are stale — skip sync, force fresh login
+      console.log('[CookieRelay] Force login requested — auto-login first');
+      autoLogin().then(result => sendResponse(result));
+    } else {
+      // Try sync first, if no cookies → auto-login
+      syncCookies().then(async (result) => {
+        if (result.needsLogin) {
+          console.log('[CookieRelay] No valid cookies — attempting auto-login');
+          const loginResult = await autoLogin();
+          sendResponse(loginResult);
+        } else {
+          sendResponse(result);
+        }
+      });
+    }
     return true; // async
   }
 

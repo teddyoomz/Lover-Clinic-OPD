@@ -13,7 +13,7 @@ window.addEventListener('message', (event) => {
   if (event.source !== window) return;
 
   if (event.data?.type === 'LC_SYNC_COOKIES') {
-    sendToBackground({ type: 'LC_SYNC_COOKIES' }, (result) => {
+    sendToBackground({ type: 'LC_SYNC_COOKIES', forceLogin: !!event.data.forceLogin }, (result) => {
       window.postMessage({
         type: 'LC_SYNC_COOKIES_RESULT',
         result: result || { success: false, error: 'Extension not responding' },

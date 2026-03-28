@@ -26,8 +26,8 @@ function sendMessageToExtension(type, extra = {}) {
   });
 }
 
-function requestExtensionSync() {
-  return sendMessageToExtension('LC_SYNC_COOKIES');
+function requestExtensionSync(forceLogin = false) {
+  return sendMessageToExtension('LC_SYNC_COOKIES', { forceLogin });
 }
 
 async function ensureExtensionHasCredentials() {
@@ -87,10 +87,10 @@ async function apiFetch(endpoint, body, _retried) {
 
   // If server says it needs extension cookies and we haven't retried yet
   if (data.extensionNeeded && !_retried) {
-    console.log('[broker] Server needs cookies — sending credentials to extension + requesting sync');
+    console.log('[broker] Server needs cookies — sending credentials to extension + requesting sync (forceLogin)');
     // Ensure extension has credentials before auto-login attempt
     await ensureExtensionHasCredentials();
-    const syncResult = await requestExtensionSync();
+    const syncResult = await requestExtensionSync(true);
     if (syncResult.success) {
       console.log('[broker] Extension synced cookies — retrying API call');
       return apiFetch(endpoint, body, true);
