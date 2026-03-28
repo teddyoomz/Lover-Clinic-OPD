@@ -2001,6 +2001,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               {isSyncing && session.depositSyncStatus === 'pending' ? <Loader2 size={14} className="animate-spin"/> : <XCircle size={14}/>}
                             </button>
                           )}
+                          {hasOPD && hasDeposit ? (
                           <button onClick={() => {
                             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
                               isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
@@ -2008,6 +2009,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามารับบริการเรียบร้อย">
                             <UserCheck size={14}/>
                           </button>
+                          ) : (
+                          <button onClick={() => {
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+                              isArchived: true, archivedAt: serverTimestamp(),
+                            });
+                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ลบ (ย้ายไปประวัติจอง)">
+                            <Trash2 size={14}/>
+                          </button>
+                          )}
                         </div>
                       </div>
 
