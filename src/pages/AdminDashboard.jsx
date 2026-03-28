@@ -1139,7 +1139,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
         await updateDoc(ref, {
           depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),
-          ...(result.depositId && !sess.depositProClinicId ? { depositProClinicId: result.depositId } : {}),
+          ...(result.depositId ? { depositProClinicId: result.depositId } : {}),
         });
         setToastMsg('อัพเดทข้อมูลจองสำเร็จทั้งในระบบและ ProClinic');
       } else {
