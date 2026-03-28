@@ -1015,7 +1015,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         appointmentTo: (dep.visitPurpose || []).join(', '),
       };
       const depResult = await broker.submitDeposit(proClinicId, depositPayload);
-      if (!depResult?.success) throw new Error(depResult?.error || 'บันทึกมัดจำไม่สำเร็จ');
+      if (!depResult?.success) {
+        if (depResult?.debug) console.error('deposit-submit debug:', depResult.debug);
+        throw new Error(depResult?.error || 'บันทึกมัดจำไม่สำเร็จ');
+      }
 
       await updateDoc(ref, {
         depositSyncStatus: 'done',
