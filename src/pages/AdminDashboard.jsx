@@ -1869,8 +1869,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     <div className="w-full h-px bg-[var(--bd)] my-2"></div>
                     {/* Simulate button */}
-                    <button onClick={() => window.open(linkUrl, '_blank')} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
-                      <Eye size={16}/> เปิดหน้ากรอกฟอร์ม
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                      <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
                     </button>
                   </div>
                 );
@@ -2156,7 +2156,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                   ) : (
                     <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
-                      <Eye size={16}/> จำลองหน้าจอมือถือ
+                      <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
                     </button>
                   )}
                 </div>
