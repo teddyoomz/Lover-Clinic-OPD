@@ -1678,18 +1678,51 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           )}
         </div>
       ) : adminMode === 'deposit' ? (
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] shadow-[var(--shadow-panel)]">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-black text-emerald-400 flex items-center gap-2 mb-1"><Banknote size={22}/> ลูกค้าจองมัดจำ</h2>
-              <p className="text-xs text-gray-500">{depositSessions.length} รายการ</p>
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
+          {/* ── QR Panel (reuse same pattern as queue) ── */}
+          <div className="xl:col-span-1">
+            <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
+              <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
+                <QrCode size={18} className="text-emerald-500" /> QR Code จอง
+              </h2>
+              {selectedQR && selectedQR.startsWith('DEP-') ? (() => {
+                const depSession = depositSessions.find(s => s.id === selectedQR);
+                const plToken = depSession?.patientLinkToken;
+                const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
+                const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
+                return (
+                  <div className="space-y-4 flex flex-col items-center w-full">
+                    <img src={qrSrc} alt="QR" className="w-48 h-48 rounded-xl border-2 border-emerald-900/50 shadow-lg"/>
+                    <div className="w-full">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">รหัสคิว</p>
+                      <p className="font-mono text-xs text-emerald-400 font-bold break-all">{selectedQR}</p>
+                    </div>
+                    <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
+                      className="w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white">
+                      {isLinkCopied ? <><CheckCircle2 size={14}/> คัดลอกแล้ว!</> : <><Link size={14}/> คัดลอกลิงก์</>}
+                    </button>
+                  </div>
+                );
+              })() : (
+                <div className="text-gray-600 text-sm py-8">
+                  <QrCode size={48} className="mx-auto mb-3 opacity-20"/>
+                  <p className="text-xs">เลือกคิวจองเพื่อดู QR Code</p>
+                </div>
+              )}
             </div>
-            <div className="flex gap-2">
+          </div>
+
+          {/* ── Deposit sessions list ── */}
+          <div className="xl:col-span-3">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-black text-emerald-400 flex items-center gap-2 mb-1"><Banknote size={22}/> ลูกค้าจองมัดจำ</h2>
+                <p className="text-xs text-gray-500">{depositSessions.length} รายการ</p>
+              </div>
               <button onClick={() => setAdminMode('depositHistory')} className="text-xs px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50 font-bold flex items-center gap-1.5 transition-all">
                 <History size={13}/> ประวัติจอง
               </button>
             </div>
-          </div>
 
           {depositSessions.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
@@ -1718,8 +1751,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.isUnread && <span className="bg-blue-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse">NEW</span>}
                         </div>
                         <div className="flex items-center gap-1.5 flex-none">
+                          <button onClick={() => setSelectedQR(session.id)} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
+                            <QrCode size={14}/>
+                          </button>
                           {isCompleted && (
-                            <button onClick={() => { setViewingSession(session); setAdminMode('dashboard'); setTimeout(() => setAdminMode('deposit'), 0); }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
+                            <button onClick={() => { setViewingSession(session); }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
                               <Eye size={14}/>
                             </button>
                           )}
@@ -1798,6 +1834,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               })}
             </div>
           )}
+          </div>
         </div>
       ) : adminMode === 'depositHistory' ? (
         <div className="bg-[var(--bg-card)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] shadow-[var(--shadow-panel)]">
