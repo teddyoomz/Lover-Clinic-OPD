@@ -30,9 +30,31 @@ function computeBirthdate(patient) {
   return null;
 }
 
+// ─── Match country value กับ ProClinic select options ────────────────────────
+// nationalityCountry format: "ชื่อไทย (EnglishName)"
+// ProClinic country select: "ชื่อไทย (EnglishName)" — match by English name in ()
+// allCountryOptions: array of { value, text } from extractFormFields or defaultFields
+function matchCountryValue(nationalityCountry, allCountryOptions) {
+  if (!nationalityCountry) return null;
+  // Try exact match first
+  const exact = allCountryOptions.find(o => o === nationalityCountry);
+  if (exact) return exact;
+  // Extract English name from parentheses and match
+  const m = nationalityCountry.match(/\(([^)]+)\)/);
+  if (m) {
+    const en = m[1].toLowerCase();
+    const found = allCountryOptions.find(o => {
+      const om = o.match(/\(([^)]+)\)/);
+      return om && om[1].toLowerCase() === en;
+    });
+    if (found) return found;
+  }
+  return nationalityCountry; // fallback: send as-is
+}
+
 // ─── Build form data for CREATE ─────────────────────────────────────────────
 
-export function buildCreateFormData(patient, csrf, defaultFields = {}) {
+export function buildCreateFormData(patient, csrf, defaultFields = {}, countryOptions = []) {
   const params = new URLSearchParams();
 
   // Start with all default form fields from the create page (hidden fields, selects, etc.)
@@ -77,21 +99,25 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}) {
   if (patient.emergencyRelation) params.set('contact_1_lastname', patient.emergencyRelation);
   if (patient.emergencyPhone) params.set('contact_1_telephone_number', patient.emergencyPhone);
 
-  // Customer type: Thai vs Foreigner
+  // Customer type: Thai vs Foreigner — radio values เป็น text ไม่ใช่ตัวเลข
   if (patient.nationality === 'ต่างชาติ') {
-    params.set('customer_type', '2');
-    if (patient.nationalityCountry) params.set('nationality', patient.nationalityCountry);
+    params.set('customer_type', 'ชาวต่างชาติ');
+    if (patient.nationalityCountry) {
+      const matched = matchCountryValue(patient.nationalityCountry, countryOptions);
+      if (matched) params.set('country', matched);
+    }
   } else {
-    params.set('customer_type', '1');
+    params.set('customer_type', 'คนไทย');
+    params.set('country', 'ไทย (Thailand)');
   }
-  params.set('customer_type_2', '1'); // ลูกค้าทั่วไป
+  params.set('customer_type_2', 'ลูกค้าทั่วไป');
 
   return params;
 }
 
 // ─── Build form data for UPDATE ─────────────────────────────────────────────
 
-export function buildUpdateFormData(patient, existingFields, csrf) {
+export function buildUpdateFormData(patient, existingFields, csrf, countryOptions = []) {
   const params = new URLSearchParams();
 
   // Start with all existing form fields (preserves hidden fields like hn_no, customer_id)
@@ -135,10 +161,14 @@ export function buildUpdateFormData(patient, existingFields, csrf) {
 
   // Customer type: Thai vs Foreigner
   if (patient.nationality === 'ต่างชาติ') {
-    params.set('customer_type', '2');
-    if (patient.nationalityCountry) params.set('nationality', patient.nationalityCountry);
+    params.set('customer_type', 'ชาวต่างชาติ');
+    if (patient.nationalityCountry) {
+      const matched = matchCountryValue(patient.nationalityCountry, countryOptions);
+      if (matched) params.set('country', matched);
+    }
   } else {
-    params.set('customer_type', '1');
+    params.set('customer_type', 'คนไทย');
+    params.set('country', 'ไทย (Thailand)');
   }
 
   return params;

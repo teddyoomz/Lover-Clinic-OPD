@@ -1,6 +1,6 @@
 // POST /api/proclinic/create — Create new customer in ProClinic
 import { createSession, handleCors } from './_lib/session.js';
-import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields } from './_lib/scraper.js';
+import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions } from './_lib/scraper.js';
 import { buildCreateFormData } from './_lib/fields.js';
 
 export default async function handler(req, res) {
@@ -21,9 +21,10 @@ export default async function handler(req, res) {
     const csrf = extractCSRF(createHtml);
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า create');
 
-    // Step 2: Extract all default form fields, then overlay patient data
+    // Step 2: Extract all default form fields + country options, then overlay patient data
     const defaultFields = extractFormFields(createHtml);
-    const formData = buildCreateFormData(patient, csrf, defaultFields);
+    const countryOptions = extractSelectOptions(createHtml, 'country');
+    const formData = buildCreateFormData(patient, csrf, defaultFields, countryOptions);
 
     const submitRes = await session.fetch(`${base}/admin/customer`, {
       method: 'POST',

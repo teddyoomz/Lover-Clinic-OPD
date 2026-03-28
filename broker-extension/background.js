@@ -711,12 +711,30 @@ async function fillAndSubmitProClinicForm(patient) {
     fillInput('contact_1_lastname',         patient.emergencyRelation);
     fillInput('contact_1_telephone_number', patient.emergencyPhone);
 
-    // Nationality: Thai vs Foreigner
+    // Nationality: Thai vs Foreigner — radio values เป็น text
     if (patient.nationality === 'ต่างชาติ') {
       clickRadio('customer_type-2');   // ชาวต่างชาติ
-      if (patient.nationalityCountry) fillInput('nationality', patient.nationalityCountry);
+      // Match country by English name in parentheses
+      if (patient.nationalityCountry) {
+        const countrySelect = document.querySelector('select[name="country"]');
+        if (countrySelect) {
+          const enMatch = patient.nationalityCountry.match(/\(([^)]+)\)/);
+          if (enMatch) {
+            const en = enMatch[1].toLowerCase();
+            const opt = Array.from(countrySelect.options).find(o => {
+              const om = o.value.match(/\(([^)]+)\)/);
+              return om && om[1].toLowerCase() === en;
+            });
+            if (opt) {
+              countrySelect.value = opt.value;
+              countrySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+        }
+      }
     } else {
       clickRadio('customer_type-1');   // คนไทย
+      fillSelect('country', 'ไทย (Thailand)');
     }
     clickRadio('customer_type_2-1'); // ลูกค้าทั่วไป
 

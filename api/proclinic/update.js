@@ -1,6 +1,6 @@
 // POST /api/proclinic/update — Update existing customer in ProClinic
 import { createSession, handleCors } from './_lib/session.js';
-import { extractCSRF, extractSearchResults, findBestMatch, extractFormFields, extractValidationErrors } from './_lib/scraper.js';
+import { extractCSRF, extractSearchResults, findBestMatch, extractFormFields, extractValidationErrors, extractSelectOptions } from './_lib/scraper.js';
 import { buildUpdateFormData } from './_lib/fields.js';
 
 async function resolveCustomerId(session, base, proClinicId, proClinicHN, patient) {
@@ -61,7 +61,8 @@ export default async function handler(req, res) {
     if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า edit');
 
     const existingFields = extractFormFields(editHtml);
-    const formData = buildUpdateFormData(patient, existingFields, csrf);
+    const countryOptions = extractSelectOptions(editHtml, 'country');
+    const formData = buildUpdateFormData(patient, existingFields, csrf, countryOptions);
 
     // POST update
     const updateRes = await session.fetch(`${base}/admin/customer/${targetId}`, {

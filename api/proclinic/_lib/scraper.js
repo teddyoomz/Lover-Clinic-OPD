@@ -221,6 +221,18 @@ export function extractFormFields(html) {
   return fields;
 }
 
+// ─── Extract all options from a specific select field ─────────────────────────
+
+export function extractSelectOptions(html, selectName) {
+  const $ = cheerio.load(html);
+  const options = [];
+  $(`select[name="${selectName}"] option`).each((_, opt) => {
+    const val = $(opt).val();
+    if (val) options.push(val);
+  });
+  return options;
+}
+
 // ─── Extract validation errors ──────────────────────────────────────────────
 
 export function extractValidationErrors(html) {
