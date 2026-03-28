@@ -297,7 +297,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               newS.brokerStatus === 'done' && newS.brokerProClinicId &&
               oldS.brokerStatus === 'done' &&
               oldS.brokerProClinicId === newS.brokerProClinicId &&
-              lastAutoSyncedStrRef.current[newS.id] !== newStr
+              lastAutoSyncedStrRef.current[newS.id] !== newStr &&
+              !autoSyncInFlightRef.current.has(newS.id)
             ) {
               lastAutoSyncedStrRef.current[newS.id] = newStr;
               brokerSyncSessions.push(newS);
@@ -882,11 +883,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
   };
 
+  // Keep ref updated so message handler always uses latest closure
+  const closePatientViewIframeRef = useRef(closePatientViewIframe);
+  closePatientViewIframeRef.current = closePatientViewIframe;
+
   // Listen for close message from iframe
   useEffect(() => {
     const handler = (e) => {
       if (e.data?.type === 'close-patient-view') {
-        closePatientViewIframe();
+        closePatientViewIframeRef.current();
       }
     };
     window.addEventListener('message', handler);

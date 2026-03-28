@@ -103,20 +103,27 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
     }
 
-    // ── Cascading address reset ──
+    // ── Cascading address reset (only reset downstream if value actually changed) ──
     if (name === 'province') {
-      setFormData(prev => ({ ...prev, province: finalValue, district: '', subDistrict: '', postalCode: '' }));
+      setFormData(prev => {
+        if (prev.province === finalValue) return prev;
+        return { ...prev, province: finalValue, district: '', subDistrict: '', postalCode: '' };
+      });
       return;
     }
     if (name === 'district') {
-      // Auto-fill postalCode if subdistrict has only one zip
-      setFormData(prev => ({ ...prev, district: finalValue, subDistrict: '', postalCode: '' }));
+      setFormData(prev => {
+        if (prev.district === finalValue) return prev;
+        return { ...prev, district: finalValue, subDistrict: '', postalCode: '' };
+      });
       return;
     }
     if (name === 'subDistrict') {
-      // Auto-fill postalCode from DB
-      const zip = thaiAddressDB[formData.province]?.[formData.district]?.[finalValue];
-      setFormData(prev => ({ ...prev, subDistrict: finalValue, postalCode: zip ? String(zip) : '' }));
+      setFormData(prev => {
+        if (prev.subDistrict === finalValue) return prev;
+        const zip = thaiAddressDB[prev.province]?.[prev.district]?.[finalValue];
+        return { ...prev, subDistrict: finalValue, postalCode: zip ? String(zip) : '' };
+      });
       return;
     }
 
