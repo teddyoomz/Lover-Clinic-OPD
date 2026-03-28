@@ -1981,11 +1981,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-deposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
                             <QrCode size={14}/>
                           </button>
-                          {isCompleted && (
-                            <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
-                              <Eye size={14}/>
-                            </button>
-                          )}
+                          <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
+                            <Eye size={14}/>
+                          </button>
                           {isCompleted && (
                             <button
                               onClick={() => handleDepositSync(session)}
