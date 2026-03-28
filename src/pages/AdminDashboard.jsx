@@ -2414,11 +2414,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Buttons — always full labels, wrap to next line when space is tight */}
               <div className="flex items-center gap-1.5 flex-wrap">
+                {!(viewingSession.isArchived && viewingSession.formType === 'deposit') && (
                 <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
                   <Edit3 size={13} /> แก้ไขข้อมูล
                 </button>
-                {(() => {
+                )}
+                {!(viewingSession.isArchived && viewingSession.formType === 'deposit') && (() => {
                   const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
                   return (
                     <button
@@ -2830,7 +2832,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </h4>
                       <div className="flex gap-1.5">
                         {!isEditing ? (
-                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
+                          !(viewingSession.isArchived && viewingSession.formType === 'deposit') && <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
                             className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
                             <Edit3 size={10}/> แก้ไข
                           </button>
@@ -2919,7 +2921,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
-                          <input type="text" value={toThaiDate(dep.depositDate)} onChange={e => { const v = e.target.value; setEditingDepositData(p => ({...p, depositDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                          <input type="date" value={dep.depositDate || ''} onChange={e => setEditingDepositData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none [color-scheme:dark]"/>
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</label>
@@ -2950,7 +2952,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {dep.hasAppointment && (<>
                           <div>
                             <label className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</label>
-                            <input type="text" value={toThaiDate(dep.appointmentDate)} onChange={e => { const v = e.target.value; setEditingDepositData(p => ({...p, appointmentDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                            <input type="date" value={dep.appointmentDate || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none [color-scheme:dark]"/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -3138,7 +3140,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">วันที่จ่ายมัดจำ</label>
-                      <input type="text" value={toThaiDate(depositFormData.depositDate)} onChange={e => { const v = e.target.value; setDepositFormData(p => ({...p, depositDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                      <input type="date" value={depositFormData.depositDate} onChange={e => setDepositFormData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600 [color-scheme:dark]"/>
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">เวลา</label>
@@ -3168,7 +3170,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-gray-500 block mb-1">วันนัด</label>
-                          <input type="text" value={toThaiDate(depositFormData.appointmentDate)} onChange={e => { const v = e.target.value; setDepositFormData(p => ({...p, appointmentDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
+                          <input type="date" value={depositFormData.appointmentDate} onChange={e => setDepositFormData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600 [color-scheme:dark]"/>
                         </div>
                         <div className="grid grid-cols-2 gap-1">
                           <div>
