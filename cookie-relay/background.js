@@ -78,11 +78,20 @@ async function autoLogin() {
   }
 
   loginInProgress = true;
-  console.log('[CookieRelay] Starting auto-login via hidden tab');
+  console.log('[CookieRelay] Starting auto-login via minimized window');
 
+  let winId = null;
   try {
-    // Create a hidden tab
-    const tab = await chrome.tabs.create({ url: `${origin}/login`, active: false });
+    // Create a minimized window — completely invisible to user
+    const win = await chrome.windows.create({
+      url: `${origin}/login`,
+      type: 'popup',
+      state: 'minimized',
+      width: 400,
+      height: 400,
+    });
+    winId = win.id;
+    const tab = win.tabs[0];
 
     // Wait for page to load
     await waitForTabLoad(tab.id);
@@ -100,8 +109,9 @@ async function autoLogin() {
     // Wait for redirect to /admin
     const success = await waitForLoginRedirect(tab.id, origin, 15000);
 
-    // Close the tab
-    await chrome.tabs.remove(tab.id).catch(() => {});
+    // Close the entire window
+    await chrome.windows.remove(winId).catch(() => {});
+    winId = null;
 
     if (success) {
       console.log('[CookieRelay] Auto-login succeeded — syncing cookies');
@@ -113,6 +123,7 @@ async function autoLogin() {
     }
   } catch (e) {
     console.error('[CookieRelay] autoLogin error:', e);
+    if (winId) await chrome.windows.remove(winId).catch(() => {});
     return { success: false, error: e.message };
   } finally {
     loginInProgress = false;
