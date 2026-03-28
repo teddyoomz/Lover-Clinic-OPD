@@ -3602,6 +3602,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   else if (isComplete) {
                     updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
                       serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
+                      isPermanent: false, createdAt: serverTimestamp(),
                     });
                   } else {
                     updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
