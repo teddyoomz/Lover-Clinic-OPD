@@ -27,6 +27,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const [isEditing, setIsEditing] = useState(false); 
   const [sessionType, setSessionType] = useState('intake');
   const [customTemplate, setCustomTemplate] = useState(null);
+  const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
+  const [countryFilter, setCountryFilter] = useState('');
+  const countryDropdownRef = useRef(null);
   const originalDataRef = useRef(null); // เก็บ snapshot ข้อมูลก่อนแก้ไข สำหรับ diff notification
 
   useEffect(() => {
@@ -77,6 +80,17 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     });
     return () => unsubscribe();
   }, [db, appId, user, sessionId, isEditing]);
+
+  // Close country dropdown on click outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target)) {
+        setCountryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -161,6 +175,15 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     e.preventDefault();
     if (!sessionId || isExpired) return;
     
+    if (!formData.province) {
+      alert(language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
+      return;
+    }
+    if (formData.nationality === 'ต่างชาติ' && !formData.nationalityCountry) {
+      alert(language === 'en' ? "Please select a country." : "กรุณาเลือกประเทศ");
+      return;
+    }
+
     if (sessionType === 'intake') {
       if (!formData.howFoundUs || formData.howFoundUs.length === 0) {
         alert(language === 'en' ? "Please select how you found our clinic." : "กรุณาเลือกช่องทางที่ท่านรู้จักคลินิกอย่างน้อย 1 ช่องทาง");
@@ -567,10 +590,40 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       </label>
                     </div>
                     {formData.nationality === 'ต่างชาติ' && (
-                      <select name="nationalityCountry" value={formData.nationalityCountry || ''} onChange={handleInputChange} required className={inputClass}>
-                        <option value="" disabled>{language === 'en' ? '-- Select Country --' : '-- เลือกประเทศ --'}</option>
-                        {NATIONALITY_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <div className="relative" ref={countryDropdownRef}>
+                        <input type="hidden" name="nationalityCountry" value={formData.nationalityCountry || ''} required />
+                        <button type="button" onClick={() => { setCountryDropdownOpen(!countryDropdownOpen); setCountryFilter(''); }}
+                          className={`${inputClass} w-full text-left flex items-center justify-between`}>
+                          <span className={formData.nationalityCountry ? '' : 'opacity-50'}>
+                            {formData.nationalityCountry || (language === 'en' ? '-- Select Country --' : '-- เลือกประเทศ --')}
+                          </span>
+                          <span className="ml-2 text-xs">▼</span>
+                        </button>
+                        {countryDropdownOpen && (
+                          <div className="absolute z-50 w-full mt-1 rounded-lg border border-[#333] shadow-xl max-h-60 overflow-hidden flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)' }}>
+                            <div className="p-2 border-b border-[#333]">
+                              <input type="text" autoFocus value={countryFilter} onChange={e => setCountryFilter(e.target.value)}
+                                placeholder={language === 'en' ? 'Search country...' : 'ค้นหาประเทศ...'}
+                                className="w-full px-3 py-2 rounded border border-[#444] text-sm outline-none" style={{ background: 'var(--bg-input, #111)', color: 'var(--tx-normal, #fff)' }} />
+                            </div>
+                            <div className="overflow-y-auto flex-1">
+                              {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).map(c => (
+                                <button key={c} type="button"
+                                  onClick={() => { setFormData(prev => ({ ...prev, nationalityCountry: c })); setCountryDropdownOpen(false); }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-red-900/30 transition-colors ${formData.nationalityCountry === c ? 'bg-red-900/40 font-semibold' : ''}`}
+                                  style={{ color: 'var(--tx-normal, #fff)' }}>
+                                  {c}
+                                </button>
+                              ))}
+                              {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).length === 0 && (
+                                <div className="px-3 py-4 text-center text-sm opacity-50" style={{ color: 'var(--tx-normal, #fff)' }}>
+                                  {language === 'en' ? 'No results' : 'ไม่พบผลลัพธ์'}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="space-y-3">
