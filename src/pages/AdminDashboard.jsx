@@ -114,6 +114,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const coursesJobIdRef  = useRef(null);       // jobId ของ LC_GET_COURSES ที่รออยู่
   const autoCoursesRequestedRef = useRef(new Set()); // sessionId ที่ auto-trigger แล้วใน session นี้
   const autoSyncInFlightRef     = useRef(new Set()); // sessionId ที่ brokerSyncSessions กำลัง LC_UPDATE อยู่ → block auto-trigger courses จนกว่าจะเสร็จ
+  const prevAdminModeRef        = useRef(null); // track adminMode ก่อนเปิด report (เพื่อกลับไปหน้าเดิมเมื่อปิด)
   const [qrDisplayMode, setQrDisplayMode] = useState('session'); // 'session' | 'patientLink'
   const [patientLinkModal, setPatientLinkModal] = useState(null); // session id
   const [patientLinkLoading, setPatientLinkLoading] = useState(false);
@@ -556,6 +557,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const closeViewSession = () => {
     setViewingSession(null);
     setHasNewUpdate(false);
+    if (prevAdminModeRef.current) {
+      setAdminMode(prevAdminModeRef.current);
+      prevAdminModeRef.current = null;
+    }
   };
 
   const getSessionUrl = (sessionId) => `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
@@ -1261,7 +1266,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       {d && (
-                        <button onClick={() => { setViewingSession(session); setAdminMode('dashboard'); }}
+                        <button onClick={() => { prevAdminModeRef.current = adminMode; setViewingSession(session); setAdminMode('dashboard'); }}
                           className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูประวัติ">
                           <FileText size={15}/>
                         </button>
