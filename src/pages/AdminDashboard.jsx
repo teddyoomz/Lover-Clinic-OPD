@@ -257,6 +257,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
+        let brokerSyncSessions = [];
         data.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
@@ -272,6 +273,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               lastAutoSyncedStrRef.current[newS.id] = newStr;
               return;
             }
+            // ── Auto-sync ProClinic: patientData เปลี่ยนจริง + session done+linked ──
+            if (
+              oldStr !== newStr && newStr !== '{}' && newS.patientData &&
+              newS.brokerStatus === 'done' && newS.brokerProClinicId &&
+              oldS.brokerStatus === 'done' &&
+              oldS.brokerProClinicId === newS.brokerProClinicId &&
+              lastAutoSyncedStrRef.current[newS.id] !== newStr
+            ) {
+              lastAutoSyncedStrRef.current[newS.id] = newStr;
+              brokerSyncSessions.push(newS);
+            }
           }
         });
 
@@ -281,7 +293,76 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           setToastMsg(`อัปเดตข้อมูลประวัติ: ${names}`);
           setTimeout(() => setToastMsg(null), 5000);
         }
-        // NOTE: ไม่มี auto-sync ProClinic แล้ว — ต้อง user กดเอง (Resync, บันทึก, ลบ, แก้ไข)
+
+        // ── Auto-sync ProClinic เมื่อลูกค้าส่ง update ข้อมูลมาใหม่ ─────────────────
+        brokerSyncSessions.forEach(session => {
+          autoSyncInFlightRef.current.add(session.id);
+          const d = session.patientData;
+          const reasons = getReasons(d);
+          const pmh = [];
+          if (d?.hasUnderlying === 'มี') {
+            if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
+            if (d.ud_diabetes)     pmh.push('เบาหวาน');
+            if (d.ud_lung)         pmh.push('โรคปอด');
+            if (d.ud_kidney)       pmh.push('โรคไต');
+            if (d.ud_heart)        pmh.push('โรคหัวใจ');
+            if (d.ud_blood)        pmh.push('โรคโลหิต');
+            if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
+          }
+          const patient = {
+            prefix: d?.prefix || '', firstName: d?.firstName || '',
+            lastName: d?.lastName || '', phone: d?.phone || '',
+            age: d?.age || '', reasons,
+            dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
+            address: d?.address || '', province: d?.province || '',
+            nationality: d?.nationality || 'ไทย', nationalityCountry: d?.nationalityCountry || '',
+            howFoundUs: d?.howFoundUs || [],
+            allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
+            underlying: pmh.join(', '),
+            emergencyName:     d?.emergencyName     || '',
+            emergencyRelation: d?.emergencyRelation || '',
+            emergencyPhone:    d?.emergencyPhone    || '',
+            clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
+          };
+          broker.updateProClinic(session.brokerProClinicId, session.brokerProClinicHN || null, patient)
+            .then(async (result) => {
+              autoSyncInFlightRef.current.delete(session.id);
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+              if (result?.success) {
+                await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerLastAutoSyncAt: new Date().toISOString(), brokerError: null, brokerStatus: 'done', brokerJob: null }).catch(() => {});
+              } else if (result?.notFound) {
+                // HN ไม่เจอใน ProClinic → ถอด HN/OPD แล้ว create ใหม่อัตโนมัติ
+                await updateDoc(ref, {
+                  brokerProClinicId: null, brokerProClinicHN: null,
+                  opdRecordedAt: null, brokerLastAutoSyncAt: null,
+                  brokerStatus: null, brokerError: null, brokerJob: null,
+                });
+                try {
+                  const createResult = await broker.fillProClinic(patient);
+                  if (createResult?.success) {
+                    await updateDoc(ref, {
+                      opdRecordedAt: new Date().toISOString(),
+                      brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+                      brokerError: null, brokerJob: null,
+                      ...(createResult.proClinicId ? { brokerProClinicId: createResult.proClinicId } : {}),
+                      ...(createResult.proClinicHN ? { brokerProClinicHN: createResult.proClinicHN } : {}),
+                    });
+                  } else {
+                    await updateDoc(ref, { brokerStatus: 'failed', brokerError: createResult?.error || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+                  }
+                } catch(e) { /* create retry failed silently */ }
+              } else {
+                await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'auto-sync failed', brokerJob: null }).catch(() => {});
+              }
+            }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
+        });
+      } else {
+        // ── First load: stamp ทุก done session เพื่อป้องกัน re-sync ตอนเปิดหน้า ──
+        data.forEach(s => {
+          if (s.brokerStatus === 'done' && s.brokerProClinicId && s.patientData) {
+            lastAutoSyncedStrRef.current[s.id] = JSON.stringify(s.patientData);
+          }
+        });
       }
       // ─── Sync brokerPending local state กับ Firestore ─────────────────────────
       allDocs.forEach(s => {
