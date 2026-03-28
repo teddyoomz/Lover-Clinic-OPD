@@ -1951,7 +1951,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const d = session.patientData;
                 const dep = session.depositData;
                 const isCompleted = session.status === 'completed' && d;
-                const hasOPD = session.opdRecordedAt && session.brokerStatus === 'done';
+                const hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done';
                 const hasDeposit = session.depositSyncStatus === 'done';
                 const dataUpdated = hasOPD && hasDeposit && session.isUnread;
                 const needsSync = isCompleted && (!hasOPD || !hasDeposit || dataUpdated);
