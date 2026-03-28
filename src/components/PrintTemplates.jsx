@@ -109,17 +109,31 @@ export function OfficialOPDPrint({ session, clinicSettings = {} }) {
             {(!isFollowUp && !isCustom) && (
               <>
                 <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>วันเกิด</span>
+                  <span style={{ fontWeight: '700' }}>{d.dobDay && d.dobMonth && d.dobYear ? `${d.dobDay}/${d.dobMonth}/${d.dobYear}` : '-'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>สัญชาติ</span>
+                  <span style={{ fontWeight: '700' }}>{d.nationality === 'ต่างชาติ' ? (d.nationalityCountry || 'ต่างชาติ') : 'ไทย'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>โทรศัพท์</span>
                   <span style={{ fontWeight: '700' }}>{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ฉุกเฉิน</span>
-                  <span style={{ fontWeight: '700' }}>{d.emergencyName || '-'} · {formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</span>
+                  <span style={{ fontWeight: '700' }}>{d.emergencyName || '-'}{d.emergencyRelation ? ` (${d.emergencyRelation})` : ''} · {formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</span>
                 </div>
                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '6px' }}>
                   <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ที่อยู่</span>
-                  <span style={{ fontWeight: '700' }}>{d.address || '-'}</span>
+                  <span style={{ fontWeight: '700' }}>{[d.address, d.subDistrict && `ต.${d.subDistrict}`, d.district && `อ.${d.district}`, d.province, d.postalCode].filter(Boolean).join(' ') || '-'}</span>
                 </div>
+                {d.currentMedication && (
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '6px' }}>
+                    <span style={{ color: '#64748b', minWidth: '70px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ยาปัจจุบัน</span>
+                    <span style={{ fontWeight: '700' }}>{d.currentMedication}</span>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -383,13 +397,31 @@ export function DashboardOPDPrint({ session, clinicSettings = {} }) {
               {(!isFollowUp && !isCustom) && (
                 <>
                   <div>
+                    <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>วันเกิด</span>
+                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{d.dobDay && d.dobMonth && d.dobYear ? `${d.dobDay}/${d.dobMonth}/${d.dobYear}` : '-'}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>สัญชาติ</span>
+                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{d.nationality === 'ต่างชาติ' ? (d.nationalityCountry || 'ต่างชาติ') : 'ไทย'}</div>
+                  </div>
+                  <div>
                     <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>โทรศัพท์</span>
                     <div style={{ fontWeight: '700', color: '#1e293b' }}>{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</div>
                   </div>
+                  <div>
+                    <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ฉุกเฉิน</span>
+                    <div style={{ fontWeight: '700', color: '#1e293b' }}>{d.emergencyName || '-'}{d.emergencyRelation ? ` (${d.emergencyRelation})` : ''}</div>
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ที่อยู่</span>
-                    <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '9px' }}>{d.address || '-'}</div>
+                    <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '9px' }}>{[d.address, d.subDistrict && `ต.${d.subDistrict}`, d.district && `อ.${d.district}`, d.province, d.postalCode].filter(Boolean).join(' ') || '-'}</div>
                   </div>
+                  {d.currentMedication && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ fontSize: '8px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ยาที่ใช้ปัจจุบัน</span>
+                      <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '9px' }}>{d.currentMedication}</div>
+                    </div>
+                  )}
                 </>
               )}
               {/* Ref ID */}
