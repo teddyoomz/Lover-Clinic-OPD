@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { proClinicId, deposit } = req.body || {};
+    const { proClinicId, proClinicHN, deposit } = req.body || {};
     if (!proClinicId || !deposit) {
       return res.status(400).json({ success: false, error: 'Missing proClinicId or deposit data' });
     }
@@ -122,8 +122,34 @@ export default async function handler(req, res) {
     // Success: redirect (302/303)
     if (status >= 300 && status < 400) {
       // Try to extract deposit ID from redirect URL (e.g. /admin/deposit/123/deposit)
-      const depIdMatch = location.match(/\/deposit\/(\d+)/);
-      const depositProClinicId = depIdMatch ? depIdMatch[1] : null;
+      let depIdMatch = location.match(/\/deposit\/(\d+)/);
+      let depositProClinicId = depIdMatch ? depIdMatch[1] : null;
+
+      // If redirect URL doesn't contain deposit ID, follow redirect and search by HN
+      if (!depositProClinicId && proClinicHN) {
+        try {
+          const redirectUrl = location.startsWith('http') ? location : `${base}${location}`;
+          const listHtml = await session.fetchText(redirectUrl);
+          const $l = cheerio.load(listHtml);
+          // Find deposit entry for this customer — first match is most recent
+          $l('a[href*="/admin/deposit/"]').each((_, el) => {
+            if (depositProClinicId) return;
+            const href = $l(el).attr('href') || '';
+            const m = href.match(/\/admin\/deposit\/(\d+)\/deposit/);
+            if (!m) return;
+            const row = $l(el).closest('tr, .card, .deposit-row, div.row, div[class*="deposit"]');
+            if (!row.length) return;
+            if (row.text().includes(proClinicHN)) {
+              depositProClinicId = m[1];
+            }
+            const custLink = row.find(`a[href*="/customer/${proClinicId}"]`);
+            if (custLink.length) {
+              depositProClinicId = m[1];
+            }
+          });
+        } catch { /* best effort */ }
+      }
+
       return res.status(200).json({ success: true, redirectTo: location, depositProClinicId });
     }
 

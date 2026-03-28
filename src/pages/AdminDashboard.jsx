@@ -1047,7 +1047,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         ...dep,
         appointmentTo: (dep.visitPurpose || []).join(', '),
       };
-      const depResult = await broker.submitDeposit(proClinicId, depositPayload);
+      const depResult = await broker.submitDeposit(proClinicId, proClinicHN, depositPayload);
       if (!depResult?.success) {
         if (depResult?.debug) console.error('deposit-submit debug:', depResult.debug);
         throw new Error(depResult?.error || 'บันทึกมัดจำไม่สำเร็จ');
