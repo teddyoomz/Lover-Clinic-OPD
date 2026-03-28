@@ -22,6 +22,24 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 
+// ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
+function toThaiDate(isoDate) {
+  // YYYY-MM-DD → DD/MM/YYYY
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-');
+  return (y && m && d) ? `${d}/${m}/${y}` : isoDate;
+}
+function fromThaiDate(thaiDate) {
+  // DD/MM/YYYY → YYYY-MM-DD
+  if (!thaiDate) return '';
+  const cleaned = thaiDate.replace(/[^0-9/]/g, '');
+  const parts = cleaned.split('/');
+  if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+  return thaiDate;
+}
+function todayISO() { return new Date().toISOString().split('T')[0]; }
+function nowTime() { return new Date().toTimeString().slice(0,5); }
+
 // ── CourseCard: stable top-level component (ห้ามวางไว้ใน render function) ─────
 function CourseCard({ c, expired }) {
   const hasValue   = c.value && !c.value.includes('0.00');
@@ -123,8 +141,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [depositOptions, setDepositOptions] = useState(null);
   const [depositOptionsLoading, setDepositOptionsLoading] = useState(false);
   const [depositFormData, setDepositFormData] = useState({
-    sessionName: '', paymentChannel: '', paymentAmount: '', depositDate: new Date().toISOString().split('T')[0],
-    depositTime: new Date().toTimeString().slice(0,5), salesperson: '', hasAppointment: false,
+    sessionName: '', paymentChannel: '', paymentAmount: '', depositDate: todayISO(),
+    depositTime: nowTime(), salesperson: '', hasAppointment: false,
     appointmentDate: '', appointmentStartTime: '', appointmentEndTime: '',
     consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '',
     visitPurpose: [],
@@ -593,8 +611,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setIsGenerating(false);
     // reset form
     setDepositFormData({
-      sessionName: '', paymentChannel: '', paymentAmount: '', depositDate: new Date().toISOString().split('T')[0],
-      depositTime: new Date().toTimeString().slice(0,5), salesperson: '', hasAppointment: false,
+      sessionName: '', paymentChannel: '', paymentAmount: '', depositDate: todayISO(),
+      depositTime: nowTime(), salesperson: '', hasAppointment: false,
       appointmentDate: '', appointmentStartTime: '', appointmentEndTime: '',
       consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '', visitPurpose: [],
     });
@@ -1819,8 +1837,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <div className="flex flex-wrap gap-2 mt-2">
                           {dep.paymentAmount && <span className="text-[10px] bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded font-bold">฿{Number(dep.paymentAmount).toLocaleString()}</span>}
                           {dep.paymentChannel && <span className="text-[10px] bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{dep.paymentChannel}</span>}
-                          {dep.depositDate && <span className="text-[10px] bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{dep.depositDate}</span>}
-                          {dep.hasAppointment && <span className="text-[10px] bg-blue-950/30 text-blue-400 border border-blue-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CalendarClock size={9}/> นัดหมาย {dep.appointmentDate || ''}</span>}
+                          {dep.depositDate && <span className="text-[10px] bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{toThaiDate(dep.depositDate)}</span>}
+                          {dep.hasAppointment && <span className="text-[10px] bg-blue-950/30 text-blue-400 border border-blue-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CalendarClock size={9}/> นัดหมาย {toThaiDate(dep.appointmentDate)}</span>}
                         </div>
                       )}
 
@@ -2705,7 +2723,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div className="bg-[#111] p-3 rounded border border-[#222]">
                           <span className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</span>
-                          <span className="font-bold text-white">{dep.depositDate || '-'}</span>
+                          <span className="font-bold text-white">{toThaiDate(dep.depositDate) || '-'}</span>
                         </div>
                         <div className="bg-[#111] p-3 rounded border border-[#222]">
                           <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
@@ -2729,7 +2747,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <div className="sm:col-span-2 mt-2 mb-1"><span className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
                           <div className="bg-[#111] p-3 rounded border border-amber-900/30">
                             <span className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</span>
-                            <span className="font-bold text-amber-300">{dep.appointmentDate || '-'}</span>
+                            <span className="font-bold text-amber-300">{toThaiDate(dep.appointmentDate) || '-'}</span>
                           </div>
                           <div className="bg-[#111] p-3 rounded border border-amber-900/30">
                             <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
@@ -2766,7 +2784,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
-                          <input type="date" value={dep.depositDate || ''} onChange={e => setEditingDepositData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                          <input type="text" value={toThaiDate(dep.depositDate)} onChange={e => { const v = e.target.value; setEditingDepositData(p => ({...p, depositDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</label>
@@ -2797,7 +2815,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {dep.hasAppointment && (<>
                           <div>
                             <label className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</label>
-                            <input type="date" value={dep.appointmentDate || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                            <input type="text" value={toThaiDate(dep.appointmentDate)} onChange={e => { const v = e.target.value; setEditingDepositData(p => ({...p, appointmentDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -2978,14 +2996,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* ยอดชำระ */}
                   <div>
                     <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ยอดชำระ (บาท) <span className="text-red-500">*</span></label>
-                    <input type="number" value={depositFormData.paymentAmount} onChange={e => setDepositFormData(p => ({...p, paymentAmount: e.target.value}))} placeholder="5000" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                    <input type="number" value={depositFormData.paymentAmount} onChange={e => setDepositFormData(p => ({...p, paymentAmount: e.target.value}))} placeholder="" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                   </div>
 
                   {/* วันที่ + เวลา */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">วันที่จ่ายมัดจำ</label>
-                      <input type="date" value={depositFormData.depositDate} onChange={e => setDepositFormData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                      <input type="text" value={toThaiDate(depositFormData.depositDate)} onChange={e => { const v = e.target.value; setDepositFormData(p => ({...p, depositDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">เวลา</label>
@@ -3015,7 +3033,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-gray-500 block mb-1">วันนัด</label>
-                          <input type="date" value={depositFormData.appointmentDate} onChange={e => setDepositFormData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
+                          <input type="text" value={toThaiDate(depositFormData.appointmentDate)} onChange={e => { const v = e.target.value; setDepositFormData(p => ({...p, appointmentDate: fromThaiDate(v)})); }} placeholder="DD/MM/YYYY" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
                         </div>
                         <div className="grid grid-cols-2 gap-1">
                           <div>

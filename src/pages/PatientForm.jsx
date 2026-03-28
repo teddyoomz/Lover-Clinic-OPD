@@ -210,7 +210,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       return;
     }
 
-    if (sessionType === 'intake') {
+    if (isIntake) {
       if (!formData.howFoundUs || formData.howFoundUs.length === 0) {
         alert(language === 'en' ? "Please select how you found our clinic." : "กรุณาเลือกช่องทางที่ท่านรู้จักคลินิกอย่างน้อย 1 ช่องทาง");
         return;
@@ -226,7 +226,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     }
 
     const thaiPhoneRegex = /^0\d{9}$/;
-    if (sessionType === 'intake') {
+    if (sessionType === 'intake' || sessionType === 'deposit') {
         if (!formData.isInternationalPhone && !thaiPhoneRegex.test(formData.phone)) {
             alert(language === 'en' ? "Please enter a valid Thai 10-digit phone number starting with 0." : "กรุณากรอกเบอร์โทรศัพท์ของท่านให้ถูกต้อง (เบอร์ไทยต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0)");
             return;
@@ -237,7 +237,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         }
     }
 
-    if ((sessionType === 'intake' || sessionType === 'custom') && formData.dobDay && formData.dobMonth && formData.dobYear && formData.age) {
+    if ((sessionType === 'intake' || sessionType === 'deposit' || sessionType === 'custom') && formData.dobDay && formData.dobMonth && formData.dobYear && formData.age) {
         const today = new Date();
         let birthYearAD = parseInt(formData.dobYear);
         if (birthYearAD > 2400) birthYearAD -= 543;
@@ -405,7 +405,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const selectedReasons = formData.visitReasons || [];
   const selectedGoals = formData.hrtGoals || [];
   
-  const isIntake = sessionType === 'intake';
+  const isIntake = sessionType === 'intake' || sessionType === 'deposit';
   const isFollowUp = sessionType.startsWith('followup_');
   const isCustom = sessionType === 'custom';
   
