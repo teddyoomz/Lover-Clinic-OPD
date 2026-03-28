@@ -95,14 +95,16 @@ async function saveCookies(origin, cookies) {
 export async function performLogin(origin, email, password) {
   // Step 1: GET /login → CSRF + initial cookies
   const loginPageRes = await fetch(`${origin}/login`, {
-    redirect: 'manual',
+    redirect: 'follow',
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
   });
   const loginHtml = await loginPageRes.text();
   const csrf = extractCSRF(loginHtml);
+  console.log(`[session] GET /login status=${loginPageRes.status} url=${loginPageRes.url} csrf=${csrf ? 'found' : 'MISSING'} htmlLen=${loginHtml.length}`);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า login');
 
   let cookies = parseSetCookies(loginPageRes);
+  console.log(`[session] cookies from GET: ${cookies.length} items`);
 
   // Step 2: POST /login
   const body = new URLSearchParams({
@@ -122,10 +124,12 @@ export async function performLogin(origin, email, password) {
     redirect: 'manual',
   });
 
-  cookies = mergeCookies(cookies, parseSetCookies(loginRes));
+  const postCookies = parseSetCookies(loginRes);
+  cookies = mergeCookies(cookies, postCookies);
 
   const status = loginRes.status;
   const location = loginRes.headers.get('location') || '';
+  console.log(`[session] POST /login status=${status} location=${location} newCookies=${postCookies.length} totalCookies=${cookies.length}`);
 
   // Success: redirected to dashboard (not back to /login)
   if (status >= 300 && status < 400 && !location.includes('/login')) {
