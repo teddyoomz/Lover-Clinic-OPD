@@ -122,7 +122,8 @@ export const NATIONALITY_COUNTRIES = [
 export const defaultFormData = {
   prefix: 'นาย', firstName: '', lastName: '', gender: 'ชาย',
   dobDay: '', dobMonth: '', dobYear: '', age: '',
-  province: '', nationality: 'ไทย', nationalityCountry: '',
+  province: '', district: '', subDistrict: '', postalCode: '',
+  nationality: 'ไทย', nationalityCountry: '',
   address: '', phone: '', isInternationalPhone: false, phoneCountryCode: '+66',
   emergencyName: '', emergencyRelation: '', emergencyPhone: '', isInternationalEmergencyPhone: false, emergencyPhoneCountryCode: '+66',
   visitReasons: [], visitReasonOther: '',

@@ -7,10 +7,11 @@ import {
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import {
   hexToRgb, THAI_MONTHS, EN_MONTHS, YEARS_BE, YEARS_CE,
-  COUNTRY_CODES, THAI_PROVINCES, NATIONALITY_COUNTRIES, defaultFormData
+  COUNTRY_CODES, NATIONALITY_COUNTRIES, defaultFormData
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+import thaiAddressDB from '../data/thai-address-db.js';
 
 export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
@@ -95,12 +96,30 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     let finalValue = type === 'checkbox' ? checked : value;
-    
+
     if ((name === 'phone' && !formData.isInternationalPhone) || (name === 'emergencyPhone' && !formData.isInternationalEmergencyPhone)) {
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
     } else if ((name === 'phone' && formData.isInternationalPhone) || (name === 'emergencyPhone' && formData.isInternationalEmergencyPhone)) {
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
     }
+
+    // ── Cascading address reset ──
+    if (name === 'province') {
+      setFormData(prev => ({ ...prev, province: finalValue, district: '', subDistrict: '', postalCode: '' }));
+      return;
+    }
+    if (name === 'district') {
+      // Auto-fill postalCode if subdistrict has only one zip
+      setFormData(prev => ({ ...prev, district: finalValue, subDistrict: '', postalCode: '' }));
+      return;
+    }
+    if (name === 'subDistrict') {
+      // Auto-fill postalCode from DB
+      const zip = thaiAddressDB[formData.province]?.[formData.district]?.[finalValue];
+      setFormData(prev => ({ ...prev, subDistrict: finalValue, postalCode: zip ? String(zip) : '' }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: finalValue }));
   };
 
@@ -160,7 +179,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       const b = Array.isArray(newData[f]) ? JSON.stringify(newData[f]) : String(newData[f] ?? '');
       return a !== b;
     });
-    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address','province','nationality','nationalityCountry'])) sections.push('ข้อมูลส่วนตัว');
+    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address','province','district','subDistrict','postalCode','nationality','nationalityCountry'])) sections.push('ข้อมูลส่วนตัว');
     if (diff(['phone','phoneCountryCode','isInternationalPhone','emergencyName','emergencyPhone','emergencyRelation','emergencyPhoneCountryCode'])) sections.push('ข้อมูลติดต่อ');
     if (diff(['visitReasons','visitReasonOther','hrtGoals','hrtTransType','hrtOtherDetail'])) sections.push('สาเหตุที่มา');
     const healthFields = ['hasAllergies','allergiesDetail','hasUnderlying','currentMedication','pregnancy','ud_hypertension','ud_diabetes','ud_lung','ud_kidney','ud_heart','ud_blood','ud_other','ud_otherDetail'];
@@ -567,15 +586,33 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     </div>
                   </div>
                   <div>
-                    <label className={labelClass}>{language === 'en' ? 'Current Address' : 'ที่อยู่ปัจจุบัน'} <span className="text-red-600">*</span></label>
-                    <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, Sub-district, District' : 'บ้านเลขที่, ถนน, ตำบล, อำเภอ'} required className={inputClass + " resize-none transition-shadow"}></textarea>
+                    <label className={labelClass}>{language === 'en' ? 'Address' : 'ที่อยู่'}</label>
+                    <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, Soi, Road' : 'บ้านเลขที่, ซอย, ถนน'} className={inputClass + " resize-none transition-shadow"}></textarea>
                   </div>
                   <div>
                     <label className={labelClass}>{language === 'en' ? 'Province' : 'จังหวัด'} <span className="text-red-600">*</span></label>
                     <select name="province" value={formData.province || ''} onChange={handleInputChange} required className={inputClass}>
                       <option value="" disabled>{language === 'en' ? '-- Select Province --' : '-- เลือกจังหวัด --'}</option>
-                      {THAI_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                      {Object.keys(thaiAddressDB).map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'District' : 'อำเภอ/เขต'} <span className="text-red-600">*</span></label>
+                    <select name="district" value={formData.district || ''} onChange={handleInputChange} required className={inputClass} disabled={!formData.province}>
+                      <option value="" disabled>{language === 'en' ? '-- Select District --' : '-- เลือกอำเภอ/เขต --'}</option>
+                      {formData.province && thaiAddressDB[formData.province] && Object.keys(thaiAddressDB[formData.province]).map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Sub-district' : 'ตำบล/แขวง'} <span className="text-red-600">*</span></label>
+                    <select name="subDistrict" value={formData.subDistrict || ''} onChange={handleInputChange} required className={inputClass} disabled={!formData.district}>
+                      <option value="" disabled>{language === 'en' ? '-- Select Sub-district --' : '-- เลือกตำบล/แขวง --'}</option>
+                      {formData.province && formData.district && thaiAddressDB[formData.province]?.[formData.district] && Object.keys(thaiAddressDB[formData.province][formData.district]).map(sd => <option key={sd} value={sd}>{sd}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Postal Code' : 'รหัสไปรษณีย์'}</label>
+                    <input type="text" name="postalCode" value={formData.postalCode || ''} readOnly className={inputClass + " bg-opacity-50"} placeholder={language === 'en' ? 'Auto-filled' : 'อัตโนมัติจากตำบล'} />
                   </div>
                   <div>
                     <label className={labelClass}>{language === 'en' ? 'Nationality' : 'สัญชาติ'}</label>

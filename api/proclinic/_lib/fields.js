@@ -74,6 +74,9 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}, countryOp
   if (patient.phone) params.set('telephone_number', patient.phone);
   if (patient.address) params.set('address', patient.address);
   if (patient.province) params.set('province', patient.province);
+  if (patient.district) params.set('district', patient.district);
+  if (patient.subDistrict) params.set('sub_district', patient.subDistrict);
+  if (patient.postalCode) params.set('postal_code', patient.postalCode);
 
   const gender = GENDER_MAP[patient.prefix];
   if (gender) params.set('gender', gender);
@@ -138,6 +141,9 @@ export function buildUpdateFormData(patient, existingFields, csrf, countryOption
   if (patient.phone) params.set('telephone_number', patient.phone);
   if (patient.address) params.set('address', patient.address);
   if (patient.province) params.set('province', patient.province);
+  if (patient.district) params.set('district', patient.district);
+  if (patient.subDistrict) params.set('sub_district', patient.subDistrict);
+  if (patient.postalCode) params.set('postal_code', patient.postalCode);
 
   const gender = GENDER_MAP[patient.prefix];
   if (gender) params.set('gender', gender);
