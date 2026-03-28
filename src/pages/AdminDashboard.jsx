@@ -65,6 +65,20 @@ function CourseCard({ c, expired }) {
   );
 }
 
+// Sorted JSON.stringify — Firestore ไม่การันตี key order ใน nested objects
+// ถ้า key order ต่างกัน JSON.stringify ธรรมดาจะได้ string ต่างกัน → false positive
+const stableStr = (obj) => {
+  if (!obj || typeof obj !== 'object') return JSON.stringify(obj);
+  const sort = (o) => {
+    if (Array.isArray(o)) return o.map(sort);
+    if (o && typeof o === 'object') {
+      return Object.keys(o).sort().reduce((r, k) => { r[k] = sort(o[k]); return r; }, {});
+    }
+    return o;
+  };
+  return JSON.stringify(sort(obj));
+};
+
 export default function AdminDashboard({ db, appId, user, auth, viewingSession, setViewingSession, setPrintMode, onSimulateScan, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
   const ac = cs.accentColor;
@@ -262,8 +276,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         data.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
-            const oldStr = JSON.stringify(oldS.patientData || {});
-            const newStr = JSON.stringify(newS.patientData || {});
+            const oldStr = stableStr(oldS.patientData || {});
+            const newStr = stableStr(newS.patientData || {});
             // Only notify when notifications enabled AND session is unread AND patientData changed
             // + dedup: ไม่ซ้ำถ้า data เดิมเคย notify แล้ว (ป้องกัน toast/sound รัวจาก snapshot ซ้ำ)
             if (isNotifEnabled && newS.isUnread && (!oldS.isUnread || oldStr !== newStr) && lastNotifiedStrRef.current[newS.id] !== newStr) {
@@ -363,7 +377,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       } else {
         // ── First load: stamp ทุก session เพื่อป้องกัน re-sync + notification ซ้ำตอนเปิดหน้า ──
         data.forEach(s => {
-          const str = JSON.stringify(s.patientData || {});
+          const str = stableStr(s.patientData || {});
           if (s.brokerStatus === 'done' && s.brokerProClinicId && s.patientData) {
             lastAutoSyncedStrRef.current[s.id] = str;
           }
@@ -437,8 +451,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const latestSession = sessions.find(s => s.id === viewingSession.id)
         || archivedSessions.find(s => s.id === viewingSession.id);
       if (latestSession) {
-        const currentStr = JSON.stringify(viewingSession.patientData || {});
-        const latestStr = JSON.stringify(latestSession.patientData || {});
+        const currentStr = stableStr(viewingSession.patientData || {});
+        const latestStr = stableStr(latestSession.patientData || {});
         // เปรียบเทียบเฉพาะ patientData — ไม่รวม updatedAt เพราะ Firestore serverTimestamp
         // มี 2 snapshots (local estimated + server actual) ทำให้ toMillis() ต่างกัน → false positive banner
         const dataOutOfSync = currentStr !== latestStr;
@@ -571,8 +585,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
       // ไม่ว่า LOCAL snapshot จะยิงมาด้วย patientData version ไหน guard จะบล็อกก่อนเสมอ
       // เพราะ isUnread:false ไม่มีส่วนเกี่ยวกับ ProClinic sync เลย
-      lastViewedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
-      lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
+      lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
+      lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
       } catch(e) { console.error('updateDoc isUnread:', e); }
@@ -857,7 +871,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (viewingSession) {
       const latest = sessions.find(s => s.id === viewingSession.id) || archivedSessions.find(s => s.id === viewingSession.id);
       if (latest) {
-        const latestStr = JSON.stringify(latest.patientData || {});
+        const latestStr = stableStr(latest.patientData || {});
         lastViewedStrRef.current[latest.id] = latestStr;
         lastAutoSyncedStrRef.current[latest.id] = latestStr;
         setViewingSession(latest);
@@ -893,7 +907,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const latest = sessions.find(s => s.id === session.id) || archivedSessions.find(s => s.id === session.id);
       if (latest) {
         setViewingSession(latest);
-        lastViewedStrRef.current[session.id] = JSON.stringify(latest.patientData || {});
+        lastViewedStrRef.current[session.id] = stableStr(latest.patientData || {});
       }
     }
     setPatientViewUrl(`/?patient=${token}&admin=1`);
@@ -1789,8 +1803,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   if (latest) {
                     setViewingSession(latest);
                     if (latest.isUnread) {
-                      lastViewedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
-                      lastAutoSyncedStrRef.current[latest.id] = JSON.stringify(latest.patientData || {});
+                      lastViewedStrRef.current[latest.id] = stableStr(latest.patientData || {});
+                      lastAutoSyncedStrRef.current[latest.id] = stableStr(latest.patientData || {});
                       updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
                     }
                   }
