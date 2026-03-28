@@ -134,8 +134,12 @@ export async function performLogin(origin, email, password) {
     return { success: true, cookies };
   }
 
-  // Failed
-  throw new Error('Login ไม่สำเร็จ — ตรวจสอบ email/password');
+  // Failed — include debug info
+  const body = await loginRes.text().catch(() => '');
+  const hasCaptcha = body.includes('captcha') || body.includes('recaptcha') || body.includes('g-recaptcha');
+  const hint = hasCaptcha ? ' (CAPTCHA detected — ProClinic บล็อก automated login)'
+    : ` (status=${status}, location=${location || 'none'})`;
+  throw new Error(`Login ไม่สำเร็จ${hint}`);
 }
 
 // ─── Create session (login once, reuse for multiple requests) ────────────────
