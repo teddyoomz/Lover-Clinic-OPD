@@ -1,8 +1,8 @@
 // ─── Update Deposit in ProClinic ──────────────────────────────────────────────
-// 1. Find deposit entry (by saved depositProClinicId or search by HN)
-// 2. GET deposit list page for CSRF + default form fields (same as create)
-// 3. Try edit page variants to get current values
-// 4. POST update with _method=PUT
+// 1. Find deposit entry on list page (by saved ID or search by HN)
+// 2. Extract the edit link (pencil icon) from that row
+// 3. GET the edit page → extract form fields + CSRF
+// 4. POST the edit form with updated data
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
 import * as cheerio from 'cheerio';
@@ -20,10 +20,7 @@ export default async function handler(req, res) {
     const session = await createSession();
     const base = session.origin;
 
-    // Step 1: Find the deposit ID
-    let depositId = depositProClinicId || null;
-
-    // Also get CSRF from deposit list page (always needed)
+    // Step 1: GET deposit list page — find the deposit row and its edit link
     const searchQuery = proClinicHN || '';
     const listUrl = searchQuery
       ? `${base}/admin/deposit?q=${encodeURIComponent(searchQuery)}`
@@ -31,153 +28,153 @@ export default async function handler(req, res) {
 
     const listHtml = await session.fetchText(listUrl);
     const $list = cheerio.load(listHtml);
-    const csrf = extractCSRF(listHtml);
-    if (!csrf) throw new Error('ไม่พบ CSRF token');
 
-    if (!depositId && (proClinicId || proClinicHN)) {
-      // Strategy 1: Find by row containing HN or customer link
+    let depositId = depositProClinicId || null;
+    let editHref = null;
+
+    // Find the deposit row and extract edit link + deposit ID
+    const findInRow = (row) => {
+      // Look for edit link (pencil icon) — usually <a> with "edit" in href
+      const editLink = row.find('a[href*="edit"]');
+      if (editLink.length) {
+        editHref = editLink.attr('href') || '';
+      }
+      // Also extract deposit ID from any deposit link in the row
+      if (!depositId) {
+        row.find('a[href]').each((_, a) => {
+          const href = $list(a).attr('href') || '';
+          const m = href.match(/\/admin\/deposit\/(\d+)/);
+          if (m) depositId = m[1];
+        });
+      }
+    };
+
+    if (depositId) {
+      // We have the ID — find the row containing a link to this deposit
+      $list(`a[href*="/admin/deposit/${depositId}"]`).each((_, el) => {
+        if (editHref) return;
+        const row = $list(el).closest('tr, .card, .deposit-row, div.row, div[class*="deposit"]');
+        if (row.length) findInRow(row);
+      });
+    }
+
+    if (!editHref && (proClinicId || proClinicHN)) {
+      // Search by HN or customer link
       $list('a[href*="/admin/deposit/"]').each((_, el) => {
-        if (depositId) return;
+        if (editHref) return;
         const href = $list(el).attr('href') || '';
-        const m = href.match(/\/admin\/deposit\/(\d+)\/deposit/);
+        const m = href.match(/\/admin\/deposit\/(\d+)/);
         if (!m) return;
 
         const row = $list(el).closest('tr, .card, .deposit-row, div.row, div[class*="deposit"]');
         if (!row.length) return;
         const rowText = row.text();
 
-        if (proClinicHN && rowText.includes(proClinicHN)) {
+        let matched = false;
+        if (proClinicHN && rowText.includes(proClinicHN)) matched = true;
+        if (proClinicId && row.find(`a[href*="/customer/${proClinicId}"]`).length) matched = true;
+
+        if (matched) {
           depositId = m[1];
-        }
-        const customerLink = row.find(`a[href*="/customer/${proClinicId}"]`);
-        if (customerLink.length) {
-          depositId = m[1];
+          findInRow(row);
         }
       });
+    }
 
-      // Strategy 2: Check detail pages
-      if (!depositId) {
-        const allDepositIds = new Set();
-        $list('a[href]').each((_, el) => {
-          const href = $list(el).attr('href') || '';
-          const m = href.match(/\/admin\/deposit\/(\d+)\/deposit/);
-          if (m) allDepositIds.add(m[1]);
-        });
-
-        const idsToCheck = [...allDepositIds].slice(0, 10);
-        for (const id of idsToCheck) {
-          try {
-            const detailHtml = await session.fetchText(`${base}/admin/deposit/${id}/deposit`);
-            if ((proClinicId && detailHtml.includes(`/customer/${proClinicId}`)) ||
-                (proClinicHN && detailHtml.includes(proClinicHN))) {
-              depositId = id;
-              break;
-            }
-          } catch { /* skip */ }
-        }
+    // If no edit link found from row, construct possible edit URLs
+    if (!editHref && depositId) {
+      // Try common Laravel edit URL patterns
+      const tryUrls = [
+        `/admin/deposit/${depositId}/edit`,
+        `/admin/deposit/${depositId}/deposit/edit`,
+      ];
+      for (const path of tryUrls) {
+        try {
+          const testRes = await session.fetch(`${base}${path}`, { redirect: 'manual' });
+          if (testRes.status === 200) {
+            editHref = path;
+            break;
+          }
+          try { await testRes.text(); } catch {}
+        } catch { /* try next */ }
       }
     }
 
-    if (!depositId) {
+    if (!depositId && !editHref) {
       return res.status(200).json({
         success: false,
         error: 'ไม่พบรายการมัดจำใน ProClinic — ไม่สามารถแก้ไขได้',
       });
     }
 
-    // Step 2: Try to get the edit form — try multiple URL patterns
-    let editHtml = null;
-    let editCsrf = null;
-    let formAction = null;
-    const defaultFields = {};
-
-    const editUrls = [
-      `${base}/admin/deposit/${depositId}/edit`,
-      `${base}/admin/deposit/${depositId}/deposit/edit`,
-      `${base}/admin/deposit/${depositId}/deposit`,
-    ];
-
-    for (const url of editUrls) {
-      try {
-        const html = await session.fetchText(url);
-        const token = extractCSRF(html);
-        if (token) {
-          editHtml = html;
-          editCsrf = token;
-          const $ = cheerio.load(html);
-          const form = $('form').first();
-          formAction = form.attr('action') || '';
-
-          // Extract form fields from the edit page
-          $('form input, form textarea, form select').each((_, el) => {
-            const name = $(el).attr('name');
-            if (!name || name === '_token') return;
-            const tag = el.tagName.toLowerCase();
-            if (tag === 'select') {
-              defaultFields[name] = $(el).find('option:selected').val() || '';
-            } else if (tag === 'input' && $(el).attr('type') === 'checkbox') {
-              if ($(el).is(':checked')) defaultFields[name] = $(el).val() || '1';
-            } else if (tag === 'input' && $(el).attr('type') === 'radio') {
-              if ($(el).is(':checked')) defaultFields[name] = $(el).val();
-            } else {
-              defaultFields[name] = $(el).val() || '';
-            }
-          });
-
-          // If we found form fields, this is the right page
-          if (Object.keys(defaultFields).length > 3) break;
-        }
-      } catch { /* try next URL */ }
+    // Step 2: GET the edit page
+    let editUrl = editHref || '';
+    if (editUrl && !editUrl.startsWith('http')) {
+      editUrl = editUrl.startsWith('/') ? `${base}${editUrl}` : `${base}/${editUrl}`;
     }
 
-    // Fallback: use CSRF from list page and default fields from create modal
-    const finalCsrf = editCsrf || csrf;
-
-    if (Object.keys(defaultFields).length <= 3) {
-      // No edit form found — extract defaults from the create modal on list page
-      const modalSelector = $list('#createDepositModal').length
-        ? '#createDepositModal input, #createDepositModal textarea, #createDepositModal select'
-        : 'form input, form textarea, form select';
-
-      $list(modalSelector).each((_, el) => {
-        const name = $list(el).attr('name');
-        if (!name || name === '_token') return;
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'select') {
-          defaultFields[name] = $list(el).find('option:selected').val() || '';
-        } else if (tag === 'input' && $list(el).attr('type') === 'checkbox') {
-          if ($list(el).is(':checked')) defaultFields[name] = $list(el).val() || '1';
-        } else if (tag === 'input' && $list(el).attr('type') === 'radio') {
-          if ($list(el).is(':checked')) defaultFields[name] = $list(el).val();
-        } else {
-          defaultFields[name] = $list(el).val() || '';
-        }
+    if (!editUrl) {
+      return res.status(200).json({
+        success: false,
+        error: 'ไม่พบลิงก์แก้ไขมัดจำในหน้า ProClinic',
       });
     }
 
-    // Resolve form action URL
+    const editPageHtml = await session.fetchText(editUrl);
+    const $ = cheerio.load(editPageHtml);
+    const csrf = extractCSRF(editPageHtml);
+    if (!csrf) {
+      return res.status(200).json({
+        success: false,
+        error: `ไม่พบ CSRF token ในหน้าแก้ไข (${editUrl})`,
+      });
+    }
+
+    // Extract form action and current field values
+    const form = $('form').first();
+    let formAction = form.attr('action') || '';
     if (formAction && !formAction.startsWith('http')) {
       formAction = formAction.startsWith('/') ? `${base}${formAction}` : `${base}/${formAction}`;
     }
-    if (!formAction) formAction = `${base}/admin/deposit/${depositId}`;
+    if (!formAction) {
+      return res.status(200).json({
+        success: false,
+        error: 'ไม่พบ form action ในหน้าแก้ไข',
+      });
+    }
 
-    // Step 3: Build form data with overrides
+    // Check if form has _method hidden field (PUT/PATCH)
+    const formMethod = $('form input[name="_method"]').val() || 'PUT';
+
+    // Extract all current form field values
+    const defaultFields = {};
+    $('form input, form textarea, form select').each((_, el) => {
+      const name = $(el).attr('name');
+      if (!name || name === '_token') return;
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'select') {
+        defaultFields[name] = $(el).find('option:selected').val() || '';
+      } else if (tag === 'input' && $(el).attr('type') === 'checkbox') {
+        if ($(el).is(':checked')) defaultFields[name] = $(el).val() || '1';
+      } else if (tag === 'input' && $(el).attr('type') === 'radio') {
+        if ($(el).is(':checked')) defaultFields[name] = $(el).val();
+      } else {
+        defaultFields[name] = $(el).val() || '';
+      }
+    });
+
+    // Step 3: Build form data — start with current values, override with changes
     const params = new URLSearchParams();
-    params.set('_token', finalCsrf);
-    params.set('_method', 'PUT');
+    params.set('_token', csrf);
+    params.set('_method', formMethod);
 
-    // Set all defaults first
     for (const [key, val] of Object.entries(defaultFields)) {
       if (key !== '_token' && key !== '_method') {
         params.set(key, val);
       }
     }
 
-    // Select existing customer
-    params.set('customer_option', 'choose');
-    if (proClinicId) params.set('customer_id', proClinicId);
-
-    // Override with deposit data
+    // Override with our deposit data
     if (deposit.paymentChannel) params.set('payment_method', deposit.paymentChannel);
     if (deposit.paymentAmount != null) params.set('deposit', String(deposit.paymentAmount));
     if (deposit.depositDate) params.set('payment_date', deposit.depositDate);
@@ -217,13 +214,13 @@ export default async function handler(req, res) {
       params.set('hasAppointment', '0');
     }
 
-    // Step 4: POST update — try PUT first, then PATCH
+    // Step 4: POST the edit form
     const submitRes = await session.fetch(formAction, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRF-TOKEN': finalCsrf,
-        'Referer': `${base}/admin/deposit`,
+        'X-CSRF-TOKEN': csrf,
+        'Referer': editUrl,
       },
       body: params.toString(),
       redirect: 'manual',
@@ -239,128 +236,6 @@ export default async function handler(req, res) {
 
     // Read response for errors
     const bodyHtml = await submitRes.text();
-
-    // If PUT to /deposit/{id} returned 405/404, try DELETE old + CREATE new
-    if (status === 404 || status === 405) {
-      // Fallback: delete old deposit and create new one
-      // Delete old
-      const delRes = await session.fetch(`${base}/admin/deposit/${depositId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-CSRF-TOKEN': finalCsrf,
-        },
-        body: `_method=DELETE&_token=${encodeURIComponent(finalCsrf)}`,
-        redirect: 'manual',
-      });
-
-      if (delRes.status < 200 || delRes.status >= 400) {
-        return res.status(200).json({
-          success: false,
-          error: `ไม่สามารถลบมัดจำเดิมได้ (status ${delRes.status}) — ลองลบมือจาก ProClinic`,
-        });
-      }
-
-      // Re-fetch CSRF (delete may have invalidated it)
-      const freshHtml = await session.fetchText(`${base}/admin/deposit`);
-      const freshCsrf = extractCSRF(freshHtml);
-      if (!freshCsrf) throw new Error('ไม่พบ CSRF token หลังลบมัดจำเดิม');
-
-      // Create new deposit with updated data
-      const createParams = new URLSearchParams();
-      createParams.set('_token', freshCsrf);
-
-      // Re-extract defaults from fresh page
-      const $fresh = cheerio.load(freshHtml);
-      const freshSelector = $fresh('#createDepositModal').length
-        ? '#createDepositModal input, #createDepositModal textarea, #createDepositModal select'
-        : 'form input, form textarea, form select';
-
-      $fresh(freshSelector).each((_, el) => {
-        const name = $fresh(el).attr('name');
-        if (!name || name === '_token') return;
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'select') {
-          createParams.set(name, $fresh(el).find('option:selected').val() || '');
-        } else if (tag === 'input' && $fresh(el).attr('type') === 'checkbox') {
-          if ($fresh(el).is(':checked')) createParams.set(name, $fresh(el).val() || '1');
-        } else if (tag === 'input' && $fresh(el).attr('type') === 'radio') {
-          if ($fresh(el).is(':checked')) createParams.set(name, $fresh(el).val());
-        } else {
-          createParams.set(name, $fresh(el).val() || '');
-        }
-      });
-
-      // Set deposit data
-      createParams.set('customer_option', 'choose');
-      if (proClinicId) createParams.set('customer_id', proClinicId);
-      if (deposit.paymentChannel) createParams.set('payment_method', deposit.paymentChannel);
-      if (deposit.paymentAmount != null) createParams.set('deposit', String(deposit.paymentAmount));
-      if (deposit.depositDate) createParams.set('payment_date', deposit.depositDate);
-      if (deposit.depositTime) createParams.set('payment_time', deposit.depositTime);
-      if (deposit.refNo) createParams.set('ref_no', deposit.refNo);
-      if (deposit.depositNote) createParams.set('deposit_note', deposit.depositNote);
-      if (deposit.salesperson) {
-        createParams.set('hasSeller1', '1');
-        createParams.set('seller_1_id', deposit.salesperson);
-        createParams.set('sale_percent_1', '100');
-        createParams.set('sale_total_1', String(deposit.paymentAmount || '0'));
-      }
-      if (deposit.customerSource) createParams.set('customer_source', deposit.customerSource);
-      if (deposit.sourceDetail) createParams.set('source_detail', deposit.sourceDetail);
-      if (deposit.hasAppointment) {
-        createParams.set('hasAppointment', '1');
-        if (deposit.appointmentDate) createParams.set('appointment_date', deposit.appointmentDate);
-        if (deposit.appointmentStartTime) createParams.set('appointment_start_time', deposit.appointmentStartTime);
-        if (deposit.appointmentEndTime) createParams.set('appointment_end_time', deposit.appointmentEndTime);
-        createParams.set('appointment_type', 'sales');
-        createParams.set('appointment_option', 'once');
-        if (deposit.consultant) createParams.set('advisor_id', deposit.consultant);
-        if (deposit.doctor) createParams.set('doctor_id', deposit.doctor);
-        if (deposit.assistant) createParams.set('doctor_assistant_id[]', deposit.assistant);
-        if (deposit.room) createParams.set('examination_room_id', deposit.room);
-        if (deposit.appointmentChannel) createParams.set('source', deposit.appointmentChannel);
-        if (deposit.appointmentTo) createParams.set('appointment_to', deposit.appointmentTo);
-        if (deposit.appointmentNote) createParams.set('appointment_note', deposit.appointmentNote);
-      } else {
-        createParams.set('hasAppointment', '0');
-      }
-
-      const createRes = await session.fetch(`${base}/admin/deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-CSRF-TOKEN': freshCsrf,
-          'Referer': `${base}/admin/deposit`,
-        },
-        body: createParams.toString(),
-        redirect: 'manual',
-      });
-
-      const createStatus = createRes.status;
-      const createLocation = createRes.headers?.get?.('location') || '';
-
-      if (createStatus >= 300 && createStatus < 400) {
-        const newDepIdMatch = createLocation.match(/\/deposit\/(\d+)/);
-        const newDepositId = newDepIdMatch ? newDepIdMatch[1] : null;
-        return res.status(200).json({
-          success: true,
-          depositId: newDepositId || depositId,
-          method: 'delete+create',
-          redirectTo: createLocation,
-        });
-      }
-
-      const createBody = await createRes.text();
-      const createErrors = extractValidationErrors(createBody);
-      return res.status(200).json({
-        success: false,
-        error: createErrors
-          ? `สร้างมัดจำใหม่ไม่สำเร็จ: ${createErrors}`
-          : `สร้างมัดจำใหม่ไม่สำเร็จ (status ${createStatus})`,
-      });
-    }
-
     const errors = extractValidationErrors(bodyHtml);
     if (errors) {
       return res.status(200).json({ success: false, error: `ProClinic validation: ${errors}` });
@@ -379,6 +254,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: false,
       error: `ProClinic error (${status}): ${errorDetail || 'Unknown'}`,
+      debug: { editUrl, formAction, formMethod, fieldCount: Object.keys(defaultFields).length },
     });
   } catch (err) {
     const resp = { success: false, error: err.message };
