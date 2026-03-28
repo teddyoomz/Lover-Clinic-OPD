@@ -1051,7 +1051,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       let proClinicId = session.brokerProClinicId;
       let proClinicHN = session.brokerProClinicHN;
 
+      const alreadySynced = !!proClinicId && session.depositSyncStatus === 'done';
+
       if (!proClinicId) {
+        // First time: create customer in ProClinic
         await updateDoc(ref, { brokerStatus: 'pending' });
         setToastMsg('กำลังสร้างลูกค้าใน ProClinic...');
         const result = await broker.fillProClinic(patient);
@@ -1064,20 +1067,34 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           opdRecordedAt: serverTimestamp(),
         });
         setToastMsg(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังบันทึกมัดจำ...`);
+      } else if (alreadySynced) {
+        // Re-sync: update existing customer OPD data
+        setToastMsg('กำลังอัพเดทข้อมูลลูกค้าใน ProClinic...');
+        await broker.updateProClinic(proClinicId, proClinicHN, patient);
+        await updateDoc(ref, { brokerLastAutoSyncAt: serverTimestamp() });
+        setToastMsg('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
       } else {
         setToastMsg('กำลังบันทึกมัดจำลง ProClinic...');
       }
 
-      // Step 2: Submit deposit to ProClinic
+      // Step 2: Submit or update deposit in ProClinic
       await updateDoc(ref, { depositSyncStatus: 'pending' });
       const dep = session.depositData || {};
       const depositPayload = {
         ...dep,
         appointmentTo: (dep.visitPurpose || []).join(', '),
       };
-      const depResult = await broker.submitDeposit(proClinicId, proClinicHN, depositPayload);
+
+      let depResult;
+      if (alreadySynced) {
+        // Re-sync: update existing deposit
+        depResult = await broker.updateDeposit(proClinicId, proClinicHN, session.depositProClinicId || null, depositPayload);
+      } else {
+        // First time: create new deposit
+        depResult = await broker.submitDeposit(proClinicId, proClinicHN, depositPayload);
+      }
       if (!depResult?.success) {
-        if (depResult?.debug) console.error('deposit-submit debug:', depResult.debug);
+        if (depResult?.debug) console.error('deposit sync debug:', depResult.debug);
         throw new Error(depResult?.error || 'บันทึกมัดจำไม่สำเร็จ');
       }
 
@@ -1087,7 +1104,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncAt: serverTimestamp(),
         ...(depResult.depositProClinicId ? { depositProClinicId: depResult.depositProClinicId } : {}),
       });
-      setToastMsg('บันทึกมัดจำสำเร็จ!');
+      setToastMsg(alreadySynced ? 'อัพเดทข้อมูลสำเร็จ!' : 'บันทึกมัดจำสำเร็จ!');
       setTimeout(() => setToastMsg(null), 5000);
     } catch (e) {
       console.error('deposit sync error:', e);
@@ -1909,7 +1926,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const isCompleted = session.status === 'completed' && d;
                 const hasOPD = session.opdRecordedAt && session.brokerStatus === 'done';
                 const hasDeposit = session.depositSyncStatus === 'done';
-                const needsSync = isCompleted && (!hasOPD || !hasDeposit);
+                const dataUpdated = hasOPD && hasDeposit && session.isUnread;
+                const needsSync = isCompleted && (!hasOPD || !hasDeposit || dataUpdated);
                 const isSyncing = session.brokerStatus === 'pending' || session.depositSyncStatus === 'pending';
                 return (
                   <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
@@ -1944,13 +1962,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {isCompleted && (
                             <button
                               onClick={() => handleDepositSync(session)}
-                              disabled={isSyncing || (hasOPD && hasDeposit)}
+                              disabled={isSyncing || (hasOPD && hasDeposit && !dataUpdated)}
                               className={`p-1.5 rounded border text-xs font-bold flex items-center gap-1 transition-colors ${
-                                hasOPD && hasDeposit ? 'bg-emerald-950/30 border-emerald-900/50 text-emerald-500 cursor-default'
+                                dataUpdated ? 'bg-amber-700 hover:bg-amber-600 border-amber-500 text-white animate-pulse'
+                                : hasOPD && hasDeposit ? 'bg-emerald-950/30 border-emerald-900/50 text-emerald-500 cursor-default'
                                 : needsSync ? 'bg-emerald-700 hover:bg-emerald-600 border-emerald-600 text-white'
                                 : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400'
                               } disabled:opacity-50`}
-                              title={hasOPD && hasDeposit ? 'บันทึกเรียบร้อยแล้ว' : 'บันทึกลงการจอง'}
+                              title={dataUpdated ? 'ข้อมูลอัพเดท — กดเพื่อ sync ใหม่' : hasOPD && hasDeposit ? 'บันทึกเรียบร้อยแล้ว' : 'บันทึกลงการจอง'}
                             >
                               {isSyncing ? <Loader2 size={14} className="animate-spin"/> : <ClipboardCheck size={14}/>}
                             </button>
