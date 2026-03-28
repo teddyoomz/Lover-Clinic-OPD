@@ -2,7 +2,7 @@
 
 > ไฟล์: `src/pages/AdminDashboard.jsx`
 > Component ที่ซับซ้อนที่สุดในโปรเจ็ค — มี Firestore listener, auto-sync, broker logic
-> อัพเดทล่าสุด: 2026-03-25
+> อัพเดทล่าสุด: 2026-03-28
 
 ---
 
@@ -240,6 +240,35 @@ Error bar (brokerStatus==='failed')
 | `handleOpdClick(session)` | ส่งไป ProClinic (บล็อกถ้า done แล้ว) |
 | `handleResync(session)` | ส่งไป ProClinic ซ้ำ (ไม่บล็อกถ้า done — manual resync) |
 | `handleProClinicEdit(session)` | เปิดหน้า edit ProClinic (LC_OPEN_EDIT_PROCLINIC) |
-| `handleProClinicDelete(session)` | ลบจาก ProClinic + ล้าง HN/ID ใน Firestore |
+| `handleProClinicDelete(session)` | ลบจาก ProClinic + ล้าง HN/ID (notFound → ถอด HN/OPD เตรียมบันทึกใหม่) |
+| `handleOpenPatientView(session)` | เปิด PatientDashboard ใน iframe modal (admin view) |
+| `closePatientViewIframe()` | ปิด iframe + stamp refs + clear banner |
+| `closeViewSession()` | ปิด report + restore adminMode (prevAdminModeRef) |
 | `enablePushNotifications()` | request permission → getToken → save Firestore |
 | `generateClinicalSummary(d, formType, tpl, lang)` | import จาก utils.js |
+
+---
+
+## Iframe Patient View Modal
+
+### เปิด
+- ปุ่ม "คอร์สและนัดหมาย ↗" ใน report → `handleOpenPatientView(session)`
+- ปุ่มแว่นขยาย ใน queue/history list → `handleOpenPatientView(session)` (ไม่เปิด report ซ้อน)
+- สร้าง `patientLinkToken` ถ้ายังไม่มี → เปิด iframe `/?patient=TOKEN&admin=1`
+
+### ปิด
+- ทุกจุดเรียก `closePatientViewIframe()`:
+  - ปุ่ม X บน "Admin View" bar
+  - คลิก backdrop
+  - postMessage `close-patient-view` จาก iframe back button
+- Function stamp `lastViewedStrRef` + `lastAutoSyncedStrRef` → ป้องกัน banner false positive
+
+### prevAdminModeRef
+- เก็บ `adminMode` ก่อนเปิด report จากหน้าประวัติ
+- `closeViewSession()` restore `adminMode` กลับ → ป้องกันกลับไปหน้าคิว
+
+### notFound handling (delete/resync)
+- API `update.js` + `delete.js` verify customer existence via edit page
+- ถ้าไม่เจอ → return `{ notFound: true }`
+- `handleResync`: ถอด HN/OPD → พร้อมบันทึกใหม่
+- `handleProClinicDelete`: treat `notFound` = success → ถอด HN/OPD เหมือนกัน

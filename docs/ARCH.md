@@ -2,7 +2,7 @@
 
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b` | Deploy: Vercel
-> อัพเดทล่าสุด: 2026-03-25
+> อัพเดทล่าสุด: 2026-03-28
 
 ---
 
@@ -82,6 +82,30 @@ PatientForm submit / admin กดปุ่ม / แก้ข้อมูล
 ```
 
 ดูรายละเอียดทั้งหมดใน `docs/EXTENSION.md`
+
+---
+
+## 🌐 API Layer (Vercel Serverless)
+
+```
+brokerClient.js → fetch /api/proclinic/{action} → Vercel Serverless Function
+  → createSession() (HTTP login + Firestore cookie cache)
+  → scrape ProClinic with cheerio
+  → return JSON { success, notFound?, sessionExpired? }
+```
+
+| Endpoint | คำอธิบาย |
+|----------|-----------|
+| `create` | สร้าง customer ใหม่ → return proClinicId + HN |
+| `update` | แก้ไข customer (resolve by ID/HN/phone/name) |
+| `delete` | ลบ customer (verify existence → notFound if deleted) |
+| `courses` | ดึง courses + appointments |
+| `search` | ค้นหา customers |
+| `login` | ทดสอบ connection |
+
+> ⚠️ ทำงานบน Vercel production เท่านั้น — localhost dev server จะ error (expected)
+
+ดูรายละเอียดใน `docs/API.md`
 
 ---
 

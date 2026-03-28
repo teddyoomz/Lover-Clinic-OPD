@@ -1,7 +1,7 @@
 # Bug History & Resolved Fixes
 
 > อ่านไฟล์นี้ก่อนแตะ AdminDashboard.jsx หรือ broker-extension/
-> อัพเดทล่าสุด: 2026-03-25 (courses cross-device)
+> อัพเดทล่าสุด: 2026-03-28 (iframe banner, delete notFound, history tab return)
 
 ---
 
@@ -45,6 +45,16 @@
 | Banner หายเองหลัง broker sync เสร็จ | `brokerChanged` path เรียก `setViewingSession` → useEffect คำนวณใหม่ → `dataOutOfSync=false` → clear banner | `brokerChanged` path อัพเดท session เงียบๆ ไม่แตะ `hasNewUpdate` |
 | Auto-sync ไม่ทำงานระหว่าง simulation | AdminDashboard unmount ระหว่าง simulation → Firestore listener ถูกทำลาย | keep AdminDashboard mounted ตลอด ด้วย `display:none` wrapper ตอน simulation |
 | Auto-sync ทำงานเฉพาะตอน isNotifEnabled=true | auto-sync block อยู่ใน `if (isNotifEnabled)` | ย้าย auto-sync ออกมาข้างนอก — notification sound/toast เท่านั้นที่ check isNotifEnabled |
+| Banner ขึ้นหลังปิด iframe patient view | iframe sync courses → Firestore update → onSnapshot → banner logic เห็น stale ref | `closePatientViewIframe()` stamp `lastViewedStrRef` + `lastAutoSyncedStrRef` + sync viewingSession ให้ latest |
+| ปิด report จากประวัติ → กลับหน้าคิว | `closeViewSession` ไม่ restore `adminMode` | เพิ่ม `prevAdminModeRef` — เก็บ adminMode ก่อนเปิด report, restore ตอนปิด |
+| ลบจาก ProClinic แจ้ง failed แต่จริงๆลบได้ | `handleProClinicDelete` ไม่มี `notFound` check | API `delete.js` verify existence via edit page + return `notFound`; handler treat `notFound` = success → ถอด HN/OPD |
+| Cooldown display +1 นาที | `serverTimestamp()` clock skew → `Math.ceil` rounds up | `Math.min(Math.ceil(remainingMs / 60000), configuredMins)` |
+
+### PatientDashboard
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| fetchCoursesViaApi error บน localhost | API routes ไม่มีบน dev server | ปกติ — ไม่ต้องแก้ ทำงานได้บน production |
 
 ---
 
