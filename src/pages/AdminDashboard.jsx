@@ -757,11 +757,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleViewSession = async (session) => {
     setViewingSession(session);
     setHasNewUpdate(false);
-    // Deposit ที่ sync แล้วแต่ลูกค้าแก้ข้อมูลมาใหม่ → ไม่ clear isUnread จนกว่าจะกด sync
-    const depositNeedsResync = session.formType === 'deposit'
-      && session.opdRecordedAt && session.brokerStatus === 'done'
-      && session.depositSyncStatus === 'done' && session.isUnread;
-    if (session.isUnread && !depositNeedsResync) {
+    // Deposit: ไม่ clear isUnread เมื่อแค่ดู — ต้อง sync (บันทึกการจอง / resync) ถึงจะ clear
+    const isDepositKeepUnread = session.formType === 'deposit' && session.isUnread;
+    if (session.isUnread && !isDepositKeepUnread) {
       // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
       lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
