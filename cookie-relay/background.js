@@ -122,7 +122,7 @@ async function autoLogin() {
     if (success) {
       console.log('[CookieRelay] Auto-login succeeded — syncing cookies');
       // Small delay for cookies to settle
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 200));
       return await syncCookies();
     } else {
       return { success: false, error: 'Login ไม่สำเร็จ — ตรวจสอบ credentials ใน popup' };
@@ -226,7 +226,7 @@ function doLogin(email, password, siteKey) {
           log('No reCAPTCHA — submitting directly');
           doSubmit();
         }
-      }, 1000);
+      }, 500);
     } catch (e) {
       resolve({ status: 'error', error: e.message });
     }

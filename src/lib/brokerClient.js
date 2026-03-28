@@ -13,7 +13,7 @@ function sendMessageToExtension(type, extra = {}) {
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler);
       resolve({ success: false, error: 'Extension not installed or not responding' });
-    }, 60000); // 60s — auto-login takes time (open window + load + fill + submit + redirect + sync)
+    }, 30000); // 30s — auto-login ~7s + buffer
 
     function handler(event) {
       if (event.source !== window || event.data?.type !== resultType) return;
