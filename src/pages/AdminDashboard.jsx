@@ -350,10 +350,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           .sort((a, b) => (b.archivedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.archivedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
 
-      // Deposit sessions — separate from queue
+      // Deposit sessions — separate from queue (exclude serviceCompleted → those go to queue)
       setDepositSessions(
         allDocs
-          .filter(s => !s.isArchived && s.formType === 'deposit')
+          .filter(s => !s.isArchived && s.formType === 'deposit' && !s.serviceCompleted)
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
       setArchivedDepositSessions(
@@ -364,8 +364,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       const data = allDocs.filter(session => {
           if (session.isArchived) return false;
-          if (session.formType === 'deposit') return false; // exclude from queue
+          if (session.formType === 'deposit' && !session.serviceCompleted) return false; // deposit ที่ยังไม่มารับบริการ → อยู่ tab จองมัดจำ
           if (session.isPermanent) return true;
+          if (session.formType === 'deposit' && session.serviceCompleted) return true; // deposit มารับบริการแล้ว → แสดงในคิว
           if (!session.createdAt) return true;
           const createdAtMs = session.createdAt.toMillis();
           return (now - createdAtMs) <= SESSION_TIMEOUT_MS;
@@ -3600,7 +3601,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   if (isCancel) { handleDepositCancel(dSess); }
                   else if (isComplete) {
                     updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
-                      isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
+                      serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
                     });
                   } else {
                     updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
