@@ -129,6 +129,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '',
     visitPurpose: [],
   });
+  const [editingDepositData, setEditingDepositData] = useState(null); // null = not editing, object = editing copy
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -480,7 +481,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     if (viewingSession) {
       const latestSession = sessions.find(s => s.id === viewingSession.id)
-        || archivedSessions.find(s => s.id === viewingSession.id);
+        || archivedSessions.find(s => s.id === viewingSession.id)
+        || depositSessions.find(s => s.id === viewingSession.id)
+        || archivedDepositSessions.find(s => s.id === viewingSession.id);
       if (latestSession) {
         const currentStr = stableStr(viewingSession.patientData || {});
         const latestStr = stableStr(latestSession.patientData || {});
@@ -489,7 +492,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const dataOutOfSync = currentStr !== latestStr;
 
         // Sync broker fields ให้ viewingSession ทันทีที่ Firestore อัปเดต
-        const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt'];
+        const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt','depositSyncStatus','depositSyncAt','depositSyncError','depositData'];
         const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
 
         if (brokerChanged) {
@@ -690,6 +693,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const closeViewSession = () => {
     setViewingSession(null);
     setHasNewUpdate(false);
+    setEditingDepositData(null);
     if (prevAdminModeRef.current) {
       setAdminMode(prevAdminModeRef.current);
       prevAdminModeRef.current = null;
@@ -1033,6 +1037,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncStatus: 'failed',
         depositSyncError: e.message,
       }).catch(console.error);
+      setToastMsg(`ผิดพลาด: ${e.message}`);
+      setTimeout(() => setToastMsg(null), 5000);
+    }
+  };
+
+  const handleSaveDepositData = async (sessionId, newData) => {
+    try {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+      await updateDoc(ref, { depositData: newData, depositSyncStatus: null, depositSyncAt: null });
+      setEditingDepositData(null);
+      setToastMsg('บันทึกข้อมูลจองสำเร็จ');
+      setTimeout(() => setToastMsg(null), 3000);
+    } catch (e) {
       setToastMsg(`ผิดพลาด: ${e.message}`);
       setTimeout(() => setToastMsg(null), 5000);
     }
@@ -2642,6 +2659,193 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   })()}
                 </div>
               )}
+
+              {/* ── Deposit Info Section ── */}
+              {viewingSession.formType === 'deposit' && viewingSession.depositData && (() => {
+                const dep = editingDepositData || viewingSession.depositData;
+                const isEditing = !!editingDepositData;
+                const optLabel = (list, val) => {
+                  const found = (depositOptions?.[list] || []).find(o => o.value === val);
+                  return found ? found.label : val || '-';
+                };
+                return (
+                  <div className="mt-6 bg-[#0a100a] p-4 sm:p-5 rounded-xl border border-emerald-900/40 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600"></div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                        <ClipboardCheck size={12}/> ข้อมูลการจองมัดจำ
+                      </h4>
+                      <div className="flex gap-1.5">
+                        {!isEditing ? (
+                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
+                            className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
+                            <Edit3 size={10}/> แก้ไข
+                          </button>
+                        ) : (<>
+                          <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
+                            className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors flex items-center gap-1">
+                            <CheckCircle2 size={10}/> บันทึก
+                          </button>
+                          <button onClick={() => setEditingDepositData(null)}
+                            className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-[#333] text-gray-400 hover:text-white transition-colors">
+                            ยกเลิก
+                          </button>
+                        </>)}
+                      </div>
+                    </div>
+                    {!isEditing ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</span>
+                          <span className="font-bold text-emerald-300">{dep.paymentChannel || '-'}</span>
+                        </div>
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">ยอดชำระ</span>
+                          <span className="font-bold text-emerald-300">{dep.paymentAmount ? `${Number(dep.paymentAmount).toLocaleString()} บาท` : '-'}</span>
+                        </div>
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</span>
+                          <span className="font-bold text-white">{dep.depositDate || '-'}</span>
+                        </div>
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
+                          <span className="font-bold text-white">{dep.depositTime || '-'}</span>
+                        </div>
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">พนักงานขาย</span>
+                          <span className="font-bold text-white">{optLabel('sellers', dep.salesperson)}</span>
+                        </div>
+                        <div className="bg-[#111] p-3 rounded border border-[#222]">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">เลขอ้างอิง</span>
+                          <span className="font-bold text-white">{dep.refNo || '-'}</span>
+                        </div>
+                        {dep.depositNote && (
+                          <div className="bg-[#111] p-3 rounded border border-[#222] sm:col-span-2">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">หมายเหตุ</span>
+                            <span className="font-bold text-gray-300 text-xs">{dep.depositNote}</span>
+                          </div>
+                        )}
+                        {dep.hasAppointment && (<>
+                          <div className="sm:col-span-2 mt-2 mb-1"><span className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</span>
+                            <span className="font-bold text-amber-300">{dep.appointmentDate || '-'}</span>
+                          </div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
+                            <span className="font-bold text-amber-300">{dep.appointmentStartTime || ''} - {dep.appointmentEndTime || ''}</span>
+                          </div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">แพทย์</span>
+                            <span className="font-bold text-white">{optLabel('doctors', dep.doctor)}</span>
+                          </div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">ห้องตรวจ</span>
+                            <span className="font-bold text-white">{optLabel('rooms', dep.room)}</span>
+                          </div>
+                          {(dep.visitPurpose || []).length > 0 && (
+                            <div className="bg-[#111] p-3 rounded border border-amber-900/30 sm:col-span-2">
+                              <span className="text-[10px] text-gray-500 uppercase block mb-1">นัดมาเพื่อ</span>
+                              <div className="flex flex-wrap gap-1">{dep.visitPurpose.map(v => <span key={v} className="text-xs font-bold text-amber-300 bg-amber-950/30 border border-amber-900/40 px-2 py-0.5 rounded">{v}</span>)}</div>
+                            </div>
+                          )}
+                        </>)}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</label>
+                          <select value={dep.paymentChannel || ''} onChange={e => setEditingDepositData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                            <option value="">-- เลือก --</option>
+                            {(depositOptions?.paymentMethods || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">ยอดชำระ</label>
+                          <input type="number" value={dep.paymentAmount || ''} onChange={e => setEditingDepositData(p => ({...p, paymentAmount: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
+                          <input type="date" value={dep.depositDate || ''} onChange={e => setEditingDepositData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</label>
+                          <input type="time" value={dep.depositTime || ''} onChange={e => setEditingDepositData(p => ({...p, depositTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">พนักงานขาย</label>
+                          <select value={dep.salesperson || ''} onChange={e => setEditingDepositData(p => ({...p, salesperson: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                            <option value="">-- เลือก --</option>
+                            {(depositOptions?.sellers || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">เลขอ้างอิง</label>
+                          <input type="text" value={dep.refNo || ''} onChange={e => setEditingDepositData(p => ({...p, refNo: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] text-gray-500 uppercase block mb-1">หมายเหตุ</label>
+                          <textarea value={dep.depositNote || ''} onChange={e => setEditingDepositData(p => ({...p, depositNote: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none resize-none" rows={2}/>
+                        </div>
+                        <div className="sm:col-span-2 flex items-center gap-3 mt-1">
+                          <label className="text-[10px] text-gray-500 uppercase">นัดหมาย</label>
+                          <button onClick={() => setEditingDepositData(p => ({...p, hasAppointment: !p.hasAppointment}))}
+                            className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${dep.hasAppointment ? 'bg-amber-900/30 border-amber-600 text-amber-400' : 'bg-[#141414] border-[#333] text-gray-500'}`}>
+                            {dep.hasAppointment ? 'มีนัดหมาย' : 'ไม่มีนัดหมาย'}
+                          </button>
+                        </div>
+                        {dep.hasAppointment && (<>
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</label>
+                            <input type="date" value={dep.appointmentDate || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase block mb-1">เริ่ม</label>
+                              <select value={dep.appointmentStartTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                                <option value="">--</option>
+                                {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase block mb-1">สิ้นสุด</label>
+                              <select value={dep.appointmentEndTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                                <option value="">--</option>
+                                {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase block mb-1">แพทย์</label>
+                            <select value={dep.doctor || ''} onChange={e => setEditingDepositData(p => ({...p, doctor: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                              <option value="">-- เลือก --</option>
+                              {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 uppercase block mb-1">ห้องตรวจ</label>
+                            <select value={dep.room || ''} onChange={e => setEditingDepositData(p => ({...p, room: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                              <option value="">-- เลือก --</option>
+                              {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </div>
+                        </>)}
+                      </div>
+                    )}
+                    {/* Deposit sync status */}
+                    {viewingSession.depositSyncStatus === 'done' && viewingSession.depositSyncAt && (
+                      <div className="mt-3 p-2 bg-emerald-950/20 border border-emerald-900/30 rounded text-[10px] text-emerald-400 font-mono flex items-center gap-2">
+                        <CheckCircle2 size={12}/> บันทึกมัดจำลง ProClinic แล้ว · {formatBangkokTime(viewingSession.depositSyncAt)}
+                      </div>
+                    )}
+                    {viewingSession.depositSyncStatus === 'failed' && (
+                      <div className="mt-3 p-2 bg-red-950/20 border border-red-900/30 rounded text-[10px] text-red-400 font-mono">
+                        ผิดพลาด: {viewingSession.depositSyncError}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="mt-8 pt-6 border-t border-[#222] relative">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">

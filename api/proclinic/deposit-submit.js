@@ -1,6 +1,8 @@
 // ─── Submit Deposit to ProClinic ─────────────────────────────────────────────
 // Two-step: expects customer already created (has proClinicId/HN)
 // Fills deposit form on /admin/deposit with customer_option='choose' (existing customer)
+// NOTE: Despite form having enctype="multipart/form-data", x-www-form-urlencoded works
+// fine since there are no file uploads. Tested and confirmed 302 redirect on success.
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
 import * as cheerio from 'cheerio';
@@ -25,19 +27,9 @@ export default async function handler(req, res) {
 
     const $ = cheerio.load(html);
 
-    // Extract form action URL from the modal
-    const modalForm = $('#createDepositModal form');
-    let formAction = modalForm.attr('action') || '';
-    if (formAction && !formAction.startsWith('http')) {
-      formAction = formAction.startsWith('/') ? `${base}${formAction}` : `${base}/${formAction}`;
-    }
-    if (!formAction) formAction = `${base}/admin/deposit`;
-
-    // Extract all default form fields from the modal
-    // ProClinic form has ~61 fields — we must send ALL of them
+    // Extract all default form fields from the deposit modal
     const defaultFields = {};
-    const checkedCheckboxes = new Set();
-    const formSelector = modalForm.length
+    const formSelector = $('#createDepositModal').length
       ? '#createDepositModal input, #createDepositModal textarea, #createDepositModal select'
       : 'form input, form textarea, form select';
 
@@ -48,10 +40,7 @@ export default async function handler(req, res) {
       if (tag === 'select') {
         defaultFields[name] = $(el).find('option:selected').val() || '';
       } else if (tag === 'input' && $(el).attr('type') === 'checkbox') {
-        if ($(el).is(':checked')) {
-          defaultFields[name] = $(el).val() || '1';
-          checkedCheckboxes.add(name);
-        }
+        if ($(el).is(':checked')) defaultFields[name] = $(el).val() || '1';
       } else if (tag === 'input' && $(el).attr('type') === 'radio') {
         if ($(el).is(':checked')) defaultFields[name] = $(el).val();
       } else {
@@ -59,93 +48,78 @@ export default async function handler(req, res) {
       }
     });
 
-    // Step 2: Build multipart/form-data (ProClinic form uses enctype="multipart/form-data")
-    const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
-    let body = '';
-
-    function addField(name, value) {
-      body += `--${boundary}\r\n`;
-      body += `Content-Disposition: form-data; name="${name}"\r\n\r\n`;
-      body += `${value}\r\n`;
-    }
-
-    // CSRF token
-    addField('_token', csrf);
+    // Step 2: Build URLSearchParams — start with defaults, override with deposit data
+    const params = new URLSearchParams();
+    params.set('_token', csrf);
 
     // Set all default fields first
     for (const [key, val] of Object.entries(defaultFields)) {
       if (key !== '_token' && key !== '_method') {
-        addField(key, val);
+        params.set(key, val);
       }
     }
 
-    // ─── Override with our deposit data ─────────────────────────────────
-
-    // Select existing customer: 'choose' (not '2'!)
-    addField('customer_option', 'choose');
-    addField('customer_id', proClinicId);
+    // Select existing customer: 'choose' (ProClinic radio value)
+    params.set('customer_option', 'choose');
+    params.set('customer_id', proClinicId);
 
     // Payment info
-    if (deposit.paymentChannel) addField('payment_method', deposit.paymentChannel);
-    if (deposit.paymentAmount != null) addField('deposit', String(deposit.paymentAmount));
-    if (deposit.depositDate) addField('payment_date', deposit.depositDate);
-    if (deposit.depositTime) addField('payment_time', deposit.depositTime);
-    if (deposit.refNo) addField('ref_no', deposit.refNo);
-    if (deposit.depositNote) addField('deposit_note', deposit.depositNote);
+    if (deposit.paymentChannel) params.set('payment_method', deposit.paymentChannel);
+    if (deposit.paymentAmount != null) params.set('deposit', String(deposit.paymentAmount));
+    if (deposit.depositDate) params.set('payment_date', deposit.depositDate);
+    if (deposit.depositTime) params.set('payment_time', deposit.depositTime);
+    if (deposit.refNo) params.set('ref_no', deposit.refNo);
+    if (deposit.depositNote) params.set('deposit_note', deposit.depositNote);
 
     // Salesperson
     if (deposit.salesperson) {
-      addField('hasSeller1', '1');
-      addField('seller_1_id', deposit.salesperson);
-      addField('sale_percent_1', '100');
-      addField('sale_total_1', String(deposit.paymentAmount || '0'));
+      params.set('hasSeller1', '1');
+      params.set('seller_1_id', deposit.salesperson);
+      params.set('sale_percent_1', '100');
+      params.set('sale_total_1', String(deposit.paymentAmount || '0'));
     }
 
     // Customer source
-    if (deposit.customerSource) addField('customer_source', deposit.customerSource);
-    if (deposit.sourceDetail) addField('source_detail', deposit.sourceDetail);
+    if (deposit.customerSource) params.set('customer_source', deposit.customerSource);
+    if (deposit.sourceDetail) params.set('source_detail', deposit.sourceDetail);
 
     // Appointment
     if (deposit.hasAppointment) {
-      addField('hasAppointment', '1');
-      if (deposit.appointmentDate) addField('appointment_date', deposit.appointmentDate);
-      if (deposit.appointmentStartTime) addField('appointment_start_time', deposit.appointmentStartTime);
-      if (deposit.appointmentEndTime) addField('appointment_end_time', deposit.appointmentEndTime);
-      addField('appointment_type', 'sales'); // sales appointment
-      addField('appointment_option', 'once'); // single occurrence
+      params.set('hasAppointment', '1');
+      if (deposit.appointmentDate) params.set('appointment_date', deposit.appointmentDate);
+      if (deposit.appointmentStartTime) params.set('appointment_start_time', deposit.appointmentStartTime);
+      if (deposit.appointmentEndTime) params.set('appointment_end_time', deposit.appointmentEndTime);
+      params.set('appointment_type', 'sales');
+      params.set('appointment_option', 'once');
 
-      if (deposit.consultant) addField('advisor_id', deposit.consultant);
-      if (deposit.doctor) addField('doctor_id', deposit.doctor);
-      if (deposit.assistant) addField('doctor_assistant_id[]', deposit.assistant);
-      if (deposit.room) addField('examination_room_id', deposit.room);
-      if (deposit.appointmentChannel) addField('source', deposit.appointmentChannel);
-      if (deposit.appointmentTo) addField('appointment_to', deposit.appointmentTo);
-      if (deposit.appointmentNote) addField('appointment_note', deposit.appointmentNote);
+      if (deposit.consultant) params.set('advisor_id', deposit.consultant);
+      if (deposit.doctor) params.set('doctor_id', deposit.doctor);
+      if (deposit.assistant) params.set('doctor_assistant_id[]', deposit.assistant);
+      if (deposit.room) params.set('examination_room_id', deposit.room);
+      if (deposit.appointmentChannel) params.set('source', deposit.appointmentChannel);
+      if (deposit.appointmentTo) params.set('appointment_to', deposit.appointmentTo);
+      if (deposit.appointmentNote) params.set('appointment_note', deposit.appointmentNote);
     } else {
-      addField('hasAppointment', '0');
+      params.set('hasAppointment', '0');
     }
 
-    // Close boundary
-    body += `--${boundary}--\r\n`;
-
-    // Step 3: POST form with multipart/form-data
-    console.log(`[deposit] POST to ${formAction}, proClinicId=${proClinicId}, defaultFields=${Object.keys(defaultFields).length}`);
+    // Step 3: POST form
+    const formAction = `${base}/admin/deposit`;
     const submitRes = await session.fetch(formAction, {
       method: 'POST',
       headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
         'X-CSRF-TOKEN': csrf,
-        'Accept': 'text/html, application/xhtml+xml, */*',
         'Referer': `${base}/admin/deposit`,
       },
-      body,
+      body: params.toString(),
       redirect: 'manual',
     });
 
     const status = submitRes.status;
     const location = submitRes.headers?.get?.('location') || '';
 
-    // Success: redirect (302/303) — ProClinic redirects after successful form submission
+    // Success: redirect (302/303)
     if (status >= 300 && status < 400) {
       return res.status(200).json({ success: true, redirectTo: location });
     }
@@ -164,15 +138,9 @@ export default async function handler(req, res) {
       if (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success')) {
         return res.status(200).json({ success: true });
       }
-      if (bodyHtml.includes('createDepositModal') || bodyHtml.includes('customer_option')) {
-        return res.status(200).json({
-          success: false,
-          error: 'ฟอร์มถูกแสดงซ้ำ — อาจมีข้อมูลไม่ครบหรือไม่ถูกต้อง',
-        });
-      }
     }
 
-    // Unexpected status — extract error details
+    // Unexpected status
     const $err = cheerio.load(bodyHtml);
     const laravelMsg = $err('.exception-message, .exception_message, h1').first().text().trim();
     const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
