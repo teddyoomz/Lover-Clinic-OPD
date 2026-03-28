@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-03-28 (Security: Firebase Auth on all API endpoints, clear-session, brokerClient auth)
+> อัพเดทล่าสุด: 2026-03-28 (Cookie Relay Extension, auto-login, origin mismatch fix)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -441,27 +441,52 @@ Inline component ด้านบนขวา — สลับ TH/EN
 
 ---
 
-## 🔌 Broker Extension (broker-extension/)
+## 🔌 Cookie Relay Extension (cookie-relay/)
 
 ### ภาพรวม
-Chrome Extension MV3 ที่ทำหน้าที่ bridge ระหว่าง LoverClinic กับ ProClinic
-- **ไม่มี auto-deploy** — ต้องก็อปไฟล์ใส่ Chrome Extensions ด้วยตัวเอง
-- **Reload ที่ chrome://extensions เมื่อแก้**: `background.js`, `manifest.json`, `content-loverclinic.js`
+Chrome Extension MV3 ที่ sync ProClinic httpOnly cookies → Firestore + auto-login เมื่อ session หมดอายุ
+- ProClinic มี reCAPTCHA v3 → server login ทำไม่ได้ → ต้องใช้ browser จริง
+- **ไม่มี auto-deploy** — ต้อง reload ที่ `chrome://extensions` เอง
+- **Reload เมื่อแก้**: `background.js`, `manifest.json`, `content-loverclinic.js`
 - **ไม่ต้อง reload เมื่อแก้**: `popup.html`, `popup.js`
 
 ### Files
 | ไฟล์ | หน้าที่ |
 |------|--------|
-| `manifest.json` | MV3 config, permissions: tabs/scripting/activeTab/storage |
-| `background.js` | Service Worker หลัก — logic ทั้งหมด |
-| `content-loverclinic.js` | Bridge script บน lover-clinic-app.vercel.app — forward postMessage ↔ extension |
-| `popup.html/js` | UI แสดง session status (pending/done/failed) |
+| `manifest.json` | MV3 config, permissions: cookies/scripting/tabs/storage |
+| `background.js` | Service Worker — syncCookies(), autoLogin(), doLogin(), message handlers |
+| `content-loverclinic.js` | Bridge webapp ↔ extension (postMessage ↔ chrome.runtime.sendMessage) |
+| `popup.html/js` | UI ตั้ง credentials + manual sync |
+
+### Credentials (อัตโนมัติ)
+```
+Vercel env vars → /api/proclinic/credentials → webapp → LC_SET_CREDENTIALS → chrome.storage.local
+```
+
+### Cookie Sync
+```
+syncCookies():
+  chrome.cookies.getAll({ domain: '.proclinicth.com' })
+  → ใช้ origin จาก credentials (ไม่ใช่ cookie domain!)
+  → PATCH Firestore: clinic_settings/proclinic_session
+```
+
+### Auto-login
+```
+autoLogin():
+  1. chrome.windows.create({ type: 'popup' }) → chrome.windows.update({ state: 'minimized' })
+  2. waitForTabLoad → executeScript(doLogin) → click #form-submit button
+  3. waitForLoginRedirect (non-/login URL) → syncCookies()
+```
+
+## 🔌 Legacy: Broker Extension (broker-extension/) — ⚠️ DEPRECATED
+ไม่ใช้แล้ว — ถูกแทนที่ด้วย API layer + cookie-relay/ ห้ามอ้างอิง
 
 ### ProClinic URL
 ```
 const PROCLINIC_ORIGIN     = 'https://trial.proclinicth.com'
-const PROCLINIC_CREATE_URL = 'https://trial.proclinicth.com/admin/customer/create'
-const PROCLINIC_LIST_URL   = 'https://trial.proclinicth.com/admin/customer'
+const PROCLINIC_CREATE_URL = ORIGIN + '/admin/customer/create'
+const PROCLINIC_LIST_URL   = ORIGIN + '/admin/customer'
 ```
 
 ### Firestore broker fields (เพิ่มใน opd_sessions)
@@ -670,6 +695,7 @@ cancelDeposit(proClinicId, proClinicHN) → cancel deposit + delete customer in 
 **brokerClient** (`src/lib/brokerClient.js`):
 - `apiFetch(endpoint, body)` — internal helper, auto-attaches Firebase Auth token (`Authorization: Bearer`)
 - ถ้า user ไม่ได้ login หรือ token หมดอายุ → return `{ success: false, error }` ไม่ยิง request
+- **Auto-retry via extension**: เมื่อ `extensionNeeded:true` → send credentials + request sync → retry (timeout 30s)
 
 ```js
 // CRUD
@@ -686,6 +712,11 @@ updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) // PUT exis
 cancelDeposit(proClinicId, proClinicHN)                // POST cancel + DELETE customer
 // Admin
 clearProClinicSession()                                // POST clear session cache
+getProClinicCredentials()                              // GET credentials for extension
+// Extension helpers
+sendMessageToExtension(type, extra)                    // postMessage bridge (timeout 30s)
+requestExtensionSync(forceLogin)                       // LC_SYNC_COOKIES
+ensureExtensionHasCredentials()                        // fetch credentials → send to extension
 ```
 
 **ProClinic deposit endpoints** (discovered via debug scraping):

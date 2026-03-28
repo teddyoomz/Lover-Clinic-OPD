@@ -17,6 +17,7 @@ artifacts/{appId}/public/data/
 │             brokerStatus, brokerProClinicId, brokerProClinicHN,
 │             brokerError, opdRecordedAt, brokerFilledAt, brokerLastAutoSyncAt
 ├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
+│   └── proclinic_session       — ProClinic cookies cache (origin, cookies[], source)
 ├── form_templates/{id}         — Custom form templates
 └── push_config/tokens          — FCM device tokens [{token, userAgent, createdAt}]
 ```
@@ -73,15 +74,22 @@ artifacts/{appId}/public/data/
 
 ```
 PatientForm submit / admin กดปุ่ม / แก้ข้อมูล
-  → AdminDashboard: window.postMessage(LC_FILL_PROCLINIC | LC_UPDATE_PROCLINIC, patient)
-  → content-loverclinic.js: forward → chrome.runtime.sendMessage
-  → background.js: enqueueProClinic → handleFillRequest | handleUpdateRequest
-  → ProClinic: fill form (UI) หรือ fetch PUT (update)
-  → background.js: window.postMessage(LC_BROKER_RESULT | LC_UPDATE_RESULT)
-  → AdminDashboard: updateDoc { brokerStatus:'done', brokerProClinicId, brokerProClinicHN }
+  → AdminDashboard: broker.fillProClinic(patient) / broker.updateProClinic(...)
+  → brokerClient.js: apiFetch → POST /api/proclinic/{action}
+  → Vercel Serverless: createSession() → scrape ProClinic with cheerio
+  → return JSON { success, proClinicId, proClinicHN }
+  → AdminDashboard: updateDoc { brokerStatus:'done', ... }
 ```
 
-ดูรายละเอียดทั้งหมดใน `docs/EXTENSION.md`
+### Cookie Relay (เมื่อ server login ล้มเหลว)
+```
+API returns extensionNeeded:true (ProClinic reCAPTCHA)
+  → brokerClient: send credentials to cookie-relay extension
+  → extension: autoLogin (minimized window → fill form → click submit → sync cookies)
+  → brokerClient: retry API call → server uses synced cookies → success
+```
+
+ดูรายละเอียดใน `docs/EXTENSION.md` (Cookie Relay) และ `docs/API.md`
 
 ---
 
@@ -135,7 +143,10 @@ brokerClient.js → fetch /api/proclinic/{action} → Vercel Serverless Function
 | Missing icon import | → JS runtime error → component crash → จอดำ; ตรวจ lucide-react imports ก่อน |
 | logo.jpg | เก็บที่ `/public/logo.jpg` |
 | Chrome Extension reload | แก้ background.js/manifest.json/content script → reload ที่ chrome://extensions เสมอ |
-| ProClinic button type | `type="button"` ไม่ใช่ `type="submit"` → ใช้ selector `button.btn-primary` |
+| ProClinic button type | `type="button"` ไม่ใช่ `type="submit"` → click ปุ่มแทน form.submit() |
+| Cookie origin mismatch | cookie domain `.proclinicth.com` ≠ `trial.proclinicth.com` → ใช้ origin จาก credentials |
+| Chrome minimized window | `state:'minimized'` ใน windows.create ไม่ work ทุกที → สร้างแล้ว update minimize |
+| API extensionNeeded | เมื่อ server login ล้มเหลว → extension auto-login + sync cookies → retry |
 
 ---
 

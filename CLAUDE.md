@@ -28,7 +28,7 @@ vercel --prod
 |-----|----------------|
 | ภาพรวมระบบ, Firestore schema, session lifecycle | `docs/ARCH.md` |
 | AdminDashboard state/functions/broker logic | `docs/DASHBOARD.md` |
-| Broker Extension (Chrome Extension) | `docs/EXTENSION.md` |
+| Cookie Relay Extension (Chrome Extension) | `docs/EXTENSION.md` |
 | API layer (Vercel serverless → ProClinic scraping) | `docs/API.md` |
 | PatientDashboard (ข้อมูลผู้ป่วย, courses, sync) | `docs/PATIENT_DASHBOARD.md` |
 | Bug ที่เจอมา + fix + design patterns | `docs/BUGS.md` |
@@ -47,7 +47,7 @@ vercel --prod
 - ใช้ pre-computed variable แทน
 
 ### 3. Extension ไม่ auto-deploy
-- แก้ `broker-extension/*.js` แล้วต้อง reload ที่ `chrome://extensions` ด้วยตัวเอง
+- แก้ `cookie-relay/*.js` แล้วต้อง reload ที่ `chrome://extensions` ด้วยตัวเอง
 - **ไม่ต้อง reload**: `popup.html`, `popup.js`
 - **ต้อง reload**: `background.js`, `manifest.json`, `content-loverclinic.js`
 
@@ -90,9 +90,9 @@ src/
 │   ├── ClinicLogo.jsx       — Logo component
 │   └── ThemeToggle.jsx      — Dark/light mode toggle
 api/proclinic/               — Vercel Serverless Functions (ดู docs/API.md)
-├── create.js, update.js, delete.js, courses.js, search.js, login.js
-└── _lib/ (session.js, scraper.js, fields.js)
-broker-extension/             — Chrome Extension MV3 (ดู docs/EXTENSION.md)
+├── create.js, update.js, delete.js, courses.js, search.js, login.js, credentials.js
+└── _lib/ (session.js, scraper.js, fields.js, auth.js)
+cookie-relay/                — Cookie Relay Extension MV3 (ดู docs/EXTENSION.md)
 ├── background.js, content-loverclinic.js, manifest.json, popup.*
 functions/
 └── index.js                 — Cloud Function: onPatientSubmit → FCM push

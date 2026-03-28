@@ -50,6 +50,20 @@
 | ลบจาก ProClinic แจ้ง failed แต่จริงๆลบได้ | `handleProClinicDelete` ไม่มี `notFound` check | API `delete.js` verify existence via edit page + return `notFound`; handler treat `notFound` = success → ถอด HN/OPD |
 | Cooldown display +1 นาที | `serverTimestamp()` clock skew → `Math.ceil` rounds up | `Math.min(Math.ceil(remainingMs / 60000), configuredMins)` |
 
+### Cookie Relay Extension (cookie-relay/)
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| "Invalid value for state" | `state:'minimized'` ใน `chrome.windows.create` ไม่ support ทุก Chrome version | สร้าง window ก่อน → `chrome.windows.update({state:'minimized'})` ทีหลัง |
+| "Invalid value for bounds" | `left:-9999, top:-9999` ถูก Chrome reject (ต้อง 50% ภายในจอ) | ใช้ create + minimize แทน off-screen |
+| Cookies synced แต่ server ใช้ไม่ได้ | Origin mismatch: cookie domain `.proclinicth.com` → `proclinicth.com` ≠ `trial.proclinicth.com` (Vercel env var) | ใช้ `proclinic_origin` จาก credentials แทน cookie domain |
+| Login สำเร็จแต่ webapp timeout | brokerClient timeout 20s < auto-login flow time (~15-25s) | เพิ่มเป็น 30s |
+| `form.submit()` ไม่ trigger login | ProClinic ใช้ `#form-submit` button `type="button"` มี JS click handler | click `#form-submit` button แทน `form.submit()` |
+| "Extension context invalidated" | Extension reload แต่หน้าเว็บไม่ refresh → content script เก่า crash | try-catch wrapper `sendToBackground()` ใน content-loverclinic.js |
+| Extension ไม่รับ credentials | `LC_COOKIE_RELAY_READY` ส่งก่อน React mount → useEffect ไม่ทัน listen | re-announce ที่ 0s, 1s, 3s + `ensureExtensionHasCredentials()` ก่อน sync |
+| CORS blocking API calls | `Access-Control-Allow-Headers` ขาด `Authorization` | เพิ่ม `Authorization` ใน session.js handleCors |
+| "Unauthorized: missing token" ตอนกดปุ่มตั้งค่า | ClinicSettingsPanel ใช้ raw `fetch()` แทน `brokerClient` | เปลี่ยนเป็น `testLogin()` / `clearProClinicSession()` จาก brokerClient |
+
 ### PatientDashboard
 
 | Bug | Root Cause | Fix |

@@ -29,7 +29,10 @@ brokerClient.js (frontend) → fetch /api/proclinic/* → Vercel Serverless Func
 | `/api/proclinic/search` | POST | ค้นหา customers | `{ success, customers: [{id, name, phone}] }` |
 | `/api/proclinic/login` | POST | ทดสอบ connection | `{ success }` |
 
+| `/api/proclinic/credentials` | POST | ส่ง ProClinic credentials ให้ extension | `{ success, origin, email, password }` |
+
 ### Common response flags
+- `extensionNeeded: true` → cookies หมดอายุ + server login ล้มเหลว → ต้องการ Cookie Relay Extension
 - `sessionExpired: true` → ProClinic session หมด ต้อง re-login
 - `notFound: true` → customer ไม่เจอ (ถูกลบไปแล้ว) → frontend ถอด HN/OPD
 
@@ -74,14 +77,37 @@ brokerClient.js (frontend) → fetch /api/proclinic/* → Vercel Serverless Func
 
 ---
 
+## Cookie Relay Extension Integration
+
+เมื่อ server login ล้มเหลว (ProClinic มี reCAPTCHA) → API returns `extensionNeeded: true`
+
+```
+brokerClient.js auto-retry flow:
+  1. API returns extensionNeeded → fetch /api/proclinic/credentials
+  2. Send credentials to Cookie Relay Extension via postMessage
+  3. Extension auto-login (minimized window) → sync cookies to Firestore
+  4. brokerClient retries API call → success (server uses synced cookies)
+```
+
+> Timeout: 30s (auto-login ~7-15s)
+> Extension ดู `docs/EXTENSION.md`
+
+---
+
 ## Frontend Client (src/lib/brokerClient.js)
 
 ```js
 apiFetch(action, data)  // wrapper → fetch('/api/proclinic/{action}', { body: data })
+                        // auto-retry via extension when extensionNeeded
 fillProClinic(patient)
 updateProClinic(proClinicId, proClinicHN, patient)
 deleteProClinic(proClinicId, proClinicHN, patient)
 getCourses(proClinicId)
 searchCustomers(query)
 testLogin()
+getProClinicCredentials()  // GET credentials for extension
+// Extension helpers
+sendMessageToExtension(type, extra)
+requestExtensionSync(forceLogin)
+ensureExtensionHasCredentials()
 ```
