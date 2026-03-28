@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-03-28 (Deposit re-sync, DatePickerThai, patientLink cleanup, nav reorder)
+> อัพเดทล่าสุด: 2026-03-28 (Security: Firebase Auth on all API endpoints, clear-session, brokerClient auth)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -27,7 +27,7 @@ src/
 ├── components/
 │   ├── ClinicLogo.jsx          — Logo component (custom URL / /logo.jpg / text fallback)
 │   ├── ThemeToggle.jsx         — Theme toggle button
-│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo)
+│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo, ProClinic credential reload)
 │   ├── CustomFormBuilder.jsx   — Admin form builder for custom templates
 │   └── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
 └── pages/
@@ -40,7 +40,8 @@ api/proclinic/                  — Vercel Serverless Functions
 ├── deposit-submit.js           — Submit deposit to ProClinic (create)
 ├── deposit-update.js           — Update deposit in ProClinic (PUT via editDepositModal)
 ├── deposit-cancel.js           — Cancel deposit + delete customer from ProClinic
-└── _lib/ (session.js, scraper.js, fields.js)
+├── clear-session.js            — Clear ProClinic session cache (force re-login)
+└── _lib/ (session.js, scraper.js, fields.js, auth.js)
 ```
 
 ---
@@ -417,6 +418,8 @@ Inline component ด้านบนขวา — สลับ TH/EN
 12. **PatientLink cleanup** — เมื่อ OPD หลุด sync (delete, notFound, cancel) → ลบ patientLinkToken ถาวร ลิงก์ใช้ไม่ได้อีก
 13. **PatientLink requires OPD** — ปุ่มสร้างลิงก์ดูข้อมูลในหน้าประวัติ แสดงเฉพาะเมื่อ opdRecordedAt + brokerStatus=done
 14. **DatePickerThai** — custom component: แสดง DD/MM/YYYY + ไอคอนปฏิทิน, กดแล้วเปิด native calendar picker, value เก็บเป็น YYYY-MM-DD (compatible กับ ProClinic)
+15. **API Security (Firebase Auth)** — ทุก `/api/proclinic/*` endpoint ต้องมี `Authorization: Bearer <firebaseIdToken>` header. ตรวจสอบผ่าน `_lib/auth.js` → `verifyAuth()` (เรียก Firebase `accounts:lookup` REST API). brokerClient.js แนบ token อัตโนมัติทุก request
+16. **ProClinic credential reload** — เปลี่ยน env vars ใน Vercel แล้วกดปุ่ม "โหลด Credentials ใหม่" ใน ClinicSettingsPanel → เรียก `/api/proclinic/clear-session` → ลบ session cache จาก Firestore → ครั้งถัดไป API จะ login ใหม่ด้วย credentials ใหม่ (ไม่ต้อง redeploy)
 
 ---
 
@@ -431,6 +434,7 @@ Inline component ด้านบนขวา — สลับ TH/EN
 - **Missing icon import → black screen** — ถ้า import lucide-react icon ขาด จะเกิด JS runtime error → component crash → จอดำ; ตรวจ import ก่อนเสมอ
 - **Archive link fix** — PatientForm ตรวจ `data.isArchived` ใน onSnapshot → setIsClosed(true) และ return ทันที ป้องกันการกรอกซ้ำ
 - **VAPID Key** — ต้อง generate ใน Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair แล้วใส่ใน `VAPID_KEY` constant ใน AdminDashboard.jsx
+- **API Auth required** — ทุก `/api/proclinic/*` endpoint ต้องมี Firebase Auth token. ถ้าเพิ่ม endpoint ใหม่ต้อง import `verifyAuth` จาก `_lib/auth.js` เสมอ
 - **Cloud Functions deploy** — `cd F:\LoverClinic-app\functions && npm install` แล้ว `firebase deploy --only functions` จาก root
 - **iOS Push** — ต้องใช้ iOS 16.4+, เปิดจาก Safari แล้ว Share → "เพิ่มลงหน้าจอ (Add to Home Screen)" ก่อนถึงจะรับ push ได้
 - **FCM token lifecycle** — token เก็บใน Firestore `push_config/tokens`, auto-cleanup เมื่อ invalid (Cloud Function ทำ)
@@ -663,12 +667,25 @@ cancelDeposit(proClinicId, proClinicHN) → cancel deposit + delete customer in 
 - value เก็บเป็น YYYY-MM-DD → compatible กับ ProClinic
 - ใช้ใน deposit form (สร้าง + แก้ไข) ทั้ง depositDate และ appointmentDate
 
-**brokerClient deposit functions**:
+**brokerClient** (`src/lib/brokerClient.js`):
+- `apiFetch(endpoint, body)` — internal helper, auto-attaches Firebase Auth token (`Authorization: Bearer`)
+- ถ้า user ไม่ได้ login หรือ token หมดอายุ → return `{ success: false, error }` ไม่ยิง request
+
 ```js
+// CRUD
+fillProClinic(patient)                                 // POST create customer
+updateProClinic(proClinicId, proClinicHN, patient)     // POST update customer
+deleteProClinic(proClinicId, proClinicHN, patient)     // POST delete customer
+searchCustomers(query)                                 // POST search
+getCourses(proClinicId)                                // POST get courses
+testLogin()                                            // POST test login
+// Deposit
 getDepositOptions()                                    // GET dropdown options
 submitDeposit(proClinicId, proClinicHN, deposit)       // POST new deposit
 updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) // PUT existing
 cancelDeposit(proClinicId, proClinicHN)                // POST cancel + DELETE customer
+// Admin
+clearProClinicSession()                                // POST clear session cache
 ```
 
 **ProClinic deposit endpoints** (discovered via debug scraping):
