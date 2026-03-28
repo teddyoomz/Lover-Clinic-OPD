@@ -51,6 +51,7 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}) {
   if (patient.lastName) params.set('lastname', patient.lastName);
   if (patient.phone) params.set('telephone_number', patient.phone);
   if (patient.address) params.set('address', patient.address);
+  if (patient.province) params.set('province', patient.province);
 
   const gender = GENDER_MAP[patient.prefix];
   if (gender) params.set('gender', gender);
@@ -76,8 +77,13 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}) {
   if (patient.emergencyRelation) params.set('contact_1_lastname', patient.emergencyRelation);
   if (patient.emergencyPhone) params.set('contact_1_telephone_number', patient.emergencyPhone);
 
-  // Customer type defaults
-  params.set('customer_type', '1');   // คนไทย
+  // Customer type: Thai vs Foreigner
+  if (patient.nationality === 'ต่างชาติ') {
+    params.set('customer_type', '2');
+    if (patient.nationalityCountry) params.set('nationality', patient.nationalityCountry);
+  } else {
+    params.set('customer_type', '1');
+  }
   params.set('customer_type_2', '1'); // ลูกค้าทั่วไป
 
   return params;
@@ -105,6 +111,7 @@ export function buildUpdateFormData(patient, existingFields, csrf) {
   if (patient.lastName) params.set('lastname', patient.lastName);
   if (patient.phone) params.set('telephone_number', patient.phone);
   if (patient.address) params.set('address', patient.address);
+  if (patient.province) params.set('province', patient.province);
 
   const gender = GENDER_MAP[patient.prefix];
   if (gender) params.set('gender', gender);
@@ -125,6 +132,14 @@ export function buildUpdateFormData(patient, existingFields, csrf) {
   if (patient.emergencyName) params.set('contact_1_firstname', patient.emergencyName);
   if (patient.emergencyRelation) params.set('contact_1_lastname', patient.emergencyRelation);
   if (patient.emergencyPhone) params.set('contact_1_telephone_number', patient.emergencyPhone);
+
+  // Customer type: Thai vs Foreigner
+  if (patient.nationality === 'ต่างชาติ') {
+    params.set('customer_type', '2');
+    if (patient.nationalityCountry) params.set('nationality', patient.nationalityCountry);
+  } else {
+    params.set('customer_type', '1');
+  }
 
   return params;
 }

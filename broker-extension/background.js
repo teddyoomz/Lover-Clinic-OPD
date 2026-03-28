@@ -635,6 +635,7 @@ async function fillAndSubmitProClinicForm(patient) {
     fillInput('lastname',  patient.lastName);
     fillInput('telephone_number', patient.phone);
     fillInput('address', patient.address);
+    if (patient.province) fillSelect('province', patient.province);
 
     const genderMap = {
       'นาย':'ชาย','ด.ช.':'ชาย','Mr.':'ชาย',
@@ -710,7 +711,13 @@ async function fillAndSubmitProClinicForm(patient) {
     fillInput('contact_1_lastname',         patient.emergencyRelation);
     fillInput('contact_1_telephone_number', patient.emergencyPhone);
 
-    clickRadio('customer_type-1');    // คนไทย
+    // Nationality: Thai vs Foreigner
+    if (patient.nationality === 'ต่างชาติ') {
+      clickRadio('customer_type-2');   // ชาวต่างชาติ
+      if (patient.nationalityCountry) fillInput('nationality', patient.nationalityCountry);
+    } else {
+      clickRadio('customer_type-1');   // คนไทย
+    }
     clickRadio('customer_type_2-1'); // ลูกค้าทั่วไป
 
     window.confirm = () => true;

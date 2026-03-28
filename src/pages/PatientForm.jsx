@@ -7,7 +7,7 @@ import {
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import {
   hexToRgb, THAI_MONTHS, EN_MONTHS, YEARS_BE, YEARS_CE,
-  COUNTRY_CODES, defaultFormData
+  COUNTRY_CODES, THAI_PROVINCES, NATIONALITY_COUNTRIES, defaultFormData
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
@@ -146,7 +146,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       const b = Array.isArray(newData[f]) ? JSON.stringify(newData[f]) : String(newData[f] ?? '');
       return a !== b;
     });
-    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address'])) sections.push('ข้อมูลส่วนตัว');
+    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address','province','nationality','nationalityCountry'])) sections.push('ข้อมูลส่วนตัว');
     if (diff(['phone','phoneCountryCode','isInternationalPhone','emergencyName','emergencyPhone','emergencyRelation','emergencyPhoneCountryCode'])) sections.push('ข้อมูลติดต่อ');
     if (diff(['visitReasons','visitReasonOther','hrtGoals','hrtTransType','hrtOtherDetail'])) sections.push('สาเหตุที่มา');
     const healthFields = ['hasAllergies','allergiesDetail','hasUnderlying','currentMedication','pregnancy','ud_hypertension','ud_diabetes','ud_lung','ud_kidney','ud_heart','ud_blood','ud_other','ud_otherDetail'];
@@ -545,7 +545,33 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
                   <div>
                     <label className={labelClass}>{language === 'en' ? 'Current Address' : 'ที่อยู่ปัจจุบัน'} <span className="text-red-600">*</span></label>
-                    <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, City, etc.' : 'บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด...'} required className={inputClass + " resize-none transition-shadow"}></textarea>
+                    <textarea name="address" value={formData.address || ''} onChange={handleInputChange} rows="2" placeholder={language === 'en' ? 'House No, Street, Sub-district, District' : 'บ้านเลขที่, ถนน, ตำบล, อำเภอ'} required className={inputClass + " resize-none transition-shadow"}></textarea>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Province' : 'จังหวัด'} <span className="text-red-600">*</span></label>
+                    <select name="province" value={formData.province || ''} onChange={handleInputChange} required className={inputClass}>
+                      <option value="" disabled>{language === 'en' ? '-- Select Province --' : '-- เลือกจังหวัด --'}</option>
+                      {THAI_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Nationality' : 'สัญชาติ'}</label>
+                    <div className="flex gap-3 mb-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'var(--tx-normal)' }}>
+                        <input type="radio" name="nationality" value="ไทย" checked={formData.nationality !== 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[#444]" />
+                        {language === 'en' ? 'Thai' : 'ไทย'}
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'var(--tx-normal)' }}>
+                        <input type="radio" name="nationality" value="ต่างชาติ" checked={formData.nationality === 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[#444]" />
+                        {language === 'en' ? 'Foreigner' : 'ต่างชาติ'}
+                      </label>
+                    </div>
+                    {formData.nationality === 'ต่างชาติ' && (
+                      <select name="nationalityCountry" value={formData.nationalityCountry || ''} onChange={handleInputChange} required className={inputClass}>
+                        <option value="" disabled>{language === 'en' ? '-- Select Country --' : '-- เลือกประเทศ --'}</option>
+                        {NATIONALITY_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
