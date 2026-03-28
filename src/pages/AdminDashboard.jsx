@@ -2765,7 +2765,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* ช่องทางชำระเงิน */}
                   <div>
                     <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ช่องทางชำระเงิน</label>
-                    <input type="text" value={depositFormData.paymentChannel} onChange={e => setDepositFormData(p => ({...p, paymentChannel: e.target.value}))} placeholder="เช่น โอนธนาคาร, บัตรเครดิต" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                    <select value={depositFormData.paymentChannel} onChange={e => setDepositFormData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600">
+                      <option value="">-- เลือกช่องทาง --</option>
+                      {(depositOptions?.paymentMethods || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
                   </div>
 
                   {/* ยอดชำระ */}

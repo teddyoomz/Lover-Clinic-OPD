@@ -25,7 +25,19 @@ export default async function handler(req, res) {
     const html = await session.fetchText(`${base}/admin/deposit`);
     const $ = cheerio.load(html);
 
+    // Extract payment methods from script tag (JS autocomplete, not <select>)
+    // Pattern: const paymentMethods = ["KBank","SCB","Voucher"],
+    let paymentMethods = [];
+    $('script').each((_, s) => {
+      const text = $(s).html() || '';
+      const m = text.match(/paymentMethods\s*=\s*(\[.*?\])/);
+      if (m) {
+        try { paymentMethods = JSON.parse(m[1]); } catch {}
+      }
+    });
+
     const options = {
+      paymentMethods: paymentMethods.map(v => ({ value: v, label: v })),
       sellers: extractAllSelectOptions($, 'seller_1_id'),
       advisors: extractAllSelectOptions($, 'advisor_id'),
       doctors: extractAllSelectOptions($, 'doctor_id'),
