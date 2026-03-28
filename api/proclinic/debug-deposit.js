@@ -42,6 +42,56 @@ export default async function handler(req, res) {
       fields.push({ name, type, value: String(val).substring(0, 50), required, checked });
     });
 
+    // Look for payment_method data sources (datalist, script data, hidden elements)
+    const paymentMethodInput = $('#createDepositModal input[name="payment_method"]');
+    const paymentMethodParent = paymentMethodInput.parent().parent().html() || '';
+    const paymentMethodId = paymentMethodInput.attr('id') || '';
+    const paymentMethodClass = paymentMethodInput.attr('class') || '';
+    const paymentMethodList = paymentMethodInput.attr('list') || '';
+
+    // Check for datalist
+    const datalistOptions = [];
+    if (paymentMethodList) {
+      $(`#${paymentMethodList} option`).each((_, opt) => {
+        datalistOptions.push($(opt).val() || $(opt).text().trim());
+      });
+    }
+
+    // Search all datalists on the page
+    const allDatalists = {};
+    $('datalist').each((_, dl) => {
+      const dlId = $(dl).attr('id') || 'unknown';
+      const opts = [];
+      $(dl).find('option').each((_, opt) => {
+        opts.push($(opt).val() || $(opt).text().trim());
+      });
+      allDatalists[dlId] = opts;
+    });
+
+    // Search for JS arrays/objects containing payment methods in script tags
+    const scriptPaymentData = [];
+    $('script').each((_, s) => {
+      const text = $(s).html() || '';
+      if (text.includes('payment') || text.includes('Payment') || text.includes('KBank') || text.includes('SCB')) {
+        // Extract relevant snippet
+        const lines = text.split('\n').filter(l =>
+          l.includes('payment') || l.includes('Payment') ||
+          l.includes('KBank') || l.includes('SCB') || l.includes('Voucher')
+        );
+        scriptPaymentData.push(...lines.map(l => l.trim().substring(0, 200)));
+      }
+    });
+
+    // Look for any select or list near payment_method
+    const nearbySelects = [];
+    paymentMethodInput.closest('.form-group, .col, .row, div').find('select, datalist').each((_, el) => {
+      const opts = [];
+      $(el).find('option').each((_, opt) => {
+        opts.push({ value: $(opt).val(), text: $(opt).text().trim() });
+      });
+      nearbySelects.push({ tag: el.tagName, id: $(el).attr('id'), name: $(el).attr('name'), opts });
+    });
+
     const result = {
       success: true,
       modalFound: modalForm.length > 0,
@@ -51,6 +101,16 @@ export default async function handler(req, res) {
       csrfFound: !!csrf,
       totalFields: fields.length,
       fields,
+      paymentMethodDebug: {
+        id: paymentMethodId,
+        className: paymentMethodClass,
+        listAttr: paymentMethodList,
+        datalistOptions,
+        allDatalists,
+        scriptPaymentData,
+        nearbySelects,
+        parentHtml: paymentMethodParent.substring(0, 500),
+      },
     };
 
     // If testSubmit flag is set and we have proClinicId, do a test POST
