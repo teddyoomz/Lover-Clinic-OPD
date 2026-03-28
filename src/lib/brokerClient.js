@@ -71,3 +71,8 @@ export function cancelDeposit(proClinicId, proClinicHN) {
 export function updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) {
   return apiFetch('deposit-update', { proClinicId, proClinicHN, depositProClinicId, deposit });
 }
+
+/** Clear ProClinic session cache — forces re-login with current env vars */
+export function clearProClinicSession() {
+  return apiFetch('clear-session', {});
+}

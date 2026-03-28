@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -18,6 +18,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const fileInputRefLight = useRef(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState('');
+  const [clearingSession, setClearingSession] = useState(false);
+  const [clearResult, setClearResult] = useState('');
   // showPassword removed — credentials no longer in settings UI
 
   const handleColorChange = (hex) => {
@@ -361,8 +363,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             </p>
           </div>
 
-          {/* Test Connection Button */}
-          <div className="mt-4 flex items-center gap-3">
+          {/* Test Connection + Clear Session Buttons */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               onClick={async () => {
                 setTestingConnection(true);
@@ -387,12 +389,39 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             >
               {testingConnection ? <><Wifi size={14} className="animate-pulse"/> กำลังทดสอบ...</> : <><Wifi size={14}/> ทดสอบการเชื่อมต่อ</>}
             </button>
-            {testResult && (
-              <span className={`text-sm font-bold ${testResult.startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>
-                {testResult}
+            <button
+              onClick={async () => {
+                setClearingSession(true);
+                setClearResult('');
+                try {
+                  const res = await fetch('/api/proclinic/clear-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                  });
+                  const data = await res.json();
+                  setClearResult(data.success ? '✓ ล้าง session แล้ว — จะ login ใหม่อัตโนมัติ' : `✗ ${data.error}`);
+                } catch (err) {
+                  setClearResult(`✗ ${err.message}`);
+                } finally {
+                  setClearingSession(false);
+                  setTimeout(() => setClearResult(''), 8000);
+                }
+              }}
+              disabled={clearingSession}
+              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-amber-950/30 border border-amber-800 text-amber-400 hover:bg-amber-900/40 disabled:opacity-50"
+            >
+              {clearingSession ? <><RefreshCw size={14} className="animate-spin"/> กำลังล้าง...</> : <><RefreshCw size={14}/> โหลด Credentials ใหม่</>}
+            </button>
+            {(testResult || clearResult) && (
+              <span className={`text-sm font-bold ${(testResult || clearResult).startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>
+                {testResult || clearResult}
               </span>
             )}
           </div>
+          <p className="mt-2 text-[10px] text-gray-600">
+            เปลี่ยน URL/Email/Password ใน Vercel แล้วกด "โหลด Credentials ใหม่" — ไม่ต้อง redeploy
+          </p>
         </div>
 
         {/* Save Button */}
