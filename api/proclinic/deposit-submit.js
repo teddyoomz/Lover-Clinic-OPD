@@ -126,6 +126,9 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-CSRF-TOKEN': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8',
+        'Referer': `${base}/admin/deposit`,
       },
       body: params.toString(),
       redirect: 'manual',
@@ -170,11 +173,22 @@ export default async function handler(req, res) {
       }
     }
 
-    // Unexpected status
+    // Unexpected status — extract useful info from error page
+    // Try to find Laravel error message in 500 page
+    const $err = cheerio.load(bodyHtml);
+    const laravelMsg = $err('.exception-message, .exception_message, h1').first().text().trim();
+    const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
+
     return res.status(200).json({
       success: false,
-      error: `Unexpected response: status=${status}`,
-      debug: { status, location, formAction, bodySnippet: bodyHtml.substring(0, 500) },
+      error: `ProClinic error (${status}): ${errorDetail || 'Unknown'}`,
+      debug: {
+        status, location, formAction,
+        fieldsCount: Object.keys(defaultFields).length,
+        sentParams: [...params.keys()].length,
+        sentKeys: [...params.keys()],
+        bodySnippet: bodyHtml.substring(0, 1000),
+      },
     });
   } catch (err) {
     const resp = { success: false, error: err.message };
