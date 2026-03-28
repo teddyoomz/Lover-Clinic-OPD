@@ -37,8 +37,19 @@ function fromThaiDate(thaiDate) {
   if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
   return thaiDate;
 }
-function todayISO() { return new Date().toISOString().split('T')[0]; }
-function nowTime() { return new Date().toTimeString().slice(0,5); }
+function bangkokNow() {
+  // Always GMT+7 regardless of browser locale
+  const utc = Date.now();
+  return new Date(utc + 7 * 3600000);
+}
+function todayISO() {
+  const d = bangkokNow();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+function nowTime() {
+  const d = bangkokNow();
+  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
 
 // ── CourseCard: stable top-level component (ห้ามวางไว้ใน render function) ─────
 function CourseCard({ c, expired }) {
