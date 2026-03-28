@@ -1922,7 +1922,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-emerald-400 transition-colors" title="กู้คืน">
                           <RotateCcw size={14}/>
                         </button>
-                        <button onClick={() => setSessionToHardDelete(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-500 transition-colors" title="ลบถาวร">
+                        <button onClick={() => setSessionToHardDelete(session.id)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-500 transition-colors" title="ลบถาวร">
                           <Trash2 size={14}/>
                         </button>
                       </div>
