@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -294,10 +294,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       });
 
-      // Archived sessions → history page (exclude deposits)
+      // Archived sessions → history page (exclude deposits, except serviceCompleted ones)
       setArchivedSessions(
         allDocs
-          .filter(s => s.isArchived && s.formType !== 'deposit')
+          .filter(s => s.isArchived && (s.formType !== 'deposit' || s.serviceCompleted))
           .sort((a, b) => (b.archivedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.archivedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
 
@@ -559,6 +559,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   const getBadgeForFormType = (formType, customTemplate) => {
+    if (formType === 'deposit') return <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap inline-block flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>;
     if (formType === 'followup_ed') return <span className="bg-purple-950/50 text-purple-400 border border-purple-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: IIEF</span>;
     if (formType === 'followup_adam') return <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: ADAM</span>;
     if (formType === 'followup_mrs') return <span className="bg-pink-950/50 text-pink-400 border border-pink-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: MRS</span>;
@@ -1938,9 +1939,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             </button>
                           )}
                           <button onClick={() => {
-                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: true, archivedAt: serverTimestamp() });
-                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-500 transition-colors" title="ลบ (ย้ายไปประวัติ)">
-                            <Trash2 size={14}/>
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+                              isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
+                            });
+                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามารับบริการเรียบร้อย">
+                            <UserCheck size={14}/>
                           </button>
                         </div>
                       </div>
@@ -2027,16 +2030,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 return (
                   <div key={session.id} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--bd)] p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-400 text-sm">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
-                        <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-bold text-gray-400 text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                        <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><Banknote size={10}/> จองมัดจำ</span>
+                        {session.serviceCompleted && (
+                          <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><UserCheck size={10}/> มารับบริการแล้ว</span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => {
-                          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: false, archivedAt: null });
-                        }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-emerald-400 transition-colors" title="กู้คืน">
-                          <RotateCcw size={14}/>
-                        </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!session.serviceCompleted && (
+                          <button onClick={() => {
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: false, archivedAt: null });
+                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-emerald-400 transition-colors" title="กู้คืน">
+                            <RotateCcw size={14}/>
+                          </button>
+                        )}
                         <button onClick={() => setSessionToHardDelete(session.id)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-500 transition-colors" title="ลบถาวร">
                           <Trash2 size={14}/>
                         </button>
@@ -2051,6 +2059,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex flex-wrap gap-2 mt-2">
                       {hasOPD && <span className="text-[10px] bg-green-950/30 text-green-400 border border-green-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={10}/> OPD</span>}
                       {hasDeposit && <span className="text-[10px] bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded flex items-center gap-1"><Banknote size={10}/> มัดจำ</span>}
+                      {session.depositSyncStatus === 'cancelled' && <span className="text-[10px] bg-red-950/30 text-red-400 border border-red-900/40 px-2 py-0.5 rounded flex items-center gap-1"><XCircle size={10}/> ยกเลิกแล้ว</span>}
                     </div>
                   </div>
                 );
