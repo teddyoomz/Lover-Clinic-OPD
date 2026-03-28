@@ -442,6 +442,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   brokerProClinicId: null, brokerProClinicHN: null,
                   opdRecordedAt: null, brokerLastAutoSyncAt: null,
                   brokerStatus: null, brokerError: null, brokerJob: null,
+                  patientLinkToken: null, patientLinkEnabled: false,
                 });
                 try {
                   const createResult = await broker.fillProClinic(patient);
@@ -885,6 +886,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerProClinicId: null, brokerProClinicHN: null,
           opdRecordedAt: null, brokerLastAutoSyncAt: null,
           brokerStatus: null, brokerError: null, brokerJob: null,
+          patientLinkToken: null, patientLinkEnabled: false,
         });
         setToastMsg('HN ไม่พบใน ProClinic — ถอด HN แล้ว กำลังบันทึกใหม่...');
         setTimeout(() => setToastMsg(null), 3000);
@@ -998,11 +1000,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       } else if (result?.notFound) {
         // HN ไม่เจอใน ProClinic → ถอด HN/OPD ออก พร้อมบันทึกใหม่
         setViewingSession(prev => prev?.id === sessionId
-          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null } : prev);
+          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false } : prev);
         await updateDoc(ref, {
           brokerStatus: null, brokerError: null, brokerJob: null,
           brokerProClinicId: null, brokerProClinicHN: null,
           opdRecordedAt: null, brokerLastAutoSyncAt: null,
+          patientLinkToken: null, patientLinkEnabled: false,
         });
         setToastMsg('HN ไม่พบใน ProClinic — ถอด HN ออกแล้ว พร้อมบันทึกใหม่');
         setTimeout(() => setToastMsg(null), 5000);
@@ -1152,6 +1155,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         brokerStatus: null,
         brokerProClinicId: null,
         brokerProClinicHN: null,
+        patientLinkToken: null, patientLinkEnabled: false,
       });
       setToastMsg('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติแล้ว');
       setTimeout(() => setToastMsg(null), 5000);
@@ -1376,10 +1380,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (result?.success || result?.notFound) {
         // ลบสำเร็จ หรือ customer ไม่อยู่แล้ว → ถอด HN/OPD ออกทั้งคู่
         setViewingSession(prev => prev?.id === session.id
-          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
+          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false }
           : prev);
         await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
-          brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
+          brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null,
+          patientLinkToken: null, patientLinkEnabled: false });
         if (result?.notFound) {
           setToastMsg('HN ไม่พบใน ProClinic (ถูกลบไปแล้ว) — ถอด HN ออก พร้อมบันทึกใหม่');
           setTimeout(() => setToastMsg(null), 5000);
