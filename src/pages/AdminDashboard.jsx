@@ -1816,10 +1816,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">รหัสคิว</p>
                       <p className="font-mono text-xs text-emerald-400 font-bold break-all">{selectedQR}</p>
                     </div>
-                    <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
-                      className="w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white">
-                      {isLinkCopied ? <><CheckCircle2 size={14}/> คัดลอกแล้ว!</> : <><Link size={14}/> คัดลอกลิงก์</>}
-                    </button>
+                    <div className="w-full text-left">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">ลิงก์</p>
+                      <div className="flex items-center gap-1.5">
+                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] p-2.5 rounded-lg outline-none font-mono" />
+                        <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
+                          className="p-2.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
+                          {isLinkCopied ? <CheckCircle2 size={14} className="text-green-500"/> : <ClipboardList size={14}/>}
+                        </button>
+                        <a href={linkUrl} target="_blank" rel="noopener noreferrer"
+                          className="p-2.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
+                          <ExternalLink size={14}/>
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 );
               })() : (
