@@ -229,9 +229,21 @@ export default async function handler(req, res) {
     const status = submitRes.status;
     const location = submitRes.headers?.get?.('location') || '';
 
+    const debugInfo = {
+      depositId,
+      editHref,
+      editUrl,
+      formAction,
+      formMethod,
+      fieldCount: Object.keys(defaultFields).length,
+      fieldNames: Object.keys(defaultFields).slice(0, 20),
+      redirectTo: location,
+      status,
+    };
+
     // Success: redirect (302/303)
     if (status >= 300 && status < 400) {
-      return res.status(200).json({ success: true, depositId, redirectTo: location });
+      return res.status(200).json({ success: true, depositId, redirectTo: location, debug: debugInfo });
     }
 
     // Read response for errors
