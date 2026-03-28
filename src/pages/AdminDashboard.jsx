@@ -155,7 +155,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionNameInput, setSessionNameInput] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [editingNameValue, setEditingNameValue] = useState("");
-  const [adminMode, setAdminMode] = useState('dashboard'); // dashboard, formBuilder
+  const [adminMode, setAdminModeRaw] = useState('dashboard'); // dashboard, formBuilder
+  const setAdminMode = (mode) => { setAdminModeRaw(mode); setSelectedQR(null); };
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
