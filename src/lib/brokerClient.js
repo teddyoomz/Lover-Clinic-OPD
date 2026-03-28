@@ -51,3 +51,13 @@ export function searchCustomers(query) {
 export function testLogin() {
   return apiFetch('login', {});
 }
+
+/** Get deposit form options (sellers, doctors, rooms, etc.) from ProClinic */
+export function getDepositOptions() {
+  return apiFetch('deposit-options', {});
+}
+
+/** Submit deposit record to ProClinic */
+export function submitDeposit(proClinicId, deposit) {
+  return apiFetch('deposit-submit', { proClinicId, deposit });
+}
