@@ -1131,7 +1131,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           sess.brokerProClinicId, sess.brokerProClinicHN,
           sess.depositProClinicId || null, depositPayload
         );
-        console.log('[deposit-update] result:', JSON.stringify(result, null, 2));
         if (!result?.success) {
           await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: result?.error });
           setToastMsg(`บันทึกในระบบแล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ${result?.error}`);

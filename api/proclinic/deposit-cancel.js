@@ -1,7 +1,7 @@
 // ─── Cancel Deposit + Delete Customer from ProClinic ─────────────────────────
 // 1. Search deposit list for entry matching customer (by HN)
-// 2. DELETE the deposit entry
-// 3. DELETE the customer
+// 2. Cancel deposit via POST /admin/deposit/cancel  { deposit_id }
+// 3. DELETE the customer via POST /admin/customer/{id}  { _method: DELETE }
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF } from './_lib/scraper.js';
 import * as cheerio from 'cheerio';
@@ -19,8 +19,7 @@ export default async function handler(req, res) {
     const session = await createSession();
     const base = session.origin;
 
-    // Step 1: Find deposit entry for this customer on the deposit list page
-    // Search by HN if available, otherwise scan the full list
+    // Step 1: Find deposit entry on list page
     const searchQuery = proClinicHN || '';
     const listUrl = searchQuery
       ? `${base}/admin/deposit?q=${encodeURIComponent(searchQuery)}`
@@ -31,13 +30,11 @@ export default async function handler(req, res) {
     const csrf = extractCSRF(html);
     if (!csrf) throw new Error('ไม่พบ CSRF token');
 
-    // Find deposit row + delete button by looking for rows matching customer's HN
     let depositId = null;
-    let deleteUrl = null; // The actual delete URL from the ✕ button
 
-    // Strategy 1: Find matching row and extract delete link/data-url
+    // Find by HN or customer link in rows
     $('a[href*="/admin/deposit/"]').each((_, el) => {
-      if (depositId && deleteUrl) return;
+      if (depositId) return;
       const href = $(el).attr('href') || '';
       const m = href.match(/\/admin\/deposit\/(\d+)/);
       if (!m) return;
@@ -46,29 +43,11 @@ export default async function handler(req, res) {
       if (!row.length) return;
       const rowText = row.text();
 
-      let matched = false;
-      if (proClinicHN && rowText.includes(proClinicHN)) matched = true;
-      if (row.find(`a[href*="/customer/${proClinicId}"]`).length) matched = true;
-
-      if (matched) {
-        depositId = m[1];
-        // Find delete button: look for data-url, or link/form with "delete"/"destroy"
-        const delBtn = row.find('[data-url*="deposit"]');
-        if (delBtn.length) deleteUrl = delBtn.attr('data-url');
-        // Also check for delete link (✕ icon)
-        if (!deleteUrl) {
-          row.find('a[href*="delete"], a[href*="destroy"], form[action*="deposit"] input[name="_method"][value="DELETE"]').each((_, d) => {
-            if (!deleteUrl) {
-              const parent = $(d).closest('form');
-              if (parent.length) deleteUrl = parent.attr('action');
-              else deleteUrl = $(d).attr('href');
-            }
-          });
-        }
-      }
+      if (proClinicHN && rowText.includes(proClinicHN)) depositId = m[1];
+      if (row.find(`a[href*="/customer/${proClinicId}"]`).length) depositId = m[1];
     });
 
-    // Strategy 2: Check detail pages if not found
+    // Fallback: check detail pages
     if (!depositId) {
       const allDepositIds = new Set();
       $('a[href]').each((_, el) => {
@@ -77,8 +56,7 @@ export default async function handler(req, res) {
         if (m) allDepositIds.add(m[1]);
       });
 
-      const idsToCheck = [...allDepositIds].slice(0, 10);
-      for (const id of idsToCheck) {
+      for (const id of [...allDepositIds].slice(0, 10)) {
         try {
           const detailHtml = await session.fetchText(`${base}/admin/deposit/${id}/deposit`);
           if (detailHtml.includes(`/customer/${proClinicId}`) ||
@@ -92,35 +70,30 @@ export default async function handler(req, res) {
 
     const results = { depositDeleted: false, customerDeleted: false };
 
-    // Step 2: DELETE the deposit entry (if found)
+    // Step 2: Cancel deposit via POST /admin/deposit/cancel
     if (depositId) {
-      // Try multiple delete URL patterns
-      const deleteUrls = [
-        deleteUrl, // from the actual delete button
-        `${base}/admin/deposit/${depositId}/deposit`,
-        `${base}/admin/deposit/${depositId}`,
-      ].filter(Boolean).map(u => u.startsWith('http') ? u : `${base}${u}`);
+      const cancelRes = await session.fetch(`${base}/admin/deposit/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRF-TOKEN': csrf,
+          'Referer': `${base}/admin/deposit`,
+        },
+        body: new URLSearchParams({
+          _token: csrf,
+          deposit_id: depositId,
+          cancel_note: 'ยกเลิกการจองมัดจำ',
+        }).toString(),
+        redirect: 'manual',
+      });
 
-      for (const url of [...new Set(deleteUrls)]) {
-        const delRes = await session.fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRF-TOKEN': csrf,
-          },
-          body: `_method=DELETE&_token=${encodeURIComponent(csrf)}`,
-          redirect: 'manual',
-        });
-        if (delRes.status >= 200 && delRes.status < 400) {
-          results.depositDeleted = true;
-          break;
-        }
-        try { await delRes.text(); } catch {}
+      if (cancelRes.status >= 200 && cancelRes.status < 400) {
+        results.depositDeleted = true;
       }
+      try { await cancelRes.text(); } catch {}
     }
 
     // Step 3: DELETE the customer
-    // Re-fetch CSRF from customer page (deposit delete may have invalidated it)
     const customerHtml = await session.fetchText(`${base}/admin/customer`);
     const customerCsrf = extractCSRF(customerHtml);
 
