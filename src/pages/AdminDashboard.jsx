@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -45,6 +45,33 @@ function bangkokNow() {
 function todayISO() {
   const d = bangkokNow();
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+
+// ── DatePickerThai — shows DD/MM/YYYY + opens native calendar picker on click
+function DatePickerThai({ value, onChange, className = '', placeholder = 'DD/MM/YYYY' }) {
+  const hiddenRef = useRef(null);
+  const display = value ? toThaiDate(value) : '';
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        readOnly
+        value={display}
+        placeholder={placeholder}
+        onClick={() => { try { hiddenRef.current?.showPicker(); } catch { hiddenRef.current?.click(); } }}
+        className={`${className} cursor-pointer pr-8`}
+      />
+      <Calendar size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+      <input
+        ref={hiddenRef}
+        type="date"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        className="absolute inset-0 opacity-0 cursor-pointer [color-scheme:dark]"
+        tabIndex={-1}
+      />
+    </div>
+  );
 }
 function nowTime() {
   const d = bangkokNow();
@@ -2921,7 +2948,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
-                          <input type="date" value={dep.depositDate || ''} onChange={e => setEditingDepositData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none [color-scheme:dark]"/>
+                          <DatePickerThai value={dep.depositDate || ''} onChange={v => setEditingDepositData(p => ({...p, depositDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</label>
@@ -2952,7 +2979,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {dep.hasAppointment && (<>
                           <div>
                             <label className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</label>
-                            <input type="date" value={dep.appointmentDate || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none [color-scheme:dark]"/>
+                            <DatePickerThai value={dep.appointmentDate || ''} onChange={v => setEditingDepositData(p => ({...p, appointmentDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -3140,7 +3167,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">วันที่จ่ายมัดจำ</label>
-                      <input type="date" value={depositFormData.depositDate} onChange={e => setDepositFormData(p => ({...p, depositDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600 [color-scheme:dark]"/>
+                      <DatePickerThai value={depositFormData.depositDate} onChange={v => setDepositFormData(p => ({...p, depositDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">เวลา</label>
@@ -3170,7 +3197,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-gray-500 block mb-1">วันนัด</label>
-                          <input type="date" value={depositFormData.appointmentDate} onChange={e => setDepositFormData(p => ({...p, appointmentDate: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600 [color-scheme:dark]"/>
+                          <DatePickerThai value={depositFormData.appointmentDate} onChange={v => setDepositFormData(p => ({...p, appointmentDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
                         </div>
                         <div className="grid grid-cols-2 gap-1">
                           <div>
