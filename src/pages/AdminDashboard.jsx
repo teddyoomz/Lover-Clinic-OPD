@@ -2431,7 +2431,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Session Result Viewer */}
       {viewingSession && (() => {
-        const d = viewingSession.patientData;
+        const d = viewingSession.patientData || {};
         const formType = viewingSession.formType || 'intake';
         const isFollowUp = formType.startsWith('followup_');
         const isCustom = formType === 'custom';
@@ -2621,8 +2621,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             )}
             <div className="p-4 md:p-6 overflow-y-auto bg-[var(--bg-base)] flex-1 custom-scrollbar">
-              <div className={`grid grid-cols-1 ${isFollowUp || isCustom ? '' : 'md:grid-cols-2'} gap-6`}>
-                
+              {!viewingSession.patientData && (
+                <div className="p-12 text-center text-gray-600 flex flex-col items-center gap-4 mb-6">
+                  <Clock size={36} className="opacity-30" />
+                  <p className="text-sm font-bold text-gray-400">รอลูกค้ากรอกข้อมูล...</p>
+                  <p className="text-xs text-gray-600">ลูกค้ายังไม่ได้กรอกแบบฟอร์ม</p>
+                </div>
+              )}
+              <div className={`grid grid-cols-1 ${isFollowUp || isCustom ? '' : 'md:grid-cols-2'} gap-6`} style={viewingSession.patientData ? {} : {display:'none'}}>
+
                 <div className="space-y-6">
                   <div className="bg-[#0f0f0f] p-4 sm:p-5 rounded-xl border border-[#1a1a1a] shadow-inner relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
@@ -3097,6 +3104,117 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <textarea readOnly value={clinicalSummaryText} className="w-full bg-[#111] border border-[#222] text-gray-300 rounded-lg p-3 sm:p-4 text-[10px] sm:text-xs font-mono resize-none outline-none custom-scrollbar leading-relaxed" rows="8"/>
               </div>
             </div>
+
+            {/* Deposit data section — visible even without patientData */}
+            {!viewingSession.patientData && viewingSession.formType === 'deposit' && viewingSession.depositData && (() => {
+              const dep = editingDepositData || viewingSession.depositData;
+              const isEditingDep = !!editingDepositData;
+              const optLabel = (list, val) => {
+                const found = (depositOptions?.[list] || []).find(o => o.value === val);
+                return found ? found.label : val || '-';
+              };
+              return (
+                <div className="bg-[#0a100a] p-4 sm:p-5 rounded-xl border border-emerald-900/40 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600"></div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                      <ClipboardCheck size={12}/> ข้อมูลการจองมัดจำ
+                    </h4>
+                    <div className="flex gap-1.5">
+                      {!isEditingDep ? (
+                        <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
+                          className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
+                          <Edit3 size={10}/> แก้ไข
+                        </button>
+                      ) : (
+                        <span className="flex gap-1.5">
+                        <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
+                          className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors flex items-center gap-1">
+                          <CheckCircle2 size={10}/> บันทึก
+                        </button>
+                        <button onClick={() => setEditingDepositData(null)}
+                          className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border border-[#333] text-gray-400 hover:text-white transition-colors">
+                          ยกเลิก
+                        </button>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {!isEditingDep ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</span>
+                        <span className="font-bold text-emerald-300">{dep.paymentChannel || '-'}</span>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">ยอดชำระ</span>
+                        <span className="font-bold text-emerald-300">{dep.paymentAmount ? `${Number(dep.paymentAmount).toLocaleString()} บาท` : '-'}</span>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">วันที่จ่าย</span>
+                        <span className="font-bold text-white">{toThaiDate(dep.depositDate) || '-'}</span>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
+                        <span className="font-bold text-white">{dep.depositTime || '-'}</span>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">พนักงานขาย</span>
+                        <span className="font-bold text-white">{optLabel('sellers', dep.salesperson)}</span>
+                      </div>
+                      <div className="bg-[#111] p-3 rounded border border-[#222]">
+                        <span className="text-[10px] text-gray-500 uppercase block mb-1">เลขอ้างอิง</span>
+                        <span className="font-bold text-white">{dep.refNo || '-'}</span>
+                      </div>
+                      {dep.depositNote && (
+                        <div className="bg-[#111] p-3 rounded border border-[#222] sm:col-span-2">
+                          <span className="text-[10px] text-gray-500 uppercase block mb-1">หมายเหตุ</span>
+                          <span className="font-bold text-gray-300 text-xs">{dep.depositNote}</span>
+                        </div>
+                      )}
+                      {dep.hasAppointment && (
+                        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2 mt-2 mb-1"><span className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">วันนัด</span>
+                            <span className="font-bold text-amber-300">{toThaiDate(dep.appointmentDate) || '-'}</span>
+                          </div>
+                          <div className="bg-[#111] p-3 rounded border border-amber-900/30">
+                            <span className="text-[10px] text-gray-500 uppercase block mb-1">เวลา</span>
+                            <span className="font-bold text-amber-300">{dep.appointmentStartTime || ''} - {dep.appointmentEndTime || ''}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <label className="text-[10px] text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</label>
+                        <select value={dep.paymentChannel || ''} onChange={e => setEditingDepositData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                          <option value="">-- เลือก --</option>
+                          {(depositOptions?.paymentChannels || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 uppercase block mb-1">ยอดชำระ</label>
+                        <input type="number" value={dep.paymentAmount || ''} onChange={e => setEditingDepositData(p => ({...p, paymentAmount: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 uppercase block mb-1">พนักงานขาย</label>
+                        <select value={dep.salesperson || ''} onChange={e => setEditingDepositData(p => ({...p, salesperson: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none">
+                          <option value="">-- เลือก --</option>
+                          {(depositOptions?.sellers || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 uppercase block mb-1">เลขอ้างอิง</label>
+                        <input type="text" value={dep.refNo || ''} onChange={e => setEditingDepositData(p => ({...p, refNo: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
         );
