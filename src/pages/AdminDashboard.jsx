@@ -143,7 +143,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [formTemplates, setFormTemplates] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedQR, setSelectedQR] = useState(null);
-  const [sessionToDelete, setSessionToDelete] = useState(null); 
+  const [sessionToDelete, setSessionToDelete] = useState(null);
+  const [depositToDelete, setDepositToDelete] = useState(null); // { session, action: 'archive'|'cancel'|'complete' }
   const [currentTime, setCurrentTime] = useState(Date.now()); 
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
@@ -2001,7 +2002,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           {hasOPD && (
                             <button
-                              onClick={() => { if (window.confirm('ยกเลิกการจองนี้?\nจะลบมัดจำ + ลูกค้าใน ProClinic ด้วย')) handleDepositCancel(session); }}
+                              onClick={() => setDepositToDelete({ session, action: 'cancel' })}
                               disabled={isSyncing}
                               className="p-1.5 rounded border bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-red-400 hover:border-red-900/50 transition-colors disabled:opacity-50"
                               title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"
@@ -2010,21 +2011,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             </button>
                           )}
                           {hasOPD && hasDeposit ? (
-                          <button onClick={() => {
-                            if (!window.confirm('ยืนยันว่าลูกค้ามารับบริการเรียบร้อยแล้ว?')) return;
-                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
-                              isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
-                            });
-                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามารับบริการเรียบร้อย">
+                          <button onClick={() => setDepositToDelete({ session, action: 'complete' })}
+                            className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามารับบริการเรียบร้อย">
                             <UserCheck size={14}/>
                           </button>
                           ) : (
-                          <button onClick={() => {
-                            if (!window.confirm('ลบคิวจองนี้?\n(ย้ายไปประวัติจอง — กู้คืนได้)')) return;
-                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
-                              isArchived: true, archivedAt: serverTimestamp(),
-                            });
-                          }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ลบ (ย้ายไปประวัติจอง)">
+                          <button onClick={() => setDepositToDelete({ session, action: 'archive' })}
+                            className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ลบ (ย้ายไปประวัติจอง)">
                             <Trash2 size={14}/>
                           </button>
                           )}
@@ -3574,6 +3567,52 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         </div>
       )}
+
+      {/* Deposit Confirm Modal */}
+      {depositToDelete && (() => {
+        const { session: dSess, action: dAction } = depositToDelete;
+        const dName = dSess.patientData ? `${dSess.patientData.firstName || ''} ${dSess.patientData.lastName || ''}`.trim() : dSess.sessionName || dSess.id;
+        const isCancel = dAction === 'cancel';
+        const isComplete = dAction === 'complete';
+        const icon = isComplete ? <UserCheck size={24}/> : <Trash2 size={24}/>;
+        const iconBg = isComplete ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50';
+        const iconGlow = isComplete ? '0 0 15px rgba(96,165,250,0.4)' : '0 0 15px rgba(220,38,38,0.4)';
+        const title = isComplete ? 'ลูกค้ามารับบริการเรียบร้อย?' : isCancel ? 'ยกเลิกการจอง?' : 'ลบคิวจองนี้?';
+        const desc = isComplete ? 'ย้ายไปประวัติจอง (รับบริการแล้ว)'
+          : isCancel ? 'จะลบมัดจำ + ลูกค้าใน ProClinic ด้วย'
+          : 'ย้ายไปประวัติจอง (กู้คืนได้)';
+        const confirmLabel = isComplete ? 'ยืนยัน' : isCancel ? 'ยกเลิกการจอง' : 'ยืนยันการลบ';
+        const confirmBg = isComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700';
+        const confirmGlow = isComplete ? 'shadow-[0_0_15px_rgba(96,165,250,0.3)]' : 'shadow-[0_0_15px_rgba(220,38,38,0.3)]';
+        const borderColor = isComplete ? 'border-blue-900/50' : 'border-red-900/50';
+        const boxGlow = isComplete ? '0 0 40px rgba(96,165,250,0.15)' : `0 0 40px rgba(${acRgb},0.15)`;
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+            <div className={`bg-[#0a0a0a] rounded-xl border ${borderColor} w-full max-w-sm overflow-hidden p-6 text-center`} style={{boxShadow: boxGlow}}>
+              <div className={`w-16 h-16 ${iconBg} rounded-full border flex items-center justify-center mx-auto mb-4`} style={{boxShadow: iconGlow}}>{icon}</div>
+              <h3 className="text-base sm:text-lg font-black text-white mb-2">{title}</h3>
+              <p className="text-gray-400 font-bold text-sm mb-1">{dName}</p>
+              <p className="text-gray-500 mb-6 text-xs">{desc}</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDepositToDelete(null)} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded font-bold text-xs border border-[#333]">ยกเลิก</button>
+                <button onClick={() => {
+                  setDepositToDelete(null);
+                  if (isCancel) { handleDepositCancel(dSess); }
+                  else if (isComplete) {
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
+                      isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
+                    });
+                  } else {
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
+                      isArchived: true, archivedAt: serverTimestamp(),
+                    });
+                  }
+                }} className={`flex-1 px-4 py-3 ${confirmBg} text-white rounded font-bold text-xs ${confirmGlow}`}>{confirmLabel}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delete Modal */}
       {sessionToDelete && (
