@@ -1,10 +1,19 @@
 // ─── Content Script: Bridge between LoverClinic webapp and Cookie Relay extension ──
 
+function sendToBackground(msg, callback) {
+  try {
+    chrome.runtime.sendMessage(msg, callback);
+  } catch (e) {
+    // Extension was reloaded — context invalidated, page needs refresh
+    if (callback) callback({ success: false, error: 'Extension reloaded — refresh page' });
+  }
+}
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
 
   if (event.data?.type === 'LC_SYNC_COOKIES') {
-    chrome.runtime.sendMessage({ type: 'LC_SYNC_COOKIES' }, (result) => {
+    sendToBackground({ type: 'LC_SYNC_COOKIES' }, (result) => {
       window.postMessage({
         type: 'LC_SYNC_COOKIES_RESULT',
         result: result || { success: false, error: 'Extension not responding' },
@@ -12,9 +21,8 @@ window.addEventListener('message', (event) => {
     });
   }
 
-  // Auto-receive credentials from webapp (fetched from Vercel env vars)
   if (event.data?.type === 'LC_SET_CREDENTIALS') {
-    chrome.runtime.sendMessage({
+    sendToBackground({
       type: 'LC_SET_CREDENTIALS',
       origin: event.data.origin,
       email: event.data.email,
