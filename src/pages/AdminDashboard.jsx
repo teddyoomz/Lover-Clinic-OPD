@@ -95,6 +95,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // ป้องกัน auto-sync ซ้ำ: sessionId → JSON string ของ patientData ที่ sync ไปล่าสุด
   // ถ้า snapshot ส่ง patientData เดิมมาอีก (เช่น จาก isUnread=false update) จะไม่ re-trigger
   const lastAutoSyncedStrRef = useRef({}); // dedup auto-sync (ป้องกัน sync ซ้ำ)
+  const lastNotifiedStrRef = useRef({});   // dedup notification (ป้องกัน toast/sound ซ้ำ)
   const lastViewedStrRef = useRef({});     // banner suppression (admin เห็นแล้ว → ไม่โชว์ false banner)
   const [hasNewUpdate, setHasNewUpdate] = useState(false);
   const [summaryLang, setSummaryLang] = useState('en');
@@ -264,13 +265,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             const oldStr = JSON.stringify(oldS.patientData || {});
             const newStr = JSON.stringify(newS.patientData || {});
             // Only notify when notifications enabled AND session is unread AND patientData changed
-            if (isNotifEnabled && newS.isUnread && (!oldS.isUnread || oldStr !== newStr)) {
+            // + dedup: ไม่ซ้ำถ้า data เดิมเคย notify แล้ว (ป้องกัน toast/sound รัวจาก snapshot ซ้ำ)
+            if (isNotifEnabled && newS.isUnread && (!oldS.isUnread || oldStr !== newStr) && lastNotifiedStrRef.current[newS.id] !== newStr) {
+              lastNotifiedStrRef.current[newS.id] = newStr;
               updatedSessions.push(newS);
             }
             // ── ตัดสายวงจร: isUnread true→false = admin กด Report ──────────────────
             if (oldS.isUnread && !newS.isUnread) {
               lastViewedStrRef.current[newS.id] = newStr;
               lastAutoSyncedStrRef.current[newS.id] = newStr;
+              delete lastNotifiedStrRef.current[newS.id]; // reset → พร้อม notify ใหม่เมื่อมี update ถัดไป
               return;
             }
             // ── Auto-sync ProClinic: patientData เปลี่ยนจริง + session done+linked ──
@@ -357,11 +361,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
         });
       } else {
-        // ── First load: stamp ทุก done session เพื่อป้องกัน re-sync ตอนเปิดหน้า ──
+        // ── First load: stamp ทุก session เพื่อป้องกัน re-sync + notification ซ้ำตอนเปิดหน้า ──
         data.forEach(s => {
+          const str = JSON.stringify(s.patientData || {});
           if (s.brokerStatus === 'done' && s.brokerProClinicId && s.patientData) {
-            lastAutoSyncedStrRef.current[s.id] = JSON.stringify(s.patientData);
+            lastAutoSyncedStrRef.current[s.id] = str;
           }
+          // stamp notification dedup สำหรับทุก session ที่มีอยู่แล้ว
+          lastNotifiedStrRef.current[s.id] = str;
         });
       }
       // ─── Sync brokerPending local state กับ Firestore ─────────────────────────
