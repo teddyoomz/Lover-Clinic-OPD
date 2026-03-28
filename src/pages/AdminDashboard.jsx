@@ -156,12 +156,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [editingNameId, setEditingNameId] = useState(null);
   const [editingNameValue, setEditingNameValue] = useState("");
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // dashboard, formBuilder
-  const setAdminMode = (mode) => { setAdminModeRaw(mode); setSelectedQR(null); };
+  const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  const toastTimerRef = useRef(null);
+  const showToast = (msg, durationMs = 5000) => {
+    clearTimeout(toastTimerRef.current);
+    setToastMsg(msg);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), durationMs);
+  };
   const prevSessionsRef = useRef([]);
   // ป้องกัน auto-sync ซ้ำ: sessionId → JSON string ของ patientData ที่ sync ไปล่าสุด
   // ถ้า snapshot ส่ง patientData เดิมมาอีก (เช่น จาก isUnread=false update) จะไม่ re-trigger
@@ -292,7 +298,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
       setPushEnabled(true);
       localStorage.setItem('lc_push_enabled', 'true');
-      setToastMsg('เปิดการแจ้งเตือนมือถือสำเร็จ! 📱');
+      showToast('เปิดการแจ้งเตือนมือถือสำเร็จ! 📱');
       setShowNotifSettings(false);
     } catch (err) {
       console.error('Push setup error:', err);
@@ -304,7 +310,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const disablePushNotifications = () => {
     setPushEnabled(false);
     localStorage.removeItem('lc_push_enabled');
-    setToastMsg('ปิดการแจ้งเตือนมือถือแล้ว');
+    showToast('ปิดการแจ้งเตือนมือถือแล้ว');
   };
 
   // Fetch Form Templates
@@ -410,8 +416,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         if (isNotifEnabled && updatedSessions.length > 0) {
           playNotificationSound(notifVolume);
           const names = updatedSessions.map(s => s.sessionName || s.patientData?.firstName || s.id).join(', ');
-          setToastMsg(`อัปเดตข้อมูลประวัติ: ${names}`);
-          setTimeout(() => setToastMsg(null), 5000);
+          showToast(`อัปเดตข้อมูลประวัติ: ${names}`);
         }
 
         // ── Auto-sync ProClinic เมื่อลูกค้าส่ง update ข้อมูลมาใหม่ ─────────────────
@@ -659,9 +664,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), sessionDoc);
       setSelectedQR(sessionId);
-      setToastMsg('สร้างคิวลูกค้าจองมัดจำสำเร็จ!');
-      setTimeout(() => setToastMsg(null), 3000);
-      setAdminMode('deposit');
+      showToast('สร้างคิวลูกค้าจองมัดจำสำเร็จ!');
+      setAdminMode('deposit', true);
     } catch (e) { console.error('createDeposit:', e); }
     setIsGenerating(false);
     // reset form
@@ -719,7 +723,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } finally {
       setIsGenerating(false);
       setPendingConfig(null);
-      setAdminMode('dashboard');
+      setAdminMode('dashboard', true);
     }
   };
 
@@ -770,7 +774,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setHasNewUpdate(false);
     setEditingDepositData(null);
     if (prevAdminModeRef.current) {
-      setAdminMode(prevAdminModeRef.current);
+      setAdminMode(prevAdminModeRef.current, true);
       prevAdminModeRef.current = null;
     }
   };
@@ -903,8 +907,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerStatus: null, brokerError: null, brokerJob: null,
           patientLinkToken: null, patientLinkEnabled: false,
         });
-        setToastMsg('HN ไม่พบใน ProClinic — ถอด HN แล้ว กำลังบันทึกใหม่...');
-        setTimeout(() => setToastMsg(null), 3000);
+        showToast('HN ไม่พบใน ProClinic — ถอด HN แล้ว กำลังบันทึกใหม่...');
         // ลอง create ใหม่
         const createResult = await broker.fillProClinic(patient);
         if (createResult?.success) {
@@ -1022,8 +1025,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           opdRecordedAt: null, brokerLastAutoSyncAt: null,
           patientLinkToken: null, patientLinkEnabled: false,
         });
-        setToastMsg('HN ไม่พบใน ProClinic — ถอด HN ออกแล้ว พร้อมบันทึกใหม่');
-        setTimeout(() => setToastMsg(null), 5000);
+        showToast('HN ไม่พบใน ProClinic — ถอด HN ออกแล้ว พร้อมบันทึกใหม่');
       } else {
         setViewingSession(prev => prev?.id === sessionId
           ? { ...prev, brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ' } : prev);
@@ -1081,7 +1083,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (!proClinicId) {
         // First time: create customer in ProClinic
         await updateDoc(ref, { brokerStatus: 'pending' });
-        setToastMsg('กำลังสร้างลูกค้าใน ProClinic...');
+        showToast('กำลังสร้างลูกค้าใน ProClinic...');
         const result = await broker.fillProClinic(patient);
         if (!result?.success) throw new Error(result?.error || 'สร้างลูกค้าไม่สำเร็จ');
         proClinicId = result.proClinicId;
@@ -1091,15 +1093,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerProClinicId: proClinicId, brokerProClinicHN: proClinicHN,
           opdRecordedAt: serverTimestamp(),
         });
-        setToastMsg(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังบันทึกมัดจำ...`);
+        showToast(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังบันทึกมัดจำ...`);
       } else if (alreadySynced) {
         // Re-sync: update existing customer OPD data
-        setToastMsg('กำลังอัพเดทข้อมูลลูกค้าใน ProClinic...');
+        showToast('กำลังอัพเดทข้อมูลลูกค้าใน ProClinic...');
         await broker.updateProClinic(proClinicId, proClinicHN, patient);
         await updateDoc(ref, { brokerLastAutoSyncAt: serverTimestamp() });
-        setToastMsg('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
+        showToast('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
       } else {
-        setToastMsg('กำลังบันทึกมัดจำลง ProClinic...');
+        showToast('กำลังบันทึกมัดจำลง ProClinic...');
       }
 
       // Step 2: Submit or update deposit in ProClinic
@@ -1132,16 +1134,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
       lastViewedStrRef.current[session.id] = stableStr(d || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(d || {});
-      setToastMsg(alreadySynced ? 'อัพเดทข้อมูลสำเร็จ!' : 'บันทึกมัดจำสำเร็จ!');
-      setTimeout(() => setToastMsg(null), 5000);
+      showToast(alreadySynced ? 'อัพเดทข้อมูลสำเร็จ!' : 'บันทึกมัดจำสำเร็จ!');
     } catch (e) {
       console.error('deposit sync error:', e);
       await updateDoc(ref, {
         depositSyncStatus: 'failed',
         depositSyncError: e.message,
       }).catch(console.error);
-      setToastMsg(`ผิดพลาด: ${e.message}`);
-      setTimeout(() => setToastMsg(null), 5000);
+      showToast(`ผิดพลาด: ${e.message}`);
     }
   };
 
@@ -1153,12 +1153,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     try {
       await updateDoc(ref, { depositSyncStatus: 'pending' });
-      setToastMsg('กำลังยกเลิกการจองใน ProClinic...');
+      showToast('กำลังยกเลิกการจองใน ProClinic...');
 
       if (proClinicId) {
         const result = await broker.cancelDeposit(proClinicId, proClinicHN);
         if (!result?.success) throw new Error(result?.error || 'ยกเลิกการจองไม่สำเร็จ');
-        setToastMsg(result.message || 'ยกเลิกการจองสำเร็จ');
+        showToast(result.message || 'ยกเลิกการจองสำเร็จ');
       }
 
       // Archive the session (move to deposit history)
@@ -1172,16 +1172,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         brokerProClinicHN: null,
         patientLinkToken: null, patientLinkEnabled: false,
       });
-      setToastMsg('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติแล้ว');
-      setTimeout(() => setToastMsg(null), 5000);
+      showToast('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติแล้ว');
     } catch (e) {
       console.error('deposit cancel error:', e);
       await updateDoc(ref, {
         depositSyncStatus: 'failed',
         depositSyncError: e.message,
       }).catch(console.error);
-      setToastMsg(`ยกเลิกไม่สำเร็จ: ${e.message}`);
-      setTimeout(() => setToastMsg(null), 5000);
+      showToast(`ยกเลิกไม่สำเร็จ: ${e.message}`);
     }
   };
 
@@ -1198,7 +1196,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       if (alreadySynced) {
         // Also update in ProClinic
-        setToastMsg('กำลังอัพเดทข้อมูลจองใน ProClinic...');
+        showToast('กำลังอัพเดทข้อมูลจองใน ProClinic...');
         await updateDoc(ref, { depositSyncStatus: 'pending' });
         const depositPayload = { ...newData, appointmentTo: (newData.visitPurpose || []).join(', ') };
         const result = await broker.updateDeposit(
@@ -1207,24 +1205,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         );
         if (!result?.success) {
           await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: result?.error });
-          setToastMsg(`บันทึกในระบบแล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ${result?.error}`);
-          setTimeout(() => setToastMsg(null), 5000);
+          showToast(`บันทึกในระบบแล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ${result?.error}`);
           return;
         }
         await updateDoc(ref, {
           depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),
           ...(result.depositId ? { depositProClinicId: result.depositId } : {}),
         });
-        setToastMsg('อัพเดทข้อมูลจองสำเร็จทั้งในระบบและ ProClinic');
+        showToast('อัพเดทข้อมูลจองสำเร็จทั้งในระบบและ ProClinic');
       } else {
         // Not yet synced — reset sync status so user can re-sync
         await updateDoc(ref, { depositSyncStatus: null, depositSyncAt: null });
-        setToastMsg('บันทึกข้อมูลจองสำเร็จ');
+        showToast('บันทึกข้อมูลจองสำเร็จ');
       }
-      setTimeout(() => setToastMsg(null), 5000);
     } catch (e) {
-      setToastMsg(`ผิดพลาด: ${e.message}`);
-      setTimeout(() => setToastMsg(null), 5000);
+      showToast(`ผิดพลาด: ${e.message}`);
     }
   };
 
@@ -1401,13 +1396,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null,
           patientLinkToken: null, patientLinkEnabled: false });
         if (result?.notFound) {
-          setToastMsg('HN ไม่พบใน ProClinic (ถูกลบไปแล้ว) — ถอด HN ออก พร้อมบันทึกใหม่');
-          setTimeout(() => setToastMsg(null), 5000);
+          showToast('HN ไม่พบใน ProClinic (ถูกลบไปแล้ว) — ถอด HN ออก พร้อมบันทึกใหม่');
         }
       } else {
         await updateDoc(ref, { brokerStatus: null, brokerJob: null });
-        setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
-        setTimeout(() => setToastMsg(null), 5000);
+        showToast(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
       }
     } catch(e) {
       setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });

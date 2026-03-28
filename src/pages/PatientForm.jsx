@@ -21,8 +21,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const [language, setLanguageRaw] = useState('th');
   const setLanguage = (lang) => {
     setLanguageRaw(lang);
-    // Clear name fields when switching language to prevent mixed-language names
-    setFormData(prev => ({ ...prev, firstName: '', lastName: '' }));
+    // Clear name fields only on new forms — preserve existing data when editing
+    if (!isEditing) {
+      setFormData(prev => ({ ...prev, firstName: '', lastName: '' }));
+    }
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);

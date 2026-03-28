@@ -235,7 +235,6 @@ function doLogin(email, password, siteKey) {
 
 function waitForTabLoad(tabId) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { reject(new Error('Tab load timeout')); }, 15000);
     function listener(id, info) {
       if (id === tabId && info.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(listener);
@@ -243,7 +242,19 @@ function waitForTabLoad(tabId) {
         resolve();
       }
     }
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('Tab load timeout'));
+    }, 15000);
     chrome.tabs.onUpdated.addListener(listener);
+    // Check if already loaded (race condition fix)
+    chrome.tabs.get(tabId).then(tab => {
+      if (tab?.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        clearTimeout(timeout);
+        resolve();
+      }
+    }).catch(() => {});
   });
 }
 

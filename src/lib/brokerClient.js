@@ -65,14 +65,20 @@ async function apiFetch(endpoint, body, _retried) {
     return { success: false, error: 'Failed to get auth token' };
   }
 
-  const res = await fetch(`/api/proclinic/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/proclinic/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.warn(`[broker] ${endpoint} network error:`, err);
+    return { success: false, error: `เชื่อมต่อ server ไม่ได้: ${err.message}` };
+  }
   if (!res.ok) {
     console.warn(`[broker] ${endpoint} HTTP ${res.status}`);
     return { success: false, error: `HTTP ${res.status}` };
