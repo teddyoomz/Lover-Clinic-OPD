@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 300px; padding: 16px; font-family: sans-serif; background: #111; color: #eee; }
+    h3 { margin: 0 0 12px; color: #f87171; font-size: 14px; }
+    label { display: block; margin-bottom: 4px; font-size: 12px; color: #aaa; }
+    input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #333; border-radius: 6px; background: #222; color: #eee; box-sizing: border-box; font-size: 13px; }
+    button { width: 100%; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+    #save { background: #dc2626; color: white; margin-bottom: 6px; }
+    #save:hover { background: #b91c1c; }
+    #sync { background: #333; color: #eee; }
+    #sync:hover { background: #444; }
+    #status { margin-top: 10px; font-size: 12px; min-height: 16px; }
+    .ok { color: #4ade80; }
+    .err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h3>ProClinic Credentials</h3>
+  <label>Origin URL</label>
+  <input id="origin" placeholder="https://trial.proclinicth.com">
+  <label>Email</label>
+  <input id="email" type="email" placeholder="demo@proclinic.com">
+  <label>Password</label>
+  <input id="password" type="password" placeholder="••••••">
+  <button id="save">บันทึก Credentials</button>
+  <button id="sync">Sync Cookies ตอนนี้</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
