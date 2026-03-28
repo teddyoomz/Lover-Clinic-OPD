@@ -136,62 +136,93 @@ async function autoLogin() {
 function doLogin(email, password, siteKey) {
   return new Promise((resolve) => {
     try {
+      const log = (msg) => console.log('[CookieRelay:doLogin] ' + msg);
+      log('URL: ' + window.location.href);
+
       // Check if already on admin page (already logged in)
       if (window.location.pathname.startsWith('/admin') && !window.location.pathname.includes('login')) {
         return resolve({ status: 'already_logged_in' });
       }
 
-      // Fill form fields
-      const emailInput = document.querySelector('input[name="email"]');
-      const passwordInput = document.querySelector('input[name="password"]');
-      const acceptCheckbox = document.querySelector('#accept');
+      // Fill form fields using multiple selector strategies
+      const emailInput = document.querySelector('input[name="email"]') || document.querySelector('input[type="email"]');
+      const passwordInput = document.querySelector('input[name="password"]') || document.querySelector('input[type="password"]');
+      const acceptCheckbox = document.querySelector('#accept') || document.querySelector('input[name="accept"]');
+
+      log('emailInput: ' + !!emailInput + ', passwordInput: ' + !!passwordInput + ', acceptCheckbox: ' + !!acceptCheckbox);
 
       if (!emailInput || !passwordInput) {
-        return resolve({ status: 'form_not_found' });
+        // Dump available inputs for debugging
+        const inputs = Array.from(document.querySelectorAll('input')).map(i => i.name + '|' + i.type + '|' + i.id);
+        return resolve({ status: 'form_not_found', inputs });
       }
 
-      // Use native setters for React compatibility
+      // Use native setters for React/Vue compatibility
       const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       nativeSet.call(emailInput, email);
       emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+      emailInput.dispatchEvent(new Event('change', { bubbles: true }));
 
       nativeSet.call(passwordInput, password);
       passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+      passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
 
       // Check accept checkbox
       if (acceptCheckbox && !acceptCheckbox.checked) {
         acceptCheckbox.checked = true;
         acceptCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+        acceptCheckbox.dispatchEvent(new Event('click', { bubbles: true }));
       }
 
-      // Wait for reCAPTCHA to be ready then submit
+      log('Form filled, waiting before submit...');
+
+      // Wait for form JS to process + reCAPTCHA to be ready
       setTimeout(() => {
+        // Set hidden fields
+        const tokenInput = document.querySelector('#form-token') || document.querySelector('input[name="token"]');
+        const actionInput = document.querySelector('#form-action') || document.querySelector('input[name="action"]');
+        if (actionInput) actionInput.value = 'login';
+
+        // Try reCAPTCHA if available, then submit
+        const doSubmit = () => {
+          // Strategy 1: Click the submit button (preferred — triggers ProClinic's own JS handler)
+          const submitBtn = document.querySelector('#form-submit') || document.querySelector('button[type="submit"]') || document.querySelector('form button');
+          log('submitBtn: ' + (submitBtn ? submitBtn.id + '|' + submitBtn.type + '|' + submitBtn.textContent.trim().substring(0, 20) : 'null'));
+
+          if (submitBtn) {
+            submitBtn.click();
+            log('Clicked submit button');
+            resolve({ status: 'clicked_submit' });
+          } else {
+            // Strategy 2: Native form submit
+            const form = document.querySelector('#form-login') || document.querySelector('form');
+            if (form) {
+              form.submit();
+              log('Called form.submit()');
+              resolve({ status: 'form_submitted' });
+            } else {
+              resolve({ status: 'no_submit_element' });
+            }
+          }
+        };
+
         if (typeof grecaptcha !== 'undefined') {
+          log('reCAPTCHA found — executing');
           grecaptcha.ready(() => {
             grecaptcha.execute(siteKey, { action: 'login' }).then((token) => {
-              const tokenInput = document.querySelector('#form-token');
               if (tokenInput) tokenInput.value = token;
-
-              const actionInput = document.querySelector('#form-action');
-              if (actionInput) actionInput.value = 'login';
-
-              // Submit form
-              const form = document.querySelector('#form-login');
-              if (form) {
-                form.submit();
-                resolve({ status: 'submitted' });
-              } else {
-                resolve({ status: 'form_not_found' });
-              }
-            }).catch(e => resolve({ status: 'recaptcha_error', error: e.message }));
+              log('reCAPTCHA token set');
+              doSubmit();
+            }).catch(e => {
+              log('reCAPTCHA error: ' + e.message + ' — submitting anyway');
+              doSubmit();
+            });
           });
         } else {
-          // No reCAPTCHA — try direct submit
-          const form = document.querySelector('#form-login');
-          if (form) { form.submit(); resolve({ status: 'submitted_no_recaptcha' }); }
-          else resolve({ status: 'no_recaptcha_no_form' });
+          log('No reCAPTCHA — submitting directly');
+          doSubmit();
         }
-      }, 600); // Wait 600ms for checkbox + reCAPTCHA
+      }, 1000);
     } catch (e) {
       resolve({ status: 'error', error: e.message });
     }
@@ -216,13 +247,21 @@ function waitForLoginRedirect(tabId, origin, timeoutMs) {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      resolve(false);
+      // Check final URL before giving up
+      chrome.tabs.get(tabId).then(tab => {
+        const url = tab?.url || '';
+        console.log('[CookieRelay] Redirect timeout — final URL:', url);
+        // If we're no longer on /login, it probably worked
+        resolve(url && url.startsWith(origin) && !url.includes('/login'));
+      }).catch(() => resolve(false));
     }, timeoutMs);
 
     function listener(id, info, tab) {
       if (id !== tabId) return;
-      // Check if navigated to admin (login success)
-      if (tab.url && tab.url.startsWith(origin) && tab.url.includes('/admin') && !tab.url.includes('/login')) {
+      if (!tab.url || !tab.url.startsWith(origin)) return;
+      // Success = navigated anywhere that's NOT /login
+      if (info.status === 'complete' && !tab.url.includes('/login')) {
+        console.log('[CookieRelay] Redirect detected:', tab.url);
         chrome.tabs.onUpdated.removeListener(listener);
         clearTimeout(timeout);
         resolve(true);
