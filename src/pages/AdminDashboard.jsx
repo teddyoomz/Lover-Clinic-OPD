@@ -1860,21 +1860,32 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const needsSync = isCompleted && (!hasOPD || !hasDeposit);
                 const isSyncing = session.brokerStatus === 'pending' || session.depositSyncStatus === 'pending';
                 return (
-                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-emerald-600/50 shadow-[0_0_12px_rgba(5,150,105,0.15)]' : 'border-[var(--bd)]'}`}>
+                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="font-black text-white text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                          {editingNameId === session.id ? (
+                            <input autoFocus value={editingNameValue}
+                              onChange={e => setEditingNameValue(e.target.value)}
+                              onBlur={() => saveEditedName(session.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveEditedName(session.id)}
+                              className="bg-[var(--bg-input)] border border-emerald-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
+                          ) : (
+                            <>
+                              {session.isUnread && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              <span className="font-black text-white text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                              <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-emerald-400 shrink-0"><Edit3 size={12}/></button>
+                            </>
+                          )}
                           <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
-                          {session.isUnread && <span className="bg-blue-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse">NEW</span>}
                         </div>
                         <div className="flex items-center gap-1.5 flex-none">
                           <button onClick={() => setSelectedQR(session.id)} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-emerald-900/30 border-emerald-600 text-emerald-400' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
                             <QrCode size={14}/>
                           </button>
                           {isCompleted && (
-                            <button onClick={() => { setViewingSession(session); }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
+                            <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-emerald-400 transition-colors" title="ดูข้อมูลมัดจำ">
                               <Eye size={14}/>
                             </button>
                           )}
