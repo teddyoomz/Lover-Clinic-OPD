@@ -2,6 +2,7 @@
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractSearchResults, findBestMatch, extractFormFields, extractValidationErrors, extractSelectOptions } from './_lib/scraper.js';
 import { buildUpdateFormData } from './_lib/fields.js';
+import { verifyAuth } from './_lib/auth.js';
 
 async function resolveCustomerId(session, base, proClinicId, proClinicHN, patient) {
   if (proClinicId) return proClinicId;
@@ -35,6 +36,9 @@ async function resolveCustomerId(session, base, proClinicId, proClinicHN, patien
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { origin, email, password, proClinicId, proClinicHN, patient } = req.body || {};

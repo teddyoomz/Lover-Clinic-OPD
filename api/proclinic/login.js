@@ -1,9 +1,13 @@
 // POST /api/proclinic/login — Test ProClinic connection
 import { createSession, handleCors } from './_lib/session.js';
+import { verifyAuth } from './_lib/auth.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { origin, email, password } = req.body || {};

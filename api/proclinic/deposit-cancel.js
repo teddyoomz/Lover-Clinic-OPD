@@ -4,11 +4,15 @@
 // 3. DELETE the customer via POST /admin/customer/{id}  { _method: DELETE }
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF } from './_lib/scraper.js';
+import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { proClinicId, proClinicHN } = req.body || {};

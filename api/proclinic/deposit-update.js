@@ -4,11 +4,15 @@
 //     payment_method, deposit, payment_date, payment_time, ref_no, note }
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
+import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { proClinicId, proClinicHN, depositProClinicId, deposit } = req.body || {};

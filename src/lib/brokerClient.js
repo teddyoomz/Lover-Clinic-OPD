@@ -2,10 +2,32 @@
 // All ProClinic operations go through Vercel API routes.
 // Credentials come from Vercel env vars (not from frontend).
 
+import { getAuth } from 'firebase/auth';
+import { app } from '../firebase.js';
+
 async function apiFetch(endpoint, body) {
+  // Get Firebase auth token for API authentication
+  const auth = getAuth(app);
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    console.warn(`[broker] ${endpoint} — not logged in`);
+    return { success: false, error: 'Not logged in' };
+  }
+
+  let token;
+  try {
+    token = await currentUser.getIdToken();
+  } catch (err) {
+    console.warn(`[broker] ${endpoint} — failed to get auth token`, err);
+    return { success: false, error: 'Failed to get auth token' };
+  }
+
   const res = await fetch(`/api/proclinic/${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) {

@@ -1,10 +1,14 @@
 // POST /api/proclinic/delete — Delete customer from ProClinic
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractSearchResults, findBestMatch } from './_lib/scraper.js';
+import { verifyAuth } from './_lib/auth.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { origin, email, password, proClinicId, proClinicHN, patient } = req.body || {};
