@@ -24,7 +24,11 @@ async function syncCookies() {
       return { success: false, error: 'Not logged in to ProClinic', needsLogin: true };
     }
 
-    const origin = `https://${sessionCookie.domain.replace(/^\./, '')}`;
+    // Use stored origin from credentials (matches Vercel env var exactly)
+    // Fallback to cookie domain if credentials not set yet
+    const stored = await chrome.storage.local.get(['proclinic_origin']);
+    const origin = stored.proclinic_origin || `https://${sessionCookie.domain.replace(/^\./, '')}`;
+    console.log('[CookieRelay] Using origin:', origin);
 
     // Convert to Set-Cookie-like strings (format expected by session.js)
     const cookieStrings = cookies.map(c => {
