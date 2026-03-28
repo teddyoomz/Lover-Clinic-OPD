@@ -818,13 +818,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // เปิด PatientDashboard ใน new tab (admin view — ไม่มี cooldown)
   const [patientViewUrl, setPatientViewUrl] = useState(null);
 
+  // ปิด iframe + sync viewingSession ให้เป็นล่าสุด — ป้องกัน stale banner
+  const closePatientViewIframe = () => {
+    setPatientViewUrl(null);
+    setHasNewUpdate(false);
+    // stamp lastViewedStrRef ให้ตรงกับ session ล่าสุด — ป้องกัน banner false positive หลังปิด
+    if (viewingSession) {
+      const latest = sessions.find(s => s.id === viewingSession.id) || archivedSessions.find(s => s.id === viewingSession.id);
+      if (latest) {
+        const latestStr = JSON.stringify(latest.patientData || {});
+        lastViewedStrRef.current[latest.id] = latestStr;
+        lastAutoSyncedStrRef.current[latest.id] = latestStr;
+        setViewingSession(latest);
+      }
+    }
+  };
+
   // Listen for close message from iframe
   useEffect(() => {
     const handler = (e) => {
       if (e.data?.type === 'close-patient-view') {
-        setPatientViewUrl(null);
-        // Sync viewingSession ให้เป็นล่าสุดเมื่อปิด iframe — ป้องกัน stale banner
-        setHasNewUpdate(false);
+        closePatientViewIframe();
       }
     };
     window.addEventListener('message', handler);
@@ -2486,10 +2500,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Patient View Modal (iframe popup) */}
       {patientViewUrl && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col" onClick={() => setPatientViewUrl(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col" onClick={() => closePatientViewIframe()}>
           <div className="flex items-center justify-between px-4 py-2 bg-[#0a0a0a]/90 border-b border-[#333] shrink-0">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">ข้อมูลผู้ป่วย — Admin View</span>
-            <button onClick={() => setPatientViewUrl(null)} className="text-gray-500 hover:text-white text-xl font-bold px-2 transition-colors">&times;</button>
+            <button onClick={() => closePatientViewIframe()} className="text-gray-500 hover:text-white text-xl font-bold px-2 transition-colors">&times;</button>
           </div>
           <div className="flex-1 p-2 sm:p-4" onClick={e => e.stopPropagation()}>
             <iframe src={patientViewUrl} className="w-full h-full rounded-xl border border-[#333]" style={{background:'#0a0a0a', boxShadow:`0 0 40px rgba(${acRgb},0.12)`}} />
