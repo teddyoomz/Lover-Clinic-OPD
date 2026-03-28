@@ -5,7 +5,29 @@
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
 
-async function apiFetch(endpoint, body) {
+// ─── Cookie Relay Extension communication ────────────────────────────────────
+
+function requestExtensionSync() {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve({ success: false, error: 'Extension not installed or not responding' });
+    }, 5000);
+
+    function handler(event) {
+      if (event.source !== window || event.data?.type !== 'LC_SYNC_COOKIES_RESULT') return;
+      window.removeEventListener('message', handler);
+      clearTimeout(timeout);
+      resolve(event.data.result);
+    }
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'LC_SYNC_COOKIES' }, '*');
+  });
+}
+
+// ─── API fetch with auto-retry via extension ─────────────────────────────────
+
+async function apiFetch(endpoint, body, _retried) {
   // Get Firebase auth token for API authentication
   const auth = getAuth(app);
   const currentUser = auth.currentUser;
@@ -34,12 +56,27 @@ async function apiFetch(endpoint, body) {
     console.warn(`[broker] ${endpoint} HTTP ${res.status}`);
     return { success: false, error: `HTTP ${res.status}` };
   }
+  let data;
   try {
-    return await res.json();
+    data = await res.json();
   } catch {
     console.warn(`[broker] ${endpoint} invalid JSON response`);
     return { success: false, error: 'Invalid response' };
   }
+
+  // If server says it needs extension cookies and we haven't retried yet
+  if (data.extensionNeeded && !_retried) {
+    console.log('[broker] Server needs cookies — requesting from Cookie Relay extension');
+    const syncResult = await requestExtensionSync();
+    if (syncResult.success) {
+      console.log('[broker] Extension synced cookies — retrying API call');
+      return apiFetch(endpoint, body, true);
+    }
+    console.warn('[broker] Extension sync failed:', syncResult.error);
+    data.error = `${data.error} (Extension: ${syncResult.error})`;
+  }
+
+  return data;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────

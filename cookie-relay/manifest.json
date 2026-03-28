@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "LoverClinic Cookie Relay",
+  "version": "1.0",
+  "description": "Auto-sync ProClinic session cookies for LoverClinic webapp",
+  "permissions": ["cookies"],
+  "host_permissions": ["https://*.proclinicth.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://lover-clinic-app.vercel.app/*",
+        "http://localhost:*/*"
+      ],
+      "js": ["content-loverclinic.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

@@ -182,7 +182,9 @@ export async function createSession(originArg, emailArg, passwordArg) {
       const result = await performLogin(origin, email, password);
       cookies = result.cookies;
     } catch (e) {
-      throw new SessionExpiredError(`Login ล้มเหลว: ${e.message}`);
+      const err = new SessionExpiredError(`Login ล้มเหลว — ต้องการ Cookie Relay Extension (ProClinic มี reCAPTCHA)`);
+      err.extensionNeeded = true;
+      throw err;
     }
   }
 

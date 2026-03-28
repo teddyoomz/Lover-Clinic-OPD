@@ -185,6 +185,7 @@ export default async function handler(req, res) {
   } catch (err) {
     const resp = { success: false, error: err.message };
     if (err.sessionExpired) resp.sessionExpired = true;
+    if (err.extensionNeeded) resp.extensionNeeded = true;
     return res.status(200).json(resp);
   }
 }
