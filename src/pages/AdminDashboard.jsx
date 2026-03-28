@@ -1810,32 +1810,46 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
                 const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
                 return (
-                  <div className="space-y-4 flex flex-col items-center w-full">
-                    <img src={qrSrc} alt="QR" className="w-48 h-48 rounded-xl border-2 border-emerald-900/50 shadow-lg"/>
-                    <div className="w-full">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">รหัสคิว</p>
-                      <p className="font-mono text-xs text-emerald-400 font-bold break-all">{selectedQR}</p>
+                  <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
+                    {/* QR image — white card with glow */}
+                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.25)]">
+                      <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
                     </div>
+                    {/* Session name */}
+                    <div className="w-full text-center">
+                      <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{depSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
+                    </div>
+                    {/* Token */}
                     <div className="w-full text-left">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">ลิงก์</p>
-                      <div className="flex items-center gap-1.5">
-                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] p-2.5 rounded-lg outline-none font-mono" />
+                      <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">รหัสคิว (Token)</p>
+                      <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-emerald-400">{selectedQR}</p>
+                    </div>
+                    {/* Link */}
+                    <div className="w-full text-left">
+                      <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
                         <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
-                          className="p-2.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
-                          {isLinkCopied ? <CheckCircle2 size={14} className="text-green-500"/> : <ClipboardList size={14}/>}
+                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
+                          {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500"/> : <ClipboardList size={18}/>}
                         </button>
                         <a href={linkUrl} target="_blank" rel="noopener noreferrer"
-                          className="p-2.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
-                          <ExternalLink size={14}/>
+                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
+                          <ExternalLink size={18}/>
                         </a>
                       </div>
                     </div>
+                    <div className="w-full h-px bg-[var(--bd)] my-2"></div>
+                    {/* Simulate button */}
+                    <button onClick={() => window.open(linkUrl, '_blank')} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                      <Eye size={16}/> เปิดหน้ากรอกฟอร์ม
+                    </button>
                   </div>
                 );
               })() : (
-                <div className="text-gray-600 text-sm py-8">
-                  <QrCode size={48} className="mx-auto mb-3 opacity-20"/>
-                  <p className="text-xs">เลือกคิวจองเพื่อดู QR Code</p>
+                <div className="text-gray-600 text-sm py-12">
+                  <QrCode size={64} className="mx-auto mb-4 opacity-15"/>
+                  <p className="text-xs text-gray-500">กดปุ่ม QR บนการ์ดจอง<br/>เพื่อแสดง QR Code</p>
                 </div>
               )}
             </div>
