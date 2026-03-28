@@ -66,3 +66,8 @@ export function submitDeposit(proClinicId, deposit) {
 export function cancelDeposit(proClinicId, proClinicHN) {
   return apiFetch('deposit-cancel', { proClinicId, proClinicHN });
 }
+
+/** Update existing deposit record in ProClinic */
+export function updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) {
+  return apiFetch('deposit-update', { proClinicId, proClinicHN, depositProClinicId, deposit });
+}

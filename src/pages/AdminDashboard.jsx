@@ -521,7 +521,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const dataOutOfSync = currentStr !== latestStr;
 
         // Sync broker fields ให้ viewingSession ทันทีที่ Firestore อัปเดต
-        const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt','depositSyncStatus','depositSyncAt','depositSyncError','depositData'];
+        const brokerFields = ['brokerStatus','brokerProClinicId','brokerProClinicHN','brokerError','opdRecordedAt','brokerFilledAt','brokerLastAutoSyncAt','depositSyncStatus','depositSyncAt','depositSyncError','depositData','depositProClinicId'];
         const brokerChanged = brokerFields.some(k => viewingSession[k] !== latestSession[k]);
 
         if (brokerChanged) {
@@ -1057,6 +1057,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncStatus: 'done',
         depositSyncError: null,
         depositSyncAt: serverTimestamp(),
+        ...(depResult.depositProClinicId ? { depositProClinicId: depResult.depositProClinicId } : {}),
       });
       setToastMsg('บันทึกมัดจำสำเร็จ!');
       setTimeout(() => setToastMsg(null), 5000);
@@ -1113,10 +1114,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleSaveDepositData = async (sessionId, newData) => {
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-      await updateDoc(ref, { depositData: newData, depositSyncStatus: null, depositSyncAt: null });
+      // Find the session to check if deposit was already synced to ProClinic
+      const sess = [...depositSessions, ...archivedDepositSessions].find(s => s.id === sessionId);
+      const alreadySynced = sess?.depositSyncStatus === 'done' && sess?.brokerProClinicId;
+
+      // Save locally first
+      await updateDoc(ref, { depositData: newData });
       setEditingDepositData(null);
-      setToastMsg('บันทึกข้อมูลจองสำเร็จ');
-      setTimeout(() => setToastMsg(null), 3000);
+
+      if (alreadySynced) {
+        // Also update in ProClinic
+        setToastMsg('กำลังอัพเดทข้อมูลจองใน ProClinic...');
+        await updateDoc(ref, { depositSyncStatus: 'pending' });
+        const depositPayload = { ...newData, appointmentTo: (newData.visitPurpose || []).join(', ') };
+        const result = await broker.updateDeposit(
+          sess.brokerProClinicId, sess.brokerProClinicHN,
+          sess.depositProClinicId || null, depositPayload
+        );
+        if (!result?.success) {
+          await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: result?.error });
+          setToastMsg(`บันทึกในระบบแล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ${result?.error}`);
+          setTimeout(() => setToastMsg(null), 5000);
+          return;
+        }
+        await updateDoc(ref, {
+          depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),
+          ...(result.depositId && !sess.depositProClinicId ? { depositProClinicId: result.depositId } : {}),
+        });
+        setToastMsg('อัพเดทข้อมูลจองสำเร็จทั้งในระบบและ ProClinic');
+      } else {
+        // Not yet synced — reset sync status so user can re-sync
+        await updateDoc(ref, { depositSyncStatus: null, depositSyncAt: null });
+        setToastMsg('บันทึกข้อมูลจองสำเร็จ');
+      }
+      setTimeout(() => setToastMsg(null), 5000);
     } catch (e) {
       setToastMsg(`ผิดพลาด: ${e.message}`);
       setTimeout(() => setToastMsg(null), 5000);
