@@ -257,7 +257,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
-        let brokerSyncSessions = [];
         data.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
@@ -268,25 +267,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               updatedSessions.push(newS);
             }
             // ── ตัดสายวงจร: isUnread true→false = admin กด Report ──────────────────
-            // snapshot นี้เกิดจาก updateDoc({ isUnread:false }) ของ admin
-            // Firestore SDK อาจแนบ patientData เวอร์ชันใหม่จาก local cache มาด้วย
-            // ทำให้ oldStr≠newStr แม้ admin ไม่ได้แตะ patientData เลย → ห้าม auto-sync เด็ดขาด
-            // stamp lastAutoSyncedStr=newStr เพื่อป้องกัน re-trigger ใน snapshot ถัดไป
             if (oldS.isUnread && !newS.isUnread) {
-              lastViewedStrRef.current[newS.id] = newStr;     // banner: admin เห็นแล้ว
-              lastAutoSyncedStrRef.current[newS.id] = newStr; // auto-sync dedup
-              return; // forEach return = skip to next session (no auto-sync for this snapshot)
-            }
-            // Auto-sync ProClinic: patientData changed AND session was ALREADY done+linked
-            if (
-              oldStr !== newStr && newStr !== '{}' && newS.patientData &&
-              newS.brokerStatus === 'done' && newS.brokerProClinicId &&
-              oldS.brokerStatus === 'done' &&
-              oldS.brokerProClinicId === newS.brokerProClinicId &&
-              lastAutoSyncedStrRef.current[newS.id] !== newStr
-            ) {
+              lastViewedStrRef.current[newS.id] = newStr;
               lastAutoSyncedStrRef.current[newS.id] = newStr;
-              brokerSyncSessions.push(newS);
+              return;
             }
           }
         });
@@ -297,47 +281,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           setToastMsg(`อัปเดตข้อมูลประวัติ: ${names}`);
           setTimeout(() => setToastMsg(null), 5000);
         }
-
-        // Trigger ProClinic auto-sync for changed sessions (ทำงานเสมอ ไม่ขึ้นกับ isNotifEnabled)
-        brokerSyncSessions.forEach(session => {
-          autoSyncInFlightRef.current.add(session.id);
-          const d = session.patientData;
-          const reasons = getReasons(d);
-          const pmh = [];
-          if (d?.hasUnderlying === 'มี') {
-            if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-            if (d.ud_diabetes)     pmh.push('เบาหวาน');
-            if (d.ud_lung)         pmh.push('โรคปอด');
-            if (d.ud_kidney)       pmh.push('โรคไต');
-            if (d.ud_heart)        pmh.push('โรคหัวใจ');
-            if (d.ud_blood)        pmh.push('โรคโลหิต');
-            if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-          }
-          const patient = {
-            prefix: d?.prefix || '', firstName: d?.firstName || '',
-            lastName: d?.lastName || '', phone: d?.phone || '',
-            age: d?.age || '', reasons,
-            dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
-            address: d?.address || '',
-            howFoundUs: d?.howFoundUs || [],
-            allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
-            underlying: pmh.join(', '),
-            emergencyName:     d?.emergencyName     || '',
-            emergencyRelation: d?.emergencyRelation || '',
-            emergencyPhone:    d?.emergencyPhone    || '',
-            clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
-          };
-          broker.updateProClinic(session.brokerProClinicId, session.brokerProClinicHN || null, patient)
-            .then(result => {
-              autoSyncInFlightRef.current.delete(session.id);
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-              if (result?.success) {
-                updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerLastAutoSyncAt: new Date().toISOString(), brokerError: null, brokerStatus: 'done', brokerJob: null }).catch(() => {});
-              } else {
-                updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'auto-sync failed', brokerJob: null }).catch(() => {});
-              }
-            }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
-        });
+        // NOTE: ไม่มี auto-sync ProClinic แล้ว — ต้อง user กดเอง (Resync, บันทึก, ลบ, แก้ไข)
       }
       // ─── Sync brokerPending local state กับ Firestore ─────────────────────────
       allDocs.forEach(s => {
@@ -364,32 +308,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
 
       // ─── Auto-trigger courses refresh เมื่อลูกค้าเปิดลิงก์ ────────────────────
+      // NOTE: ไม่แตะ brokerStatus — fetch courses เงียบๆ ไม่กระทบสถานะ OPD
       allDocs.forEach(s => {
         if (
           s.coursesRefreshRequest &&
           s.brokerProClinicId &&
-          s.brokerStatus !== 'pending' &&
-          !autoCoursesRequestedRef.current.has(s.id) &&
-          !autoSyncInFlightRef.current.has(s.id)
+          !autoCoursesRequestedRef.current.has(s.id)
         ) {
-          const last = s.lastCoursesAutoFetch;
-          const COURSES_REFRESH_COOLDOWN_MS = 0;
-          if (last && (Date.now() - last.toMillis()) < COURSES_REFRESH_COOLDOWN_MS) return;
           autoCoursesRequestedRef.current.add(s.id);
           const jobId = `courses_auto_${s.id}_${Date.now()}`;
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
           updateDoc(ref, {
             coursesRefreshRequest: null,
             lastCoursesAutoFetch: serverTimestamp(),
-            brokerStatus: 'pending', brokerError: null,
-            brokerJob: { id: jobId, type: 'LC_GET_COURSES', proClinicId: s.brokerProClinicId || null },
           }).catch(e => console.error('auto courses trigger:', e));
           broker.getCourses(s.brokerProClinicId)
             .then(result => {
               autoCoursesRequestedRef.current.delete(s.id);
               const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
               updateDoc(cRef, {
-                brokerStatus: 'done', brokerError: null, brokerJob: null,
                 latestCourses: {
                   courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
                   appointments: result?.appointments || [], patientName: result?.patientName || '',
