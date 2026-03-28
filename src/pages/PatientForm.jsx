@@ -600,26 +600,29 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                           <span className="ml-2 text-xs">▼</span>
                         </button>
                         {countryDropdownOpen && (
-                          <div className="absolute z-50 w-full mt-1 rounded-lg border border-[#333] shadow-xl max-h-60 overflow-hidden flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)' }}>
-                            <div className="p-2 border-b border-[#333]">
-                              <input type="text" autoFocus value={countryFilter} onChange={e => setCountryFilter(e.target.value)}
-                                placeholder={language === 'en' ? 'Search country...' : 'ค้นหาประเทศ...'}
-                                className="w-full px-3 py-2 rounded border border-[#444] text-sm outline-none" style={{ background: 'var(--bg-input, #111)', color: 'var(--tx-normal, #fff)' }} />
-                            </div>
-                            <div className="overflow-y-auto flex-1">
-                              {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).map(c => (
-                                <button key={c} type="button"
-                                  onClick={() => { setFormData(prev => ({ ...prev, nationalityCountry: c })); setCountryDropdownOpen(false); }}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-red-900/30 transition-colors ${formData.nationalityCountry === c ? 'bg-red-900/40 font-semibold' : ''}`}
-                                  style={{ color: 'var(--tx-normal, #fff)' }}>
-                                  {c}
-                                </button>
-                              ))}
-                              {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).length === 0 && (
-                                <div className="px-3 py-4 text-center text-sm opacity-50" style={{ color: 'var(--tx-normal, #fff)' }}>
-                                  {language === 'en' ? 'No results' : 'ไม่พบผลลัพธ์'}
-                                </div>
-                              )}
+                          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60" onClick={() => setCountryDropdownOpen(false)}>
+                            <div className="w-full sm:w-[90%] sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-[#333] shadow-2xl flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)', maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
+                              <div className="p-3 border-b border-[#333] flex items-center gap-2">
+                                <input type="text" autoFocus value={countryFilter} onChange={e => setCountryFilter(e.target.value)}
+                                  placeholder={language === 'en' ? 'Search country...' : 'ค้นหาประเทศ...'}
+                                  className="w-full px-3 py-2.5 rounded-lg border border-[#444] text-sm outline-none" style={{ background: 'var(--bg-input, #111)', color: 'var(--tx-normal, #fff)' }} />
+                                <button type="button" onClick={() => setCountryDropdownOpen(false)} className="text-gray-400 hover:text-white text-xl px-2">✕</button>
+                              </div>
+                              <div className="overflow-y-auto flex-1 overscroll-contain">
+                                {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).map(c => (
+                                  <button key={c} type="button"
+                                    onClick={() => { setFormData(prev => ({ ...prev, nationalityCountry: c })); setCountryDropdownOpen(false); }}
+                                    className={`w-full text-left px-4 py-3 text-sm border-b border-[#222] hover:bg-red-900/30 transition-colors ${formData.nationalityCountry === c ? 'bg-red-900/40 font-semibold' : ''}`}
+                                    style={{ color: 'var(--tx-normal, #fff)' }}>
+                                    {c}
+                                  </button>
+                                ))}
+                                {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).length === 0 && (
+                                  <div className="px-3 py-6 text-center text-sm opacity-50" style={{ color: 'var(--tx-normal, #fff)' }}>
+                                    {language === 'en' ? 'No results' : 'ไม่พบผลลัพธ์'}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}
