@@ -2055,6 +2055,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">ยาที่ใช้ประจำ</span>
                           <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
                         </div>
+                        {d.pregnancy && d.pregnancy !== 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์' && (
+                          <div className={`p-3 rounded border ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'bg-pink-950/20 border-pink-900/50' : 'bg-[#141414] border-[#222]'}`}>
+                            <span className={`text-[10px] uppercase tracking-widest block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
+                            <span className={`font-bold text-sm ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-300' : 'text-gray-300'}`}>{d.pregnancy}</span>
+                          </div>
+                        )}
                         {d.howFoundUs && d.howFoundUs.length > 0 && (
                           <div className="p-3 bg-[#0d1117] rounded border border-blue-900/30">
                             <span className="text-[10px] text-blue-500 uppercase tracking-widest block mb-2 flex items-center gap-1"><Globe size={10}/> รู้จักคลินิกจาก</span>
