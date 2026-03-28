@@ -80,7 +80,25 @@ export default async function handler(req, res) {
           actionButtons.push({ tag: el.tagName, href, title, text: $(el).text().trim().substring(0, 50) });
         }
       });
-      return res.status(200).json({ success: true, deleteButtons, deleteLinks, depositEntries, allDataUrls, depositLinks: depositLinks.slice(0, 20), depositIdLinks: depositIdLinks.slice(0, 20), actionButtons });
+      // Dump cancel form details
+      const cancelForm = $('form[action*="cancel"]');
+      const cancelFormInfo = {};
+      if (cancelForm.length) {
+        cancelFormInfo.action = cancelForm.attr('action');
+        cancelFormInfo.method = cancelForm.attr('method');
+        cancelFormInfo.html = cancelForm.html()?.substring(0, 2000);
+        cancelFormInfo.fields = [];
+        cancelForm.find('input, select, textarea').each((_, el) => {
+          cancelFormInfo.fields.push({
+            name: $(el).attr('name'),
+            type: $(el).attr('type') || el.tagName,
+            value: $(el).val()?.substring(0, 100),
+          });
+        });
+      }
+      // Dump first row HTML to see structure
+      const firstRowHtml = $('tr').eq(1).html()?.substring(0, 2000) || '';
+      return res.status(200).json({ success: true, cancelFormInfo, firstRowHtml, deleteButtons, deleteLinks, depositEntries, allDataUrls, depositLinks: depositLinks.slice(0, 20), depositIdLinks: depositIdLinks.slice(0, 20), actionButtons });
     }
 
     // Step 1: GET /admin/deposit
