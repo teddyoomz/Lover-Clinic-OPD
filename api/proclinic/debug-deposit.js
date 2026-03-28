@@ -54,7 +54,33 @@ export default async function handler(req, res) {
       $('[data-url]').each((_, el) => {
         allDataUrls.push({ tag: el.tagName, dataUrl: $(el).attr('data-url'), classes: $(el).attr('class')?.substring(0, 50) });
       });
-      return res.status(200).json({ success: true, deleteButtons, deleteLinks, depositEntries, allDataUrls, htmlSnippet: html.substring(0, 500) });
+      // Find all links/buttons related to deposits
+      const depositLinks = [];
+      $('a[href*="deposit"], button[onclick*="deposit"]').each((_, el) => {
+        depositLinks.push({
+          tag: el.tagName,
+          href: $(el).attr('href') || $(el).attr('onclick') || '',
+          text: $(el).text().trim().substring(0, 80),
+          classes: ($(el).attr('class') || '').substring(0, 60),
+        });
+      });
+      // Find deposit IDs in page (links like /deposit/123 or /deposit/123/edit)
+      const depositIdLinks = [];
+      $('a[href]').each((_, el) => {
+        const href = $(el).attr('href') || '';
+        const m = href.match(/\/deposit\/(\d+)/);
+        if (m) depositIdLinks.push({ id: m[1], href, text: $(el).text().trim().substring(0, 80) });
+      });
+      // Look for edit/cancel/delete buttons/icons per row
+      const actionButtons = [];
+      $('a[href*="edit"], a[href*="cancel"], button[title], a[title]').each((_, el) => {
+        const href = $(el).attr('href') || '';
+        const title = $(el).attr('title') || '';
+        if (href.includes('deposit') || title.toLowerCase().includes('delete') || title.toLowerCase().includes('cancel') || title.includes('ลบ') || title.includes('ยกเลิก')) {
+          actionButtons.push({ tag: el.tagName, href, title, text: $(el).text().trim().substring(0, 50) });
+        }
+      });
+      return res.status(200).json({ success: true, deleteButtons, deleteLinks, depositEntries, allDataUrls, depositLinks: depositLinks.slice(0, 20), depositIdLinks: depositIdLinks.slice(0, 20), actionButtons });
     }
 
     // Step 1: GET /admin/deposit
