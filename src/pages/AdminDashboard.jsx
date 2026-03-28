@@ -1726,9 +1726,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <Search size={15}/>
                         </button>
                       )}
+                      {session.opdRecordedAt && session.brokerStatus === 'done' && (
                       <button
                         onClick={() => setPatientLinkModal(session.id)}
-                        title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ถาวร: เปิดใช้งาน' : 'ลิงก์ถาวร: ปิดใช้งาน') : 'สร้างลิงก์ถาวร'}
+                        title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ดูข้อมูล: เปิดใช้งาน' : 'ลิงก์ดูข้อมูล: ปิดใช้งาน') : 'สร้างลิงก์ดูข้อมูล'}
                         className={`p-2 rounded-lg border transition-all ${
                           session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
                           session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
@@ -1737,6 +1738,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       >
                         {session.patientLinkToken && !session.patientLinkEnabled ? <Unlink size={15}/> : <Link size={15}/>}
                       </button>
+                      )}
                       <button onClick={() => setSessionToHardDelete(session.id)}
                         className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบถาวร">
                         <Trash2 size={15}/>
@@ -2145,7 +2147,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex w-full rounded-xl overflow-hidden border border-[var(--bd)] text-xs font-bold uppercase tracking-wider">
                       <button onClick={() => setQrDisplayMode('session')} className={`flex-1 py-2 transition-colors ${qrDisplayMode === 'session' ? 'bg-[var(--bg-hover2)] text-[var(--tx-heading)]' : 'text-gray-600 hover:text-gray-400'}`}>QR คิว</button>
                       <button onClick={() => setQrDisplayMode('patientLink')} className={`flex-1 py-2 transition-colors flex items-center justify-center gap-1 ${qrDisplayMode === 'patientLink' ? 'bg-purple-950/40 text-purple-300' : 'text-gray-600 hover:text-purple-400'}`}>
-                        <Link size={11}/> ลิงก์ถาวร
+                        <Link size={11}/> ลิงก์ดูข้อมูล
                       </button>
                     </div>
                   )}
@@ -2179,7 +2181,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <button onClick={() => activeSessionInfo && handleTogglePatientLink(activeSessionInfo)} disabled={patientLinkLoading} className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border ${plEnabled ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-white' : 'bg-green-950/30 border-green-900/50 text-green-400 hover:bg-green-900/40'}`}>
                         {plEnabled ? <><ToggleLeft size={15}/> ปิด</> : <><ToggleRight size={15}/> เปิด</>}
                       </button>
-                      <button onClick={() => handleDeletePatientLink(selectedQR)} disabled={patientLinkLoading} className="p-3 rounded-xl border border-red-900/40 text-red-500 hover:bg-red-950/30 transition-colors" title="ลบลิงก์ถาวร">
+                      <button onClick={() => handleDeletePatientLink(selectedQR)} disabled={patientLinkLoading} className="p-3 rounded-xl border border-red-900/40 text-red-500 hover:bg-red-950/30 transition-colors" title="ลบลิงก์ดูข้อมูล">
                         <Trash2 size={15}/>
                       </button>
                     </div>
@@ -2252,7 +2254,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <button onClick={() => setSelectedQR(session.id)} className="p-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-input)] text-gray-400 hover:text-[var(--tx-heading)] rounded-lg border border-[var(--bd)] transition-colors" title="QR"><QrCode size={15} /></button>
                           <button
                             onClick={() => setPatientLinkModal(session.id)}
-                            title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ถาวร: เปิดใช้งาน' : 'ลิงก์ถาวร: ปิดใช้งาน') : 'สร้างลิงก์ถาวร'}
+                            title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ดูข้อมูล: เปิดใช้งาน' : 'ลิงก์ดูข้อมูล: ปิดใช้งาน') : 'สร้างลิงก์ดูข้อมูล'}
                             className={`p-2 rounded-lg border transition-all ${
                               session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
                               session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
@@ -3458,7 +3460,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Infinity size={18} className="text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-white">ลิงก์ถาวร</p>
+                  <p className="text-sm font-black text-white">ลิงก์ดูข้อมูล</p>
                   <p className="text-[10px] text-gray-500 mt-0.5">ไม่มีวันหมดอายุ — ใช้ได้จนกว่าจะลบ</p>
                 </div>
               </button>
@@ -3486,7 +3488,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Link size={16} className="text-purple-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-purple-400">ลิงก์ถาวรของผู้ป่วย</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
                   <p className="text-sm font-bold text-white truncate">{plSession.sessionName || plSession.id}</p>
                 </div>
                 <button onClick={() => setPatientLinkModal(null)} className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[#1a1a1a] transition-colors"><X size={16}/></button>
@@ -3495,9 +3497,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <div className="p-5 flex flex-col gap-4">
                 {!plToken ? (
                   <>
-                    <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ถาวรเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
+                    <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
                     <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
-                      {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ถาวร
+                      {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ดูข้อมูล
                     </button>
                   </>
                 ) : (
