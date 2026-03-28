@@ -1493,15 +1493,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <Activity size={13} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
-          <button onClick={() => setAdminMode('formBuilder')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'formBuilder' ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-            <LayoutTemplate size={13} /> จัดการ
-          </button>
-          <button onClick={() => setAdminMode('clinicSettings')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
-            style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`} : {}}>
-            <Palette size={13} /> ตั้งค่า
-          </button>
           <button onClick={() => setAdminMode('deposit')}
             className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
             <Banknote size={13} /> จอง
@@ -1511,6 +1502,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'history' ? 'bg-amber-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
             <History size={13} /> ประวัติ
           </button>
+          <button onClick={() => setAdminMode('formBuilder')}
+            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'formBuilder' ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+            <LayoutTemplate size={13} /> จัดการ
+          </button>
+          <button onClick={() => setAdminMode('clinicSettings')}
+            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
+            style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`} : {}}>
+            <Palette size={13} /> ตั้งค่า
+          </button>
         </div>
 
         {/* ── Desktop: full button row ── */}
@@ -1519,18 +1519,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <Activity size={16} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
-          <button onClick={() => setAdminMode('formBuilder')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'formBuilder' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-blue-500'}`} style={adminMode === 'formBuilder' ? {color: '#fff'} : {}}>
-            <LayoutTemplate size={16} /> จัดการแบบฟอร์ม
-          </button>
-          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
-            <Palette size={16} /> ตั้งค่า
-          </button>
           <button onClick={() => setAdminMode('deposit')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white shadow-[0_0_15px_rgba(5,150,105,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50'}`} title="ลูกค้าจองมัดจำ">
             <Banknote size={16} /> จองมัดจำ
             {depositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{depositSessions.filter(s => s.isUnread).length}</span>}
           </button>
           <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white shadow-[0_0_15px_rgba(180,83,9,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
             <History size={16} /> ประวัติ
+          </button>
+          <button onClick={() => setAdminMode('formBuilder')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'formBuilder' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-blue-500'}`} style={adminMode === 'formBuilder' ? {color: '#fff'} : {}}>
+            <LayoutTemplate size={16} /> จัดการแบบฟอร์ม
+          </button>
+          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
+            <Palette size={16} /> ตั้งค่า
           </button>
           <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
           <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-white px-3 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
