@@ -23,5 +23,10 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// Announce extension is available
-window.postMessage({ type: 'LC_COOKIE_RELAY_READY' }, '*');
+// Announce extension is available — send immediately + after React mounts
+function announce() {
+  window.postMessage({ type: 'LC_COOKIE_RELAY_READY' }, '*');
+}
+announce();
+setTimeout(announce, 1000);
+setTimeout(announce, 3000);

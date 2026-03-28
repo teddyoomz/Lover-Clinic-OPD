@@ -7,22 +7,43 @@ import { app } from '../firebase.js';
 
 // ─── Cookie Relay Extension communication ────────────────────────────────────
 
-function requestExtensionSync() {
+function sendMessageToExtension(type, extra = {}) {
   return new Promise((resolve) => {
+    const resultType = type + '_RESULT';
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler);
       resolve({ success: false, error: 'Extension not installed or not responding' });
-    }, 5000);
+    }, 20000); // 20s — auto-login takes time (open window + reCAPTCHA + redirect)
 
     function handler(event) {
-      if (event.source !== window || event.data?.type !== 'LC_SYNC_COOKIES_RESULT') return;
+      if (event.source !== window || event.data?.type !== resultType) return;
       window.removeEventListener('message', handler);
       clearTimeout(timeout);
       resolve(event.data.result);
     }
     window.addEventListener('message', handler);
-    window.postMessage({ type: 'LC_SYNC_COOKIES' }, '*');
+    window.postMessage({ type, ...extra }, '*');
   });
+}
+
+function requestExtensionSync() {
+  return sendMessageToExtension('LC_SYNC_COOKIES');
+}
+
+async function ensureExtensionHasCredentials() {
+  try {
+    const creds = await apiFetch('credentials', {}, true); // _retried=true to prevent recursion
+    if (creds?.success) {
+      window.postMessage({
+        type: 'LC_SET_CREDENTIALS',
+        origin: creds.origin,
+        email: creds.email,
+        password: creds.password,
+      }, '*');
+      // Small delay for extension to save
+      await new Promise(r => setTimeout(r, 300));
+    }
+  } catch (_) {}
 }
 
 // ─── API fetch with auto-retry via extension ─────────────────────────────────
@@ -66,7 +87,9 @@ async function apiFetch(endpoint, body, _retried) {
 
   // If server says it needs extension cookies and we haven't retried yet
   if (data.extensionNeeded && !_retried) {
-    console.log('[broker] Server needs cookies — requesting from Cookie Relay extension');
+    console.log('[broker] Server needs cookies — sending credentials to extension + requesting sync');
+    // Ensure extension has credentials before auto-login attempt
+    await ensureExtensionHasCredentials();
     const syncResult = await requestExtensionSync();
     if (syncResult.success) {
       console.log('[broker] Extension synced cookies — retrying API call');
