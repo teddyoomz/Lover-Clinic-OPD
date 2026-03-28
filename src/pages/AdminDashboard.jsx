@@ -2001,7 +2001,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           {hasOPD && (
                             <button
-                              onClick={() => handleDepositCancel(session)}
+                              onClick={() => { if (window.confirm('ยกเลิกการจองนี้?\nจะลบมัดจำ + ลูกค้าใน ProClinic ด้วย')) handleDepositCancel(session); }}
                               disabled={isSyncing}
                               className="p-1.5 rounded border bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-red-400 hover:border-red-900/50 transition-colors disabled:opacity-50"
                               title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"
@@ -2011,6 +2011,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           {hasOPD && hasDeposit ? (
                           <button onClick={() => {
+                            if (!window.confirm('ยืนยันว่าลูกค้ามารับบริการเรียบร้อยแล้ว?')) return;
                             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
                               isArchived: true, archivedAt: serverTimestamp(), serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
                             });
@@ -2019,6 +2020,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </button>
                           ) : (
                           <button onClick={() => {
+                            if (!window.confirm('ลบคิวจองนี้?\n(ย้ายไปประวัติจอง — กู้คืนได้)')) return;
                             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
                               isArchived: true, archivedAt: serverTimestamp(),
                             });
