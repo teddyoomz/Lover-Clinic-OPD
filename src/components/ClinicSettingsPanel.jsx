@@ -372,7 +372,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 setTestResult('');
                 try {
                   const data = await testLogin();
-                  setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}`);
+                  if (data.debug) console.log('[testLogin debug]', data.debug);
+                  setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}${data.debug ? '\n' + JSON.stringify(data.debug, null, 2) : ''}`);
                 } catch (err) {
                   setTestResult(`✗ ${err.message}`);
                 } finally {

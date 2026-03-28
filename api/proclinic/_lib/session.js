@@ -140,13 +140,26 @@ export async function performLogin(origin, email, password) {
 
   // Failed — include debug info
   let hint = `status=${status}, location=${location || 'none'}`;
+  let responseSnippet = '';
   try {
-    const body = await loginRes.text();
-    if (body && (body.includes('captcha') || body.includes('recaptcha') || body.includes('g-recaptcha'))) {
+    const text = await loginRes.text();
+    if (text && (text.includes('captcha') || text.includes('recaptcha') || text.includes('g-recaptcha'))) {
       hint = 'CAPTCHA detected — ProClinic บล็อก automated login ลอง login ผ่าน browser ก่อนเพื่อปลด CAPTCHA';
     }
+    responseSnippet = text.substring(0, 300);
   } catch (_) {}
-  throw new Error(`Login ไม่สำเร็จ (${hint})`);
+  const err = new Error(`Login ไม่สำเร็จ (${hint})`);
+  err.debug = {
+    getStatus: loginPageRes.status,
+    getUrl: loginPageRes.url,
+    csrfFound: !!csrf,
+    getCookies: cookies.length,
+    postStatus: status,
+    postLocation: location,
+    postNewCookies: postCookies.length,
+    responseSnippet,
+  };
+  throw err;
 }
 
 // ─── Create session (login once, reuse for multiple requests) ────────────────
