@@ -11,6 +11,16 @@ window.addEventListener('message', (event) => {
       }, '*');
     });
   }
+
+  // Auto-receive credentials from webapp (fetched from Vercel env vars)
+  if (event.data?.type === 'LC_SET_CREDENTIALS') {
+    chrome.runtime.sendMessage({
+      type: 'LC_SET_CREDENTIALS',
+      origin: event.data.origin,
+      email: event.data.email,
+      password: event.data.password,
+    });
+  }
 });
 
 // Announce extension is available

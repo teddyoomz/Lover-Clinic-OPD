@@ -135,3 +135,8 @@ export function updateDeposit(proClinicId, proClinicHN, depositProClinicId, depo
 export function clearProClinicSession() {
   return apiFetch('clear-session', {});
 }
+
+/** Get ProClinic credentials from Vercel env vars — for extension auto-config */
+export function getProClinicCredentials() {
+  return apiFetch('credentials', {});
+}

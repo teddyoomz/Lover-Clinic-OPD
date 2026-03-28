@@ -218,6 +218,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (localStorage.getItem('lc_push_enabled') === 'true') setPushEnabled(true);
   }, []);
 
+  // Auto-sync ProClinic credentials to Cookie Relay extension
+  useEffect(() => {
+    function handleExtReady(e) {
+      if (e.data?.type !== 'LC_COOKIE_RELAY_READY') return;
+      broker.getProClinicCredentials().then(res => {
+        if (res?.success) {
+          window.postMessage({ type: 'LC_SET_CREDENTIALS', origin: res.origin, email: res.email, password: res.password }, '*');
+        }
+      });
+    }
+    window.addEventListener('message', handleExtReady);
+    return () => window.removeEventListener('message', handleExtReady);
+  }, []);
+
   // โหลด / subscribe globalPushMuted จาก Firestore
   useEffect(() => {
     if (!db || !appId) return;

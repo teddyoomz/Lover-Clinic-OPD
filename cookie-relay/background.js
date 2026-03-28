@@ -254,6 +254,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     autoLogin().then(result => sendResponse(result));
     return true;
   }
+
+  // Auto-receive credentials from webapp (synced from Vercel env vars)
+  if (msg.type === 'LC_SET_CREDENTIALS') {
+    chrome.storage.local.set({
+      proclinic_origin: msg.origin,
+      proclinic_email: msg.email,
+      proclinic_password: msg.password,
+    }, () => {
+      console.log('[CookieRelay] Credentials synced from webapp');
+      sendResponse({ success: true });
+    });
+    return true;
+  }
 });
 
 // ─── Sync on install/startup ─────────────────────────────────────────────────
