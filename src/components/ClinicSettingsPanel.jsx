@@ -4,6 +4,7 @@ import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Ch
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
+import { clearProClinicSession, testLogin } from '../lib/brokerClient.js';
 
 export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack, theme, setTheme }) {
   const [settings, setSettings] = useState({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
@@ -370,12 +371,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 setTestingConnection(true);
                 setTestResult('');
                 try {
-                  const res = await fetch('/api/proclinic/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                  });
-                  const data = await res.json();
+                  const data = await testLogin();
                   setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}`);
                 } catch (err) {
                   setTestResult(`✗ ${err.message}`);
@@ -394,12 +390,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 setClearingSession(true);
                 setClearResult('');
                 try {
-                  const res = await fetch('/api/proclinic/clear-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                  });
-                  const data = await res.json();
+                  const data = await clearProClinicSession();
                   setClearResult(data.success ? '✓ ล้าง session แล้ว — จะ login ใหม่อัตโนมัติ' : `✗ ${data.error}`);
                 } catch (err) {
                   setClearResult(`✗ ${err.message}`);
