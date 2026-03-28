@@ -735,10 +735,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleViewSession = async (session) => {
     setViewingSession(session);
     setHasNewUpdate(false);
-    if (session.isUnread) {
+    // Deposit ที่ sync แล้วแต่ลูกค้าแก้ข้อมูลมาใหม่ → ไม่ clear isUnread จนกว่าจะกด sync
+    const depositNeedsResync = session.formType === 'deposit'
+      && session.opdRecordedAt && session.brokerStatus === 'done'
+      && session.depositSyncStatus === 'done' && session.isUnread;
+    if (session.isUnread && !depositNeedsResync) {
       // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
-      // ไม่ว่า LOCAL snapshot จะยิงมาด้วย patientData version ไหน guard จะบล็อกก่อนเสมอ
-      // เพราะ isUnread:false ไม่มีส่วนเกี่ยวกับ ProClinic sync เลย
       lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
       try {
@@ -987,7 +989,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           brokerError: null, brokerStatus: 'done', brokerJob: null,
           ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
           ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
+          ...(session.formType === 'deposit' && session.isUnread ? { isUnread: false } : {}),
         });
+        if (session.formType === 'deposit') {
+          lastViewedStrRef.current[sessionId] = stableStr(d || {});
+          lastAutoSyncedStrRef.current[sessionId] = stableStr(d || {});
+        }
       } else if (result?.notFound) {
         // HN ไม่เจอใน ProClinic → ถอด HN/OPD ออก พร้อมบันทึกใหม่
         setViewingSession(prev => prev?.id === sessionId
@@ -1102,8 +1109,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncStatus: 'done',
         depositSyncError: null,
         depositSyncAt: serverTimestamp(),
+        isUnread: false,
         ...(depResult.depositProClinicId ? { depositProClinicId: depResult.depositProClinicId } : {}),
       });
+      lastViewedStrRef.current[session.id] = stableStr(d || {});
+      lastAutoSyncedStrRef.current[session.id] = stableStr(d || {});
       setToastMsg(alreadySynced ? 'อัพเดทข้อมูลสำเร็จ!' : 'บันทึกมัดจำสำเร็จ!');
       setTimeout(() => setToastMsg(null), 5000);
     } catch (e) {
