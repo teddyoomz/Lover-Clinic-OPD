@@ -950,12 +950,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         proClinicId, session.brokerProClinicHN || null, patient);
       setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-      if (result?.success) {
+      if (result?.success || result?.notFound) {
+        // ลบสำเร็จ หรือ customer ไม่อยู่แล้ว → ถอด HN/OPD ออกทั้งคู่
         setViewingSession(prev => prev?.id === session.id
           ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null }
           : prev);
         await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
           brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null });
+        if (result?.notFound) {
+          setToastMsg('HN ไม่พบใน ProClinic (ถูกลบไปแล้ว) — ถอด HN ออก พร้อมบันทึกใหม่');
+          setTimeout(() => setToastMsg(null), 5000);
+        }
       } else {
         await updateDoc(ref, { brokerStatus: null, brokerJob: null });
         setToastMsg(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
