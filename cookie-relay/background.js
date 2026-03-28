@@ -78,20 +78,20 @@ async function autoLogin() {
   }
 
   loginInProgress = true;
-  console.log('[CookieRelay] Starting auto-login via off-screen window');
+  console.log('[CookieRelay] Starting auto-login via hidden window');
 
   let winId = null;
   try {
-    // Create a window off-screen — invisible to user
+    // Create a small window then immediately minimize it
     const win = await chrome.windows.create({
       url: `${origin}/login`,
       type: 'popup',
-      left: -9999,
-      top: -9999,
       width: 400,
       height: 400,
       focused: false,
     });
+    // Minimize after creation (workaround: state:'minimized' in create doesn't work on all Chrome versions)
+    await chrome.windows.update(win.id, { state: 'minimized' }).catch(() => {});
     winId = win.id;
     const tab = win.tabs[0];
 
