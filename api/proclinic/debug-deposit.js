@@ -80,25 +80,28 @@ export default async function handler(req, res) {
           actionButtons.push({ tag: el.tagName, href, title, text: $(el).text().trim().substring(0, 50) });
         }
       });
-      // Dump cancel form details
-      const cancelForm = $('form[action*="cancel"]');
-      const cancelFormInfo = {};
-      if (cancelForm.length) {
-        cancelFormInfo.action = cancelForm.attr('action');
-        cancelFormInfo.method = cancelForm.attr('method');
-        cancelFormInfo.html = cancelForm.html()?.substring(0, 2000);
-        cancelFormInfo.fields = [];
-        cancelForm.find('input, select, textarea').each((_, el) => {
-          cancelFormInfo.fields.push({
-            name: $(el).attr('name'),
-            type: $(el).attr('type') || el.tagName,
-            value: $(el).val()?.substring(0, 100),
-          });
+      // Find ALL modals on the page
+      const modals = [];
+      $('.modal, [id*="modal" i], [id*="Modal"]').each((_, el) => {
+        const id = $(el).attr('id') || '';
+        const form = $(el).find('form');
+        const fields = [];
+        form.find('input, select, textarea').each((_, f) => {
+          fields.push({ name: $(f).attr('name'), type: $(f).attr('type') || f.tagName.toLowerCase(), id: $(f).attr('id') });
         });
-      }
-      // Dump first row HTML to see structure
+        modals.push({
+          id,
+          title: $(el).find('.modal-title, h5, h4').first().text().trim().substring(0, 100),
+          formAction: form.attr('action') || '',
+          formMethod: form.attr('method') || '',
+          fieldCount: fields.length,
+          fields,
+          hasMethod: form.find('input[name="_method"]').val() || '',
+        });
+      });
+      // First row HTML
       const firstRowHtml = $('tr').eq(1).html()?.substring(0, 2000) || '';
-      return res.status(200).json({ success: true, cancelFormInfo, firstRowHtml, deleteButtons, deleteLinks, depositEntries, allDataUrls, depositLinks: depositLinks.slice(0, 20), depositIdLinks: depositIdLinks.slice(0, 20), actionButtons });
+      return res.status(200).json({ success: true, modals, firstRowHtml, deleteButtons, deleteLinks, depositEntries, allDataUrls, depositLinks: depositLinks.slice(0, 20), depositIdLinks: depositIdLinks.slice(0, 20), actionButtons });
     }
 
     // Step 1: GET /admin/deposit
