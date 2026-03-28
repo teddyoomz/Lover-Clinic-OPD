@@ -61,3 +61,8 @@ export function getDepositOptions() {
 export function submitDeposit(proClinicId, deposit) {
   return apiFetch('deposit-submit', { proClinicId, deposit });
 }
+
+/** Cancel deposit + delete customer from ProClinic */
+export function cancelDeposit(proClinicId, proClinicHN) {
+  return apiFetch('deposit-cancel', { proClinicId, proClinicHN });
+}

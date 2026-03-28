@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -1071,6 +1071,45 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
   };
 
+  const handleDepositCancel = async (session) => {
+    const sessionId = session.id;
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+    const proClinicId = session.brokerProClinicId;
+    const proClinicHN = session.brokerProClinicHN;
+
+    try {
+      await updateDoc(ref, { depositSyncStatus: 'pending' });
+      setToastMsg('กำลังยกเลิกการจองใน ProClinic...');
+
+      if (proClinicId) {
+        const result = await broker.cancelDeposit(proClinicId, proClinicHN);
+        if (!result?.success) throw new Error(result?.error || 'ยกเลิกการจองไม่สำเร็จ');
+        setToastMsg(result.message || 'ยกเลิกการจองสำเร็จ');
+      }
+
+      // Archive the session (move to deposit history)
+      await updateDoc(ref, {
+        isArchived: true,
+        archivedAt: serverTimestamp(),
+        depositSyncStatus: 'cancelled',
+        depositSyncError: null,
+        brokerStatus: null,
+        brokerProClinicId: null,
+        brokerProClinicHN: null,
+      });
+      setToastMsg('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติแล้ว');
+      setTimeout(() => setToastMsg(null), 5000);
+    } catch (e) {
+      console.error('deposit cancel error:', e);
+      await updateDoc(ref, {
+        depositSyncStatus: 'failed',
+        depositSyncError: e.message,
+      }).catch(console.error);
+      setToastMsg(`ยกเลิกไม่สำเร็จ: ${e.message}`);
+      setTimeout(() => setToastMsg(null), 5000);
+    }
+  };
+
   const handleSaveDepositData = async (sessionId, newData) => {
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
@@ -1820,6 +1859,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               title={hasOPD && hasDeposit ? 'บันทึกเรียบร้อยแล้ว' : 'บันทึกลงการจอง'}
                             >
                               {isSyncing ? <Loader2 size={14} className="animate-spin"/> : <ClipboardCheck size={14}/>}
+                            </button>
+                          )}
+                          {hasOPD && (
+                            <button
+                              onClick={() => handleDepositCancel(session)}
+                              disabled={isSyncing}
+                              className="p-1.5 rounded border bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-red-400 hover:border-red-900/50 transition-colors disabled:opacity-50"
+                              title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"
+                            >
+                              {isSyncing && session.depositSyncStatus === 'pending' ? <Loader2 size={14} className="animate-spin"/> : <XCircle size={14}/>}
                             </button>
                           )}
                           <button onClick={() => {
