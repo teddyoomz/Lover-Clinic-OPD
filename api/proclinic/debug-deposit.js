@@ -10,9 +10,52 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { proClinicId, deposit, testSubmit } = req.body || {};
+    const { proClinicId, deposit, testSubmit, listDeposits } = req.body || {};
     const session = await createSession();
     const base = session.origin;
+
+    // List mode: show deposit entries with delete buttons
+    if (listDeposits) {
+      const html = await session.fetchText(`${base}/admin/deposit`);
+      const $ = cheerio.load(html);
+      const deleteButtons = [];
+      $('button.btn-delete[data-url], a.btn-delete[data-url], [data-url*="deposit"]').each((_, btn) => {
+        deleteButtons.push({
+          tag: btn.tagName,
+          dataUrl: $(btn).attr('data-url'),
+          classes: $(btn).attr('class'),
+          text: $(btn).text().trim().substring(0, 50),
+        });
+      });
+      // Also look for any delete/cancel links/forms
+      const deleteLinks = [];
+      $('a[href*="deposit"], form[action*="deposit"]').each((_, el) => {
+        const href = $(el).attr('href') || $(el).attr('action') || '';
+        if (href.includes('delete') || href.includes('cancel') || href.includes('destroy')) {
+          deleteLinks.push({ tag: el.tagName, href, text: $(el).text().trim().substring(0, 50) });
+        }
+      });
+      // Look for table rows or cards with deposit info
+      const depositEntries = [];
+      $('tr, .card, .deposit-item').each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.includes('HN') || text.includes('฿') || text.includes('บาท')) {
+          const delBtn = $(el).find('[data-url]');
+          if (delBtn.length) {
+            depositEntries.push({
+              dataUrl: delBtn.attr('data-url'),
+              snippet: text.replace(/\s+/g, ' ').substring(0, 200),
+            });
+          }
+        }
+      });
+      // Raw: find ALL data-url attributes on the page
+      const allDataUrls = [];
+      $('[data-url]').each((_, el) => {
+        allDataUrls.push({ tag: el.tagName, dataUrl: $(el).attr('data-url'), classes: $(el).attr('class')?.substring(0, 50) });
+      });
+      return res.status(200).json({ success: true, deleteButtons, deleteLinks, depositEntries, allDataUrls, htmlSnippet: html.substring(0, 500) });
+    }
 
     // Step 1: GET /admin/deposit
     const html = await session.fetchText(`${base}/admin/deposit`);
