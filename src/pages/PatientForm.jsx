@@ -18,8 +18,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const [formData, setFormData] = useState(defaultFormData);
-  const [language, setLanguage] = useState('th');
-  
+  const [language, setLanguageRaw] = useState('th');
+  const setLanguage = (lang) => {
+    setLanguageRaw(lang);
+    // Clear name fields when switching language to prevent mixed-language names
+    setFormData(prev => ({ ...prev, firstName: '', lastName: '' }));
+  };
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sessionExists, setSessionExists] = useState(true);
   const [isExpired, setIsExpired] = useState(false);
@@ -101,6 +106,19 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
     } else if ((name === 'phone' && formData.isInternationalPhone) || (name === 'emergencyPhone' && formData.isInternationalEmergencyPhone)) {
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
+    }
+
+    // Enforce language-specific input for name fields
+    if (name === 'firstName' || name === 'lastName') {
+      if (typeof finalValue === 'string') {
+        if (language === 'th') {
+          // Thai mode: allow only Thai characters, spaces, hyphens
+          finalValue = finalValue.replace(/[^\u0E00-\u0E7F\s\-]/g, '');
+        } else {
+          // English mode: allow only English letters, spaces, hyphens
+          finalValue = finalValue.replace(/[^a-zA-Z\s\-]/g, '');
+        }
+      }
     }
 
     // ── Cascading address reset (only reset downstream if value actually changed) ──
@@ -200,7 +218,30 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!sessionId || isExpired) return;
-    
+
+    // Validate name matches selected language
+    const thaiNameRegex = /^[\u0E00-\u0E7F\s\-]+$/;
+    const engNameRegex = /^[a-zA-Z\s\-]+$/;
+    if (language === 'th') {
+      if (formData.firstName && !thaiNameRegex.test(formData.firstName)) {
+        alert('กรุณากรอกชื่อเป็นภาษาไทยเท่านั้น');
+        return;
+      }
+      if (formData.lastName && !thaiNameRegex.test(formData.lastName)) {
+        alert('กรุณากรอกนามสกุลเป็นภาษาไทยเท่านั้น');
+        return;
+      }
+    } else {
+      if (formData.firstName && !engNameRegex.test(formData.firstName)) {
+        alert('Please enter first name in English only.');
+        return;
+      }
+      if (formData.lastName && !engNameRegex.test(formData.lastName)) {
+        alert('Please enter last name in English only.');
+        return;
+      }
+    }
+
     if (!formData.province) {
       alert(language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
       return;
@@ -528,7 +569,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 </div>
                 <div className="w-full sm:w-2/3">
                   <label className={labelClass}>{language === 'en' ? 'First Name' : 'ชื่อจริง'} <span className="text-red-600">*</span></label>
-                  <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'First Name' : 'ชื่อจริง'} className={inputClass}/>
+                  <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'First Name (English only)' : 'ชื่อจริง (ภาษาไทยเท่านั้น)'} className={inputClass}/>
                 </div>
               </div>
               
@@ -536,7 +577,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 {(!isFollowUp && !isCustom) && (
                   <div className="w-full sm:w-1/2">
                     <label className={labelClass}>{language === 'en' ? 'Last Name' : 'นามสกุล'} <span className="text-red-600">*</span></label>
-                    <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Last Name' : 'นามสกุล'} className={inputClass}/>
+                    <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Last Name (English only)' : 'นามสกุล (ภาษาไทยเท่านั้น)'} className={inputClass}/>
                   </div>
                 )}
                 
