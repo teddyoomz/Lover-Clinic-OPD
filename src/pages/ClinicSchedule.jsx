@@ -241,11 +241,11 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const availCellBg = isDark ? 'border-emerald-800/30' : '';
   const availColor = isDark ? 'text-emerald-400' : 'text-emerald-600';
   const fullColor = isDark ? 'text-amber-400' : 'text-pink-500';
-  const todayDotColor = isDark ? 'bg-red-400' : 'bg-pink-500';
-  const todayTextColor = isDark ? 'text-red-400' : 'text-pink-600';
+  const todayDotColor = isDark ? 'bg-orange-400' : 'bg-pink-500';
+  const todayTextColor = isDark ? 'text-orange-400' : 'text-pink-600';
   const weekendColor = isDark ? 'text-rose-400/70' : 'text-rose-400';
-  const docIconColor = isDark ? 'text-red-400' : 'text-pink-500';
-  const slotOpenBg = isDark ? 'border-red-900/40' : '';
+  const docIconColor = isDark ? 'text-orange-400' : 'text-pink-500';
+  const slotOpenBg = isDark ? 'border-orange-900/40' : '';
   const slotOpenBadgeBg = isDark ? 'text-emerald-300 bg-emerald-900/50' : 'text-emerald-700 bg-emerald-100';
   const slotBookedBg = isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)]' : '';
   const legendDocBg = isDark ? 'bg-sky-900/50 border-sky-700/50' : '';
@@ -275,11 +275,11 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     },
   } : null;
 
-  // Fire/ember cell inline styles (dark mode only) — red-black Lover Clinic brand
+  // Fire/ember cell inline styles (dark mode only) — orange ember glow
   const fireGlow = isDark ? {
     normal: {
-      background: 'linear-gradient(to bottom, #0a0a0a 40%, #1a0000 70%, #2a0000 100%)',
-      boxShadow: 'inset 0 -8px 16px -4px rgba(220,38,38,0.15), inset 0 -2px 6px rgba(220,38,38,0.08)',
+      background: 'linear-gradient(to bottom, #0a0a0a 40%, #1a0800 70%, #2d0f00 100%)',
+      boxShadow: 'inset 0 -8px 16px -4px rgba(255,80,0,0.15), inset 0 -2px 6px rgba(255,120,0,0.1)',
     },
     doctor: {
       background: 'linear-gradient(to bottom, #0a0a12 40%, #0a1020 70%, #0d1a30 100%)',
@@ -290,8 +290,8 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
       boxShadow: 'inset 0 -8px 16px -4px rgba(16,185,129,0.15), inset 0 -2px 6px rgba(16,185,129,0.1)',
     },
     selected: {
-      background: 'linear-gradient(to bottom, #7f1d1d 0%, #dc2626 50%, #f87171 100%)',
-      boxShadow: '0 0 20px rgba(220,38,38,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+      background: 'linear-gradient(to bottom, #7c2d12 0%, #ea580c 50%, #fb923c 100%)',
+      boxShadow: '0 0 20px rgba(234,88,12,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
     },
     disabled: {
       background: '#080808',
@@ -337,23 +337,23 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           {months.length > 1 && (
             <button onClick={() => { setActiveMonthIdx(Math.max(0, activeMonthIdx - 1)); setSelectedDate(null); }}
               disabled={activeMonthIdx === 0}
-              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-red-400/60 hover:text-red-300' : 'text-pink-400 hover:text-pink-600'}`}
-              style={isDark ? { background: '#1a0000', border: '1px solid #5a1010' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
+              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'text-pink-400 hover:text-pink-600'}`}
+              style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
               <ChevronLeft size={18} />
             </button>
           )}
           <div className="text-center min-w-[180px]">
-            <h2 className={`text-xl font-black tracking-tight ${isDark ? 'text-red-50' : 'text-pink-800'}`}
-              style={isDark ? { textShadow: '0 0 20px rgba(220,38,38,0.2)' } : undefined}>
+            <h2 className={`text-xl font-black tracking-tight ${isDark ? 'text-orange-100' : 'text-pink-800'}`}
+              style={isDark ? { textShadow: '0 0 20px rgba(251,146,60,0.2)' } : undefined}>
               {t.months[m - 1]}
             </h2>
-            <p className={`text-sm font-medium -mt-0.5 ${isDark ? 'text-red-300/40' : 'text-pink-400/60'}`}>{yearDisplay}</p>
+            <p className={`text-sm font-medium -mt-0.5 ${isDark ? 'text-orange-300/40' : 'text-pink-400/60'}`}>{yearDisplay}</p>
           </div>
           {months.length > 1 && (
             <button onClick={() => { setActiveMonthIdx(Math.min(months.length - 1, activeMonthIdx + 1)); setSelectedDate(null); }}
               disabled={activeMonthIdx >= months.length - 1}
-              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-red-400/60 hover:text-red-300' : 'text-pink-400 hover:text-pink-600'}`}
-              style={isDark ? { background: '#1a0000', border: '1px solid #5a1010' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
+              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'text-pink-400 hover:text-pink-600'}`}
+              style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
               <ChevronRight size={18} />
             </button>
           )}
@@ -362,22 +362,22 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
         {/* ── Calendar Card ── */}
         <div className="rounded-2xl overflow-hidden shadow-lg border-2"
           style={isDark
-            ? { borderColor: '#5a1010', background: '#0a0a0a', boxShadow: '0 0 30px rgba(220,38,38,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
+            ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
             : { borderColor: 'rgba(236,72,153,0.18)', background: '#ffffff', boxShadow: '0 4px 20px rgba(236,72,153,0.06)' }
           }>
           {/* Day headers */}
           <div className="grid grid-cols-7"
             style={isDark
-              ? { background: 'linear-gradient(135deg, #1a0000 0%, #2a0000 50%, #1a0000 100%)', borderBottom: '1px solid #5a1010' }
+              ? { background: 'linear-gradient(135deg, #1a0800 0%, #2d0f00 50%, #1a0800 100%)', borderBottom: '1px solid #4a1a0a' }
               : { background: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #fdf2f8 100%)', borderBottom: '1px solid rgba(236,72,153,0.12)' }
             }>
             {t.days.map((d, i) => (
-              <div key={i} className={`text-center text-[11px] font-bold py-3 tracking-wider ${isDark ? (i >= 5 ? 'text-red-400/80' : 'text-red-200/60') : (i >= 5 ? 'text-rose-400' : 'text-pink-400/70')}`}>{d}</div>
+              <div key={i} className={`text-center text-[11px] font-bold py-3 tracking-wider ${isDark ? (i >= 5 ? 'text-red-400/80' : 'text-orange-300/70') : (i >= 5 ? 'text-rose-400' : 'text-pink-400/70')}`}>{d}</div>
             ))}
           </div>
 
           {/* Day grid */}
-          <div className="grid grid-cols-7" style={isDark ? { gap: '1px', background: '#1a0000' } : { gap: '1px', background: 'rgba(236,72,153,0.08)' }}>
+          <div className="grid grid-cols-7" style={isDark ? { gap: '1px', background: '#1a0a00' } : { gap: '1px', background: 'rgba(236,72,153,0.08)' }}>
             {Array.from({ length: calStart }).map((_, i) => (
               <div key={`e-${i}`} className="min-h-[52px]" style={isDark ? { background: '#080808' } : { background: '#fafafa' }} />
             ))}
@@ -416,7 +416,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 : isDayDisabled ? (isDark ? 'text-gray-700' : 'text-gray-300')
                 : isToday ? todayTextColor
                 : isWeekend ? (isDark ? 'text-red-400' : 'text-rose-400')
-                : isDark ? (isDoctor ? 'text-sky-300' : avail > 0 ? 'text-emerald-300' : 'text-red-200/90')
+                : isDark ? (isDoctor ? 'text-sky-300' : avail > 0 ? 'text-emerald-300' : 'text-orange-200/90')
                 : (isDoctor ? 'text-pink-700' : avail > 0 ? 'text-emerald-700' : 'text-gray-700');
 
               return (
@@ -428,7 +428,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                   {/* Today dot */}
                   {isToday && !isSelected && <span className={`absolute top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${todayDotColor}`}
-                    style={isDark ? { boxShadow: '0 0 6px rgba(220,38,38,0.8)' } : { boxShadow: '0 0 6px rgba(236,72,153,0.6)' }} />}
+                    style={isDark ? { boxShadow: '0 0 6px rgba(251,146,60,0.8)' } : { boxShadow: '0 0 6px rgba(236,72,153,0.6)' }} />}
 
                   {/* Date number */}
                   <span className={`font-bold text-sm leading-none ${dayTextColor}`}
@@ -467,7 +467,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           {/* Legend */}
           <div className="flex items-center justify-center gap-4 py-2.5 text-[10px]"
             style={isDark
-              ? { borderTop: '1px solid #5a1010', background: 'linear-gradient(135deg, #1a0000 0%, #0a0a0a 100%)', color: '#a08080' }
+              ? { borderTop: '1px solid #4a1a0a', background: 'linear-gradient(135deg, #1a0800 0%, #0a0a0a 100%)', color: '#a08060' }
               : { borderTop: '1px solid rgba(236,72,153,0.12)', background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%)', color: '#9ca3af' }
             }>
             <span className="flex items-center gap-1.5">
@@ -490,24 +490,24 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
         {/* ── Hint ── */}
         {!selectedDate && (
-          <p className={`text-center text-[13px] py-2 ${isDark ? 'text-red-300/30' : 'text-pink-400/60'}`}>{t.selectDate}</p>
+          <p className={`text-center text-[13px] py-2 ${isDark ? 'text-orange-300/30' : 'text-pink-400/60'}`}>{t.selectDate}</p>
         )}
 
         {/* ── Time Slots ── */}
         {selectedDate && (
           <div className="rounded-2xl overflow-hidden shadow-lg border-2"
             style={isDark
-              ? { borderColor: '#5a1010', background: '#0a0a0a', boxShadow: '0 0 30px rgba(220,38,38,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
+              ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
               : { borderColor: 'rgba(236,72,153,0.18)', background: '#ffffff', boxShadow: '0 4px 20px rgba(236,72,153,0.06)' }
             }>
             {/* Header */}
             <div className="px-5 py-4 flex items-center justify-between"
               style={isDark
-                ? { background: 'linear-gradient(135deg, #1a0000 0%, #2a0000 50%, #1a0000 100%)', borderBottom: '1px solid #5a1010' }
+                ? { background: 'linear-gradient(135deg, #1a0800 0%, #2d0f00 50%, #1a0800 100%)', borderBottom: '1px solid #4a1a0a' }
                 : { background: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #fdf2f8 100%)', borderBottom: '1px solid rgba(236,72,153,0.12)' }
               }>
               <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-red-50' : 'text-pink-800'}`}>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-orange-200' : 'text-pink-800'}`}>
                   <Clock size={16} className={docIconColor} />
                   {parseInt(selectedDate.split('-')[2])} {t.months[m - 1]} {yearDisplay}
                 </h3>
@@ -517,14 +517,14 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                       <Stethoscope size={10} /> {t.doctor} {getDoctorRangesForDate(selectedDate).map(r => `${r.start}-${r.end}`).join(', ')}
                     </span>
                   )}
-                  <span className={`text-[11px] ${isDark ? 'text-red-300/60' : 'text-pink-400/60'}`}>
+                  <span className={`text-[11px] ${isDark ? 'text-orange-300/60' : 'text-pink-400/60'}`}>
                     {freeCount}/{totalCount} {t.available}
                   </span>
                 </div>
               </div>
               <button onClick={() => setSelectedDate(null)}
-                className={`p-2 rounded-xl transition-colors ${isDark ? 'text-red-400/60 hover:text-red-300' : 'text-pink-400 hover:text-pink-600'}`}
-                style={isDark ? { background: '#1a0000', border: '1px solid #5a1010' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
+                className={`p-2 rounded-xl transition-colors ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'text-pink-400 hover:text-pink-600'}`}
+                style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : { background: 'rgba(244,114,182,0.06)', border: '1px solid rgba(236,72,153,0.15)' }}>
                 <X size={16} />
               </button>
             </div>
@@ -536,8 +536,8 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                   !slot.booked ? {
                     background: slot.doctorSlot
                       ? 'linear-gradient(135deg, #0a0a12 0%, #0d1a30 100%)'
-                      : 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 100%)',
-                    border: `1px solid ${slot.doctorSlot ? '#1a3050' : '#4a1010'}`,
+                      : 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 100%)',
+                    border: `1px solid ${slot.doctorSlot ? '#1a3050' : '#3a1a0a'}`,
                   } : {
                     background: '#080808',
                     border: '1px solid #1a1a1a',
@@ -560,11 +560,11 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                     style={slotStyle}>
                     <div className="flex-1 min-w-0 flex items-center gap-2">
                       <div>
-                        <span className={`text-lg font-bold tabular-nums ${slot.booked ? (isDark ? 'text-gray-600' : 'text-gray-400') : (isDark ? 'text-red-50' : 'text-gray-800')}`}>
+                        <span className={`text-lg font-bold tabular-nums ${slot.booked ? (isDark ? 'text-gray-600' : 'text-gray-400') : (isDark ? 'text-orange-100' : 'text-gray-800')}`}>
                           {slot.start}
                         </span>
-                        <span className={`mx-1.5 text-sm ${isDark ? 'text-red-300/40' : 'text-pink-300'}`}>{t.to}</span>
-                        <span className={`text-sm font-medium tabular-nums ${isDark ? 'text-red-300/50' : 'text-pink-400/70'}`}>
+                        <span className={`mx-1.5 text-sm ${isDark ? 'text-orange-300/40' : 'text-pink-300'}`}>{t.to}</span>
+                        <span className={`text-sm font-medium tabular-nums ${isDark ? 'text-orange-300/50' : 'text-pink-400/70'}`}>
                           {slot.end}
                         </span>
                       </div>
@@ -593,11 +593,11 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
         {(cs.lineOfficialUrl || cs.clinicPhone) && (
           <div className="rounded-2xl overflow-hidden shadow-lg border-2"
             style={isDark
-              ? { borderColor: '#5a1010', background: '#0a0a0a', boxShadow: '0 0 30px rgba(220,38,38,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
+              ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' }
               : { borderColor: 'rgba(236,72,153,0.18)', background: 'linear-gradient(135deg, #fff5f7 0%, #ffffff 50%, #fdf2f8 100%)', boxShadow: '0 4px 16px rgba(236,72,153,0.06)' }
             }>
             <div className="px-5 py-5 text-center">
-              <p className={`text-sm font-medium mb-4 ${isDark ? 'text-red-300/60' : 'text-pink-400/60'}`}>{t.contact}</p>
+              <p className={`text-sm font-medium mb-4 ${isDark ? 'text-orange-300/60' : 'text-pink-400/60'}`}>{t.contact}</p>
               <div className="flex justify-center gap-3">
                 {cs.lineOfficialUrl && (
                   <a href={cs.lineOfficialUrl} target="_blank" rel="noopener noreferrer"
@@ -619,7 +619,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
         )}
 
         {/* ── Footer ── */}
-        <p className={`text-[11px] text-center opacity-60 pb-4 ${isDark ? 'text-red-300/30' : 'text-pink-400/50'}`}>
+        <p className={`text-[11px] text-center opacity-60 pb-4 ${isDark ? 'text-orange-300/30' : 'text-pink-400/50'}`}>
           {t.dataAt} {data.createdAt?.toDate ? data.createdAt.toDate().toLocaleString(lang === 'th' ? 'th-TH' : 'en-US', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' }) : '—'}
         </p>
       </div>
