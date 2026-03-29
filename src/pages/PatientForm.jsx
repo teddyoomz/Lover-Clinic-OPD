@@ -413,7 +413,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     {language === 'en' ? 'Add LINE Official' : 'เพิ่มเพื่อน LINE Official'}
                   </p>
                   <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#ea580c' }}>
-                    {language === 'en' ? 'Important Step' : 'ขั้นตอนสำคัญ'}
+                    {language === 'en' ? '🔔 Important Step' : '🔔 ขั้นตอนสำคัญ'}
                   </p>
                 </div>
               </div>
