@@ -167,6 +167,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptData, setApptData] = useState(null);
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
+  const [apptSyncSuccess, setApptSyncSuccess] = useState(false);
   const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
   const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
 
@@ -187,6 +188,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedBlockingDay, setSchedBlockingDay] = useState(null); // date string being edited
   const [schedList, setSchedList] = useState([]); // previously generated schedule links
   const [schedPrefsLoaded, setSchedPrefsLoaded] = useState(false);
+  const dayDragRef = useRef({ active: false, action: null, touched: new Set() }); // drag for day toggle
+  const slotDragRef = useRef({ active: false, action: null }); // drag for slot toggle
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -315,18 +318,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     apptAutoSyncedRef.current = true;
     (async () => {
       setApptSyncing(true);
+      setApptSyncSuccess(false);
       try {
         const now = new Date();
-        const months = [];
-        for (let i = -1; i <= 1; i++) {
-          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-          months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-        }
-        for (const mo of months) {
-          await broker.syncAppointments(mo).catch(() => {});
-          apptSyncedMonthsRef.current.add(mo);
-        }
-        showToast('Sync นัดหมาย สำเร็จ', 2000);
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        await broker.syncAppointments(currentMonth);
+        apptSyncedMonthsRef.current.add(currentMonth);
+        setApptSyncSuccess(true);
       } catch (e) {
         showToast(`Auto-sync error: ${e.message}`, 5000);
       }
@@ -404,12 +402,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const handleSyncAppointments = async (month) => {
     setApptSyncing(true);
+    setApptSyncSuccess(false);
     try {
       const result = await broker.syncAppointments(month || apptMonth);
       if (!result.success) showToast(`Sync ล้มเหลว: ${result.error}`, 5000);
       else {
-        showToast(`Sync สำเร็จ: ${result.totalCount} นัดหมาย`, 3000);
-        updateActiveSchedules(); // update live schedule links
+        setApptSyncSuccess(true);
+        updateActiveSchedules();
       }
     } catch (e) {
       showToast(`Sync error: ${e.message}`, 5000);
@@ -431,7 +430,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch (e) { showToast(`Error: ${e.message}`, 3000); }
   };
 
-  // ── Save schedule prefs to Firestore ──
+  // ── Save schedule prefs to Firestore + update active schedule links ──
   const saveSchedulePrefs = (doctorDays, closedDays, manualBlocked) => {
     if (!db || !appId) return;
     setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
@@ -439,26 +438,70 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       closedDays: [...closedDays],
       manualBlockedSlots: manualBlocked,
       updatedAt: serverTimestamp(),
+    }).then(() => {
+      // Update active schedule docs with new day settings
+      schedList.forEach(s => {
+        if (s.enabled === false) return;
+        const age = Date.now() - (s.createdAt?.toMillis?.() || 0);
+        if (age > 24 * 60 * 60 * 1000) return;
+        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', s.token), {
+          doctorDays: [...doctorDays],
+          closedDays: [...closedDays],
+          manualBlockedSlots: manualBlocked,
+        }).catch(() => {});
+      });
     }).catch(() => {});
   };
 
-  // ── Toggle day: normal → doctor → closed → normal ──
-  const toggleDay = (dateStr) => {
+  // ── Toggle day: normal → doctor → closed → normal (or forced action for drag) ──
+  const toggleDay = (dateStr, forceAction) => {
     let newDoc, newClosed;
-    if (schedDoctorDays.has(dateStr)) {
+    const action = forceAction || (schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor');
+    if (action === 'doctor') {
+      newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
+      newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
+    } else if (action === 'closed') {
       newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
       newClosed = new Set(schedClosedDays); newClosed.add(dateStr);
-    } else if (schedClosedDays.has(dateStr)) {
-      newDoc = schedDoctorDays;
-      newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
     } else {
-      newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
-      newClosed = schedClosedDays;
+      newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
+      newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
     }
     setSchedDoctorDays(newDoc);
     setSchedClosedDays(newClosed);
     saveSchedulePrefs(newDoc, newClosed, schedManualBlocked);
+    return action;
   };
+
+  // ── Drag handlers for day toggle ──
+  const handleDayPointerDown = (dateStr, e) => {
+    e.preventDefault();
+    // Determine action based on current state: cycle forward
+    const action = schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor';
+    dayDragRef.current = { active: true, action, touched: new Set([dateStr]) };
+    toggleDay(dateStr, action);
+  };
+  const handleDayPointerEnter = (dateStr) => {
+    if (!dayDragRef.current.active || dayDragRef.current.touched.has(dateStr)) return;
+    dayDragRef.current.touched.add(dateStr);
+    toggleDay(dateStr, dayDragRef.current.action);
+  };
+  const handleDayPointerUp = () => { dayDragRef.current.active = false; };
+
+  // ── Drag handlers for slot toggle ──
+  const handleSlotPointerDown = (date, start, end, e) => {
+    e.preventDefault();
+    const isBlocked = schedManualBlocked.some(b => b.date === date && b.startTime === start && b.endTime === end);
+    slotDragRef.current = { active: true, action: isBlocked ? 'unblock' : 'block' };
+    toggleBlockedSlot(date, start, end);
+  };
+  const handleSlotPointerEnter = (date, start, end) => {
+    if (!slotDragRef.current.active) return;
+    const isBlocked = schedManualBlocked.some(b => b.date === date && b.startTime === start && b.endTime === end);
+    if (slotDragRef.current.action === 'block' && !isBlocked) toggleBlockedSlot(date, start, end);
+    if (slotDragRef.current.action === 'unblock' && isBlocked) toggleBlockedSlot(date, start, end);
+  };
+  const handleSlotPointerUp = () => { slotDragRef.current.active = false; };
 
   // ── Toggle manual blocked slot ──
   const toggleBlockedSlot = (date, start, end) => {
@@ -1778,35 +1821,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="flex items-stretch gap-1.5 w-full md:hidden z-0">
-          <button onClick={() => setAdminMode('dashboard')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
-            style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`} : {}}>
-            <Activity size={13} /> หน้าคิว
-            {unreadCount > 0 && <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-          </button>
-          <button onClick={() => setAdminMode('deposit')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-            <Banknote size={13} /> จอง
-            {depositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1 bg-emerald-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{depositSessions.filter(s => s.isUnread).length}</span>}
-          </button>
-          <button onClick={() => setAdminMode('history')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'history' ? 'bg-amber-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-            <History size={13} /> ประวัติ
-          </button>
-          <button onClick={() => setAdminMode('appointment')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'appointment' ? 'bg-sky-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-            <CalendarDays size={13} /> นัดหมาย
-          </button>
-          <button onClick={() => setAdminMode('formBuilder')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'formBuilder' ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-            <LayoutTemplate size={13} /> จัดการ
-          </button>
-          <button onClick={() => setAdminMode('clinicSettings')}
-            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
-            style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`} : {}}>
-            <Palette size={13} /> ตั้งค่า
-          </button>
+        <div className="flex items-stretch gap-1 w-full md:hidden z-0 overflow-x-auto no-scrollbar">
+          {[
+            { mode: 'dashboard', icon: <Activity size={16} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'deposit', icon: <Banknote size={16} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
+            { mode: 'history', icon: <History size={16} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
+            { mode: 'appointment', icon: <CalendarDays size={16} />, label: 'นัดหมาย', activeClass: 'bg-sky-700 text-white' },
+            { mode: 'formBuilder', icon: <LayoutTemplate size={16} />, label: 'จัดการ', activeClass: 'bg-blue-600 text-white' },
+            { mode: 'clinicSettings', icon: <Palette size={16} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+          ].map(tab => {
+            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : adminMode === tab.mode;
+            return (
+              <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
+                className={`shrink-0 w-14 py-2 rounded-xl font-bold text-[10px] flex flex-col items-center justify-center gap-1 transition-all relative snap-start ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
+                style={isActive && tab.activeStyle ? tab.activeStyle : {}}>
+                {tab.icon}
+                {tab.label}
+                {tab.badge > 0 && <span className={`absolute -top-1 -right-0.5 ${tab.badgeColor} text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none`}>{tab.badge > 99 ? '99+' : tab.badge}</span>}
+              </button>
+            );
+          })}
         </div>
 
         {/* ── Desktop: full button row ── */}
@@ -2458,25 +2492,33 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {/* Calendar card */}
             <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
               {/* Header */}
-              <div className="p-4 sm:p-6 border-b border-[var(--bd)] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CalendarDays size={20} className="text-sky-400" />
-                  <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-sky-400">นัดหมาย</h2>
+              <div className="p-3 sm:p-5 border-b border-[var(--bd)] space-y-2.5">
+                {/* Row 1: title + month nav */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays size={18} className="text-sky-400" />
+                    <h2 className="text-sm sm:text-lg font-bold tracking-widest uppercase text-sky-400">นัดหมาย</h2>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={prevMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-xs sm:text-sm font-bold text-white min-w-[110px] sm:min-w-[140px] text-center">{thaiMonths[m - 1]} {y + 543}</span>
+                    <button onClick={nextMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
+                {/* Row 2: sync + create link */}
                 <div className="flex items-center gap-2">
-                  <button onClick={prevMonth} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm font-bold text-white min-w-[140px] text-center">{thaiMonths[m - 1]} {y + 543}</span>
-                  <button onClick={nextMonth} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
-                    <ChevronRight size={16} />
-                  </button>
-                  <button onClick={() => handleSyncAppointments(apptMonth)} disabled={apptSyncing} className={`ml-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${apptSyncing ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500 opacity-70' : 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 hover:text-sky-300'}`}>
+                  <button onClick={() => handleSyncAppointments(apptMonth)} disabled={apptSyncing}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500 opacity-70' : apptSyncSuccess ? 'bg-green-950/40 border border-green-900/50 text-green-400' : 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 hover:text-sky-300'}`}>
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
-                    {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
+                    {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
+                    {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
                   <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setShowScheduleModal(true); }}
-                    className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
+                    className="flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
@@ -2520,7 +2562,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                 {/* Sync info */}
                 {apptData?.syncedAt && (
-                  <p className="text-[10px] text-gray-600 mt-3 text-right">sync: {new Date(apptData.syncedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}</p>
+                  <p className="text-[10px] text-gray-600 mt-3 text-right">sync: {new Date(apptData.syncedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                 )}
                 {!apptData && !apptSyncing && (
                   <div className="text-center py-8 text-gray-500">
@@ -2609,53 +2651,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             )}
 
-            {/* ── Schedule links list ── */}
-            {schedList.length > 0 && (
-              <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
-                <div className="p-4 sm:p-5 border-b border-[var(--bd)] flex items-center gap-2">
-                  <Link size={16} className="text-green-400" />
-                  <h3 className="text-sm font-bold text-green-400 uppercase tracking-widest">ลิงก์ตาราง</h3>
-                  <span className="text-xs text-gray-500 font-bold ml-1">({schedList.length})</span>
-                </div>
-                <div className="p-3 sm:p-4 space-y-2">
-                  {schedList.map(s => {
-                    const url = `${window.location.origin}/?schedule=${s.token}`;
-                    const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-                    const isEnabled = s.enabled !== false;
-                    return (
-                      <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
-                          <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
-                        </div>
-                        <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
-                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
-                          <ClipboardCheck size={12} />
-                        </button>
-                        <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
-                          className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
-                          {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                        </button>
-                        <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
-                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* ── Schedule Day Preferences ── */}
             {(() => {
               // Build months for preference calendar: current apptMonth ± based on navigation
-              const prefMonths = [];
-              const [py, pm] = apptMonth.split('-').map(Number);
-              for (let i = 0; i < 2; i++) {
-                const pd = new Date(py, pm - 1 + i, 1);
-                prefMonths.push(`${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`);
-              }
+              const prefMonths = [apptMonth];
               const blockedCount = schedManualBlocked.length;
               const doctorCount = schedDoctorDays.size;
               const closedCount = schedClosedDays.size;
@@ -2712,8 +2711,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             <div className="grid grid-cols-7 gap-0.5 mb-0.5">
                               {thaiDays.map((d, i) => <div key={i} className={`text-center text-[9px] font-bold py-0.5 ${i >= 5 ? 'text-red-400/50' : 'text-gray-500'}`}>{d}</div>)}
                             </div>
-                            {/* Day cells */}
-                            <div className="grid grid-cols-7 gap-0.5">
+                            {/* Day cells — drag to toggle */}
+                            <div className="grid grid-cols-7 gap-0.5 select-none" style={{touchAction: 'none'}}
+                              onPointerUp={handleDayPointerUp} onPointerLeave={handleDayPointerUp} onPointerCancel={handleDayPointerUp}>
                               {Array.from({ length: calS }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
                               {Array.from({ length: dim }).map((_, i) => {
                                 const day = i + 1;
@@ -2723,8 +2723,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 const hasBlocked = schedManualBlocked.some(b => b.date === ds);
                                 const dow = (calS + i) % 7;
                                 return (
-                                  <button key={day} onClick={() => toggleDay(ds)}
-                                    className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-all relative
+                                  <button key={day}
+                                    onPointerDown={(e) => handleDayPointerDown(ds, e)}
+                                    onPointerEnter={() => handleDayPointerEnter(ds)}
+                                    className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-colors relative
                                       ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-800/40'}
                                       ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-[var(--tx-body)]' : ''}`}>
                                     {day}
@@ -2783,12 +2785,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                       <Clock size={10} className="text-orange-400" />
                                       <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กดเพื่อปิด/เปิดช่วงเวลา</span>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-1">
+                                    <div className="grid grid-cols-4 gap-1 select-none" style={{touchAction: 'none'}}
+                                      onPointerUp={handleSlotPointerUp} onPointerLeave={handleSlotPointerUp} onPointerCancel={handleSlotPointerUp}>
                                       {slots15.map(s => {
                                         const blocked = schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
                                         return (
-                                          <button key={s.start} onClick={() => toggleBlockedSlot(schedBlockingDay, s.start, s.end)}
-                                            className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400 shadow-[0_0_6px_rgba(220,38,38,0.15)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
+                                          <button key={s.start}
+                                            onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
+                                            onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
+                                            className={`py-1.5 rounded text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400 shadow-[0_0_6px_rgba(220,38,38,0.15)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
                                             {s.start}
                                           </button>
                                         );
@@ -2806,6 +2811,44 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               );
             })()}
+
+            {/* ── Schedule links list ── */}
+            {schedList.length > 0 && (
+              <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-[var(--bd)] flex items-center gap-2">
+                  <Link size={16} className="text-green-400" />
+                  <h3 className="text-sm font-bold text-green-400 uppercase tracking-widest">ลิงก์ตาราง</h3>
+                  <span className="text-xs text-gray-500 font-bold ml-1">({schedList.length})</span>
+                </div>
+                <div className="p-3 sm:p-4 space-y-2">
+                  {schedList.map(s => {
+                    const url = `${window.location.origin}/?schedule=${s.token}`;
+                    const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+                    const isEnabled = s.enabled !== false;
+                    return (
+                      <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
+                          <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
+                        </div>
+                        <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
+                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
+                          <ClipboardCheck size={12} />
+                        </button>
+                        <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
+                          className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
+                          {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                        </button>
+                        <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
+                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })() : (

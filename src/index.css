@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* =====================================================
    THEME SYSTEM — CSS Custom Properties
    Default: dark  |  Supports: dark, light, auto
