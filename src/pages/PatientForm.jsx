@@ -371,14 +371,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   if (isSuccess && !isEditing) {
     const lineUrl = cs.lineOfficialUrl?.trim();
     return (
-      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 40%, #001a0a 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 40%, #f0fdf4 100%)' }}>
+      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 30%, #0a0a0a 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 40%, #f0fdf4 100%)' }}>
         <LanguageToggle />
-        <div className="rounded-3xl relative overflow-hidden" style={{ background: isDark ? 'linear-gradient(135deg, #0a1a0a, #0a0a0a, #001a0a)' : 'linear-gradient(135deg, #f0fdf4, #ffffff, #ecfdf5)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(34,197,94,0.06)' : '0 8px 32px rgba(34,197,94,0.08)' }}>
-          <div className="absolute top-0 left-0 w-full h-1.5" style={{ background: 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)', boxShadow: '0 0 15px rgba(34,197,94,0.6)' }}></div>
+        <div className="rounded-3xl relative overflow-hidden" style={{ background: isDark ? 'rgba(10,10,10,0.9)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.15)' : 'rgba(34,197,94,0.2)'}`, boxShadow: isDark ? '0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(34,197,94,0.04)' : '0 8px 32px rgba(34,197,94,0.1)' }}>
+          <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)' }}></div>
 
           {/* Success header */}
-          <div className="px-8 pt-10 pb-6">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.15)'}`, color: isDark ? '#34d399' : '#059669', boxShadow: '0 0 20px rgba(34,197,94,0.15)' }}>
+          <div className="px-8 pt-12 pb-8">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.08)', border: `2px solid ${isDark ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.25)'}`, color: isDark ? '#34d399' : '#059669', boxShadow: isDark ? '0 0 30px rgba(34,197,94,0.1)' : '0 0 20px rgba(34,197,94,0.12)' }}>
               <CheckCircle2 size={36} />
             </div>
             <h2 className="text-xl font-black uppercase tracking-widest mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
@@ -393,32 +393,28 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
           {/* LINE CTA — แสดงเฉพาะถ้าตั้งค่า lineOfficialUrl ไว้ */}
           {lineUrl && (
-            <div className="mx-4 mb-4 p-4 rounded-2xl border border-[#06C755]/25 bg-[#06C755]/5">
-              {/* Header badge */}
+            <div className="mx-5 mb-5 p-5 rounded-2xl" style={{ background: isDark ? 'rgba(6,199,85,0.04)' : 'rgba(6,199,85,0.05)', border: `1px solid ${isDark ? 'rgba(6,199,85,0.15)' : 'rgba(6,199,85,0.2)'}` }}>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#06C755] border border-[#06C755]/40 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full" style={{ color: '#06C755', border: '1px solid rgba(6,199,85,0.3)', background: isDark ? 'rgba(6,199,85,0.06)' : 'rgba(6,199,85,0.08)' }}>
                   {language === 'en' ? '⚠ Required Step' : '⚠ ขั้นตอนสำคัญ'}
                 </span>
               </div>
-              {/* Title */}
-              <p className="text-sm font-black text-white text-left mb-1.5">
+              <p className="text-sm font-black text-left mb-1.5" style={{ color: isDark ? '#e5e7eb' : '#0f172a' }}>
                 {language === 'en'
                   ? 'Add our LINE Official Account'
                   : 'เพิ่มเพื่อน LINE Official Account ของคลินิก'}
               </p>
-              {/* Description */}
-              <p className="text-xs text-gray-400 text-left leading-relaxed mb-4">
+              <p className="text-xs text-left leading-relaxed mb-4" style={{ color: isDark ? '#6b7280' : '#64748b' }}>
                 {language === 'en'
                   ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
                   : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
               </p>
-              {/* LINE Button */}
               <a
                 href={lineUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-white font-black text-sm tracking-wider transition-all active:scale-95"
-                style={{backgroundColor: '#06C755', boxShadow: '0 4px 20px rgba(6,199,85,0.35)'}}
+                style={{ backgroundColor: '#06C755', boxShadow: '0 4px 15px rgba(6,199,85,0.3)' }}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                   <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
@@ -429,17 +425,17 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           )}
 
           {/* Edit + simulation buttons */}
-          <div className="px-4 pb-8">
+          <div className="px-5 pb-8 flex flex-col gap-3">
             <button
               onClick={() => { setIsSuccess(false); setIsEditing(true); }}
-              className="w-full py-4 rounded-xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 mb-5 transition-all"
-              style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.3)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#e5e7eb' : '#334155' }}
+              className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
+              style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, color: isDark ? '#9ca3af' : '#475569' }}
             >
-              <Edit3 size={16} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
+              <Edit3 size={15} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
             </button>
             {isSimulation && (
-              <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#6b7280' : '#94a3b8' }}>
-                <ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
+              <button onClick={onBack} className="py-3 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#4b5563' : '#94a3b8' }}>
+                <ArrowLeft size={15} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
               </button>
             )}
           </div>
