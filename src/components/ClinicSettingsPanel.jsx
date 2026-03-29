@@ -6,6 +6,20 @@ import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
 import { clearProClinicSession, testLogin } from '../lib/brokerClient.js';
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const hh = String(i).padStart(2, '0');
+  return { value: `${hh}:00`, label: `${hh}:00` };
+});
+
+function TimeSelect24({ value, onChange, className, focusColor }) {
+  return (
+    <select value={value || '10:00'} onChange={e => onChange(e.target.value)}
+      className={`bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none transition-all text-sm font-mono [color-scheme:dark] appearance-none cursor-pointer ${focusColor || 'focus:border-[var(--accent)]'} ${className || ''}`}>
+      {HOUR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
 export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack, theme, setTheme }) {
   const [settings, setSettings] = useState({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
   const initialCooldownRef = useRef(clinicSettings?.patientSyncCooldownMins ?? DEFAULT_CLINIC_SETTINGS.patientSyncCooldownMins);
@@ -361,16 +375,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
-                  <input type="time" step="3600" value={settings.clinicOpenTime || '10:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, clinicOpenTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.clinicOpenTime} onChange={v => setSettings(prev => ({ ...prev, clinicOpenTime: v }))} />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">ปิด</span>
-                  <input type="time" step="3600" value={settings.clinicCloseTime || '19:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, clinicCloseTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.clinicCloseTime} onChange={v => setSettings(prev => ({ ...prev, clinicCloseTime: v }))} />
                 </div>
               </div>
             </div>
@@ -379,16 +389,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
-                  <input type="time" step="3600" value={settings.clinicOpenTimeWeekend || '10:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, clinicOpenTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.clinicOpenTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, clinicOpenTimeWeekend: v }))} />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">ปิด</span>
-                  <input type="time" step="3600" value={settings.clinicCloseTimeWeekend || '17:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.clinicCloseTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: v }))} />
                 </div>
               </div>
             </div>
@@ -409,16 +415,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เริ่ม</span>
-                  <input type="time" step="3600" value={settings.doctorStartTime || '10:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, doctorStartTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.doctorStartTime} onChange={v => setSettings(prev => ({ ...prev, doctorStartTime: v }))} focusColor="focus:border-sky-500" />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">สิ้นสุด</span>
-                  <input type="time" step="3600" value={settings.doctorEndTime || '19:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, doctorEndTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.doctorEndTime} onChange={v => setSettings(prev => ({ ...prev, doctorEndTime: v }))} focusColor="focus:border-sky-500" />
                 </div>
               </div>
             </div>
@@ -427,16 +429,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เริ่ม</span>
-                  <input type="time" step="3600" value={settings.doctorStartTimeWeekend || '10:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, doctorStartTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.doctorStartTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, doctorStartTimeWeekend: v }))} focusColor="focus:border-sky-500" />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">สิ้นสุด</span>
-                  <input type="time" step="3600" value={settings.doctorEndTimeWeekend || '17:00'}
-                    onChange={e => setSettings(prev => ({ ...prev, doctorEndTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                  <TimeSelect24 value={settings.doctorEndTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, doctorEndTimeWeekend: v }))} focusColor="focus:border-sky-500" />
                 </div>
               </div>
             </div>
