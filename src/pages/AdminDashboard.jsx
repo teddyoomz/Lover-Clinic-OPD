@@ -2735,16 +2735,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                     return (
                       <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
-                        className={`rounded-lg flex flex-col items-center justify-center py-1.5 sm:py-2 gap-px sm:gap-0.5 transition-all text-xs relative cursor-pointer min-h-[56px] sm:min-h-[72px]
-                          ${cellBg} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
-                        <span className={`font-bold text-[13px] sm:text-base leading-none ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
+                        className={`rounded-lg flex flex-col items-center justify-center py-1 sm:py-1.5 gap-0 transition-all text-xs relative cursor-pointer min-h-[56px] sm:min-h-[76px]
+                          ${cellBg} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
+                        {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
+                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
                         {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
                         {!isClosed && isDoc && <Stethoscope size={8} className={`sm:!w-[10px] sm:!h-[10px] ${isSelected ? 'text-sky-200' : 'text-sky-400/70'}`} />}
-                        {!isClosed && count > 0 && (
-                          <span className={`text-[7px] sm:text-[10px] font-bold leading-none ${isSelected ? 'text-sky-100' : 'text-sky-300'}`}>มีนัด {count}</span>
-                        )}
-                        {!isClosed && avail != null && (
-                          <span className={`text-[7px] sm:text-[10px] font-bold leading-none ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>
+                        {!isClosed && (count > 0 || avail != null) && (
+                          <div className="flex flex-col items-center mt-px">
+                            {count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : 'text-sky-300/80'}`}>นัด {count}</span>}
+                            {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>}
+                          </div>
                         )}
                       </button>
                     );

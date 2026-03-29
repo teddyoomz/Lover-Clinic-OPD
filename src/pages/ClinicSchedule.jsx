@@ -244,14 +244,15 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 return (
                   <button key={day} onClick={() => !isDayDisabled && setSelectedDate(isSelected ? null : dateStr)}
                     disabled={isDayDisabled}
-                    className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative ${bgClass} ${isDayDisabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
-                    <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0 transition-all text-xs relative ${bgClass} ${isDayDisabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
+                    {isToday && <span className={`text-[6px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
+                    <span className={`font-black text-sm leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
                     {!isClosed && isDoctor && noDoctorRequired && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
                     {!isDayDisabled && !isClosed && avail > 0 && (
-                      <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>ว่าง {avail}</span>
+                      <span className={`text-[8px] font-bold leading-tight ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>ว่าง {avail}</span>
                     )}
                     {!isDayDisabled && !isClosed && avail === 0 && (
-                      <span className={`text-[8px] font-bold ${isSelected ? 'text-sky-100' : 'text-orange-400'}`}>เต็ม</span>
+                      <span className={`text-[8px] font-bold leading-tight ${isSelected ? 'text-sky-100' : 'text-orange-400'}`}>เต็ม</span>
                     )}
                   </button>
                 );
