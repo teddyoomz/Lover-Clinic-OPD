@@ -2716,6 +2716,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           availByDate[ds2] = totalSlots - bookedSlots;
         }
 
+        // Calculate doctor-hour available slots per day
+        const docAvailByDate = {};
+        const cs2 = clinicSettings;
+        for (let d3 = 1; d3 <= daysInMonth; d3++) {
+          const ds3 = `${apptMonth}-${String(d3).padStart(2, '0')}`;
+          if (!schedDoctorDays.has(ds3)) continue;
+          const dt3 = new Date(y, m - 1, d3);
+          const dow3 = dt3.getDay();
+          const isWknd3 = dow3 === 0 || dow3 === 6;
+          const docOpen = isWknd3 ? (cs2.doctorStartTimeWeekend || cs2.doctorStartTime || '10:00') : (cs2.doctorStartTime || '10:00');
+          const docClose = isWknd3 ? (cs2.doctorEndTimeWeekend || cs2.doctorEndTime || '17:00') : (cs2.doctorEndTime || '19:00');
+          const [dOH, dOM] = docOpen.split(':').map(Number);
+          const [dCH, dCM] = docClose.split(':').map(Number);
+          const dStartMin = dOH * 60 + dOM;
+          const dEndMin = dCH * 60 + dCM;
+          let dTotal = 0;
+          let dBooked = 0;
+          const dayAppts3 = appointments.filter(a => a.date === ds3);
+          for (let sm = dStartMin; sm + dur <= dEndMin; sm += dur) {
+            dTotal++;
+            const slotEnd = sm + dur;
+            const hasAppt = dayAppts3.some(a => {
+              const aS = parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]);
+              const aE = parseInt(a.endTime.split(':')[0]) * 60 + parseInt(a.endTime.split(':')[1]);
+              return aS < slotEnd && aE > sm;
+            });
+            if (hasAppt) dBooked++;
+          }
+          docAvailByDate[ds3] = dTotal - dBooked;
+        }
+
         // Selected day's appointments
         const selectedAppts = apptSelectedDate
           ? appointments.filter(a => a.date === apptSelectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -2779,6 +2810,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <option key={v} value={v}>{v < 60 ? `${v} นาที` : v === 60 ? '1 ชม.' : `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')} ชม.`}</option>
                     ))}
                   </select>
+                  <span className="text-[9px] text-gray-600 shrink-0">|</span>
+                  <Stethoscope size={10} className="text-sky-400 shrink-0" />
+                  <span className="text-[10px] text-sky-400/70 shrink-0">หมอ</span>
                 </div>
               </div>
 
@@ -2789,7 +2823,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
                   <span className="flex items-center gap-1"><span className={`${apptCountColor} font-bold`}>มีนัด</span></span>
-                  <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span></span>
+                  <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span> / <span className="text-sky-400 font-bold">หมอ</span></span>
                 </div>
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
@@ -2807,6 +2841,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const dateStr = `${apptMonth}-${String(day).padStart(2, '0')}`;
                     const count = countByDate[dateStr] || 0;
                     const avail = availByDate[dateStr] ?? null;
+                    const docAvail = docAvailByDate[dateStr] ?? null;
                     const isSelected = apptSelectedDate === dateStr;
                     const isToday = dateStr === todayStr;
                     const dow = (calStart + i) % 7;
@@ -2827,11 +2862,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
                         <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : dayNumColor}`}>{day}</span>
                         {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
-                        {!isClosed && isDoc && <Stethoscope size={8} className={`sm:!w-[10px] sm:!h-[10px] ${isSelected ? 'text-sky-200' : 'text-sky-400/70'}`} />}
-                        {!isClosed && (count > 0 || avail != null) && (
-                          <div className="flex flex-col items-center mt-px">
-                            {count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : apptCountColor}`}>นัด {count}</span>}
-                            {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? availCountColor : warnCountColor}`}>ว่าง {avail}</span>}
+                        {!isClosed && count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : apptCountColor}`}>นัด {count}</span>}
+                        {!isClosed && (avail != null || docAvail != null) && (
+                          <div className={`flex items-center gap-px mt-px ${docAvail != null ? 'justify-center' : ''}`}>
+                            {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? availCountColor : warnCountColor}`}>{avail}</span>}
+                            {avail != null && docAvail != null && <span className={`text-[6px] sm:text-[7px] ${isSelected ? 'text-white/40' : 'text-gray-600'}`}>/</span>}
+                            {docAvail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-200' : docAvail > 0 ? 'text-sky-400' : warnCountColor}`}>{docAvail}</span>}
                           </div>
                         )}
                       </button>
