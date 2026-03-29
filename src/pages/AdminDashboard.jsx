@@ -186,6 +186,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedSlotDuration, setSchedSlotDuration] = useState(60);
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
   const [schedShowFrom, setSchedShowFrom] = useState('today'); // 'today' | 'tomorrow'
+  const [schedEndDay, setSchedEndDay] = useState(''); // 'YYYY-MM-DD' or '' for last day of month
   const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
   const [schedBlockingDay, setSchedBlockingDay] = useState(null); // date string being edited
   const [schedList, setSchedList] = useState([]); // previously generated schedule links
@@ -749,6 +750,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         slotDurationMins: schedSlotDuration,
         noDoctorRequired: schedNoDoctorRequired,
         showFrom: schedShowFrom,
+        endDate: schedEndDay || '',
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
@@ -2747,7 +2749,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedShowFrom('today'); setShowScheduleModal(true); }}
+                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
                     className="flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -2959,7 +2961,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-[var(--tx-muted)]">
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block" /> หมอเข้า</span>
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> ปิดคิว</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--bg-hover)] border border-[var(--bd)] inline-block" /> ปกติ</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-700 inline-block" /> ปกติ</span>
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block" /> ปิดช่วงเวลา</span>
                       {!schedCalendarEditing && <span className="text-[9px] text-[var(--tx-muted)] ml-auto opacity-50">กดแก้ไขเพื่อเปลี่ยน</span>}
                     </div>
@@ -3023,8 +3025,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     onPointerDown={(e) => handleDayPointerDown(ds, e)}
                                     onPointerEnter={() => handleDayPointerEnter(ds)}
                                     className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-colors relative
-                                      ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-800/40'}
-                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-[var(--tx-body)]' : ''}`}>
+                                      ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40'}
+                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-emerald-300' : ''}`}>
                                     {day}
                                     {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
                                     {isCl && <span className="text-[7px]">✕</span>}
@@ -4826,6 +4828,33 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       ))}
                     </div>
                   </div>
+
+                  {/* End date selector */}
+                  {(() => {
+                    const [sy2, sm2] = schedStartMonth.split('-').map(Number);
+                    const lastMo = new Date(sy2, sm2 - 1 + schedAdvanceMonths, 0);
+                    const lastMoStr = `${lastMo.getFullYear()}-${String(lastMo.getMonth() + 1).padStart(2, '0')}`;
+                    const dimLast = lastMo.getDate();
+                    const todayD = new Date();
+                    const todayFull = `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}-${String(todayD.getDate()).padStart(2, '0')}`;
+                    const isCurrentMonth = lastMoStr === `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}`;
+                    const minDay = isCurrentMonth ? todayD.getDate() : 1;
+                    const dayOptions = [];
+                    for (let d = minDay; d <= dimLast; d++) dayOptions.push(d);
+                    const defaultEnd = `${lastMoStr}-${String(dimLast).padStart(2, '0')}`;
+                    const currentEnd = schedEndDay || defaultEnd;
+                    const currentEndDay = parseInt((currentEnd).split('-')[2]) || dimLast;
+                    const validDay = currentEndDay < minDay ? minDay : currentEndDay > dimLast ? dimLast : currentEndDay;
+                    return (
+                      <div>
+                        <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
+                        <select value={validDay} onChange={e => { const d = Number(e.target.value); setSchedEndDay(`${lastMoStr}-${String(d).padStart(2, '0')}`); }}
+                          className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                          {dayOptions.map(d => <option key={d} value={d}>{d} {thaiMo[lastMo.getMonth()]} {lastMo.getFullYear() + 543}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })()}
 
                   {/* Gen button */}
                   <button onClick={handleGenScheduleLink} disabled={schedGenLoading}

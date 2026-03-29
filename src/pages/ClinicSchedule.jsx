@@ -185,6 +185,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const showFromDate = showFrom === 'tomorrow'
     ? new Date(new Date().getTime() + 86400000).toISOString().substring(0, 10)
     : todayStr;
+  const endDate = data.endDate || ''; // 'YYYY-MM-DD' or '' for no limit
 
   // For today: compute current time in minutes for filtering past slots
   const nowMinutes = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
@@ -193,6 +194,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${currentMonth}-${String(d).padStart(2, '0')}`;
     if (closedDaysSet.has(dateStr)) { availByDate[dateStr] = -1; continue; }
+    if (dateStr < showFromDate || (endDate && dateStr > endDate)) { availByDate[dateStr] = 0; continue; }
     const slots = getSlotsForDate(dateStr);
     const free = slots.filter(s => {
       if (isSlotBooked(dateStr, s.start, s.end, bookedSlots)) return false;
@@ -322,7 +324,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               const isToday = dateStr === todayStr;
               const dow = (calStart + i) % 7;
               const isWeekend = dow >= 5;
-              const isPastCutoff = dateStr < showFromDate;
+              const isPastCutoff = dateStr < showFromDate || (endDate && dateStr > endDate);
               const isDayDisabled = isPastCutoff || isClosed || (!noDoctorRequired && !isDoctor);
 
               let cellBg = 'bg-[var(--bg-card)]';
