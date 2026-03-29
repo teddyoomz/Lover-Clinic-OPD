@@ -1959,18 +1959,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       )}
 
-      <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 sm:mb-8 bg-[var(--bg-surface)] p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[var(--shadow-panel)] border border-[var(--bd)] gap-3 relative overflow-visible z-20">
+      <header className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-6 sm:mb-8 bg-[var(--bg-surface)] p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[var(--shadow-panel)] border border-[var(--bd)] gap-3 relative overflow-visible z-20">
         <div className="absolute top-[-50px] left-[-50px] w-40 h-40 rounded-full blur-[50px] pointer-events-none" style={{backgroundColor: `rgba(${acRgb},0.15)`}}></div>
 
         {/* ── Row 1: Logo + compact action icons (mobile) ── */}
-        <div className="relative flex items-center justify-between w-full md:w-auto gap-1.5 sm:gap-3 z-20">
+        <div className="relative flex items-center justify-between w-full lg:w-auto gap-1.5 sm:gap-3 z-20">
           <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
-            <ClinicLogo className="h-7 sm:h-10 max-w-[80px] sm:max-w-[160px] md:max-w-[200px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
+            <ClinicLogo className="h-7 sm:h-10 max-w-[80px] sm:max-w-[160px] lg:max-w-[200px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
             <div className="h-6 sm:h-8 w-px bg-[var(--bd)] shrink-0 hidden sm:block"></div>
             <p className="text-[9px] sm:text-xs text-[var(--tx-muted)] tracking-wider truncate hidden sm:block">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
           </div>
           {/* Mobile-only: icon-only actions */}
-          <div className="flex items-center gap-1 sm:gap-1.5 md:hidden shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 lg:hidden shrink-0">
             <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
               className="p-2 sm:p-2.5 rounded-lg text-white flex items-center justify-center disabled:opacity-70 transition-all"
               style={{backgroundColor: ac, boxShadow: `0 0 10px rgba(${acRgb},0.3)`}} title="สร้างคิวใหม่">
@@ -2023,7 +2023,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-6 gap-0.5 w-full md:hidden z-0">
+        <div className="grid grid-cols-6 gap-0.5 w-full lg:hidden z-0">
           {[
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
@@ -2046,7 +2046,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Desktop: full button row ── */}
-        <div className="hidden md:flex items-center gap-2 z-10">
+        <div className="hidden lg:flex items-center gap-2 z-10 flex-wrap">
           <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}}>
             <Activity size={16} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
@@ -2062,7 +2062,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <CalendarDays size={16} /> นัดหมาย
           </button>
           <button onClick={() => setAdminMode('formBuilder')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'formBuilder' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-blue-500'}`} style={adminMode === 'formBuilder' ? {color: '#fff'} : {}}>
-            <LayoutTemplate size={16} /> จัดการแบบฟอร์ม
+            <LayoutTemplate size={16} /> จัดการ
           </button>
           <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
             <Palette size={16} /> ตั้งค่า
