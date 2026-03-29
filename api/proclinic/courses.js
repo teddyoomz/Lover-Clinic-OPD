@@ -39,28 +39,14 @@ function mapAppointment(event) {
   };
 }
 
-function getMonday(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().substring(0, 10);
-}
-
-function getWeekMondaysForMonth(monthStr) {
+function getAllDatesForMonth(monthStr) {
   const [year, month] = monthStr.split('-').map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
-  const mondays = new Set();
-  // Get monday of first day's week
-  mondays.add(getMonday(firstDay.toISOString().substring(0, 10)));
-  // Get mondays for each week until end of month
-  const d = new Date(firstDay);
-  while (d <= lastDay) {
-    mondays.add(getMonday(d.toISOString().substring(0, 10)));
-    d.setDate(d.getDate() + 7);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dates = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    dates.push(`${monthStr}-${String(d).padStart(2, '0')}`);
   }
-  return [...mondays].sort();
+  return dates;
 }
 
 async function saveAppointmentsToFirestore(monthStr, appointments) {
@@ -110,14 +96,19 @@ export default async function handler(req, res) {
 
       const session = await createSession(origin, email, password);
       const base = session.origin;
-      const mondays = getWeekMondaysForMonth(month);
+      const allDates = getAllDatesForMonth(month);
 
-      // Fetch all weeks in parallel
+      // Fetch all days in batches of 7
       const allEvents = [];
       const seenIds = new Set();
-      const results = await Promise.all(
-        mondays.map(monday => session.fetchJSON(`${base}/admin/api/appointment?date=${monday}`))
-      );
+      const results = [];
+      for (let i = 0; i < allDates.length; i += 7) {
+        const batch = allDates.slice(i, i + 7);
+        const batchResults = await Promise.all(
+          batch.map(date => session.fetchJSON(`${base}/admin/api/appointment?date=${date}`))
+        );
+        results.push(...batchResults);
+      }
 
       for (const data of results) {
         const events = data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
