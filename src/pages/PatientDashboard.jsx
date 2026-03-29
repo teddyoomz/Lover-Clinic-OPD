@@ -648,7 +648,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
           <div className="rounded-2xl overflow-hidden"
             style={isDark
-              ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 50%, #0a0a0a 100%)', border: '1.5px solid #5a1010', boxShadow: 'inset 0 -6px 14px -4px rgba(220,38,38,0.08), 0 0 25px rgba(220,38,38,0.06)' }
+              ? { background: 'linear-gradient(135deg, #080808 0%, #0f0505 50%, #080808 100%)', border: '1.5px solid rgba(90,16,16,0.35)', boxShadow: 'inset 0 -6px 14px -4px rgba(220,38,38,0.05), 0 0 20px rgba(0,0,0,0.3)' }
               : { background: 'linear-gradient(135deg, #ffffff 0%, #fdf2f8 50%, #ffffff 100%)', border: '1.5px solid rgba(244,114,182,0.2)', boxShadow: '0 4px 16px rgba(244,114,182,0.06)' }
             }>
             {/* Accent top bar */}
