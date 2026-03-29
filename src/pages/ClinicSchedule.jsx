@@ -187,6 +187,11 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   }
 
   const todayStr = new Date().toISOString().substring(0, 10);
+  const showFrom = data.showFrom || 'today'; // 'today' | 'tomorrow'
+  const showFromDate = showFrom === 'tomorrow'
+    ? new Date(new Date().getTime() + 86400000).toISOString().substring(0, 10)
+    : todayStr;
+
   const selectedSlots = selectedDate ? getSlotsForDate(selectedDate).map(s => ({
     ...s,
     booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
@@ -283,10 +288,10 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               const avail = availByDate[dateStr] || 0;
               const isSelected = selectedDate === dateStr;
               const isToday = dateStr === todayStr;
-              const isPast = dateStr < todayStr;
               const dow = (calStart + i) % 7;
               const isWeekend = dow >= 5;
-              const isDayDisabled = isClosed || (!noDoctorRequired && !isDoctor);
+              const isPastCutoff = dateStr < showFromDate;
+              const isDayDisabled = isPastCutoff || isClosed || (!noDoctorRequired && !isDoctor);
 
               let cellBg = 'bg-[var(--bg-card)]';
               if (!isDayDisabled && !isSelected) {
@@ -306,8 +311,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <button key={day} onClick={() => !isDayDisabled && setSelectedDate(isSelected ? null : dateStr)}
                   disabled={isDayDisabled}
                   className={`aspect-square flex flex-col items-center justify-center gap-0 transition-all relative
-                    ${cellBg} ${isDayDisabled ? 'cursor-default' : 'cursor-pointer hover:brightness-95'}
-                    ${isPast && !isSelected ? 'opacity-45' : ''}`}>
+                    ${cellBg} ${isDayDisabled ? 'cursor-default' : 'cursor-pointer hover:brightness-95'}`}>
 
                   {/* Today dot */}
                   {isToday && !isSelected && <span className={`absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${todayDotColor}`} />}

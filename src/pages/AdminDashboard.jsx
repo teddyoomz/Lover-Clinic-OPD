@@ -185,6 +185,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
   const [schedSlotDuration, setSchedSlotDuration] = useState(60);
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
+  const [schedShowFrom, setSchedShowFrom] = useState('today'); // 'today' | 'tomorrow'
   const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
   const [schedBlockingDay, setSchedBlockingDay] = useState(null); // date string being edited
   const [schedList, setSchedList] = useState([]); // previously generated schedule links
@@ -679,6 +680,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         clinicCloseTimeWeekend: clinicSettings.clinicCloseTimeWeekend || '17:00',
         slotDurationMins: schedSlotDuration,
         noDoctorRequired: schedNoDoctorRequired,
+        showFrom: schedShowFrom,
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
@@ -4695,6 +4697,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
                         <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
                       </label>
+                    </div>
+                  </div>
+
+                  {/* Show from option */}
+                  <div>
+                    <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงคิวตั้งแต่</label>
+                    <div className="flex gap-2">
+                      {[['today', 'วันนี้เป็นต้นไป'], ['tomorrow', 'พรุ่งนี้เป็นต้นไป']].map(([val, label]) => (
+                        <button key={val} onClick={() => setSchedShowFrom(val)}
+                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${schedShowFrom === val
+                            ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                            : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
