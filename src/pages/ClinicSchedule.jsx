@@ -197,7 +197,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
         <div className="flex flex-wrap justify-center gap-3 text-[10px] text-[var(--tx-muted)]">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-900/50 border border-sky-700/50 inline-block" /> หมอเข้า</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/30 border border-green-800/40 inline-block" /> ว่าง</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-950/50 border border-red-900/50 inline-block" /> ปิด/เต็ม</span>
+          <span className="flex items-center gap-1"><span className="text-orange-400 font-bold">เต็ม</span></span>
         </div>
 
         {/* Calendar */}
@@ -229,7 +229,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 let bgClass = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50';
                 let textExtra = '';
                 if (isDayDisabled) {
-                  bgClass = isClosed ? 'bg-red-950/30 border border-red-900/40' : 'bg-[var(--bg-hover)] border border-[var(--bd)]';
+                  bgClass = 'bg-[var(--bg-hover)] border border-[var(--bd)]';
                   textExtra = 'opacity-40';
                 } else if (!noDoctorRequired && isDoctor) {
                   bgClass = 'bg-sky-950/40 border border-sky-700/50';
@@ -244,7 +244,6 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                     disabled={isDayDisabled}
                     className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative ${bgClass} ${isDayDisabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
                     <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
-                    {isClosed && <span className="text-[8px] font-bold text-red-400">ปิด</span>}
                     {!isClosed && isDoctor && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
                     {!isDayDisabled && !isClosed && avail > 0 && (
                       <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>ว่าง {avail}</span>

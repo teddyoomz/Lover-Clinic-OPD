@@ -2698,22 +2698,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {/* Calendar grid */}
               <div className="p-3 sm:p-5">
                 {/* Legend */}
-                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] text-gray-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-950/50 border border-sky-800/50 inline-block" /> หมอเข้า</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-950/50 border border-red-900/50 inline-block" /> ปิด</span>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-sky-950/50 border border-sky-800/50 inline-block" /> หมอเข้า</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-red-950/50 border border-red-900/50 inline-block" /> ปิด</span>
                   <span className="flex items-center gap-1"><span className="text-sky-300 font-bold">มีนัด</span></span>
                   <span className="flex items-center gap-1"><span className="text-green-400 font-bold">ว่าง</span></span>
                 </div>
                 {/* Day headers */}
-                <div className="grid grid-cols-7 gap-1 mb-1">
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
                   {thaiDays.map((d, i) => (
-                    <div key={i} className={`text-center text-[10px] font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
+                    <div key={i} className={`text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
                   ))}
                 </div>
                 {/* Day cells */}
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                   {Array.from({ length: calStart }).map((_, i) => (
-                    <div key={`empty-${i}`} className="aspect-square" />
+                    <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[72px]" />
                   ))}
                   {Array.from({ length: daysInMonth }).map((_, i) => {
                     const day = i + 1;
@@ -2735,16 +2735,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                     return (
                       <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
-                        className={`rounded-lg flex flex-col items-center justify-center py-1.5 gap-px transition-all text-xs relative cursor-pointer min-h-[56px]
+                        className={`rounded-lg flex flex-col items-center justify-center py-1.5 sm:py-2 gap-px sm:gap-0.5 transition-all text-xs relative cursor-pointer min-h-[56px] sm:min-h-[72px]
                           ${cellBg} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
-                        <span className={`font-bold text-[13px] leading-none ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
-                        {isClosed && <span className="text-[7px] font-bold text-red-400/70 leading-none">ปิด</span>}
-                        {!isClosed && isDoc && <Stethoscope size={8} className={isSelected ? 'text-sky-200' : 'text-sky-400/70'} />}
+                        <span className={`font-bold text-[13px] sm:text-base leading-none ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
+                        {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
+                        {!isClosed && isDoc && <Stethoscope size={8} className={`sm:!w-[10px] sm:!h-[10px] ${isSelected ? 'text-sky-200' : 'text-sky-400/70'}`} />}
                         {!isClosed && count > 0 && (
-                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-sky-100' : 'text-sky-300'}`}>มีนัด {count}</span>
+                          <span className={`text-[7px] sm:text-[10px] font-bold leading-none ${isSelected ? 'text-sky-100' : 'text-sky-300'}`}>มีนัด {count}</span>
                         )}
                         {!isClosed && avail != null && (
-                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>
+                          <span className={`text-[7px] sm:text-[10px] font-bold leading-none ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>
                         )}
                       </button>
                     );
