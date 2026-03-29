@@ -2682,11 +2682,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
-                {/* Slot duration selector */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500">ช่วงเวลา:</span>
+                {/* Row 3: slot duration selector */}
+                <div className="flex items-center gap-2 bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 border border-[var(--bd)]">
+                  <Clock size={12} className="text-gray-500 shrink-0" />
+                  <span className="text-[10px] text-gray-500 shrink-0">คำนวณว่าง:</span>
                   <select value={apptSlotDuration} onChange={e => setApptSlotDuration(Number(e.target.value))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-1.5 text-[11px] font-bold outline-none cursor-pointer [color-scheme:dark]">
+                    className="bg-transparent text-white text-[11px] font-bold outline-none cursor-pointer [color-scheme:dark] flex-1">
                     {[15,30,45,60,75,90,105,120].map(v => (
                       <option key={v} value={v}>{v < 60 ? `${v} นาที` : v === 60 ? '1 ชม.' : `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')} ชม.`}</option>
                     ))}
@@ -2696,6 +2697,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Calendar grid */}
               <div className="p-3 sm:p-5">
+                {/* Legend */}
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] text-gray-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-950/50 border border-sky-800/50 inline-block" /> หมอเข้า</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-950/50 border border-red-900/50 inline-block" /> ปิด</span>
+                  <span className="flex items-center gap-1"><span className="text-sky-300 font-bold">มีนัด</span></span>
+                  <span className="flex items-center gap-1"><span className="text-green-400 font-bold">ว่าง</span></span>
+                </div>
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-1 mb-1">
                   {thaiDays.map((d, i) => (
@@ -2711,22 +2719,32 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const day = i + 1;
                     const dateStr = `${apptMonth}-${String(day).padStart(2, '0')}`;
                     const count = countByDate[dateStr] || 0;
+                    const avail = availByDate[dateStr] ?? null;
                     const isSelected = apptSelectedDate === dateStr;
                     const isToday = dateStr === todayStr;
-                    const dow = (calStart + i) % 7; // 0=Mon, 5=Sat, 6=Sun
+                    const dow = (calStart + i) % 7;
                     const isWeekend = dow >= 5;
+                    const isDoc = schedDoctorDays.has(dateStr);
+                    const isClosed = schedClosedDays.has(dateStr);
+
+                    let cellBg = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:bg-[var(--bg-hover)]';
+                    if (isClosed) cellBg = 'bg-red-950/30 border border-red-900/40 opacity-50';
+                    else if (isDoc) cellBg = 'bg-sky-950/30 border border-sky-800/40 hover:border-sky-600/50';
+                    else if (count > 0) cellBg = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50';
+                    if (isSelected) cellBg = 'bg-sky-600 ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)] border-0';
+
                     return (
                       <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative
-                          ${isSelected ? 'bg-sky-600 text-white ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)]' : count > 0 ? 'bg-[var(--bg-hover)] hover:bg-sky-950/40 border border-[var(--bd)] hover:border-sky-800/50 cursor-pointer' : 'text-gray-600 hover:bg-[var(--bg-hover)]'}
-                          ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}
-                        `}>
-                        <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
-                        {count > 0 && (
-                          <span className={`text-[9px] font-black ${isSelected ? 'text-sky-100' : 'text-sky-400'}`}>{count}</span>
+                        className={`rounded-lg flex flex-col items-center justify-center py-1.5 gap-px transition-all text-xs relative cursor-pointer min-h-[56px]
+                          ${cellBg} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
+                        <span className={`font-bold text-[13px] leading-none ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
+                        {isClosed && <span className="text-[7px] font-bold text-red-400/70 leading-none">ปิด</span>}
+                        {!isClosed && isDoc && <Stethoscope size={8} className={isSelected ? 'text-sky-200' : 'text-sky-400/70'} />}
+                        {!isClosed && count > 0 && (
+                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-sky-100' : 'text-sky-300'}`}>มีนัด {count}</span>
                         )}
-                        {(availByDate[dateStr] != null) && (
-                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-green-200' : availByDate[dateStr] > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง{availByDate[dateStr]}</span>
+                        {!isClosed && avail != null && (
+                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>
                         )}
                       </button>
                     );
