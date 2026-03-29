@@ -594,22 +594,44 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     });
   };
 
-  // ── Doctor hour slot helpers ──
-  const getDoctorHoursForDate = (dateStr) => {
-    if (schedCustomDoctorHours[dateStr]) return schedCustomDoctorHours[dateStr];
+  // ── Doctor hour slot helpers (supports array of ranges per day) ──
+  const toMin = (t) => parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]);
+  const fromMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+  // Returns array of { start, end } ranges — backwards compat with old single-range format
+  const getDoctorRangesForDate = (dateStr) => {
+    const custom = schedCustomDoctorHours[dateStr];
+    if (custom) return Array.isArray(custom) ? custom : [custom];
     const d = new Date(dateStr);
     const isWknd = d.getDay() === 0 || d.getDay() === 6;
-    return {
+    return [{
       start: isWknd ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
       end: isWknd ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
-    };
+    }];
+  };
+  // Legacy compat: return first range (used in display)
+  const getDoctorHoursForDate = (dateStr) => {
+    const ranges = getDoctorRangesForDate(dateStr);
+    return ranges[0] || { start: '10:00', end: '19:00' };
   };
   const isSlotInDoctorHours = (dateStr, slotStart) => {
-    const hours = getDoctorHoursForDate(dateStr);
-    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
-    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
-    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
-    return sMin >= dStart && sMin <= dEnd;
+    const ranges = getDoctorRangesForDate(dateStr);
+    const sMin = toMin(slotStart);
+    return ranges.some(r => sMin >= toMin(r.start) && sMin < toMin(r.end));
+  };
+
+  // Convert a set of enabled 15-min slot minutes into array of contiguous ranges
+  const slotsToRanges = (enabledSet) => {
+    if (enabledSet.size === 0) return [];
+    const sorted = [...enabledSet].sort((a, b) => a - b);
+    const ranges = [];
+    let rStart = sorted[0], prev = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === prev + 15) { prev = sorted[i]; }
+      else { ranges.push({ start: fromMin(rStart), end: fromMin(prev + 15) }); rStart = sorted[i]; prev = sorted[i]; }
+    }
+    ranges.push({ start: fromMin(rStart), end: fromMin(prev + 15) });
+    return ranges;
   };
 
   // Toggle custom doctor hours for a specific day+slot
@@ -622,51 +644,41 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const isWknd = bDate.getDay() === 0 || bDate.getDay() === 6;
       const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
       const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
-      const [oh, om] = openT.split(':').map(Number);
-      const [ch, cm] = closeT.split(':').map(Number);
-      let cur = oh * 60 + om;
-      const endMin = ch * 60 + cm;
       const allSlots = [];
+      let cur = toMin(openT);
+      const endMin = toMin(closeT);
       while (cur + 15 <= endMin) { allSlots.push(cur); cur += 15; }
 
-      // Build set of enabled doctor slot minutes
-      const currentHours = prev[dateStr] || getDoctorHoursForDate(dateStr);
-      const cStart = parseInt(currentHours.start.split(':')[0]) * 60 + parseInt(currentHours.start.split(':')[1]);
-      const cEnd = parseInt(currentHours.end.split(':')[0]) * 60 + parseInt(currentHours.end.split(':')[1]);
-      const enabledSet = new Set(allSlots.filter(m => m >= cStart && m < cEnd));
+      // Build set of enabled doctor slot minutes from current ranges
+      const currentRanges = prev[dateStr] ? (Array.isArray(prev[dateStr]) ? prev[dateStr] : [prev[dateStr]]) : getDoctorRangesForDate(dateStr);
+      const enabledSet = new Set(allSlots.filter(m => currentRanges.some(r => m >= toMin(r.start) && m < toMin(r.end))));
 
-      const slotMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+      const slotMin = toMin(slotStart);
       if (action === 'remove') enabledSet.delete(slotMin);
       else enabledSet.add(slotMin);
 
-      if (enabledSet.size === 0) {
-        // No doctor hours for this day — store as 00:00-00:00
-        const next = { ...prev, [dateStr]: { start: '00:00', end: '00:00' } };
+      const newRanges = slotsToRanges(enabledSet);
+      if (newRanges.length === 0) {
+        const next = { ...prev, [dateStr]: [{ start: '00:00', end: '00:00' }] };
         return next;
       }
 
-      const sorted = [...enabledSet].sort((a, b) => a - b);
-      const minM = sorted[0];
-      const maxM = sorted[sorted.length - 1] + 15;
-      const newStart = `${String(Math.floor(minM / 60)).padStart(2, '0')}:${String(minM % 60).padStart(2, '0')}`;
-      const newEnd = `${String(Math.floor(maxM / 60)).padStart(2, '0')}:${String(maxM % 60).padStart(2, '0')}`;
-
       // Check if same as default → remove custom override
-      const defHours = (() => {
+      const defRanges = (() => {
         const d2 = new Date(dateStr);
         const w = d2.getDay() === 0 || d2.getDay() === 6;
-        return {
+        return [{
           start: w ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
           end: w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
-        };
+        }];
       })();
-      if (newStart === defHours.start && newEnd === defHours.end) {
+      if (newRanges.length === 1 && defRanges.length === 1 && newRanges[0].start === defRanges[0].start && newRanges[0].end === defRanges[0].end) {
         const next = { ...prev };
         delete next[dateStr];
         return next;
       }
 
-      const next = { ...prev, [dateStr]: { start: newStart, end: newEnd } };
+      const next = { ...prev, [dateStr]: newRanges };
       return next;
     });
   };
@@ -3071,7 +3083,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                   });
                                 };
                                 const isDoctorDay = schedDoctorDays.has(schedBlockingDay);
-                                const docHours = getDoctorHoursForDate(schedBlockingDay);
+                                const docRanges = getDoctorRangesForDate(schedBlockingDay);
                                 const hasCustomDocHours = !!schedCustomDoctorHours[schedBlockingDay];
                                 return (
                                   <div className="mt-2 bg-[var(--bg-card)] rounded-lg border border-[var(--bd)] p-2.5">
@@ -3081,8 +3093,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                       {dayAppts.length > 0 && <span className="text-[9px] text-sky-400 font-bold ml-auto">{dayAppts.length} นัดหมาย</span>}
                                     </div>
                                     {isDoctorDay && (
-                                      <div className="text-[9px] text-sky-400 mb-1.5 flex items-center gap-1">
-                                        <Stethoscope size={9} /> เวลาหมอ: {docHours.start}–{docHours.end}
+                                      <div className="text-[9px] text-sky-400 mb-1.5 flex items-center gap-1 flex-wrap">
+                                        <Stethoscope size={9} /> เวลาหมอ: {docRanges.map((r, i) => <span key={i}>{i > 0 && ', '}{r.start}–{r.end}</span>)}
                                         {hasCustomDocHours && <span className="text-orange-400 font-bold">(custom)</span>}
                                       </div>
                                     )}

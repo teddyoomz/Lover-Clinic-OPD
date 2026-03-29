@@ -157,24 +157,27 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return (d.getDay() === 0 || d.getDay() === 6) ? weekendSlots : weekdaySlots;
   };
 
-  const getDoctorHoursForDate = (dateStr) => {
-    if (customDoctorHours[dateStr]) return customDoctorHours[dateStr];
+  const toMin = (t) => parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]);
+  // Returns array of { start, end } — backwards compat with old single-range format
+  const getDoctorRangesForDate = (dateStr) => {
+    const custom = customDoctorHours[dateStr];
+    if (custom) return Array.isArray(custom) ? custom : [custom];
     const d = new Date(dateStr);
     const isWknd = d.getDay() === 0 || d.getDay() === 6;
-    return {
+    return [{
       start: isWknd ? (data.doctorStartTimeWeekend || data.doctorStartTime || '10:00') : (data.doctorStartTime || '10:00'),
       end: isWknd ? (data.doctorEndTimeWeekend || data.doctorEndTime || '19:00') : (data.doctorEndTime || '19:00'),
-    };
+    }];
   };
+  const getDoctorHoursForDate = (dateStr) => getDoctorRangesForDate(dateStr)[0] || { start: '10:00', end: '19:00' };
   const isSlotOutsideDoctorHours = (dateStr, slotStart, slotEnd) => {
     if (noDoctorRequired) return false;
     if (!doctorDaysSet.has(dateStr)) return false;
-    const hours = getDoctorHoursForDate(dateStr);
-    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
-    const eMin = parseInt(slotEnd.split(':')[0]) * 60 + parseInt(slotEnd.split(':')[1]);
-    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
-    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
-    return sMin < dStart || eMin > dEnd;
+    const ranges = getDoctorRangesForDate(dateStr);
+    const sMin = toMin(slotStart);
+    const eMin = toMin(slotEnd);
+    // Slot is outside if it doesn't fit entirely within ANY range
+    return !ranges.some(r => sMin >= toMin(r.start) && eMin <= toMin(r.end));
   };
 
   const todayStr = new Date().toISOString().substring(0, 10);
@@ -206,12 +209,10 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
   const isSlotWithinDoctorHours = (dateStr, slotStart, slotEnd) => {
     if (!doctorDaysSet.has(dateStr)) return false;
-    const hours = getDoctorHoursForDate(dateStr);
-    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
-    const eMin = parseInt(slotEnd.split(':')[0]) * 60 + parseInt(slotEnd.split(':')[1]);
-    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
-    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
-    return sMin >= dStart && eMin <= dEnd;
+    const ranges = getDoctorRangesForDate(dateStr);
+    const sMin = toMin(slotStart);
+    const eMin = toMin(slotEnd);
+    return ranges.some(r => sMin >= toMin(r.start) && eMin <= toMin(r.end));
   };
 
   const isSlotPast = (dateStr, slotStart) => {
@@ -416,7 +417,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <div className="flex items-center gap-3 mt-1">
                   {doctorDaysSet.has(selectedDate) && (
                     <span className={`text-[11px] font-semibold flex items-center gap-1 ${docIconColor}`}>
-                      <Stethoscope size={10} /> {t.doctor} {getDoctorHoursForDate(selectedDate).start}-{getDoctorHoursForDate(selectedDate).end}
+                      <Stethoscope size={10} /> {t.doctor} {getDoctorRangesForDate(selectedDate).map(r => `${r.start}-${r.end}`).join(', ')}
                     </span>
                   )}
                   <span className="text-[11px] text-[var(--tx-muted)]">
