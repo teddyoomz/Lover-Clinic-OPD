@@ -2779,23 +2779,48 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 }
                                 const dayNum = parseInt(schedBlockingDay.split('-')[2]);
                                 const dayMo = parseInt(schedBlockingDay.split('-')[1]);
+                                // Find appointments for this day
+                                const dayAppts = appointments.filter(a => a.date === schedBlockingDay);
+                                const findApptForSlot = (slotStart) => {
+                                  const slotMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+                                  return dayAppts.find(a => {
+                                    const aStart = parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]);
+                                    const aEnd = parseInt(a.endTime.split(':')[0]) * 60 + parseInt(a.endTime.split(':')[1]);
+                                    return slotMin >= aStart && slotMin < aEnd;
+                                  });
+                                };
                                 return (
                                   <div className="mt-2 bg-[var(--bg-card)] rounded-lg border border-[var(--bd)] p-2.5">
                                     <div className="text-[10px] text-[var(--tx-muted)] mb-2 flex items-center gap-1.5">
                                       <Clock size={10} className="text-orange-400" />
-                                      <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กดเพื่อปิด/เปิดช่วงเวลา</span>
+                                      <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กด/ลากเพื่อปิด-เปิดช่วงเวลา</span>
+                                      {dayAppts.length > 0 && <span className="text-[9px] text-sky-400 font-bold ml-auto">{dayAppts.length} นัดหมาย</span>}
                                     </div>
-                                    <div className="grid grid-cols-4 gap-1 select-none" style={{touchAction: 'none'}}
+                                    <div className="space-y-0.5 select-none" style={{touchAction: 'none'}}
                                       onPointerUp={handleSlotPointerUp} onPointerLeave={handleSlotPointerUp} onPointerCancel={handleSlotPointerUp}>
                                       {slots15.map(s => {
                                         const blocked = schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
+                                        const appt = findApptForSlot(s.start);
                                         return (
-                                          <button key={s.start}
-                                            onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
-                                            onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                            className={`py-1.5 rounded text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400 shadow-[0_0_6px_rgba(220,38,38,0.15)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
-                                            {s.start}
-                                          </button>
+                                          <div key={s.start} className="flex items-stretch gap-1">
+                                            <button
+                                              onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
+                                              onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
+                                              className={`w-14 shrink-0 py-1.5 rounded-l text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
+                                              {s.start}
+                                            </button>
+                                            <div className={`flex-1 rounded-r px-2 py-1 text-[9px] flex items-center gap-1.5 min-w-0 ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
+                                              {appt ? (
+                                                <>
+                                                  <span className="text-sky-300 font-bold truncate">{appt.fullCustomerName || appt.customerName || '—'}</span>
+                                                  {appt.doctorName && appt.doctorName !== '-' && <span className="text-[8px] text-sky-500 shrink-0">🩺{appt.doctorName}</span>}
+                                                  {appt.appointmentType && <span className="text-[8px] text-gray-500 shrink-0">{appt.appointmentType}</span>}
+                                                </>
+                                              ) : (
+                                                <span className="text-gray-700 text-[8px]">ว่าง</span>
+                                              )}
+                                            </div>
+                                          </div>
                                         );
                                       })}
                                     </div>
