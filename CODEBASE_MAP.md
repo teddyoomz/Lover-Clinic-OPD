@@ -27,8 +27,8 @@ src/
 ├── components/
 │   ├── ClinicLogo.jsx          — Logo component (custom URL / /logo.jpg / text fallback)
 │   ├── ThemeToggle.jsx         — Theme toggle button
-│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo, doctor hours, ProClinic credential reload)
-│   ├── CustomFormBuilder.jsx   — Admin form builder for custom templates
+│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo, doctor hours, ProClinic credential reload) — all CSS-var theme-aware
+│   ├── CustomFormBuilder.jsx   — Admin form builder for custom templates — all CSS-var theme-aware, responsive layout
 │   └── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
 └── pages/
     ├── AdminLogin.jsx          — Login page
