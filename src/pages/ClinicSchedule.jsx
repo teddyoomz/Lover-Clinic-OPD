@@ -231,8 +231,10 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 if (isDayDisabled) {
                   bgClass = 'bg-[var(--bg-hover)] border border-[var(--bd)]';
                   textExtra = 'opacity-40';
-                } else if (!noDoctorRequired && isDoctor) {
-                  bgClass = 'bg-sky-950/40 border border-sky-700/50';
+                } else if (isDoctor) {
+                  bgClass = noDoctorRequired
+                    ? 'bg-sky-950/40 border border-sky-700/50'
+                    : 'bg-sky-950/40 border border-sky-700/50';
                 } else if (avail > 0) {
                   bgClass = 'bg-green-950/20 border border-green-900/30 hover:border-green-700/50';
                 }
@@ -244,7 +246,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                     disabled={isDayDisabled}
                     className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative ${bgClass} ${isDayDisabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
                     <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
-                    {!isClosed && isDoctor && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
+                    {!isClosed && isDoctor && noDoctorRequired && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
                     {!isDayDisabled && !isClosed && avail > 0 && (
                       <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>ว่าง {avail}</span>
                     )}
