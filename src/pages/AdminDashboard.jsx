@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { app } from '../firebase.js';
 import { signOut } from 'firebase/auth';
@@ -179,6 +179,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedClosedDays, setSchedClosedDays] = useState(new Set());
   const [schedGenLoading, setSchedGenLoading] = useState(false);
   const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
+  const [schedList, setSchedList] = useState([]); // previously generated schedule links
+  const [schedPrefsLoaded, setSchedPrefsLoaded] = useState(false);
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -301,6 +303,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [apptMonth, db, appId]);
 
+  // ── Load saved schedule day preferences + schedule list ──
+  useEffect(() => {
+    if (!db || !appId) return;
+    // Load saved doctor/closed day prefs
+    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs')).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d.doctorDays) setSchedDoctorDays(new Set(d.doctorDays));
+        if (d.closedDays) setSchedClosedDays(new Set(d.closedDays));
+      }
+      setSchedPrefsLoaded(true);
+    }).catch(() => setSchedPrefsLoaded(true));
+
+    // Subscribe to schedule list
+    const unsub = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules'),
+      (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+          const ta = a.createdAt?.toMillis?.() || 0;
+          const tb = b.createdAt?.toMillis?.() || 0;
+          return tb - ta;
+        });
+        setSchedList(list);
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [db, appId]);
+
   const handleSyncAppointments = async (month) => {
     setApptSyncing(true);
     try {
@@ -311,6 +342,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       showToast(`Sync error: ${e.message}`, 5000);
     }
     setApptSyncing(false);
+  };
+
+  // ── Toggle/Delete schedule links ──
+  const handleToggleSchedule = async (token, currentEnabled) => {
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), { enabled: !currentEnabled });
+      showToast(currentEnabled ? 'ปิดลิงก์แล้ว' : 'เปิดลิงก์แล้ว', 2000);
+    } catch (e) { showToast(`Error: ${e.message}`, 3000); }
+  };
+  const handleDeleteSchedule = async (token) => {
+    try {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token));
+      showToast('ลบลิงก์แล้ว', 2000);
+    } catch (e) { showToast(`Error: ${e.message}`, 3000); }
   };
 
   // ── Generate Schedule Link ──
@@ -352,6 +397,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         token,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
+        enabled: true,
         months,
         clinicOpenTime: clinicSettings.clinicOpenTime || '10:00',
         clinicCloseTime: clinicSettings.clinicCloseTime || '19:00',
@@ -359,6 +405,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
+      });
+
+      // 5b. Save doctor/closed day prefs for next time
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
+        doctorDays: [...schedDoctorDays],
+        closedDays: [...schedClosedDays],
+        updatedAt: serverTimestamp(),
       });
 
       // 6. Build URL + QR
@@ -2309,7 +2362,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedDoctorDays(new Set()); setSchedClosedDays(new Set()); setSchedGenResult(null); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setShowScheduleModal(true); }}
                     className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -4008,7 +4061,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เดือนเริ่มต้น</label>
-                      <select value={schedStartMonth} onChange={e => { setSchedStartMonth(e.target.value); setSchedDoctorDays(new Set()); setSchedClosedDays(new Set()); }}
+                      <select value={schedStartMonth} onChange={e => setSchedStartMonth(e.target.value)}
                         className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
                         {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
                       </select>
@@ -4071,6 +4124,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-600 hover:bg-green-700 text-white shadow-[0_0_20px_rgba(22,163,74,0.3)]'}`}>
                     {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
                   </button>
+                </div>
+              )}
+
+              {/* ── Schedule links list ── */}
+              {schedList.length > 0 && (
+                <div className="border-t border-[var(--bd)] p-4">
+                  <h3 className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider mb-3">ลิงก์ที่สร้างไว้ ({schedList.length})</h3>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {schedList.map(s => {
+                      const url = `${window.location.origin}/?schedule=${s.token}`;
+                      const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+                      const isEnabled = s.enabled !== false;
+                      return (
+                        <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
+                            <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
+                          </div>
+                          <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
+                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
+                            <ClipboardCheck size={12} />
+                          </button>
+                          <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
+                            className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
+                            {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                          </button>
+                          <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
+                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

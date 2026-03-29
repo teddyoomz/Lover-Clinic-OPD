@@ -51,7 +51,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     const unsub = onSnapshot(
       doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token),
       (snap) => {
-        if (!snap.exists()) { setStatus('notfound'); return; }
+        if (!snap.exists() || snap.data().enabled === false) { setStatus('notfound'); return; }
         setScheduleData(snap.data());
         setStatus('done');
       },
@@ -114,21 +114,23 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     <div className="min-h-screen bg-[var(--bg-base)] font-sans text-[var(--tx-body)]">
       {/* Header */}
       <header className="bg-[var(--bg-card)] border-b border-[var(--bd)] px-4 py-3 sm:py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ClinicLogo clinicSettings={cs} size={36} theme={theme} />
-            <div>
-              <h1 className="text-sm sm:text-base font-bold text-[var(--tx-heading)]">{cs.clinicName || 'Clinic'}</h1>
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="shrink-0 w-9 h-9">
+              <ClinicLogo clinicSettings={cs} className="w-full h-full" showText={false} theme={theme} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-bold text-[var(--tx-heading)] truncate">{cs.clinicName || 'Clinic'}</h1>
               <p className="text-[10px] sm:text-xs text-[var(--tx-muted)]">ตารางนัดหมาย</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle theme={theme} setTheme={setTheme} />
           </div>
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
+      <div className="max-w-md mx-auto p-4 space-y-4">
         {/* Month selector */}
         {months.length > 1 && (
           <div className="flex items-center justify-center gap-2">
