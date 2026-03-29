@@ -79,7 +79,7 @@ artifacts/{appId}/public/data/push_config/tokens
 - หมดอายุ 2 ชม. + ไม่มีข้อมูล → auto `deleteDoc` (ใน onSnapshot)
 - หมดอายุ 2 ชม. + มีข้อมูล → auto `isArchived:true` (ใน onSnapshot)
 - Deposit: สร้างคิวจอง → `formType:'deposit', isPermanent:true, depositData:{...}`
-- Deposit: "ลูกค้ามารับบริการเรียบร้อย" → `isArchived:true, serviceCompleted:true` (ไปทั้งประวัติปกติ + ประวัติจอง)
+- Deposit: "ลูกค้าเข้ารับบริการ" → `serviceCompleted:true` → ย้ายเข้าคิว (queue) ด้วย `isPermanent:false, createdAt:serverTimestamp()` (แปลงเป็น 2-hour link)
 - Deposit: "ยกเลิกการจอง" → cancel deposit + delete customer in ProClinic → archive
 
 ### Session ID prefixes
@@ -220,6 +220,7 @@ Fields ทั้งหมดใน patient intake form:
 | `archivedDepositSessions` | — | archived deposit sessions |
 | `depositOptions` | — | ProClinic dropdown options (payment methods, sellers, doctors, rooms) |
 | `depositOptionsLoading` | — | loading state for deposit options fetch |
+| `depositToDelete` | — | `{ session, action: 'archive'\|'cancel'\|'complete' }` — styled confirm modal (red=delete/cancel, blue=complete) |
 
 ### Computed (บรรทัด 288-289)
 ```js
@@ -414,7 +415,7 @@ Inline component ด้านบนขวา — สลับ TH/EN
 8. **Bilingual** — PatientForm รองรับ TH/EN, default EN สำหรับแพทย์
 9. **isClosed vs isExpired** — PatientForm ใช้ 2 state แยก: `isClosed` (admin archive) แสดง Lock icon + "คลินิกปิดคิวนี้แล้ว"; `isExpired` (2 ชม.) แสดง TimerOff + "หมดอายุ"; render isClosed ก่อน isExpired
 10. **Timestamps in tables** — Queue table: QR time (QrCode icon, gray) ใน col 1; submit/edit time (CheckCircle2/Edit3, green/blue) ใน status col. History table: 4 timestamps (Gen/กรอก/แก้ไข/เก็บ) ด้วย icons+colors
-11. **Deposit isUnread persistence** — deposit ที่ sync แล้ว + ลูกค้าแก้ข้อมูล → isUnread ไม่ clear จนกว่าจะกดปุ่ม sync (amber) หรือ Resync ใน modal สำเร็จ
+11. **Deposit isUnread persistence** — deposit sessions: isUnread ไม่ clear เมื่อแค่กดปุ่มตา/edit → clear เฉพาะเมื่อ handleDepositSync หรือ handleResync สำเร็จ (guard: `isDepositKeepUnread = session.formType === 'deposit' && session.isUnread`)
 12. **PatientLink cleanup** — เมื่อ OPD หลุด sync (delete, notFound, cancel) → ลบ patientLinkToken ถาวร ลิงก์ใช้ไม่ได้อีก
 13. **PatientLink requires OPD** — ปุ่มสร้างลิงก์ดูข้อมูลในหน้าประวัติ แสดงเฉพาะเมื่อ opdRecordedAt + brokerStatus=done
 14. **DatePickerThai** — custom component: แสดง DD/MM/YYYY + ไอคอนปฏิทิน, กดแล้วเปิด native calendar picker, value เก็บเป็น YYYY-MM-DD (compatible กับ ProClinic)
@@ -642,6 +643,9 @@ isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'd
 isPending = brokerPending[id] || session.brokerStatus === 'pending'
 isFailed  = !isPending && !isDone && session.brokerStatus === 'failed'
 // disabled={isPending || isDone}  ← ป้องกัน double-click
+
+// Deposit hasOPD (ใช้ brokerProClinicId แทน opdRecordedAt เพราะ serverTimestamp null ใน first snapshot):
+hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done'
 ```
 
 ### Deposit Booking System (จองมัดจำ)
@@ -651,11 +655,12 @@ isFailed  = !isPending && !isDone && session.brokerStatus === 'failed'
 **Session filtering** (onSnapshot handler):
 ```
 allDocs → filter:
-├── sessions         → formType !== 'deposit' && !isArchived
+├── sessions         → (formType !== 'deposit' && !isArchived) OR (formType === 'deposit' && serviceCompleted && !isArchived)
 ├── archivedSessions → (formType !== 'deposit' || serviceCompleted) && isArchived
-├── depositSessions  → formType === 'deposit' && !isArchived
+├── depositSessions  → formType === 'deposit' && !isArchived && !serviceCompleted
 └── archivedDepositSessions → formType === 'deposit' && isArchived
 ```
+> Note: deposit sessions ที่ serviceCompleted แสดงในคิว (sessions) ไม่ใช่ deposit tab
 
 **Auto-sync guard**: `newS.formType !== 'deposit'` — ป้องกัน auto-sync สำหรับ deposit sessions
 
@@ -671,18 +676,29 @@ Re-sync (ลูกค้าแก้ข้อมูล):
 ```
 
 **Deposit re-sync trigger**: `dataUpdated = hasOPD && hasDeposit && session.isUnread`
+- `hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done'` (ไม่ใช้ opdRecordedAt เพราะ serverTimestamp null ใน first snapshot)
 - ปุ่มเปลี่ยนเป็นสีเหลือง + animate-pulse เมื่อ dataUpdated
-- isUnread ไม่ clear เมื่อกดดูข้อมูล (ตา) → clear เฉพาะเมื่อกด sync สำเร็จ
+- isUnread ไม่ clear เมื่อกดดูข้อมูล (ตา/edit) → clear เฉพาะเมื่อ handleDepositSync หรือ handleResync สำเร็จ
 
 **"ยกเลิกการจอง" (handleDepositCancel)**:
 ```
 cancelDeposit(proClinicId, proClinicHN) → cancel deposit + delete customer in ProClinic → archive + clear patientLink
 ```
 
-**"ลูกค้ามารับบริการเรียบร้อย"**: sets `isArchived:true, serviceCompleted:true` → appears in both regular history AND deposit history
+**"ลูกค้าเข้ารับบริการ"**: sets `serviceCompleted:true, isPermanent:false, createdAt:serverTimestamp()` → ย้ายจาก deposit tab เข้า queue (แปลงเป็น 2-hour link) พร้อม QR code + tag "จองมัดจำ"
+
+**Deposit eye/edit button**:
+- แสดง Edit3 icon เมื่อรอ patient data, Eye icon เมื่อ data submitted
+- สามารถดู/แก้ deposit data ได้แม้ patient ยังไม่กรอกฟอร์ม
+- Viewer: "รอลูกค้ากรอกข้อมูล..." เมื่อไม่มี patientData, toolbar+grid+clinical summary ซ่อน
+- ใช้ `d = viewingSession.patientData || {}` ป้องกัน crash + grid ซ่อนด้วย `style={display:'none'}` (OXC workaround)
 
 **Deposit data editing**: When admin edits deposit data in viewing modal and session already synced → auto calls `updateDeposit()` to sync changes to ProClinic via `#editDepositModal` PUT
 - Archived deposit sessions: ซ่อนปุ่ม "แก้ไขข้อมูล", "Resync ProClinic", "แก้ไข" ในส่วน deposit info
+
+**Deposit confirm modal**: ทุกปุ่ม action (ลบ/ยกเลิก/เข้ารับบริการ) ใช้ styled modal แทน `window.confirm()`
+- State: `depositToDelete = { session, action }` — red สำหรับ archive/cancel, blue สำหรับ complete
+- แสดงชื่อลูกค้า + matching style กับ queue delete modal
 
 **PatientLink cleanup**: เมื่อ OPD หลุด sync → clear `patientLinkToken: null, patientLinkEnabled: false`
 - Flows ที่ trigger: handleOpdClick notFound, handleResync notFound, delete ProClinic, deposit cancel

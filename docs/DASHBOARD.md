@@ -2,7 +2,7 @@
 
 > ไฟล์: `src/pages/AdminDashboard.jsx`
 > Component ที่ซับซ้อนที่สุดในโปรเจ็ค — มี Firestore listener, auto-sync, broker logic
-> อัพเดทล่าสุด: 2026-03-28
+> อัพเดทล่าสุด: 2026-03-29
 
 ---
 
@@ -30,6 +30,7 @@
 | `brokerPending` | state | `{[sessionId]: true}` — spinner state |
 | `brokerTimers` | useRef | `{[sessionId]: timeoutId}` — 10s timeout สำหรับ broker |
 | `pushEnabled` | state | FCM push เปิดอยู่บน device นี้ไหม |
+| `depositToDelete` | state | `{ session, action: 'archive'\|'cancel'\|'complete' }` — styled confirm modal แทน window.confirm |
 
 > **⚠️ lastViewedStrRef vs lastAutoSyncedStrRef**:
 > - `lastViewedStrRef` — stamp เมื่อ admin เห็น session แล้ว → ป้องกัน banner false positive
@@ -140,7 +141,9 @@ if (brokerChanged) {
 const handleViewSession = async (session) => {
   setViewingSession(session);
   setHasNewUpdate(false);
-  if (session.isUnread) {
+  // deposit sessions: isUnread ไม่ clear เมื่อแค่ดู → clear เฉพาะเมื่อ sync สำเร็จ
+  const isDepositKeepUnread = session.formType === 'deposit' && session.isUnread;
+  if (session.isUnread && !isDepositKeepUnread) {
     // stamp ทั้งสอง ref ก่อน write — ป้องกัน LOCAL snapshot false trigger
     lastViewedStrRef.current[session.id]     = JSON.stringify(session.patientData || {});
     lastAutoSyncedStrRef.current[session.id] = JSON.stringify(session.patientData || {});
@@ -246,6 +249,10 @@ Error bar (brokerStatus==='failed')
 | `closeViewSession()` | ปิด report + restore adminMode (prevAdminModeRef) |
 | `enablePushNotifications()` | request permission → getToken → save Firestore |
 | `generateClinicalSummary(d, formType, tpl, lang)` | import จาก utils.js |
+| `handleDepositSync(session)` | Two-step: fillProClinic→submitDeposit (first) หรือ updateProClinic→updateDeposit (re-sync), clears isUnread |
+| `handleDepositCancel(session)` | Cancel deposit + delete customer in ProClinic → archive + clear patientLink |
+| `handleSaveDepositData(data)` | Save deposit edits to Firestore + sync to ProClinic if already synced |
+| `handleResync(session)` | Manual resync OPD data → clears isUnread for deposit |
 
 ---
 
@@ -272,3 +279,48 @@ Error bar (brokerStatus==='failed')
 - ถ้าไม่เจอ → return `{ notFound: true }`
 - `handleResync`: ถอด HN/OPD → พร้อมบันทึกใหม่
 - `handleProClinicDelete`: treat `notFound` = success → ถอด HN/OPD เหมือนกัน
+
+---
+
+## Deposit System
+
+### Deposit Confirm Modal (styled)
+- ทุกปุ่ม action ใน deposit (ลบ/ยกเลิก/เข้ารับบริการ) ใช้ styled modal แทน `window.confirm()`
+- State: `depositToDelete = { session, action: 'archive' | 'cancel' | 'complete' }`
+- สี modal: แดง สำหรับ archive/cancel, น้ำเงิน สำหรับ service complete
+- แสดงชื่อลูกค้าใน modal body
+
+### Deposit "ลูกค้าเข้ารับบริการ" Flow (updated)
+```
+เดิม: serviceCompleted → archived → ไปประวัติ
+ใหม่: serviceCompleted → ยังอยู่ deposit tab ชั่วคราว → ย้ายเข้าคิว (queue)
+```
+- Queue filter: `formType === 'deposit' && serviceCompleted` sessions แสดงในคิว
+- Deposit tab filter: ไม่รวม `serviceCompleted` sessions
+- เมื่อย้ายเข้าคิว: `isPermanent: false` + `createdAt: serverTimestamp()` (แปลงจาก permanent link เป็น 2-hour link)
+- Queue แสดง deposit sessions พร้อม QR code, tag "จองมัดจำ", full functionality
+- Report viewer แสดง deposit data section พร้อม edit capability
+
+### Deposit Eye/Edit Button
+- แสดง Edit3 icon เมื่อรอ patient data, Eye icon เมื่อ data submitted แล้ว
+- สามารถดู/แก้ deposit data ได้แม้ patient ยังไม่กรอกฟอร์ม
+- Viewer แสดง "รอลูกค้ากรอกข้อมูล..." เมื่อไม่มี patientData
+- Toolbar buttons (แก้ไข, resync, พิมพ์, OPD) ซ่อนเมื่อไม่มี patientData
+- Clinical summary ซ่อนเมื่อไม่มี patientData
+- ใช้ `d = viewingSession.patientData || {}` ป้องกัน crash
+- Grid ซ่อนด้วย `style={display:'none'}` เมื่อไม่มี patientData (OXC parser workaround)
+
+### Deposit hasOPD Check
+```js
+// เดิม (bug — serverTimestamp null ใน first snapshot):
+hasOPD = session.opdRecordedAt && session.brokerStatus === 'done'
+
+// ใหม่ (fix):
+hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done'
+```
+
+### Deposit isUnread Behavior
+- isUnread ไม่ clear เมื่อแค่กดปุ่มตา/edit → clear เฉพาะเมื่อ:
+  - `handleDepositSync` (บันทึกการจอง) สำเร็จ
+  - `handleResync` (Resync ProClinic) สำเร็จ
+- Guard ใน handleViewSession: `isDepositKeepUnread = session.formType === 'deposit' && session.isUnread`

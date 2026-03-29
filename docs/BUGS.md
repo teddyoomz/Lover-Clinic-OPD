@@ -1,7 +1,7 @@
 # Bug History & Resolved Fixes
 
 > อ่านไฟล์นี้ก่อนแตะ AdminDashboard.jsx หรือ broker-extension/
-> อัพเดทล่าสุด: 2026-03-28 (iframe banner, delete notFound, history tab return)
+> อัพเดทล่าสุด: 2026-03-29 (deposit confirm modal, deposit→queue flow, sync button fix, isUnread behavior)
 
 ---
 
@@ -49,6 +49,9 @@
 | ปิด report จากประวัติ → กลับหน้าคิว | `closeViewSession` ไม่ restore `adminMode` | เพิ่ม `prevAdminModeRef` — เก็บ adminMode ก่อนเปิด report, restore ตอนปิด |
 | ลบจาก ProClinic แจ้ง failed แต่จริงๆลบได้ | `handleProClinicDelete` ไม่มี `notFound` check | API `delete.js` verify existence via edit page + return `notFound`; handler treat `notFound` = success → ถอด HN/OPD |
 | Cooldown display +1 นาที | `serverTimestamp()` clock skew → `Math.ceil` rounds up | `Math.min(Math.ceil(remainingMs / 60000), configuredMins)` |
+| Deposit sync button ไม่อัพเดทสถานะหลัง sync | `hasOPD` check ใช้ `session.opdRecordedAt` ซึ่ง `serverTimestamp()` returns null ใน first snapshot (local estimate) → hasOPD = false ชั่วคราว | เปลี่ยน `hasOPD` check เป็น `!!session.brokerProClinicId && session.brokerStatus === 'done'` |
+| Deposit eye button crash เมื่อไม่มี patientData | `viewingSession.patientData` เป็น undefined → destructure crash | ใช้ `d = viewingSession.patientData \|\| {}` + ซ่อน grid ด้วย `style={display:'none'}` เมื่อไม่มี patientData (OXC parser ไม่รองรับ ternary กับ fragments) |
+| Deposit isUnread หายเมื่อแค่ดูข้อมูล | `handleViewSession` clear isUnread ทุกครั้งรวม deposit ที่ยังไม่ sync | เพิ่ม guard: `isDepositKeepUnread = session.formType === 'deposit' && session.isUnread` → ไม่ clear isUnread เมื่อแค่กดปุ่มตา/edit |
 
 ### Cookie Relay Extension (cookie-relay/)
 
@@ -142,6 +145,22 @@ getDoc(ref).then(snap => {
   updateDoc(ref, { latestCourses: { jobId: firestoreJobId, ... } });
 });
 // → iPhone onSnapshot: lc.jobId === coursesJobIdRef.current → match ✓
+```
+
+### serverTimestamp() null in first snapshot
+```
+serverTimestamp() returns null ใน LOCAL snapshot (first of 2 snapshots)
+→ ห้ามใช้ field ที่เขียนด้วย serverTimestamp() เป็น truthy check ทันทีหลัง write
+→ ใช้ field อื่นที่ set ค่าจริง (เช่น brokerProClinicId) แทน opdRecordedAt
+```
+
+### Styled confirm modal pattern (แทน window.confirm)
+```js
+// ใช้ state object เก็บ session + action type:
+const [depositToDelete, setDepositToDelete] = useState(null);
+// { session, action: 'archive' | 'cancel' | 'complete' }
+// Modal style: red สำหรับ delete/cancel, blue สำหรับ service complete
+// แสดงชื่อลูกค้าใน modal body
 ```
 
 ### fetch + redirect:'manual' pattern (ProClinic save)
