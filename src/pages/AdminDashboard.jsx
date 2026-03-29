@@ -4064,16 +4064,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // Calendar for all selected months combined
         const toggleDay = (dateStr) => {
           // cycle: normal → doctor → closed → normal
+          let newDoc, newClosed;
           if (schedDoctorDays.has(dateStr)) {
-            const nd = new Set(schedDoctorDays); nd.delete(dateStr);
-            setSchedDoctorDays(nd);
-            setSchedClosedDays(prev => new Set(prev).add(dateStr));
+            newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
+            newClosed = new Set(schedClosedDays); newClosed.add(dateStr);
           } else if (schedClosedDays.has(dateStr)) {
-            const nc = new Set(schedClosedDays); nc.delete(dateStr);
-            setSchedClosedDays(nc);
+            newDoc = schedDoctorDays;
+            newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
           } else {
-            setSchedDoctorDays(prev => new Set(prev).add(dateStr));
+            newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
+            newClosed = schedClosedDays;
           }
+          setSchedDoctorDays(newDoc);
+          setSchedClosedDays(newClosed);
+          // Save to Firestore immediately
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
+            doctorDays: [...newDoc],
+            closedDays: [...newClosed],
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
         };
 
         return (
