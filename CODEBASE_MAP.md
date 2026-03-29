@@ -331,8 +331,9 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 ### Features
 - **i18n**: ระบบแปลภาษา TH/EN ผ่าน `LANG` object + `lang` state + ปุ่ม Globe toggle
 - **Theme-aware**: ใช้ `isDark` boolean คำนวณสีแทน Tailwind `dark:` prefix (เพราะ theme ใช้ `data-theme` attribute)
+- **Dark mode: Fire/Ember theme** — `fireGlow` object มี inline styles สำหรับ normal/doctor/avail/selected/disabled cells: gradient backgrounds (#0a0a0a→#2d0f00), inset box-shadow glow effects, red-orange metallic borders (#4a1a0a), premium gaming aesthetic. Header/legend/slots/contact cards ทั้งหมดใช้ fire palette. Light mode ใช้ Tailwind classes ปกติ
 - Calendar view แบ่งตามเดือน (month tabs) — gap-px grid borders, trailing cells fill incomplete rows
-- วันหมอเข้า (sky highlight) / วันปิด (muted disabled) / วันว่าง (green badge "ว่างX")
+- วันหมอเข้า (sky highlight / dark: blue glow) / วันปิด (muted disabled) / วันว่าง (green badge "ว่างX" / dark: emerald glow)
 - `noDoctorRequired=false`: วันที่ไม่ใช่หมอเข้า disabled + ไม่แสดงเลขคิวว่าง
 - `noDoctorRequired=true`: ทุกวันคลิกได้ยกเว้นวันปิด, วันหมอเข้ามี 🩺 emoji (มุมขวาบน)
 - กดวันที่ → แสดง time slots (horizontal list + CheckCircle2/XCircle icons) — free/total count
