@@ -167,7 +167,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
         {/* Legend */}
         <div className="flex flex-wrap justify-center gap-3 text-[10px] text-[var(--tx-muted)]">
-          {!noDoctorRequired && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-900/50 border border-sky-700/50 inline-block" /> หมอเข้า</span>}
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-900/50 border border-sky-700/50 inline-block" /> หมอเข้า</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/30 border border-green-800/40 inline-block" /> ว่าง</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-950/50 border border-red-900/50 inline-block" /> ปิด/เต็ม</span>
         </div>
@@ -188,20 +188,22 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 const day = i + 1;
                 const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
                 const isClosed = closedDaysSet.has(dateStr);
-                const isDoctor = !noDoctorRequired && doctorDaysSet.has(dateStr);
+                const isDoctor = doctorDaysSet.has(dateStr);
                 const avail = availByDate[dateStr] || 0;
                 const isSelected = selectedDate === dateStr;
                 const isToday = dateStr === todayStr;
                 const isPast = dateStr < todayStr;
                 const dow = (calStart + i) % 7;
                 const isWeekend = dow >= 5;
+                // ถ้าต้องพบแพทย์ → วันที่หมอไม่เข้า disabled
+                const isDayDisabled = isClosed || (!noDoctorRequired && !isDoctor);
 
                 let bgClass = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50';
                 let textExtra = '';
-                if (isClosed) {
-                  bgClass = 'bg-red-950/30 border border-red-900/40';
-                  textExtra = 'opacity-50';
-                } else if (isDoctor) {
+                if (isDayDisabled) {
+                  bgClass = isClosed ? 'bg-red-950/30 border border-red-900/40' : 'bg-[var(--bg-hover)] border border-[var(--bd)]';
+                  textExtra = 'opacity-40';
+                } else if (!noDoctorRequired && isDoctor) {
                   bgClass = 'bg-sky-950/40 border border-sky-700/50';
                 } else if (avail > 0) {
                   bgClass = 'bg-green-950/20 border border-green-900/30 hover:border-green-700/50';
@@ -210,9 +212,9 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 if (isPast && !isSelected) textExtra += ' opacity-40';
 
                 return (
-                  <button key={day} onClick={() => !isClosed && setSelectedDate(isSelected ? null : dateStr)}
-                    disabled={isClosed}
-                    className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative ${bgClass} ${isClosed ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
+                  <button key={day} onClick={() => !isDayDisabled && setSelectedDate(isSelected ? null : dateStr)}
+                    disabled={isDayDisabled}
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative ${bgClass} ${isDayDisabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}`}>
                     <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
                     {isClosed && <span className="text-[8px] font-bold text-red-400">ปิด</span>}
                     {!isClosed && isDoctor && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
@@ -238,7 +240,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <h3 className="text-sm font-bold text-[var(--tx-heading)]">
                   {parseInt(selectedDate.split('-')[2])} {THAI_MONTHS[m - 1]} {y + 543}
                 </h3>
-                {!noDoctorRequired && doctorDaysSet.has(selectedDate) && (
+                {doctorDaysSet.has(selectedDate) && (
                   <span className="text-[9px] bg-sky-950/50 text-sky-400 border border-sky-900/50 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                     <Stethoscope size={8} /> หมอเข้า
                   </span>
