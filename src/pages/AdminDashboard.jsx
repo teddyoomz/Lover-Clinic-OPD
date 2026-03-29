@@ -2848,26 +2848,42 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="p-3 sm:p-4 space-y-2">
                   {schedList.map(s => {
                     const url = `${window.location.origin}/?schedule=${s.token}`;
-                    const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+                    const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
                     const isEnabled = s.enabled !== false;
+                    const createdMs = s.createdAt?.toMillis?.() || 0;
+                    const expiresMs = createdMs + 24 * 60 * 60 * 1000;
+                    const remainMs = expiresMs - Date.now();
+                    const isExpired = remainMs <= 0;
+                    const remainHrs = Math.floor(remainMs / (60 * 60 * 1000));
+                    const remainMins = Math.floor((remainMs % (60 * 60 * 1000)) / (60 * 1000));
+                    const remainText = isExpired ? 'หมดอายุ' : remainHrs > 0 ? `เหลือ ${remainHrs} ชม. ${remainMins} น.` : `เหลือ ${remainMins} น.`;
+                    const isDoctor = !s.noDoctorRequired;
                     return (
-                      <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
-                          <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
+                      <div key={s.id} className={`rounded-xl border p-3 transition-all ${!isEnabled || isExpired ? 'border-red-900/30 bg-red-950/10 opacity-60' : 'border-[var(--bd)] bg-[var(--bg-hover)]'}`}>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isDoctor ? 'bg-sky-950/40 border border-sky-900/40 text-sky-400' : 'bg-purple-950/40 border border-purple-900/40 text-purple-400'}`}>
+                                {isDoctor ? 'พบแพทย์' : 'ไม่พบแพทย์'}
+                              </span>
+                              <span className={`text-[9px] font-bold ${isExpired ? 'text-red-400' : remainHrs < 6 ? 'text-orange-400' : 'text-green-400'}`}>{remainText}</span>
+                            </div>
+                            <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน · {s.slotDurationMins || 60} นาที/slot</div>
+                            <div className="text-[10px] font-mono text-[var(--tx-muted)] truncate">{s.token}</div>
+                          </div>
+                          <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
+                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
+                            <ClipboardCheck size={12} />
+                          </button>
+                          <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
+                            className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
+                            {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                          </button>
+                          <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
+                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
+                            <Trash2 size={12} />
+                          </button>
                         </div>
-                        <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
-                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
-                          <ClipboardCheck size={12} />
-                        </button>
-                        <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
-                          className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
-                          {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                        </button>
-                        <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
-                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
-                          <Trash2 size={12} />
-                        </button>
                       </div>
                     );
                   })}
