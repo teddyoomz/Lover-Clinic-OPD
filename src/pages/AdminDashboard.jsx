@@ -2666,8 +2666,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const docCellBg = isDark ? 'bg-sky-950/30 border border-sky-800/40 hover:border-sky-600/50' : 'bg-sky-50 border border-sky-200 hover:border-sky-400';
         const closedCellBg = isDark ? 'bg-red-950/30 border border-red-900/40 opacity-50' : 'bg-red-50 border border-red-200 opacity-60';
         const normalCellBg = isDark ? 'bg-emerald-950/20 border border-emerald-900/30 hover:border-emerald-700/50' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400';
-        const defaultCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-300';
-        const hasApptCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50' : 'bg-[var(--bg-card)] border border-sky-200 hover:border-sky-400';
         const legendDocBg = isDark ? 'bg-sky-950/50 border border-sky-800/50' : 'bg-sky-100 border border-sky-200';
         const legendClosedBg = isDark ? 'bg-red-950/50 border border-red-900/50' : 'bg-red-100 border border-red-200';
         const dayNumColor = isDark ? 'text-gray-300' : 'text-gray-700';
@@ -2851,10 +2849,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const isDoc = schedDoctorDays.has(dateStr);
                     const isClosed = schedClosedDays.has(dateStr);
 
-                    let cellBg = defaultCellBg;
+                    let cellBg = normalCellBg;
                     if (isClosed) cellBg = closedCellBg;
                     else if (isDoc) cellBg = docCellBg;
-                    else if (!isWeekend) cellBg = normalCellBg;
                     if (isSelected) cellBg = 'bg-sky-600 ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)] border-0';
 
                     return (
@@ -2863,7 +2860,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           ${cellBg} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
                         {!isClosed && isDoc && <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 text-[8px] sm:text-[10px] leading-none">🩺</span>}
                         {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
-                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isDoc ? (isDark ? 'text-sky-300' : 'text-sky-700') : isWeekend ? 'text-red-400/70' : isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>{day}</span>
+                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isDoc ? (isDark ? 'text-sky-300' : 'text-sky-700') : isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>{day}</span>
                         {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
                         {!isClosed && count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : apptCountColor}`}>นัด {count}</span>}
                         {!isClosed && (avail != null || docAvail != null) && (
