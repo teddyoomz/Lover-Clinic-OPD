@@ -351,12 +351,12 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
           {/* Legend */}
           <div className="flex items-center justify-center gap-4 py-2.5 border-t border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
-            {!noDoctorRequired && (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-sm ${legendDocBg} border`} />
-                {t.doctor}
-              </span>
-            )}
+            <span className="flex items-center gap-1.5">
+              {noDoctorRequired
+                ? <Stethoscope size={11} className={docIconColor} />
+                : <span className={`w-2.5 h-2.5 rounded-sm ${legendDocBg} border`} />}
+              {t.doctor}
+            </span>
             <span className="flex items-center gap-1.5">
               <span className={`w-2.5 h-2.5 rounded-sm ${legendAvailBg} border`} />
               {t.available}

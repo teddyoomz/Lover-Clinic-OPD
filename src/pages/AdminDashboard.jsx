@@ -2679,7 +2679,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setShowScheduleModal(true); }}
+                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedShowFrom('today'); setShowScheduleModal(true); }}
                     className="flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
