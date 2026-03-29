@@ -2941,14 +2941,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                             <button
                                               onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                               onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                              className={`w-7 shrink-0 py-1.5 rounded-l text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
+                                              className={`w-12 shrink-0 py-2 rounded-l text-[10px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
                                               title={blocked ? 'ปิดคิวอยู่ — กดเพื่อเปิด' : 'กดเพื่อปิดคิว'}>
                                               {blocked ? '✕' : ''}
                                             </button>
-                                            <div className="w-11 shrink-0 flex items-center justify-center text-[9px] font-mono text-[var(--tx-muted)] bg-[var(--bg-hover)]/30">
+                                            <div className="w-12 shrink-0 flex items-center justify-center text-[10px] font-mono font-bold text-[var(--tx-muted)] bg-[var(--bg-hover)]/30 border-y border-[var(--bd)]/30">
                                               {s.start}
                                             </div>
-                                            <div className={`flex-1 px-2 py-1 text-[9px] flex items-center gap-1.5 min-w-0 ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
+                                            <div className={`flex-1 px-2 py-1.5 text-[10px] flex items-center gap-1.5 min-w-0 ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
                                               {appt ? (
                                                 <>
                                                   <span className="text-sky-300 font-bold truncate">{appt.fullCustomerName || appt.customerName || '—'}</span>
@@ -2956,14 +2956,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                                   {appt.appointmentType && <span className="text-[8px] text-gray-500 shrink-0">{appt.appointmentType}</span>}
                                                 </>
                                               ) : (
-                                                <span className="text-gray-700 text-[8px]">ว่าง</span>
+                                                <span className="text-gray-600 text-[9px]">—</span>
                                               )}
                                             </div>
                                             {isDoctorDay && (
                                               <button
                                                 onPointerDown={(e) => handleDocSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                                 onPointerEnter={() => handleDocSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                                className={`w-7 shrink-0 py-1.5 rounded-r text-[9px] font-bold transition-colors ${inDocHour ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}
+                                                className={`w-12 shrink-0 py-2 rounded-r text-[10px] font-bold transition-colors ${inDocHour ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}
                                                 title={inDocHour ? 'หมอเข้า — กดเพื่อปิด' : 'กดเพื่อเปิดเวลาหมอ'}>
                                                 {inDocHour ? '🩺' : ''}
                                               </button>
