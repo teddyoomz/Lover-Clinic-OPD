@@ -236,8 +236,8 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const yearDisplay = lang === 'th' ? y + 543 : y;
 
   // ── Theme-aware color helpers ──
-  const docCellBg = isDark ? 'bg-sky-950/30' : 'bg-sky-50';
-  const availCellBg = isDark ? 'bg-emerald-950/20' : 'bg-emerald-50/60';
+  const docCellBg = isDark ? 'bg-sky-900/40 border-sky-700/40' : 'bg-sky-100 border-sky-300';
+  const availCellBg = isDark ? 'bg-emerald-950/30 border-emerald-800/30' : 'bg-emerald-50 border-emerald-200';
   const availColor = isDark ? 'text-emerald-400' : 'text-emerald-600';
   const fullColor = isDark ? 'text-amber-400' : 'text-amber-600';
   const todayDotColor = isDark ? 'bg-sky-400' : 'bg-sky-500';
@@ -329,9 +329,8 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
               let cellBg = 'bg-[var(--bg-card)]';
               if (!isDayDisabled && !isSelected) {
-                if (isDoctor) cellBg = `bg-[var(--bg-card)] ${docCellBg}`;
-                else if (avail > 0) cellBg = `bg-[var(--bg-card)] ${availCellBg}`;
-                else cellBg = 'bg-[var(--bg-card)]';
+                if (isDoctor) cellBg = docCellBg;
+                else if (avail > 0) cellBg = availCellBg;
               }
               if (isSelected) cellBg = 'bg-sky-500';
 
@@ -355,7 +354,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                   {/* Doctor emoji (top-right corner) */}
                   {!isClosed && isDoctor && !isDayDisabled && (
-                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">🩺</span>
+                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">♥️</span>
                   )}
 
                   {/* Availability */}
@@ -386,7 +385,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           {/* Legend */}
           <div className="flex items-center justify-center gap-4 py-2.5 border-t border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
             <span className="flex items-center gap-1.5">
-              <span className="text-[11px]">🩺</span>
+              <span className="text-[11px]">♥️</span>
               {t.doctor}
             </span>
             <span className="flex items-center gap-1.5">
