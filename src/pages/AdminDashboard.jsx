@@ -2334,7 +2334,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   )}
 
                   {/* Row 4: OPD badge */}
-                  {session.opdRecordedAt && (
+                  {session.opdRecordedAt && session.brokerStatus === 'done' && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                       <ClipboardCheck size={13} className="text-[var(--opd-color)] shrink-0" />
                       <div className="flex flex-col min-w-0 gap-0.5">
@@ -3563,7 +3563,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         )}
                       </div>
                       {/* OPD Recorded Badge */}
-                      {session.opdRecordedAt && (
+                      {session.opdRecordedAt && session.brokerStatus === 'done' && (
                         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                           <ClipboardCheck size={14} className="text-[var(--opd-color)] shrink-0" />
                           <div className="flex flex-col min-w-0 gap-0.5">
@@ -3727,7 +3727,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             </div>
             
-            {viewingSession.opdRecordedAt && (
+            {viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done' && (
               <div className="px-4 sm:px-6 py-3 bg-[var(--opd-bg)] border-b border-[var(--opd-bd)] flex items-center gap-3 shrink-0 flex-wrap">
                 <div className="p-1.5 rounded-lg bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)]">
                   <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
