@@ -139,6 +139,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
+  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [sessions, setSessions] = useState([]);
   const [formTemplates, setFormTemplates] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2205,8 +2206,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               return (
                 <div key={session.id} className="p-4 flex flex-col gap-3 hover:bg-amber-950/5 transition-colors">
 
-                  {/* Row 1: name + ID + actions */}
-                  <div className="flex flex-col gap-1.5">
+                  {/* Row 1: name + actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[200px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -2215,7 +2216,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     </div>
                     {/* Action buttons */}
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                       {d && (
                         <button onClick={() => { prevAdminModeRef.current = adminMode; setViewingSession(session); setAdminMode('dashboard'); }}
                           className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูประวัติ">
@@ -2469,7 +2470,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
-                      <div className="flex flex-col gap-1.5 mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-2">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           {editingNameId === session.id ? (
                             <input autoFocus value={editingNameValue}
@@ -2480,13 +2481,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           ) : (
                             <>
                               {session.isUnread && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
-                              <span className="font-black text-white text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                              <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-emerald-400 shrink-0"><Edit3 size={12}/></button>
                             </>
                           )}
                           <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-deposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
                             <QrCode size={14}/>
                           </button>
@@ -2613,7 +2614,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const hasDeposit = session.depositSyncStatus === 'done';
                 return (
                   <div key={session.id} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--bd)] p-4">
-                    <div className="flex flex-col gap-1.5 mb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-2">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span className="font-bold text-gray-400 text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                         <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><Banknote size={10}/> จองมัดจำ</span>
@@ -2621,7 +2622,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><UserCheck size={10}/> มารับบริการแล้ว</span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                         {!session.serviceCompleted && (
                           <button onClick={() => {
                             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: false, archivedAt: null });
@@ -2661,6 +2662,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const calStart = startDow === 0 ? 6 : startDow - 1; // shift to Monday-first
         const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
         const thaiDays = ['จ','อ','พ','พฤ','ศ','ส','อา'];
+        // Theme-aware colors
+        const docCellBg = isDark ? 'bg-sky-950/30 border border-sky-800/40 hover:border-sky-600/50' : 'bg-sky-50 border border-sky-200 hover:border-sky-400';
+        const closedCellBg = isDark ? 'bg-red-950/30 border border-red-900/40 opacity-50' : 'bg-red-50 border border-red-200 opacity-60';
+        const defaultCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-300';
+        const hasApptCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50' : 'bg-[var(--bg-card)] border border-sky-200 hover:border-sky-400';
+        const legendDocBg = isDark ? 'bg-sky-950/50 border border-sky-800/50' : 'bg-sky-100 border border-sky-200';
+        const legendClosedBg = isDark ? 'bg-red-950/50 border border-red-900/50' : 'bg-red-100 border border-red-200';
+        const dayNumColor = isDark ? 'text-gray-300' : 'text-gray-700';
+        const apptCountColor = isDark ? 'text-sky-300/80' : 'text-sky-600';
+        const availCountColor = isDark ? 'text-green-400' : 'text-green-600';
+        const warnCountColor = isDark ? 'text-orange-400' : 'text-orange-600';
+        const monthTextColor = isDark ? 'text-white' : 'text-[var(--tx-heading)]';
+        const selectColor = isDark ? '[color-scheme:dark]' : '[color-scheme:light]';
+        const selectText = isDark ? 'text-white' : 'text-[var(--tx-heading)]';
         const appointments = apptData?.appointments || [];
 
         // Build appointment count per day
@@ -2735,7 +2750,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <button onClick={prevMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
                       <ChevronLeft size={14} />
                     </button>
-                    <span className="text-xs sm:text-sm font-bold text-white min-w-[110px] sm:min-w-[140px] text-center">{thaiMonths[m - 1]} {y + 543}</span>
+                    <span className={`text-xs sm:text-sm font-bold ${monthTextColor} min-w-[110px] sm:min-w-[140px] text-center`}>{thaiMonths[m - 1]} {y + 543}</span>
                     <button onClick={nextMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
                       <ChevronRight size={14} />
                     </button>
@@ -2744,13 +2759,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 {/* Row 2: sync + create link */}
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleSyncAppointments(apptMonth)} disabled={apptSyncing}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500 opacity-70' : apptSyncSuccess ? 'bg-green-950/40 border border-green-900/50 text-green-400' : 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 hover:text-sky-300'}`}>
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? (isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500' : 'bg-sky-100 border border-sky-200 text-sky-500') + ' opacity-70' : apptSyncSuccess ? (isDark ? 'bg-green-950/40 border border-green-900/50 text-green-400' : 'bg-green-50 border border-green-200 text-green-600') : (isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40' : 'bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100')}`}>
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
                   <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
-                    className="flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
@@ -2759,7 +2774,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Clock size={12} className="text-gray-500 shrink-0" />
                   <span className="text-[10px] text-gray-500 shrink-0">คำนวณว่าง:</span>
                   <select value={apptSlotDuration} onChange={e => setApptSlotDuration(Number(e.target.value))}
-                    className="bg-transparent text-white text-[11px] font-bold outline-none cursor-pointer [color-scheme:dark] flex-1">
+                    className={`bg-transparent ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1`}>
                     {[15,30,45,60,75,90,105,120].map(v => (
                       <option key={v} value={v}>{v < 60 ? `${v} นาที` : v === 60 ? '1 ชม.' : `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')} ชม.`}</option>
                     ))}
@@ -2771,10 +2786,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <div className="p-3 sm:p-5">
                 {/* Legend */}
                 <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-sky-950/50 border border-sky-800/50 inline-block" /> หมอเข้า</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm bg-red-950/50 border border-red-900/50 inline-block" /> ปิด</span>
-                  <span className="flex items-center gap-1"><span className="text-sky-300 font-bold">มีนัด</span></span>
-                  <span className="flex items-center gap-1"><span className="text-green-400 font-bold">ว่าง</span></span>
+                  <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
+                  <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
+                  <span className="flex items-center gap-1"><span className={`${apptCountColor} font-bold`}>มีนัด</span></span>
+                  <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span></span>
                 </div>
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
@@ -2799,10 +2814,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const isDoc = schedDoctorDays.has(dateStr);
                     const isClosed = schedClosedDays.has(dateStr);
 
-                    let cellBg = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:bg-[var(--bg-hover)]';
-                    if (isClosed) cellBg = 'bg-red-950/30 border border-red-900/40 opacity-50';
-                    else if (isDoc) cellBg = 'bg-sky-950/30 border border-sky-800/40 hover:border-sky-600/50';
-                    else if (count > 0) cellBg = 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50';
+                    let cellBg = defaultCellBg;
+                    if (isClosed) cellBg = closedCellBg;
+                    else if (isDoc) cellBg = docCellBg;
+                    else if (count > 0) cellBg = hasApptCellBg;
                     if (isSelected) cellBg = 'bg-sky-600 ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)] border-0';
 
                     return (
@@ -2810,13 +2825,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         className={`rounded-lg flex flex-col items-center justify-center py-1 sm:py-1.5 gap-px transition-all text-xs relative cursor-pointer min-h-[58px] sm:min-h-[76px]
                           ${cellBg} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
                         {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
-                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
+                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : dayNumColor}`}>{day}</span>
                         {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
                         {!isClosed && isDoc && <Stethoscope size={8} className={`sm:!w-[10px] sm:!h-[10px] ${isSelected ? 'text-sky-200' : 'text-sky-400/70'}`} />}
                         {!isClosed && (count > 0 || avail != null) && (
                           <div className="flex flex-col items-center mt-px">
-                            {count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : 'text-sky-300/80'}`}>นัด {count}</span>}
-                            {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง {avail}</span>}
+                            {count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : apptCountColor}`}>นัด {count}</span>}
+                            {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? availCountColor : warnCountColor}`}>ว่าง {avail}</span>}
                           </div>
                         )}
                       </button>
@@ -2952,24 +2967,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                       {/* Summary badges */}
                       <div className="flex items-center gap-1.5">
-                        {doctorCount > 0 && <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-400 px-2 py-0.5 rounded-full font-bold">{doctorCount} หมอเข้า</span>}
-                        {closedCount > 0 && <span className="text-[9px] bg-red-950/40 border border-red-900/40 text-red-400 px-2 py-0.5 rounded-full font-bold">{closedCount} ปิด</span>}
-                        {blockedCount > 0 && <span className="text-[9px] bg-orange-950/40 border border-orange-900/40 text-orange-400 px-2 py-0.5 rounded-full font-bold">{blockedCount} slot ปิด</span>}
+                        {doctorCount > 0 && <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-sky-950/40 border border-sky-900/40 text-sky-400' : 'bg-sky-100 border border-sky-200 text-sky-600'}`}>{doctorCount} หมอเข้า</span>}
+                        {closedCount > 0 && <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-red-950/40 border border-red-900/40 text-red-400' : 'bg-red-100 border border-red-200 text-red-600'}`}>{closedCount} ปิด</span>}
+                        {blockedCount > 0 && <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-orange-950/40 border border-orange-900/40 text-orange-400' : 'bg-orange-100 border border-orange-200 text-orange-600'}`}>{blockedCount} slot ปิด</span>}
                       </div>
                     </div>
                     {/* Legend */}
                     <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-[var(--tx-muted)]">
-                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block" /> หมอเข้า</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> ปิดคิว</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-700 inline-block" /> ปกติ</span>
-                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block" /> ปิดช่วงเวลา</span>
+                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-sky-600' : 'bg-sky-400'}`} /> หมอเข้า</span>
+                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-red-600' : 'bg-red-400'}`} /> ปิดคิว</span>
+                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-700' : 'bg-emerald-400'}`} /> ปกติ</span>
+                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-orange-600' : 'bg-orange-400'}`} /> ปิดช่วงเวลา</span>
                       {!schedCalendarEditing && <span className="text-[9px] text-[var(--tx-muted)] ml-auto opacity-50">กดแก้ไขเพื่อเปลี่ยน</span>}
                     </div>
                     {/* Calendar edit/save/cancel buttons */}
                     <div className="flex items-center gap-2 mt-3">
                       {!schedCalendarEditing ? (
                         <button onClick={() => { if (confirm('ต้องการแก้ไขตารางหมอเข้า/ปิดคิว?')) startCalendarEdit(); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 transition-all">
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40' : 'bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100'}`}>
                           <Edit3 size={11} /> แก้ไขตารางหมอเข้า/ปิดคิว
                         </button>
                       ) : (
@@ -3025,8 +3040,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     onPointerDown={(e) => handleDayPointerDown(ds, e)}
                                     onPointerEnter={() => handleDayPointerEnter(ds)}
                                     className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-colors relative
-                                      ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40'}
-                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-emerald-300' : ''}`}>
+                                      ${isCl ? (isDark ? 'bg-red-900/40 border border-red-800/50 text-red-400' : 'bg-red-100 border border-red-200 text-red-500') : isDoc ? (isDark ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-sky-100 border border-sky-200 text-sky-600') : (isDark ? 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400')}
+                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? (isDark ? 'text-emerald-300' : 'text-emerald-700') : ''}`}>
                                     {day}
                                     {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
                                     {isCl && <span className="text-[7px]">✕</span>}
@@ -3104,8 +3119,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                       </div>
                                     )}
                                     <div className="flex items-center gap-3 mb-1.5 text-[8px]">
-                                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-900/50 border border-red-800/50 inline-block"></span> ปิดคิว</span>
-                                      {isDoctorDay && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-900/50 border border-sky-700/50 inline-block"></span> หมอเข้า</span>}
+                                      <span className="flex items-center gap-1"><span className={`w-2 h-2 rounded-sm inline-block ${isDark ? 'bg-red-900/50 border border-red-800/50' : 'bg-red-200 border border-red-300'}`}></span> ปิดคิว</span>
+                                      {isDoctorDay && <span className="flex items-center gap-1"><span className={`w-2 h-2 rounded-sm inline-block ${isDark ? 'bg-sky-900/50 border border-sky-700/50' : 'bg-sky-200 border border-sky-300'}`}></span> หมอเข้า</span>}
                                     </div>
                                     <div className="space-y-0.5 select-none" style={{touchAction: 'none'}}
                                       onPointerUp={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
@@ -3124,7 +3139,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                             <button data-slot-info data-slot-date={schedBlockingDay} data-slot-start={s.start} data-slot-end={s.end} data-slot-type="block"
                                               onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                               onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                              className={`w-12 shrink-0 py-2 text-[10px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
+                                              className={`w-12 shrink-0 py-2 text-[10px] font-bold transition-colors ${blocked ? (isDark ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-red-200 border border-red-300 text-red-600') : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
                                               title={blocked ? 'ปิดคิวอยู่ — กดเพื่อเปิด' : 'กดเพื่อปิดคิว'}>
                                               {blocked ? '✕' : ''}
                                             </button>
@@ -3132,15 +3147,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                               <button data-slot-info data-slot-date={schedBlockingDay} data-slot-start={s.start} data-slot-end={s.end} data-slot-type="doctor"
                                                 onPointerDown={(e) => handleDocSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                                 onPointerEnter={() => handleDocSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                                className={`w-12 shrink-0 py-2 text-[10px] font-bold transition-colors ${inDocHour ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}
+                                                className={`w-12 shrink-0 py-2 text-[10px] font-bold transition-colors ${inDocHour ? (isDark ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-sky-200 border border-sky-300 text-sky-600') : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}
                                                 title={inDocHour ? 'หมอเข้า — กดเพื่อปิด' : 'กดเพื่อเปิดเวลาหมอ'}>
                                                 {inDocHour ? '🩺' : ''}
                                               </button>
                                             )}
-                                            <div className={`flex-1 px-2 py-1.5 text-[10px] flex items-center gap-1.5 min-w-0 rounded-r ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
+                                            <div className={`flex-1 px-2 py-1.5 text-[10px] flex items-center gap-1.5 min-w-0 rounded-r ${appt ? (isDark ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-sky-50 border border-sky-200') : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
                                               {appt ? (
                                                 <>
-                                                  <span className="text-sky-300 font-bold truncate">{appt.fullCustomerName || appt.customerName || '—'}</span>
+                                                  <span className={`font-bold truncate ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>{appt.fullCustomerName || appt.customerName || '—'}</span>
                                                   {appt.doctorName && appt.doctorName !== '-' && <span className="text-[8px] text-sky-500 shrink-0">🩺{appt.doctorName}</span>}
                                                   {appt.appointmentType && <span className="text-[8px] text-gray-500 shrink-0">{appt.appointmentType}</span>}
                                                 </>
@@ -3344,33 +3359,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   const isLowTime = timeLeftStr.includes('m') && !timeLeftStr.includes('h') && parseInt(timeLeftStr) < 30 && !session.isPermanent;
                   return (
                     <div key={session.id} className={`p-4 flex flex-col gap-3 ${session.isUnread ? 'bg-red-950/10' : ''}`}>
-                      {/* Row 1: name + ID */}
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex flex-col gap-1.5 min-w-0">
-                            {editingNameId === session.id ? (
-                              <input autoFocus value={editingNameValue}
-                                onChange={e => setEditingNameValue(e.target.value)}
-                                onBlur={() => saveEditedName(session.id)}
-                                onKeyDown={e => e.key === 'Enter' && saveEditedName(session.id)}
-                                className="bg-[var(--bg-input)] border border-blue-500 text-[var(--tx-heading)] text-sm px-3 py-1 rounded-lg w-40 outline-none" />
-                            ) : (
-                              <div className="flex items-center gap-1.5 relative">
-                                {session.isUnread && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>
-                                )}
-                                <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px]">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
-                                <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-blue-400 shrink-0"><Edit3 size={12} /></button>
-                              </div>
-                            )}
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`font-mono text-xs font-bold bg-[var(--bg-hover)] px-2 py-1 rounded-lg border border-[var(--bd)] ${session.isPermanent ? 'text-orange-500' : 'text-red-500'}`}>{session.id}</span>
-                              {getBadgeForFormType(formType, session.customTemplate)}
+                      {/* Row 1: name + actions */}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2">
+                        <div className="flex flex-col gap-1.5 min-w-0">
+                          {editingNameId === session.id ? (
+                            <input autoFocus value={editingNameValue}
+                              onChange={e => setEditingNameValue(e.target.value)}
+                              onBlur={() => saveEditedName(session.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveEditedName(session.id)}
+                              className="bg-[var(--bg-input)] border border-blue-500 text-[var(--tx-heading)] text-sm px-3 py-1 rounded-lg w-40 outline-none" />
+                          ) : (
+                            <div className="flex items-center gap-1.5 relative">
+                              {session.isUnread && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>
+                              )}
+                              <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                              <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-blue-400 shrink-0"><Edit3 size={12} /></button>
                             </div>
+                          )}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`font-mono text-xs font-bold bg-[var(--bg-hover)] px-2 py-1 rounded-lg border border-[var(--bd)] ${session.isPermanent ? 'text-orange-500' : 'text-red-500'}`}>{session.id}</span>
+                            {getBadgeForFormType(formType, session.customTemplate)}
                           </div>
                         </div>
-                        {/* Action buttons — own row for narrow screens */}
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-2 rounded-lg border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-input)] text-gray-400 hover:text-[var(--tx-heading)] border-[var(--bd)]'}`} title="QR"><QrCode size={15} /></button>
                           <button
                             onClick={() => setPatientLinkModal(session.id)}
@@ -4217,63 +4230,83 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* Unified Create Session Modal */}
       {showSessionModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-           <div className="bg-[#0a0a0a] rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.8)] border border-[#222] w-full max-w-2xl overflow-hidden animate-in zoom-in-95">
-              <div className="flex border-b border-[#222]">
-                 <button onClick={() => setSessionModalTab('standard')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 ${sessionModalTab === 'standard' ? 'bg-[#111]' : 'text-gray-500 hover:text-gray-300 border-transparent'}`} style={sessionModalTab === 'standard' ? {color: ac, borderColor: ac} : {}}>ฟอร์มมาตรฐาน</button>
-                 <button onClick={() => setSessionModalTab('custom')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${sessionModalTab === 'custom' ? 'bg-[#111] text-blue-500 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>แบบฟอร์มสร้างเอง</button>
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center p-4 z-[60]" onClick={() => setShowSessionModal(false)}>
+           <div className="bg-[var(--bg-card)] rounded-2xl shadow-[var(--shadow-modal)] border border-[var(--bd)] w-full max-w-lg overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="p-5 sm:p-6 pb-0">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-base sm:text-lg font-black text-[var(--tx-heading)] tracking-tight">สร้างคิวใหม่</h2>
+                  <button onClick={() => setShowSessionModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors"><X size={14} /></button>
+                </div>
+                <p className="text-[11px] text-[var(--tx-muted)]">เลือกประเภทแบบฟอร์มที่ต้องการ</p>
+                {/* Tabs */}
+                <div className="flex mt-4 bg-[var(--bg-hover)] rounded-lg p-0.5 border border-[var(--bd)]">
+                  <button onClick={() => setSessionModalTab('standard')} className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${sessionModalTab === 'standard' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มมาตรฐาน</button>
+                  <button onClick={() => setSessionModalTab('custom')} className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${sessionModalTab === 'custom' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มสร้างเอง</button>
+                </div>
               </div>
 
-              <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="p-5 sm:p-6 max-h-[55vh] overflow-y-auto">
                  {sessionModalTab === 'standard' ? (
-                   <div className="space-y-4">
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={() => openNamePrompt({isPermanent: false, formType: 'intake'})} className="p-4 bg-[#141414] hover:bg-[#1a1a1a] border border-[#333] text-left rounded-lg transition-all group" onMouseEnter={e => e.currentTarget.style.borderColor = ac} onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}>
-                          <span className="block text-gray-200 font-bold transition-colors" style={{}}>แบบบันทึก OPD (Intake)</span>
-                          <span className="text-[10px] text-gray-500 mt-1 block">กรอกประวัติผู้ป่วยใหม่ (หมดอายุ 2 ชม.)</span>
+                   <div className="space-y-3">
+                     {/* Primary actions */}
+                     <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => openNamePrompt({isPermanent: false, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-red-500/50' : 'bg-white border-gray-200 hover:border-red-400 shadow-sm'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-500'}`}>
+                            <ClipboardCheck size={16} />
+                          </div>
+                          <span className="block text-[var(--tx-heading)] font-bold text-sm">OPD Intake</span>
+                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">บันทึกผู้ป่วยใหม่<br/>หมดอายุ 2 ชม.</span>
                         </button>
-                        <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className="p-4 bg-[#141414] hover:bg-[#1a1a1a] border border-[#333] text-left rounded-lg transition-all group" onMouseEnter={e => e.currentTarget.style.borderColor = ac} onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}>
-                          <span className="block text-gray-200 font-bold flex items-center gap-1"><Link size={12}/> ลิงก์ถาวร</span>
-                          <span className="text-[10px] text-gray-500 mt-1 block">คิวไม่หมดอายุ ใช้แปะหน้าเพจได้</span>
-                        </button>
-                        <button onClick={() => { setShowSessionModal(false); setShowDepositForm(true); fetchDepositOptions(); }} className="p-4 bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-900/50 hover:border-emerald-600 text-left rounded-lg transition-all sm:col-span-2">
-                          <span className="block text-emerald-400 font-bold flex items-center gap-1"><Banknote size={12}/> แบบบันทึก OPD ลูกค้าจอง</span>
-                          <span className="text-[10px] text-gray-500 mt-1 block">จองมัดจำ + บันทึกลง ProClinic (ลิงก์ถาวร)</span>
+                        <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-sky-500/50' : 'bg-white border-gray-200 hover:border-sky-400 shadow-sm'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-sky-950/50 text-sky-400' : 'bg-sky-50 text-sky-500'}`}>
+                            <Link size={16} />
+                          </div>
+                          <span className="block text-[var(--tx-heading)] font-bold text-sm">ลิงก์ถาวร</span>
+                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">คิวไม่หมดอายุ<br/>ใช้แปะหน้าเพจ</span>
                         </button>
                      </div>
-                     <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest pt-4 border-t border-[#222]">ติดตามอาการ (Follow-up) - ลิงก์ถาวร</h4>
-                     <div className="grid grid-cols-1 gap-3">
-                         <button onClick={() => openNamePrompt({isPermanent: true, formType: 'followup_ed'})} className="w-full p-4 bg-[#141414] hover:bg-[#1a1a1a] border border-[#333] hover:border-orange-500 text-left rounded-lg transition-all group">
-                            <span className="block text-gray-200 font-bold group-hover:text-orange-400 transition-colors">1. เสื่อมสมรรถภาพทางเพศ (ชาย)</span>
-                            <span className="text-[10px] text-gray-500 mt-1 block">ประเมินผลด้วย IIEF-5 Score</span>
-                         </button>
-                         <button onClick={() => openNamePrompt({isPermanent: true, formType: 'followup_adam'})} className="w-full p-4 bg-[#141414] hover:bg-[#1a1a1a] border border-[#333] hover:border-orange-500 text-left rounded-lg transition-all group">
-                            <span className="block text-gray-200 font-bold group-hover:text-orange-400 transition-colors">2. ภาวะพร่องฮอร์โมน (ชาย)</span>
-                            <span className="text-[10px] text-gray-500 mt-1 block">ประเมินผลด้วย ADAM Score</span>
-                         </button>
-                         <button onClick={() => openNamePrompt({isPermanent: true, formType: 'followup_mrs'})} className="w-full p-4 bg-[#141414] hover:bg-[#1a1a1a] border border-[#333] hover:border-orange-500 text-left rounded-lg transition-all group">
-                            <span className="block text-gray-200 font-bold group-hover:text-orange-400 transition-colors">3. อาการวัยทอง (หญิง)</span>
-                            <span className="text-[10px] text-gray-500 mt-1 block">ประเมินผลด้วย MRS Score</span>
-                         </button>
+
+                     {/* Follow-up section */}
+                     <div className={`mt-2 pt-3 border-t ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+                       <h4 className="text-[10px] font-black text-[var(--tx-muted)] uppercase tracking-widest mb-2.5">Follow-up — ลิงก์ถาวร</h4>
+                       <div className="space-y-2">
+                         {[
+                           { formType: 'followup_ed', label: 'เสื่อมสมรรถภาพทางเพศ (ชาย)', sub: 'IIEF-5 Score' },
+                           { formType: 'followup_adam', label: 'ภาวะพร่องฮอร์โมน (ชาย)', sub: 'ADAM Score' },
+                           { formType: 'followup_mrs', label: 'อาการวัยทอง (หญิง)', sub: 'MRS Score' },
+                         ].map((fu, idx) => (
+                           <button key={fu.formType} onClick={() => openNamePrompt({isPermanent: true, formType: fu.formType})}
+                             className={`w-full p-3 text-left rounded-xl transition-all flex items-center gap-3 group ${isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border border-gray-200 hover:border-orange-400 shadow-sm'}`}>
+                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isDark ? 'bg-orange-950/50 text-orange-400' : 'bg-orange-50 text-orange-500'}`}>{idx + 1}</span>
+                             <div className="min-w-0">
+                               <span className={`block text-sm font-bold truncate ${isDark ? 'text-[var(--tx-body)] group-hover:text-orange-400' : 'text-[var(--tx-heading)] group-hover:text-orange-600'} transition-colors`}>{fu.label}</span>
+                               <span className="text-[10px] text-[var(--tx-muted)]">{fu.sub}</span>
+                             </div>
+                           </button>
+                         ))}
+                       </div>
                      </div>
                    </div>
                  ) : (
-                   <div className="space-y-4">
+                   <div className="space-y-3">
                      {formTemplates.length === 0 ? (
-                       <div className="text-center py-8 text-gray-500 text-sm">
-                         ยังไม่มีแบบฟอร์ม <button onClick={() => {setShowSessionModal(false); setAdminMode('formBuilder');}} className="text-blue-500 underline ml-1">สร้างแบบฟอร์มใหม่</button>
+                       <div className="text-center py-10 text-[var(--tx-muted)]">
+                         <LayoutTemplate size={32} className="mx-auto mb-3 opacity-30" />
+                         <p className="text-sm font-medium mb-1">ยังไม่มีแบบฟอร์ม</p>
+                         <button onClick={() => {setShowSessionModal(false); setAdminMode('formBuilder');}} className="text-sky-500 hover:text-sky-400 text-xs font-bold">สร้างแบบฟอร์มใหม่</button>
                        </div>
                      ) : (
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                          {formTemplates.map(tpl => (
-                           <div key={tpl.id} className="bg-[#141414] border border-[#333] rounded-lg p-4 flex flex-col justify-between">
+                           <div key={tpl.id} className={`rounded-xl p-4 flex flex-col justify-between border ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)]' : 'bg-white border-gray-200 shadow-sm'}`}>
                              <div>
-                               <h4 className="text-white font-bold text-sm mb-1">{tpl.title}</h4>
-                               <p className="text-gray-500 text-xs mb-3 truncate">{tpl.description}</p>
+                               <h4 className="text-[var(--tx-heading)] font-bold text-sm mb-1">{tpl.title}</h4>
+                               <p className="text-[var(--tx-muted)] text-xs mb-3 truncate">{tpl.description}</p>
                              </div>
                              <div className="flex gap-2 mt-2">
-                               <button onClick={() => openNamePrompt({isPermanent: false, formType: 'custom', customTemplate: tpl})} className="flex-1 py-2 rounded text-xs font-bold transition-all border" style={{background:'transparent', borderColor:`${ac}66`, color:ac}} onMouseEnter={e=>{e.currentTarget.style.background=ac;e.currentTarget.style.borderColor=ac;e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor=`${ac}66`;e.currentTarget.style.color=ac}}>คิว 2 ชม.</button>
-                               <button onClick={() => openNamePrompt({isPermanent: true, formType: 'custom', customTemplate: tpl})} className="flex-1 py-2 rounded text-xs font-bold transition-all border flex items-center justify-center gap-1" style={{background:ac, borderColor:ac, color:'#fff'}} onMouseEnter={e=>{e.currentTarget.style.opacity='0.85'}} onMouseLeave={e=>{e.currentTarget.style.opacity='1'}}><Link size={10}/> ถาวร</button>
+                               <button onClick={() => openNamePrompt({isPermanent: false, formType: 'custom', customTemplate: tpl})} className="flex-1 py-2 rounded-lg text-xs font-bold transition-all border" style={{background:'transparent', borderColor:`${ac}66`, color:ac}} onMouseEnter={e=>{e.currentTarget.style.background=ac;e.currentTarget.style.borderColor=ac;e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor=`${ac}66`;e.currentTarget.style.color=ac}}>คิว 2 ชม.</button>
+                               <button onClick={() => openNamePrompt({isPermanent: true, formType: 'custom', customTemplate: tpl})} className="flex-1 py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1" style={{background:ac, borderColor:ac, color:'#fff'}} onMouseEnter={e=>{e.currentTarget.style.opacity='0.85'}} onMouseLeave={e=>{e.currentTarget.style.opacity='1'}}><Link size={10}/> ถาวร</button>
                              </div>
                            </div>
                          ))}
@@ -4281,9 +4314,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                      )}
                    </div>
                  )}
-              </div>
-              <div className="p-4 bg-[#111] border-t border-[#222]">
-                 <button onClick={() => setShowSessionModal(false)} className="w-full py-3 bg-transparent text-gray-500 hover:text-white text-xs font-bold uppercase tracking-widest">ยกเลิก</button>
               </div>
            </div>
         </div>
