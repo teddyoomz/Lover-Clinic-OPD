@@ -194,6 +194,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const slotDragRef = useRef({ active: false, action: null }); // drag for slot toggle
   const [schedCustomDoctorHours, setSchedCustomDoctorHours] = useState({}); // { "YYYY-MM-DD": { start, end } }
   const doctorSlotDragRef = useRef({ active: false, action: null }); // drag for doctor hour slots
+  const [schedCalendarEditing, setSchedCalendarEditing] = useState(false);
+  const [schedSlotEditing, setSchedSlotEditing] = useState(false);
+  const schedCalendarBackup = useRef(null); // backup for cancel
+  const schedSlotBackup = useRef(null); // backup for cancel
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -461,6 +465,53 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }).catch(() => {});
   };
 
+  // ── Edit mode helpers for schedule settings ──
+  const startCalendarEdit = () => {
+    schedCalendarBackup.current = {
+      doctorDays: new Set(schedDoctorDays),
+      closedDays: new Set(schedClosedDays),
+      customDoctorHours: { ...schedCustomDoctorHours },
+    };
+    setSchedCalendarEditing(true);
+  };
+  const saveCalendarEdit = () => {
+    saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, schedCustomDoctorHours);
+    schedCalendarBackup.current = null;
+    setSchedCalendarEditing(false);
+    showToast('บันทึกตารางหมอเข้า/ปิดคิวแล้ว', 2000);
+  };
+  const cancelCalendarEdit = () => {
+    if (schedCalendarBackup.current) {
+      setSchedDoctorDays(schedCalendarBackup.current.doctorDays);
+      setSchedClosedDays(schedCalendarBackup.current.closedDays);
+      setSchedCustomDoctorHours(schedCalendarBackup.current.customDoctorHours);
+    }
+    schedCalendarBackup.current = null;
+    setSchedCalendarEditing(false);
+  };
+  const startSlotEdit = () => {
+    schedSlotBackup.current = {
+      manualBlocked: [...schedManualBlocked],
+    };
+    setSchedSlotEditing(true);
+    setSchedBlockingDay(null);
+  };
+  const saveSlotEdit = () => {
+    saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, schedCustomDoctorHours);
+    schedSlotBackup.current = null;
+    setSchedSlotEditing(false);
+    setSchedBlockingDay(null);
+    showToast('บันทึกการปิดช่วงเวลาแล้ว', 2000);
+  };
+  const cancelSlotEdit = () => {
+    if (schedSlotBackup.current) {
+      setSchedManualBlocked(schedSlotBackup.current.manualBlocked);
+    }
+    schedSlotBackup.current = null;
+    setSchedSlotEditing(false);
+    setSchedBlockingDay(null);
+  };
+
   // ── Toggle day: normal → doctor → closed → normal (or forced action for drag) ──
   const toggleDay = (dateStr, forceAction) => {
     let newDoc, newClosed;
@@ -477,7 +528,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
     setSchedDoctorDays(newDoc);
     setSchedClosedDays(newClosed);
-    saveSchedulePrefs(newDoc, newClosed, schedManualBlocked);
+    // Don't auto-save — user must click save button
     return action;
   };
 
@@ -533,7 +584,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const next = exists
         ? prev.filter(b => !(b.date === date && b.startTime === start && b.endTime === end))
         : [...prev, { date, startTime: start, endTime: end }];
-      saveSchedulePrefs(schedDoctorDays, schedClosedDays, next);
+      // Don't auto-save — user must click save button
       return next;
     });
   };
@@ -586,7 +637,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (enabledSet.size === 0) {
         // No doctor hours for this day — store as 00:00-00:00
         const next = { ...prev, [dateStr]: { start: '00:00', end: '00:00' } };
-        saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
         return next;
       }
 
@@ -608,12 +658,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (newStart === defHours.start && newEnd === defHours.end) {
         const next = { ...prev };
         delete next[dateStr];
-        saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
         return next;
       }
 
       const next = { ...prev, [dateStr]: { start: newStart, end: newEnd } };
-      saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
       return next;
     });
   };
@@ -2893,12 +2941,33 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> ปิดคิว</span>
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--bg-hover)] border border-[var(--bd)] inline-block" /> ปกติ</span>
                       <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block" /> ปิดช่วงเวลา</span>
-                      <span className="text-[9px] text-[var(--tx-muted)] ml-auto">กดวันที่เพื่อเปลี่ยนสถานะ</span>
+                      {!schedCalendarEditing && <span className="text-[9px] text-[var(--tx-muted)] ml-auto opacity-50">กดแก้ไขเพื่อเปลี่ยน</span>}
+                    </div>
+                    {/* Calendar edit/save/cancel buttons */}
+                    <div className="flex items-center gap-2 mt-3">
+                      {!schedCalendarEditing ? (
+                        <button onClick={() => { if (confirm('ต้องการแก้ไขตารางหมอเข้า/ปิดคิว?')) startCalendarEdit(); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 transition-all">
+                          <Edit3 size={11} /> แก้ไขตารางหมอเข้า/ปิดคิว
+                        </button>
+                      ) : (
+                        <>
+                          <button onClick={saveCalendarEdit}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 transition-all">
+                            <CheckCircle2 size={11} /> บันทึก
+                          </button>
+                          <button onClick={cancelCalendarEdit}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-950/40 border border-red-900/50 text-red-400 hover:bg-red-900/40 transition-all">
+                            <XCircle size={11} /> ยกเลิก
+                          </button>
+                          <span className="text-[9px] text-sky-400 ml-auto">กำลังแก้ไข — กดวันที่เพื่อเปลี่ยนสถานะ</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Calendar(s) */}
-                  <div className="p-3 sm:p-4 space-y-3">
+                  <div className={`p-3 sm:p-4 space-y-3 ${!schedCalendarEditing ? 'pointer-events-none opacity-50' : ''}`}>
                     {prefMonths.map(mo => {
                       const [cy, cm] = mo.split('-').map(Number);
                       const dim = new Date(cy, cm, 0).getDate();
@@ -2946,9 +3015,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             </div>
 
                             {/* Manual slot blocking for this month */}
-                            <div className="mt-2.5 pt-2 border-t border-[var(--bd)]">
+                            <div className={`mt-2.5 pt-2 border-t border-[var(--bd)] ${!schedSlotEditing ? 'pointer-events-none opacity-50' : ''}`}>
                               <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-[9px] text-[var(--tx-muted)] font-bold flex items-center gap-1"><Clock size={9} /> ปิดช่วงเวลา — กดเลือกวัน</span>
+                                <span className="text-[9px] text-[var(--tx-muted)] font-bold flex items-center gap-1"><Clock size={9} /> ปิดช่วงเวลา{schedSlotEditing ? ' — กดเลือกวัน' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-0.5">
                                 {Array.from({ length: dim }).map((_, i) => {
@@ -3069,6 +3138,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                       );
                     })}
+                  </div>
+                  {/* Slot edit buttons */}
+                  <div className="px-4 pb-4">
+                    <div className="flex items-center gap-2">
+                      {!schedSlotEditing ? (
+                        <button onClick={() => { if (confirm('ต้องการแก้ไขการปิดช่วงเวลา?')) startSlotEdit(); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-orange-950/40 border border-orange-900/50 text-orange-400 hover:bg-orange-900/40 transition-all">
+                          <Edit3 size={11} /> แก้ไขปิดช่วงเวลา
+                        </button>
+                      ) : (
+                        <>
+                          <button onClick={saveSlotEdit}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 transition-all">
+                            <CheckCircle2 size={11} /> บันทึก
+                          </button>
+                          <button onClick={cancelSlotEdit}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-950/40 border border-red-900/50 text-red-400 hover:bg-red-900/40 transition-all">
+                            <XCircle size={11} /> ยกเลิก
+                          </button>
+                          <span className="text-[9px] text-orange-400 ml-auto">กำลังแก้ไข</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
