@@ -423,8 +423,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 <div className="absolute top-0 left-0 w-1 h-full" style={{ background: isDark ? accentO : '#ea580c' }}></div>
                 <p className="text-[15px] leading-[1.7] font-bold pl-2.5" style={{ color: isDark ? '#f5f5f4' : '#1e293b' }}>
                   {language === 'en'
-                    ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
-                    : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
+                    ? '📋 Appointment confirmations · 💊 Prescriptions · 🩺 Treatment updates · 📞 Direct contact with our medical team — please add us now!'
+                    : '📋 ยืนยันนัดหมาย · 💊 ใบสั่งยา · 🩺 ผลการรักษา · 📞 ติดต่อทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า!'}
                 </p>
               </div>
 
