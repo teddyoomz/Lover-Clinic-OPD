@@ -357,6 +357,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const d = snap.data();
         if (d.doctorDays) setSchedDoctorDays(new Set(d.doctorDays));
         if (d.closedDays) setSchedClosedDays(new Set(d.closedDays));
+        if (d.manualBlockedSlots) setSchedManualBlocked(d.manualBlockedSlots);
       }
       setSchedPrefsLoaded(true);
     }).catch(() => setSchedPrefsLoaded(true));
@@ -430,6 +431,47 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch (e) { showToast(`Error: ${e.message}`, 3000); }
   };
 
+  // ── Save schedule prefs to Firestore ──
+  const saveSchedulePrefs = (doctorDays, closedDays, manualBlocked) => {
+    if (!db || !appId) return;
+    setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
+      doctorDays: [...doctorDays],
+      closedDays: [...closedDays],
+      manualBlockedSlots: manualBlocked,
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  };
+
+  // ── Toggle day: normal → doctor → closed → normal ──
+  const toggleDay = (dateStr) => {
+    let newDoc, newClosed;
+    if (schedDoctorDays.has(dateStr)) {
+      newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
+      newClosed = new Set(schedClosedDays); newClosed.add(dateStr);
+    } else if (schedClosedDays.has(dateStr)) {
+      newDoc = schedDoctorDays;
+      newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
+    } else {
+      newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
+      newClosed = schedClosedDays;
+    }
+    setSchedDoctorDays(newDoc);
+    setSchedClosedDays(newClosed);
+    saveSchedulePrefs(newDoc, newClosed, schedManualBlocked);
+  };
+
+  // ── Toggle manual blocked slot ──
+  const toggleBlockedSlot = (date, start, end) => {
+    setSchedManualBlocked(prev => {
+      const exists = prev.some(b => b.date === date && b.startTime === start && b.endTime === end);
+      const next = exists
+        ? prev.filter(b => !(b.date === date && b.startTime === start && b.endTime === end))
+        : [...prev, { date, startTime: start, endTime: end }];
+      saveSchedulePrefs(schedDoctorDays, schedClosedDays, next);
+      return next;
+    });
+  };
+
   // ── Generate Schedule Link ──
   const handleGenScheduleLink = async () => {
     setSchedGenLoading(true);
@@ -483,12 +525,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         manualBlockedSlots: schedManualBlocked,
       });
 
-      // 5b. Save doctor/closed day prefs for next time
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
-        doctorDays: [...schedDoctorDays],
-        closedDays: [...schedClosedDays],
-        updatedAt: serverTimestamp(),
-      });
+      // 5b. Prefs are already saved on every toggle — no need to save again
 
       // 6. Build URL + QR
       const baseUrl = window.location.origin;
@@ -2438,7 +2475,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedManualBlocked([]); setSchedBlockingDay(null); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setShowScheduleModal(true); }}
                     className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -2609,6 +2646,166 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               </div>
             )}
+
+            {/* ── Schedule Day Preferences ── */}
+            {(() => {
+              // Build months for preference calendar: current apptMonth ± based on navigation
+              const prefMonths = [];
+              const [py, pm] = apptMonth.split('-').map(Number);
+              for (let i = 0; i < 2; i++) {
+                const pd = new Date(py, pm - 1 + i, 1);
+                prefMonths.push(`${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`);
+              }
+              const blockedCount = schedManualBlocked.length;
+              const doctorCount = schedDoctorDays.size;
+              const closedCount = schedClosedDays.size;
+
+              return (
+                <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+                  {/* Header */}
+                  <div className="p-4 sm:p-5 border-b border-[var(--bd)]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500/20 to-purple-500/20 border border-sky-800/30 flex items-center justify-center">
+                          <Stethoscope size={16} className="text-sky-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-[var(--tx-heading)] tracking-wide">ตั้งค่าตารางคลินิก</h3>
+                          <p className="text-[10px] text-[var(--tx-muted)]">หมอเข้า · ปิดคิว · ปิดช่วงเวลา</p>
+                        </div>
+                      </div>
+                      {/* Summary badges */}
+                      <div className="flex items-center gap-1.5">
+                        {doctorCount > 0 && <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-400 px-2 py-0.5 rounded-full font-bold">{doctorCount} หมอเข้า</span>}
+                        {closedCount > 0 && <span className="text-[9px] bg-red-950/40 border border-red-900/40 text-red-400 px-2 py-0.5 rounded-full font-bold">{closedCount} ปิด</span>}
+                        {blockedCount > 0 && <span className="text-[9px] bg-orange-950/40 border border-orange-900/40 text-orange-400 px-2 py-0.5 rounded-full font-bold">{blockedCount} slot ปิด</span>}
+                      </div>
+                    </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-[var(--tx-muted)]">
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block" /> หมอเข้า</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> ปิดคิว</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--bg-hover)] border border-[var(--bd)] inline-block" /> ปกติ</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block" /> ปิดช่วงเวลา</span>
+                      <span className="text-[9px] text-[var(--tx-muted)] ml-auto">กดวันที่เพื่อเปลี่ยนสถานะ</span>
+                    </div>
+                  </div>
+
+                  {/* Calendar(s) */}
+                  <div className="p-3 sm:p-4 space-y-3">
+                    {prefMonths.map(mo => {
+                      const [cy, cm] = mo.split('-').map(Number);
+                      const dim = new Date(cy, cm, 0).getDate();
+                      const fdow = new Date(cy, cm - 1, 1).getDay();
+                      const calS = fdow === 0 ? 6 : fdow - 1;
+                      const moBlockedCount = schedManualBlocked.filter(b => b.date.startsWith(mo)).length;
+
+                      return (
+                        <div key={mo} className="bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)] overflow-hidden">
+                          {/* Month header */}
+                          <div className="px-3 py-2 border-b border-[var(--bd)] flex items-center justify-between">
+                            <span className="text-xs font-bold text-[var(--tx-heading)]">{thaiMonths[cm - 1]} {cy + 543}</span>
+                            {moBlockedCount > 0 && <span className="text-[8px] bg-orange-950/40 border border-orange-900/40 text-orange-400 px-1.5 py-0.5 rounded-full font-bold">{moBlockedCount} slot ปิด</span>}
+                          </div>
+                          <div className="p-2.5">
+                            {/* Day headers */}
+                            <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+                              {thaiDays.map((d, i) => <div key={i} className={`text-center text-[9px] font-bold py-0.5 ${i >= 5 ? 'text-red-400/50' : 'text-gray-500'}`}>{d}</div>)}
+                            </div>
+                            {/* Day cells */}
+                            <div className="grid grid-cols-7 gap-0.5">
+                              {Array.from({ length: calS }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
+                              {Array.from({ length: dim }).map((_, i) => {
+                                const day = i + 1;
+                                const ds = `${mo}-${String(day).padStart(2, '0')}`;
+                                const isDoc = schedDoctorDays.has(ds);
+                                const isCl = schedClosedDays.has(ds);
+                                const hasBlocked = schedManualBlocked.some(b => b.date === ds);
+                                const dow = (calS + i) % 7;
+                                return (
+                                  <button key={day} onClick={() => toggleDay(ds)}
+                                    className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-all relative
+                                      ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-800/40'}
+                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-[var(--tx-body)]' : ''}`}>
+                                    {day}
+                                    {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
+                                    {isCl && <span className="text-[7px]">✕</span>}
+                                    {hasBlocked && !isCl && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Manual slot blocking for this month */}
+                            <div className="mt-2.5 pt-2 border-t border-[var(--bd)]">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[9px] text-[var(--tx-muted)] font-bold flex items-center gap-1"><Clock size={9} /> ปิดช่วงเวลา — กดเลือกวัน</span>
+                              </div>
+                              <div className="flex flex-wrap gap-0.5">
+                                {Array.from({ length: dim }).map((_, i) => {
+                                  const ds2 = `${mo}-${String(i + 1).padStart(2, '0')}`;
+                                  const isActive = schedBlockingDay === ds2;
+                                  const dayHasBlocked = schedManualBlocked.some(b => b.date === ds2);
+                                  return (
+                                    <button key={ds2} onClick={() => setSchedBlockingDay(isActive ? null : ds2)}
+                                      className={`w-6 h-6 rounded text-[9px] font-bold transition-all ${isActive ? 'bg-sky-600 text-white ring-1 ring-sky-400' : dayHasBlocked ? 'bg-orange-900/40 border border-orange-800/40 text-orange-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-[var(--tx-muted)]'}`}>
+                                      {i + 1}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {/* Time slot grid for selected day */}
+                              {schedBlockingDay && schedBlockingDay.startsWith(mo) && (() => {
+                                const bDate = new Date(schedBlockingDay);
+                                const bDow = bDate.getDay();
+                                const isWknd = bDow === 0 || bDow === 6;
+                                const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
+                                const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+                                const slots15 = [];
+                                const [oh2, om2] = openT.split(':').map(Number);
+                                const [ch2, cm22] = closeT.split(':').map(Number);
+                                let cur2 = oh2 * 60 + om2;
+                                const end2 = ch2 * 60 + cm22;
+                                while (cur2 + 15 <= end2) {
+                                  const sH = String(Math.floor(cur2 / 60)).padStart(2, '0');
+                                  const sM = String(cur2 % 60).padStart(2, '0');
+                                  const eMin = cur2 + 15;
+                                  const eH = String(Math.floor(eMin / 60)).padStart(2, '0');
+                                  const eM = String(eMin % 60).padStart(2, '0');
+                                  slots15.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
+                                  cur2 += 15;
+                                }
+                                const dayNum = parseInt(schedBlockingDay.split('-')[2]);
+                                const dayMo = parseInt(schedBlockingDay.split('-')[1]);
+                                return (
+                                  <div className="mt-2 bg-[var(--bg-card)] rounded-lg border border-[var(--bd)] p-2.5">
+                                    <div className="text-[10px] text-[var(--tx-muted)] mb-2 flex items-center gap-1.5">
+                                      <Clock size={10} className="text-orange-400" />
+                                      <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กดเพื่อปิด/เปิดช่วงเวลา</span>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-1">
+                                      {slots15.map(s => {
+                                        const blocked = schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
+                                        return (
+                                          <button key={s.start} onClick={() => toggleBlockedSlot(schedBlockingDay, s.start, s.end)}
+                                            className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400 shadow-[0_0_6px_rgba(220,38,38,0.15)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
+                                            {s.start}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         );
       })() : (
@@ -4110,16 +4307,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ── Schedule Link Modal ── */}
       {showScheduleModal && (() => {
-        const allMonths = [];
-        const [sy, sm] = schedStartMonth.split('-').map(Number);
-        for (let i = 0; i < schedAdvanceMonths; i++) {
-          const d = new Date(sy, sm - 1 + i, 1);
-          allMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-        }
         const thaiMo = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-        const thaiD = ['จ','อ','พ','พฤ','ศ','ส','อา'];
-
-        // Generate month options for start month picker (current month + next 6)
         const monthOptions = [];
         const nowForOpts = new Date();
         for (let i = 0; i < 7; i++) {
@@ -4129,41 +4317,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           monthOptions.push({ val, label });
         }
 
-        // Calendar for all selected months combined
-        const toggleDay = (dateStr) => {
-          // cycle: normal → doctor → closed → normal
-          let newDoc, newClosed;
-          if (schedDoctorDays.has(dateStr)) {
-            newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
-            newClosed = new Set(schedClosedDays); newClosed.add(dateStr);
-          } else if (schedClosedDays.has(dateStr)) {
-            newDoc = schedDoctorDays;
-            newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
-          } else {
-            newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
-            newClosed = schedClosedDays;
-          }
-          setSchedDoctorDays(newDoc);
-          setSchedClosedDays(newClosed);
-          // Save to Firestore immediately
-          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
-            doctorDays: [...newDoc],
-            closedDays: [...newClosed],
-            updatedAt: serverTimestamp(),
-          }).catch(() => {});
-        };
-
         return (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
-            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
               {/* Header */}
-              <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-card)] z-10">
-                <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตารางคลินิก</h2>
+              <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between">
+                <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตาราง</h2>
                 <button onClick={() => !schedGenLoading && setShowScheduleModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white"><X size={14} /></button>
               </div>
 
               {schedGenResult ? (
-                // ── Show result: QR + URL ──
                 <div className="p-6 flex flex-col items-center gap-4">
                   <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
                   <div className="w-full">
@@ -4178,8 +4341,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     className="mt-2 px-6 py-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs font-bold hover:text-white">ปิด</button>
                 </div>
               ) : (
-                // ── Config form ──
                 <div className="p-4 space-y-4">
+                  <p className="text-[10px] text-[var(--tx-muted)]">ลิงก์จะใช้ข้อมูลวันหมอเข้า/ปิดคิว/ปิดช่วงเวลา ที่ตั้งค่าไว้ด้านล่างปฏิทิน</p>
                   {/* Month + advance */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -4197,117 +4360,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </select>
                     </div>
                   </div>
-
-                  {/* Legend */}
-                  <div className="flex flex-wrap gap-3 text-[10px] text-[var(--tx-muted)]">
-                    <span className="flex items-center gap-1">กดวันที่เพื่อ toggle:</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-sky-600 inline-block" /> หมอเข้า</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-600 inline-block" /> ปิด</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] inline-block" /> ปกติ</span>
-                  </div>
-
-                  {/* Calendar(s) */}
-                  {allMonths.map(mo => {
-                    const [cy, cm] = mo.split('-').map(Number);
-                    const dim = new Date(cy, cm, 0).getDate();
-                    const fdow = new Date(cy, cm - 1, 1).getDay();
-                    const calS = fdow === 0 ? 6 : fdow - 1;
-                    return (
-                      <div key={mo} className="bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)] p-3">
-                        <div className="text-xs font-bold text-center text-[var(--tx-heading)] mb-2">{thaiMo[cm - 1]} {cy + 543}</div>
-                        <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                          {thaiD.map((d, i) => <div key={i} className={`text-center text-[9px] font-bold py-0.5 ${i >= 5 ? 'text-red-400/50' : 'text-gray-500'}`}>{d}</div>)}
-                        </div>
-                        <div className="grid grid-cols-7 gap-0.5">
-                          {Array.from({ length: calS }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
-                          {Array.from({ length: dim }).map((_, i) => {
-                            const day = i + 1;
-                            const ds = `${mo}-${String(day).padStart(2, '0')}`;
-                            const isDoc = schedDoctorDays.has(ds);
-                            const isCl = schedClosedDays.has(ds);
-                            const dow = (calS + i) % 7;
-                            return (
-                              <button key={day} onClick={() => toggleDay(ds)}
-                                className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-all
-                                  ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-800/40'}
-                                  ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-[var(--tx-body)]' : ''}`}>
-                                {day}
-                                {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
-                                {isCl && <span className="text-[7px]">✕</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {/* Manual slot blocking — day buttons under this month */}
-                        <div className="mt-2 pt-2 border-t border-[var(--bd)]">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[9px] text-[var(--tx-muted)] font-bold">ปิดคิวรายช่วงเวลา — กดเลือกวัน</span>
-                            {schedManualBlocked.filter(b => b.date.startsWith(mo)).length > 0 && <span className="text-[8px] text-orange-400 font-bold">{schedManualBlocked.filter(b => b.date.startsWith(mo)).length} slot ปิด</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-0.5">
-                            {Array.from({ length: dim }).map((_, i) => {
-                              const ds2 = `${mo}-${String(i + 1).padStart(2, '0')}`;
-                              const isActive = schedBlockingDay === ds2;
-                              const hasBlocked = schedManualBlocked.some(b => b.date === ds2);
-                              return (
-                                <button key={ds2} onClick={() => setSchedBlockingDay(isActive ? null : ds2)}
-                                  className={`w-6 h-6 rounded text-[9px] font-bold transition-all ${isActive ? 'bg-sky-600 text-white' : hasBlocked ? 'bg-orange-900/40 border border-orange-800/40 text-orange-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`}>
-                                  {i + 1}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {/* Time slot grid for selected day in this month */}
-                          {schedBlockingDay && schedBlockingDay.startsWith(mo) && (() => {
-                            const bDate = new Date(schedBlockingDay);
-                            const bDow = bDate.getDay();
-                            const isWknd = bDow === 0 || bDow === 6;
-                            const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
-                            const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
-                            const slots15 = [];
-                            const [oh2, om2] = openT.split(':').map(Number);
-                            const [ch2, cm22] = closeT.split(':').map(Number);
-                            let cur = oh2 * 60 + om2;
-                            const end2 = ch2 * 60 + cm22;
-                            while (cur + 15 <= end2) {
-                              const sH = String(Math.floor(cur / 60)).padStart(2, '0');
-                              const sM = String(cur % 60).padStart(2, '0');
-                              const eMin = cur + 15;
-                              const eH = String(Math.floor(eMin / 60)).padStart(2, '0');
-                              const eM = String(eMin % 60).padStart(2, '0');
-                              slots15.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
-                              cur += 15;
-                            }
-                            const isBlocked = (s) => schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
-                            const toggleSlot = (s) => {
-                              if (isBlocked(s)) {
-                                setSchedManualBlocked(prev => prev.filter(b => !(b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end)));
-                              } else {
-                                setSchedManualBlocked(prev => [...prev, { date: schedBlockingDay, startTime: s.start, endTime: s.end }]);
-                              }
-                            };
-                            const dayLabel = `${parseInt(schedBlockingDay.split('-')[2])}/${parseInt(schedBlockingDay.split('-')[1])}`;
-                            return (
-                              <div className="mt-2">
-                                <div className="text-[10px] text-[var(--tx-muted)] mb-1">วันที่ {dayLabel} — กดเพื่อปิด/เปิดช่วงเวลา</div>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {slots15.map(s => {
-                                    const blocked = isBlocked(s);
-                                    return (
-                                      <button key={s.start} onClick={() => toggleSlot(s)}
-                                        className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40'}`}>
-                                        {s.start}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })}
 
                   {/* Slot interval + options */}
                   <div className="grid grid-cols-2 gap-3">
@@ -4334,7 +4386,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </button>
                 </div>
               )}
-
             </div>
           </div>
         );
