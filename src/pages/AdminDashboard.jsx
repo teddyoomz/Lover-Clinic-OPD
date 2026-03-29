@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, Banknote, Loader2, ChevronDown, ChevronRight, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -156,8 +156,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionNameInput, setSessionNameInput] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [editingNameValue, setEditingNameValue] = useState("");
-  const [adminMode, setAdminModeRaw] = useState('dashboard'); // dashboard, formBuilder
+  const [adminMode, setAdminModeRaw] = useState('dashboard'); // dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
+
+  // ── Appointment calendar state ──
+  const [apptMonth, setApptMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [apptData, setApptData] = useState(null);
+  const [apptSelectedDate, setApptSelectedDate] = useState(null);
+  const [apptSyncing, setApptSyncing] = useState(false);
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -269,6 +278,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     });
   }, [sessions, archivedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Appointment calendar: subscribe to Firestore doc for current month ──
+  useEffect(() => {
+    if (!db || !appId) return;
+    const unsub = onSnapshot(
+      doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', apptMonth),
+      (snap) => { setApptData(snap.exists() ? snap.data() : null); },
+      () => { setApptData(null); }
+    );
+    return () => unsub();
+  }, [apptMonth, db, appId]);
+
+  const handleSyncAppointments = async (month) => {
+    setApptSyncing(true);
+    try {
+      const result = await broker.syncAppointments(month || apptMonth);
+      if (!result.success) showToast(`Sync ล้มเหลว: ${result.error}`, 5000);
+      else showToast(`Sync สำเร็จ: ${result.totalCount} นัดหมาย`, 3000);
+    } catch (e) {
+      showToast(`Sync error: ${e.message}`, 5000);
+    }
+    setApptSyncing(false);
+  };
 
   const enablePushNotifications = async () => {
     setPushLoading(true);
@@ -1525,6 +1556,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'history' ? 'bg-amber-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
             <History size={13} /> ประวัติ
           </button>
+          <button onClick={() => setAdminMode('appointment')}
+            className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'appointment' ? 'bg-sky-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+            <CalendarDays size={13} /> นัดหมาย
+          </button>
           <button onClick={() => setAdminMode('formBuilder')}
             className={`flex-1 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${adminMode === 'formBuilder' ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>
             <LayoutTemplate size={13} /> จัดการ
@@ -1548,6 +1583,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </button>
           <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white shadow-[0_0_15px_rgba(180,83,9,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
             <History size={16} /> ประวัติ
+          </button>
+          <button onClick={() => setAdminMode('appointment')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'appointment' ? 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-900/50'}`} title="นัดหมาย ProClinic">
+            <CalendarDays size={16} /> นัดหมาย
           </button>
           <button onClick={() => setAdminMode('formBuilder')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'formBuilder' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-blue-500'}`} style={adminMode === 'formBuilder' ? {color: '#fff'} : {}}>
             <LayoutTemplate size={16} /> จัดการแบบฟอร์ม
@@ -2140,7 +2178,197 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
           )}
         </div>
-      ) : (
+      ) : adminMode === 'appointment' ? (() => {
+        // ── Appointment Calendar ──
+        const [y, m] = apptMonth.split('-').map(Number);
+        const firstDayOfMonth = new Date(y, m - 1, 1);
+        const lastDayOfMonth = new Date(y, m, 0);
+        const daysInMonth = lastDayOfMonth.getDate();
+        const startDow = firstDayOfMonth.getDay(); // 0=Sun
+        const calStart = startDow === 0 ? 6 : startDow - 1; // shift to Monday-first
+        const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+        const thaiDays = ['จ','อ','พ','พฤ','ศ','ส','อา'];
+        const appointments = apptData?.appointments || [];
+
+        // Build appointment count per day
+        const countByDate = {};
+        appointments.forEach(a => {
+          if (!countByDate[a.date]) countByDate[a.date] = 0;
+          countByDate[a.date]++;
+        });
+
+        // Selected day's appointments
+        const selectedAppts = apptSelectedDate
+          ? appointments.filter(a => a.date === apptSelectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime))
+          : [];
+
+        const prevMonth = () => {
+          const d = new Date(y, m - 2, 1);
+          setApptMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+          setApptSelectedDate(null);
+        };
+        const nextMonth = () => {
+          const d = new Date(y, m, 1);
+          setApptMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+          setApptSelectedDate(null);
+        };
+
+        const todayStr = new Date().toISOString().substring(0, 10);
+
+        return (
+          <div className="space-y-4">
+            {/* Calendar card */}
+            <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+              {/* Header */}
+              <div className="p-4 sm:p-6 border-b border-[var(--bd)] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CalendarDays size={20} className="text-sky-400" />
+                  <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-sky-400">นัดหมาย</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={prevMonth} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-sm font-bold text-white min-w-[140px] text-center">{thaiMonths[m - 1]} {y + 543}</span>
+                  <button onClick={nextMonth} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                    <ChevronRight size={16} />
+                  </button>
+                  <button onClick={() => handleSyncAppointments(apptMonth)} disabled={apptSyncing} className={`ml-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${apptSyncing ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500 opacity-70' : 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40 hover:text-sky-300'}`}>
+                    <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
+                    {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Calendar grid */}
+              <div className="p-3 sm:p-5">
+                {/* Day headers */}
+                <div className="grid grid-cols-7 gap-1 mb-1">
+                  {thaiDays.map((d, i) => (
+                    <div key={i} className={`text-center text-[10px] font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
+                  ))}
+                </div>
+                {/* Day cells */}
+                <div className="grid grid-cols-7 gap-1">
+                  {Array.from({ length: calStart }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square" />
+                  ))}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const dateStr = `${apptMonth}-${String(day).padStart(2, '0')}`;
+                    const count = countByDate[dateStr] || 0;
+                    const isSelected = apptSelectedDate === dateStr;
+                    const isToday = dateStr === todayStr;
+                    const dow = (calStart + i) % 7; // 0=Mon, 5=Sat, 6=Sun
+                    const isWeekend = dow >= 5;
+                    return (
+                      <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
+                        className={`aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-xs relative
+                          ${isSelected ? 'bg-sky-600 text-white ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)]' : count > 0 ? 'bg-[var(--bg-hover)] hover:bg-sky-950/40 border border-[var(--bd)] hover:border-sky-800/50 cursor-pointer' : 'text-gray-600 hover:bg-[var(--bg-hover)]'}
+                          ${isToday && !isSelected ? 'ring-1 ring-sky-500/50' : ''}
+                        `}>
+                        <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
+                        {count > 0 && (
+                          <span className={`text-[9px] font-black ${isSelected ? 'text-sky-100' : 'text-sky-400'}`}>{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Sync info */}
+                {apptData?.syncedAt && (
+                  <p className="text-[10px] text-gray-600 mt-3 text-right">sync: {new Date(apptData.syncedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}</p>
+                )}
+                {!apptData && !apptSyncing && (
+                  <div className="text-center py-8 text-gray-500">
+                    <CalendarDays size={36} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-bold mb-2">ยังไม่มีข้อมูลเดือนนี้</p>
+                    <button onClick={() => handleSyncAppointments(apptMonth)} className="text-xs text-sky-400 hover:text-sky-300 font-bold">กด Sync เพื่อดึงข้อมูลจาก ProClinic</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Selected date appointments */}
+            {apptSelectedDate && (
+              <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-[var(--bd)] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-sky-400" />
+                    <h3 className="text-sm font-bold text-white">
+                      {parseInt(apptSelectedDate.split('-')[2])} {thaiMonths[m - 1]} {y + 543}
+                    </h3>
+                    <span className="text-xs text-gray-500 font-bold ml-1">({selectedAppts.length} นัดหมาย)</span>
+                  </div>
+                  <button onClick={() => setApptSelectedDate(null)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-white transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {selectedAppts.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <CalendarDays size={32} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">ไม่มีนัดหมายในวันนี้</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[var(--bd)]">
+                    {selectedAppts.map((appt) => {
+                      const statusMap = { '1': 'รอดำเนินการ', '2': 'ยืนยันแล้ว', '3': 'เสร็จสิ้น', '4': 'ยกเลิก' };
+                      const statusColor = { '1': 'text-yellow-400', '2': 'text-green-400', '3': 'text-blue-400', '4': 'text-red-400' };
+                      const typeMap = { follow: 'ติดตาม', sales: 'ขาย', consult: 'ปรึกษา', treatment: 'รักษา' };
+                      return (
+                        <div key={appt.id} className="p-4 hover:bg-[var(--bg-hover)] transition-colors">
+                          <div className="flex items-start gap-3">
+                            {/* Time */}
+                            <div className="shrink-0 w-[72px] text-center bg-sky-950/30 border border-sky-900/40 rounded-lg py-1.5 px-1">
+                              <div className="text-xs font-black text-sky-300">{appt.startTime}</div>
+                              <div className="text-[9px] text-sky-500">{appt.endTime}</div>
+                            </div>
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold text-sm text-white truncate">{appt.customerName !== '-' ? appt.fullCustomerName || appt.customerName : 'ไม่ระบุชื่อ'}</span>
+                                {appt.hnId && appt.hnId !== '-' && (
+                                  <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono shrink-0">{appt.hnId}</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                                {appt.doctorName && appt.doctorName !== '-' && (
+                                  <span className="flex items-center gap-1"><Stethoscope size={10} className="text-sky-500" /> {appt.doctorName}</span>
+                                )}
+                                {appt.roomName && appt.roomName !== '-' && (
+                                  <span className="flex items-center gap-1"><MapPin size={10} className="text-sky-500" /> {appt.roomName}</span>
+                                )}
+                                {appt.source && (
+                                  <span className="flex items-center gap-1"><Phone size={10} className="text-sky-500" /> {appt.source}</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {appt.appointmentType && (
+                                  <span className="text-[9px] bg-sky-950/40 text-sky-400 border border-sky-900/40 px-1.5 py-0.5 rounded font-bold">{typeMap[appt.appointmentType] || appt.appointmentType}</span>
+                                )}
+                                <span className={`text-[9px] font-bold ${statusColor[appt.status] || 'text-gray-400'}`}>
+                                  {appt.confirmed ? '✓ ' : ''}{statusMap[appt.status] || `สถานะ ${appt.status}`}
+                                </span>
+                              </div>
+                              {appt.note && (
+                                <p className="text-[11px] text-gray-500 mt-1.5 line-clamp-2">{appt.note}</p>
+                              )}
+                            </div>
+                            {/* Color dot */}
+                            <div className="shrink-0 w-3 h-3 rounded-full mt-1" style={{ backgroundColor: appt.eventColor || appt.appointmentColor || '#4FC3F7' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })() : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1" id="qr-panel">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">

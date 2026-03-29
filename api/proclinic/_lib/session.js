@@ -261,6 +261,31 @@ export async function createSession(originArg, emailArg, passwordArg) {
       }
       return text;
     },
+    fetchJSON: async (url, options = {}) => {
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ...options.headers,
+        'Cookie': cookiesToHeader(sessionState.cookies),
+      };
+      const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'follow' });
+      const newC = parseSetCookies(res);
+      if (newC.length) {
+        for (const c of newC) {
+          const name = c.split('=')[0].trim();
+          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
+          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
+        }
+      }
+      // Check if redirected to login page
+      if (res.redirected && res.url.includes('/login')) {
+        console.log('[session] fetchJSON redirected to login — auto re-login & retry');
+        await reLogin();
+        const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
+        const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+        return retryRes.json();
+      }
+      return res.json();
+    },
   };
 }
 

@@ -169,3 +169,13 @@ export function clearProClinicSession() {
 export function getProClinicCredentials() {
   return apiFetch('credentials', {});
 }
+
+/** Sync appointments for a month from ProClinic → Firestore */
+export function syncAppointments(month) {
+  return apiFetch('courses', { action: 'sync-appointments', month });
+}
+
+/** Get appointment counts per month for a year */
+export function fetchAppointmentMonths(year) {
+  return apiFetch('courses', { action: 'fetch-appointment-months', year });
+}
