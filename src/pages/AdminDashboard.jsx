@@ -4125,7 +4125,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงล่วงหน้า</label>
                       <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
                         className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
-                        {[0,1,2,3].map(n => <option key={n} value={n}>{n} เดือน</option>)}
+                        {[1,2,3].map(n => <option key={n} value={n}>{n} เดือน</option>)}
                       </select>
                     </div>
                   </div>
