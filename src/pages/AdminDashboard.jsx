@@ -3463,6 +3463,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               ><ClipboardCheck size={15} /></button>
                             );
                           })()}
+                          {session.formType === 'deposit' && session.serviceCompleted && (
+                            <button onClick={() => setDepositToDelete({ session, action: 'cancel' })} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 transition-colors" title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"><XCircle size={15} /></button>
+                          )}
                           <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบ"><Trash2 size={15} /></button>
                         </div>
                       </div>
