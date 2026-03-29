@@ -6,17 +6,22 @@ import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
 import { clearProClinicSession, testLogin } from '../lib/brokerClient.js';
 
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
-  const hh = String(i).padStart(2, '0');
-  return { value: `${hh}:00`, label: `${hh}:00` };
-});
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = ['00', '15', '30', '45'];
 
-function TimeSelect24({ value, onChange, className, focusColor }) {
+function TimeSelect24({ value, onChange, focusColor }) {
+  const [hh, mm] = (value || '10:00').split(':');
+  const selCls = `bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-2.5 outline-none transition-all text-sm font-mono [color-scheme:dark] cursor-pointer ${focusColor || 'focus:border-[var(--accent)]'}`;
   return (
-    <select value={value || '10:00'} onChange={e => onChange(e.target.value)}
-      className={`bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none transition-all text-sm font-mono [color-scheme:dark] appearance-none cursor-pointer ${focusColor || 'focus:border-[var(--accent)]'} ${className || ''}`}>
-      {HOUR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <div className="flex items-center gap-0.5">
+      <select value={hh} onChange={e => onChange(`${e.target.value}:${mm}`)} className={`${selCls} w-[60px] text-center rounded-r-none`}>
+        {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span className="text-gray-500 font-mono text-sm font-bold">:</span>
+      <select value={MINUTES.includes(mm) ? mm : '00'} onChange={e => onChange(`${hh}:${e.target.value}`)} className={`${selCls} w-[56px] text-center rounded-l-none`}>
+        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </div>
   );
 }
 
