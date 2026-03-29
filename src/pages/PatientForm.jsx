@@ -370,75 +370,94 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
   if (isSuccess && !isEditing) {
     const lineUrl = cs.lineOfficialUrl?.trim();
+    const accentR = isDark ? '#dc2626' : '#e11d48';
+    const accentO = isDark ? '#f97316' : '#ea580c';
     return (
-      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 30%, #0a0a0a 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 40%, #f0fdf4 100%)' }}>
+      <div className="w-full max-w-xl mx-auto p-4 pt-8 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #200000 0%, #0a0a0a 35%, #0a0a0a 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #fff5f7 30%, #ffffff 100%)' }}>
         <LanguageToggle />
-        <div className="rounded-3xl relative overflow-hidden" style={{ background: isDark ? 'rgba(10,10,10,0.9)' : 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.15)' : 'rgba(34,197,94,0.2)'}`, boxShadow: isDark ? '0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(34,197,94,0.04)' : '0 8px 32px rgba(34,197,94,0.1)' }}>
-          <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)' }}></div>
 
-          {/* Success header */}
-          <div className="px-8 pt-12 pb-8">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.08)', border: `2px solid ${isDark ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.25)'}`, color: isDark ? '#34d399' : '#059669', boxShadow: isDark ? '0 0 30px rgba(34,197,94,0.1)' : '0 0 20px rgba(34,197,94,0.12)' }}>
+        {/* ── Success Card ── */}
+        <div className="rounded-2xl relative overflow-hidden mb-4" style={{ background: isDark ? 'rgba(15,8,5,0.85)' : 'rgba(255,255,255,0.9)', backdropFilter: 'blur(16px)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.12)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 60px rgba(0,0,0,0.6), 0 0 30px rgba(220,38,38,0.03)' : '0 8px 40px rgba(236,72,153,0.08)' }}>
+          {/* Top accent bar */}
+          <div className="absolute top-0 left-0 w-full h-1" style={{ background: isDark ? `linear-gradient(90deg, ${accentR}, ${accentO}, ${accentR})` : 'linear-gradient(90deg, #ec4899, #f472b6, #ec4899)' }}></div>
+
+          <div className="px-8 pt-12 pb-10">
+            {/* Checkmark icon */}
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.08)', border: `2px solid ${isDark ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.25)'}`, color: isDark ? '#34d399' : '#059669', boxShadow: isDark ? '0 0 25px rgba(34,197,94,0.08)' : '0 0 20px rgba(34,197,94,0.1)' }}>
               <CheckCircle2 size={36} />
             </div>
             <h2 className="text-xl font-black uppercase tracking-widest mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
               {language === 'en' ? 'Submission Successful' : 'ส่งข้อมูลสำเร็จ'}
             </h2>
-            <p className="text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>
+            <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: isDark ? '#6b7280' : '#64748b' }}>
               {language === 'en'
                 ? 'Your information has been submitted. Please wait to be called by our staff.'
                 : 'ข้อมูลของท่านถูกส่งเรียบร้อยแล้ว กรุณารอเจ้าหน้าที่เรียกชื่อเพื่อพบแพทย์'}
             </p>
           </div>
+        </div>
 
-          {/* LINE CTA — แสดงเฉพาะถ้าตั้งค่า lineOfficialUrl ไว้ */}
-          {lineUrl && (
-            <div className="mx-5 mb-5 p-5 rounded-2xl" style={{ background: isDark ? 'rgba(6,199,85,0.04)' : 'rgba(6,199,85,0.05)', border: `1px solid ${isDark ? 'rgba(6,199,85,0.15)' : 'rgba(6,199,85,0.2)'}` }}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full" style={{ color: '#06C755', border: '1px solid rgba(6,199,85,0.3)', background: isDark ? 'rgba(6,199,85,0.06)' : 'rgba(6,199,85,0.08)' }}>
-                  {language === 'en' ? '⚠ Required Step' : '⚠ ขั้นตอนสำคัญ'}
-                </span>
+        {/* ── LINE CTA Card ── */}
+        {lineUrl && (
+          <div className="rounded-2xl relative overflow-hidden mb-4" style={{ background: isDark ? 'rgba(15,8,5,0.85)' : 'rgba(255,255,255,0.9)', backdropFilter: 'blur(16px)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.12)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 60px rgba(0,0,0,0.4)' : '0 8px 40px rgba(236,72,153,0.06)' }}>
+            <div className="p-5">
+              {/* Header with LINE icon */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: '#06C755', boxShadow: '0 0 15px rgba(6,199,85,0.25)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
+                    {language === 'en' ? 'Add LINE Official' : 'เพิ่มเพื่อน LINE Official'}
+                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#ea580c' }}>
+                    {language === 'en' ? 'Important Step' : 'ขั้นตอนสำคัญ'}
+                  </p>
+                </div>
               </div>
-              <p className="text-sm font-black text-left mb-1.5" style={{ color: isDark ? '#e5e7eb' : '#0f172a' }}>
-                {language === 'en'
-                  ? 'Add our LINE Official Account'
-                  : 'เพิ่มเพื่อน LINE Official Account ของคลินิก'}
-              </p>
-              <p className="text-xs text-left leading-relaxed mb-4" style={{ color: isDark ? '#6b7280' : '#64748b' }}>
-                {language === 'en'
-                  ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
-                  : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
-              </p>
+
+              {/* Highlighted description */}
+              <div className="rounded-xl p-3.5 mb-4 text-left" style={{ background: isDark ? 'rgba(249,115,22,0.04)' : 'rgba(249,115,22,0.04)', border: `1px solid ${isDark ? 'rgba(249,115,22,0.12)' : 'rgba(249,115,22,0.15)'}` }}>
+                <p className="text-[13px] leading-relaxed font-semibold" style={{ color: isDark ? '#d1d5db' : '#334155' }}>
+                  {language === 'en'
+                    ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
+                    : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
+                </p>
+              </div>
+
+              {/* LINE Button */}
               <a
                 href={lineUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl text-white font-black text-sm tracking-wider transition-all active:scale-95"
-                style={{ backgroundColor: '#06C755', boxShadow: '0 4px 15px rgba(6,199,85,0.3)' }}
+                style={{ backgroundColor: '#06C755', boxShadow: '0 4px 20px rgba(6,199,85,0.35)' }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                   <path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
                 </svg>
                 {language === 'en' ? 'Add LINE Official Account' : 'เพิ่มเพื่อน LINE Official'}
               </a>
             </div>
-          )}
-
-          {/* Edit + simulation buttons */}
-          <div className="px-5 pb-8 flex flex-col gap-3">
-            <button
-              onClick={() => { setIsSuccess(false); setIsEditing(true); }}
-              className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
-              style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, color: isDark ? '#9ca3af' : '#475569' }}
-            >
-              <Edit3 size={15} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
-            </button>
-            {isSimulation && (
-              <button onClick={onBack} className="py-3 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#4b5563' : '#94a3b8' }}>
-                <ArrowLeft size={15} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
-              </button>
-            )}
           </div>
+        )}
+
+        {/* ── Action buttons ── */}
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => { setIsSuccess(false); setIsEditing(true); }}
+            className="w-full py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
+            style={{ background: isDark ? 'rgba(15,8,5,0.7)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(12px)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.1)' : 'rgba(236,72,153,0.12)'}`, color: isDark ? '#9ca3af' : '#475569' }}
+          >
+            <Edit3 size={15} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
+          </button>
+          {isSimulation && (
+            <button onClick={onBack} className="py-3 text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#4b5563' : '#94a3b8' }}>
+              <ArrowLeft size={15} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
+            </button>
+          )}
         </div>
       </div>
     );
