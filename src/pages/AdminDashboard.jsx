@@ -2116,6 +2116,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">
           <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
+          {/* Form Builder shortcut */}
+          <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <LayoutTemplate size={18} className="text-blue-500" />
+              <h3 className="text-sm font-bold tracking-widest uppercase text-blue-500">จัดการแบบฟอร์ม</h3>
+            </div>
+            <button
+              onClick={() => setAdminMode('formBuilder')}
+              className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border bg-blue-950/30 border-blue-800/50 text-blue-400 hover:bg-blue-900/40"
+            >
+              <LayoutTemplate size={15}/> เปิดตัวจัดการแบบฟอร์ม
+            </button>
+          </div>
           {/* Push notification test mode */}
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -2140,19 +2153,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {globalPushMuted && (
               <p className="text-xs text-orange-700 mt-3 text-center">ผู้ป่วยกรอกแบบฟอร์มแล้วจะไม่มีแจ้งเตือนส่งไปยังอุปกรณ์ใดๆ</p>
             )}
-          </div>
-          {/* Form Builder shortcut */}
-          <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <LayoutTemplate size={18} className="text-blue-500" />
-              <h3 className="text-sm font-bold tracking-widest uppercase text-blue-500">จัดการแบบฟอร์ม</h3>
-            </div>
-            <button
-              onClick={() => setAdminMode('formBuilder')}
-              className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border bg-blue-950/30 border-blue-800/50 text-blue-400 hover:bg-blue-900/40"
-            >
-              <LayoutTemplate size={15}/> เปิดตัวจัดการแบบฟอร์ม
-            </button>
           </div>
         </div>
       ) : adminMode === 'formBuilder' ? (
