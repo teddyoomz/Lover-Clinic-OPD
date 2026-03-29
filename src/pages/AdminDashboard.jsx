@@ -2023,16 +2023,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-6 gap-0.5 w-full xl:hidden z-0">
+        <div className="grid grid-cols-5 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
-            { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
-            { mode: 'formBuilder', icon: <LayoutTemplate size={14} />, label: 'จัดการ', activeClass: 'bg-blue-600 text-white' },
+            { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
             { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
           ].map(tab => {
-            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : adminMode === tab.mode;
+            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
                 className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
@@ -2055,16 +2054,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <Banknote size={16} /> จองมัดจำ
             {depositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{depositSessions.filter(s => s.isUnread).length}</span>}
           </button>
-          <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white shadow-[0_0_15px_rgba(180,83,9,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
-            <History size={16} /> ประวัติ
-          </button>
           <button onClick={() => setAdminMode('appointment')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'appointment' ? 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-900/50'}`} title="นัดหมาย ProClinic">
             <CalendarDays size={16} /> นัดหมาย
           </button>
-          <button onClick={() => setAdminMode('formBuilder')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'formBuilder' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white hover:border-blue-500'}`} style={adminMode === 'formBuilder' ? {color: '#fff'} : {}}>
-            <LayoutTemplate size={16} /> จัดการ
+          <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white shadow-[0_0_15px_rgba(180,83,9,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
+            <History size={16} /> ประวัติ
           </button>
-          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'clinicSettings' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'clinicSettings' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
+          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
             <Palette size={16} /> ตั้งค่า
           </button>
           <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
@@ -2145,9 +2141,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <p className="text-xs text-orange-700 mt-3 text-center">ผู้ป่วยกรอกแบบฟอร์มแล้วจะไม่มีแจ้งเตือนส่งไปยังอุปกรณ์ใดๆ</p>
             )}
           </div>
+          {/* Form Builder shortcut */}
+          <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <LayoutTemplate size={18} className="text-blue-500" />
+              <h3 className="text-sm font-bold tracking-widest uppercase text-blue-500">จัดการแบบฟอร์ม</h3>
+            </div>
+            <button
+              onClick={() => setAdminMode('formBuilder')}
+              className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border bg-blue-950/30 border-blue-800/50 text-blue-400 hover:bg-blue-900/40"
+            >
+              <LayoutTemplate size={15}/> เปิดตัวจัดการแบบฟอร์ม
+            </button>
+          </div>
         </div>
       ) : adminMode === 'formBuilder' ? (
-        <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('dashboard')} />
+        <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('clinicSettings')} />
       ) : adminMode === 'history' ? (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
           {/* Header */}
@@ -4287,13 +4296,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                  {sessionModalTab === 'standard' ? (
                    <div className="space-y-3">
                      {/* Primary actions */}
-                     <div className="grid grid-cols-2 gap-3">
+                     <div className="grid grid-cols-3 gap-3">
                         <button onClick={() => openNamePrompt({isPermanent: false, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-red-500/50' : 'bg-white border-gray-200 hover:border-red-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-500'}`}>
                             <ClipboardCheck size={16} />
                           </div>
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">OPD Intake</span>
                           <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">บันทึกผู้ป่วยใหม่<br/>หมดอายุ 2 ชม.</span>
+                        </button>
+                        <button onClick={() => { setShowSessionModal(false); setShowDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-emerald-500/50' : 'bg-white border-gray-200 hover:border-emerald-400 shadow-sm'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-emerald-950/50 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
+                            <Banknote size={16} />
+                          </div>
+                          <span className="block text-[var(--tx-heading)] font-bold text-sm">จองมัดจำ</span>
+                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจอง<br/>ลิงก์ถาวร</span>
                         </button>
                         <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-sky-500/50' : 'bg-white border-gray-200 hover:border-sky-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-sky-950/50 text-sky-400' : 'bg-sky-50 text-sky-500'}`}>
