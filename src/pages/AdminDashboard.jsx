@@ -3076,8 +3076,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     onPointerDown={(e) => handleDayPointerDown(ds, e)}
                                     onPointerEnter={() => handleDayPointerEnter(ds)}
                                     className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-colors relative
-                                      ${isCl ? (isDark ? 'bg-red-900/40 border border-red-800/50 text-red-400' : 'bg-red-100 border border-red-200 text-red-500') : isDoc ? (isDark ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-sky-100 border border-sky-200 text-sky-600') : (isDark ? 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400')}
-                                      ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? (isDark ? 'text-emerald-300' : 'text-emerald-700') : ''}`}>
+                                      ${isCl ? (isDark ? 'bg-red-900/40 border border-red-800/50' : 'bg-red-100 border border-red-200') : isDoc ? (isDark ? 'bg-sky-900/40 border border-sky-700/50' : 'bg-sky-100 border border-sky-200') : (isDark ? 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400')}
+                                      ${isCl ? 'text-red-400' : dow >= 5 ? 'text-red-400/70' : isDoc ? (isDark ? 'text-sky-300' : 'text-sky-600') : (isDark ? 'text-emerald-300' : 'text-emerald-700')}`}>
                                     {day}
                                     {isDoc && <span className="text-[7px] leading-none mt-px">🩺</span>}
                                     {isCl && <span className="text-[7px]">✕</span>}
