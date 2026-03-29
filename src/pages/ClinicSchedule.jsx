@@ -246,7 +246,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const weekendColor = isDark ? 'text-rose-400/70' : 'text-rose-500/70';
   const docIconColor = isDark ? 'text-orange-400' : 'text-sky-500';
   const slotOpenBg = isDark ? 'border-orange-900/40' : 'bg-emerald-50 border-emerald-200';
-  const slotOpenBadgeBg = isDark ? 'text-orange-300 bg-orange-900/40' : 'text-emerald-700 bg-emerald-100';
+  const slotOpenBadgeBg = isDark ? 'text-emerald-300 bg-emerald-900/50' : 'text-emerald-700 bg-emerald-100';
   const slotBookedBg = isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)]' : 'bg-gray-50 border-gray-200';
   const legendDocBg = isDark ? 'bg-sky-900/50 border-sky-700/50' : 'bg-sky-100 border-sky-200';
   const legendAvailBg = isDark ? 'bg-emerald-900/30 border-emerald-800/40' : 'bg-emerald-100 border-emerald-200';
