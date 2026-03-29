@@ -430,7 +430,9 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                       </span>
                     </div>
                     {slot.doctorSlot && !slot.booked && (
-                      <Stethoscope size={12} className={docIconColor} />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-sky-100 text-sky-600'}`}>
+                        {t.doctor}
+                      </span>
                     )}
                   </div>
                   <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
