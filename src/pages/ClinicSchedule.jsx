@@ -436,7 +436,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                   {/* Doctor emoji (top-right corner) */}
                   {!isClosed && isDoctor && !isDayDisabled && (
-                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">♥️</span>
+                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">🔥</span>
                   )}
 
                   {/* Availability */}
@@ -471,7 +471,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               : { borderTop: '1px solid rgba(236,72,153,0.12)', background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%)', color: '#9ca3af' }
             }>
             <span className="flex items-center gap-1.5">
-              <span className="text-[11px]">♥️</span>
+              <span className="text-[11px]">🔥</span>
               {t.doctor}
             </span>
             <span className="flex items-center gap-1.5">
