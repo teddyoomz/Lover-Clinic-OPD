@@ -97,6 +97,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const closedDaysSet = new Set(data.closedDays || []);
   const bookedSlots = [...(data.bookedSlots || []), ...(data.manualBlockedSlots || [])];
   const noDoctorRequired = data.noDoctorRequired || false;
+  const customDoctorHours = data.customDoctorHours || {};
 
   const weekdaySlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
   const weekendSlots = generateTimeSlots(data.clinicOpenTimeWeekend || data.clinicOpenTime || '10:00', data.clinicCloseTimeWeekend || data.clinicCloseTime || '17:00', data.slotDurationMins || 60);
@@ -107,13 +108,34 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return (dow === 0 || dow === 6) ? weekendSlots : weekdaySlots;
   };
 
+  // Doctor hour blocking for "พบแพทย์" links
+  const getDoctorHoursForDate = (dateStr) => {
+    if (customDoctorHours[dateStr]) return customDoctorHours[dateStr];
+    const d = new Date(dateStr);
+    const isWknd = d.getDay() === 0 || d.getDay() === 6;
+    return {
+      start: isWknd ? (data.doctorStartTimeWeekend || data.doctorStartTime || '10:00') : (data.doctorStartTime || '10:00'),
+      end: isWknd ? (data.doctorEndTimeWeekend || data.doctorEndTime || '19:00') : (data.doctorEndTime || '19:00'),
+    };
+  };
+  const isSlotOutsideDoctorHours = (dateStr, slotStart, slotEnd) => {
+    if (noDoctorRequired) return false;
+    if (!doctorDaysSet.has(dateStr)) return false;
+    const hours = getDoctorHoursForDate(dateStr);
+    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+    const eMin = parseInt(slotEnd.split(':')[0]) * 60 + parseInt(slotEnd.split(':')[1]);
+    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
+    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
+    return sMin < dStart || eMin > dEnd;
+  };
+
   // Count available slots per day
   const availByDate = {};
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${currentMonth}-${String(d).padStart(2, '0')}`;
     if (closedDaysSet.has(dateStr)) { availByDate[dateStr] = -1; continue; }
     const slots = getSlotsForDate(dateStr);
-    const free = slots.filter(s => !isSlotBooked(dateStr, s.start, s.end, bookedSlots)).length;
+    const free = slots.filter(s => !isSlotBooked(dateStr, s.start, s.end, bookedSlots) && !isSlotOutsideDoctorHours(dateStr, s.start, s.end)).length;
     availByDate[dateStr] = free;
   }
 
@@ -122,7 +144,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   // Selected day slots
   const selectedSlots = selectedDate ? getSlotsForDate(selectedDate).map(s => ({
     ...s,
-    booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots),
+    booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
   })) : [];
 
   return (

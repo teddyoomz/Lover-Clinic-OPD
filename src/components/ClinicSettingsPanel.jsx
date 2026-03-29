@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -389,6 +389,54 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                   <input type="time" step="3600" value={settings.clinicCloseTimeWeekend || '17:00'}
                     onChange={e => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: e.target.value }))}
                     className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Doctor Hours */}
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-[#222]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Stethoscope size={14} style={{color: '#38bdf8'}}/> เวลาแพทย์เข้า
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            เวลาที่แพทย์เข้าตรวจ — ผูกกับวันที่กำหนดให้หมอเข้า ลิงก์แบบ "พบแพทย์" จะแสดงเฉพาะช่วงเวลานี้เป็นว่าง
+          </p>
+          <div className="space-y-3" lang="en-GB">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">เริ่ม</span>
+                  <input type="time" step="3600" value={settings.doctorStartTime || '10:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, doctorStartTime: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                </div>
+                <span className="text-gray-600">—</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">สิ้นสุด</span>
+                  <input type="time" step="3600" value={settings.doctorEndTime || '19:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, doctorEndTime: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">เริ่ม</span>
+                  <input type="time" step="3600" value={settings.doctorStartTimeWeekend || '10:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, doctorStartTimeWeekend: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
+                </div>
+                <span className="text-gray-600">—</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">สิ้นสุด</span>
+                  <input type="time" step="3600" value={settings.doctorEndTimeWeekend || '17:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, doctorEndTimeWeekend: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 transition-all text-sm font-mono [color-scheme:dark]" />
                 </div>
               </div>
             </div>

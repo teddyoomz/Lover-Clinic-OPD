@@ -190,6 +190,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedPrefsLoaded, setSchedPrefsLoaded] = useState(false);
   const dayDragRef = useRef({ active: false, action: null, touched: new Set() }); // drag for day toggle
   const slotDragRef = useRef({ active: false, action: null }); // drag for slot toggle
+  const [schedCustomDoctorHours, setSchedCustomDoctorHours] = useState({}); // { "YYYY-MM-DD": { start, end } }
+  const doctorSlotDragRef = useRef({ active: false, action: null }); // drag for doctor hour slots
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -356,6 +358,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         if (d.doctorDays) setSchedDoctorDays(new Set(d.doctorDays));
         if (d.closedDays) setSchedClosedDays(new Set(d.closedDays));
         if (d.manualBlockedSlots) setSchedManualBlocked(d.manualBlockedSlots);
+        if (d.customDoctorHours) setSchedCustomDoctorHours(d.customDoctorHours);
       }
       setSchedPrefsLoaded(true);
     }).catch(() => setSchedPrefsLoaded(true));
@@ -431,12 +434,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   // ── Save schedule prefs to Firestore + update active schedule links ──
-  const saveSchedulePrefs = (doctorDays, closedDays, manualBlocked) => {
+  const saveSchedulePrefs = (doctorDays, closedDays, manualBlocked, customDocHours) => {
     if (!db || !appId) return;
+    const cdh = customDocHours ?? schedCustomDoctorHours;
     setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
       doctorDays: [...doctorDays],
       closedDays: [...closedDays],
       manualBlockedSlots: manualBlocked,
+      customDoctorHours: cdh,
       updatedAt: serverTimestamp(),
     }).then(() => {
       // Update active schedule docs with new day settings
@@ -448,6 +453,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           doctorDays: [...doctorDays],
           closedDays: [...closedDays],
           manualBlockedSlots: manualBlocked,
+          customDoctorHours: cdh,
         }).catch(() => {});
       });
     }).catch(() => {});
@@ -515,6 +521,101 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     });
   };
 
+  // ── Doctor hour slot helpers ──
+  const getDoctorHoursForDate = (dateStr) => {
+    if (schedCustomDoctorHours[dateStr]) return schedCustomDoctorHours[dateStr];
+    const d = new Date(dateStr);
+    const isWknd = d.getDay() === 0 || d.getDay() === 6;
+    return {
+      start: isWknd ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
+      end: isWknd ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
+    };
+  };
+  const isSlotInDoctorHours = (dateStr, slotStart) => {
+    const hours = getDoctorHoursForDate(dateStr);
+    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
+    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
+    return sMin >= dStart && sMin < dEnd;
+  };
+
+  // Toggle custom doctor hours for a specific day+slot
+  const toggleDoctorSlot = (dateStr, slotStart, slotEnd, forceAction) => {
+    const inDoc = isSlotInDoctorHours(dateStr, slotStart);
+    const action = forceAction || (inDoc ? 'remove' : 'add');
+    setSchedCustomDoctorHours(prev => {
+      // Get all 15-min slots for the day based on clinic hours
+      const bDate = new Date(dateStr);
+      const isWknd = bDate.getDay() === 0 || bDate.getDay() === 6;
+      const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
+      const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+      const [oh, om] = openT.split(':').map(Number);
+      const [ch, cm] = closeT.split(':').map(Number);
+      let cur = oh * 60 + om;
+      const endMin = ch * 60 + cm;
+      const allSlots = [];
+      while (cur + 15 <= endMin) { allSlots.push(cur); cur += 15; }
+
+      // Build set of enabled doctor slot minutes
+      const currentHours = prev[dateStr] || getDoctorHoursForDate(dateStr);
+      const cStart = parseInt(currentHours.start.split(':')[0]) * 60 + parseInt(currentHours.start.split(':')[1]);
+      const cEnd = parseInt(currentHours.end.split(':')[0]) * 60 + parseInt(currentHours.end.split(':')[1]);
+      const enabledSet = new Set(allSlots.filter(m => m >= cStart && m < cEnd));
+
+      const slotMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+      if (action === 'remove') enabledSet.delete(slotMin);
+      else enabledSet.add(slotMin);
+
+      if (enabledSet.size === 0) {
+        // No doctor hours for this day — store as 00:00-00:00
+        const next = { ...prev, [dateStr]: { start: '00:00', end: '00:00' } };
+        saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
+        return next;
+      }
+
+      const sorted = [...enabledSet].sort((a, b) => a - b);
+      const minM = sorted[0];
+      const maxM = sorted[sorted.length - 1] + 15;
+      const newStart = `${String(Math.floor(minM / 60)).padStart(2, '0')}:${String(minM % 60).padStart(2, '0')}`;
+      const newEnd = `${String(Math.floor(maxM / 60)).padStart(2, '0')}:${String(maxM % 60).padStart(2, '0')}`;
+
+      // Check if same as default → remove custom override
+      const defHours = (() => {
+        const d2 = new Date(dateStr);
+        const w = d2.getDay() === 0 || d2.getDay() === 6;
+        return {
+          start: w ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
+          end: w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
+        };
+      })();
+      if (newStart === defHours.start && newEnd === defHours.end) {
+        const next = { ...prev };
+        delete next[dateStr];
+        saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
+        return next;
+      }
+
+      const next = { ...prev, [dateStr]: { start: newStart, end: newEnd } };
+      saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, next);
+      return next;
+    });
+  };
+
+  // Doctor slot drag handlers
+  const handleDocSlotPointerDown = (dateStr, slotStart, slotEnd, e) => {
+    e.preventDefault();
+    const inDoc = isSlotInDoctorHours(dateStr, slotStart);
+    doctorSlotDragRef.current = { active: true, action: inDoc ? 'remove' : 'add' };
+    toggleDoctorSlot(dateStr, slotStart, slotEnd, inDoc ? 'remove' : 'add');
+  };
+  const handleDocSlotPointerEnter = (dateStr, slotStart, slotEnd) => {
+    if (!doctorSlotDragRef.current.active) return;
+    const inDoc = isSlotInDoctorHours(dateStr, slotStart);
+    if (doctorSlotDragRef.current.action === 'remove' && inDoc) toggleDoctorSlot(dateStr, slotStart, slotEnd, 'remove');
+    if (doctorSlotDragRef.current.action === 'add' && !inDoc) toggleDoctorSlot(dateStr, slotStart, slotEnd, 'add');
+  };
+  const handleDocSlotPointerUp = () => { doctorSlotDragRef.current.active = false; };
+
   // ── Generate Schedule Link ──
   const handleGenScheduleLink = async () => {
     setSchedGenLoading(true);
@@ -566,6 +667,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         closedDays: [...schedClosedDays],
         bookedSlots,
         manualBlockedSlots: schedManualBlocked,
+        customDoctorHours: schedCustomDoctorHours,
+        doctorStartTime: clinicSettings.doctorStartTime || '10:00',
+        doctorEndTime: clinicSettings.doctorEndTime || '19:00',
+        doctorStartTimeWeekend: clinicSettings.doctorStartTimeWeekend || '10:00',
+        doctorEndTimeWeekend: clinicSettings.doctorEndTimeWeekend || '17:00',
       });
 
       // 5b. Prefs are already saved on every toggle — no need to save again
@@ -2640,8 +2746,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 <p className="text-[11px] text-gray-500 mt-1.5 line-clamp-2">{appt.note}</p>
                               )}
                             </div>
-                            {/* Color dot */}
-                            <div className="shrink-0 w-3 h-3 rounded-full mt-1" style={{ backgroundColor: appt.eventColor || appt.appointmentColor || '#4FC3F7' }} />
+                            {/* Color dot + ProClinic link */}
+                            <div className="shrink-0 flex flex-col items-center gap-1.5 mt-1">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: appt.eventColor || appt.appointmentColor || '#4FC3F7' }} />
+                              {appt.customerId && clinicSettings.proClinicOrigin && (
+                                <a
+                                  href={`${clinicSettings.proClinicOrigin}/admin/customer/${appt.customerId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sky-500 hover:text-sky-300 transition-colors"
+                                  title="เปิดใน ProClinic"
+                                >
+                                  <ExternalLink size={13} />
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -2789,27 +2908,47 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     return slotMin >= aStart && slotMin < aEnd;
                                   });
                                 };
+                                const isDoctorDay = schedDoctorDays.has(schedBlockingDay);
+                                const docHours = getDoctorHoursForDate(schedBlockingDay);
+                                const hasCustomDocHours = !!schedCustomDoctorHours[schedBlockingDay];
                                 return (
                                   <div className="mt-2 bg-[var(--bg-card)] rounded-lg border border-[var(--bd)] p-2.5">
-                                    <div className="text-[10px] text-[var(--tx-muted)] mb-2 flex items-center gap-1.5">
+                                    <div className="text-[10px] text-[var(--tx-muted)] mb-2 flex items-center gap-1.5 flex-wrap">
                                       <Clock size={10} className="text-orange-400" />
-                                      <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กด/ลากเพื่อปิด-เปิดช่วงเวลา</span>
+                                      <span>วันที่ <strong className="text-[var(--tx-body)]">{dayNum}/{dayMo}</strong> — กด/ลากเพื่อปิด-เปิด</span>
                                       {dayAppts.length > 0 && <span className="text-[9px] text-sky-400 font-bold ml-auto">{dayAppts.length} นัดหมาย</span>}
                                     </div>
+                                    {isDoctorDay && (
+                                      <div className="text-[9px] text-sky-400 mb-1.5 flex items-center gap-1">
+                                        <Stethoscope size={9} /> เวลาหมอ: {docHours.start}–{docHours.end}
+                                        {hasCustomDocHours && <span className="text-orange-400 font-bold">(custom)</span>}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-3 mb-1.5 text-[8px]">
+                                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-900/50 border border-red-800/50 inline-block"></span> ปิดคิว</span>
+                                      {isDoctorDay && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-900/50 border border-sky-700/50 inline-block"></span> หมอเข้า</span>}
+                                    </div>
                                     <div className="space-y-0.5 select-none" style={{touchAction: 'none'}}
-                                      onPointerUp={handleSlotPointerUp} onPointerLeave={handleSlotPointerUp} onPointerCancel={handleSlotPointerUp}>
+                                      onPointerUp={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
+                                      onPointerLeave={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
+                                      onPointerCancel={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}>
                                       {slots15.map(s => {
                                         const blocked = schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
+                                        const inDocHour = isDoctorDay && isSlotInDoctorHours(schedBlockingDay, s.start);
                                         const appt = findApptForSlot(s.start);
                                         return (
-                                          <div key={s.start} className="flex items-stretch gap-1">
+                                          <div key={s.start} className="flex items-stretch gap-0.5">
                                             <button
                                               onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                               onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
-                                              className={`w-14 shrink-0 py-1.5 rounded-l text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40 hover:text-red-300'}`}>
-                                              {s.start}
+                                              className={`w-7 shrink-0 py-1.5 rounded-l text-[9px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
+                                              title={blocked ? 'ปิดคิวอยู่ — กดเพื่อเปิด' : 'กดเพื่อปิดคิว'}>
+                                              {blocked ? '✕' : ''}
                                             </button>
-                                            <div className={`flex-1 rounded-r px-2 py-1 text-[9px] flex items-center gap-1.5 min-w-0 ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
+                                            <div className="w-11 shrink-0 flex items-center justify-center text-[9px] font-mono text-[var(--tx-muted)] bg-[var(--bg-hover)]/30">
+                                              {s.start}
+                                            </div>
+                                            <div className={`flex-1 px-2 py-1 text-[9px] flex items-center gap-1.5 min-w-0 ${appt ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
                                               {appt ? (
                                                 <>
                                                   <span className="text-sky-300 font-bold truncate">{appt.fullCustomerName || appt.customerName || '—'}</span>
@@ -2820,6 +2959,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                                 <span className="text-gray-700 text-[8px]">ว่าง</span>
                                               )}
                                             </div>
+                                            {isDoctorDay && (
+                                              <button
+                                                onPointerDown={(e) => handleDocSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
+                                                onPointerEnter={() => handleDocSlotPointerEnter(schedBlockingDay, s.start, s.end)}
+                                                className={`w-7 shrink-0 py-1.5 rounded-r text-[9px] font-bold transition-colors ${inDocHour ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}
+                                                title={inDocHour ? 'หมอเข้า — กดเพื่อปิด' : 'กดเพื่อเปิดเวลาหมอ'}>
+                                                {inDocHour ? '🩺' : ''}
+                                              </button>
+                                            )}
                                           </div>
                                         );
                                       })}

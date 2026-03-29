@@ -15,6 +15,10 @@ export const DEFAULT_CLINIC_SETTINGS = {
   clinicOpenTimeWeekend: '10:00',
   clinicCloseTimeWeekend: '17:00',
   slotDurationMins: 60,
+  doctorStartTime: '10:00',
+  doctorEndTime: '19:00',
+  doctorStartTimeWeekend: '10:00',
+  doctorEndTimeWeekend: '17:00',
 };
 
 export const PRESET_COLORS = [
