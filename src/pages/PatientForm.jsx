@@ -841,9 +841,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   {visitReasonOptions.map(reason => {
                     const isSelected = selectedReasons.includes(reason.value);
                     return (
-                      <label key={reason.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={isSelected ? {borderColor: ac, background: `${ac}0d`} : {}}>
+                      <label key={reason.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={{}}>
                         <input type="checkbox" checked={isSelected} onChange={() => handleReasonToggle(reason.value)} style={{display:'none'}} />
-                        <div className="pf-reason-check" style={isSelected ? {background: ac, borderColor: ac} : {}}>
+                        <div className="pf-reason-check" style={{}}>
                           {isSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                         </div>
                         <span className="pf-reason-text">{language === 'en' ? reason.en : reason.th}</span>
@@ -867,7 +867,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                         const isGoalSelected = selectedGoals.includes(goal.value);
                         return (
                           <div key={goal.value} className="group">
-                            <label className={`pf-reason-card${isGoalSelected ? ' selected' : ''}`} style={isGoalSelected ? {borderColor:'#f97316', background:'rgba(249,115,22,0.06)'} : {}}>
+                            <label className={`pf-reason-card${isGoalSelected ? ' selected' : ''}`} style={{}}>
                               <input type="checkbox" checked={isGoalSelected} onChange={() => handleGoalToggle(goal.value)} style={{display:'none'}} />
                               <div className="pf-reason-check" style={isGoalSelected ? {background:'#f97316',borderColor:'#f97316'} : {}}>
                                 {isGoalSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1155,9 +1155,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 ].map(ch => {
                   const isSelected = (formData.howFoundUs || []).includes(ch.value);
                   return (
-                    <label key={ch.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={isSelected ? {borderColor: ac, background: `${ac}0d`} : {}}>
+                    <label key={ch.value} className={`pf-reason-card${isSelected ? ' selected' : ''}`} style={{}}>
                       <input type="checkbox" checked={isSelected} onChange={() => handleHowFoundUsToggle(ch.value)} style={{display:'none'}} />
-                      <div className="pf-reason-check" style={isSelected ? {background: ac, borderColor: ac} : {}}>
+                      <div className="pf-reason-check" style={{}}>
                         {isSelected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                       </div>
                       <span className="pf-reason-text">{language === 'en' ? ch.en : ch.th}</span>

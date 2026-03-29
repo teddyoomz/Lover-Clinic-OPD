@@ -1058,21 +1058,28 @@ select.pf-input {
   box-shadow: 0 4px 12px rgba(236,72,153,0.08);
 }
 .pf-reason-card.selected {
-  border-color: var(--accent, #dc2626);
-  background: rgba(var(--accent-rgb, 220,38,38), 0.08);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220,38,38), 0.08), 0 4px 16px rgba(var(--accent-rgb, 220,38,38), 0.1);
+  border-color: #f97316;
+  background: rgba(249,115,22,0.08);
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.08), 0 4px 16px rgba(249,115,22,0.1);
 }
 :root[data-theme="light"] .pf-reason-card.selected {
-  background: rgba(236,72,153,0.06);
-  border-color: #ec4899;
-  box-shadow: 0 0 0 3px rgba(236,72,153,0.08);
+  background: rgba(249,115,22,0.06);
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.08);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-reason-card.selected {
+    background: rgba(249,115,22,0.06);
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(249,115,22,0.08);
+  }
 }
 .pf-reason-card.selected::before {
   content: '';
   position: absolute;
   top: 0; left: 0;
   width: 3px; height: 100%;
-  background: var(--accent, #dc2626);
+  background: #f97316;
   border-radius: 0 2px 2px 0;
 }
 .pf-reason-check {
@@ -1090,8 +1097,8 @@ select.pf-input {
   border-color: rgba(236,72,153,0.2);
 }
 .pf-reason-card.selected .pf-reason-check {
-  background: var(--accent, #dc2626);
-  border-color: var(--accent, #dc2626);
+  background: #f97316;
+  border-color: #f97316;
 }
 .pf-reason-text {
   font-size: 14px;
@@ -1139,11 +1146,39 @@ select.pf-input {
   color: #ef4444;
   box-shadow: 0 0 12px rgba(239,68,68,0.1);
 }
+:root[data-theme="light"] .pf-radio-card.selected-yes {
+  border: 2px solid #ef4444;
+  background: rgba(239,68,68,0.08);
+  color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.1), 0 2px 8px rgba(239,68,68,0.12);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-radio-card.selected-yes {
+    border: 2px solid #ef4444;
+    background: rgba(239,68,68,0.08);
+    color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.1), 0 2px 8px rgba(239,68,68,0.12);
+  }
+}
 .pf-radio-card.selected-no {
   border-color: #22c55e;
   background: rgba(34,197,94,0.08);
   color: #22c55e;
   box-shadow: 0 0 12px rgba(34,197,94,0.1);
+}
+:root[data-theme="light"] .pf-radio-card.selected-no {
+  border: 2px solid #22c55e;
+  background: rgba(34,197,94,0.08);
+  color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.1), 0 2px 8px rgba(34,197,94,0.12);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-radio-card.selected-no {
+    border: 2px solid #22c55e;
+    background: rgba(34,197,94,0.08);
+    color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.1), 0 2px 8px rgba(34,197,94,0.12);
+  }
 }
 
 /* ── Submit CTA — fire glow ── */
