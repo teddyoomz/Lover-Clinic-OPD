@@ -89,44 +89,54 @@ function getInitials(firstName = '', lastName = '') {
 
 // ── CourseCard ────────────────────────────────────────────────────────────────
 
-function CourseCard({ c, expired, accentRgb, tx, lang }) {
+function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
   const hasValue  = c.value && !c.value.includes('0.00');
   const expiryText = (c.expiry || '').replace('ใช้ได้ถึง ', '').replace('ไม่มีวันหมดอายุ', lang === 'en' ? 'No expiry' : 'ไม่มีวันหมดอายุ');
   const qtyText = translateThaiUnit(c.qty, lang);
   const isActive  = c.status === 'กำลังใช้งาน';
 
-  const cardStyle = expired
-    ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #2d0f00 100%)', border: '1.5px solid #5a1a1a', boxShadow: 'inset 0 -6px 14px -4px rgba(239,68,68,0.1), 0 0 12px rgba(239,68,68,0.06)' }
-    : isActive
-    ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #001a0a 50%, #002d10 100%)', border: '1.5px solid #1a4a2a', boxShadow: 'inset 0 -6px 14px -4px rgba(45,212,191,0.1), 0 0 12px rgba(45,212,191,0.06)' }
-    : { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #3a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08)' };
+  const cardStyle = isDark
+    ? (expired
+      ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #2d0f00 100%)', border: '1.5px solid #5a1a1a', boxShadow: 'inset 0 -6px 14px -4px rgba(239,68,68,0.1), 0 0 12px rgba(239,68,68,0.06)' }
+      : isActive
+      ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #001a0a 50%, #002d10 100%)', border: '1.5px solid #1a4a2a', boxShadow: 'inset 0 -6px 14px -4px rgba(45,212,191,0.1), 0 0 12px rgba(45,212,191,0.06)' }
+      : { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #3a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08)' })
+    : (expired
+      ? { background: 'linear-gradient(135deg, #fff5f5 0%, #ffffff 50%, #fef2f2 100%)', border: '1.5px solid rgba(239,68,68,0.2)', boxShadow: '0 2px 12px rgba(239,68,68,0.06)' }
+      : isActive
+      ? { background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 50%, #ecfdf5 100%)', border: '1.5px solid rgba(16,185,129,0.2)', boxShadow: '0 2px 12px rgba(16,185,129,0.06)' }
+      : { background: 'linear-gradient(135deg, #fff5f7 0%, #ffffff 50%, #fdf2f8 100%)', border: '1.5px solid rgba(244,114,182,0.18)', boxShadow: '0 2px 12px rgba(244,114,182,0.05)' });
 
   return (
     <div className="rounded-2xl p-4 flex flex-col gap-2.5" style={cardStyle}>
       {/* Name + status */}
       <div className="flex items-start justify-between gap-2">
-        <span className={`font-bold text-sm leading-snug ${expired ? 'text-red-300/80' : 'text-orange-100'}`}>
+        <span className={`font-bold text-sm leading-snug ${expired ? (isDark ? 'text-red-300/80' : 'text-red-500/80') : (isDark ? 'text-orange-100' : 'text-gray-800')}`}>
           {c.name}
         </span>
         {c.status && (
           <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${
-            expired  ? 'text-red-400'
-            : isActive ? 'text-emerald-300'
-            : 'text-gray-500'
-          }`} style={
-            expired ? { background: 'rgba(127,29,29,0.3)', border: '1px solid #5a1a1a' }
-            : isActive ? { background: 'rgba(5,150,105,0.15)', border: '1px solid #1a4a2a' }
-            : { background: 'rgba(255,255,255,0.03)', border: '1px solid #2a2a2a' }
+            expired  ? (isDark ? 'text-red-400' : 'text-red-500')
+            : isActive ? (isDark ? 'text-emerald-300' : 'text-emerald-600')
+            : (isDark ? 'text-gray-500' : 'text-gray-400')
+          }`} style={isDark
+            ? (expired ? { background: 'rgba(127,29,29,0.3)', border: '1px solid #5a1a1a' }
+              : isActive ? { background: 'rgba(5,150,105,0.15)', border: '1px solid #1a4a2a' }
+              : { background: 'rgba(255,255,255,0.03)', border: '1px solid #2a2a2a' })
+            : (expired ? { background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }
+              : isActive ? { background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }
+              : { background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)' })
           }>{isActive ? tx.active : c.status}</span>
         )}
       </div>
 
       {/* Product + qty */}
       {c.product && (
-        <p className="text-[11px] text-orange-300/50 flex items-center gap-1.5 leading-relaxed">
+        <p className={`text-[11px] flex items-center gap-1.5 leading-relaxed ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>
           <span>{c.product}</span>
           {qtyText && qtyText !== c.product && (
-            <span className="font-mono font-bold text-orange-200/80 px-1.5 py-0.5 rounded-md" style={{ background: '#1a0a00' }}>
+            <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${isDark ? 'text-orange-200/80' : 'text-gray-700'}`}
+              style={{ background: isDark ? '#1a0a00' : 'rgba(244,114,182,0.06)' }}>
               {qtyText}
             </span>
           )}
@@ -138,12 +148,16 @@ function CourseCard({ c, expired, accentRgb, tx, lang }) {
         <div className="flex flex-wrap gap-2 pt-0.5">
           {expiryText && (
             <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
-              expired ? 'text-red-500/80'
-              : 'text-orange-300/50'
-            }`} style={expired ? { border: '1px solid #3a1010', background: '#1a0808' } : { border: '1px solid #3a1a0a', background: '#0a0500' }}>{expiryText}</span>
+              expired ? (isDark ? 'text-red-500/80' : 'text-red-400')
+              : (isDark ? 'text-orange-300/50' : 'text-gray-500')
+            }`} style={isDark
+              ? (expired ? { border: '1px solid #3a1010', background: '#1a0808' } : { border: '1px solid #3a1a0a', background: '#0a0500' })
+              : (expired ? { border: '1px solid rgba(239,68,68,0.12)', background: 'rgba(239,68,68,0.03)' } : { border: '1px solid rgba(244,114,182,0.12)', background: 'rgba(244,114,182,0.03)' })
+            }>{expiryText}</span>
           )}
           {hasValue && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg text-emerald-400" style={{ border: '1px solid #1a4a2a', background: '#001a0a' }}>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+              style={isDark ? { border: '1px solid #1a4a2a', background: '#001a0a' } : { border: '1px solid rgba(16,185,129,0.15)', background: 'rgba(16,185,129,0.04)' }}>
               {c.value}
             </span>
           )}
@@ -221,35 +235,41 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
 
 // ── AppointmentCard ───────────────────────────────────────────────────────────
 
-function AppointmentCard({ a, lang }) {
+function AppointmentCard({ a, lang, isDark }) {
   const { day, rest } = parseDateParts(a.date, lang);
   return (
     <div className="rounded-2xl overflow-hidden flex"
-      style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.1), 0 0 15px rgba(200,60,0,0.06)' }}>
+      style={isDark
+        ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.1), 0 0 15px rgba(200,60,0,0.06)' }
+        : { background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 50%, #fce7f3 100%)', border: '1.5px solid rgba(236,72,153,0.2)', boxShadow: '0 2px 12px rgba(236,72,153,0.06)' }
+      }>
       {/* Date sidebar */}
       <div className="flex flex-col items-center justify-center px-4 py-4 min-w-[64px] gap-0.5"
-        style={{ background: 'linear-gradient(to bottom, #2d0f00 0%, #4a1a0a 50%, #2d0f00 100%)', borderRight: '1px solid #4a1a0a' }}>
-        <span className="text-2xl font-black text-orange-100 leading-none">{day}</span>
-        <span className="text-[9px] font-bold text-orange-400/70 text-center leading-tight">{rest}</span>
+        style={isDark
+          ? { background: 'linear-gradient(to bottom, #2d0f00 0%, #4a1a0a 50%, #2d0f00 100%)', borderRight: '1px solid #4a1a0a' }
+          : { background: 'linear-gradient(to bottom, #fce7f3 0%, #fbcfe8 50%, #fce7f3 100%)', borderRight: '1px solid rgba(236,72,153,0.15)' }
+        }>
+        <span className={`text-2xl font-black leading-none ${isDark ? 'text-orange-100' : 'text-pink-700'}`}>{day}</span>
+        <span className={`text-[9px] font-bold text-center leading-tight ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`}>{rest}</span>
       </div>
       {/* Details */}
       <div className="flex flex-col gap-1.5 px-4 py-3.5 flex-1 min-w-0">
         {a.time && (
           <div className="flex items-center gap-1.5">
-            <Clock size={11} className="text-orange-400/70 shrink-0" />
-            <span className="text-sm font-bold text-orange-100">{a.time}</span>
+            <Clock size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
+            <span className={`text-sm font-bold ${isDark ? 'text-orange-100' : 'text-gray-800'}`}>{a.time}</span>
           </div>
         )}
         {a.doctor && (
           <div className="flex items-center gap-1.5">
-            <Stethoscope size={11} className="text-orange-400/70 shrink-0" />
-            <span className="text-xs text-orange-200/70">{a.doctor}</span>
+            <Stethoscope size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
+            <span className={`text-xs ${isDark ? 'text-orange-200/70' : 'text-gray-600'}`}>{a.doctor}</span>
           </div>
         )}
         {(a.branch || a.room) && (
           <div className="flex items-center gap-1.5">
-            <MapPin size={11} className="text-orange-400/70 shrink-0" />
-            <span className="text-xs text-orange-300/50">{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
+            <MapPin size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-300'}`} />
+            <span className={`text-xs ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
           </div>
         )}
       </div>
@@ -281,6 +301,7 @@ const SYNC_TIMEOUT_MS = 20_000; // 20 วิ
 
 export default function PatientDashboard({ token, clinicSettings, clinicSettingsLoaded, theme, setTheme, isAdminView }) {
   // cooldown ที่ admin กำหนด (0 = ไม่จำกัด); admin view ไม่มี cooldown
+  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const COURSES_REFRESH_COOLDOWN_MS = isAdminView ? 0 : ((clinicSettings?.patientSyncCooldownMins ?? 0) * 60_000);
   const [status, setStatus]           = useState('loading');
   const [sessionData, setSessionData] = useState(null);
@@ -455,13 +476,13 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       )}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
         {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-        <div className="flex bg-black/40 border border-white/10 rounded-lg overflow-hidden backdrop-blur-sm">
+        <div className={`flex rounded-lg overflow-hidden backdrop-blur-sm ${isDark ? 'bg-black/40 border border-white/10' : 'bg-white/60 border border-pink-200/60'}`}>
           <button onClick={() => setLanguage('th')}
-            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-            style={language === 'th' ? { backgroundColor: ac } : {}}>TH</button>
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : (isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-pink-600')}`}
+            style={language === 'th' ? { backgroundColor: isDark ? ac : '#ec4899' } : {}}>TH</button>
           <button onClick={() => setLanguage('en')}
-            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-            style={language === 'en' ? { backgroundColor: ac } : {}}>EN</button>
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : (isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-pink-600')}`}
+            style={language === 'en' ? { backgroundColor: isDark ? ac : '#ec4899' } : {}}>EN</button>
         </div>
       </div>
     </>
@@ -469,7 +490,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
   if (status === 'loading') {
     return (
-      <div className="relative flex flex-col items-center justify-center min-h-screen gap-4 bg-[#050505]">
+      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-4 ${isDark ? 'bg-[#050505]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
         <Controls />
         <Loader2 size={28} className="animate-spin" style={{ color: ac }} />
         <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-600">{tx.loading}</p>
@@ -480,7 +501,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   // ── Error / disabled ───────────────────────────────────────────────────────
   if (status === 'notfound' || status === 'disabled') {
     return (
-      <div className="relative flex flex-col items-center justify-center min-h-screen gap-5 bg-[#050505] px-8 text-center">
+      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-5 px-8 text-center ${isDark ? 'bg-[#050505]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
         <Controls />
         <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
           <AlertCircle size={28} className="text-gray-600" />
@@ -531,15 +552,21 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const cooldownMins = Math.min(Math.ceil(cooldownRemainingMs / 60_000), configuredMins);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-200">
+    <div className={`min-h-screen ${isDark ? 'bg-[#050505] text-gray-200' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50/30 text-gray-800'}`}>
 
       {/* ── Hero header ─────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden">
-        {/* Radial glow — intensified */}
+        {/* Radial glow */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(ellipse 90% 80% at 50% -10%, rgba(${acRgb},0.30) 0%, transparent 65%)` }} />
+          style={{ background: isDark
+            ? `radial-gradient(ellipse 90% 80% at 50% -10%, rgba(${acRgb},0.30) 0%, transparent 65%)`
+            : 'radial-gradient(ellipse 90% 80% at 50% -10%, rgba(244,114,182,0.20) 0%, transparent 65%)'
+          }} />
         <div className="absolute bottom-0 left-0 right-0 h-px"
-          style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.35), transparent)` }} />
+          style={{ background: isDark
+            ? `linear-gradient(90deg, transparent, rgba(${acRgb},0.35), transparent)`
+            : 'linear-gradient(90deg, transparent, rgba(244,114,182,0.25), transparent)'
+          }} />
 
         {/* Controls top-right */}
         <Controls />
@@ -551,7 +578,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             center
             theme={theme}
           />
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-600 mt-1">
+          <p className={`text-[10px] font-black uppercase tracking-[0.12em] mt-1 ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
             {tx.headerSub}
           </p>
         </div>
@@ -561,36 +588,43 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-12 pt-5 flex flex-col gap-5">
 
         {/* Patient info card */}
-        <div className="rounded-2xl border bg-[#0f0f0f] overflow-hidden"
-          style={{ borderColor: `rgba(${acRgb},0.15)`, boxShadow: `var(--shadow-panel), 0 0 30px rgba(${acRgb},0.06), inset 0 1px 0 rgba(255,255,255,0.04)` }}>
+        <div className="rounded-2xl overflow-hidden"
+          style={isDark
+            ? { background: 'linear-gradient(135deg, #1a0800 0%, #0a0a0a 40%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -8px 20px -6px rgba(255,80,0,0.12), 0 0 30px rgba(200,60,0,0.08)' }
+            : { background: 'linear-gradient(135deg, #fff5f7 0%, #ffffff 40%, #fdf2f8 100%)', border: '1.5px solid rgba(244,114,182,0.25)', boxShadow: '0 4px 20px rgba(244,114,182,0.08), inset 0 1px 0 rgba(255,255,255,0.8)' }
+          }>
           {/* Accent top bar */}
-          <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${acRgb},0.8), transparent)` }} />
+          <div className="h-0.5 w-full" style={{ background: isDark
+            ? 'linear-gradient(90deg, transparent, #ea580c, rgba(220,38,38,0.8), transparent)'
+            : 'linear-gradient(90deg, transparent, rgba(236,72,153,0.5), rgba(244,114,182,0.6), transparent)'
+          }} />
 
           <div className="px-5 pt-5 pb-4 flex gap-4 items-start">
-            {/* Avatar — glowing red ring */}
+            {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
-              style={{
-                background: `radial-gradient(135deg, rgba(${acRgb},0.12) 0%, var(--bg-card) 100%)`,
-                border: `2px solid rgba(${acRgb},0.5)`,
-                color: 'var(--tx-primary)',
-                boxShadow: `0 0 18px rgba(${acRgb},0.35), 0 0 40px rgba(${acRgb},0.12), inset 0 0 12px rgba(${acRgb},0.08)`,
-              }}>
+              style={isDark
+                ? { background: 'radial-gradient(135deg, rgba(220,38,38,0.15) 0%, #0a0a0a 100%)', border: '2px solid rgba(220,38,38,0.5)', color: '#fed7aa', boxShadow: '0 0 18px rgba(220,38,38,0.35), 0 0 40px rgba(220,38,38,0.12), inset 0 0 12px rgba(220,38,38,0.08)' }
+                : { background: 'radial-gradient(135deg, rgba(244,114,182,0.15) 0%, #ffffff 100%)', border: '2px solid rgba(236,72,153,0.35)', color: '#9d174d', boxShadow: '0 0 18px rgba(236,72,153,0.20), 0 0 40px rgba(236,72,153,0.06)' }
+              }>
               {getInitials(d.firstName || patientName, d.lastName)}
             </div>
 
             {/* Info */}
             <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              <p className="text-xl font-black text-white leading-snug">{patientName || tx.unknown}</p>
+              <p className={`text-xl font-black leading-snug ${isDark ? 'text-orange-100' : 'text-gray-800'}`}>{patientName || tx.unknown}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
-                    style={{ color: 'var(--tx-secondary)', background: 'var(--bg-hover)', border: '1px solid var(--bd)' }}>
+                    style={isDark
+                      ? { color: '#fdba74', background: '#1a0a00', border: '1px solid #4a1a0a' }
+                      : { color: '#9d174d', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }
+                    }>
                     HN {hn}
                   </span>
                 )}
                 {d.phone && (
-                  <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                    <Phone size={11} className="text-gray-600" />{d.phone}
+                  <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-orange-300/50' : 'text-pink-400/70'}`}>
+                    <Phone size={11} className={isDark ? 'text-orange-400/40' : 'text-pink-300'} />{d.phone}
                   </span>
                 )}
               </div>
@@ -612,10 +646,16 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
         {/* ── Contact Buttons (LINE + Call) ────────────────────────────────── */}
         {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
-          <div className="rounded-2xl border bg-[#0f0f0f] overflow-hidden"
-            style={{ borderColor: `rgba(${acRgb},0.12)`, boxShadow: `var(--shadow-panel), 0 0 25px rgba(${acRgb},0.05)` }}>
+          <div className="rounded-2xl overflow-hidden"
+            style={isDark
+              ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #0a0a0a 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08), 0 0 25px rgba(200,60,0,0.06)' }
+              : { background: 'linear-gradient(135deg, #ffffff 0%, #fdf2f8 50%, #ffffff 100%)', border: '1.5px solid rgba(244,114,182,0.2)', boxShadow: '0 4px 16px rgba(244,114,182,0.06)' }
+            }>
             {/* Accent top bar */}
-            <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.35) 25%, rgba(${acRgb},0.3) 50%, rgba(${acRgb},0.35) 75%, transparent 95%)` }} />
+            <div className="h-px w-full" style={{ background: isDark
+              ? 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.25) 25%, rgba(234,88,12,0.25) 50%, rgba(220,38,38,0.25) 75%, transparent 95%)'
+              : 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.25) 25%, rgba(236,72,153,0.2) 50%, rgba(236,72,153,0.25) 75%, transparent 95%)'
+            }} />
 
             <div className="grid" style={{ gridTemplateColumns: clinicSettings?.lineOfficialUrl && clinicSettings?.clinicPhone ? '1fr auto 1fr' : '1fr' }}>
 
@@ -640,14 +680,14 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
                     <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#06C755]">LINE</span>
-                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors truncate">
+                    <span className={`text-[10px] transition-colors truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
                       {language === 'en' ? 'Contact Clinic' : 'ติดต่อคลินิก'}
                     </span>
                   </div>
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className="ml-auto shrink-0 text-gray-700 group-hover:text-[#06C755]/60 group-hover:translate-x-0.5 transition-all duration-300">
+                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-gray-700 group-hover:text-[#06C755]/60' : 'text-gray-300 group-hover:text-[#06C755]/60'}`}>
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -655,7 +695,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
               {/* Divider */}
               {clinicSettings?.lineOfficialUrl && clinicSettings?.clinicPhone && (
-                <div className="w-px self-stretch my-3" style={{ background: `linear-gradient(180deg, transparent, rgba(${acRgb},0.12), transparent)` }} />
+                <div className="w-px self-stretch my-3" style={{ background: isDark
+                  ? `linear-gradient(180deg, transparent, rgba(${acRgb},0.12), transparent)`
+                  : 'linear-gradient(180deg, transparent, rgba(236,72,153,0.15), transparent)'
+                }} />
               )}
 
               {/* Call Clinic */}
@@ -676,17 +719,17 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className={`text-[11px] font-black text-white ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
+                    <span className={`text-[11px] font-black ${isDark ? 'text-orange-100' : 'text-gray-800'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
-                    <span className="text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors tracking-wide truncate">
+                    <span className={`text-[10px] transition-colors tracking-wide truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
                       {clinicSettings.clinicPhone}
                     </span>
                   </div>
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className="ml-auto shrink-0 text-gray-700 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all duration-300">
+                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-gray-700 group-hover:text-gray-400' : 'text-gray-300 group-hover:text-gray-500'}`}>
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -694,7 +737,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             </div>
 
             {/* Bottom accent line */}
-            <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent 10%, rgba(6,199,85,0.10) 25%, rgba(${acRgb},0.10) 50%, rgba(${acRgb},0.10) 75%, transparent 90%)` }} />
+            <div className="h-px w-full" style={{ background: isDark
+              ? `linear-gradient(90deg, transparent 10%, rgba(6,199,85,0.10) 25%, rgba(${acRgb},0.10) 50%, rgba(${acRgb},0.10) 75%, transparent 90%)`
+              : 'linear-gradient(90deg, transparent 10%, rgba(6,199,85,0.08) 25%, rgba(236,72,153,0.08) 50%, rgba(236,72,153,0.08) 75%, transparent 90%)'
+            }} />
           </div>
         )}
 
@@ -705,10 +751,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               icon={<CalendarClock size={14} />}
               label={tx.apptLabel}
               count={appointments.length}
-              accent="#fb923c"
+              accent={isDark ? '#fb923c' : '#ec4899'}
             />
             <div className="flex flex-col gap-2.5">
-              {appointments.map((a, i) => <AppointmentCard key={i} a={a} lang={language} />)}
+              {appointments.map((a, i) => <AppointmentCard key={i} a={a} lang={language} isDark={isDark} />)}
             </div>
           </section>
         )}
@@ -722,19 +768,19 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   icon={<Package size={14} />}
                   label={tx.coursesLabel}
                   count={courses.length}
-                  accent="#34d399"
+                  accent={isDark ? '#34d399' : '#059669'}
                   meta={syncStatus === 'idle' && syncTimeStr ? `${tx.updatedAt} ${syncTimeStr}` : undefined}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} tx={tx} lang={language} />)}
+                  {courses.map((c, i) => <CourseCard key={i} c={c} expired={false} accentRgb={acRgb} tx={tx} lang={language} isDark={isDark} />)}
                 </div>
               </section>
             )}
 
             {courses.length === 0 && (
-              <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-8 text-center flex flex-col items-center gap-2">
-                <Package size={28} className="text-gray-700" />
-                <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noCourses}</p>
+              <div className={`rounded-2xl border p-8 text-center flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
+                <Package size={28} className={isDark ? 'text-gray-700' : 'text-pink-300'} />
+                <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>{tx.noCourses}</p>
               </div>
             )}
 
@@ -744,33 +790,33 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   icon={<PackageX size={14} />}
                   label={tx.expiredLabel}
                   count={expiredCourses.length}
-                  accent="#ef4444"
+                  accent={isDark ? '#ef4444' : '#dc2626'}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} lang={language} />)}
+                  {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} lang={language} isDark={isDark} />)}
                 </div>
               </section>
             )}
           </>
         ) : (syncStatus === 'requesting' || syncStatus === 'syncing') ? (
-          <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-10 flex flex-col items-center gap-3">
-            <Loader2 size={24} className="animate-spin text-gray-600" />
-            <p className="text-xs font-black uppercase tracking-widest text-gray-600">
+          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-3 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
+            <Loader2 size={24} className={`animate-spin ${isDark ? 'text-gray-600' : 'text-pink-400'}`} />
+            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
               {syncStatus === 'syncing' ? tx.syncingCourses : tx.requesting}
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-10 flex flex-col items-center gap-2">
-            <CalendarClock size={28} className="text-gray-700" />
-            <p className="text-xs font-black uppercase tracking-widest text-gray-600">{tx.noData}</p>
-            <p className="text-[10px] text-gray-700 text-center max-w-[220px] leading-relaxed mt-0.5">
+          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
+            <CalendarClock size={28} className={isDark ? 'text-gray-700' : 'text-pink-300'} />
+            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>{tx.noData}</p>
+            <p className={`text-[10px] text-center max-w-[220px] leading-relaxed mt-0.5 ${isDark ? 'text-gray-700' : 'text-pink-400/50'}`}>
               {tx.noDataSub}
             </p>
           </div>
         )}
 
         {/* Footer */}
-        <p className="text-center text-[10px] text-gray-700 pt-2">
+        <p className={`text-center text-[10px] pt-2 ${isDark ? 'text-gray-700' : 'text-pink-300/50'}`}>
           {tx.poweredBy} {clinicSettings?.clinicName || 'คลินิก'}
         </p>
       </div>
