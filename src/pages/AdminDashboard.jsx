@@ -3082,7 +3082,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                       ${isCl ? (isDark ? 'bg-red-900/40 border border-red-800/50 text-red-400' : 'bg-red-100 border border-red-200 text-red-500') : isDoc ? (isDark ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-sky-100 border border-sky-200 text-sky-600') : (isDark ? 'bg-emerald-950/30 border border-emerald-900/30 hover:border-emerald-700/40' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400')}
                                       ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? (isDark ? 'text-emerald-300' : 'text-emerald-700') : ''}`}>
                                     {day}
-                                    {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
+                                    {isDoc && <span className="text-[7px] leading-none mt-px">🩺</span>}
                                     {isCl && <span className="text-[7px]">✕</span>}
                                     {hasBlocked && !isCl && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-500" />}
                                   </button>

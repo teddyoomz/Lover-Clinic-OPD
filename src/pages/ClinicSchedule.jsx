@@ -353,9 +353,9 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                   {/* Date number */}
                   <span className={`font-bold text-sm leading-none ${dayTextColor}`}>{day}</span>
 
-                  {/* Doctor icon (ไม่พบแพทย์ mode only) */}
-                  {!isClosed && isDoctor && noDoctorRequired && !isDayDisabled && (
-                    <Stethoscope size={9} className={`${isSelected ? 'text-sky-100' : docIconColor}`} />
+                  {/* Doctor emoji (top-right corner) */}
+                  {!isClosed && isDoctor && !isDayDisabled && (
+                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">🩺</span>
                   )}
 
                   {/* Availability */}
@@ -386,9 +386,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           {/* Legend */}
           <div className="flex items-center justify-center gap-4 py-2.5 border-t border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
             <span className="flex items-center gap-1.5">
-              {noDoctorRequired
-                ? <Stethoscope size={11} className={docIconColor} />
-                : <span className={`w-2.5 h-2.5 rounded-sm ${legendDocBg} border`} />}
+              <span className="text-[11px]">🩺</span>
               {t.doctor}
             </span>
             <span className="flex items-center gap-1.5">
