@@ -2541,6 +2541,44 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 )}
               </div>
             )}
+
+            {/* ── Schedule links list ── */}
+            {schedList.length > 0 && (
+              <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-[var(--bd)] flex items-center gap-2">
+                  <Link size={16} className="text-green-400" />
+                  <h3 className="text-sm font-bold text-green-400 uppercase tracking-widest">ลิงก์ตาราง</h3>
+                  <span className="text-xs text-gray-500 font-bold ml-1">({schedList.length})</span>
+                </div>
+                <div className="p-3 sm:p-4 space-y-2">
+                  {schedList.map(s => {
+                    const url = `${window.location.origin}/?schedule=${s.token}`;
+                    const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+                    const isEnabled = s.enabled !== false;
+                    return (
+                      <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
+                          <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
+                        </div>
+                        <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
+                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
+                          <ClipboardCheck size={12} />
+                        </button>
+                        <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
+                          className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
+                          {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                        </button>
+                        <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
+                          className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       })() : (
@@ -4200,39 +4238,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               )}
 
-              {/* ── Schedule links list ── */}
-              {schedList.length > 0 && (
-                <div className="border-t border-[var(--bd)] p-4">
-                  <h3 className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider mb-3">ลิงก์ที่สร้างไว้ ({schedList.length})</h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {schedList.map(s => {
-                      const url = `${window.location.origin}/?schedule=${s.token}`;
-                      const date = s.createdAt?.toDate ? s.createdAt.toDate().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-                      const isEnabled = s.enabled !== false;
-                      return (
-                        <div key={s.id} className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${isEnabled ? 'border-[var(--bd)] bg-[var(--bg-hover)]' : 'border-red-900/30 bg-red-950/10 opacity-60'}`}>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[10px] text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน</div>
-                            <div className="text-[11px] font-mono text-[var(--tx-body)] truncate">{s.token}</div>
-                          </div>
-                          <button onClick={() => { navigator.clipboard.writeText(url); showToast('คัดลอกแล้ว', 2000); }}
-                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-green-400 transition-colors" title="Copy URL">
-                            <ClipboardCheck size={12} />
-                          </button>
-                          <button onClick={() => handleToggleSchedule(s.token, isEnabled)}
-                            className={`p-1.5 rounded-lg border transition-colors ${isEnabled ? 'bg-green-950/30 border-green-900/40 text-green-400 hover:text-green-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-red-400 hover:text-red-300'}`} title={isEnabled ? 'ปิดลิงก์' : 'เปิดลิงก์'}>
-                            {isEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                          </button>
-                          <button onClick={() => { if (confirm('ลบลิงก์นี้?')) handleDeleteSchedule(s.token); }}
-                            className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400 transition-colors" title="ลบ">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );
