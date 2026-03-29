@@ -617,10 +617,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const isSlotInDoctorHours = (dateStr, slotStart) => {
     const ranges = getDoctorRangesForDate(dateStr);
     const sMin = toMin(slotStart);
-    return ranges.some(r => sMin >= toMin(r.start) && sMin < toMin(r.end));
+    return ranges.some(r => sMin >= toMin(r.start) && sMin <= toMin(r.end));
   };
 
   // Convert a set of enabled 15-min slot minutes into array of contiguous ranges
+  // End = last slot's start time (NOT +15) — so "ticked to 19:15" shows as range ending 19:15
   const slotsToRanges = (enabledSet) => {
     if (enabledSet.size === 0) return [];
     const sorted = [...enabledSet].sort((a, b) => a - b);
@@ -628,9 +629,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     let rStart = sorted[0], prev = sorted[0];
     for (let i = 1; i < sorted.length; i++) {
       if (sorted[i] === prev + 15) { prev = sorted[i]; }
-      else { ranges.push({ start: fromMin(rStart), end: fromMin(prev + 15) }); rStart = sorted[i]; prev = sorted[i]; }
+      else { ranges.push({ start: fromMin(rStart), end: fromMin(prev) }); rStart = sorted[i]; prev = sorted[i]; }
     }
-    ranges.push({ start: fromMin(rStart), end: fromMin(prev + 15) });
+    ranges.push({ start: fromMin(rStart), end: fromMin(prev) });
     return ranges;
   };
 
@@ -651,7 +652,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // Build set of enabled doctor slot minutes from current ranges
       const currentRanges = prev[dateStr] ? (Array.isArray(prev[dateStr]) ? prev[dateStr] : [prev[dateStr]]) : getDoctorRangesForDate(dateStr);
-      const enabledSet = new Set(allSlots.filter(m => currentRanges.some(r => m >= toMin(r.start) && m < toMin(r.end))));
+      const enabledSet = new Set(allSlots.filter(m => currentRanges.some(r => m >= toMin(r.start) && m <= toMin(r.end))));
 
       const slotMin = toMin(slotStart);
       if (action === 'remove') enabledSet.delete(slotMin);
@@ -664,12 +665,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
 
       // Check if same as default → remove custom override
+      // Default end is actual end time (e.g. "19:00"), adjust by -15 to match new format (last slot start)
       const defRanges = (() => {
         const d2 = new Date(dateStr);
         const w = d2.getDay() === 0 || d2.getDay() === 6;
+        const defEnd = w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00');
         return [{
           start: w ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
-          end: w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
+          end: fromMin(toMin(defEnd) - 15),
         }];
       })();
       if (newRanges.length === 1 && defRanges.length === 1 && newRanges[0].start === defRanges[0].start && newRanges[0].end === defRanges[0].end) {
