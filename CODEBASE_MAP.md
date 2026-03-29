@@ -322,15 +322,21 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 - Merge bookedSlots + manualBlockedSlots สำหรับคำนวณว่าง
 
 ### Features
-- Calendar view แบ่งตามเดือน (month tabs)
-- วันหมอเข้า (sky highlight) / วันปิด (red/disabled) / วันว่าง (green badge "ว่างX")
+- **i18n**: ระบบแปลภาษา TH/EN ผ่าน `LANG` object + `lang` state + ปุ่ม Globe toggle
+- **Theme-aware**: ใช้ `isDark` boolean คำนวณสีแทน Tailwind `dark:` prefix (เพราะ theme ใช้ `data-theme` attribute)
+- Calendar view แบ่งตามเดือน (month tabs) — gap-px grid borders, trailing cells fill incomplete rows
+- วันหมอเข้า (sky highlight) / วันปิด (muted disabled) / วันว่าง (green badge "ว่างX")
 - `noDoctorRequired=false`: วันที่ไม่ใช่หมอเข้า disabled + ไม่แสดงเลขคิวว่าง
-- `noDoctorRequired=true`: ทุกวันคลิกได้ยกเว้นวันปิด
-- กดวันที่ → แสดง time slots (ว่าง/ไม่ว่าง) — คำนวณจาก clinic hours (แยก weekday/weekend) ลบ bookedSlots
-- 24hr expiry: ลิงก์อายุ 24 ชม. จาก `createdAt` → แสดง "ลิงก์หมดอายุ" เมื่อเกิน
+- `noDoctorRequired=true`: ทุกวันคลิกได้ยกเว้นวันปิด, วันหมอเข้ามี stethoscope icon
+- กดวันที่ → แสดง time slots (horizontal list + CheckCircle2/XCircle icons) — free/total count
+- Today indicator: dot above date number + "วันนี้"/"Today" label below
+- 24hr expiry: ลิงก์อายุ 24 ชม. จาก `createdAt` → แสดง "ลิงก์หมดอายุ"
 - `enabled === false` → แสดง "ไม่พบตารางนัดหมาย"
-- Contact buttons (LINE + Phone) จาก clinicSettings
-- ไม่แสดงชื่อ/ข้อมูลคนไข้
+- Contact buttons (LINE + Phone) with hover scale animation
+- Sticky header with backdrop blur
+- Loading state with spinning circle, error states with icon container
+- Legend inside calendar card at bottom
+- Mobile-first layout (max-w-lg container, responsive padding)
 
 ### Helper functions
 - `generateTimeSlots(open, close, duration)` — สร้าง array ของ time slots
@@ -340,6 +346,8 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 - `getDoctorHoursForDate(dateStr)` — คืน { start, end } จาก customDoctorHours override หรือ weekend/weekday default
 - `isSlotOutsideDoctorHours(slot, dateStr)` — blocks slots นอกเวลาแพทย์สำหรับ พบแพทย์ links
 - Availability count + selected slots exclude doctor-hour-blocked slots
+- `isDark` — computed boolean จาก theme prop + matchMedia สำหรับ auto mode
+- Theme color helpers: `docCellBg`, `availCellBg`, `availColor`, `closedCellBg` etc.
 
 ---
 
