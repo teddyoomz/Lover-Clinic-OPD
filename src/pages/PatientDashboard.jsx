@@ -95,34 +95,38 @@ function CourseCard({ c, expired, accentRgb, tx, lang }) {
   const qtyText = translateThaiUnit(c.qty, lang);
   const isActive  = c.status === 'กำลังใช้งาน';
 
-  const cardBase = expired
-    ? { className: 'rounded-2xl border border-red-900/40 bg-red-950/10 p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 10px rgba(239,68,68,0.06), var(--shadow-card)' } }
+  const cardStyle = expired
+    ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #2d0f00 100%)', border: '1.5px solid #5a1a1a', boxShadow: 'inset 0 -6px 14px -4px rgba(239,68,68,0.1), 0 0 12px rgba(239,68,68,0.06)' }
     : isActive
-    ? { className: 'rounded-2xl border border-teal-700/40 bg-teal-950/[0.18] p-4 flex flex-col gap-2.5', style: { boxShadow: '0 0 12px rgba(45,212,191,0.08), 0 0 0 1px rgba(45,212,191,0.06), var(--shadow-card)' } }
-    : { className: 'rounded-2xl border border-[#1a1a1a] bg-[#0f0f0f] p-4 flex flex-col gap-2.5', style: { boxShadow: 'var(--shadow-card)' } };
+    ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #001a0a 50%, #002d10 100%)', border: '1.5px solid #1a4a2a', boxShadow: 'inset 0 -6px 14px -4px rgba(45,212,191,0.1), 0 0 12px rgba(45,212,191,0.06)' }
+    : { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #3a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08)' };
 
   return (
-    <div className={cardBase.className} style={cardBase.style}>
+    <div className="rounded-2xl p-4 flex flex-col gap-2.5" style={cardStyle}>
       {/* Name + status */}
       <div className="flex items-start justify-between gap-2">
-        <span className={`font-bold text-sm leading-snug ${expired ? 'text-red-300/80' : 'text-white'}`}>
+        <span className={`font-bold text-sm leading-snug ${expired ? 'text-red-300/80' : 'text-orange-100'}`}>
           {c.name}
         </span>
         {c.status && (
           <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${
-            expired  ? 'bg-red-950/50 border border-red-900/50 text-red-400'
-            : isActive ? 'bg-teal-950/60 border border-teal-800/60 text-teal-300'
-            : 'bg-white/5 border border-white/10 text-gray-500'
-          }`}>{isActive ? tx.active : c.status}</span>
+            expired  ? 'text-red-400'
+            : isActive ? 'text-emerald-300'
+            : 'text-gray-500'
+          }`} style={
+            expired ? { background: 'rgba(127,29,29,0.3)', border: '1px solid #5a1a1a' }
+            : isActive ? { background: 'rgba(5,150,105,0.15)', border: '1px solid #1a4a2a' }
+            : { background: 'rgba(255,255,255,0.03)', border: '1px solid #2a2a2a' }
+          }>{isActive ? tx.active : c.status}</span>
         )}
       </div>
 
       {/* Product + qty */}
       {c.product && (
-        <p className="text-[11px] text-gray-500 flex items-center gap-1.5 leading-relaxed">
+        <p className="text-[11px] text-orange-300/50 flex items-center gap-1.5 leading-relaxed">
           <span>{c.product}</span>
           {qtyText && qtyText !== c.product && (
-            <span className="font-mono font-bold text-gray-300 bg-[#1a1a1a] px-1.5 py-0.5 rounded-md">
+            <span className="font-mono font-bold text-orange-200/80 px-1.5 py-0.5 rounded-md" style={{ background: '#1a0a00' }}>
               {qtyText}
             </span>
           )}
@@ -133,13 +137,13 @@ function CourseCard({ c, expired, accentRgb, tx, lang }) {
       {(expiryText || hasValue) && (
         <div className="flex flex-wrap gap-2 pt-0.5">
           {expiryText && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border ${
-              expired ? 'text-red-500/80 border-red-900/30 bg-red-950/20'
-              : 'text-gray-500 border-[#1a1a1a] bg-[#0f0f0f]'
-            }`}>{expiryText}</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
+              expired ? 'text-red-500/80'
+              : 'text-orange-300/50'
+            }`} style={expired ? { border: '1px solid #3a1010', background: '#1a0808' } : { border: '1px solid #3a1a0a', background: '#0a0500' }}>{expiryText}</span>
           )}
           {hasValue && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg border text-teal-400 border-teal-900/40 bg-teal-950/20">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg text-emerald-400" style={{ border: '1px solid #1a4a2a', background: '#001a0a' }}>
               {c.value}
             </span>
           )}
@@ -220,31 +224,32 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
 function AppointmentCard({ a, lang }) {
   const { day, rest } = parseDateParts(a.date, lang);
   return (
-    <div className="rounded-2xl border border-violet-800/30 bg-violet-950/[0.22] overflow-hidden flex"
-      style={{ boxShadow: '0 0 15px rgba(139,92,246,0.08), var(--shadow-card)' }}>
+    <div className="rounded-2xl overflow-hidden flex"
+      style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.1), 0 0 15px rgba(200,60,0,0.06)' }}>
       {/* Date sidebar */}
-      <div className="flex flex-col items-center justify-center px-4 py-4 bg-violet-900/[0.35] border-r border-violet-800/20 min-w-[64px] gap-0.5">
-        <span className="text-2xl font-black text-white leading-none">{day}</span>
-        <span className="text-[9px] font-bold text-violet-300 text-center leading-tight">{rest}</span>
+      <div className="flex flex-col items-center justify-center px-4 py-4 min-w-[64px] gap-0.5"
+        style={{ background: 'linear-gradient(to bottom, #2d0f00 0%, #4a1a0a 50%, #2d0f00 100%)', borderRight: '1px solid #4a1a0a' }}>
+        <span className="text-2xl font-black text-orange-100 leading-none">{day}</span>
+        <span className="text-[9px] font-bold text-orange-400/70 text-center leading-tight">{rest}</span>
       </div>
       {/* Details */}
       <div className="flex flex-col gap-1.5 px-4 py-3.5 flex-1 min-w-0">
         {a.time && (
           <div className="flex items-center gap-1.5">
-            <Clock size={11} className="text-violet-400/70 shrink-0" />
-            <span className="text-sm font-bold text-white">{a.time}</span>
+            <Clock size={11} className="text-orange-400/70 shrink-0" />
+            <span className="text-sm font-bold text-orange-100">{a.time}</span>
           </div>
         )}
         {a.doctor && (
           <div className="flex items-center gap-1.5">
-            <Stethoscope size={11} className="text-violet-400/70 shrink-0" />
-            <span className="text-xs text-gray-300">{a.doctor}</span>
+            <Stethoscope size={11} className="text-orange-400/70 shrink-0" />
+            <span className="text-xs text-orange-200/70">{a.doctor}</span>
           </div>
         )}
         {(a.branch || a.room) && (
           <div className="flex items-center gap-1.5">
-            <MapPin size={11} className="text-violet-400/70 shrink-0" />
-            <span className="text-xs text-gray-400">{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
+            <MapPin size={11} className="text-orange-400/70 shrink-0" />
+            <span className="text-xs text-orange-300/50">{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
           </div>
         )}
       </div>
@@ -700,7 +705,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               icon={<CalendarClock size={14} />}
               label={tx.apptLabel}
               count={appointments.length}
-              accent="#a78bfa"
+              accent="#fb923c"
             />
             <div className="flex flex-col gap-2.5">
               {appointments.map((a, i) => <AppointmentCard key={i} a={a} lang={language} />)}
@@ -717,7 +722,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   icon={<Package size={14} />}
                   label={tx.coursesLabel}
                   count={courses.length}
-                  accent="#2dd4bf"
+                  accent="#34d399"
                   meta={syncStatus === 'idle' && syncTimeStr ? `${tx.updatedAt} ${syncTimeStr}` : undefined}
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -739,7 +744,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   icon={<PackageX size={14} />}
                   label={tx.expiredLabel}
                   count={expiredCourses.length}
-                  accent="#f87171"
+                  accent="#ef4444"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true} accentRgb={acRgb} tx={tx} lang={language} />)}
