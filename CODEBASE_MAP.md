@@ -346,6 +346,7 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 - `getDoctorHoursForDate(dateStr)` — คืน { start, end } จาก customDoctorHours override หรือ weekend/weekday default
 - `isSlotOutsideDoctorHours(slot, dateStr)` — blocks slots นอกเวลาแพทย์สำหรับ พบแพทย์ links
 - Availability count + selected slots exclude doctor-hour-blocked slots
+- `showFrom` — อ่านจาก schedule doc ('today'/'tomorrow') → วันก่อน cutoff = disabled เหมือนวันหมอไม่เข้า
 - `isDark` — computed boolean จาก theme prop + matchMedia สำหรับ auto mode
 - Theme color helpers: `docCellBg`, `availCellBg`, `availColor`, `closedCellBg` etc.
 
@@ -365,6 +366,7 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 | `schedGenResult` | { token, url, qrUrl } หลัง gen สำเร็จ |
 | `schedSlotDuration` | ช่วงเวลาละกี่นาที (15-120) เลือกตอน gen |
 | `schedNoDoctorRequired` | checkbox "ไม่ต้องพบแพทย์" |
+| `schedShowFrom` | 'today' หรือ 'tomorrow' — แสดงคิวตั้งแต่วันนี้/พรุ่งนี้ |
 | `schedManualBlocked` | array ของ { date, startTime, endTime } slots ที่ปิด manual |
 | `schedBlockingDay` | วันที่กำลังเลือก block slots (null = ไม่ได้เลือก) |
 | `schedList` | array ของ schedule docs ทั้งหมด (subscribe) |
