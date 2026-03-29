@@ -10,6 +10,11 @@ export const DEFAULT_CLINIC_SETTINGS = {
   clinicPhone: '',
   patientSyncCooldownMins: 0, // 0 = ไม่จำกัด, 1-99999 = นาที
   proClinicOrigin: 'https://trial.proclinicth.com',
+  clinicOpenTime: '10:00',
+  clinicCloseTime: '19:00',
+  clinicOpenTimeWeekend: '10:00',
+  clinicCloseTimeWeekend: '17:00',
+  slotDurationMins: 60,
 };
 
 export const PRESET_COLORS = [

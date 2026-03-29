@@ -167,6 +167,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptData, setApptData] = useState(null);
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
+  const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
 
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -179,6 +180,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedClosedDays, setSchedClosedDays] = useState(new Set());
   const [schedGenLoading, setSchedGenLoading] = useState(false);
   const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
+  const [schedSlotDuration, setSchedSlotDuration] = useState(60);
+  const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
   const [schedList, setSchedList] = useState([]); // previously generated schedule links
   const [schedPrefsLoaded, setSchedPrefsLoaded] = useState(false);
 
@@ -303,6 +306,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [apptMonth, db, appId]);
 
+  // ── Auto-sync ±3 months when first opening appointment tab ──
+  useEffect(() => {
+    if (adminMode !== 'appointment' || apptAutoSyncedRef.current) return;
+    apptAutoSyncedRef.current = true;
+    (async () => {
+      setApptSyncing(true);
+      try {
+        const now = new Date();
+        const months = [];
+        for (let i = -3; i <= 3; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        }
+        for (const mo of months) {
+          await broker.syncAppointments(mo).catch(() => {});
+        }
+        showToast('Sync นัดหมาย ±3 เดือน สำเร็จ', 3000);
+      } catch (e) {
+        showToast(`Auto-sync error: ${e.message}`, 5000);
+      }
+      setApptSyncing(false);
+    })();
+  }, [adminMode]);
+
   // ── Load saved schedule day preferences + schedule list ──
   useEffect(() => {
     if (!db || !appId) return;
@@ -401,7 +428,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         months,
         clinicOpenTime: clinicSettings.clinicOpenTime || '10:00',
         clinicCloseTime: clinicSettings.clinicCloseTime || '19:00',
-        slotDurationMins: clinicSettings.slotDurationMins || 60,
+        clinicOpenTimeWeekend: clinicSettings.clinicOpenTimeWeekend || '10:00',
+        clinicCloseTimeWeekend: clinicSettings.clinicCloseTimeWeekend || '17:00',
+        slotDurationMins: schedSlotDuration,
+        noDoctorRequired: schedNoDoctorRequired,
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
@@ -2362,7 +2392,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setShowScheduleModal(true); }}
                     className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -4118,6 +4148,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     );
                   })}
+
+                  {/* Slot interval + options */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">ช่วงเวลาละ</label>
+                      <select value={schedSlotDuration} onChange={e => setSchedSlotDuration(Number(e.target.value))}
+                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        {[15,30,45,60,75,90,105,120].map(n => <option key={n} value={n}>{n >= 60 ? `${n/60} ชม.${n%60 ? ` ${n%60} นาที` : ''}` : `${n} นาที`}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-end pb-0.5">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => setSchedNoDoctorRequired(e.target.checked)}
+                          className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
+                        <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
+                      </label>
+                    </div>
+                  </div>
 
                   {/* Gen button */}
                   <button onClick={handleGenScheduleLink} disabled={schedGenLoading}

@@ -93,6 +93,10 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
         clinicPhone: settings.clinicPhone?.trim() || '',
         patientSyncCooldownMins: newCooldown,
+        clinicOpenTime: settings.clinicOpenTime || DEFAULT_CLINIC_SETTINGS.clinicOpenTime,
+        clinicCloseTime: settings.clinicCloseTime || DEFAULT_CLINIC_SETTINGS.clinicCloseTime,
+        clinicOpenTimeWeekend: settings.clinicOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicOpenTimeWeekend,
+        clinicCloseTimeWeekend: settings.clinicCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicCloseTimeWeekend,
         // Credentials stored in Vercel Environment Variables (not in Firestore)
         updatedAt: serverTimestamp(),
       });
@@ -340,6 +344,54 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 ? '(ไม่จำกัด)'
                 : `(${settings.patientSyncCooldownMins ?? 60} นาทีต่อครั้ง)`}
             </span>
+          </div>
+        </div>
+
+        {/* Clinic Hours */}
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-[#222]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Timer size={14} style={{color: ac}}/> เวลาเปิด-ปิดคลินิก
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            ใช้สำหรับคำนวณช่องเวลาว่างในตารางนัดหมายสาธารณะ (ระบบ 24 ชม.)
+          </p>
+          <div className="space-y-3">
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">เปิด</span>
+                  <input type="time" value={settings.clinicOpenTime || '10:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, clinicOpenTime: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                </div>
+                <span className="text-gray-600">—</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">ปิด</span>
+                  <input type="time" value={settings.clinicCloseTime || '19:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, clinicCloseTime: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">เปิด</span>
+                  <input type="time" value={settings.clinicOpenTimeWeekend || '10:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, clinicOpenTimeWeekend: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                </div>
+                <span className="text-gray-600">—</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">ปิด</span>
+                  <input type="time" value={settings.clinicCloseTimeWeekend || '17:00'}
+                    onChange={e => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: e.target.value }))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

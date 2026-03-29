@@ -90,22 +90,31 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const doctorDaysSet = new Set(data.doctorDays || []);
   const closedDaysSet = new Set(data.closedDays || []);
   const bookedSlots = data.bookedSlots || [];
+  const noDoctorRequired = data.noDoctorRequired || false;
 
-  const allSlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
+  const weekdaySlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
+  const weekendSlots = generateTimeSlots(data.clinicOpenTimeWeekend || data.clinicOpenTime || '10:00', data.clinicCloseTimeWeekend || data.clinicCloseTime || '17:00', data.slotDurationMins || 60);
+
+  const getSlotsForDate = (dateStr) => {
+    const d = new Date(dateStr);
+    const dow = d.getDay(); // 0=Sun, 6=Sat
+    return (dow === 0 || dow === 6) ? weekendSlots : weekdaySlots;
+  };
 
   // Count available slots per day
   const availByDate = {};
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${currentMonth}-${String(d).padStart(2, '0')}`;
     if (closedDaysSet.has(dateStr)) { availByDate[dateStr] = -1; continue; }
-    const free = allSlots.filter(s => !isSlotBooked(dateStr, s.start, s.end, bookedSlots)).length;
+    const slots = getSlotsForDate(dateStr);
+    const free = slots.filter(s => !isSlotBooked(dateStr, s.start, s.end, bookedSlots)).length;
     availByDate[dateStr] = free;
   }
 
   const todayStr = new Date().toISOString().substring(0, 10);
 
   // Selected day slots
-  const selectedSlots = selectedDate ? allSlots.map(s => ({
+  const selectedSlots = selectedDate ? getSlotsForDate(selectedDate).map(s => ({
     ...s,
     booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots),
   })) : [];
@@ -158,7 +167,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
         {/* Legend */}
         <div className="flex flex-wrap justify-center gap-3 text-[10px] text-[var(--tx-muted)]">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-900/50 border border-sky-700/50 inline-block" /> หมอเข้า</span>
+          {!noDoctorRequired && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-900/50 border border-sky-700/50 inline-block" /> หมอเข้า</span>}
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-900/30 border border-green-800/40 inline-block" /> ว่าง</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-950/50 border border-red-900/50 inline-block" /> ปิด/เต็ม</span>
         </div>
@@ -179,7 +188,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 const day = i + 1;
                 const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
                 const isClosed = closedDaysSet.has(dateStr);
-                const isDoctor = doctorDaysSet.has(dateStr);
+                const isDoctor = !noDoctorRequired && doctorDaysSet.has(dateStr);
                 const avail = availByDate[dateStr] || 0;
                 const isSelected = selectedDate === dateStr;
                 const isToday = dateStr === todayStr;
@@ -229,7 +238,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <h3 className="text-sm font-bold text-[var(--tx-heading)]">
                   {parseInt(selectedDate.split('-')[2])} {THAI_MONTHS[m - 1]} {y + 543}
                 </h3>
-                {doctorDaysSet.has(selectedDate) && (
+                {!noDoctorRequired && doctorDaysSet.has(selectedDate) && (
                   <span className="text-[9px] bg-sky-950/50 text-sky-400 border border-sky-900/50 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                     <Stethoscope size={8} /> หมอเข้า
                   </span>
