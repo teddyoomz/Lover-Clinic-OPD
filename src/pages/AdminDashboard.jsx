@@ -2027,7 +2027,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
             { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
-            { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัดหมาย', activeClass: 'bg-sky-700 text-white' },
+            { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
             { mode: 'formBuilder', icon: <LayoutTemplate size={14} />, label: 'จัดการ', activeClass: 'bg-blue-600 text-white' },
             { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
           ].map(tab => {
