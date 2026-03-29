@@ -316,37 +316,39 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     }
   };
 
+  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+
   const LanguageToggle = () => (
     <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
       {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-      <div className="flex bg-[#111] border border-[#333] rounded-lg overflow-hidden">
-        <button type="button" onClick={() => setLanguage('th')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : 'text-gray-400 hover:text-white'}`} style={language === 'th' ? {backgroundColor: ac, color: '#fff'} : {}}>TH</button>
-        <button type="button" onClick={() => setLanguage('en')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : 'text-gray-400 hover:text-white'}`} style={language === 'en' ? {backgroundColor: ac, color: '#fff'} : {}}>EN</button>
+      <div style={{ display: 'flex', background: isDark ? 'rgba(220,38,38,0.08)' : 'rgba(236,72,153,0.08)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(236,72,153,0.2)'}`, borderRadius: '8px', overflow: 'hidden' }}>
+        <button type="button" onClick={() => setLanguage('th')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : isDark ? 'text-red-300/50 hover:text-white' : 'text-pink-400/50 hover:text-pink-800'}`} style={language === 'th' ? {backgroundColor: isDark ? '#dc2626' : '#ec4899', color: '#fff'} : {}}>TH</button>
+        <button type="button" onClick={() => setLanguage('en')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : isDark ? 'text-red-300/50 hover:text-white' : 'text-pink-400/50 hover:text-pink-800'}`} style={language === 'en' ? {backgroundColor: isDark ? '#dc2626' : '#ec4899', color: '#fff'} : {}}>EN</button>
       </div>
     </div>
   );
 
   if (!sessionId || !sessionExists) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative">
+      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
         <LanguageToggle />
-        <div className="w-24 h-24 bg-[#111] border border-[#333] rounded-full flex items-center justify-center mx-auto mb-8 text-gray-600"><AlertCircle size={40} /></div>
-        <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
-        <p className="text-gray-400 mb-8 text-base tracking-wider">{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
-        {isSimulation && <button onClick={onBack} className="text-red-500 font-bold text-base uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:text-red-400 transition-colors"><ArrowLeft size={20} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
+        <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a)' : 'linear-gradient(135deg, #fdf2f8, #ffffff)', border: `1px solid ${isDark ? 'rgba(90,16,16,0.4)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#4a1a1a' : '#f9a8d4' }}><AlertCircle size={40} /></div>
+        <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
+        <p className="mb-8 text-base tracking-wider" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
+        {isSimulation && <button onClick={onBack} className="font-bold text-base uppercase tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#ec4899' }}><ArrowLeft size={20} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
       </div>
     );
   }
 
   if (isClosed) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative">
+      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
         <LanguageToggle />
-        <div className="bg-[#0a0a0a] p-8 sm:p-10 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-[#222]">
-          <div className="w-20 h-20 bg-gray-900 border border-gray-700 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-500"><Lock size={32} /></div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
-          <p className="text-gray-400 mb-10 text-base leading-relaxed">{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
-          {isSimulation && <button onClick={onBack} className="text-gray-400 hover:text-white text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors"><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        <div className="p-8 sm:p-10 rounded-3xl" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a, #200000)' : 'linear-gradient(135deg, #fff5f7, #ffffff, #fdf2f8)', border: `1px solid ${isDark ? 'rgba(90,16,16,0.3)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(220,38,38,0.05)' : '0 8px 32px rgba(236,72,153,0.08)' }}>
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(74,26,10,0.2)' : 'rgba(236,72,153,0.06)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.4)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#6b5050' : '#f9a8d4' }}><Lock size={32} /></div>
+          <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
+          <p className="mb-10 text-base leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
         </div>
       </div>
     );
@@ -354,13 +356,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
   if (isExpired) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative">
+      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
         <LanguageToggle />
-        <div className="bg-[#0a0a0a] p-8 sm:p-10 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-[#222]">
-          <div className="w-20 h-20 bg-red-950/30 border border-red-900/50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)]"><TimerOff size={32} /></div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-4">{language === 'en' ? 'Session Expired' : 'คิวหมดอายุ'}</h2>
-          <p className="text-gray-400 mb-10 text-base leading-relaxed">{language === 'en' ? 'For security reasons, sessions expire after 2 hours.' : 'ระบบจำกัดเวลาของคิวไว้ที่ 2 ชั่วโมง กรุณาขอ QR Code ใหม่'}</p>
-          {isSimulation && <button onClick={onBack} className="text-gray-400 hover:text-white text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors"><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        <div className="p-8 sm:p-10 rounded-3xl" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a, #200000)' : 'linear-gradient(135deg, #fff5f7, #ffffff, #fdf2f8)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(220,38,38,0.08)' : '0 8px 32px rgba(236,72,153,0.08)' }}>
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(220,38,38,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)'}`, color: isDark ? '#ef4444' : '#dc2626', boxShadow: isDark ? '0 0 20px rgba(220,38,38,0.15)' : '0 0 20px rgba(239,68,68,0.08)' }}><TimerOff size={32} /></div>
+          <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Expired' : 'คิวหมดอายุ'}</h2>
+          <p className="mb-10 text-base leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'For security reasons, sessions expire after 2 hours.' : 'ระบบจำกัดเวลาของคิวไว้ที่ 2 ชั่วโมง กรุณาขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
         </div>
       </div>
     );
@@ -369,20 +371,20 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   if (isSuccess && !isEditing) {
     const lineUrl = cs.lineOfficialUrl?.trim();
     return (
-      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative">
+      <div className="w-full max-w-xl mx-auto p-4 pt-10 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 40%, #001a0a 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 40%, #f0fdf4 100%)' }}>
         <LanguageToggle />
-        <div className="bg-[#0a0a0a] rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-green-900/30 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1.5 bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]"></div>
+        <div className="rounded-3xl relative overflow-hidden" style={{ background: isDark ? 'linear-gradient(135deg, #0a1a0a, #0a0a0a, #001a0a)' : 'linear-gradient(135deg, #f0fdf4, #ffffff, #ecfdf5)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(34,197,94,0.06)' : '0 8px 32px rgba(34,197,94,0.08)' }}>
+          <div className="absolute top-0 left-0 w-full h-1.5" style={{ background: 'linear-gradient(90deg, #22c55e, #34d399, #22c55e)', boxShadow: '0 0 15px rgba(34,197,94,0.6)' }}></div>
 
           {/* Success header */}
           <div className="px-8 pt-10 pb-6">
-            <div className="w-20 h-20 bg-green-950/30 border border-green-900/50 rounded-full flex items-center justify-center mx-auto mb-5 text-green-500 shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)', border: `1px solid ${isDark ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.15)'}`, color: isDark ? '#34d399' : '#059669', boxShadow: '0 0 20px rgba(34,197,94,0.15)' }}>
               <CheckCircle2 size={36} />
             </div>
-            <h2 className="text-xl font-black uppercase tracking-widest text-white mb-3">
+            <h2 className="text-xl font-black uppercase tracking-widest mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
               {language === 'en' ? 'Submission Successful' : 'ส่งข้อมูลสำเร็จ'}
             </h2>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>
               {language === 'en'
                 ? 'Your information has been submitted. Please wait to be called by our staff.'
                 : 'ข้อมูลของท่านถูกส่งเรียบร้อยแล้ว กรุณารอเจ้าหน้าที่เรียกชื่อเพื่อพบแพทย์'}
@@ -430,12 +432,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           <div className="px-4 pb-8">
             <button
               onClick={() => { setIsSuccess(false); setIsEditing(true); }}
-              className="w-full bg-[#111] border border-[#333] hover:bg-[#1a1a1a] hover:border-[#444] text-white py-4 rounded-xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 mb-5 transition-colors"
+              className="w-full py-4 rounded-xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 mb-5 transition-all"
+              style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.3)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#e5e7eb' : '#334155' }}
             >
               <Edit3 size={16} /> {language === 'en' ? 'Update Information' : 'แก้ไขข้อมูล'}
             </button>
             {isSimulation && (
-              <button onClick={onBack} className="text-gray-500 text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto hover:text-white transition-colors">
+              <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#6b7280' : '#94a3b8' }}>
                 <ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}
               </button>
             )}
@@ -778,12 +781,12 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
           {/* DYNAMIC CUSTOM FORM RENDERER */}
           {isCustom && customTemplate && (
-            <div className="space-y-6 bg-gradient-to-br from-[#0a1128] to-[#0a0a0a] p-5 sm:p-8 rounded-2xl border border-blue-900/30">
+            <div className="space-y-6 p-5 sm:p-8 rounded-2xl" style={{ background: isDark ? 'linear-gradient(135deg, rgba(10,17,40,0.6), rgba(10,10,10,0.95))' : 'linear-gradient(135deg, rgba(239,246,255,0.8), rgba(255,255,255,0.95))', border: `1px solid ${isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.12)'}` }}>
               <h3 className="text-lg sm:text-xl font-black text-blue-400 tracking-wide border-b border-blue-900/30 pb-4 mb-6">
                 ตอบแบบสอบถาม (Questionnaire)
               </h3>
               {customTemplate.questions.map((q, idx) => (
-                <div key={q.id} className="bg-[#111] p-5 rounded-xl border border-[#222] shadow-sm">
+                <div key={q.id} className="p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.7)', border: `1px solid ${isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)'}` }}>
                    <label className="block text-base sm:text-lg font-bold text-gray-200 mb-4 leading-relaxed">
                      <span className="text-blue-500 mr-2">{idx+1}.</span>{q.label}
                    </label>
@@ -799,7 +802,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                    {q.type === 'radio' && (
                      <div className="space-y-3">
                        {q.options.map(opt => (
-                         <label key={opt} className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${formData[q.id] === opt ? 'bg-[#0a1128] border-blue-600' : 'bg-[#141414] border-[#333] hover:bg-[#1a1a1a]'}`}>
+                         <label key={opt} className="flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors" style={{ background: formData[q.id] === opt ? (isDark ? 'rgba(37,99,235,0.08)' : 'rgba(59,130,246,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.5)'), borderColor: formData[q.id] === opt ? (isDark ? '#2563eb' : '#3b82f6') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
                            <input type="radio" name={q.id} value={opt} checked={formData[q.id] === opt} onChange={handleInputChange} required={q.required} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] focus:ring-blue-600 shrink-0"/>
                            <span className={`text-base font-medium break-words leading-tight ${formData[q.id] === opt ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
                          </label>
@@ -812,7 +815,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                        {q.options.map(opt => {
                          const isSelected = Array.isArray(formData[q.id]) && formData[q.id].includes(opt);
                          return (
-                           <label key={opt} className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'bg-[#0a1128] border-blue-600' : 'bg-[#141414] border-[#333] hover:bg-[#1a1a1a]'}`}>
+                           <label key={opt} className="flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors" style={{ background: isSelected ? (isDark ? 'rgba(37,99,235,0.08)' : 'rgba(59,130,246,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.5)'), borderColor: isSelected ? (isDark ? '#2563eb' : '#3b82f6') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
                              <input type="checkbox" checked={isSelected} onChange={() => handleCustomCheckboxChange(q.id, opt)} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] rounded focus:ring-blue-600 shrink-0"/>
                              <span className={`text-base font-medium break-words leading-tight ${isSelected ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
                            </label>
@@ -935,7 +938,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     </div>
                     
                     {formData.hasUnderlying === 'มี' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-black border border-orange-900/30 rounded-xl animate-in fade-in">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl animate-in fade-in" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,247,237,0.5)', border: `1px solid ${isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.12)'}` }}>
                         {[
                           { n: 'ud_hypertension', th: 'ความดันโลหิตสูง', en: 'Hypertension' },
                           { n: 'ud_diabetes', th: 'เบาหวาน', en: 'Diabetes' },
@@ -970,10 +973,10 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           )}
 
           {(!isCustom && (isPerfMode || showAdam || showMrs)) && (
-            <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-8 sm:space-y-10 bg-gradient-to-b from-[#110505] to-[#0a0a0a] p-4 sm:p-8 rounded-2xl border border-red-900/20 w-full">
+            <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-8 sm:space-y-10 p-4 sm:p-8 rounded-2xl w-full" style={{ background: isDark ? 'linear-gradient(135deg, rgba(26,0,0,0.5), rgba(10,10,10,0.95), rgba(42,0,0,0.3))' : 'linear-gradient(135deg, rgba(254,242,242,0.6), rgba(255,255,255,0.95), rgba(253,242,248,0.5))', border: `1px solid ${isDark ? 'rgba(220,38,38,0.15)' : 'rgba(239,68,68,0.1)'}`, boxShadow: isDark ? '0 4px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(220,38,38,0.05)' : '0 4px 20px rgba(239,68,68,0.04)' }}>
               
               {!isFollowUp && (
-                <div className="bg-red-950/40 border border-red-900/50 rounded-2xl p-5 sm:p-6 flex gap-4 items-start shadow-inner">
+                <div className="rounded-2xl p-5 sm:p-6 flex gap-4 items-start" style={{ background: isDark ? 'rgba(220,38,38,0.06)' : 'rgba(239,68,68,0.04)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(239,68,68,0.12)'}` }}>
                   <AlertCircle className="text-red-500 shrink-0 mt-1" size={28} />
                   <div>
                     <h4 className="text-red-500 font-black text-sm sm:text-base tracking-wide mb-2">{language === 'en' ? 'Patient Notice' : 'คำแนะนำสำหรับผู้ป่วย'}</h4>
@@ -986,19 +989,19 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               )}
 
               {isPerfMode && isIntake && (
-                <section className="bg-[#141414] p-5 sm:p-6 rounded-2xl border border-[#222] shadow-inner mb-6">
+                <section className="p-5 sm:p-6 rounded-2xl mb-6" style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.25)' : 'rgba(239,68,68,0.1)'}` }}>
                   <div className="mb-4 border-b border-[#222] pb-4">
                     <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-center gap-3"><span className="w-2 h-2 bg-red-600 rounded-full shrink-0"></span> {language === 'en' ? 'Part 1: Primary Symptoms' : 'ส่วนที่ 1: การประเมินอาการเบื้องต้น'}</h3>
                   </div>
-                  <label className={`flex items-center gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors ${formData.symp_pe ? 'bg-[#1a0505] border-red-900/50' : 'bg-[#0f0f0f] border-[#222] hover:bg-[#1a1a1a]'}`}>
+                  <label className="flex items-center gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors" style={{ background: formData.symp_pe ? (isDark ? 'rgba(220,38,38,0.06)' : 'rgba(239,68,68,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)'), borderColor: formData.symp_pe ? (isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
                     <input type="checkbox" name="symp_pe" checked={!!formData.symp_pe} onChange={handleInputChange} className="w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
-                    <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-snug ${formData.symp_pe ? 'text-red-400' : 'text-gray-300'}`}>{language === 'en' ? 'Experiencing Premature Ejaculation (PE)' : 'ข้าพเจ้ามีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย'}</span>
+                    <span className="text-base sm:text-lg font-bold tracking-wide break-words leading-snug" style={{ color: formData.symp_pe ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#d1d5db' : '#374151') }}>{language === 'en' ? 'Experiencing Premature Ejaculation (PE)' : 'ข้าพเจ้ามีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย'}</span>
                   </label>
                 </section>
               )}
 
               {showAdam && (
-                <section className="bg-[#141414] p-5 sm:p-6 rounded-2xl border border-[#222] shadow-inner">
+                <section className="p-5 sm:p-6 rounded-2xl" style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.25)' : 'rgba(239,68,68,0.1)'}` }}>
                   <div className="mb-5 border-b border-[#222] pb-4">
                     <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-start gap-3 leading-snug">
                       <span className="w-2 h-2 bg-red-600 rounded-full shrink-0 mt-2"></span> 
@@ -1019,9 +1022,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       { n: 'adam_9', th: 'ง่วงนอนหลังทานอาหารเย็น', en: 'Falling asleep after dinner' },
                       { n: 'adam_10', th: 'ประสิทธิภาพการทำงานลดลง', en: 'Decreased work performance' }
                     ].map((item, idx) => (
-                      <label key={item.n} className={`flex items-start gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors ${formData[item.n] ? 'bg-[#1a0505] border-red-900/50' : 'bg-[#0f0f0f] border-[#222] hover:bg-[#1a1a1a]'}`}>
+                      <label key={item.n} className={`flex items-start gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors`} style={{ background: formData[item.n] ? (isDark ? 'rgba(220,38,38,0.06)' : 'rgba(239,68,68,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)'), borderColor: formData[item.n] ? (isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
                         <input type="checkbox" name={item.n} checked={!!formData[item.n]} onChange={handleInputChange} className="mt-0.5 w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
-                        <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-relaxed ${formData[item.n] ? 'text-red-400' : 'text-gray-400'}`}>{idx+1}. {language === 'en' ? item.en : item.th}</span>
+                        <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-relaxed`} style={{ color: formData[item.n] ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#9ca3af' : '#6b7280') }}>{idx+1}. {language === 'en' ? item.en : item.th}</span>
                       </label>
                     ))}
                   </div>
@@ -1029,7 +1032,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               )}
 
               {showMrs && (
-                <section className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-5 sm:p-8 rounded-2xl border border-pink-900/40 relative overflow-hidden">
+                <section className="p-5 sm:p-8 rounded-2xl relative overflow-hidden" style={{ background: isDark ? 'linear-gradient(135deg, rgba(26,5,21,0.6), rgba(10,10,10,0.95))' : 'linear-gradient(135deg, rgba(253,242,248,0.8), rgba(255,255,255,0.95))', border: `1px solid ${isDark ? 'rgba(236,72,153,0.2)' : 'rgba(236,72,153,0.12)'}` }}>
                   <div className="absolute top-0 right-0 bg-pink-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-lg">MRS</div>
                   <div className="mb-6 border-b border-pink-900/30 pb-4 relative z-10 pr-8">
                     <h3 className="text-base sm:text-lg font-black text-white tracking-wide flex items-start gap-3 leading-snug">
@@ -1053,9 +1056,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       { n: 'mrs_10', th: '10. อาการช่องคลอดแห้ง', en: '10. Dryness of vagina' },
                       { n: 'mrs_11', th: '11. อาการปวดข้อและกล้ามเนื้อ', en: '11. Joint and muscular discomfort' }
                     ].map((item) => (
-                      <div key={item.n} className="bg-[#0a0a0a] p-4 sm:p-5 rounded-xl border border-[#222]">
-                        <label className="block text-base sm:text-lg font-bold text-gray-200 mb-3 sm:mb-4 leading-snug">{language === 'en' ? item.en : item.th}</label>
-                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} border-[#333] text-pink-500 font-bold px-4 py-4 sm:py-4 focus:border-pink-600 focus:ring-pink-600 cursor-pointer`}>
+                      <div key={item.n} className="p-4 sm:p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)', border: `1px solid ${isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)'}` }}>
+                        <label className="block text-base sm:text-lg font-bold mb-3 sm:mb-4 leading-snug" style={{ color: isDark ? '#e5e7eb' : '#1f2937' }}>{language === 'en' ? item.en : item.th}</label>
+                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} text-pink-500 font-bold px-4 py-4 sm:py-4 focus:border-pink-600 focus:ring-pink-600 cursor-pointer`} style={{ borderColor: isDark ? 'rgba(236,72,153,0.2)' : 'rgba(236,72,153,0.15)' }}>
                           <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Severity' : 'เลือกระดับความรุนแรง'} --</option>
                           <option value="0" className="text-white">{language === 'en' ? 'None (0)' : 'ไม่มีอาการ (0)'}</option>
                           <option value="1" className="text-white">{language === 'en' ? 'Mild (1)' : 'เล็กน้อย (1)'}</option>
@@ -1070,7 +1073,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               )}
 
               {isPerfMode && (
-                <section className="bg-gradient-to-br from-[#1a0505] to-black p-5 sm:p-8 rounded-2xl border border-red-900/40 relative overflow-hidden">
+                <section className="p-5 sm:p-8 rounded-2xl relative overflow-hidden" style={{ background: isDark ? 'linear-gradient(135deg, rgba(26,5,5,0.6), rgba(10,10,10,0.95))' : 'linear-gradient(135deg, rgba(254,242,242,0.8), rgba(255,255,255,0.95))', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(239,68,68,0.12)'}` }}>
                   <div className="absolute top-0 right-0 bg-red-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-[0_0_15px_rgba(220,38,38,0.5)]">IIEF-5</div>
                   <div className="mb-6 border-b border-red-900/30 pb-4 relative z-10 pr-8">
                     <h3 className="text-base sm:text-lg font-black text-white tracking-wide flex items-start gap-3 leading-snug">
@@ -1118,9 +1121,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                         oen: ['Almost never/never (1)', 'A few times (2)', 'Sometimes (3)', 'Most times (4)', 'Almost always/always (5)']
                       }
                     ].map((item) => (
-                      <div key={item.n} className="bg-[#0a0a0a] p-4 sm:p-5 rounded-xl border border-[#222]">
-                        <label className="block text-base sm:text-lg font-bold text-gray-200 mb-3 sm:mb-4 leading-relaxed">{language === 'en' ? item.en : item.th}</label>
-                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} border-[#333] text-red-500 font-bold px-4 py-4 sm:py-4 focus:border-red-600 focus:ring-red-600 max-w-full break-words cursor-pointer`}>
+                      <div key={item.n} className="p-4 sm:p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.12)' : 'rgba(239,68,68,0.08)'}` }}>
+                        <label className="block text-base sm:text-lg font-bold mb-3 sm:mb-4 leading-relaxed" style={{ color: isDark ? '#e5e7eb' : '#1f2937' }}>{language === 'en' ? item.en : item.th}</label>
+                        <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} text-red-500 font-bold px-4 py-4 sm:py-4 focus:border-red-600 focus:ring-red-600 max-w-full break-words cursor-pointer`} style={{ borderColor: isDark ? 'rgba(220,38,38,0.2)' : 'rgba(239,68,68,0.15)' }}>
                           <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Answer' : 'เลือกคำตอบ'} --</option>
                           {(language === 'en' ? item.oen : item.oth).map((opt, i) => <option key={i} value={i+1} className="text-white">{opt}</option>)}
                         </select>

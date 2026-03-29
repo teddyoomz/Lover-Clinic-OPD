@@ -404,6 +404,14 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 
 ## 📄 src/pages/PatientForm.jsx
 
+### Theme: Fire/Ember Dark + Sakura Light
+- **isDark** computed boolean (เหมือน PatientDashboard/ClinicSchedule)
+- **Hero**: red-black gradient `#1a0000 → #0a0a0a → #200000` (dark) / sakura pink (light)
+- **Form body**: ember gradient `#0a0a0a → #0d0500` (dark) / pink-white (light)
+- **Sections**: glassmorphism-inspired with `backdrop-filter: blur(12px)`, ember/sakura glass tints
+- **Status screens** (invalid/expired/closed/success): themed backgrounds matching fire/sakura
+- **CSS classes**: `pf-hero`, `pf-body`, `pf-section`, `pf-reason-card`, `pf-radio-card`, `pf-submit` — all in index.css
+
 ### Props
 ```js
 { db, appId, user, sessionId, isSimulation, onBack, clinicSettings, theme, setTheme }

@@ -733,7 +733,7 @@ html.theme-transitioning *::after {
   .pf-outer { padding: 32px 16px 64px; }
 }
 
-/* ── Card wrapper ── */
+/* ── Card wrapper — ember glow border ── */
 .pf-card {
   width: 100%;
   max-width: 580px;
@@ -743,14 +743,18 @@ html.theme-transitioning *::after {
 @media (min-width: 640px) {
   .pf-card {
     border-radius: 24px;
-    box-shadow: 0 32px 80px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.1);
-    border: 1px solid var(--bd);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2), 0 0 60px rgba(220,38,38,0.06);
+    border: 1px solid rgba(90,16,16,0.4);
+  }
+  :root[data-theme="light"] .pf-card {
+    box-shadow: 0 20px 60px rgba(236,72,153,0.08), 0 4px 16px rgba(0,0,0,0.06);
+    border-color: rgba(236,72,153,0.15);
   }
 }
 
-/* ── Hero header — dark default, light-aware ── */
+/* ── Hero header — Fire/Ember dark (red-black clinic brand) ── */
 .pf-hero {
-  background: linear-gradient(160deg, #0d1525 0%, #06080f 55%, #100507 100%);
+  background: linear-gradient(160deg, #1a0000 0%, #0a0a0a 45%, #200000 100%);
   padding: 68px 28px 44px;
   text-align: center;
   position: relative;
@@ -759,62 +763,63 @@ html.theme-transitioning *::after {
 .pf-hero::before {
   content: '';
   position: absolute;
-  top: -60px; left: 50%;
+  top: -80px; left: 50%;
   transform: translateX(-50%);
-  width: 500px; height: 300px;
-  background: radial-gradient(ellipse at top, rgba(var(--accent-rgb, 220,38,38), 0.14) 0%, transparent 70%);
+  width: 600px; height: 350px;
+  background: radial-gradient(ellipse at top, rgba(220,38,38,0.18) 0%, rgba(249,115,22,0.06) 40%, transparent 70%);
   pointer-events: none;
 }
 .pf-hero::after {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb, 220,38,38), 0.4), transparent);
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 5%, rgba(220,38,38,0.5) 30%, rgba(249,115,22,0.3) 70%, transparent 95%);
 }
 
-/* ── Hero — light theme ── */
+/* ── Hero — Sakura light theme ── */
 :root[data-theme="light"] .pf-hero {
-  background: linear-gradient(160deg, #f0f4f8 0%, #ffffff 55%, rgba(var(--accent-rgb, 220,38,38), 0.03) 100%);
+  background: linear-gradient(160deg, #fdf2f8 0%, #ffffff 40%, #fff5f7 70%, #fce7f3 100%);
 }
 :root[data-theme="light"] .pf-hero::before {
-  background: radial-gradient(ellipse at top, rgba(var(--accent-rgb, 220,38,38), 0.07) 0%, transparent 70%);
+  background: radial-gradient(ellipse at top, rgba(236,72,153,0.10) 0%, rgba(244,114,182,0.04) 50%, transparent 70%);
 }
 :root[data-theme="light"] .pf-hero::after {
-  background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb, 220,38,38), 0.2), transparent);
+  background: linear-gradient(90deg, transparent 5%, rgba(236,72,153,0.25) 30%, rgba(244,114,182,0.15) 70%, transparent 95%);
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="auto"] .pf-hero {
-    background: linear-gradient(160deg, #f0f4f8 0%, #ffffff 55%, rgba(var(--accent-rgb, 220,38,38), 0.03) 100%);
+    background: linear-gradient(160deg, #fdf2f8 0%, #ffffff 40%, #fff5f7 70%, #fce7f3 100%);
   }
   :root[data-theme="auto"] .pf-hero::before {
-    background: radial-gradient(ellipse at top, rgba(var(--accent-rgb, 220,38,38), 0.07) 0%, transparent 70%);
+    background: radial-gradient(ellipse at top, rgba(236,72,153,0.10) 0%, rgba(244,114,182,0.04) 50%, transparent 70%);
   }
   :root[data-theme="auto"] .pf-hero::after {
-    background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb, 220,38,38), 0.2), transparent);
+    background: linear-gradient(90deg, transparent 5%, rgba(236,72,153,0.25) 30%, rgba(244,114,182,0.15) 70%, transparent 95%);
   }
 }
 
-/* ── Session pill ── */
+/* ── Session pill — fire/sakura ── */
 .pf-session-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(220,38,38,0.06);
+  border: 1px solid rgba(220,38,38,0.15);
   border-radius: 999px;
   padding: 6px 16px;
   margin-top: 16px;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 :root[data-theme="light"] .pf-session-pill {
-  background: rgba(0,0,0,0.05);
-  border-color: rgba(0,0,0,0.12);
+  background: rgba(236,72,153,0.06);
+  border-color: rgba(236,72,153,0.15);
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="auto"] .pf-session-pill {
-    background: rgba(0,0,0,0.05);
-    border-color: rgba(0,0,0,0.12);
+    background: rgba(236,72,153,0.06);
+    border-color: rgba(236,72,153,0.15);
   }
 }
 .pf-session-dot {
@@ -839,23 +844,47 @@ html.theme-transitioning *::after {
   :root[data-theme="auto"] .pf-session-id { color: rgba(15,23,42,0.55); }
 }
 
-/* ── Form body ── */
+/* ── Form body — dark: ember gradient, light: sakura ── */
 .pf-body {
-  background: var(--bg-base);
+  background: linear-gradient(180deg, #0a0a0a 0%, #0d0500 40%, #0a0a0a 100%);
   padding: 28px 20px 40px;
+  position: relative;
+}
+:root[data-theme="light"] .pf-body {
+  background: linear-gradient(180deg, #ffffff 0%, #fdf2f8 30%, #fff5f7 60%, #ffffff 100%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-body {
+    background: linear-gradient(180deg, #ffffff 0%, #fdf2f8 30%, #fff5f7 60%, #ffffff 100%);
+  }
 }
 @media (min-width: 640px) {
   .pf-body { padding: 36px 32px 48px; }
 }
 
-/* ── Section container ── */
+/* ── Section container — glassmorphism-inspired ── */
 .pf-section {
-  background: var(--bg-surface);
-  border: 1px solid var(--bd);
+  background: linear-gradient(135deg, rgba(26,8,0,0.4) 0%, rgba(10,10,10,0.95) 50%, rgba(45,15,0,0.3) 100%);
+  border: 1px solid rgba(74,26,10,0.35);
   border-radius: 16px;
   padding: 20px;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(249,115,22,0.05);
+}
+:root[data-theme="light"] .pf-section {
+  background: linear-gradient(135deg, rgba(255,245,247,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(253,242,248,0.7) 100%);
+  border-color: rgba(236,72,153,0.15);
+  box-shadow: 0 2px 16px rgba(236,72,153,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-section {
+    background: linear-gradient(135deg, rgba(255,245,247,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(253,242,248,0.7) 100%);
+    border-color: rgba(236,72,153,0.15);
+    box-shadow: 0 2px 16px rgba(236,72,153,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
 }
 @media (min-width: 640px) {
   .pf-section { padding: 24px; }
@@ -867,8 +896,14 @@ html.theme-transitioning *::after {
   position: absolute;
   top: 0; left: 0;
   width: 3px; height: 100%;
-  background: var(--bd);
+  background: rgba(74,26,10,0.5);
   border-radius: 0 2px 2px 0;
+}
+:root[data-theme="light"] .pf-section::before {
+  background: rgba(236,72,153,0.15);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-section::before { background: rgba(236,72,153,0.15); }
 }
 .pf-section.accent::before {
   background: var(--accent, #dc2626);
@@ -877,6 +912,40 @@ html.theme-transitioning *::after {
 .pf-section.blue::before   { background: #3b82f6; }
 .pf-section.pink::before   { background: #ec4899; }
 .pf-section.red::before    { background: #ef4444; }
+
+/* Section color variants — dark mode glass tints */
+.pf-section.orange {
+  background: linear-gradient(135deg, rgba(26,15,0,0.5) 0%, rgba(10,10,10,0.95) 50%, rgba(45,20,0,0.4) 100%);
+  border-color: rgba(249,115,22,0.2);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(249,115,22,0.08);
+}
+.pf-section.red {
+  background: linear-gradient(135deg, rgba(26,0,0,0.5) 0%, rgba(10,10,10,0.95) 50%, rgba(42,0,0,0.4) 100%);
+  border-color: rgba(239,68,68,0.2);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(239,68,68,0.08);
+}
+:root[data-theme="light"] .pf-section.orange {
+  background: linear-gradient(135deg, rgba(255,247,237,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(255,237,213,0.6) 100%);
+  border-color: rgba(249,115,22,0.15);
+  box-shadow: 0 2px 16px rgba(249,115,22,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+:root[data-theme="light"] .pf-section.red {
+  background: linear-gradient(135deg, rgba(254,242,242,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(254,226,226,0.6) 100%);
+  border-color: rgba(239,68,68,0.12);
+  box-shadow: 0 2px 16px rgba(239,68,68,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-section.orange {
+    background: linear-gradient(135deg, rgba(255,247,237,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(255,237,213,0.6) 100%);
+    border-color: rgba(249,115,22,0.15);
+    box-shadow: 0 2px 16px rgba(249,115,22,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+  :root[data-theme="auto"] .pf-section.red {
+    background: linear-gradient(135deg, rgba(254,242,242,0.8) 0%, rgba(255,255,255,0.95) 50%, rgba(254,226,226,0.6) 100%);
+    border-color: rgba(239,68,68,0.12);
+    box-shadow: 0 2px 16px rgba(239,68,68,0.06), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+}
 
 /* ── Section title ── */
 .pf-section-title {
@@ -889,7 +958,13 @@ html.theme-transitioning *::after {
   gap: 10px;
   margin-bottom: 18px;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--bd);
+  border-bottom: 1px solid rgba(74,26,10,0.25);
+}
+:root[data-theme="light"] .pf-section-title {
+  border-bottom-color: rgba(236,72,153,0.12);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] .pf-section-title { border-bottom-color: rgba(236,72,153,0.12); }
 }
 
 /* ── Field group ── */
@@ -926,17 +1001,17 @@ html.theme-transitioning *::after {
   outline: none;
 }
 
-/* Dark theme: keep dark for inputs even in pf-section */
+/* Dark theme: ember-tinted inputs */
 :root[data-theme="dark"] .pf-input,
 :root[data-theme="auto"] .pf-input {
-  background: #0f0f0f;
-  border-color: #2a2a2a;
+  background: rgba(10,8,5,0.8);
+  border-color: rgba(74,26,10,0.3);
   color: #e5e7eb;
 }
 :root[data-theme="dark"] .pf-input:focus,
 :root[data-theme="auto"] .pf-input:focus {
-  border-color: var(--accent, #dc2626);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220,38,38), 0.15);
+  border-color: rgba(249,115,22,0.5);
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.1), 0 0 12px rgba(220,38,38,0.06);
 }
 
 /* Select arrow */
@@ -953,30 +1028,44 @@ select.pf-input {
   color: #e5e7eb;
 }
 
-/* ── Visit reason / goal cards ── */
+/* ── Visit reason / goal cards — ember glass ── */
 .pf-reason-card {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border: 1.5px solid var(--bd-strong);
+  border: 1.5px solid rgba(74,26,10,0.25);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  background: var(--bg-surface);
+  transition: all 0.2s ease;
+  background: rgba(10,8,5,0.5);
   position: relative;
   overflow: hidden;
 }
+:root[data-theme="light"] .pf-reason-card {
+  background: rgba(255,255,255,0.7);
+  border-color: rgba(236,72,153,0.12);
+}
 .pf-reason-card:hover {
-  border-color: var(--bd-stronger);
-  background: var(--bg-elevated);
+  border-color: rgba(249,115,22,0.35);
+  background: rgba(26,8,0,0.4);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+:root[data-theme="light"] .pf-reason-card:hover {
+  border-color: rgba(236,72,153,0.25);
+  background: rgba(253,242,248,0.8);
+  box-shadow: 0 4px 12px rgba(236,72,153,0.08);
 }
 .pf-reason-card.selected {
   border-color: var(--accent, #dc2626);
-  background: rgba(var(--accent-rgb, 220,38,38), 0.05);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220,38,38), 0.08);
+  background: rgba(var(--accent-rgb, 220,38,38), 0.08);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220,38,38), 0.08), 0 4px 16px rgba(var(--accent-rgb, 220,38,38), 0.1);
+}
+:root[data-theme="light"] .pf-reason-card.selected {
+  background: rgba(236,72,153,0.06);
+  border-color: #ec4899;
+  box-shadow: 0 0 0 3px rgba(236,72,153,0.08);
 }
 .pf-reason-card.selected::before {
   content: '';
@@ -989,12 +1078,16 @@ select.pf-input {
 .pf-reason-check {
   width: 20px; height: 20px;
   border-radius: 6px;
-  border: 2px solid var(--bd-stronger);
+  border: 2px solid rgba(74,26,10,0.4);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   margin-top: 1px;
   transition: all 0.15s;
-  background: var(--bg-input);
+  background: rgba(10,8,5,0.6);
+}
+:root[data-theme="light"] .pf-reason-check {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(236,72,153,0.2);
 }
 .pf-reason-card.selected .pf-reason-check {
   background: var(--accent, #dc2626);
@@ -1011,7 +1104,7 @@ select.pf-input {
   color: var(--tx-heading);
 }
 
-/* ── Radio cards (allergy / underlying yes/no) ── */
+/* ── Radio cards (allergy / underlying yes/no) — ember glass ── */
 .pf-radio-card {
   flex: 1;
   display: flex;
@@ -1019,31 +1112,41 @@ select.pf-input {
   justify-content: center;
   gap: 8px;
   padding: 12px 10px;
-  border: 1.5px solid var(--bd-strong);
+  border: 1.5px solid rgba(74,26,10,0.25);
   border-radius: 10px;
   cursor: pointer;
   font-weight: 700;
   font-size: 14px;
   color: var(--tx-secondary);
-  transition: all 0.15s;
-  background: var(--bg-surface);
+  transition: all 0.2s;
+  background: rgba(10,8,5,0.5);
+}
+:root[data-theme="light"] .pf-radio-card {
+  background: rgba(255,255,255,0.7);
+  border-color: rgba(236,72,153,0.12);
 }
 .pf-radio-card:hover {
-  border-color: var(--bd-stronger);
-  background: var(--bg-elevated);
+  border-color: rgba(249,115,22,0.35);
+  background: rgba(26,8,0,0.4);
+}
+:root[data-theme="light"] .pf-radio-card:hover {
+  border-color: rgba(236,72,153,0.25);
+  background: rgba(253,242,248,0.8);
 }
 .pf-radio-card.selected-yes {
   border-color: #ef4444;
-  background: rgba(239,68,68,0.06);
+  background: rgba(239,68,68,0.08);
   color: #ef4444;
+  box-shadow: 0 0 12px rgba(239,68,68,0.1);
 }
 .pf-radio-card.selected-no {
   border-color: #22c55e;
   background: rgba(34,197,94,0.08);
   color: #22c55e;
+  box-shadow: 0 0 12px rgba(34,197,94,0.1);
 }
 
-/* ── Submit CTA ── */
+/* ── Submit CTA — fire glow ── */
 .pf-submit {
   width: 100%;
   padding: 16px 24px;
@@ -1052,13 +1155,13 @@ select.pf-input {
   font-weight: 800;
   letter-spacing: 0.02em;
   color: #fff;
-  background: var(--accent, #dc2626);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 50%, #991b1b 100%);
   border: none;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: transform 0.12s, box-shadow 0.2s;
-  box-shadow: 0 4px 20px rgba(var(--accent-rgb, 220,38,38), 0.35);
+  transition: transform 0.15s, box-shadow 0.25s;
+  box-shadow: 0 4px 20px rgba(220,38,38,0.35), 0 0 40px rgba(220,38,38,0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1068,11 +1171,18 @@ select.pf-input {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(249,115,22,0.1) 100%);
 }
 .pf-submit:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(var(--accent-rgb, 220,38,38), 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(220,38,38,0.5), 0 0 60px rgba(220,38,38,0.15);
+}
+:root[data-theme="light"] .pf-submit {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 50%, #be185d 100%);
+  box-shadow: 0 4px 20px rgba(236,72,153,0.35), 0 0 40px rgba(236,72,153,0.1);
+}
+:root[data-theme="light"] .pf-submit:hover {
+  box-shadow: 0 8px 32px rgba(236,72,153,0.5), 0 0 60px rgba(236,72,153,0.15);
 }
 .pf-submit:active { transform: translateY(0) scale(0.98); }
 .pf-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
