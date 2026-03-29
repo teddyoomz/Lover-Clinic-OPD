@@ -2665,6 +2665,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // Theme-aware colors
         const docCellBg = isDark ? 'bg-sky-950/30 border border-sky-800/40 hover:border-sky-600/50' : 'bg-sky-50 border border-sky-200 hover:border-sky-400';
         const closedCellBg = isDark ? 'bg-red-950/30 border border-red-900/40 opacity-50' : 'bg-red-50 border border-red-200 opacity-60';
+        const normalCellBg = isDark ? 'bg-emerald-950/20 border border-emerald-900/30 hover:border-emerald-700/50' : 'bg-emerald-50 border border-emerald-200 hover:border-emerald-400';
         const defaultCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:bg-[var(--bg-hover)]' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-300';
         const hasApptCellBg = isDark ? 'bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-800/50' : 'bg-[var(--bg-card)] border border-sky-200 hover:border-sky-400';
         const legendDocBg = isDark ? 'bg-sky-950/50 border border-sky-800/50' : 'bg-sky-100 border border-sky-200';
@@ -2805,7 +2806,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Clock size={12} className="text-gray-500 shrink-0" />
                   <span className="text-[10px] text-gray-500 shrink-0">คำนวณว่าง:</span>
                   <select value={apptSlotDuration} onChange={e => setApptSlotDuration(Number(e.target.value))}
-                    className={`bg-transparent ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1`}>
+                    className={`bg-[var(--bg-hover)] ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1 rounded px-1`}>
                     {[15,30,45,60,75,90,105,120].map(v => (
                       <option key={v} value={v}>{v < 60 ? `${v} นาที` : v === 60 ? '1 ชม.' : `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')} ชม.`}</option>
                     ))}
@@ -2820,10 +2821,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <div className="p-3 sm:p-5">
                 {/* Legend */}
                 <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500">
-                  <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
+                  <span className="flex items-center gap-1">🩺 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
+                  <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-950/40 border border-emerald-900/40' : 'bg-emerald-50 border border-emerald-200'}`} /> ปกติ</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
-                  <span className="flex items-center gap-1"><span className={`${apptCountColor} font-bold`}>มีนัด</span></span>
-                  <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span> / <span className="text-sky-400 font-bold">หมอ</span></span>
+                  <span className="flex items-center gap-1"><span className={`${apptCountColor} font-bold`}>นัด</span></span>
+                  <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span>/<span className="text-sky-400 font-bold">หมอ</span></span>
                 </div>
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
@@ -2852,19 +2854,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     let cellBg = defaultCellBg;
                     if (isClosed) cellBg = closedCellBg;
                     else if (isDoc) cellBg = docCellBg;
-                    else if (count > 0) cellBg = hasApptCellBg;
+                    else if (!isWeekend) cellBg = normalCellBg;
                     if (isSelected) cellBg = 'bg-sky-600 ring-2 ring-sky-400 ring-offset-1 ring-offset-[var(--bg-card)] border-0';
 
                     return (
                       <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
                         className={`rounded-lg flex flex-col items-center justify-center py-1 sm:py-1.5 gap-px transition-all text-xs relative cursor-pointer min-h-[58px] sm:min-h-[76px]
                           ${cellBg} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
+                        {!isClosed && isDoc && <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 text-[8px] sm:text-[10px] leading-none">🩺</span>}
                         {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
-                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : dayNumColor}`}>{day}</span>
+                        <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : isDoc ? dayNumColor : isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>{day}</span>
                         {isClosed && <span className="text-[7px] sm:text-[9px] font-bold text-red-400/70 leading-none">ปิด</span>}
                         {!isClosed && count > 0 && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-100' : apptCountColor}`}>นัด {count}</span>}
                         {!isClosed && (avail != null || docAvail != null) && (
-                          <div className={`flex items-center gap-px mt-px ${docAvail != null ? 'justify-center' : ''}`}>
+                          <div className="flex items-center gap-0.5 mt-px">
                             {avail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-green-200' : avail > 0 ? availCountColor : warnCountColor}`}>{avail}</span>}
                             {avail != null && docAvail != null && <span className={`text-[6px] sm:text-[7px] ${isSelected ? 'text-white/40' : 'text-gray-600'}`}>/</span>}
                             {docAvail != null && <span className={`text-[7px] sm:text-[9px] font-bold leading-tight ${isSelected ? 'text-sky-200' : docAvail > 0 ? 'text-sky-400' : warnCountColor}`}>{docAvail}</span>}
