@@ -183,6 +183,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
   const [schedSlotDuration, setSchedSlotDuration] = useState(60);
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
+  const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
+  const [schedBlockingDay, setSchedBlockingDay] = useState(null); // date string being edited
   const [schedList, setSchedList] = useState([]); // previously generated schedule links
   const [schedPrefsLoaded, setSchedPrefsLoaded] = useState(false);
 
@@ -375,12 +377,39 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [db, appId]);
 
+  // Update bookedSlots in all active schedule docs
+  const updateActiveSchedules = async () => {
+    try {
+      const activeScheds = schedList.filter(s => s.enabled !== false);
+      for (const sched of activeScheds) {
+        // Check if not expired (24hr)
+        if (sched.createdAt?.toMillis && Date.now() - sched.createdAt.toMillis() > 24 * 60 * 60 * 1000) continue;
+        const months = sched.months || [];
+        const bookedSlots = [];
+        for (const mo of months) {
+          const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
+          if (snap.exists()) {
+            (snap.data().appointments || []).forEach(a => {
+              if (a.date && a.startTime && a.endTime) {
+                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+            });
+          }
+        }
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), { bookedSlots }).catch(() => {});
+      }
+    } catch { /* silent */ }
+  };
+
   const handleSyncAppointments = async (month) => {
     setApptSyncing(true);
     try {
       const result = await broker.syncAppointments(month || apptMonth);
       if (!result.success) showToast(`Sync ล้มเหลว: ${result.error}`, 5000);
-      else showToast(`Sync สำเร็จ: ${result.totalCount} นัดหมาย`, 3000);
+      else {
+        showToast(`Sync สำเร็จ: ${result.totalCount} นัดหมาย`, 3000);
+        updateActiveSchedules(); // update live schedule links
+      }
     } catch (e) {
       showToast(`Sync error: ${e.message}`, 5000);
     }
@@ -451,6 +480,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
+        manualBlockedSlots: schedManualBlocked,
       });
 
       // 5b. Save doctor/closed day prefs for next time
@@ -2408,7 +2438,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedManualBlocked([]); setSchedBlockingDay(null); setShowScheduleModal(true); }}
                     className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -4211,6 +4241,77 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     );
                   })}
+
+                  {/* Manual slot blocking */}
+                  <div className="bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider">ปิดคิวรายช่วงเวลา</span>
+                      {schedManualBlocked.length > 0 && <span className="text-[9px] text-orange-400 font-bold">{schedManualBlocked.length} slot ที่ปิด</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {allMonths.flatMap(mo => {
+                        const [cy2, cm2] = mo.split('-').map(Number);
+                        const dim2 = new Date(cy2, cm2, 0).getDate();
+                        return Array.from({ length: dim2 }).map((_, i) => {
+                          const ds2 = `${mo}-${String(i + 1).padStart(2, '0')}`;
+                          const isActive = schedBlockingDay === ds2;
+                          const hasBlocked = schedManualBlocked.some(b => b.date === ds2);
+                          return (
+                            <button key={ds2} onClick={() => setSchedBlockingDay(isActive ? null : ds2)}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${isActive ? 'bg-sky-600 text-white' : hasBlocked ? 'bg-orange-900/40 border border-orange-800/40 text-orange-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`}>
+                              {i + 1}
+                            </button>
+                          );
+                        });
+                      })}
+                    </div>
+                    {schedBlockingDay && (() => {
+                      const bDate = new Date(schedBlockingDay);
+                      const bDow = bDate.getDay();
+                      const isWknd = bDow === 0 || bDow === 6;
+                      const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
+                      const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+                      const slots15 = [];
+                      const [oh2, om2] = openT.split(':').map(Number);
+                      const [ch2, cm2] = closeT.split(':').map(Number);
+                      let cur = oh2 * 60 + om2;
+                      const end2 = ch2 * 60 + cm2;
+                      while (cur + 15 <= end2) {
+                        const sH = String(Math.floor(cur / 60)).padStart(2, '0');
+                        const sM = String(cur % 60).padStart(2, '0');
+                        const eMin = cur + 15;
+                        const eH = String(Math.floor(eMin / 60)).padStart(2, '0');
+                        const eM = String(eMin % 60).padStart(2, '0');
+                        slots15.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
+                        cur += 15;
+                      }
+                      const isBlocked = (s) => schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
+                      const toggleSlot = (s) => {
+                        if (isBlocked(s)) {
+                          setSchedManualBlocked(prev => prev.filter(b => !(b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end)));
+                        } else {
+                          setSchedManualBlocked(prev => [...prev, { date: schedBlockingDay, startTime: s.start, endTime: s.end }]);
+                        }
+                      };
+                      const dayLabel = `${parseInt(schedBlockingDay.split('-')[2])}/${parseInt(schedBlockingDay.split('-')[1])}`;
+                      return (
+                        <div>
+                          <div className="text-[10px] text-[var(--tx-muted)] mb-1">วันที่ {dayLabel} — กดเพื่อปิด/เปิดช่วงเวลา</div>
+                          <div className="grid grid-cols-4 gap-1">
+                            {slots15.map(s => {
+                              const blocked = isBlocked(s);
+                              return (
+                                <button key={s.start} onClick={() => toggleSlot(s)}
+                                  className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40'}`}>
+                                  {s.start}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
 
                   {/* Slot interval + options */}
                   <div className="grid grid-cols-2 gap-3">

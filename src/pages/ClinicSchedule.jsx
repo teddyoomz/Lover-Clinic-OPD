@@ -52,7 +52,13 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
       doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token),
       (snap) => {
         if (!snap.exists() || snap.data().enabled === false) { setStatus('notfound'); return; }
-        setScheduleData(snap.data());
+        const d = snap.data();
+        // Check 24hr expiry
+        if (d.createdAt?.toMillis) {
+          const ageMs = Date.now() - d.createdAt.toMillis();
+          if (ageMs > 24 * 60 * 60 * 1000) { setStatus('expired'); return; }
+        }
+        setScheduleData(d);
         setStatus('done');
       },
       () => setStatus('notfound')
@@ -68,12 +74,12 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     );
   }
 
-  if (status === 'notfound') {
+  if (status === 'notfound' || status === 'expired') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bg-base)] text-[var(--tx-muted)] gap-4">
         <CalendarDays size={48} className="opacity-30" />
-        <p className="text-lg font-bold">ไม่พบตารางนัดหมาย</p>
-        <p className="text-sm text-gray-500">ลิงก์อาจหมดอายุหรือไม่ถูกต้อง</p>
+        <p className="text-lg font-bold">{status === 'expired' ? 'ลิงก์หมดอายุแล้ว' : 'ไม่พบตารางนัดหมาย'}</p>
+        <p className="text-sm text-gray-500">{status === 'expired' ? 'กรุณาขอลิงก์ใหม่จากคลินิก' : 'ลิงก์อาจหมดอายุหรือไม่ถูกต้อง'}</p>
       </div>
     );
   }
@@ -89,7 +95,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
   const doctorDaysSet = new Set(data.doctorDays || []);
   const closedDaysSet = new Set(data.closedDays || []);
-  const bookedSlots = data.bookedSlots || [];
+  const bookedSlots = [...(data.bookedSlots || []), ...(data.manualBlockedSlots || [])];
   const noDoctorRequired = data.noDoctorRequired || false;
 
   const weekdaySlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
@@ -218,10 +224,10 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                     <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-[var(--tx-body)]'} ${textExtra}`}>{day}</span>
                     {isClosed && <span className="text-[8px] font-bold text-red-400">ปิด</span>}
                     {!isClosed && isDoctor && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
-                    {!isClosed && !isDoctor && avail > 0 && (
+                    {!isDayDisabled && !isClosed && avail > 0 && (
                       <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>{avail}</span>
                     )}
-                    {!isClosed && avail === 0 && !isDoctor && (
+                    {!isDayDisabled && !isClosed && avail === 0 && (
                       <span className={`text-[8px] font-bold ${isSelected ? 'text-sky-100' : 'text-orange-400'}`}>เต็ม</span>
                     )}
                   </button>
