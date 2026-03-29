@@ -2530,7 +2530,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           {hasOPD && hasDeposit ? (
                           <button onClick={() => setDepositToDelete({ session, action: 'complete' })}
-                            className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามารับบริการเรียบร้อย">
+                            className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-blue-400 transition-colors" title="ลูกค้ามาเข้ารับบริการ">
                             <UserCheck size={14}/>
                           </button>
                           ) : (
@@ -4772,7 +4772,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const icon = isComplete ? <UserCheck size={24}/> : <Trash2 size={24}/>;
         const iconBg = isComplete ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50';
         const iconGlow = isComplete ? '0 0 15px rgba(96,165,250,0.4)' : '0 0 15px rgba(220,38,38,0.4)';
-        const title = isComplete ? 'ลูกค้ามารับบริการเรียบร้อย?' : isCancel ? 'ยกเลิกการจอง?' : 'ลบคิวจองนี้?';
+        const title = isComplete ? 'ลูกค้ามาเข้ารับบริการ?' : isCancel ? 'ยกเลิกการจอง?' : 'ลบคิวจองนี้?';
         const desc = isComplete ? 'ย้ายไปประวัติจอง (รับบริการแล้ว)'
           : isCancel ? 'จะลบมัดจำ + ลูกค้าใน ProClinic ด้วย'
           : 'ย้ายไปประวัติจอง (กู้คืนได้)';
