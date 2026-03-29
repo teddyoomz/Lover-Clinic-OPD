@@ -116,6 +116,10 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         clinicCloseTime: settings.clinicCloseTime || DEFAULT_CLINIC_SETTINGS.clinicCloseTime,
         clinicOpenTimeWeekend: settings.clinicOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicOpenTimeWeekend,
         clinicCloseTimeWeekend: settings.clinicCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicCloseTimeWeekend,
+        doctorStartTime: settings.doctorStartTime || DEFAULT_CLINIC_SETTINGS.doctorStartTime,
+        doctorEndTime: settings.doctorEndTime || DEFAULT_CLINIC_SETTINGS.doctorEndTime,
+        doctorStartTimeWeekend: settings.doctorStartTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorStartTimeWeekend,
+        doctorEndTimeWeekend: settings.doctorEndTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorEndTimeWeekend,
         // Credentials stored in Vercel Environment Variables (not in Firestore)
         updatedAt: serverTimestamp(),
       });
