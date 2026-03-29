@@ -616,7 +616,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
                     style={isDark
-                      ? { color: '#fca5a5', background: '#1a0000', border: '1px solid #5a1010' }
+                      ? { color: '#fdba74', background: '#1a0a00', border: '1px solid #4a1a0a' }
                       : { color: '#9d174d', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }
                     }>
                     HN {hn}
