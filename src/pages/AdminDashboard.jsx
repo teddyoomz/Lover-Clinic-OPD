@@ -2216,7 +2216,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const todayStr = new Date().toISOString().substring(0, 10);
 
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-2xl mx-auto">
             {/* Calendar card */}
             <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
               {/* Header */}
