@@ -168,6 +168,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
 
+  // ── Schedule Link modal state ──
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [schedStartMonth, setSchedStartMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(1);
+  const [schedDoctorDays, setSchedDoctorDays] = useState(new Set());
+  const [schedClosedDays, setSchedClosedDays] = useState(new Set());
+  const [schedGenLoading, setSchedGenLoading] = useState(false);
+  const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
+
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
@@ -299,6 +311,66 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       showToast(`Sync error: ${e.message}`, 5000);
     }
     setApptSyncing(false);
+  };
+
+  // ── Generate Schedule Link ──
+  const handleGenScheduleLink = async () => {
+    setSchedGenLoading(true);
+    try {
+      // 1. Build months array
+      const months = [];
+      const [sy, sm] = schedStartMonth.split('-').map(Number);
+      for (let i = 0; i <= schedAdvanceMonths; i++) {
+        const d = new Date(sy, sm - 1 + i, 1);
+        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+
+      // 2. Sync all months
+      for (const mo of months) {
+        await broker.syncAppointments(mo);
+      }
+
+      // 3. Collect booked slots from Firestore (date + startTime + endTime only)
+      const bookedSlots = [];
+      for (const mo of months) {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
+        if (snap.exists()) {
+          const appts = snap.data().appointments || [];
+          appts.forEach(a => {
+            if (a.date && a.startTime && a.endTime) {
+              bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+            }
+          });
+        }
+      }
+
+      // 4. Generate token
+      const token = 'SCH-' + Array.from(crypto.getRandomValues(new Uint8Array(5))).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // 5. Save schedule doc
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), {
+        token,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+        months,
+        clinicOpenTime: clinicSettings.clinicOpenTime || '10:00',
+        clinicCloseTime: clinicSettings.clinicCloseTime || '19:00',
+        slotDurationMins: clinicSettings.slotDurationMins || 60,
+        doctorDays: [...schedDoctorDays],
+        closedDays: [...schedClosedDays],
+        bookedSlots,
+      });
+
+      // 6. Build URL + QR
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/?schedule=${token}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+      setSchedGenResult({ token, url, qrUrl });
+      showToast('สร้างลิงก์ตารางสำเร็จ', 3000);
+    } catch (e) {
+      showToast(`สร้างลิงก์ล้มเหลว: ${e.message}`, 5000);
+    }
+    setSchedGenLoading(false);
   };
 
   const enablePushNotifications = async () => {
@@ -2237,6 +2309,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
                     {apptSyncing ? 'กำลัง Sync...' : 'Sync'}
                   </button>
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedDoctorDays(new Set()); setSchedClosedDays(new Set()); setSchedGenResult(null); setShowScheduleModal(true); }}
+                    className="ml-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40 hover:text-green-300">
+                    <Link size={13} /> สร้างลิงก์
+                  </button>
                 </div>
               </div>
 
@@ -3864,6 +3940,143 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </div>
         </div>
       )}
+
+      {/* ── Schedule Link Modal ── */}
+      {showScheduleModal && (() => {
+        const allMonths = [];
+        const [sy, sm] = schedStartMonth.split('-').map(Number);
+        for (let i = 0; i <= schedAdvanceMonths; i++) {
+          const d = new Date(sy, sm - 1 + i, 1);
+          allMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        }
+        const thaiMo = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+        const thaiD = ['จ','อ','พ','พฤ','ศ','ส','อา'];
+
+        // Generate month options for start month picker (current month + next 6)
+        const monthOptions = [];
+        const nowForOpts = new Date();
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(nowForOpts.getFullYear(), nowForOpts.getMonth() + i, 1);
+          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const label = `${thaiMo[d.getMonth()]} ${d.getFullYear() + 543}`;
+          monthOptions.push({ val, label });
+        }
+
+        // Calendar for all selected months combined
+        const toggleDay = (dateStr) => {
+          // cycle: normal → doctor → closed → normal
+          if (schedDoctorDays.has(dateStr)) {
+            const nd = new Set(schedDoctorDays); nd.delete(dateStr);
+            setSchedDoctorDays(nd);
+            setSchedClosedDays(prev => new Set(prev).add(dateStr));
+          } else if (schedClosedDays.has(dateStr)) {
+            const nc = new Set(schedClosedDays); nc.delete(dateStr);
+            setSchedClosedDays(nc);
+          } else {
+            setSchedDoctorDays(prev => new Set(prev).add(dateStr));
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-card)] z-10">
+                <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตารางคลินิก</h2>
+                <button onClick={() => !schedGenLoading && setShowScheduleModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white"><X size={14} /></button>
+              </div>
+
+              {schedGenResult ? (
+                // ── Show result: QR + URL ──
+                <div className="p-6 flex flex-col items-center gap-4">
+                  <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
+                  <div className="w-full">
+                    <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">URL</label>
+                    <div className="flex gap-2">
+                      <input readOnly value={schedGenResult.url} className="flex-1 text-xs bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-[var(--tx-body)] font-mono" />
+                      <button onClick={() => { navigator.clipboard.writeText(schedGenResult.url); showToast('คัดลอกแล้ว', 2000); }}
+                        className="px-3 py-2 rounded-lg bg-green-950/40 border border-green-900/50 text-green-400 text-xs font-bold hover:bg-green-900/40">Copy</button>
+                    </div>
+                  </div>
+                  <button onClick={() => { setSchedGenResult(null); setShowScheduleModal(false); }}
+                    className="mt-2 px-6 py-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs font-bold hover:text-white">ปิด</button>
+                </div>
+              ) : (
+                // ── Config form ──
+                <div className="p-4 space-y-4">
+                  {/* Month + advance */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เดือนเริ่มต้น</label>
+                      <select value={schedStartMonth} onChange={e => { setSchedStartMonth(e.target.value); setSchedDoctorDays(new Set()); setSchedClosedDays(new Set()); }}
+                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงล่วงหน้า</label>
+                      <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
+                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        {[0,1,2,3].map(n => <option key={n} value={n}>{n} เดือน</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-3 text-[10px] text-[var(--tx-muted)]">
+                    <span className="flex items-center gap-1">กดวันที่เพื่อ toggle:</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-sky-600 inline-block" /> หมอเข้า</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-600 inline-block" /> ปิด</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] inline-block" /> ปกติ</span>
+                  </div>
+
+                  {/* Calendar(s) */}
+                  {allMonths.map(mo => {
+                    const [cy, cm] = mo.split('-').map(Number);
+                    const dim = new Date(cy, cm, 0).getDate();
+                    const fdow = new Date(cy, cm - 1, 1).getDay();
+                    const calS = fdow === 0 ? 6 : fdow - 1;
+                    return (
+                      <div key={mo} className="bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)] p-3">
+                        <div className="text-xs font-bold text-center text-[var(--tx-heading)] mb-2">{thaiMo[cm - 1]} {cy + 543}</div>
+                        <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+                          {thaiD.map((d, i) => <div key={i} className={`text-center text-[9px] font-bold py-0.5 ${i >= 5 ? 'text-red-400/50' : 'text-gray-500'}`}>{d}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-0.5">
+                          {Array.from({ length: calS }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
+                          {Array.from({ length: dim }).map((_, i) => {
+                            const day = i + 1;
+                            const ds = `${mo}-${String(day).padStart(2, '0')}`;
+                            const isDoc = schedDoctorDays.has(ds);
+                            const isCl = schedClosedDays.has(ds);
+                            const dow = (calS + i) % 7;
+                            return (
+                              <button key={day} onClick={() => toggleDay(ds)}
+                                className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-all
+                                  ${isCl ? 'bg-red-900/40 border border-red-800/50 text-red-400' : isDoc ? 'bg-sky-900/40 border border-sky-700/50 text-sky-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] hover:border-sky-800/40'}
+                                  ${dow >= 5 && !isDoc && !isCl ? 'text-red-400/60' : !isDoc && !isCl ? 'text-[var(--tx-body)]' : ''}`}>
+                                {day}
+                                {isDoc && <Stethoscope size={7} className="text-sky-400 mt-px" />}
+                                {isCl && <span className="text-[7px]">✕</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Gen button */}
+                  <button onClick={handleGenScheduleLink} disabled={schedGenLoading}
+                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-600 hover:bg-green-700 text-white shadow-[0_0_20px_rgba(22,163,74,0.3)]'}`}>
+                    {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

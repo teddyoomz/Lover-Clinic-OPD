@@ -3,6 +3,8 @@ import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
+// DEBUG: expose auth for console API calls
+window.__auth = auth;
 import { DEFAULT_CLINIC_SETTINGS } from './constants.js';
 import { applyThemeColor, hexToRgb } from './utils.js';
 import { useTheme } from './hooks/useTheme.js';
@@ -11,6 +13,7 @@ import AdminLogin from './pages/AdminLogin.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import PatientForm from './pages/PatientForm.jsx';
 import PatientDashboard from './pages/PatientDashboard.jsx';
+import ClinicSchedule from './pages/ClinicSchedule.jsx';
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -30,6 +33,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search);
   const sessionFromUrl = params.get('session');
   const patientFromUrl = params.get('patient');
+  const scheduleFromUrl = params.get('schedule');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), (snap) => {
@@ -87,6 +91,10 @@ export default function App() {
 
   if (isInitializing) {
     return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลดระบบ {clinicSettings.clinicName}...</div>;
+  }
+
+  if (scheduleFromUrl) {
+    return <ClinicSchedule token={scheduleFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />;
   }
 
   if (patientFromUrl) {
