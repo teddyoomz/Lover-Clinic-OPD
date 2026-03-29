@@ -536,7 +536,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
     const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
     const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
-    return sMin >= dStart && sMin < dEnd;
+    return sMin >= dStart && sMin <= dEnd;
   };
 
   // Toggle custom doctor hours for a specific day+slot
@@ -806,6 +806,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             // Only notify when notifications enabled AND session is unread AND patientData changed
             // + dedup: ไม่ซ้ำถ้า data เดิมเคย notify แล้ว (ป้องกัน toast/sound รัวจาก snapshot ซ้ำ)
             if (isNotifEnabled && newS.isUnread && (!oldS.isUnread || oldStr !== newStr) && lastNotifiedStrRef.current[newS.id] !== newStr) {
+              lastNotifiedStrRef.current[newS.id] = newStr;
+              updatedSessions.push(newS);
+            }
+          } else if (newS.isUnread && newS.patientData && newS.status === 'completed') {
+            // Session ใหม่ที่ส่งข้อมูลมาแล้ว แต่ไม่เจอใน prevRef (เช่น สร้าง+ส่งพร้อมกัน, หรือ listener restart)
+            const newStr = stableStr(newS.patientData || {});
+            if (isNotifEnabled && lastNotifiedStrRef.current[newS.id] !== newStr) {
               lastNotifiedStrRef.current[newS.id] = newStr;
               updatedSessions.push(newS);
             }
