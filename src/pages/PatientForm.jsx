@@ -419,8 +419,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               </div>
 
               {/* Highlighted description */}
-              <div className="rounded-xl p-3.5 mb-4 text-left" style={{ background: isDark ? 'rgba(249,115,22,0.04)' : 'rgba(249,115,22,0.04)', border: `1px solid ${isDark ? 'rgba(249,115,22,0.12)' : 'rgba(249,115,22,0.15)'}` }}>
-                <p className="text-[13px] leading-relaxed font-semibold" style={{ color: isDark ? '#d1d5db' : '#334155' }}>
+              <div className="rounded-xl p-4 mb-4 text-left relative overflow-hidden" style={{ background: isDark ? 'rgba(249,115,22,0.06)' : 'rgba(249,115,22,0.05)', border: `1px solid ${isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.2)'}` }}>
+                <div className="absolute top-0 left-0 w-1 h-full" style={{ background: isDark ? accentO : '#ea580c' }}></div>
+                <p className="text-[15px] leading-[1.7] font-bold pl-2.5" style={{ color: isDark ? '#f5f5f4' : '#1e293b' }}>
                   {language === 'en'
                     ? 'To receive appointment confirmations, treatment updates, prescriptions, and direct communication from our medical team — please add our LINE Official Account now.'
                     : 'เพื่อรับการยืนยันนัดหมาย ผลการรักษา ใบสั่งยา และการติดต่อจากทีมแพทย์โดยตรง — กรุณาเพิ่มเพื่อนกับเราไว้ล่วงหน้า'}
