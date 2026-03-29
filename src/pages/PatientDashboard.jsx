@@ -603,7 +603,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
               style={isDark
-                ? { background: 'radial-gradient(135deg, rgba(249,115,22,0.12) 0%, #0a0a0a 100%)', border: '2px solid rgba(249,115,22,0.5)', color: '#fed7aa', boxShadow: '0 0 18px rgba(249,115,22,0.30), 0 0 40px rgba(249,115,22,0.10), inset 0 0 12px rgba(249,115,22,0.06)' }
+                ? { background: 'radial-gradient(135deg, rgba(249,115,22,0.12) 0%, #0a0a0a 100%)', border: '2px solid rgba(249,115,22,0.5)', color: '#ffffff', boxShadow: '0 0 18px rgba(249,115,22,0.30), 0 0 40px rgba(249,115,22,0.10), inset 0 0 12px rgba(249,115,22,0.06)' }
                 : { background: 'radial-gradient(135deg, rgba(244,114,182,0.15) 0%, #ffffff 100%)', border: '2px solid rgba(236,72,153,0.35)', color: '#9d174d', boxShadow: '0 0 18px rgba(236,72,153,0.20), 0 0 40px rgba(236,72,153,0.06)' }
               }>
               {getInitials(d.firstName || patientName, d.lastName)}
