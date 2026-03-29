@@ -1962,23 +1962,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="absolute top-[-50px] left-[-50px] w-40 h-40 rounded-full blur-[50px] pointer-events-none" style={{backgroundColor: `rgba(${acRgb},0.15)`}}></div>
 
         {/* ── Row 1: Logo + compact action icons (mobile) ── */}
-        <div className="relative flex items-center justify-between w-full md:w-auto gap-3 z-20">
-          <div className="flex items-center gap-3">
-            <ClinicLogo className="h-8 sm:h-10 max-w-[120px] sm:max-w-[160px] md:max-w-[200px] w-auto" showText={false} clinicSettings={cs} theme={theme} />
-            <div className="h-8 w-px bg-[var(--bd)]"></div>
-            <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-wider truncate max-w-[120px] sm:max-w-none">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
+        <div className="relative flex items-center justify-between w-full md:w-auto gap-1.5 sm:gap-3 z-20">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <ClinicLogo className="h-7 sm:h-10 max-w-[80px] sm:max-w-[160px] md:max-w-[200px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
+            <div className="h-6 sm:h-8 w-px bg-[var(--bd)] shrink-0 hidden sm:block"></div>
+            <p className="text-[9px] sm:text-xs text-[var(--tx-muted)] tracking-wider truncate hidden sm:block">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
           </div>
           {/* Mobile-only: icon-only actions */}
-          <div className="flex items-center gap-1.5 md:hidden shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 md:hidden shrink-0">
             <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
-              className="p-2.5 rounded-lg text-white flex items-center justify-center disabled:opacity-70 transition-all"
+              className="p-2 sm:p-2.5 rounded-lg text-white flex items-center justify-center disabled:opacity-70 transition-all"
               style={{backgroundColor: ac, boxShadow: `0 0 10px rgba(${acRgb},0.3)`}} title="สร้างคิวใหม่">
-              <PlusCircle size={16} />
+              <PlusCircle size={15} />
             </button>
             <div className="relative">
               <button onClick={() => setShowNotifSettings(!showNotifSettings)}
-                className={`border p-2.5 rounded-lg transition-all ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-                {isNotifEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+                className={`border p-2 sm:p-2.5 rounded-lg transition-all ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+                {isNotifEnabled ? <Bell size={15} /> : <BellOff size={15} />}
               </button>
               {showNotifSettings && (
                 <div className="absolute right-0 top-12 w-64 bg-[#111] border border-[#333] rounded-xl shadow-2xl p-4 z-[200]">
@@ -2015,29 +2015,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               )}
             </div>
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-            <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2.5 rounded-lg transition-all" title="ออกจากระบบ">
-              <LogOut size={16} />
+            <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 sm:p-2.5 rounded-lg transition-all" title="ออกจากระบบ">
+              <LogOut size={15} />
             </button>
           </div>
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="flex items-stretch gap-1 w-full md:hidden z-0 overflow-x-auto no-scrollbar">
+        <div className="grid grid-cols-6 gap-0.5 w-full md:hidden z-0">
           {[
-            { mode: 'dashboard', icon: <Activity size={16} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
-            { mode: 'deposit', icon: <Banknote size={16} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
-            { mode: 'history', icon: <History size={16} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
-            { mode: 'appointment', icon: <CalendarDays size={16} />, label: 'นัดหมาย', activeClass: 'bg-sky-700 text-white' },
-            { mode: 'formBuilder', icon: <LayoutTemplate size={16} />, label: 'จัดการ', activeClass: 'bg-blue-600 text-white' },
-            { mode: 'clinicSettings', icon: <Palette size={16} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'deposit', icon: <Banknote size={14} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
+            { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
+            { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัดหมาย', activeClass: 'bg-sky-700 text-white' },
+            { mode: 'formBuilder', icon: <LayoutTemplate size={14} />, label: 'จัดการ', activeClass: 'bg-blue-600 text-white' },
+            { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
           ].map(tab => {
             const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
-                className={`shrink-0 w-14 py-2 rounded-xl font-bold text-[10px] flex flex-col items-center justify-center gap-1 transition-all relative snap-start ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
+                className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
                 style={isActive && tab.activeStyle ? tab.activeStyle : {}}>
                 {tab.icon}
-                {tab.label}
+                <span className="truncate w-full text-center px-0.5">{tab.label}</span>
                 {tab.badge > 0 && <span className={`absolute -top-1 -right-0.5 ${tab.badgeColor} text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none`}>{tab.badge > 99 ? '99+' : tab.badge}</span>}
               </button>
             );
