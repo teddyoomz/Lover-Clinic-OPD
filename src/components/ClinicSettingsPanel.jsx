@@ -355,22 +355,22 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           <p className="text-[11px] text-gray-600 mb-4">
             ใช้สำหรับคำนวณช่องเวลาว่างในตารางนัดหมายสาธารณะ (ระบบ 24 ชม.)
           </p>
-          <div className="space-y-3">
+          <div className="space-y-3" lang="en-GB">
             <div>
               <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
-                  <input type="time" value={settings.clinicOpenTime || '10:00'}
+                  <input type="time" step="3600" value={settings.clinicOpenTime || '10:00'}
                     onChange={e => setSettings(prev => ({ ...prev, clinicOpenTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">ปิด</span>
-                  <input type="time" value={settings.clinicCloseTime || '19:00'}
+                  <input type="time" step="3600" value={settings.clinicCloseTime || '19:00'}
                     onChange={e => setSettings(prev => ({ ...prev, clinicCloseTime: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
                 </div>
               </div>
             </div>
@@ -379,16 +379,16 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
-                  <input type="time" value={settings.clinicOpenTimeWeekend || '10:00'}
+                  <input type="time" step="3600" value={settings.clinicOpenTimeWeekend || '10:00'}
                     onChange={e => setSettings(prev => ({ ...prev, clinicOpenTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
                 </div>
                 <span className="text-gray-600">—</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">ปิด</span>
-                  <input type="time" value={settings.clinicCloseTimeWeekend || '17:00'}
+                  <input type="time" step="3600" value={settings.clinicCloseTimeWeekend || '17:00'}
                     onChange={e => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: e.target.value }))}
-                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono [color-scheme:dark]" />
                 </div>
               </div>
             </div>

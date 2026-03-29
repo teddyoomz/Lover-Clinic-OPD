@@ -168,6 +168,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
   const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
+  const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
 
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -306,7 +307,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [apptMonth, db, appId]);
 
-  // ── Auto-sync ±3 months when first opening appointment tab ──
+  // ── Auto-sync ±1 month on first open, then lazy sync when navigating ──
   useEffect(() => {
     if (adminMode !== 'appointment' || apptAutoSyncedRef.current) return;
     apptAutoSyncedRef.current = true;
@@ -315,20 +316,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       try {
         const now = new Date();
         const months = [];
-        for (let i = -3; i <= 3; i++) {
+        for (let i = -1; i <= 1; i++) {
           const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
           months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
         }
         for (const mo of months) {
           await broker.syncAppointments(mo).catch(() => {});
+          apptSyncedMonthsRef.current.add(mo);
         }
-        showToast('Sync นัดหมาย ±3 เดือน สำเร็จ', 3000);
+        showToast('Sync นัดหมาย สำเร็จ', 2000);
       } catch (e) {
         showToast(`Auto-sync error: ${e.message}`, 5000);
       }
       setApptSyncing(false);
     })();
   }, [adminMode]);
+
+  // ── Lazy sync: when user navigates to a month not yet synced ──
+  useEffect(() => {
+    if (adminMode !== 'appointment' || !apptAutoSyncedRef.current) return;
+    if (apptSyncedMonthsRef.current.has(apptMonth)) return;
+    (async () => {
+      setApptSyncing(true);
+      try {
+        await broker.syncAppointments(apptMonth);
+        apptSyncedMonthsRef.current.add(apptMonth);
+      } catch { /* silent */ }
+      setApptSyncing(false);
+    })();
+  }, [apptMonth, adminMode]);
 
   // ── Load saved schedule day preferences + schedule list ──
   useEffect(() => {
