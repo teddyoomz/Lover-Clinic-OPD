@@ -2207,7 +2207,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div key={session.id} className="p-4 flex flex-col gap-3 hover:bg-amber-950/5 transition-colors">
 
                   {/* Row 1: name + actions */}
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[200px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -2216,7 +2216,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     </div>
                     {/* Action buttons */}
-                    <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                       {d && (
                         <button onClick={() => { prevAdminModeRef.current = adminMode; setViewingSession(session); setAdminMode('dashboard'); }}
                           className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูประวัติ">
@@ -2470,7 +2470,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-2">
+                      <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           {editingNameId === session.id ? (
                             <input autoFocus value={editingNameValue}
@@ -2487,7 +2487,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                           <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-deposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
                             <QrCode size={14}/>
                           </button>
@@ -2614,7 +2614,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const hasDeposit = session.depositSyncStatus === 'done';
                 return (
                   <div key={session.id} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--bd)] p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2 mb-2">
+                    <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span className="font-bold text-gray-400 text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                         <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><Banknote size={10}/> จองมัดจำ</span>
@@ -2622,7 +2622,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><UserCheck size={10}/> มารับบริการแล้ว</span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                         {!session.serviceCompleted && (
                           <button onClick={() => {
                             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: false, archivedAt: null });
@@ -3360,7 +3360,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   return (
                     <div key={session.id} className={`p-4 flex flex-col gap-3 ${session.isUnread ? 'bg-red-950/10' : ''}`}>
                       {/* Row 1: name + actions */}
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-2">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex flex-col gap-1.5 min-w-0">
                           {editingNameId === session.id ? (
                             <input autoFocus value={editingNameValue}
@@ -3383,7 +3383,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </div>
                         </div>
                         {/* Action buttons */}
-                        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-2 rounded-lg border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-input)] text-gray-400 hover:text-[var(--tx-heading)] border-[var(--bd)]'}`} title="QR"><QrCode size={15} /></button>
                           <button
                             onClick={() => setPatientLinkModal(session.id)}
