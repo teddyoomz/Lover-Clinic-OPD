@@ -176,7 +176,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(2);
+  const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(1);
   const [schedDoctorDays, setSchedDoctorDays] = useState(new Set());
   const [schedClosedDays, setSchedClosedDays] = useState(new Set());
   const [schedGenLoading, setSchedGenLoading] = useState(false);
