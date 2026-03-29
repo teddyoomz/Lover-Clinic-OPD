@@ -236,37 +236,64 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const yearDisplay = lang === 'th' ? y + 543 : y;
 
   // ── Theme-aware color helpers ──
-  const docCellBg = isDark ? 'bg-sky-900/40 border-sky-700/40' : 'bg-sky-100 border-sky-300';
-  const availCellBg = isDark ? 'bg-emerald-950/30 border-emerald-800/30' : 'bg-emerald-50 border-emerald-200';
+  // Dark = fire/ember theme, Light = clean standard
+  const docCellBg = isDark ? 'border-sky-700/40' : 'bg-sky-100 border-sky-300';
+  const availCellBg = isDark ? 'border-emerald-800/30' : 'bg-emerald-50 border-emerald-200';
   const availColor = isDark ? 'text-emerald-400' : 'text-emerald-600';
   const fullColor = isDark ? 'text-amber-400' : 'text-amber-600';
-  const todayDotColor = isDark ? 'bg-sky-400' : 'bg-sky-500';
-  const todayTextColor = isDark ? 'text-sky-400' : 'text-sky-600';
+  const todayDotColor = isDark ? 'bg-orange-400' : 'bg-sky-500';
+  const todayTextColor = isDark ? 'text-orange-400' : 'text-sky-600';
   const weekendColor = isDark ? 'text-rose-400/70' : 'text-rose-500/70';
-  const docIconColor = isDark ? 'text-sky-400' : 'text-sky-500';
-  const slotOpenBg = isDark ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-emerald-50 border-emerald-200';
-  const slotOpenBadgeBg = isDark ? 'text-emerald-300 bg-emerald-900/40' : 'text-emerald-700 bg-emerald-100';
+  const docIconColor = isDark ? 'text-orange-400' : 'text-sky-500';
+  const slotOpenBg = isDark ? 'border-orange-900/40' : 'bg-emerald-50 border-emerald-200';
+  const slotOpenBadgeBg = isDark ? 'text-orange-300 bg-orange-900/40' : 'text-emerald-700 bg-emerald-100';
   const slotBookedBg = isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)]' : 'bg-gray-50 border-gray-200';
   const legendDocBg = isDark ? 'bg-sky-900/50 border-sky-700/50' : 'bg-sky-100 border-sky-200';
   const legendAvailBg = isDark ? 'bg-emerald-900/30 border-emerald-800/40' : 'bg-emerald-100 border-emerald-200';
 
+  // Fire/ember cell inline styles (dark mode only)
+  const fireGlow = isDark ? {
+    normal: {
+      background: 'linear-gradient(to bottom, #0a0a0a 40%, #1a0800 70%, #2d0f00 100%)',
+      boxShadow: 'inset 0 -8px 16px -4px rgba(255,80,0,0.15), inset 0 -2px 6px rgba(255,120,0,0.1)',
+    },
+    doctor: {
+      background: 'linear-gradient(to bottom, #0a0a12 40%, #0a1020 70%, #0d1a30 100%)',
+      boxShadow: 'inset 0 -8px 16px -4px rgba(56,189,248,0.15), inset 0 -2px 6px rgba(56,189,248,0.1)',
+    },
+    avail: {
+      background: 'linear-gradient(to bottom, #0a0a0a 40%, #001a0a 70%, #002d10 100%)',
+      boxShadow: 'inset 0 -8px 16px -4px rgba(16,185,129,0.15), inset 0 -2px 6px rgba(16,185,129,0.1)',
+    },
+    selected: {
+      background: 'linear-gradient(to bottom, #7c2d12 0%, #ea580c 50%, #fb923c 100%)',
+      boxShadow: '0 0 20px rgba(234,88,12,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+    },
+    disabled: {
+      background: '#080808',
+    },
+  } : null;
+
   return (
     <div className="min-h-screen bg-[var(--bg-base)] font-sans text-[var(--tx-body)]">
       {/* ── Header ── */}
-      <header className="bg-[var(--bg-card)] border-b border-[var(--bd)] px-4 py-3.5 sm:py-4 sticky top-0 z-10">
+      <header className={`px-4 py-3.5 sm:py-4 sticky top-0 z-10 ${isDark ? '' : 'bg-[var(--bg-card)] border-b border-[var(--bd)]'}`}
+        style={isDark ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #0a0a0a 100%)', borderBottom: '1px solid #4a1a0a', boxShadow: '0 2px 20px rgba(200,60,0,0.1)' } : undefined}>
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="shrink-0 w-10 h-10 rounded-xl overflow-hidden">
+            <div className="shrink-0 w-10 h-10 rounded-xl overflow-hidden"
+              style={isDark ? { boxShadow: '0 0 12px rgba(220,38,38,0.3)', border: '1px solid #4a1a0a' } : undefined}>
               <ClinicLogo clinicSettings={cs} className="w-full h-full" showText={false} theme={theme} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-bold text-[var(--tx-heading)] truncate tracking-tight">{cs.clinicName || 'Clinic'}</h1>
-              <p className="text-[11px] text-[var(--tx-muted)] tracking-wide">{t.schedule}</p>
+              <h1 className={`text-base font-bold truncate tracking-tight ${isDark ? 'text-orange-100' : 'text-[var(--tx-heading)]'}`}>{cs.clinicName || 'Clinic'}</h1>
+              <p className={`text-[11px] tracking-wide ${isDark ? 'text-orange-300/40' : 'text-[var(--tx-muted)]'}`}>{t.schedule}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
-              className="p-2 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors text-[11px] font-bold flex items-center gap-1"
+              className={`p-2 rounded-xl transition-colors text-[11px] font-bold flex items-center gap-1 ${isDark ? 'text-orange-300/60 hover:text-orange-200' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)]'}`}
+              style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : undefined}
               title={lang === 'th' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}>
               <Globe size={14} />
               <span className="uppercase">{lang === 'th' ? 'EN' : 'TH'}</span>
@@ -283,37 +310,44 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           {months.length > 1 && (
             <button onClick={() => { setActiveMonthIdx(Math.max(0, activeMonthIdx - 1)); setSelectedDate(null); }}
               disabled={activeMonthIdx === 0}
-              className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] hover:border-[var(--bd-strong)] transition-all disabled:opacity-20">
+              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] hover:border-[var(--bd-strong)]'}`}
+              style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : undefined}>
               <ChevronLeft size={18} />
             </button>
           )}
           <div className="text-center min-w-[180px]">
-            <h2 className="text-xl font-black text-[var(--tx-heading)] tracking-tight">
+            <h2 className={`text-xl font-black tracking-tight ${isDark ? 'text-orange-100' : 'text-[var(--tx-heading)]'}`}
+              style={isDark ? { textShadow: '0 0 20px rgba(251,146,60,0.2)' } : undefined}>
               {t.months[m - 1]}
             </h2>
-            <p className="text-sm text-[var(--tx-muted)] font-medium -mt-0.5">{yearDisplay}</p>
+            <p className={`text-sm font-medium -mt-0.5 ${isDark ? 'text-orange-300/40' : 'text-[var(--tx-muted)]'}`}>{yearDisplay}</p>
           </div>
           {months.length > 1 && (
             <button onClick={() => { setActiveMonthIdx(Math.min(months.length - 1, activeMonthIdx + 1)); setSelectedDate(null); }}
               disabled={activeMonthIdx >= months.length - 1}
-              className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] hover:border-[var(--bd-strong)] transition-all disabled:opacity-20">
+              className={`p-2.5 rounded-xl transition-all disabled:opacity-20 ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] hover:border-[var(--bd-strong)]'}`}
+              style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : undefined}>
               <ChevronRight size={18} />
             </button>
           )}
         </div>
 
         {/* ── Calendar Card ── */}
-        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] overflow-hidden shadow-lg">
+        <div className={`rounded-2xl overflow-hidden shadow-lg ${isDark ? 'border-2' : 'bg-[var(--bg-card)] border border-[var(--bd)]'}`}
+          style={isDark ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' } : undefined}>
           {/* Day headers */}
-          <div className="grid grid-cols-7 border-b border-[var(--bd)]">
+          <div className={`grid grid-cols-7 ${isDark ? '' : 'border-b border-[var(--bd)]'}`}
+            style={isDark ? { background: 'linear-gradient(135deg, #1a0800 0%, #2d0f00 50%, #1a0800 100%)', borderBottom: '1px solid #4a1a0a' } : undefined}>
             {t.days.map((d, i) => (
-              <div key={i} className={`text-center text-[11px] font-semibold py-3 tracking-wider ${i >= 5 ? weekendColor : 'text-[var(--tx-muted)]'}`}>{d}</div>
+              <div key={i} className={`text-center text-[11px] font-bold py-3 tracking-wider ${isDark ? (i >= 5 ? 'text-red-400/80' : 'text-orange-300/70') : (i >= 5 ? weekendColor : 'text-[var(--tx-muted)]')}`}>{d}</div>
             ))}
           </div>
 
           {/* Day grid */}
-          <div className="grid grid-cols-7 gap-px bg-[var(--bd)]">
-            {Array.from({ length: calStart }).map((_, i) => <div key={`e-${i}`} className="min-h-[48px] bg-[var(--bg-card)]" />)}
+          <div className="grid grid-cols-7" style={isDark ? { gap: '1px', background: '#1a0a00' } : { gap: '1px', background: 'var(--bd)' }}>
+            {Array.from({ length: calStart }).map((_, i) => (
+              <div key={`e-${i}`} className="min-h-[52px]" style={isDark ? { background: '#080808' } : { background: 'var(--bg-card)' }} />
+            ))}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
@@ -327,30 +361,51 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               const isPastCutoff = dateStr < showFromDate || (endDate && dateStr > endDate);
               const isDayDisabled = isPastCutoff || isClosed || (!noDoctorRequired && !isDoctor);
 
+              // Light mode: use Tailwind classes
               let cellBg = 'bg-[var(--bg-card)]';
-              if (!isDayDisabled && !isSelected) {
-                if (isDoctor) cellBg = docCellBg;
-                else if (avail > 0) cellBg = availCellBg;
+              let cellStyle = undefined;
+              if (isDark && fireGlow) {
+                if (isSelected) {
+                  cellStyle = fireGlow.selected;
+                } else if (isDayDisabled) {
+                  cellStyle = fireGlow.disabled;
+                } else if (isDoctor) {
+                  cellStyle = fireGlow.doctor;
+                } else if (avail > 0) {
+                  cellStyle = fireGlow.avail;
+                } else {
+                  cellStyle = fireGlow.normal;
+                }
+                cellBg = '';
+              } else {
+                if (!isDayDisabled && !isSelected) {
+                  if (isDoctor) cellBg = docCellBg;
+                  else if (avail > 0) cellBg = availCellBg;
+                }
+                if (isSelected) cellBg = 'bg-sky-500';
               }
-              if (isSelected) cellBg = 'bg-sky-500';
 
-              const dayTextColor = isSelected ? 'text-white'
-                : isDayDisabled ? 'text-[var(--tx-muted)] opacity-30'
+              const dayTextColor = isSelected ? (isDark ? 'text-white font-black' : 'text-white')
+                : isDayDisabled ? (isDark ? 'text-gray-700' : 'text-[var(--tx-muted)] opacity-30')
                 : isToday ? todayTextColor
-                : isWeekend ? weekendColor
+                : isWeekend ? (isDark ? 'text-red-400' : weekendColor)
+                : isDark ? (isDoctor ? 'text-sky-300' : avail > 0 ? 'text-emerald-300' : 'text-orange-200/90')
                 : 'text-[var(--tx-heading)]';
 
               return (
                 <button key={day} onClick={() => !isDayDisabled && setSelectedDate(isSelected ? null : dateStr)}
                   disabled={isDayDisabled}
-                  className={`min-h-[48px] py-1 flex flex-col items-center justify-center gap-px transition-all relative
-                    ${cellBg} ${isDayDisabled ? 'cursor-default' : 'cursor-pointer hover:brightness-95'}`}>
+                  className={`min-h-[52px] py-1.5 flex flex-col items-center justify-center gap-px transition-all relative
+                    ${cellBg} ${isDayDisabled ? 'cursor-default' : 'cursor-pointer'}`}
+                  style={cellStyle}>
 
                   {/* Today dot */}
-                  {isToday && !isSelected && <span className={`absolute top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${todayDotColor}`} />}
+                  {isToday && !isSelected && <span className={`absolute top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${todayDotColor}`}
+                    style={isDark ? { boxShadow: '0 0 6px rgba(251,146,60,0.8)' } : undefined} />}
 
                   {/* Date number */}
-                  <span className={`font-bold text-sm leading-none ${dayTextColor}`}>{day}</span>
+                  <span className={`font-bold text-sm leading-none ${dayTextColor}`}
+                    style={isDark && isSelected ? { textShadow: '0 0 10px rgba(255,255,255,0.5)' } : undefined}>{day}</span>
 
                   {/* Doctor emoji (top-right corner) */}
                   {!isClosed && isDoctor && !isDayDisabled && (
@@ -359,7 +414,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                   {/* Availability */}
                   {!isDayDisabled && !isClosed && avail > 0 && (
-                    <span className={`text-[8px] font-bold leading-none ${isSelected ? 'text-emerald-100' : availColor}`}>
+                    <span className={`text-[8px] font-bold leading-none ${isSelected ? (isDark ? 'text-white/80' : 'text-emerald-100') : availColor}`}>
                       {t.available} {avail}
                     </span>
                   )}
@@ -378,18 +433,20 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
             })}
             {/* Fill trailing cells */}
             {Array.from({ length: (7 - (calStart + daysInMonth) % 7) % 7 }).map((_, i) => (
-              <div key={`trail-${i}`} className="min-h-[48px] bg-[var(--bg-card)]" />
+              <div key={`trail-${i}`} className="min-h-[52px]" style={isDark ? { background: '#080808' } : { background: 'var(--bg-card)' }} />
             ))}
           </div>
 
           {/* Legend */}
-          <div className="flex items-center justify-center gap-4 py-2.5 border-t border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
+          <div className={`flex items-center justify-center gap-4 py-2.5 text-[10px] ${isDark ? '' : 'border-t border-[var(--bd)] text-[var(--tx-muted)]'}`}
+            style={isDark ? { borderTop: '1px solid #4a1a0a', background: 'linear-gradient(135deg, #1a0800 0%, #0a0a0a 100%)', color: '#a08060' } : undefined}>
             <span className="flex items-center gap-1.5">
               <span className="text-[11px]">♥️</span>
               {t.doctor}
             </span>
             <span className="flex items-center gap-1.5">
-              <span className={`w-2.5 h-2.5 rounded-sm ${legendAvailBg} border`} />
+              <span className={`w-2.5 h-2.5 rounded-sm ${isDark ? '' : `${legendAvailBg} border`}`}
+                style={isDark ? { background: 'linear-gradient(to bottom, #002d10, #001a0a)', border: '1px solid #1a4a2a' } : undefined} />
               {t.available}
             </span>
             <span className="flex items-center gap-1">
@@ -405,11 +462,13 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
         {/* ── Time Slots ── */}
         {selectedDate && (
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] overflow-hidden shadow-lg">
+          <div className={`rounded-2xl overflow-hidden shadow-lg ${isDark ? 'border-2' : 'bg-[var(--bg-card)] border border-[var(--bd)]'}`}
+            style={isDark ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' } : undefined}>
             {/* Header */}
-            <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
+            <div className={`px-5 py-4 flex items-center justify-between ${isDark ? '' : 'border-b border-[var(--bd)]'}`}
+              style={isDark ? { background: 'linear-gradient(135deg, #1a0800 0%, #2d0f00 50%, #1a0800 100%)', borderBottom: '1px solid #4a1a0a' } : undefined}>
               <div>
-                <h3 className="text-base font-bold text-[var(--tx-heading)] flex items-center gap-2">
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-orange-200' : 'text-[var(--tx-heading)]'}`}>
                   <Clock size={16} className={docIconColor} />
                   {parseInt(selectedDate.split('-')[2])} {t.months[m - 1]} {yearDisplay}
                 </h3>
@@ -419,61 +478,76 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                       <Stethoscope size={10} /> {t.doctor} {getDoctorRangesForDate(selectedDate).map(r => `${r.start}-${r.end}`).join(', ')}
                     </span>
                   )}
-                  <span className="text-[11px] text-[var(--tx-muted)]">
+                  <span className={`text-[11px] ${isDark ? 'text-orange-300/60' : 'text-[var(--tx-muted)]'}`}>
                     {freeCount}/{totalCount} {t.available}
                   </span>
                 </div>
               </div>
               <button onClick={() => setSelectedDate(null)}
-                className="p-2 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors">
+                className={`p-2 rounded-xl transition-colors ${isDark ? 'text-orange-400/60 hover:text-orange-300' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)]'}`}
+                style={isDark ? { background: '#1a0a00', border: '1px solid #4a1a0a' } : undefined}>
                 <X size={16} />
               </button>
             </div>
 
             {/* Slot list */}
             <div className="p-4 space-y-2">
-              {selectedSlots.map((slot) => (
-                <div key={slot.start}
-                  className={`flex items-center rounded-xl border px-4 py-3 transition-all ${
-                    slot.booked ? `${slotBookedBg} opacity-40`
-                      : slot.doctorSlot ? (isDark ? 'bg-sky-950/20 border-sky-800/40' : 'bg-sky-50 border-sky-200')
-                      : slotOpenBg
-                  }`}>
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <div>
-                      <span className={`text-lg font-bold tabular-nums ${slot.booked ? 'text-[var(--tx-muted)]' : 'text-[var(--tx-heading)]'}`}>
-                        {slot.start}
-                      </span>
-                      <span className="text-[var(--tx-muted)] mx-1.5 text-sm">{t.to}</span>
-                      <span className="text-sm font-medium tabular-nums text-[var(--tx-muted)]">
-                        {slot.end}
-                      </span>
+              {selectedSlots.map((slot) => {
+                const slotStyle = isDark && !slot.booked ? {
+                  background: slot.doctorSlot
+                    ? 'linear-gradient(135deg, #0a0a12 0%, #0d1a30 100%)'
+                    : 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 100%)',
+                  border: `1px solid ${slot.doctorSlot ? '#1a3050' : '#3a1a0a'}`,
+                } : isDark && slot.booked ? {
+                  background: '#080808',
+                  border: '1px solid #1a1a1a',
+                } : undefined;
+
+                return (
+                  <div key={slot.start}
+                    className={`flex items-center rounded-xl px-4 py-3 transition-all ${isDark ? '' : `border ${
+                      slot.booked ? `${slotBookedBg} opacity-40`
+                        : slot.doctorSlot ? 'bg-sky-50 border-sky-200'
+                        : slotOpenBg
+                    }`} ${isDark && slot.booked ? 'opacity-30' : ''}`}
+                    style={slotStyle}>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <div>
+                        <span className={`text-lg font-bold tabular-nums ${slot.booked ? 'text-[var(--tx-muted)]' : (isDark ? 'text-orange-100' : 'text-[var(--tx-heading)]')}`}>
+                          {slot.start}
+                        </span>
+                        <span className={`mx-1.5 text-sm ${isDark ? 'text-orange-300/40' : 'text-[var(--tx-muted)]'}`}>{t.to}</span>
+                        <span className={`text-sm font-medium tabular-nums ${isDark ? 'text-orange-300/50' : 'text-[var(--tx-muted)]'}`}>
+                          {slot.end}
+                        </span>
+                      </div>
+                      {slot.doctorSlot && !slot.booked && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-sky-100 text-sky-600'}`}>
+                          {t.doctor}
+                        </span>
+                      )}
                     </div>
-                    {slot.doctorSlot && !slot.booked && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-sky-100 text-sky-600'}`}>
-                        {t.doctor}
-                      </span>
-                    )}
+                    <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
+                      slot.booked ? (isDark ? 'text-gray-600 bg-gray-900/40' : 'text-[var(--tx-muted)] bg-[var(--bg-hover2)]')
+                        : slot.doctorSlot ? (isDark ? 'text-sky-300 bg-sky-900/40' : 'text-sky-700 bg-sky-100')
+                        : slotOpenBadgeBg
+                    }`}>
+                      {slot.booked ? <XCircle size={12} /> : <CheckCircle2 size={12} />}
+                      {slot.booked ? t.unavailable : t.available}
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
-                    slot.booked ? 'text-[var(--tx-muted)] bg-[var(--bg-hover2)]'
-                      : slot.doctorSlot ? (isDark ? 'text-sky-300 bg-sky-900/40' : 'text-sky-700 bg-sky-100')
-                      : slotOpenBadgeBg
-                  }`}>
-                    {slot.booked ? <XCircle size={12} /> : <CheckCircle2 size={12} />}
-                    {slot.booked ? t.unavailable : t.available}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* ── Contact ── */}
         {(cs.lineOfficialUrl || cs.clinicPhone) && (
-          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] overflow-hidden shadow-lg">
+          <div className={`rounded-2xl overflow-hidden shadow-lg ${isDark ? 'border-2' : 'bg-[var(--bg-card)] border border-[var(--bd)]'}`}
+            style={isDark ? { borderColor: '#4a1a0a', background: '#0a0a0a', boxShadow: '0 0 30px rgba(200,60,0,0.08), 0 4px 20px rgba(0,0,0,0.5)' } : undefined}>
             <div className="px-5 py-5 text-center">
-              <p className="text-sm font-medium text-[var(--tx-muted)] mb-4">{t.contact}</p>
+              <p className={`text-sm font-medium mb-4 ${isDark ? 'text-orange-300/60' : 'text-[var(--tx-muted)]'}`}>{t.contact}</p>
               <div className="flex justify-center gap-3">
                 {cs.lineOfficialUrl && (
                   <a href={cs.lineOfficialUrl} target="_blank" rel="noopener noreferrer"
