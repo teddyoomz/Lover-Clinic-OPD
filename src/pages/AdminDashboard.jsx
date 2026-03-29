@@ -4238,80 +4238,76 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             );
                           })}
                         </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Manual slot blocking */}
-                  <div className="bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)] p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider">ปิดคิวรายช่วงเวลา</span>
-                      {schedManualBlocked.length > 0 && <span className="text-[9px] text-orange-400 font-bold">{schedManualBlocked.length} slot ที่ปิด</span>}
-                    </div>
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {allMonths.flatMap(mo => {
-                        const [cy2, cm2] = mo.split('-').map(Number);
-                        const dim2 = new Date(cy2, cm2, 0).getDate();
-                        return Array.from({ length: dim2 }).map((_, i) => {
-                          const ds2 = `${mo}-${String(i + 1).padStart(2, '0')}`;
-                          const isActive = schedBlockingDay === ds2;
-                          const hasBlocked = schedManualBlocked.some(b => b.date === ds2);
-                          return (
-                            <button key={ds2} onClick={() => setSchedBlockingDay(isActive ? null : ds2)}
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${isActive ? 'bg-sky-600 text-white' : hasBlocked ? 'bg-orange-900/40 border border-orange-800/40 text-orange-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`}>
-                              {i + 1}
-                            </button>
-                          );
-                        });
-                      })}
-                    </div>
-                    {schedBlockingDay && (() => {
-                      const bDate = new Date(schedBlockingDay);
-                      const bDow = bDate.getDay();
-                      const isWknd = bDow === 0 || bDow === 6;
-                      const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
-                      const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
-                      const slots15 = [];
-                      const [oh2, om2] = openT.split(':').map(Number);
-                      const [ch2, cm2] = closeT.split(':').map(Number);
-                      let cur = oh2 * 60 + om2;
-                      const end2 = ch2 * 60 + cm2;
-                      while (cur + 15 <= end2) {
-                        const sH = String(Math.floor(cur / 60)).padStart(2, '0');
-                        const sM = String(cur % 60).padStart(2, '0');
-                        const eMin = cur + 15;
-                        const eH = String(Math.floor(eMin / 60)).padStart(2, '0');
-                        const eM = String(eMin % 60).padStart(2, '0');
-                        slots15.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
-                        cur += 15;
-                      }
-                      const isBlocked = (s) => schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
-                      const toggleSlot = (s) => {
-                        if (isBlocked(s)) {
-                          setSchedManualBlocked(prev => prev.filter(b => !(b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end)));
-                        } else {
-                          setSchedManualBlocked(prev => [...prev, { date: schedBlockingDay, startTime: s.start, endTime: s.end }]);
-                        }
-                      };
-                      const dayLabel = `${parseInt(schedBlockingDay.split('-')[2])}/${parseInt(schedBlockingDay.split('-')[1])}`;
-                      return (
-                        <div>
-                          <div className="text-[10px] text-[var(--tx-muted)] mb-1">วันที่ {dayLabel} — กดเพื่อปิด/เปิดช่วงเวลา</div>
-                          <div className="grid grid-cols-4 gap-1">
-                            {slots15.map(s => {
-                              const blocked = isBlocked(s);
+                        {/* Manual slot blocking — day buttons under this month */}
+                        <div className="mt-2 pt-2 border-t border-[var(--bd)]">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[9px] text-[var(--tx-muted)] font-bold">ปิดคิวรายช่วงเวลา — กดเลือกวัน</span>
+                            {schedManualBlocked.filter(b => b.date.startsWith(mo)).length > 0 && <span className="text-[8px] text-orange-400 font-bold">{schedManualBlocked.filter(b => b.date.startsWith(mo)).length} slot ปิด</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-0.5">
+                            {Array.from({ length: dim }).map((_, i) => {
+                              const ds2 = `${mo}-${String(i + 1).padStart(2, '0')}`;
+                              const isActive = schedBlockingDay === ds2;
+                              const hasBlocked = schedManualBlocked.some(b => b.date === ds2);
                               return (
-                                <button key={s.start} onClick={() => toggleSlot(s)}
-                                  className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40'}`}>
-                                  {s.start}
+                                <button key={ds2} onClick={() => setSchedBlockingDay(isActive ? null : ds2)}
+                                  className={`w-6 h-6 rounded text-[9px] font-bold transition-all ${isActive ? 'bg-sky-600 text-white' : hasBlocked ? 'bg-orange-900/40 border border-orange-800/40 text-orange-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`}>
+                                  {i + 1}
                                 </button>
                               );
                             })}
                           </div>
+                          {/* Time slot grid for selected day in this month */}
+                          {schedBlockingDay && schedBlockingDay.startsWith(mo) && (() => {
+                            const bDate = new Date(schedBlockingDay);
+                            const bDow = bDate.getDay();
+                            const isWknd = bDow === 0 || bDow === 6;
+                            const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
+                            const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+                            const slots15 = [];
+                            const [oh2, om2] = openT.split(':').map(Number);
+                            const [ch2, cm22] = closeT.split(':').map(Number);
+                            let cur = oh2 * 60 + om2;
+                            const end2 = ch2 * 60 + cm22;
+                            while (cur + 15 <= end2) {
+                              const sH = String(Math.floor(cur / 60)).padStart(2, '0');
+                              const sM = String(cur % 60).padStart(2, '0');
+                              const eMin = cur + 15;
+                              const eH = String(Math.floor(eMin / 60)).padStart(2, '0');
+                              const eM = String(eMin % 60).padStart(2, '0');
+                              slots15.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
+                              cur += 15;
+                            }
+                            const isBlocked = (s) => schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
+                            const toggleSlot = (s) => {
+                              if (isBlocked(s)) {
+                                setSchedManualBlocked(prev => prev.filter(b => !(b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end)));
+                              } else {
+                                setSchedManualBlocked(prev => [...prev, { date: schedBlockingDay, startTime: s.start, endTime: s.end }]);
+                              }
+                            };
+                            const dayLabel = `${parseInt(schedBlockingDay.split('-')[2])}/${parseInt(schedBlockingDay.split('-')[1])}`;
+                            return (
+                              <div className="mt-2">
+                                <div className="text-[10px] text-[var(--tx-muted)] mb-1">วันที่ {dayLabel} — กดเพื่อปิด/เปิดช่วงเวลา</div>
+                                <div className="grid grid-cols-4 gap-1">
+                                  {slots15.map(s => {
+                                    const blocked = isBlocked(s);
+                                    return (
+                                      <button key={s.start} onClick={() => toggleSlot(s)}
+                                        className={`py-1.5 rounded text-[9px] font-bold transition-all ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-body)] hover:border-red-800/40'}`}>
+                                        {s.start}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
-                      );
-                    })()}
-                  </div>
+                      </div>
+                    );
+                  })}
 
                   {/* Slot interval + options */}
                   <div className="grid grid-cols-2 gap-3">
