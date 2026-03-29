@@ -11,7 +11,23 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const { origin, email, password, proClinicId } = req.body || {};
+    const { origin, email, password, proClinicId, action, dateFrom, dateTo } = req.body || {};
+
+    // Debug: fetch appointment page HTML
+    if (action === 'debug-appointment') {
+      const session = await createSession(origin, email, password);
+      const base = session.origin;
+      const { path, offset } = req.body || {};
+      let url = `${base}${path || '/admin/appointment'}`;
+      const params = new URLSearchParams();
+      if (dateFrom) params.set('date_from', dateFrom);
+      if (dateTo) params.set('date_to', dateTo);
+      if (params.toString()) url += `?${params.toString()}`;
+      const html = await session.fetchText(url);
+      const start = offset || 0;
+      return res.status(200).json({ success: true, url, htmlLength: html.length, htmlPreview: html.substring(start, start + 50000) });
+    }
+
     if (!proClinicId) {
       return res.status(400).json({ success: false, error: 'Missing proClinicId' });
     }
