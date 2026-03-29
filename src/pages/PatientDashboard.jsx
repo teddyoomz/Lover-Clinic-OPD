@@ -97,10 +97,10 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
 
   const cardStyle = isDark
     ? (expired
-      ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #2d0f00 100%)', border: '1.5px solid #5a1a1a', boxShadow: 'inset 0 -6px 14px -4px rgba(239,68,68,0.1), 0 0 12px rgba(239,68,68,0.06)' }
+      ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 50%, #2a0000 100%)', border: '1.5px solid #5a1010', boxShadow: 'inset 0 -6px 14px -4px rgba(239,68,68,0.1), 0 0 12px rgba(239,68,68,0.06)' }
       : isActive
       ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #001a0a 50%, #002d10 100%)', border: '1.5px solid #1a4a2a', boxShadow: 'inset 0 -6px 14px -4px rgba(45,212,191,0.1), 0 0 12px rgba(45,212,191,0.06)' }
-      : { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #3a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08)' })
+      : { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 70%, #2a0000 100%)', border: '1.5px solid #4a1010', boxShadow: 'inset 0 -6px 14px -4px rgba(220,38,38,0.08)' })
     : (expired
       ? { background: 'linear-gradient(135deg, #fff5f5 0%, #ffffff 50%, #fef2f2 100%)', border: '1.5px solid rgba(239,68,68,0.2)', boxShadow: '0 2px 12px rgba(239,68,68,0.06)' }
       : isActive
@@ -111,7 +111,7 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
     <div className="rounded-2xl p-4 flex flex-col gap-2.5" style={cardStyle}>
       {/* Name + status */}
       <div className="flex items-start justify-between gap-2">
-        <span className={`font-bold text-sm leading-snug ${expired ? (isDark ? 'text-red-300/80' : 'text-red-500/80') : (isDark ? 'text-orange-100' : 'text-gray-800')}`}>
+        <span className={`font-bold text-sm leading-snug ${expired ? (isDark ? 'text-red-300/80' : 'text-red-500/80') : (isDark ? 'text-red-50' : 'text-gray-800')}`}>
           {c.name}
         </span>
         {c.status && (
@@ -132,11 +132,11 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
 
       {/* Product + qty */}
       {c.product && (
-        <p className={`text-[11px] flex items-center gap-1.5 leading-relaxed ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>
+        <p className={`text-[11px] flex items-center gap-1.5 leading-relaxed ${isDark ? 'text-red-300/50' : 'text-gray-500'}`}>
           <span>{c.product}</span>
           {qtyText && qtyText !== c.product && (
-            <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${isDark ? 'text-orange-200/80' : 'text-gray-700'}`}
-              style={{ background: isDark ? '#1a0a00' : 'rgba(244,114,182,0.06)' }}>
+            <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${isDark ? 'text-red-200/80' : 'text-gray-700'}`}
+              style={{ background: isDark ? '#1a0000' : 'rgba(244,114,182,0.06)' }}>
               {qtyText}
             </span>
           )}
@@ -149,9 +149,9 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
           {expiryText && (
             <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
               expired ? (isDark ? 'text-red-500/80' : 'text-red-400')
-              : (isDark ? 'text-orange-300/50' : 'text-gray-500')
+              : (isDark ? 'text-red-300/50' : 'text-gray-500')
             }`} style={isDark
-              ? (expired ? { border: '1px solid #3a1010', background: '#1a0808' } : { border: '1px solid #3a1a0a', background: '#0a0500' })
+              ? (expired ? { border: '1px solid #3a1010', background: '#1a0000' } : { border: '1px solid #4a1010', background: '#0a0000' })
               : (expired ? { border: '1px solid rgba(239,68,68,0.12)', background: 'rgba(239,68,68,0.03)' } : { border: '1px solid rgba(244,114,182,0.12)', background: 'rgba(244,114,182,0.03)' })
             }>{expiryText}</span>
           )}
@@ -240,36 +240,36 @@ function AppointmentCard({ a, lang, isDark }) {
   return (
     <div className="rounded-2xl overflow-hidden flex"
       style={isDark
-        ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 70%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.1), 0 0 15px rgba(200,60,0,0.06)' }
+        ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 70%, #2a0000 100%)', border: '1.5px solid #5a1010', boxShadow: 'inset 0 -6px 14px -4px rgba(220,38,38,0.12), 0 0 15px rgba(220,38,38,0.06)' }
         : { background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 50%, #fce7f3 100%)', border: '1.5px solid rgba(236,72,153,0.2)', boxShadow: '0 2px 12px rgba(236,72,153,0.06)' }
       }>
       {/* Date sidebar */}
       <div className="flex flex-col items-center justify-center px-4 py-4 min-w-[64px] gap-0.5"
         style={isDark
-          ? { background: 'linear-gradient(to bottom, #2d0f00 0%, #4a1a0a 50%, #2d0f00 100%)', borderRight: '1px solid #4a1a0a' }
+          ? { background: 'linear-gradient(to bottom, #2a0000 0%, #5a1010 50%, #2a0000 100%)', borderRight: '1px solid #5a1010' }
           : { background: 'linear-gradient(to bottom, #fce7f3 0%, #fbcfe8 50%, #fce7f3 100%)', borderRight: '1px solid rgba(236,72,153,0.15)' }
         }>
-        <span className={`text-2xl font-black leading-none ${isDark ? 'text-orange-100' : 'text-pink-700'}`}>{day}</span>
-        <span className={`text-[9px] font-bold text-center leading-tight ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`}>{rest}</span>
+        <span className={`text-2xl font-black leading-none ${isDark ? 'text-red-50' : 'text-pink-700'}`}>{day}</span>
+        <span className={`text-[9px] font-bold text-center leading-tight ${isDark ? 'text-red-300/70' : 'text-pink-400'}`}>{rest}</span>
       </div>
       {/* Details */}
       <div className="flex flex-col gap-1.5 px-4 py-3.5 flex-1 min-w-0">
         {a.time && (
           <div className="flex items-center gap-1.5">
-            <Clock size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
-            <span className={`text-sm font-bold ${isDark ? 'text-orange-100' : 'text-gray-800'}`}>{a.time}</span>
+            <Clock size={11} className={`shrink-0 ${isDark ? 'text-red-400/70' : 'text-pink-400'}`} />
+            <span className={`text-sm font-bold ${isDark ? 'text-red-50' : 'text-gray-800'}`}>{a.time}</span>
           </div>
         )}
         {a.doctor && (
           <div className="flex items-center gap-1.5">
-            <Stethoscope size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
-            <span className={`text-xs ${isDark ? 'text-orange-200/70' : 'text-gray-600'}`}>{a.doctor}</span>
+            <Stethoscope size={11} className={`shrink-0 ${isDark ? 'text-red-400/70' : 'text-pink-400'}`} />
+            <span className={`text-xs ${isDark ? 'text-red-200/70' : 'text-gray-600'}`}>{a.doctor}</span>
           </div>
         )}
         {(a.branch || a.room) && (
           <div className="flex items-center gap-1.5">
-            <MapPin size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-300'}`} />
-            <span className={`text-xs ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
+            <MapPin size={11} className={`shrink-0 ${isDark ? 'text-red-400/70' : 'text-pink-300'}`} />
+            <span className={`text-xs ${isDark ? 'text-red-300/50' : 'text-gray-500'}`}>{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
           </div>
         )}
       </div>
@@ -590,12 +590,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {/* Patient info card */}
         <div className="rounded-2xl overflow-hidden"
           style={isDark
-            ? { background: 'linear-gradient(135deg, #1a0800 0%, #0a0a0a 40%, #2d0f00 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -8px 20px -6px rgba(255,80,0,0.12), 0 0 30px rgba(200,60,0,0.08)' }
+            ? { background: 'linear-gradient(135deg, #200000 0%, #0a0a0a 40%, #2a0000 100%)', border: '1.5px solid #5a1010', boxShadow: 'inset 0 -8px 20px -6px rgba(220,38,38,0.15), 0 0 30px rgba(220,38,38,0.08)' }
             : { background: 'linear-gradient(135deg, #fff5f7 0%, #ffffff 40%, #fdf2f8 100%)', border: '1.5px solid rgba(244,114,182,0.25)', boxShadow: '0 4px 20px rgba(244,114,182,0.08), inset 0 1px 0 rgba(255,255,255,0.8)' }
           }>
           {/* Accent top bar */}
           <div className="h-0.5 w-full" style={{ background: isDark
-            ? 'linear-gradient(90deg, transparent, #ea580c, rgba(220,38,38,0.8), transparent)'
+            ? 'linear-gradient(90deg, transparent, rgba(220,38,38,0.9), rgba(180,0,0,0.8), transparent)'
             : 'linear-gradient(90deg, transparent, rgba(236,72,153,0.5), rgba(244,114,182,0.6), transparent)'
           }} />
 
@@ -603,7 +603,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-xl font-black select-none"
               style={isDark
-                ? { background: 'radial-gradient(135deg, rgba(220,38,38,0.15) 0%, #0a0a0a 100%)', border: '2px solid rgba(220,38,38,0.5)', color: '#fed7aa', boxShadow: '0 0 18px rgba(220,38,38,0.35), 0 0 40px rgba(220,38,38,0.12), inset 0 0 12px rgba(220,38,38,0.08)' }
+                ? { background: 'radial-gradient(135deg, rgba(220,38,38,0.15) 0%, #0a0a0a 100%)', border: '2px solid rgba(220,38,38,0.5)', color: '#fecaca', boxShadow: '0 0 18px rgba(220,38,38,0.35), 0 0 40px rgba(220,38,38,0.12), inset 0 0 12px rgba(220,38,38,0.08)' }
                 : { background: 'radial-gradient(135deg, rgba(244,114,182,0.15) 0%, #ffffff 100%)', border: '2px solid rgba(236,72,153,0.35)', color: '#9d174d', boxShadow: '0 0 18px rgba(236,72,153,0.20), 0 0 40px rgba(236,72,153,0.06)' }
               }>
               {getInitials(d.firstName || patientName, d.lastName)}
@@ -611,20 +611,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
             {/* Info */}
             <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              <p className={`text-xl font-black leading-snug ${isDark ? 'text-orange-100' : 'text-gray-800'}`}>{patientName || tx.unknown}</p>
+              <p className={`text-xl font-black leading-snug ${isDark ? 'text-red-50' : 'text-gray-800'}`}>{patientName || tx.unknown}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
                     style={isDark
-                      ? { color: '#fdba74', background: '#1a0a00', border: '1px solid #4a1a0a' }
+                      ? { color: '#fca5a5', background: '#1a0000', border: '1px solid #5a1010' }
                       : { color: '#9d174d', background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }
                     }>
                     HN {hn}
                   </span>
                 )}
                 {d.phone && (
-                  <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-orange-300/50' : 'text-pink-400/70'}`}>
-                    <Phone size={11} className={isDark ? 'text-orange-400/40' : 'text-pink-300'} />{d.phone}
+                  <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-red-300/50' : 'text-pink-400/70'}`}>
+                    <Phone size={11} className={isDark ? 'text-red-400/40' : 'text-pink-300'} />{d.phone}
                   </span>
                 )}
               </div>
@@ -648,12 +648,12 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {(clinicSettings?.lineOfficialUrl || clinicSettings?.clinicPhone) && (
           <div className="rounded-2xl overflow-hidden"
             style={isDark
-              ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0800 50%, #0a0a0a 100%)', border: '1.5px solid #4a1a0a', boxShadow: 'inset 0 -6px 14px -4px rgba(255,80,0,0.08), 0 0 25px rgba(200,60,0,0.06)' }
+              ? { background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0000 50%, #0a0a0a 100%)', border: '1.5px solid #5a1010', boxShadow: 'inset 0 -6px 14px -4px rgba(220,38,38,0.08), 0 0 25px rgba(220,38,38,0.06)' }
               : { background: 'linear-gradient(135deg, #ffffff 0%, #fdf2f8 50%, #ffffff 100%)', border: '1.5px solid rgba(244,114,182,0.2)', boxShadow: '0 4px 16px rgba(244,114,182,0.06)' }
             }>
             {/* Accent top bar */}
             <div className="h-px w-full" style={{ background: isDark
-              ? 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.25) 25%, rgba(234,88,12,0.25) 50%, rgba(220,38,38,0.25) 75%, transparent 95%)'
+              ? 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.25) 25%, rgba(220,38,38,0.25) 50%, rgba(180,0,0,0.25) 75%, transparent 95%)'
               : 'linear-gradient(90deg, transparent 5%, rgba(6,199,85,0.25) 25%, rgba(236,72,153,0.2) 50%, rgba(236,72,153,0.25) 75%, transparent 95%)'
             }} />
 
@@ -719,7 +719,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className={`text-[11px] font-black ${isDark ? 'text-orange-100' : 'text-gray-800'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
+                    <span className={`text-[11px] font-black ${isDark ? 'text-red-50' : 'text-gray-800'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
                     <span className={`text-[10px] transition-colors tracking-wide truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
@@ -751,7 +751,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               icon={<CalendarClock size={14} />}
               label={tx.apptLabel}
               count={appointments.length}
-              accent={isDark ? '#fb923c' : '#ec4899'}
+              accent={isDark ? '#f87171' : '#ec4899'}
             />
             <div className="flex flex-col gap-2.5">
               {appointments.map((a, i) => <AppointmentCard key={i} a={a} lang={language} isDark={isDark} />)}
