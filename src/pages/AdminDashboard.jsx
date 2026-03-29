@@ -1685,8 +1685,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         brokerProClinicId: null,
         brokerProClinicHN: null,
         patientLinkToken: null, patientLinkEnabled: false,
+        serviceCompleted: false, serviceCompletedAt: null,
       });
-      showToast('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติแล้ว');
+      showToast('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติจองแล้ว');
     } catch (e) {
       console.error('deposit cancel error:', e);
       await updateDoc(ref, {
