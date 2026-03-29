@@ -477,8 +477,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const saveCalendarEdit = () => {
     saveSchedulePrefs(schedDoctorDays, schedClosedDays, schedManualBlocked, schedCustomDoctorHours);
     schedCalendarBackup.current = null;
+    schedSlotBackup.current = null;
     setSchedCalendarEditing(false);
-    showToast('บันทึกตารางหมอเข้า/ปิดคิวแล้ว', 2000);
+    setSchedSlotEditing(false);
+    setSchedBlockingDay(null);
+    showToast('บันทึกตารางคลินิกแล้ว', 2000);
   };
   const cancelCalendarEdit = () => {
     if (schedCalendarBackup.current) {
@@ -488,6 +491,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
     schedCalendarBackup.current = null;
     setSchedCalendarEditing(false);
+    // Also cancel slot edit if active
+    if (schedSlotEditing) cancelSlotEdit();
   };
   const startSlotEdit = () => {
     schedSlotBackup.current = {
@@ -3139,8 +3144,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       );
                     })}
                   </div>
-                  {/* Slot edit buttons */}
-                  <div className="px-4 pb-4">
+                  {/* Slot edit buttons — only show when calendar edit is active */}
+                  {schedCalendarEditing && <div className="px-4 pb-4">
                     <div className="flex items-center gap-2">
                       {!schedSlotEditing ? (
                         <button onClick={() => { if (confirm('ต้องการแก้ไขการปิดช่วงเวลา?')) startSlotEdit(); }}
@@ -3161,7 +3166,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </>
                       )}
                     </div>
-                  </div>
+                  </div>}
                 </div>
               );
             })()}
