@@ -2887,7 +2887,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 const [ch2, cm22] = closeT.split(':').map(Number);
                                 let cur2 = oh2 * 60 + om2;
                                 const end2 = ch2 * 60 + cm22;
-                                while (cur2 + 15 <= end2) {
+                                while (cur2 <= end2) {
                                   const sH = String(Math.floor(cur2 / 60)).padStart(2, '0');
                                   const sM = String(cur2 % 60).padStart(2, '0');
                                   const eMin = cur2 + 15;
