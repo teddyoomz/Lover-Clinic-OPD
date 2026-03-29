@@ -176,7 +176,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(1);
+  const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(2);
   const [schedDoctorDays, setSchedDoctorDays] = useState(new Set());
   const [schedClosedDays, setSchedClosedDays] = useState(new Set());
   const [schedGenLoading, setSchedGenLoading] = useState(false);
@@ -408,7 +408,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // 1. Build months array
       const months = [];
       const [sy, sm] = schedStartMonth.split('-').map(Number);
-      for (let i = 0; i <= schedAdvanceMonths; i++) {
+      for (let i = 0; i < schedAdvanceMonths; i++) {
         const d = new Date(sy, sm - 1 + i, 1);
         months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
       }
@@ -4044,7 +4044,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {showScheduleModal && (() => {
         const allMonths = [];
         const [sy, sm] = schedStartMonth.split('-').map(Number);
-        for (let i = 0; i <= schedAdvanceMonths; i++) {
+        for (let i = 0; i < schedAdvanceMonths; i++) {
           const d = new Date(sy, sm - 1 + i, 1);
           allMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
         }
@@ -4122,10 +4122,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงล่วงหน้า</label>
+                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงทั้งหมด</label>
                       <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
                         className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
-                        {[1,2,3].map(n => <option key={n} value={n}>{n} เดือน</option>)}
+                        {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} เดือน</option>)}
                       </select>
                     </div>
                   </div>
