@@ -168,6 +168,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
   const [apptSyncSuccess, setApptSyncSuccess] = useState(false);
+  const [apptSlotDuration, setApptSlotDuration] = useState(60);
   const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
   const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
 
@@ -482,7 +483,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // ── Drag handlers for day toggle ──
   const handleDayPointerDown = (dateStr, e) => {
     e.preventDefault();
-    // Determine action based on current state: cycle forward
     const action = schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor';
     dayDragRef.current = { active: true, action, touched: new Set([dateStr]) };
     toggleDay(dateStr, action);
@@ -493,6 +493,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     toggleDay(dateStr, dayDragRef.current.action);
   };
   const handleDayPointerUp = () => { dayDragRef.current.active = false; };
+  const handleDayPointerMove = (e) => {
+    if (!dayDragRef.current.active) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const ds = el?.closest?.('[data-dayds]')?.dataset?.dayds;
+    if (ds) handleDayPointerEnter(ds);
+  };
 
   // ── Drag handlers for slot toggle ──
   const handleSlotPointerDown = (date, start, end, e) => {
@@ -508,6 +514,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (slotDragRef.current.action === 'unblock' && isBlocked) toggleBlockedSlot(date, start, end);
   };
   const handleSlotPointerUp = () => { slotDragRef.current.active = false; };
+  const handleSlotPointerMove = (e) => {
+    if (!slotDragRef.current.active && !doctorSlotDragRef.current.active) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const btn = el?.closest?.('[data-slot-info]');
+    if (!btn) return;
+    const { slotDate, slotStart, slotEnd, slotType } = btn.dataset;
+    if (!slotDate) return;
+    if (slotType === 'block' && slotDragRef.current.active) handleSlotPointerEnter(slotDate, slotStart, slotEnd);
+    if (slotType === 'doctor' && doctorSlotDragRef.current.active) handleDocSlotPointerEnter(slotDate, slotStart, slotEnd);
+  };
 
   // ── Toggle manual blocked slot ──
   const toggleBlockedSlot = (date, start, end) => {
@@ -2582,6 +2598,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           countByDate[a.date]++;
         });
 
+        // Calculate available slots per day based on selected duration
+        const availByDate = {};
+        const dur = apptSlotDuration || 60;
+        for (let d2 = 1; d2 <= daysInMonth; d2++) {
+          const ds2 = `${apptMonth}-${String(d2).padStart(2, '0')}`;
+          const dt2 = new Date(y, m - 1, d2);
+          const dow2 = dt2.getDay();
+          const isWknd2 = dow2 === 0 || dow2 === 6;
+          const openT2 = isWknd2 ? (clinicSettings.clinicOpenTimeWeekend || clinicSettings.clinicOpenTime || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
+          const closeT2 = isWknd2 ? (clinicSettings.clinicCloseTimeWeekend || clinicSettings.clinicCloseTime || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+          const [oH2, oM2] = openT2.split(':').map(Number);
+          const [cH2, cM2] = closeT2.split(':').map(Number);
+          const startMin2 = oH2 * 60 + oM2;
+          const endMin2 = cH2 * 60 + cM2;
+          let totalSlots = 0;
+          let bookedSlots = 0;
+          const dayAppts2 = appointments.filter(a => a.date === ds2);
+          for (let sm = startMin2; sm + dur <= endMin2; sm += dur) {
+            totalSlots++;
+            const slotEnd = sm + dur;
+            // Check if any appointment overlaps this slot
+            const hasAppt = dayAppts2.some(a => {
+              const aS = parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]);
+              const aE = parseInt(a.endTime.split(':')[0]) * 60 + parseInt(a.endTime.split(':')[1]);
+              return aS < slotEnd && aE > sm;
+            });
+            if (hasAppt) bookedSlots++;
+          }
+          availByDate[ds2] = totalSlots - bookedSlots;
+        }
+
         // Selected day's appointments
         const selectedAppts = apptSelectedDate
           ? appointments.filter(a => a.date === apptSelectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -2635,6 +2682,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
+                {/* Slot duration selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500">ช่วงเวลา:</span>
+                  <select value={apptSlotDuration} onChange={e => setApptSlotDuration(Number(e.target.value))}
+                    className="bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-1.5 text-[11px] font-bold outline-none cursor-pointer [color-scheme:dark]">
+                    {[15,30,45,60,75,90,105,120].map(v => (
+                      <option key={v} value={v}>{v < 60 ? `${v} นาที` : v === 60 ? '1 ชม.' : `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')} ชม.`}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Calendar grid */}
@@ -2667,6 +2724,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <span className={`font-bold ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>
                         {count > 0 && (
                           <span className={`text-[9px] font-black ${isSelected ? 'text-sky-100' : 'text-sky-400'}`}>{count}</span>
+                        )}
+                        {(availByDate[dateStr] != null) && (
+                          <span className={`text-[7px] font-bold leading-none ${isSelected ? 'text-green-200' : availByDate[dateStr] > 0 ? 'text-green-400' : 'text-orange-400'}`}>ว่าง{availByDate[dateStr]}</span>
                         )}
                       </button>
                     );
@@ -2839,7 +2899,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             </div>
                             {/* Day cells — drag to toggle */}
                             <div className="grid grid-cols-7 gap-0.5 select-none" style={{touchAction: 'none'}}
-                              onPointerUp={handleDayPointerUp} onPointerLeave={handleDayPointerUp} onPointerCancel={handleDayPointerUp}>
+                              onPointerUp={handleDayPointerUp} onPointerLeave={handleDayPointerUp} onPointerCancel={handleDayPointerUp} onPointerMove={handleDayPointerMove}>
                               {Array.from({ length: calS }).map((_, i) => <div key={`e-${i}`} className="aspect-square" />)}
                               {Array.from({ length: dim }).map((_, i) => {
                                 const day = i + 1;
@@ -2849,7 +2909,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 const hasBlocked = schedManualBlocked.some(b => b.date === ds);
                                 const dow = (calS + i) % 7;
                                 return (
-                                  <button key={day}
+                                  <button key={day} data-dayds={ds}
                                     onPointerDown={(e) => handleDayPointerDown(ds, e)}
                                     onPointerEnter={() => handleDayPointerEnter(ds)}
                                     className={`aspect-square rounded-md flex flex-col items-center justify-center text-[11px] font-bold transition-colors relative
@@ -2938,14 +2998,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     <div className="space-y-0.5 select-none" style={{touchAction: 'none'}}
                                       onPointerUp={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
                                       onPointerLeave={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
-                                      onPointerCancel={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}>
+                                      onPointerCancel={() => { handleSlotPointerUp(); handleDocSlotPointerUp(); }}
+                                      onPointerMove={handleSlotPointerMove}>
                                       {slots15.map(s => {
                                         const blocked = schedManualBlocked.some(b => b.date === schedBlockingDay && b.startTime === s.start && b.endTime === s.end);
                                         const inDocHour = isDoctorDay && isSlotInDoctorHours(schedBlockingDay, s.start);
                                         const appt = findApptForSlot(s.start);
                                         return (
                                           <div key={s.start} className="flex items-stretch gap-0.5">
-                                            <button
+                                            <button data-slot-info data-slot-date={schedBlockingDay} data-slot-start={s.start} data-slot-end={s.end} data-slot-type="block"
                                               onPointerDown={(e) => handleSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                               onPointerEnter={() => handleSlotPointerEnter(schedBlockingDay, s.start, s.end)}
                                               className={`w-12 shrink-0 py-2 rounded-l text-[10px] font-bold transition-colors ${blocked ? 'bg-red-900/50 border border-red-800/50 text-red-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-red-800/40 hover:text-red-300'}`}
@@ -2967,7 +3028,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                               )}
                                             </div>
                                             {isDoctorDay && (
-                                              <button
+                                              <button data-slot-info data-slot-date={schedBlockingDay} data-slot-start={s.start} data-slot-end={s.end} data-slot-type="doctor"
                                                 onPointerDown={(e) => handleDocSlotPointerDown(schedBlockingDay, s.start, s.end, e)}
                                                 onPointerEnter={() => handleDocSlotPointerEnter(schedBlockingDay, s.start, s.end)}
                                                 className={`w-12 shrink-0 py-2 rounded-r text-[10px] font-bold transition-colors ${inDocHour ? 'bg-sky-900/50 border border-sky-700/50 text-sky-400' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:border-sky-800/40 hover:text-sky-300'}`}

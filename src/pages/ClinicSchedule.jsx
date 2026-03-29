@@ -247,7 +247,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                     {isClosed && <span className="text-[8px] font-bold text-red-400">ปิด</span>}
                     {!isClosed && isDoctor && <Stethoscope size={9} className={isSelected ? 'text-sky-100' : 'text-sky-400'} />}
                     {!isDayDisabled && !isClosed && avail > 0 && (
-                      <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}>{avail}</span>
+                      <span className={`text-[8px] font-black ${isSelected ? 'text-sky-100' : 'text-green-400'}`}><span className="font-bold">ว่าง</span>{avail}</span>
                     )}
                     {!isDayDisabled && !isClosed && avail === 0 && (
                       <span className={`text-[8px] font-bold ${isSelected ? 'text-sky-100' : 'text-orange-400'}`}>เต็ม</span>
