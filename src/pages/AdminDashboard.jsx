@@ -2737,7 +2737,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                     return (
                       <button key={day} onClick={() => setApptSelectedDate(isSelected ? null : dateStr)}
-                        className={`rounded-lg flex flex-col items-center justify-center py-1 sm:py-1.5 gap-0 transition-all text-xs relative cursor-pointer min-h-[56px] sm:min-h-[76px]
+                        className={`rounded-lg flex flex-col items-center justify-center py-1 sm:py-1.5 gap-px transition-all text-xs relative cursor-pointer min-h-[58px] sm:min-h-[76px]
                           ${cellBg} ${isToday && !isSelected ? 'ring-2 ring-sky-400/60' : ''}`}>
                         {isToday && <span className={`text-[6px] sm:text-[8px] font-bold leading-none mb-px ${isSelected ? 'text-white/80' : 'text-sky-400'}`}>วันนี้</span>}
                         <span className={`font-black text-[15px] sm:text-lg leading-tight ${isSelected ? 'text-white' : isToday ? 'text-sky-400' : isClosed ? 'text-red-400/60' : isWeekend ? 'text-red-400/70' : 'text-gray-300'}`}>{day}</span>

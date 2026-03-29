@@ -192,9 +192,20 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     ? new Date(new Date().getTime() + 86400000).toISOString().substring(0, 10)
     : todayStr;
 
+  const isSlotWithinDoctorHours = (dateStr, slotStart, slotEnd) => {
+    if (!doctorDaysSet.has(dateStr)) return false;
+    const hours = getDoctorHoursForDate(dateStr);
+    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+    const eMin = parseInt(slotEnd.split(':')[0]) * 60 + parseInt(slotEnd.split(':')[1]);
+    const dStart = parseInt(hours.start.split(':')[0]) * 60 + parseInt(hours.start.split(':')[1]);
+    const dEnd = parseInt(hours.end.split(':')[0]) * 60 + parseInt(hours.end.split(':')[1]);
+    return sMin >= dStart && eMin <= dEnd;
+  };
+
   const selectedSlots = selectedDate ? getSlotsForDate(selectedDate).map(s => ({
     ...s,
     booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
+    doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
   })) : [];
 
   const freeCount = selectedSlots.filter(s => !s.booked).length;
@@ -279,7 +290,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
           {/* Day grid */}
           <div className="grid grid-cols-7 gap-px bg-[var(--bd)]">
-            {Array.from({ length: calStart }).map((_, i) => <div key={`e-${i}`} className="aspect-square bg-[var(--bg-card)]" />)}
+            {Array.from({ length: calStart }).map((_, i) => <div key={`e-${i}`} className="min-h-[48px] bg-[var(--bg-card)]" />)}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
@@ -310,28 +321,28 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               return (
                 <button key={day} onClick={() => !isDayDisabled && setSelectedDate(isSelected ? null : dateStr)}
                   disabled={isDayDisabled}
-                  className={`aspect-square flex flex-col items-center justify-center gap-0 transition-all relative
+                  className={`min-h-[48px] py-1 flex flex-col items-center justify-center gap-px transition-all relative
                     ${cellBg} ${isDayDisabled ? 'cursor-default' : 'cursor-pointer hover:brightness-95'}`}>
 
                   {/* Today dot */}
-                  {isToday && !isSelected && <span className={`absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${todayDotColor}`} />}
+                  {isToday && !isSelected && <span className={`absolute top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${todayDotColor}`} />}
 
                   {/* Date number */}
-                  <span className={`font-bold text-[15px] leading-none ${dayTextColor}`}>{day}</span>
+                  <span className={`font-bold text-sm leading-none ${dayTextColor}`}>{day}</span>
 
                   {/* Doctor icon (ไม่พบแพทย์ mode only) */}
                   {!isClosed && isDoctor && noDoctorRequired && !isDayDisabled && (
-                    <Stethoscope size={10} className={`mt-0.5 ${isSelected ? 'text-sky-100' : docIconColor}`} />
+                    <Stethoscope size={9} className={`${isSelected ? 'text-sky-100' : docIconColor}`} />
                   )}
 
                   {/* Availability */}
                   {!isDayDisabled && !isClosed && avail > 0 && (
-                    <span className={`text-[9px] font-bold leading-none mt-0.5 ${isSelected ? 'text-emerald-100' : availColor}`}>
+                    <span className={`text-[8px] font-bold leading-none ${isSelected ? 'text-emerald-100' : availColor}`}>
                       {t.available} {avail}
                     </span>
                   )}
                   {!isDayDisabled && !isClosed && avail === 0 && (
-                    <span className={`text-[9px] font-bold leading-none mt-0.5 ${isSelected ? 'text-white/60' : fullColor}`}>
+                    <span className={`text-[8px] font-bold leading-none ${isSelected ? 'text-white/60' : fullColor}`}>
                       {t.full}
                     </span>
                   )}
@@ -345,7 +356,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
             })}
             {/* Fill trailing cells */}
             {Array.from({ length: (7 - (calStart + daysInMonth) % 7) % 7 }).map((_, i) => (
-              <div key={`trail-${i}`} className="aspect-square bg-[var(--bg-card)]" />
+              <div key={`trail-${i}`} className="min-h-[48px] bg-[var(--bg-card)]" />
             ))}
           </div>
 
@@ -385,7 +396,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <div className="flex items-center gap-3 mt-1">
                   {doctorDaysSet.has(selectedDate) && (
                     <span className={`text-[11px] font-semibold flex items-center gap-1 ${docIconColor}`}>
-                      <Stethoscope size={10} /> {t.doctor}
+                      <Stethoscope size={10} /> {t.doctor} {getDoctorHoursForDate(selectedDate).start}-{getDoctorHoursForDate(selectedDate).end}
                     </span>
                   )}
                   <span className="text-[11px] text-[var(--tx-muted)]">
@@ -404,19 +415,28 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
               {selectedSlots.map((slot) => (
                 <div key={slot.start}
                   className={`flex items-center rounded-xl border px-4 py-3 transition-all ${
-                    slot.booked ? `${slotBookedBg} opacity-40` : slotOpenBg
+                    slot.booked ? `${slotBookedBg} opacity-40`
+                      : slot.doctorSlot ? (isDark ? 'bg-sky-950/20 border-sky-800/40' : 'bg-sky-50 border-sky-200')
+                      : slotOpenBg
                   }`}>
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-lg font-bold tabular-nums ${slot.booked ? 'text-[var(--tx-muted)]' : 'text-[var(--tx-heading)]'}`}>
-                      {slot.start}
-                    </span>
-                    <span className="text-[var(--tx-muted)] mx-1.5 text-sm">{t.to}</span>
-                    <span className="text-sm font-medium tabular-nums text-[var(--tx-muted)]">
-                      {slot.end}
-                    </span>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <div>
+                      <span className={`text-lg font-bold tabular-nums ${slot.booked ? 'text-[var(--tx-muted)]' : 'text-[var(--tx-heading)]'}`}>
+                        {slot.start}
+                      </span>
+                      <span className="text-[var(--tx-muted)] mx-1.5 text-sm">{t.to}</span>
+                      <span className="text-sm font-medium tabular-nums text-[var(--tx-muted)]">
+                        {slot.end}
+                      </span>
+                    </div>
+                    {slot.doctorSlot && !slot.booked && (
+                      <Stethoscope size={12} className={docIconColor} />
+                    )}
                   </div>
                   <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg ${
-                    slot.booked ? 'text-[var(--tx-muted)] bg-[var(--bg-hover2)]' : slotOpenBadgeBg
+                    slot.booked ? 'text-[var(--tx-muted)] bg-[var(--bg-hover2)]'
+                      : slot.doctorSlot ? (isDark ? 'text-sky-300 bg-sky-900/40' : 'text-sky-700 bg-sky-100')
+                      : slotOpenBadgeBg
                   }`}>
                     {slot.booked ? <XCircle size={12} /> : <CheckCircle2 size={12} />}
                     {slot.booked ? t.unavailable : t.available}
