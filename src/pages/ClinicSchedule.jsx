@@ -177,20 +177,32 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return sMin < dStart || eMin > dEnd;
   };
 
-  const availByDate = {};
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${currentMonth}-${String(d).padStart(2, '0')}`;
-    if (closedDaysSet.has(dateStr)) { availByDate[dateStr] = -1; continue; }
-    const slots = getSlotsForDate(dateStr);
-    const free = slots.filter(s => !isSlotBooked(dateStr, s.start, s.end, bookedSlots) && !isSlotOutsideDoctorHours(dateStr, s.start, s.end)).length;
-    availByDate[dateStr] = free;
-  }
-
   const todayStr = new Date().toISOString().substring(0, 10);
   const showFrom = data.showFrom || 'today'; // 'today' | 'tomorrow'
   const showFromDate = showFrom === 'tomorrow'
     ? new Date(new Date().getTime() + 86400000).toISOString().substring(0, 10)
     : todayStr;
+
+  // For today: compute current time in minutes for filtering past slots
+  const nowMinutes = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+
+  const availByDate = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${currentMonth}-${String(d).padStart(2, '0')}`;
+    if (closedDaysSet.has(dateStr)) { availByDate[dateStr] = -1; continue; }
+    const slots = getSlotsForDate(dateStr);
+    const free = slots.filter(s => {
+      if (isSlotBooked(dateStr, s.start, s.end, bookedSlots)) return false;
+      if (isSlotOutsideDoctorHours(dateStr, s.start, s.end)) return false;
+      // For today with showFrom=today: exclude past slots from count
+      if (dateStr === todayStr && showFrom === 'today') {
+        const sMin = parseInt(s.start.split(':')[0]) * 60 + parseInt(s.start.split(':')[1]);
+        if (sMin < nowMinutes) return false;
+      }
+      return true;
+    }).length;
+    availByDate[dateStr] = free;
+  }
 
   const isSlotWithinDoctorHours = (dateStr, slotStart, slotEnd) => {
     if (!doctorDaysSet.has(dateStr)) return false;
@@ -202,11 +214,19 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return sMin >= dStart && eMin <= dEnd;
   };
 
-  const selectedSlots = selectedDate ? getSlotsForDate(selectedDate).map(s => ({
-    ...s,
-    booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
-    doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
-  })) : [];
+  const isSlotPast = (dateStr, slotStart) => {
+    if (dateStr !== todayStr || showFrom !== 'today') return false;
+    const sMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
+    return sMin < nowMinutes;
+  };
+
+  const selectedSlots = selectedDate ? getSlotsForDate(selectedDate)
+    .filter(s => !isSlotPast(selectedDate, s.start))
+    .map(s => ({
+      ...s,
+      booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
+      doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
+    })) : [];
 
   const freeCount = selectedSlots.filter(s => !s.booked).length;
   const totalCount = selectedSlots.length;
