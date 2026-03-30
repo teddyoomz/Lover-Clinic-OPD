@@ -376,6 +376,67 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     })();
   }, [apptMonth, adminMode]);
 
+  // ── Auto-sync at 21:00 daily — sync months up to furthest active session appointment ──
+  const apptAutoSyncDoneRef = useRef(null); // date string of last auto-sync (e.g. "2026-03-30")
+  useEffect(() => {
+    if (!db || !appId) return;
+    const check = async () => {
+      const now = new Date();
+      const hh = now.getHours();
+      const mm = now.getMinutes();
+      const todayKey = now.toISOString().substring(0, 10);
+      // Trigger at 21:00-21:04 (5-min window), once per day
+      if (hh !== 21 || mm > 4) return;
+      if (apptAutoSyncDoneRef.current === todayKey) return;
+      apptAutoSyncDoneRef.current = todayKey;
+
+      // Find furthest month from active sessions (noDeposit + deposit)
+      const allActive = [...noDepositSessions, ...depositSessions];
+      let maxMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      for (const s of allActive) {
+        const aDate = s.appointmentData?.appointmentDate || s.depositData?.appointmentDate;
+        if (aDate) {
+          const mo = aDate.substring(0, 7); // "YYYY-MM"
+          if (mo > maxMonth) maxMonth = mo;
+        }
+      }
+      // Also check schedule links
+      for (const s of schedList) {
+        if (s.enabled === false) continue;
+        for (const mo of (s.months || [])) {
+          if (mo > maxMonth) maxMonth = mo;
+        }
+      }
+
+      // Build list of months: current → maxMonth
+      const months = [];
+      let cursor = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      while (cursor <= maxMonth && months.length < 12) {
+        months.push(cursor);
+        const [cy, cm] = cursor.split('-').map(Number);
+        const next = cm === 12 ? `${cy + 1}-01` : `${cy}-${String(cm + 1).padStart(2, '0')}`;
+        cursor = next;
+      }
+
+      console.log(`[auto-sync 21:00] syncing ${months.length} months: ${months[0]} → ${months[months.length - 1]}`);
+      // Sync one by one with delay to avoid ProClinic rate limiting
+      for (const mo of months) {
+        try {
+          await broker.syncAppointments(mo);
+          console.log(`[auto-sync] ${mo} done`);
+        } catch (e) { console.warn(`[auto-sync] ${mo} failed:`, e.message); }
+        // 3 second delay between months
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      // Update active schedules after sync
+      try { await updateActiveSchedules(); } catch {}
+      console.log('[auto-sync 21:00] complete');
+    };
+    const interval = setInterval(check, 60000); // check every minute
+    check(); // run immediately on mount too
+    return () => clearInterval(interval);
+  }, [db, appId, noDepositSessions, depositSessions, schedList]);
+
   // ── Load saved schedule day preferences + schedule list ──
   useEffect(() => {
     if (!db || !appId) return;
@@ -3240,6 +3301,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         const todayStr = new Date().toISOString().substring(0, 10);
 
+        // Stale detection: syncedAt > 1 hour or never synced
+        const syncedAt = apptData?.syncedAt ? new Date(apptData.syncedAt) : null;
+        const isStale = !syncedAt || (Date.now() - syncedAt.getTime() > 60 * 60 * 1000);
+        const staleMinutes = syncedAt ? Math.floor((Date.now() - syncedAt.getTime()) / 60000) : null;
+        const staleText = !syncedAt ? 'ยังไม่เคย Sync เดือนนี้' : staleMinutes >= 60 ? `Sync เมื่อ ${Math.floor(staleMinutes / 60)} ชม. ${staleMinutes % 60} นาทีที่แล้ว — ข้อมูลอาจไม่อัพเดท` : null;
+
         return (
           <div className="space-y-4 max-w-2xl mx-auto">
             {/* Calendar card */}
@@ -3318,9 +3385,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
 
               {/* Calendar grid */}
-              <div className="p-3 sm:p-5">
+              <div className="p-3 sm:p-5 relative">
+                {/* Stale overlay */}
+                {isStale && !apptSyncing && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-b-2xl sm:rounded-b-3xl">
+                    <RefreshCw size={28} className="text-amber-400 mb-3" />
+                    <p className="text-amber-400 font-bold text-sm mb-1 text-center px-4">{staleText}</p>
+                    <p className="text-gray-400 text-xs mb-4 text-center px-4">กด Sync เพื่ออัพเดทข้อมูลนัดหมาย</p>
+                    <button onClick={() => handleSyncAppointments(apptMonth)} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors shadow-lg">
+                      <RefreshCw size={14} /> Sync ตอนนี้
+                    </button>
+                  </div>
+                )}
                 {/* Legend */}
-                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500">
+                <div className={`flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
                   <span className="flex items-center gap-1">🔥 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-950/40 border border-emerald-900/40' : 'bg-emerald-50 border border-emerald-200'}`} /> ปกติ</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
@@ -3328,13 +3406,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span>/<span className="text-sky-400 font-bold">หมอ</span></span>
                 </div>
                 {/* Day headers */}
-                <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
+                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
                   {thaiDays.map((d, i) => (
                     <div key={i} className={`text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
                   ))}
                 </div>
                 {/* Day cells */}
-                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
                   {Array.from({ length: calStart }).map((_, i) => (
                     <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[72px]" />
                   ))}
