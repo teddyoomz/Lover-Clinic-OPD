@@ -216,7 +216,7 @@ Fields ทั้งหมดใน patient intake form:
 | `notifVolume` | 44 | ระดับเสียง 0-1 |
 | `showNotifSettings` | 45 | dropdown ตั้งค่าเสียง |
 | `toastMsg` | 46 | ข้อความ toast notification |
-| `prevSessionsRef` | 47 | useRef — เก็บ sessions ก่อนหน้าสำหรับ detect changes |
+| `prevSessionsRef` | 47 | useRef — เก็บ queue+noDeposit sessions ก่อนหน้าสำหรับ detect changes (allNotifData) |
 | `hasNewUpdate` | 48 | มีข้อมูลอัพเดทขณะดู session detail |
 | `summaryLang` | 49 | 'en' / 'th' ภาษา clinical summary |
 | `archivedSessions` | 50 | archived sessions array (ประวัติ) |
@@ -558,6 +558,7 @@ Inline component ด้านบนขวา — สลับ TH/EN
 - **Vite OXC parser** — ห้ามใช้ `{(() => { ... })()}` IIFE ใน JSX → ใช้ pre-computed var แทน
 - **Firestore snapshot fires 2x** สำหรับ write ที่มี `serverTimestamp()` (local estimate + server confirm) → notification logic ต้องตรวจ isUnread ไม่ใช่แค่ patientData
 - **isNotifEnabled/notifVolume** ใน dependency array ของ sessions useEffect → ถ้าเปลี่ยน จะ re-subscribe onSnapshot (prevSessionsRef ยังคงเดิม)
+- **Notification detection** ครอบคลุม queue + noDeposit sessions ผ่าน `allNotifData = [...data, ...ndData]` → prevSessionsRef เก็บทั้ง 2 tab
 - **Phone validation** — Thai domestic: `/^0\d{9}$/`, international: แค่กรอง non-digit
 - **DOB year** — BE (พ.ศ.) ถ้า year > 2400, CE (ค.ศ.) ถ้า year < 2400
 - **logo.jpg** — เก็บไว้ที่ `/public/logo.jpg`
