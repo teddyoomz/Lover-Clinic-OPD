@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { app } from '../firebase.js';
@@ -140,6 +140,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  // Dedup practitioners from clinicSettings (Firestore may have duplicates from older saves)
+  const practitioners = useMemo(() => {
+    const raw = clinicSettings.practitioners || [];
+    const seen = new Set();
+    return raw.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+  }, [clinicSettings.practitioners]);
   const [sessions, setSessions] = useState([]);
   const [formTemplates, setFormTemplates] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -724,7 +730,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // 3. Collect booked slots from Firestore — filtered by selected doctor or assistants
       const bookedSlots = [];
-      const allPractitioners = clinicSettings.practitioners || [];
+      const allPractitioners = practitioners;
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
@@ -2845,22 +2851,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="text-[10px] text-sky-400/70 shrink-0">หมอ</span>
                 </div>
                 {/* Practitioner filter */}
-                {(clinicSettings.practitioners || []).filter(p => p.role !== 'hidden').length > 0 && (
+                {practitioners.filter(p => p.role !== 'hidden').length > 0 && (
                   <div className="flex items-center gap-2 bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 border border-[var(--bd)]">
                     <Users size={12} className="text-purple-400 shrink-0" />
                     <select value={apptFilterPractitioner} onChange={e => setApptFilterPractitioner(e.target.value)}
                       className={`bg-[var(--bg-hover)] ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1 rounded px-1`}>
                       <option value="all">ทุกคน</option>
-                      {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').length > 0 && (
+                      {practitioners.filter(p => p.role === 'doctor').length > 0 && (
                         <optgroup label="แพทย์">
-                          {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').map(p => (
+                          {practitioners.filter(p => p.role === 'doctor').map(p => (
                             <option key={p.id} value={String(p.id)}>{p.name}</option>
                           ))}
                         </optgroup>
                       )}
-                      {(clinicSettings.practitioners || []).filter(p => p.role === 'assistant').length > 0 && (
+                      {practitioners.filter(p => p.role === 'assistant').length > 0 && (
                         <optgroup label="ผู้ช่วย">
-                          {(clinicSettings.practitioners || []).filter(p => p.role === 'assistant').map(p => (
+                          {practitioners.filter(p => p.role === 'assistant').map(p => (
                             <option key={p.id} value={String(p.id)}>{p.name}</option>
                           ))}
                         </optgroup>
@@ -4949,13 +4955,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </div>
 
                   {/* Doctor selector — only when พบแพทย์ */}
-                  {!schedNoDoctorRequired && (clinicSettings.practitioners || []).filter(p => p.role === 'doctor').length > 0 && (
+                  {!schedNoDoctorRequired && practitioners.filter(p => p.role === 'doctor').length > 0 && (
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เลือกแพทย์</label>
                       <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
                         className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
                         <option value="">-- ทุกคน (รวมทุกนัด) --</option>
-                        {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').map(p => (
+                        {practitioners.filter(p => p.role === 'doctor').map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>

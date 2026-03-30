@@ -40,7 +40,11 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const [testResult, setTestResult] = useState('');
   const [clearingSession, setClearingSession] = useState(false);
   const [clearResult, setClearResult] = useState('');
-  const [practitioners, setPractitioners] = useState(clinicSettings?.practitioners || []);
+  const [practitioners, setPractitioners] = useState(() => {
+    const raw = clinicSettings?.practitioners || [];
+    const seen = new Set();
+    return raw.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+  });
   const [fetchingPractitioners, setFetchingPractitioners] = useState(false);
   const [practitionerMsg, setPractitionerMsg] = useState('');
 
