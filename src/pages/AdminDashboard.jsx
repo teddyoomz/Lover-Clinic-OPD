@@ -2710,9 +2710,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const selectColor = isDark ? '[color-scheme:dark]' : '[color-scheme:light]';
         const selectText = isDark ? 'text-white' : 'text-[var(--tx-heading)]';
         const appointments = apptData?.appointments || [];
+        const pList = clinicSettings.practitioners || [];
+        const doctorIdSet = new Set(pList.filter(p => p.role === 'doctor').map(p => String(p.id)));
+        const assistantIdSet = new Set(pList.filter(p => p.role === 'assistant').map(p => String(p.id)));
         const filteredAppointments = apptFilterPractitioner === 'all'
           ? appointments
-          : appointments.filter(a => String(a.doctorId) === apptFilterPractitioner);
+          : apptFilterPractitioner === 'all-doctors'
+            ? appointments.filter(a => doctorIdSet.has(String(a.doctorId)))
+            : apptFilterPractitioner === 'all-assistants'
+              ? appointments.filter(a => assistantIdSet.has(String(a.doctorId)))
+              : appointments.filter(a => String(a.doctorId) === apptFilterPractitioner);
 
         // Build appointment count per day
         const countByDate = {};
@@ -2851,22 +2858,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="text-[10px] text-sky-400/70 shrink-0">หมอ</span>
                 </div>
                 {/* Practitioner filter */}
-                {practitioners.filter(p => p.role !== 'hidden').length > 0 && (
+                {pList.filter(p => p.role !== 'hidden').length > 0 && (
                   <div className="flex items-center gap-2 bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 border border-[var(--bd)]">
                     <Users size={12} className="text-purple-400 shrink-0" />
                     <select value={apptFilterPractitioner} onChange={e => setApptFilterPractitioner(e.target.value)}
                       className={`bg-[var(--bg-hover)] ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1 rounded px-1`}>
                       <option value="all">ทุกคน</option>
-                      {practitioners.filter(p => p.role === 'doctor').length > 0 && (
+                      {doctorIdSet.size > 0 && <option value="all-doctors">🩺 แพทย์ทั้งหมด</option>}
+                      {assistantIdSet.size > 0 && <option value="all-assistants">👤 ผู้ช่วยทั้งหมด</option>}
+                      {pList.filter(p => p.role === 'doctor').length > 0 && (
                         <optgroup label="แพทย์">
-                          {practitioners.filter(p => p.role === 'doctor').map(p => (
+                          {pList.filter(p => p.role === 'doctor').map(p => (
                             <option key={p.id} value={String(p.id)}>{p.name}</option>
                           ))}
                         </optgroup>
                       )}
-                      {practitioners.filter(p => p.role === 'assistant').length > 0 && (
+                      {pList.filter(p => p.role === 'assistant').length > 0 && (
                         <optgroup label="ผู้ช่วย">
-                          {practitioners.filter(p => p.role === 'assistant').map(p => (
+                          {pList.filter(p => p.role === 'assistant').map(p => (
                             <option key={p.id} value={String(p.id)}>{p.name}</option>
                           ))}
                         </optgroup>
