@@ -1,6 +1,7 @@
 // ─── Broker Client — Server API Only ─────────────────────────────────────────
 // All ProClinic operations go through Vercel API routes.
 // Credentials come from Vercel env vars (not from frontend).
+// Consolidated: customer, deposit, connection, appointment, courses (5 endpoints)
 
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
@@ -32,7 +33,7 @@ function requestExtensionSync(forceLogin = false) {
 
 async function ensureExtensionHasCredentials() {
   try {
-    const creds = await apiFetch('credentials', {}, true); // _retried=true to prevent recursion
+    const creds = await apiFetch('connection', { action: 'credentials' }, true); // _retried=true to prevent recursion
     if (creds?.success) {
       window.postMessage({
         type: 'LC_SET_CREDENTIALS',
@@ -108,66 +109,72 @@ async function apiFetch(endpoint, body, _retried) {
   return data;
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────────
+// ─── Public API — Customer ──────────────────────────────────────────────────
 
 /** Create new customer in ProClinic → { success, proClinicId, proClinicHN, error } */
 export function fillProClinic(patient) {
-  return apiFetch('create', { patient });
+  return apiFetch('customer', { action: 'create', patient });
 }
 
 /** Update existing customer in ProClinic */
 export function updateProClinic(proClinicId, proClinicHN, patient) {
-  return apiFetch('update', { proClinicId, proClinicHN, patient });
+  return apiFetch('customer', { action: 'update', proClinicId, proClinicHN, patient });
 }
 
 /** Delete customer from ProClinic */
 export function deleteProClinic(proClinicId, proClinicHN, patient) {
-  return apiFetch('delete', { proClinicId, proClinicHN, patient });
-}
-
-/** Get courses for a customer from ProClinic */
-export function getCourses(proClinicId) {
-  return apiFetch('courses', { proClinicId });
+  return apiFetch('customer', { action: 'delete', proClinicId, proClinicHN, patient });
 }
 
 /** Search customers in ProClinic */
 export function searchCustomers(query) {
-  return apiFetch('search', { query });
+  return apiFetch('customer', { action: 'search', query });
 }
 
-/** Test ProClinic login */
-export function testLogin() {
-  return apiFetch('login', {});
-}
+// ─── Public API — Deposit ───────────────────────────────────────────────────
 
 /** Get deposit form options (sellers, doctors, rooms, etc.) from ProClinic */
 export function getDepositOptions() {
-  return apiFetch('deposit-options', {});
+  return apiFetch('deposit', { action: 'options' });
 }
 
 /** Submit deposit record to ProClinic */
 export function submitDeposit(proClinicId, proClinicHN, deposit) {
-  return apiFetch('deposit-submit', { proClinicId, proClinicHN, deposit });
-}
-
-/** Cancel deposit + delete customer from ProClinic */
-export function cancelDeposit(proClinicId, proClinicHN) {
-  return apiFetch('deposit-cancel', { proClinicId, proClinicHN });
+  return apiFetch('deposit', { action: 'submit', proClinicId, proClinicHN, deposit });
 }
 
 /** Update existing deposit record in ProClinic */
 export function updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) {
-  return apiFetch('deposit-update', { proClinicId, proClinicHN, depositProClinicId, deposit });
+  return apiFetch('deposit', { action: 'update', proClinicId, proClinicHN, depositProClinicId, deposit });
 }
 
-/** Clear ProClinic session cache — forces re-login with current env vars */
-export function clearProClinicSession() {
-  return apiFetch('clear-session', {});
+/** Cancel deposit + delete customer from ProClinic */
+export function cancelDeposit(proClinicId, proClinicHN) {
+  return apiFetch('deposit', { action: 'cancel', proClinicId, proClinicHN });
+}
+
+// ─── Public API — Connection ────────────────────────────────────────────────
+
+/** Test ProClinic login */
+export function testLogin() {
+  return apiFetch('connection', { action: 'login' });
 }
 
 /** Get ProClinic credentials from Vercel env vars — for extension auto-config */
 export function getProClinicCredentials() {
-  return apiFetch('credentials', {});
+  return apiFetch('connection', { action: 'credentials' });
+}
+
+/** Clear ProClinic session cache — forces re-login with current env vars */
+export function clearProClinicSession() {
+  return apiFetch('connection', { action: 'clear' });
+}
+
+// ─── Public API — Courses ───────────────────────────────────────────────────
+
+/** Get courses for a customer from ProClinic */
+export function getCourses(proClinicId) {
+  return apiFetch('courses', { proClinicId });
 }
 
 /** Sync appointments for a month from ProClinic → Firestore */
@@ -178,4 +185,21 @@ export function syncAppointments(month) {
 /** Get appointment counts per month for a year */
 export function fetchAppointmentMonths(year) {
   return apiFetch('courses', { action: 'fetch-appointment-months', year });
+}
+
+// ─── Public API — Appointment ───────────────────────────────────────────────
+
+/** Create new appointment in ProClinic → { success, appointmentProClinicId } */
+export function createAppointment(appointment) {
+  return apiFetch('appointment', { action: 'create', appointment });
+}
+
+/** Update existing appointment in ProClinic */
+export function updateAppointment(appointmentId, appointment) {
+  return apiFetch('appointment', { action: 'update', appointmentId, appointment });
+}
+
+/** Delete appointment from ProClinic */
+export function deleteAppointment(appointmentId) {
+  return apiFetch('appointment', { action: 'delete', appointmentId });
 }
