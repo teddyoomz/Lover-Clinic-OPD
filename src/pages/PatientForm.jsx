@@ -675,6 +675,27 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               </div>
 
               {(!isFollowUp && !isCustom) && (
+                <div>
+                  <label className={labelClass}>
+                    {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'}
+                  </label>
+                  <input
+                    type="text"
+                    name="idCard"
+                    value={formData.idCard || ''}
+                    onChange={handleInputChange}
+                    inputMode={language === 'en' ? 'text' : 'numeric'}
+                    placeholder={language === 'en' ? 'e.g. AB1234567' : 'X-XXXX-XXXXX-XX-X'}
+                    maxLength={language === 'en' ? 20 : 17}
+                    className={inputClass}
+                  />
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--tx-muted)' }}>
+                    {language === 'en' ? 'Passport number (5-20 characters)' : 'เลขบัตรประชาชน 13 หลัก (ระบบตรวจสอบหลักอัตโนมัติ)'}
+                  </p>
+                </div>
+              )}
+
+              {(!isFollowUp && !isCustom) && (
                 <>
                   <div className="flex flex-col gap-4">
                     <div className="w-full">
@@ -779,24 +800,6 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                         )}
                       </div>
                     )}
-                  </div>
-                  <div>
-                    <label className={labelClass}>
-                      {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'}
-                    </label>
-                    <input
-                      type="text"
-                      name="idCard"
-                      value={formData.idCard || ''}
-                      onChange={handleInputChange}
-                      inputMode={language === 'en' ? 'text' : 'numeric'}
-                      placeholder={language === 'en' ? 'e.g. AB1234567' : 'X-XXXX-XXXXX-XX-X'}
-                      maxLength={language === 'en' ? 20 : 17}
-                      className={inputClass}
-                    />
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--tx-muted)' }}>
-                      {language === 'en' ? 'Passport number (5-20 characters)' : 'เลขบัตรประชาชน 13 หลัก (ระบบตรวจสอบหลักอัตโนมัติ)'}
-                    </p>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
