@@ -89,8 +89,9 @@ src/
 │   ├── ClinicSettingsPanel.jsx — Admin settings (name, color, logo, phone, cooldown)
 │   ├── ClinicLogo.jsx       — Logo component
 │   └── ThemeToggle.jsx      — Dark/light mode toggle
-api/proclinic/               — Vercel Serverless Functions (ดู docs/API.md)
-├── create.js, update.js, delete.js, courses.js, search.js, login.js, credentials.js
+api/proclinic/               — Vercel Serverless Functions — 5 consolidated endpoints (ดู docs/API.md)
+├── customer.js (create/update/delete/search), deposit.js (submit/update/cancel/options)
+├── connection.js (login/credentials/clear), appointment.js (create/update/delete), courses.js
 └── _lib/ (session.js, scraper.js, fields.js, auth.js)
 cookie-relay/                — Cookie Relay Extension MV3 (ดู docs/EXTENSION.md)
 ├── background.js, content-loverclinic.js, manifest.json, popup.*

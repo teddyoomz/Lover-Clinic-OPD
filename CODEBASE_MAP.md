@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-03-29 (doctor hours settings, schedule doctor-hour blocking, ProClinic link per appointment)
+> อัพเดทล่าสุด: 2026-03-30 (API consolidation 12→5, appointment integration for noDeposit)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -35,13 +35,12 @@ src/
     ├── AdminDashboard.jsx      — Admin main page (queue, history, deposit, appointment, settings nav)
     ├── ClinicSchedule.jsx      — Public schedule page (/?schedule=<token>) — calendar + time slots
     └── PatientForm.jsx         — Patient intake/follow-up form (QR scan target)
-api/proclinic/                  — Vercel Serverless Functions
-├── create.js, update.js, delete.js, courses.js, search.js, login.js
-├── deposit-options.js          — GET deposit form options from ProClinic
-├── deposit-submit.js           — Submit deposit to ProClinic (create)
-├── deposit-update.js           — Update deposit in ProClinic (PUT via editDepositModal)
-├── deposit-cancel.js           — Cancel deposit + delete customer from ProClinic
-├── clear-session.js            — Clear ProClinic session cache (force re-login)
+api/proclinic/                  — Vercel Serverless Functions (5 consolidated endpoints)
+├── customer.js                 — actions: create, update, delete, search (รวมจาก create/update/delete/search.js)
+├── deposit.js                  — actions: submit, update, cancel, options (รวมจาก deposit-*.js)
+├── connection.js               — actions: login, credentials, clear (รวมจาก login/credentials/clear-session.js)
+├── appointment.js              — actions: create, update, delete (ใหม่ — นัดหมาย ProClinic สำหรับจองไม่มัดจำ)
+├── courses.js                  — actions: default(courses), sync-appointments, fetch-appointment-months (คงเดิม)
 └── _lib/ (session.js, scraper.js, fields.js, auth.js)
 ```
 
@@ -56,7 +55,8 @@ artifacts/{appId}/public/data/
 │             isUnread, isArchived, archivedAt, isPermanent,
 │             formType, customTemplate, sessionName,
 │             depositData, depositSyncStatus, depositSyncError, depositSyncAt,
-│             depositProClinicId, serviceCompleted, serviceCompletedAt
+│             depositProClinicId, serviceCompleted, serviceCompletedAt,
+│             appointmentData, appointmentProClinicId, appointmentSyncStatus, appointmentSyncError
 ├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
 └── form_templates/{id}         — Custom form templates
 ```
@@ -82,6 +82,9 @@ artifacts/{appId}/public/data/push_config/tokens
 - Deposit: สร้างคิวจอง → `formType:'deposit', isPermanent:true, depositData:{...}`
 - Deposit: "ลูกค้าเข้ารับบริการ" → `serviceCompleted:true` → ย้ายเข้าคิว (queue) ด้วย `isPermanent:false, createdAt:serverTimestamp()` (แปลงเป็น 2-hour link)
 - Deposit: "ยกเลิกการจอง" → cancel deposit + delete customer in ProClinic → archive
+- NoDeposit: สร้างคิวจองไม่มัดจำ → `isPermanent:true, formType:'intake', appointmentData:{...}` + สร้างนัดหมาย ProClinic
+- NoDeposit: "แก้ไขนัด" → อัพเดท appointmentData ใน Firestore + ProClinic
+- NoDeposit: "ยกเลิกจอง/ลบ" → ลบนัดจาก ProClinic (ถ้ามี appointmentProClinicId) → archive/delete
 
 ### Session ID prefixes
 - `LC-XXXXXX` — intake ทั่วไป (ใช้ 3 ตัวแรกของ clinicName)
@@ -91,6 +94,7 @@ artifacts/{appId}/public/data/push_config/tokens
 - `FW-MR-XXXXXX` — Follow-up MRS
 - `CST-XXXXXX` — Custom form
 - `DEP-XXXXXX` — Deposit booking
+- `ND-XXXXXX` — No-deposit booking (จองไม่มัดจำ + นัดหมาย ProClinic)
 
 ---
 
