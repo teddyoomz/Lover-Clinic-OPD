@@ -3094,7 +3094,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const d = session.patientData;
                 const isCompleted = session.status === 'completed' && d;
                 return (
-                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
+                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? (isDark ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)] bg-pink-50/50') : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -3112,30 +3112,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-orange-400 shrink-0"><Edit3 size={12}/></button>
                             </>
                           )}
-                          <span className="bg-orange-950/50 text-orange-400 border border-orange-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><UserPlus size={10}/> จองไม่มัดจำ</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1 border ${isDark ? 'bg-orange-950/50 text-orange-400 border-orange-900/50' : 'bg-pink-100 text-pink-600 border-pink-300'}`}><UserPlus size={10}/> จองไม่มัดจำ</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-nodeposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-orange-400'}`} title="QR Code">
+                          <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-nodeposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? (isDark ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-pink-100 border-pink-400 text-pink-600') : (isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-orange-400' : 'bg-pink-50 border-pink-200 text-pink-400 hover:text-pink-600')}`} title="QR Code">
                             <QrCode size={14}/>
                           </button>
-                          <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-orange-400 transition-colors" title={isCompleted ? 'ดูข้อมูล' : 'แก้ไขข้อมูล'}>
+                          <button onClick={() => handleViewSession(session)} className={`p-1.5 rounded border transition-colors ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-orange-400' : 'bg-pink-50 border-pink-200 text-pink-400 hover:text-pink-600'}`} title={isCompleted ? 'ดูข้อมูล' : 'แก้ไขข้อมูล'}>
                             {isCompleted ? <Eye size={14}/> : <Edit3 size={14}/>}
                           </button>
                           {isCompleted && (
                             <button onClick={() => handleNoDepositServiceStart(session)}
-                              className="p-1.5 rounded bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 text-white text-xs font-bold flex items-center gap-1 transition-colors"
+                              className={`p-1.5 rounded border text-xs font-bold flex items-center gap-1 transition-colors ${isDark ? 'bg-emerald-700 hover:bg-emerald-600 border-emerald-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-400 text-white'}`}
                               title="ลูกค้าเข้ารับบริการ — ย้ายไปหน้าคิว">
                               <UserCheck size={14}/>
                             </button>
                           )}
                           {isCompleted ? (
                             <button onClick={() => handleNoDepositCancel(session)}
-                              className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ยกเลิกจอง">
+                              className={`p-1.5 rounded border transition-colors ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-500 hover:text-red-400' : 'bg-pink-50 border-pink-200 text-gray-400 hover:text-red-500'}`} title="ยกเลิกจอง">
                               <XCircle size={14}/>
                             </button>
                           ) : (
                             <button onClick={() => handleNoDepositCancel(session)}
-                              className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ลบ">
+                              className={`p-1.5 rounded border transition-colors ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-500 hover:text-red-400' : 'bg-pink-50 border-pink-200 text-gray-400 hover:text-red-500'}`} title="ลบ">
                               <Trash2 size={14}/>
                             </button>
                           )}
@@ -3160,29 +3160,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {session.appointmentData && (
                         <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] text-gray-400">
                           <CalendarClock size={11} className="text-orange-400"/>
-                          <span className="font-bold text-orange-300">{session.appointmentData.appointmentDate ? (() => { const [y,m,d] = session.appointmentData.appointmentDate.split('-'); return `${parseInt(d)}/${parseInt(m)}/${parseInt(y)+543}`; })() : '-'}</span>
+                          <span className={`font-bold ${isDark ? 'text-orange-300' : 'text-pink-600'}`}>{session.appointmentData.appointmentDate ? (() => { const [y,m,d] = session.appointmentData.appointmentDate.split('-'); return `${parseInt(d)}/${parseInt(m)}/${parseInt(y)+543}`; })() : '-'}</span>
                           {session.appointmentData.appointmentStartTime && <span>{session.appointmentData.appointmentStartTime}{session.appointmentData.appointmentEndTime ? ` - ${session.appointmentData.appointmentEndTime}` : ''}</span>}
                           {session.appointmentData.doctor && depositOptions?.doctors && (() => { const doc = depositOptions.doctors.find(o => o.value === session.appointmentData.doctor); return doc ? <span className="text-gray-500">แพทย์: {doc.label}</span> : null; })()}
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
                           {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-yellow-500">กำลัง sync...</span>}
-                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: a.visitPurpose || [] }); setShowNoDepositForm(true); }} className="text-orange-400 hover:text-orange-300 font-bold underline underline-offset-2 ml-1">แก้ไขนัด</button>
+                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: a.visitPurpose || [] }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
                         </div>
                       )}
                       {session.appointmentData?.visitPurpose?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          {session.appointmentData.visitPurpose.map(v => <span key={v} className="text-[9px] bg-orange-950/30 text-orange-400 border border-orange-900/40 px-1.5 py-0.5 rounded">{v}</span>)}
+                          {session.appointmentData.visitPurpose.map(v => <span key={v} className={`text-[9px] px-1.5 py-0.5 rounded border ${isDark ? 'bg-orange-950/30 text-orange-400 border-orange-900/40' : 'bg-pink-50 text-pink-600 border-pink-200'}`}>{v}</span>)}
                         </div>
                       )}
 
                       {/* Row 4: Status badges */}
                       <div className="flex flex-wrap gap-2 mt-3">
                         {isCompleted ? (
-                          <span className="text-[10px] bg-green-950/30 text-green-400 border border-green-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={10}/> กรอกแล้ว</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border ${isDark ? 'bg-green-950/30 text-green-400 border-green-900/40' : 'bg-green-50 text-green-600 border-green-200'}`}><CheckCircle2 size={10}/> กรอกแล้ว</span>
                         ) : (
-                          <span className="text-[10px] bg-gray-900 text-gray-500 border border-gray-800 px-2 py-0.5 rounded flex items-center gap-1"><Clock size={10}/> รอกรอก</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border ${isDark ? 'bg-gray-900 text-gray-500 border-gray-800' : 'bg-gray-100 text-gray-500 border-gray-200'}`}><Clock size={10}/> รอกรอก</span>
                         )}
-                        <span className="text-[10px] bg-orange-950/30 text-orange-400 border border-orange-900/40 px-2 py-0.5 rounded flex items-center gap-1"><Link size={10}/> ลิงก์ถาวร</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border ${isDark ? 'bg-orange-950/30 text-orange-400 border-orange-900/40' : 'bg-pink-50 text-pink-500 border-pink-200'}`}><Link size={10}/> ลิงก์ถาวร</span>
                       </div>
                     </div>
                   </div>
