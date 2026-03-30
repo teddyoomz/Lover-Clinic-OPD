@@ -730,7 +730,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // 3. Collect booked slots from Firestore — filtered by selected doctor or assistants
       const bookedSlots = [];
-      const allPractitioners = practitioners;
+      const doctorBookedSlots = []; // นัดของแพทย์ทุกคน — ใช้แสดง "หมอว่าง/ไม่ว่าง" ในหน้าลูกค้า
+      const allPractitioners = clinicSettings.practitioners || [];
+      const doctorIds = new Set(allPractitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
@@ -738,18 +740,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const appts = snap.data().appointments || [];
           appts.forEach(a => {
             if (!a.date || !a.startTime || !a.endTime) return;
+            // Collect doctor booked slots separately (for "หมอว่าง/ไม่ว่าง" in ไม่พบแพทย์ mode)
+            if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
+              doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+            }
             if (schedNoDoctorRequired) {
-              // ไม่พบแพทย์ → เฉพาะนัดของผู้ช่วยทุกคนรวม
               if (assistantIds.size === 0 || assistantIds.has(String(a.doctorId))) {
                 bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
               }
             } else if (schedSelectedDoctor) {
-              // พบแพทย์ + เลือกแพทย์ → เฉพาะนัดของแพทย์คนนั้น
               if (String(a.doctorId) === String(schedSelectedDoctor)) {
                 bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
               }
             } else {
-              // พบแพทย์ + ไม่เลือกคน → ทุกนัด (fallback เดิม)
               bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
           });
@@ -777,6 +780,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorDays: [...schedDoctorDays],
         closedDays: [...schedClosedDays],
         bookedSlots,
+        doctorBookedSlots: schedNoDoctorRequired ? doctorBookedSlots : [],
         manualBlockedSlots: schedManualBlocked,
         customDoctorHours: schedCustomDoctorHours,
         doctorStartTime: clinicSettings.doctorStartTime || '10:00',
@@ -4969,7 +4973,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เลือกแพทย์</label>
                       <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
                         className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
-                        <option value="">-- ทุกคน (รวมทุกนัด) --</option>
+                        <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
                         {practitioners.filter(p => p.role === 'doctor').map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}

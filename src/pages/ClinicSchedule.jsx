@@ -21,6 +21,8 @@ const LANG = {
     full: 'เต็ม',
     unavailable: 'ไม่ว่าง',
     doctor: 'หมอเข้า',
+    doctorFree: 'หมอว่าง',
+    doctorBusy: 'หมอไม่ว่าง',
     to: 'ถึง',
     contact: 'สนใจนัดหมาย ติดต่อ',
     call: 'โทร',
@@ -41,6 +43,8 @@ const LANG = {
     full: 'Full',
     unavailable: 'Booked',
     doctor: 'Doctor',
+    doctorFree: 'Doctor Free',
+    doctorBusy: 'Doctor Busy',
     to: 'to',
     contact: 'Interested? Contact us',
     call: 'Call',
@@ -147,6 +151,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const doctorDaysSet = new Set(data.doctorDays || []);
   const closedDaysSet = new Set(data.closedDays || []);
   const bookedSlots = [...(data.bookedSlots || []), ...(data.manualBlockedSlots || [])];
+  const doctorBookedSlots = data.doctorBookedSlots || [];
   const noDoctorRequired = data.noDoctorRequired || false;
   const customDoctorHours = data.customDoctorHours || {};
 
@@ -229,6 +234,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
       ...s,
       booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
       doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
+      doctorBusy: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end) && isSlotBooked(selectedDate, s.start, s.end, doctorBookedSlots),
     })) : [];
 
   const freeCount = selectedSlots.filter(s => !s.booked).length;
@@ -569,8 +575,12 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                         </span>
                       </div>
                       {slot.doctorSlot && !slot.booked && (
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-pink-100 text-pink-600'}`}>
-                          {t.doctor}
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          slot.doctorBusy
+                            ? (isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-600')
+                            : (isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-pink-100 text-pink-600')
+                        }`}>
+                          {slot.doctorBusy ? t.doctorBusy : t.doctorFree}
                         </span>
                       )}
                     </div>
