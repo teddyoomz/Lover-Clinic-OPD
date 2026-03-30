@@ -5685,7 +5685,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                   )}
 
-                  {/* Show from option */}
+                  {/* Show from option — only relevant if start month is current month */}
+                  {(() => { const nowMo = new Date(); const curMo = `${nowMo.getFullYear()}-${String(nowMo.getMonth() + 1).padStart(2, '0')}`; return schedStartMonth === curMo; })() && (
                   <div>
                     <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงคิวตั้งแต่</label>
                     <div className="flex gap-2">
@@ -5699,6 +5700,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       ))}
                     </div>
                   </div>
+                  )}
 
                   {/* End date selector */}
                   {(() => {
