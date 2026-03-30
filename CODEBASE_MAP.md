@@ -27,7 +27,7 @@ src/
 ├── components/
 │   ├── ClinicLogo.jsx          — Logo component (custom URL / /logo.jpg / text fallback)
 │   ├── ThemeToggle.jsx         — Theme toggle button
-│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo, doctor hours, ProClinic credential reload) — all CSS-var theme-aware
+│   ├── ClinicSettingsPanel.jsx — Admin settings panel (clinic name, color, logo, doctor hours, practitioner settings, ProClinic credential reload) — all CSS-var theme-aware
 │   ├── CustomFormBuilder.jsx   — Admin form builder for custom templates — all CSS-var theme-aware, responsive layout
 │   └── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
 └── pages/
@@ -227,10 +227,13 @@ Fields ทั้งหมดใน patient intake form:
 | `schedCustomDoctorHours` | — | object: per-day doctor hour overrides `{ 'YYYY-MM-DD': { start, end } }` |
 | `doctorSlotDragRef` | — | useRef สำหรับ drag-select doctor hour slots |
 | `apptSlotDuration` | ~171 | ช่วงเวลาสำหรับคำนวณ slot ว่างในปฏิทินนัดหมาย (15-120 นาที, default 60) |
+| `apptFilterPractitioner` | ~175 | 'all' \| practitioner id string — filter ปฏิทินนัดหมายตามแพทย์/ผู้ช่วย |
+| `schedSelectedDoctor` | ~189 | practitioner id \| null — เลือกแพทย์สำหรับสร้างลิงก์ per-doctor |
 
 ### Appointment Calendar Computed Values (IIFE inside render)
-- `availByDate` — slot ว่างคำนวณจาก clinic hours (clinicOpenTime/CloseTime)
-- `docAvailByDate` — slot ว่างคำนวณเฉพาะ doctor hours (doctorStartTime/EndTime) สำหรับ doctorDays เท่านั้น
+- `filteredAppointments` — appointments filtered by `apptFilterPractitioner`
+- `availByDate` — slot ว่างคำนวณจาก clinic hours (clinicOpenTime/CloseTime) ใช้ filteredAppointments
+- `docAvailByDate` — slot ว่างคำนวณเฉพาะ doctor hours (doctorStartTime/EndTime) สำหรับ doctorDays เท่านั้น ใช้ filteredAppointments
 - Cell colors: `normalCellBg` (เขียว, default ทุกวัน), `docCellBg` (ฟ้า, หมอเข้า), `closedCellBg` (แดง, ปิด)
 - แสดง `ว่าง/หมอ` side-by-side เช่น `8/4` — เขียว=คลินิก, ฟ้า=เวลาหมอ
 - 🩺 emoji มุมขวาบนวันหมอเข้า, ส/อา ตัวเลขแดงเสมอ
@@ -396,7 +399,7 @@ Public schedule page ที่ลูกค้าเปิดผ่าน `/?sche
 ### Key Functions
 - `toggleDay(dateStr)` — cycle ปกติ→หมอเข้า→ปิด + save to Firestore immediately
 - `saveSchedulePrefs()` — save prefs including `customDoctorHours` to Firestore
-- `handleGenScheduleLink()` — sync all months + create schedule doc (saves doctorStartTime/End + customDoctorHours)
+- `handleGenScheduleLink()` — sync all months + create schedule doc (saves doctorStartTime/End + customDoctorHours + selectedDoctorId/Name). bookedSlots filtered: พบแพทย์→per-doctor, ไม่พบแพทย์→all assistants combined
 - `updateActiveSchedules()` — refresh bookedSlots in all active non-expired schedule docs (called after sync)
 - `handleToggleSchedule(id)` / `handleDeleteSchedule(id)` — จัดการลิงก์
 
@@ -539,6 +542,8 @@ Inline component ด้านบนขวา — สลับ TH/EN
 14. **DatePickerThai** — custom component: แสดง DD/MM/YYYY + ไอคอนปฏิทิน, กดแล้วเปิด native calendar picker, value เก็บเป็น YYYY-MM-DD (compatible กับ ProClinic)
 15. **API Security (Firebase Auth)** — ทุก `/api/proclinic/*` endpoint ต้องมี `Authorization: Bearer <firebaseIdToken>` header. ตรวจสอบผ่าน `_lib/auth.js` → `verifyAuth()` (เรียก Firebase `accounts:lookup` REST API). brokerClient.js แนบ token อัตโนมัติทุก request
 16. **ProClinic credential reload** — เปลี่ยน env vars ใน Vercel แล้วกดปุ่ม "โหลด Credentials ใหม่" ใน ClinicSettingsPanel → เรียก `/api/proclinic/clear-session` → ลบ session cache จาก Firestore → ครั้งถัดไป API จะ login ใหม่ด้วย credentials ใหม่ (ไม่ต้อง redeploy)
+17. **Practitioner settings** — ClinicSettingsPanel: ดึงรายชื่อจาก ProClinic (via getDepositOptions) → admin กำหนด role (doctor/assistant/hidden) → save ลง `clinicSettings.practitioners[]`. ใช้สำหรับ filter ปฏิทินนัดหมาย + สร้างลิงก์ตารางรายแพทย์
+18. **Per-doctor schedule links** — สร้างลิงก์: พบแพทย์→เลือกแพทย์→bookedSlots เฉพาะคนนั้น, ไม่พบแพทย์→bookedSlots รวมผู้ช่วยทุกคน. ClinicSchedule.jsx ไม่ต้องแก้ (filter ที่ต้นทาง)
 
 ---
 
