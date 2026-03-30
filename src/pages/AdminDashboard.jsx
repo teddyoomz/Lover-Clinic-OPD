@@ -872,6 +872,51 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
       setSchedGenResult({ token, url, qrUrl });
       showToast('สร้างลิงก์ตารางสำเร็จ', 3000);
+
+      // Background resync all months in the schedule link (gradual, 3s delay between each)
+      // This ensures the schedule link gets the freshest data from ProClinic
+      (async () => {
+        console.log(`[schedule-resync] background resync ${months.length} months for new link`);
+        for (const mo of months) {
+          try {
+            await broker.syncAppointments(mo);
+            console.log(`[schedule-resync] ${mo} done`);
+          } catch (e) { console.warn(`[schedule-resync] ${mo} failed:`, e.message); }
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        // Update booked slots in the newly created schedule doc with fresh data
+        try {
+          const freshBookedSlots = [];
+          const freshDoctorBookedSlots = [];
+          for (const mo of months) {
+            const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
+            if (snap.exists()) {
+              (snap.data().appointments || []).forEach(a => {
+                if (!a.date || !a.startTime || !a.endTime) return;
+                if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
+                  freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+                }
+                if (schedNoDoctorRequired) {
+                  if (assistantIds.has(String(a.doctorId))) {
+                    freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+                  }
+                } else if (schedSelectedDoctor) {
+                  if (String(a.doctorId) === String(schedSelectedDoctor)) {
+                    freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+                  }
+                } else {
+                  freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+                }
+              });
+            }
+          }
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), {
+            bookedSlots: freshBookedSlots,
+            doctorBookedSlots: schedNoDoctorRequired ? freshDoctorBookedSlots : [],
+          }).catch(() => {});
+          console.log('[schedule-resync] updated schedule doc with fresh booked slots');
+        } catch (e) { console.warn('[schedule-resync] update schedule failed:', e.message); }
+      })();
     } catch (e) {
       showToast(`สร้างลิงก์ล้มเหลว: ${e.message}`, 5000);
     }
@@ -1405,6 +1450,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       visitPurpose: noDepositFormData.visitPurpose || [],
     };
 
+    const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+    const apptPayload = {
+      appointmentDate: noDepositFormData.appointmentDate,
+      appointmentStartTime: noDepositFormData.appointmentStartTime,
+      appointmentEndTime: noDepositFormData.appointmentEndTime,
+      advisor: noDepositFormData.advisor,
+      doctor: noDepositFormData.doctor,
+      assistant: noDepositFormData.assistant,
+      room: noDepositFormData.room,
+      source: noDepositFormData.source,
+      appointmentTo: visitPurposeText,
+      appointmentNote: noDepositFormData.sessionName?.trim() || '',
+    };
+
     try {
       // Update Firestore first
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
@@ -1412,29 +1471,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         sessionName: noDepositFormData.sessionName?.trim() || session.sessionName,
       });
 
-      // Update ProClinic if we have an ID
       if (session.appointmentProClinicId) {
-        const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
-        const apptResult = await broker.updateAppointment(session.appointmentProClinicId, {
-          appointmentDate: noDepositFormData.appointmentDate,
-          appointmentStartTime: noDepositFormData.appointmentStartTime,
-          appointmentEndTime: noDepositFormData.appointmentEndTime,
-          advisor: noDepositFormData.advisor,
-          doctor: noDepositFormData.doctor,
-          assistant: noDepositFormData.assistant,
-          room: noDepositFormData.room,
-          source: noDepositFormData.source,
-          appointmentTo: visitPurposeText,
-          appointmentNote: noDepositFormData.sessionName?.trim() || '',
-        });
-
+        // Update existing appointment in ProClinic
+        const apptResult = await broker.updateAppointment(session.appointmentProClinicId, apptPayload);
         if (apptResult?.success) {
           showToast('อัพเดทนัดหมาย ProClinic สำเร็จ!');
         } else {
           showToast('บันทึกใน app แล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ' + (apptResult?.error || ''));
         }
       } else {
-        showToast('บันทึกข้อมูลนัดหมายสำเร็จ');
+        // No ProClinic ID yet (previous sync failed) → retry creating
+        const apptResult = await broker.createAppointment(apptPayload);
+        if (apptResult?.success && apptResult.appointmentProClinicId) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
+            appointmentProClinicId: apptResult.appointmentProClinicId,
+            appointmentSyncStatus: 'done',
+            appointmentSyncError: null,
+          });
+          showToast('สร้างนัดหมาย ProClinic สำเร็จ!');
+        } else {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
+            appointmentSyncStatus: 'failed',
+            appointmentSyncError: apptResult?.error || 'Unknown error',
+          });
+          showToast('บันทึกใน app แล้ว แต่สร้างนัดหมาย ProClinic ไม่สำเร็จ: ' + (apptResult?.error || ''));
+        }
       }
     } catch (e) {
       console.error('confirmUpdateAppointment:', e);
@@ -3337,8 +3398,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
+                    disabled={apptSyncing}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'opacity-50 cursor-not-allowed ' : ''}${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
@@ -3386,7 +3448,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Calendar grid */}
               <div className="p-3 sm:p-5 relative">
-                {/* Stale overlay */}
+                {/* Stale overlay — show when stale (not synced / >1hr old) */}
                 {isStale && !apptSyncing && (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-b-2xl sm:rounded-b-3xl">
                     <RefreshCw size={28} className="text-amber-400 mb-3" />
@@ -3397,8 +3459,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </button>
                   </div>
                 )}
+                {/* Syncing overlay — show while sync in progress */}
+                {apptSyncing && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[1px] rounded-b-2xl sm:rounded-b-3xl">
+                    <Loader2 size={32} className="animate-spin text-sky-400 mb-3" />
+                    <p className="text-sky-400 font-bold text-sm text-center">กำลัง Sync ข้อมูลนัดหมาย...</p>
+                  </div>
+                )}
                 {/* Legend */}
-                <div className={`flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className={`flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[9px] sm:text-[11px] text-gray-500 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
                   <span className="flex items-center gap-1">🔥 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-950/40 border border-emerald-900/40' : 'bg-emerald-50 border border-emerald-200'}`} /> ปกติ</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
@@ -3406,13 +3475,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span>/<span className="text-sky-400 font-bold">หมอ</span></span>
                 </div>
                 {/* Day headers */}
-                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
                   {thaiDays.map((d, i) => (
                     <div key={i} className={`text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
                   ))}
                 </div>
                 {/* Day cells */}
-                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 ${isStale && !apptSyncing ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
                   {Array.from({ length: calStart }).map((_, i) => (
                     <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[72px]" />
                   ))}
