@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
-import { clearProClinicSession, testLogin } from '../lib/brokerClient.js';
+import { clearProClinicSession, testLogin, getDepositOptions } from '../lib/brokerClient.js';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = ['00', '15', '30', '45'];
@@ -40,7 +40,9 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const [testResult, setTestResult] = useState('');
   const [clearingSession, setClearingSession] = useState(false);
   const [clearResult, setClearResult] = useState('');
-  // showPassword removed — credentials no longer in settings UI
+  const [practitioners, setPractitioners] = useState(clinicSettings?.practitioners || []);
+  const [fetchingPractitioners, setFetchingPractitioners] = useState(false);
+  const [practitionerMsg, setPractitionerMsg] = useState('');
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -120,7 +122,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         doctorEndTime: settings.doctorEndTime || DEFAULT_CLINIC_SETTINGS.doctorEndTime,
         doctorStartTimeWeekend: settings.doctorStartTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorStartTimeWeekend,
         doctorEndTimeWeekend: settings.doctorEndTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorEndTimeWeekend,
-        // Credentials stored in Vercel Environment Variables (not in Firestore)
+        practitioners: practitioners,
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -448,6 +450,80 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Practitioners */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Users size={14} style={{color: '#a78bfa'}}/> แพทย์ / ผู้ช่วยแพทย์
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            ดึงรายชื่อจาก ProClinic แล้วกำหนดว่าใครเป็นแพทย์ / ผู้ช่วย — ใช้สำหรับ filter ปฏิทินและสร้างลิงก์ตารางรายคน
+          </p>
+
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={async () => {
+                setFetchingPractitioners(true);
+                setPractitionerMsg('');
+                try {
+                  const res = await getDepositOptions();
+                  if (!res.success) { setPractitionerMsg(`ดึงข้อมูลล้มเหลว: ${res.error}`); return; }
+                  const opts = res.options || {};
+                  const docs = (opts.doctors || []).map(d => ({ id: Number(d.value), name: d.label, role: 'doctor' }));
+                  const assts = (opts.assistants || []).map(d => ({ id: Number(d.value), name: d.label, role: 'assistant' }));
+                  const fetched = [...docs, ...assts];
+                  // Merge: keep existing roles for known ids
+                  const existingMap = new Map(practitioners.map(p => [p.id, p]));
+                  const merged = fetched.map(f => {
+                    const existing = existingMap.get(f.id);
+                    return existing ? { ...f, role: existing.role } : f;
+                  });
+                  setPractitioners(merged);
+                  setPractitionerMsg(`ดึงข้อมูลสำเร็จ — ${docs.length} แพทย์, ${assts.length} ผู้ช่วย`);
+                  setTimeout(() => setPractitionerMsg(''), 5000);
+                } catch (err) {
+                  setPractitionerMsg(`ดึงข้อมูลล้มเหลว: ${err.message}`);
+                } finally {
+                  setFetchingPractitioners(false);
+                }
+              }}
+              disabled={fetchingPractitioners}
+              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-purple-950/30 border border-purple-800 text-purple-400 hover:bg-purple-900/40 disabled:opacity-50"
+            >
+              {fetchingPractitioners ? <><RefreshCw size={14} className="animate-spin"/> กำลังดึง...</> : <><Download size={14}/> ดึงข้อมูลจาก ProClinic</>}
+            </button>
+            {practitionerMsg && (
+              <span className={`text-sm font-bold ${practitionerMsg.includes('สำเร็จ') ? 'text-green-500' : 'text-red-500'}`}>{practitionerMsg}</span>
+            )}
+          </div>
+
+          {practitioners.length > 0 && (
+            <div className="space-y-1.5">
+              {practitioners.map((p) => (
+                <div key={p.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
+                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate">{p.name}</span>
+                  <span className="text-[10px] text-gray-500 font-mono shrink-0">#{p.id}</span>
+                  <select
+                    value={p.role}
+                    onChange={e => {
+                      setPractitioners(prev => prev.map(x => x.id === p.id ? { ...x, role: e.target.value } : x));
+                    }}
+                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none cursor-pointer shrink-0 ${
+                      p.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-400' :
+                      p.role === 'assistant' ? 'bg-purple-950/30 border-purple-800/50 text-purple-400' :
+                      'bg-red-950/30 border-red-800/50 text-red-400'
+                    }`}
+                  >
+                    <option value="doctor">🩺 แพทย์</option>
+                    <option value="assistant">👤 ผู้ช่วย</option>
+                    <option value="hidden">❌ ซ่อน</option>
+                  </select>
+                </div>
+              ))}
+              <p className="text-[10px] text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
+            </div>
+          )}
         </div>
 
         {/* ProClinic Integration */}

@@ -172,6 +172,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptSlotDuration, setApptSlotDuration] = useState(60);
   const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
   const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
+  const [apptFilterPractitioner, setApptFilterPractitioner] = useState('all'); // 'all' | practitioner id string
 
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -186,6 +187,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedGenResult, setSchedGenResult] = useState(null); // { token, url, qrUrl }
   const [schedSlotDuration, setSchedSlotDuration] = useState(60);
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
+  const [schedSelectedDoctor, setSchedSelectedDoctor] = useState(null); // practitioner id for per-doctor schedule
   const [schedShowFrom, setSchedShowFrom] = useState('today'); // 'today' | 'tomorrow'
   const [schedEndDay, setSchedEndDay] = useState(''); // 'YYYY-MM-DD' or '' for last day of month
   const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
@@ -720,14 +722,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await broker.syncAppointments(mo);
       }
 
-      // 3. Collect booked slots from Firestore (date + startTime + endTime only)
+      // 3. Collect booked slots from Firestore — filtered by selected doctor or assistants
       const bookedSlots = [];
+      const allPractitioners = clinicSettings.practitioners || [];
+      const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
         if (snap.exists()) {
           const appts = snap.data().appointments || [];
           appts.forEach(a => {
-            if (a.date && a.startTime && a.endTime) {
+            if (!a.date || !a.startTime || !a.endTime) return;
+            if (schedNoDoctorRequired) {
+              // ไม่พบแพทย์ → เฉพาะนัดของผู้ช่วยทุกคนรวม
+              if (assistantIds.size === 0 || assistantIds.has(String(a.doctorId))) {
+                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+            } else if (schedSelectedDoctor) {
+              // พบแพทย์ + เลือกแพทย์ → เฉพาะนัดของแพทย์คนนั้น
+              if (String(a.doctorId) === String(schedSelectedDoctor)) {
+                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+            } else {
+              // พบแพทย์ + ไม่เลือกคน → ทุกนัด (fallback เดิม)
               bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
           });
@@ -761,6 +777,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorEndTime: clinicSettings.doctorEndTime || '19:00',
         doctorStartTimeWeekend: clinicSettings.doctorStartTimeWeekend || '10:00',
         doctorEndTimeWeekend: clinicSettings.doctorEndTimeWeekend || '17:00',
+        selectedDoctorId: schedSelectedDoctor || null,
+        selectedDoctorName: allPractitioners.find(p => p.id === schedSelectedDoctor)?.name || null,
       });
 
       // 5b. Prefs are already saved on every toggle — no need to save again
@@ -2686,10 +2704,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const selectColor = isDark ? '[color-scheme:dark]' : '[color-scheme:light]';
         const selectText = isDark ? 'text-white' : 'text-[var(--tx-heading)]';
         const appointments = apptData?.appointments || [];
+        const filteredAppointments = apptFilterPractitioner === 'all'
+          ? appointments
+          : appointments.filter(a => String(a.doctorId) === apptFilterPractitioner);
 
         // Build appointment count per day
         const countByDate = {};
-        appointments.forEach(a => {
+        filteredAppointments.forEach(a => {
           if (!countByDate[a.date]) countByDate[a.date] = 0;
           countByDate[a.date]++;
         });
@@ -2710,7 +2731,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const endMin2 = cH2 * 60 + cM2;
           let totalSlots = 0;
           let bookedSlots = 0;
-          const dayAppts2 = appointments.filter(a => a.date === ds2);
+          const dayAppts2 = filteredAppointments.filter(a => a.date === ds2);
           for (let sm = startMin2; sm + dur <= endMin2; sm += dur) {
             totalSlots++;
             const slotEnd = sm + dur;
@@ -2742,7 +2763,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const dEndMin = dCH * 60 + dCM;
           let dTotal = 0;
           let dBooked = 0;
-          const dayAppts3 = appointments.filter(a => a.date === ds3);
+          const dayAppts3 = filteredAppointments.filter(a => a.date === ds3);
           for (let sm = dStartMin; sm + dur <= dEndMin; sm += dur) {
             dTotal++;
             const slotEnd = sm + dur;
@@ -2758,7 +2779,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         // Selected day's appointments
         const selectedAppts = apptSelectedDate
-          ? appointments.filter(a => a.date === apptSelectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime))
+          ? filteredAppointments.filter(a => a.date === apptSelectedDate).sort((a, b) => a.startTime.localeCompare(b.startTime))
           : [];
 
         const prevMonth = () => {
@@ -2804,7 +2825,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[9px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
+                  <button onClick={() => { const now = new Date(); setSchedStartMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
                   </button>
@@ -2823,6 +2844,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Stethoscope size={10} className="text-sky-400 shrink-0" />
                   <span className="text-[10px] text-sky-400/70 shrink-0">หมอ</span>
                 </div>
+                {/* Practitioner filter */}
+                {(clinicSettings.practitioners || []).filter(p => p.role !== 'hidden').length > 0 && (
+                  <div className="flex items-center gap-2 bg-[var(--bg-hover)] rounded-lg px-3 py-1.5 border border-[var(--bd)]">
+                    <Users size={12} className="text-purple-400 shrink-0" />
+                    <select value={apptFilterPractitioner} onChange={e => setApptFilterPractitioner(e.target.value)}
+                      className={`bg-[var(--bg-hover)] ${selectText} text-[11px] font-bold outline-none cursor-pointer ${selectColor} flex-1 rounded px-1`}>
+                      <option value="all">ทุกคน</option>
+                      {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').length > 0 && (
+                        <optgroup label="แพทย์">
+                          {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').map(p => (
+                            <option key={p.id} value={String(p.id)}>{p.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {(clinicSettings.practitioners || []).filter(p => p.role === 'assistant').length > 0 && (
+                        <optgroup label="ผู้ช่วย">
+                          {(clinicSettings.practitioners || []).filter(p => p.role === 'assistant').map(p => (
+                            <option key={p.id} value={String(p.id)}>{p.name}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Calendar grid */}
@@ -4896,12 +4941,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     <div className="flex items-end pb-0.5">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => setSchedNoDoctorRequired(e.target.checked)}
+                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => { setSchedNoDoctorRequired(e.target.checked); if (e.target.checked) setSchedSelectedDoctor(null); }}
                           className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
                         <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
                       </label>
                     </div>
                   </div>
+
+                  {/* Doctor selector — only when พบแพทย์ */}
+                  {!schedNoDoctorRequired && (clinicSettings.practitioners || []).filter(p => p.role === 'doctor').length > 0 && (
+                    <div>
+                      <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เลือกแพทย์</label>
+                      <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        <option value="">-- ทุกคน (รวมทุกนัด) --</option>
+                        {(clinicSettings.practitioners || []).filter(p => p.role === 'doctor').map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Show from option */}
                   <div>
