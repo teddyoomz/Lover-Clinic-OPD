@@ -745,7 +745,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
             if (schedNoDoctorRequired) {
-              if (assistantIds.size === 0 || assistantIds.has(String(a.doctorId))) {
+              if (assistantIds.has(String(a.doctorId))) {
                 bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
               }
             } else if (schedSelectedDoctor) {
