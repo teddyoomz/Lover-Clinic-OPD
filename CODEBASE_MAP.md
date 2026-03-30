@@ -221,6 +221,8 @@ Fields ทั้งหมดใน patient intake form:
 | `pushLoading` | ~54 | กำลัง request permission / get FCM token |
 | `depositSessions` | — | active deposit sessions (formType==='deposit' && !isArchived) |
 | `archivedDepositSessions` | — | archived deposit sessions |
+| `noDepositSessions` | — | active no-deposit sessions (isPermanent && formType!=='deposit' && !serviceCompleted && !isArchived) |
+| `archivedNoDepositSessions` | — | archived no-deposit sessions |
 | `depositOptions` | — | ProClinic dropdown options (payment methods, sellers, doctors, rooms) |
 | `depositOptionsLoading` | — | loading state for deposit options fetch |
 | `depositToDelete` | — | `{ session, action: 'archive'\|'cancel'\|'complete' }` — styled confirm modal (red=delete/cancel, blue=complete) |
@@ -778,12 +780,15 @@ hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done'
 **Session filtering** (onSnapshot handler):
 ```
 allDocs → filter:
-├── sessions         → (formType !== 'deposit' && !isArchived) OR (formType === 'deposit' && serviceCompleted && !isArchived)
-├── archivedSessions → (formType !== 'deposit' || serviceCompleted) && isArchived
+├── sessions         → !isArchived && !deposit-pending && !noDeposit-pending (+ timeout check)
+├── archivedSessions → isArchived && !(deposit && !serviceCompleted) && !(isPermanent && !deposit && !serviceCompleted)
 ├── depositSessions  → formType === 'deposit' && !isArchived && !serviceCompleted
-└── archivedDepositSessions → formType === 'deposit' && isArchived
+├── archivedDepositSessions → formType === 'deposit' && isArchived
+├── noDepositSessions → isPermanent && formType !== 'deposit' && !serviceCompleted && !isArchived
+└── archivedNoDepositSessions → isPermanent && formType !== 'deposit' && !serviceCompleted && isArchived
 ```
 > Note: deposit sessions ที่ serviceCompleted แสดงในคิว (sessions) ไม่ใช่ deposit tab
+> Note: noDeposit sessions ที่ "ลูกค้าเข้ารับบริการ" → serviceCompleted=true, isPermanent=false → ย้ายไปคิวเป็น 2hr timed
 
 **Auto-sync guard**: `newS.formType !== 'deposit'` — ป้องกัน auto-sync สำหรับ deposit sessions
 
