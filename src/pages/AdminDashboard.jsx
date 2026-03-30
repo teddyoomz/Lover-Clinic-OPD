@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -230,6 +230,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [depositSessions, setDepositSessions] = useState([]);
   const [archivedDepositSessions, setArchivedDepositSessions] = useState([]);
+  const [noDepositSessions, setNoDepositSessions] = useState([]);
+  const [archivedNoDepositSessions, setArchivedNoDepositSessions] = useState([]);
   const [sessionToHardDelete, setSessionToHardDelete] = useState(null);
 
   // ── Deposit form state ──
@@ -878,10 +880,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       });
 
-      // Archived sessions → history page (exclude deposits, except serviceCompleted ones)
+      // Archived sessions → history page (exclude deposits except serviceCompleted, exclude noDeposit)
       setArchivedSessions(
         allDocs
-          .filter(s => s.isArchived && (s.formType !== 'deposit' || s.serviceCompleted))
+          .filter(s => s.isArchived && (s.formType !== 'deposit' || s.serviceCompleted) && !(s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted))
           .sort((a, b) => (b.archivedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.archivedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
 
@@ -897,9 +899,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           .sort((a, b) => (b.archivedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.archivedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
 
+      // จองไม่มัดจำ = isPermanent + NOT deposit + NOT serviceCompleted
+      setNoDepositSessions(
+        allDocs
+          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)
+          .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0))
+      );
+      setArchivedNoDepositSessions(
+        allDocs
+          .filter(s => s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)
+          .sort((a, b) => (b.archivedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.archivedAt?.toMillis() || a.createdAt?.toMillis() || 0))
+      );
+
       const data = allDocs.filter(session => {
           if (session.isArchived) return false;
           if (session.formType === 'deposit' && !session.serviceCompleted) return false; // deposit ที่ยังไม่มารับบริการ → อยู่ tab จองมัดจำ
+          if (session.isPermanent && session.formType !== 'deposit' && !session.serviceCompleted) return false; // จองไม่มัดจำ → อยู่ tab จองไม่มัดจำ
           if (session.isPermanent) return true;
           if (session.formType === 'deposit' && session.serviceCompleted) return true; // deposit มารับบริการแล้ว → แสดงในคิว
           if (!session.createdAt) return true;
@@ -1287,6 +1302,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
       }
     } catch (error) { console.error(error); }
+  };
+
+  const handleNoDepositServiceStart = async (session) => {
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+        serviceCompleted: true,
+        serviceCompletedAt: serverTimestamp(),
+        isPermanent: false,
+        createdAt: serverTimestamp(), // reset 2-hour timer
+      });
+      setAdminMode('dashboard'); // ย้ายไปหน้าคิว
+    } catch (error) { console.error('handleNoDepositServiceStart error:', error); }
+  };
+
+  const handleNoDepositCancel = async (session) => {
+    try {
+      if (session.patientData) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
+          isArchived: true, archivedAt: serverTimestamp()
+        });
+      } else {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id));
+      }
+    } catch (error) { console.error('handleNoDepositCancel error:', error); }
   };
 
   const hardDeleteSession = async (sessionId) => {
@@ -2052,15 +2091,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-5 gap-0.5 w-full xl:hidden z-0">
+        <div className="grid grid-cols-6 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
-            { mode: 'deposit', icon: <Banknote size={14} />, label: 'จอง', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
+            { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
+            { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
             { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
             { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
           ].map(tab => {
-            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
+            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
                 className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
@@ -2078,6 +2118,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}}>
             <Activity size={16} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+          </button>
+          <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white shadow-[0_0_15px_rgba(194,65,12,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
+            <UserPlus size={16} /> จองไม่มัดจำ
+            {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{noDepositSessions.filter(s => s.isUnread).length}</span>}
           </button>
           <button onClick={() => setAdminMode('deposit')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white shadow-[0_0_15px_rgba(5,150,105,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50'}`} title="ลูกค้าจองมัดจำ">
             <Banknote size={16} /> จองมัดจำ
@@ -2684,6 +2728,214 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {hasDeposit && <span className="text-[10px] bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded flex items-center gap-1"><Banknote size={10}/> มัดจำ</span>}
                       {session.depositSyncStatus === 'cancelled' && <span className="text-[10px] bg-red-950/30 text-red-400 border border-red-900/40 px-2 py-0.5 rounded flex items-center gap-1"><XCircle size={10}/> ยกเลิกแล้ว</span>}
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : adminMode === 'noDeposit' ? (
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
+          {/* ── QR Panel (reuse same pattern as deposit) ── */}
+          <div className="xl:col-span-1" id="qr-panel-nodeposit">
+            <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
+              <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
+                <QrCode size={18} className="text-orange-500" /> QR Code จอง
+              </h2>
+              {selectedQR && noDepositSessions.find(s => s.id === selectedQR) ? (() => {
+                const ndSession = noDepositSessions.find(s => s.id === selectedQR);
+                const plToken = ndSession?.patientLinkToken;
+                const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
+                const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
+                return (
+                  <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
+                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(194,65,12,0.25)]">
+                      <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
+                    </div>
+                    <div className="w-full text-center">
+                      <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{ndSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
+                    </div>
+                    <div className="w-full text-left">
+                      <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">รหัสคิว (Token)</p>
+                      <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-orange-400">{selectedQR}</p>
+                    </div>
+                    <div className="w-full text-left">
+                      <p className="text-[10px] sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-[10px] sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
+                        <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
+                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
+                          {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500"/> : <ClipboardList size={18}/>}
+                        </button>
+                        <a href={linkUrl} target="_blank" rel="noopener noreferrer"
+                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
+                          <ExternalLink size={18}/>
+                        </a>
+                      </div>
+                    </div>
+                    <div className="w-full h-px bg-[var(--bd)] my-2"></div>
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                      <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
+                    </button>
+                  </div>
+                );
+              })() : (
+                <div className="text-gray-600 text-sm py-12">
+                  <QrCode size={64} className="mx-auto mb-4 opacity-15"/>
+                  <p className="text-xs text-gray-500">กดปุ่ม QR บนการ์ดจอง<br/>เพื่อแสดง QR Code</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── No-deposit sessions list ── */}
+          <div className="xl:col-span-3">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-black text-orange-400 flex items-center gap-2 mb-1"><UserPlus size={22}/> ลูกค้าจองไม่มัดจำ</h2>
+                <p className="text-xs text-gray-500">{noDepositSessions.length} รายการ</p>
+              </div>
+              <button onClick={() => setAdminMode('noDepositHistory')} className="text-xs px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50 font-bold flex items-center gap-1.5 transition-all">
+                <History size={13}/> ประวัติจอง
+              </button>
+            </div>
+
+          {noDepositSessions.length === 0 ? (
+            <div className="text-center py-16 text-gray-500">
+              <UserPlus size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-sm font-bold">ยังไม่มีลูกค้าจองไม่มัดจำ</p>
+              <p className="text-xs mt-2 text-gray-600">กดปุ่ม "สร้างคิวใหม่" แล้วเลือก "จองไม่มัดจำ"</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {noDepositSessions.map(session => {
+                const d = session.patientData;
+                const isCompleted = session.status === 'completed' && d;
+                return (
+                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
+                    <div className="p-4">
+                      {/* Row 1: Name + actions */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          {editingNameId === session.id ? (
+                            <input autoFocus value={editingNameValue}
+                              onChange={e => setEditingNameValue(e.target.value)}
+                              onBlur={() => saveEditedName(session.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveEditedName(session.id)}
+                              className="bg-[var(--bg-input)] border border-orange-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
+                          ) : (
+                            <>
+                              {session.isUnread && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                              <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-orange-400 shrink-0"><Edit3 size={12}/></button>
+                            </>
+                          )}
+                          <span className="bg-orange-950/50 text-orange-400 border border-orange-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><UserPlus size={10}/> จองไม่มัดจำ</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-nodeposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-orange-400'}`} title="QR Code">
+                            <QrCode size={14}/>
+                          </button>
+                          <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-orange-400 transition-colors" title={isCompleted ? 'ดูข้อมูล' : 'แก้ไขข้อมูล'}>
+                            {isCompleted ? <Eye size={14}/> : <Edit3 size={14}/>}
+                          </button>
+                          {isCompleted && (
+                            <button onClick={() => handleNoDepositServiceStart(session)}
+                              className="p-1.5 rounded bg-emerald-700 hover:bg-emerald-600 border border-emerald-600 text-white text-xs font-bold flex items-center gap-1 transition-colors"
+                              title="ลูกค้าเข้ารับบริการ — ย้ายไปหน้าคิว">
+                              <UserCheck size={14}/>
+                            </button>
+                          )}
+                          {isCompleted ? (
+                            <button onClick={() => handleNoDepositCancel(session)}
+                              className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ยกเลิกจอง">
+                              <XCircle size={14}/>
+                            </button>
+                          ) : (
+                            <button onClick={() => handleNoDepositCancel(session)}
+                              className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-400 transition-colors" title="ลบ">
+                              <Trash2 size={14}/>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row 2: Patient info */}
+                      {isCompleted ? (
+                        <div className="text-xs text-gray-400 space-y-1 mt-2">
+                          <div className="flex flex-wrap gap-4">
+                            <span className="text-white font-bold">{d.prefix !== 'ไม่ระบุ' ? d.prefix + ' ' : ''}{d.firstName} {d.lastName}</span>
+                            {d.age && <span className="text-gray-500">{d.age} ปี</span>}
+                            {d.phone && <span className="text-gray-500 font-mono">{d.phone}</span>}
+                            {d.idCard && <span className="text-gray-500 font-mono text-[10px]"><CreditCard size={10} className="inline mr-1"/>{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-600 italic mt-1">รอลูกค้ากรอกข้อมูล...</p>
+                      )}
+
+                      {/* Row 3: Status badges */}
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {isCompleted ? (
+                          <span className="text-[10px] bg-green-950/30 text-green-400 border border-green-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={10}/> กรอกแล้ว</span>
+                        ) : (
+                          <span className="text-[10px] bg-gray-900 text-gray-500 border border-gray-800 px-2 py-0.5 rounded flex items-center gap-1"><Clock size={10}/> รอกรอก</span>
+                        )}
+                        <span className="text-[10px] bg-orange-950/30 text-orange-400 border border-orange-900/40 px-2 py-0.5 rounded flex items-center gap-1"><Link size={10}/> ลิงก์ถาวร</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </div>
+        </div>
+      ) : adminMode === 'noDepositHistory' ? (
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] shadow-[var(--shadow-panel)]">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-black text-orange-400 flex items-center gap-2 mb-1"><History size={22}/> ประวัติลูกค้าจองไม่มัดจำ</h2>
+              <p className="text-xs text-gray-500">{archivedNoDepositSessions.length} รายการ</p>
+            </div>
+            <button onClick={() => setAdminMode('noDeposit')} className="text-xs px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50 font-bold flex items-center gap-1.5 transition-all">
+              <UserPlus size={13}/> กลับหน้าจอง
+            </button>
+          </div>
+
+          {archivedNoDepositSessions.length === 0 ? (
+            <div className="text-center py-16 text-gray-500">
+              <Archive size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-sm font-bold">ยังไม่มีประวัติ</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {archivedNoDepositSessions.map(session => {
+                const d = session.patientData;
+                return (
+                  <div key={session.id} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--bd)] p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="font-bold text-gray-400 text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
+                        <span className="bg-orange-950/50 text-orange-400 border border-orange-900/50 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 shrink-0"><UserPlus size={10}/> จองไม่มัดจำ</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <button onClick={() => handleViewSession(session)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-orange-400 transition-colors" title="ดูข้อมูล">
+                          <Eye size={14}/>
+                        </button>
+                        <button onClick={() => {
+                          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isArchived: false, archivedAt: null });
+                        }} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-orange-400 transition-colors" title="กู้คืน">
+                          <RotateCcw size={14}/>
+                        </button>
+                        <button onClick={() => setSessionToHardDelete(session.id)} className="p-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-500 hover:text-red-500 transition-colors" title="ลบถาวร">
+                          <Trash2 size={14}/>
+                        </button>
+                      </div>
+                    </div>
+                    {d && (
+                      <p className="text-xs text-gray-500">{d.prefix !== 'ไม่ระบุ' ? d.prefix + ' ' : ''}{d.firstName} {d.lastName} {d.phone ? `· ${d.phone}` : ''}</p>
+                    )}
                   </div>
                 );
               })}
@@ -3531,7 +3783,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.formType === 'deposit' && session.serviceCompleted && (
                             <button onClick={() => setDepositToDelete({ session, action: 'cancel' })} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 transition-colors" title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"><XCircle size={15} /></button>
                           )}
-                          <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบ"><Trash2 size={15} /></button>
+                          {session.patientData && session.opdRecordedAt && session.brokerStatus === 'done' ? (
+                            <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-400 rounded-lg border border-emerald-900/50 transition-colors" title="ลูกค้ามารับบริการเรียบร้อยแล้ว"><CheckCircle2 size={15} /></button>
+                          ) : (
+                            <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded-lg border border-red-900/50 transition-colors" title="ลบ"><Trash2 size={15} /></button>
+                          )}
                         </div>
                       </div>
                       {/* Row 2: time + QR timestamp */}
@@ -3868,7 +4124,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ชื่อ-สกุล:</span><span className="col-span-2 font-bold text-white break-words">{d.prefix !== 'ไม่ระบุ' ? d.prefix : ''} {d.firstName} {d.lastName}</span></div>
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">เพศ:</span><span className="col-span-2 font-bold text-white">{d.gender || '-'}</span></div>
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันเกิด:</span><span className="col-span-2 font-bold text-white">{renderDobFormat(d)} <span className="text-red-500 font-mono text-xs ml-2">[{d.age} ปี]</span></span></div>
-                      
+                      {d.idCard && (
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500 flex items-center gap-1"><CreditCard size={12}/> บัตร/Passport:</span><span className="col-span-2 font-bold text-white font-mono tracking-wider">{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span></div>
+                      )}
+
                       {(isFollowUp || isCustom) && (
                         <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันที่ประเมิน:</span><span className="col-span-2 font-bold text-orange-400">{d.assessmentDate || '-'}</span></div>
                       )}
@@ -4379,12 +4638,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองมัดจำ</span>
                           <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจอง<br/>ลิงก์ถาวร</span>
                         </button>
-                        <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-sky-500/50' : 'bg-white border-gray-200 hover:border-sky-400 shadow-sm'}`}>
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-sky-950/50 text-sky-400' : 'bg-sky-50 text-sky-500'}`}>
-                            <Link size={16} />
+                        <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-orange-950/50 text-orange-400' : 'bg-orange-50 text-orange-500'}`}>
+                            <UserPlus size={16} />
                           </div>
-                          <span className="block text-[var(--tx-heading)] font-bold text-sm">ลิงก์ถาวร</span>
-                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">คิวไม่หมดอายุ<br/>ใช้แปะหน้าเพจ</span>
+                          <span className="block text-[var(--tx-heading)] font-bold text-sm">จองไม่มัดจำ</span>
+                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจองล่วงหน้า<br/>ไม่มีมัดจำ</span>
                         </button>
                      </div>
 
