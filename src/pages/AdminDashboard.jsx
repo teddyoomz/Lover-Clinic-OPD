@@ -1290,7 +1290,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setSessionToDelete(null);
     if (selectedQR === sessionId) setSelectedQR(null);
     if (viewingSession && viewingSession.id === sessionId) setViewingSession(null);
-    const session = sessions.find(s => s.id === sessionId);
+    const session = sessions.find(s => s.id === sessionId) || noDepositSessions.find(s => s.id === sessionId) || depositSessions.find(s => s.id === sessionId);
     try {
       if (session?.patientData) {
         // มีข้อมูลกรอกแล้ว → archive เก็บไว้ในประวัติ
@@ -2385,6 +2385,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 font-mono uppercase tracking-wider">
                         <span>อายุ: {d.age || '-'} ปี</span>
                         {d.phone && <span>โทร: {formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span>}
+                        {d.idCard && <span className="flex items-center gap-1"><CreditCard size={10}/> {d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
                       </div>
                       {reasons.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -2618,10 +2619,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {/* Row 2: Patient info */}
                       {isCompleted ? (
                         <div className="text-xs text-gray-400 space-y-1 mt-2">
-                          <div className="flex gap-4">
+                          <div className="flex flex-wrap gap-4">
                             <span className="text-white font-bold">{d.prefix !== 'ไม่ระบุ' ? d.prefix + ' ' : ''}{d.firstName} {d.lastName}</span>
                             {d.age && <span className="text-gray-500">{d.age} ปี</span>}
                             {d.phone && <span className="text-gray-500 font-mono">{d.phone}</span>}
+                            {d.idCard && <span className="text-gray-500 font-mono text-[10px]"><CreditCard size={10} className="inline mr-1"/>{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
                           </div>
                         </div>
                       ) : (
