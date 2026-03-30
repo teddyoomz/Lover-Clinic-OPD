@@ -1016,11 +1016,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       );
 
       // จองไม่มัดจำ = isPermanent + NOT deposit + NOT serviceCompleted
-      setNoDepositSessions(
-        allDocs
+      const ndData = allDocs
           .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)
-          .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0))
-      );
+          .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0));
+      setNoDepositSessions(ndData);
       setArchivedNoDepositSessions(
         allDocs
           .filter(s => s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)
@@ -1043,10 +1042,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         return timeB - timeA;
       });
 
+      // รวม queue + noDeposit สำหรับ notification detection (ทั้ง 2 tab ต้องมี noti)
+      const allNotifData = [...data, ...ndData];
+
       if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
         let brokerSyncSessions = [];
-        data.forEach(newS => {
+        allNotifData.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
             const oldStr = stableStr(oldS.patientData || {});
@@ -1160,7 +1162,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
       } else {
         // ── First load: stamp ทุก session เพื่อป้องกัน re-sync + notification ซ้ำตอนเปิดหน้า ──
-        data.forEach(s => {
+        allNotifData.forEach(s => {
           const str = stableStr(s.patientData || {});
           if (s.brokerStatus === 'done' && s.brokerProClinicId && s.patientData) {
             lastAutoSyncedStrRef.current[s.id] = str;
@@ -1224,7 +1226,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       });
 
-      prevSessionsRef.current = data;
+      prevSessionsRef.current = allNotifData;
       setSessions(data);
     }, (error) => console.error("Firestore Error:", error));
     return () => unsubscribe();
@@ -1235,7 +1237,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const latestSession = sessions.find(s => s.id === viewingSession.id)
         || archivedSessions.find(s => s.id === viewingSession.id)
         || depositSessions.find(s => s.id === viewingSession.id)
-        || archivedDepositSessions.find(s => s.id === viewingSession.id);
+        || archivedDepositSessions.find(s => s.id === viewingSession.id)
+        || noDepositSessions.find(s => s.id === viewingSession.id);
       if (latestSession) {
         const currentStr = stableStr(viewingSession.patientData || {});
         const latestStr = stableStr(latestSession.patientData || {});
@@ -5178,10 +5181,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* ══ No-Deposit Appointment Form Modal ══════════════════════════════════ */}
       {showNoDepositForm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-[#0a0a0a] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto border border-orange-900/50 shadow-[0_0_40px_rgba(194,65,12,0.15)] animate-in zoom-in-95">
-            <div className="sticky top-0 bg-[#0a0a0a] border-b border-orange-900/30 p-4 flex items-center justify-between z-10">
-              <h3 className="text-lg font-black text-orange-400 flex items-center gap-2"><UserPlus size={20}/> {editingAppointment ? 'แก้ไขนัดหมาย' : 'จองไม่มัดจำ + นัดหมาย'}</h3>
-              <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className="text-gray-500 hover:text-white"><X size={18}/></button>
+          <div className={`rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-in zoom-in-95 ${isDark ? 'bg-[#0a0a0a] border border-orange-900/50 shadow-[0_0_40px_rgba(194,65,12,0.15)]' : 'bg-white border border-pink-200 shadow-xl'}`}>
+            <div className={`sticky top-0 border-b p-4 flex items-center justify-between z-10 ${isDark ? 'bg-[#0a0a0a] border-orange-900/30' : 'bg-white border-pink-200'}`}>
+              <h3 className={`text-lg font-black flex items-center gap-2 ${isDark ? 'text-orange-400' : 'text-pink-600'}`}><UserPlus size={20}/> {editingAppointment ? 'แก้ไขนัดหมาย' : 'จองไม่มัดจำ + นัดหมาย'}</h3>
+              <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className={`${isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}><X size={18}/></button>
             </div>
             <div className="p-4 space-y-4">
               {depositOptionsLoading ? (
@@ -5191,26 +5194,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* ชื่อคิว */}
                   <div>
                     <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ชื่อคิว / Note</label>
-                    <input type="text" value={noDepositFormData.sessionName} onChange={e => setNoDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-600"/>
+                    <input type="text" value={noDepositFormData.sessionName} onChange={e => setNoDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
                   </div>
 
                   {/* วันนัด + เวลา */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 block mb-1">วันนัด <span className="text-red-500">*</span></label>
-                      <DatePickerThai value={noDepositFormData.appointmentDate} onChange={v => setNoDepositFormData(p => ({...p, appointmentDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-600"/>
+                      <DatePickerThai value={noDepositFormData.appointmentDate} onChange={v => setNoDepositFormData(p => ({...p, appointmentDate: v}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
                     </div>
                     <div className="grid grid-cols-2 gap-1">
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">เริ่ม</label>
-                        <select value={noDepositFormData.appointmentStartTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-2.5 text-xs outline-none">
+                        <label className="text-xs text-gray-500 block mb-1">เริ่ม <span className="text-red-500">*</span></label>
+                        <select value={noDepositFormData.appointmentStartTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className={`w-full rounded-lg px-2 py-2.5 text-xs outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                           <option value="">--</option>
                           {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">สิ้นสุด</label>
-                        <select value={noDepositFormData.appointmentEndTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-2.5 text-xs outline-none">
+                        <label className="text-xs text-gray-500 block mb-1">สิ้นสุด <span className="text-red-500">*</span></label>
+                        <select value={noDepositFormData.appointmentEndTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className={`w-full rounded-lg px-2 py-2.5 text-xs outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                           <option value="">--</option>
                           {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
@@ -5220,8 +5223,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* ที่ปรึกษา */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ที่ปรึกษา</label>
-                    <select value={noDepositFormData.advisor} onChange={e => setNoDepositFormData(p => ({...p, advisor: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                    <label className="text-xs text-gray-500 block mb-1">ที่ปรึกษา <span className="text-red-500">*</span></label>
+                    <select value={noDepositFormData.advisor} onChange={e => setNoDepositFormData(p => ({...p, advisor: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.advisors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -5229,8 +5232,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* แพทย์ */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">แพทย์</label>
-                    <select value={noDepositFormData.doctor} onChange={e => setNoDepositFormData(p => ({...p, doctor: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                    <label className="text-xs text-gray-500 block mb-1">แพทย์ <span className="text-red-500">*</span></label>
+                    <select value={noDepositFormData.doctor} onChange={e => setNoDepositFormData(p => ({...p, doctor: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -5238,8 +5241,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* ผู้ช่วยแพทย์ */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ผู้ช่วยแพทย์</label>
-                    <select value={noDepositFormData.assistant} onChange={e => setNoDepositFormData(p => ({...p, assistant: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                    <label className="text-xs text-gray-500 block mb-1">ผู้ช่วยแพทย์ <span className="text-red-500">*</span></label>
+                    <select value={noDepositFormData.assistant} onChange={e => setNoDepositFormData(p => ({...p, assistant: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.assistants || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -5247,8 +5250,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* ห้องตรวจ */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ห้องตรวจ</label>
-                    <select value={noDepositFormData.room} onChange={e => setNoDepositFormData(p => ({...p, room: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                    <label className="text-xs text-gray-500 block mb-1">ห้องตรวจ <span className="text-red-500">*</span></label>
+                    <select value={noDepositFormData.room} onChange={e => setNoDepositFormData(p => ({...p, room: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -5256,30 +5259,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* ช่องทางนัดหมาย */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ช่องทางนัดหมาย</label>
-                    <select value={noDepositFormData.source} onChange={e => setNoDepositFormData(p => ({...p, source: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                    <label className="text-xs text-gray-500 block mb-1">ช่องทางนัดหมาย <span className="text-red-500">*</span></label>
+                    <select value={noDepositFormData.source} onChange={e => setNoDepositFormData(p => ({...p, source: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[#141414] border border-[#333] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.appointmentChannels || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
 
                   {/* นัดมาเพื่อ — visit purpose */}
-                  <div className="border-t border-[#222] pt-4">
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-2">นัดมาเพื่อ</label>
+                  <div className={`border-t pt-4 ${isDark ? 'border-[#222]' : 'border-pink-200'}`}>
+                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-2">นัดมาเพื่อ <span className="text-red-500">*</span></label>
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
                           onClick={() => setNoDepositFormData(p => ({...p, visitPurpose: p.visitPurpose.includes(r) ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r]}))}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-all ${noDepositFormData.visitPurpose.includes(r) ? 'bg-orange-900/40 border-orange-600 text-orange-300' : 'bg-[#141414] border-[#333] text-gray-500 hover:text-gray-300'}`}
+                          className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-all ${noDepositFormData.visitPurpose.includes(r) ? (isDark ? 'bg-orange-900/40 border-orange-600 text-orange-300' : 'bg-pink-100 border-pink-500 text-pink-700') : (isDark ? 'bg-[#141414] border-[#333] text-gray-500 hover:text-gray-300' : 'bg-white border-pink-200 text-gray-500 hover:text-pink-600')}`}
                         >{r}</button>
                       ))}
                     </div>
                   </div>
 
                   {/* Submit */}
-                  <div className="flex gap-3 pt-4 border-t border-[#222]">
-                    <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded-lg font-bold text-xs uppercase border border-[#333]">ยกเลิก</button>
-                    <button onClick={editingAppointment ? confirmUpdateAppointment : confirmCreateNoDeposit} disabled={isGenerating || !noDepositFormData.appointmentDate} className="flex-1 px-4 py-3 bg-orange-700 hover:bg-orange-600 text-white rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2">
+                  <div className={`flex gap-3 pt-4 border-t ${isDark ? 'border-[#222]' : 'border-pink-200'}`}>
+                    <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className={`flex-1 px-4 py-3 rounded-lg font-bold text-xs uppercase border ${isDark ? 'bg-[#1a1a1a] hover:bg-[#222] text-gray-300 border-[#333]' : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-pink-200'}`}>ยกเลิก</button>
+                    <button onClick={editingAppointment ? confirmUpdateAppointment : confirmCreateNoDeposit} disabled={isGenerating || !noDepositFormData.appointmentDate || !noDepositFormData.appointmentStartTime || !noDepositFormData.appointmentEndTime || !noDepositFormData.advisor || !noDepositFormData.doctor || !noDepositFormData.assistant || !noDepositFormData.room || !noDepositFormData.source || noDepositFormData.visitPurpose.length === 0} className={`flex-1 px-4 py-3 rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2 ${isDark ? 'bg-orange-700 hover:bg-orange-600 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white'}`}>
                       {isGenerating ? <><Loader2 size={14} className="animate-spin"/> {editingAppointment ? 'อัพเดท...' : 'สร้าง...'}</> : <><CalendarClock size={14}/> {editingAppointment ? 'อัพเดทนัดหมาย' : 'สร้างคิวจอง'}</>}
                     </button>
                   </div>
@@ -5626,7 +5629,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex gap-2">
                       <input readOnly value={schedGenResult.url} className="flex-1 text-xs bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-[var(--tx-body)] font-mono" />
                       <button onClick={() => { navigator.clipboard.writeText(schedGenResult.url); showToast('คัดลอกแล้ว', 2000); }}
-                        className="px-3 py-2 rounded-lg bg-green-950/40 border border-green-900/50 text-green-400 text-xs font-bold hover:bg-green-900/40">Copy</button>
+                        className={`px-3 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40' : 'bg-pink-100 border border-pink-300 text-pink-600 hover:bg-pink-200'}`}>Copy</button>
                     </div>
                   </div>
                   <button onClick={() => { setSchedGenResult(null); setShowScheduleModal(false); }}
@@ -5640,14 +5643,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เดือนเริ่มต้น</label>
                       <select value={schedStartMonth} onChange={e => setSchedStartMonth(e.target.value)}
-                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงทั้งหมด</label>
                       <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
-                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} เดือน</option>)}
                       </select>
                     </div>
@@ -5658,7 +5661,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">ช่วงเวลาละ</label>
                       <select value={schedSlotDuration} onChange={e => setSchedSlotDuration(Number(e.target.value))}
-                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {[15,30,45,60,75,90,105,120].map(n => <option key={n} value={n}>{n >= 60 ? `${n/60} ชม.${n%60 ? ` ${n%60} นาที` : ''}` : `${n} นาที`}</option>)}
                       </select>
                     </div>
@@ -5676,7 +5679,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div>
                       <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เลือกแพทย์</label>
                       <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
                         {practitioners.filter(p => p.role === 'doctor').map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
@@ -5693,7 +5696,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {[['today', 'วันนี้เป็นต้นไป'], ['tomorrow', 'พรุ่งนี้เป็นต้นไป']].map(([val, label]) => (
                         <button key={val} onClick={() => setSchedShowFrom(val)}
                           className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${schedShowFrom === val
-                            ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                            ? (isDark ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-pink-100 border-pink-400 text-pink-700')
                             : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>
                           {label}
                         </button>
@@ -5722,7 +5725,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div>
                         <label className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
                         <select value={validDay} onChange={e => { const d = Number(e.target.value); setSchedEndDay(`${lastMoStr}-${String(d).padStart(2, '0')}`); }}
-                          className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] [color-scheme:dark]">
+                          className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                           {dayOptions.map(d => <option key={d} value={d}>{d} {thaiMo[lastMo.getMonth()]} {lastMo.getFullYear() + 543}</option>)}
                         </select>
                       </div>
@@ -5731,7 +5734,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* Gen button */}
                   <button onClick={handleGenScheduleLink} disabled={schedGenLoading}
-                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-600 hover:bg-green-700 text-white shadow-[0_0_20px_rgba(22,163,74,0.3)]'}`}>
+                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? (isDark ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-100 border border-green-300 text-green-600 opacity-70') : (isDark ? 'bg-green-600 hover:bg-green-700 text-white shadow-[0_0_20px_rgba(22,163,74,0.3)]' : 'bg-pink-500 hover:bg-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]')}`}>
                     {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
                   </button>
                 </div>
