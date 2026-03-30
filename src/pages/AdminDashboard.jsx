@@ -5140,19 +5140,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       })()}
 
       {/* Delete Modal */}
-      {sessionToDelete && (
+      {sessionToDelete && (() => {
+        const delSession = sessions.find(s => s.id === sessionToDelete) || noDepositSessions.find(s => s.id === sessionToDelete) || depositSessions.find(s => s.id === sessionToDelete);
+        const isServiceDone = delSession?.patientData && delSession?.opdRecordedAt && delSession?.brokerStatus === 'done';
+        return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className="bg-[#0a0a0a] rounded-xl border border-red-900/50 w-full max-w-sm overflow-hidden p-6 text-center" style={{boxShadow: `0 0 40px rgba(${acRgb},0.15)`}}>
-            <div className="w-16 h-16 bg-red-950/50 text-red-500 rounded-full border border-red-900/50 flex items-center justify-center mx-auto mb-4" style={{boxShadow: '0 0 15px rgba(220,38,38,0.4)'}}><Trash2 size={24} /></div>
-            <h3 className="text-base sm:text-lg font-black text-white mb-2">ยืนยันการลบข้อมูล?</h3>
-            <p className="text-gray-500 mb-6 text-xs leading-relaxed">กำลังลบข้อมูลคิว <br/><span className="font-mono text-sm" style={{color: ac}}>{sessionToDelete}</span><br/>ข้อมูลนี้จะไม่สามารถกู้คืนได้</p>
+          <div className={`bg-[#0a0a0a] rounded-xl border w-full max-w-sm overflow-hidden p-6 text-center ${isServiceDone ? 'border-emerald-900/50' : 'border-red-900/50'}`} style={{boxShadow: `0 0 40px rgba(${acRgb},0.15)`}}>
+            <div className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto mb-4 ${isServiceDone ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50'}`} style={{boxShadow: isServiceDone ? '0 0 15px rgba(16,185,129,0.4)' : '0 0 15px rgba(220,38,38,0.4)'}}>{isServiceDone ? <CheckCircle2 size={24} /> : <Trash2 size={24} />}</div>
+            <h3 className="text-base sm:text-lg font-black text-white mb-2">{isServiceDone ? 'ลูกค้ามารับบริการเรียบร้อย?' : 'ยืนยันการลบข้อมูล?'}</h3>
+            <p className="text-gray-500 mb-6 text-xs leading-relaxed">{isServiceDone
+              ? <>จบบริการและย้ายไปประวัติ<br/><span className="font-mono text-sm text-emerald-400">{delSession?.sessionName || sessionToDelete}</span></>
+              : <>กำลังลบข้อมูลคิว <br/><span className="font-mono text-sm" style={{color: ac}}>{sessionToDelete}</span><br/>ข้อมูลนี้จะไม่สามารถกู้คืนได้</>
+            }</p>
             <div className="flex gap-3">
               <button onClick={() => setSessionToDelete(null)} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded font-bold text-xs border border-[#333]">ยกเลิก</button>
-              <button onClick={() => deleteSession(sessionToDelete)} className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-xs shadow-[0_0_15px_rgba(220,38,38,0.3)]">ยืนยันการลบ</button>
+              <button onClick={() => deleteSession(sessionToDelete)} className={`flex-1 px-4 py-3 text-white rounded font-bold text-xs ${isServiceDone ? 'bg-emerald-600 hover:bg-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-600 hover:bg-red-700 shadow-[0_0_15px_rgba(220,38,38,0.3)]'}`}>{isServiceDone ? 'ยืนยัน' : 'ยืนยันการลบ'}</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Schedule Link Modal ── */}
       {showScheduleModal && (() => {
