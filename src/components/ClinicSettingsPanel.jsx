@@ -472,7 +472,13 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                   const opts = res.options || {};
                   const docs = (opts.doctors || []).map(d => ({ id: Number(d.value), name: d.label, role: 'doctor' }));
                   const assts = (opts.assistants || []).map(d => ({ id: Number(d.value), name: d.label, role: 'assistant' }));
-                  const fetched = [...docs, ...assts];
+                  // Deduplicate by id (same person may appear in both lists)
+                  const seenIds = new Set();
+                  const fetched = [...docs, ...assts].filter(p => {
+                    if (seenIds.has(p.id)) return false;
+                    seenIds.add(p.id);
+                    return true;
+                  });
                   // Merge: keep existing roles for known ids
                   const existingMap = new Map(practitioners.map(p => [p.id, p]));
                   const merged = fetched.map(f => {
