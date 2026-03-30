@@ -260,7 +260,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       }
     }
 
-    // Validate ID card / passport
+    // Validate ID card / passport (required for intake/deposit)
+    if (isIntake && !formData.idCard) {
+      alert(language === 'en' ? 'Please enter your passport number.' : 'กรุณากรอกเลขบัตรประชาชน');
+      return;
+    }
     if (formData.idCard) {
       if (language === 'en') {
         // Passport: 5-20 alphanumeric chars
@@ -677,13 +681,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               {(!isFollowUp && !isCustom) && (
                 <div>
                   <label className={labelClass}>
-                    {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'}
+                    {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'} <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="text"
                     name="idCard"
                     value={formData.idCard || ''}
                     onChange={handleInputChange}
+                    required
                     inputMode={language === 'en' ? 'text' : 'numeric'}
                     placeholder={language === 'en' ? 'e.g. AB1234567' : 'X-XXXX-XXXXX-XX-X'}
                     maxLength={language === 'en' ? 20 : 17}
