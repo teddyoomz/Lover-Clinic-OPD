@@ -81,6 +81,12 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           if (language === 'th' && year < 2400) pd.dobYear = (year + 543).toString();
         }
 
+        // Format stored Thai ID digits → display format X-XXXX-XXXXX-XX-X
+        if (pd.idCard && language === 'th' && /^\d{13}$/.test(pd.idCard)) {
+          const d = pd.idCard;
+          pd.idCard = `${d[0]}-${d.slice(1,5)}-${d.slice(5,10)}-${d.slice(10,12)}-${d[12]}`;
+        }
+
         setFormData(pd);
         if (!originalDataRef.current && !isEditing) originalDataRef.current = { ...pd };
         if (!isEditing) setIsSuccess(true);
@@ -108,6 +114,16 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
     } else if ((name === 'phone' && formData.isInternationalPhone) || (name === 'emergencyPhone' && formData.isInternationalEmergencyPhone)) {
       finalValue = typeof finalValue === 'string' ? finalValue.replace(/\D/g, '') : finalValue;
+    }
+
+    // Format Thai ID card: X-XXXX-XXXXX-XX-X
+    if (name === 'idCard' && language === 'th') {
+      const digits = String(finalValue).replace(/\D/g, '').slice(0, 13);
+      if (digits.length <= 1) finalValue = digits;
+      else if (digits.length <= 5) finalValue = `${digits[0]}-${digits.slice(1)}`;
+      else if (digits.length <= 10) finalValue = `${digits[0]}-${digits.slice(1,5)}-${digits.slice(5)}`;
+      else if (digits.length <= 12) finalValue = `${digits[0]}-${digits.slice(1,5)}-${digits.slice(5,10)}-${digits.slice(10)}`;
+      else finalValue = `${digits[0]}-${digits.slice(1,5)}-${digits.slice(5,10)}-${digits.slice(10,12)}-${digits[12]}`;
     }
 
     // Enforce language-specific input for name fields
@@ -206,7 +222,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       const b = Array.isArray(newData[f]) ? JSON.stringify(newData[f]) : String(newData[f] ?? '');
       return a !== b;
     });
-    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address','province','district','subDistrict','postalCode','nationality','nationalityCountry'])) sections.push('ข้อมูลส่วนตัว');
+    if (diff(['prefix','firstName','lastName','gender','dobDay','dobMonth','dobYear','age','address','province','district','subDistrict','postalCode','nationality','nationalityCountry','idCard'])) sections.push('ข้อมูลส่วนตัว');
     if (diff(['phone','phoneCountryCode','isInternationalPhone','emergencyName','emergencyPhone','emergencyRelation','emergencyPhoneCountryCode'])) sections.push('ข้อมูลติดต่อ');
     if (diff(['visitReasons','visitReasonOther','hrtGoals','hrtTransType','hrtOtherDetail'])) sections.push('สาเหตุที่มา');
     const healthFields = ['hasAllergies','allergiesDetail','hasUnderlying','currentMedication','pregnancy','ud_hypertension','ud_diabetes','ud_lung','ud_kidney','ud_heart','ud_blood','ud_other','ud_otherDetail'];
@@ -241,6 +257,32 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       if (formData.lastName && !engNameRegex.test(formData.lastName)) {
         alert('Please enter last name in English only.');
         return;
+      }
+    }
+
+    // Validate ID card / passport
+    if (formData.idCard) {
+      if (language === 'en') {
+        // Passport: 5-20 alphanumeric chars
+        const passportRegex = /^[A-Za-z0-9]{5,20}$/;
+        if (!passportRegex.test(formData.idCard)) {
+          alert('Please enter a valid passport number (5-20 alphanumeric characters).');
+          return;
+        }
+      } else {
+        // Thai ID: exactly 13 digits + checksum
+        const digits = formData.idCard.replace(/[\s-]/g, '');
+        if (!/^\d{13}$/.test(digits)) {
+          alert('กรุณากรอกเลขบัตรประชาชน 13 หลักให้ถูกต้อง');
+          return;
+        }
+        let sum = 0;
+        for (let i = 0; i < 12; i++) sum += parseInt(digits[i]) * (13 - i);
+        const checkDigit = (11 - (sum % 11)) % 10;
+        if (checkDigit !== parseInt(digits[12])) {
+          alert('เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ผ่าน)');
+          return;
+        }
       }
     }
 
@@ -296,8 +338,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
     setIsSubmitting(true);
     try {
+      const submitData = { ...formData };
+      // Store Thai ID as digits only (strip dashes)
+      if (submitData.idCard && language === 'th') submitData.idCard = submitData.idCard.replace(/[\s-]/g, '');
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-        status: 'completed', patientData: formData, [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(), isUnread: !suppressNotif
+        status: 'completed', patientData: submitData, [isEditing ? 'updatedAt' : 'submittedAt']: serverTimestamp(), isUnread: !suppressNotif
       });
       // แจ้งเตือน push — fire and forget (ไม่ await เพื่อไม่ block UI)
       const changedSections = isEditing && originalDataRef.current
@@ -734,6 +779,24 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                         )}
                       </div>
                     )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      {language === 'en' ? 'Passport Number' : 'เลขบัตรประชาชน'}
+                    </label>
+                    <input
+                      type="text"
+                      name="idCard"
+                      value={formData.idCard || ''}
+                      onChange={handleInputChange}
+                      inputMode={language === 'en' ? 'text' : 'numeric'}
+                      placeholder={language === 'en' ? 'e.g. AB1234567' : 'X-XXXX-XXXXX-XX-X'}
+                      maxLength={language === 'en' ? 20 : 17}
+                      className={inputClass}
+                    />
+                    <p className="text-[10px] mt-1" style={{ color: 'var(--tx-muted)' }}>
+                      {language === 'en' ? 'Passport number (5-20 characters)' : 'เลขบัตรประชาชน 13 หลัก (ระบบตรวจสอบหลักอัตโนมัติ)'}
+                    </p>
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
