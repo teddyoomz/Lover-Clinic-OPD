@@ -246,6 +246,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     visitPurpose: [],
   });
   const [editingDepositData, setEditingDepositData] = useState(null); // null = not editing, object = editing copy
+
+  // ── No-deposit appointment form state ──
+  const [showNoDepositForm, setShowNoDepositForm] = useState(false);
+  const [noDepositFormData, setNoDepositFormData] = useState({
+    sessionName: '', appointmentDate: todayISO(),
+    appointmentStartTime: '', appointmentEndTime: '',
+    advisor: '', doctor: '', assistant: '', room: '', source: '',
+    visitPurpose: [],
+  });
+  const [editingAppointment, setEditingAppointment] = useState(null); // null = creating, sessionId = editing
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -1236,6 +1246,144 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     });
   };
 
+  // ── No-deposit: create session + ProClinic appointment ──
+  const confirmCreateNoDeposit = async () => {
+    if (!user) return;
+    setIsGenerating(true);
+    setShowNoDepositForm(false);
+
+    const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const sessionId = `ND-${shortId}`;
+
+    const appointmentData = {
+      appointmentDate: noDepositFormData.appointmentDate,
+      appointmentStartTime: noDepositFormData.appointmentStartTime || null,
+      appointmentEndTime: noDepositFormData.appointmentEndTime || null,
+      advisor: noDepositFormData.advisor || null,
+      doctor: noDepositFormData.doctor || null,
+      assistant: noDepositFormData.assistant || null,
+      room: noDepositFormData.room || null,
+      source: noDepositFormData.source || null,
+      visitPurpose: noDepositFormData.visitPurpose || [],
+    };
+
+    const sessionDoc = {
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      patientData: null,
+      isPermanent: true,
+      formType: 'intake',
+      sessionName: noDepositFormData.sessionName?.trim() || 'ลูกค้าจอง',
+      appointmentData,
+      appointmentSyncStatus: 'pending',
+    };
+
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), sessionDoc);
+      setSelectedQR(sessionId);
+      setAdminMode('noDeposit', true);
+
+      // Create appointment in ProClinic (background — don't block UI)
+      const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+      const apptResult = await broker.createAppointment({
+        appointmentDate: noDepositFormData.appointmentDate,
+        appointmentStartTime: noDepositFormData.appointmentStartTime,
+        appointmentEndTime: noDepositFormData.appointmentEndTime,
+        advisor: noDepositFormData.advisor,
+        doctor: noDepositFormData.doctor,
+        assistant: noDepositFormData.assistant,
+        room: noDepositFormData.room,
+        source: noDepositFormData.source,
+        appointmentTo: visitPurposeText,
+        appointmentNote: noDepositFormData.sessionName?.trim() || '',
+      });
+
+      if (apptResult?.success && apptResult.appointmentProClinicId) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          appointmentProClinicId: apptResult.appointmentProClinicId,
+          appointmentSyncStatus: 'done',
+        });
+        showToast('สร้างคิวจองไม่มัดจำ + นัดหมาย ProClinic สำเร็จ!');
+      } else {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          appointmentSyncStatus: 'failed',
+          appointmentSyncError: apptResult?.error || 'Unknown error',
+        });
+        showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมาย ProClinic ไม่สำเร็จ');
+      }
+    } catch (e) {
+      console.error('confirmCreateNoDeposit:', e);
+      showToast('เกิดข้อผิดพลาดในการสร้างคิว');
+    }
+    setIsGenerating(false);
+    setNoDepositFormData({
+      sessionName: '', appointmentDate: todayISO(),
+      appointmentStartTime: '', appointmentEndTime: '',
+      advisor: '', doctor: '', assistant: '', room: '', source: '',
+      visitPurpose: [],
+    });
+  };
+
+  // ── No-deposit: update appointment in ProClinic ──
+  const confirmUpdateAppointment = async () => {
+    if (!user || !editingAppointment) return;
+    setIsGenerating(true);
+
+    const session = noDepositSessions.find(s => s.id === editingAppointment);
+    if (!session) { setIsGenerating(false); return; }
+
+    const appointmentData = {
+      appointmentDate: noDepositFormData.appointmentDate,
+      appointmentStartTime: noDepositFormData.appointmentStartTime || null,
+      appointmentEndTime: noDepositFormData.appointmentEndTime || null,
+      advisor: noDepositFormData.advisor || null,
+      doctor: noDepositFormData.doctor || null,
+      assistant: noDepositFormData.assistant || null,
+      room: noDepositFormData.room || null,
+      source: noDepositFormData.source || null,
+      visitPurpose: noDepositFormData.visitPurpose || [],
+    };
+
+    try {
+      // Update Firestore first
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
+        appointmentData,
+        sessionName: noDepositFormData.sessionName?.trim() || session.sessionName,
+      });
+
+      // Update ProClinic if we have an ID
+      if (session.appointmentProClinicId) {
+        const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+        const apptResult = await broker.updateAppointment(session.appointmentProClinicId, {
+          appointmentDate: noDepositFormData.appointmentDate,
+          appointmentStartTime: noDepositFormData.appointmentStartTime,
+          appointmentEndTime: noDepositFormData.appointmentEndTime,
+          advisor: noDepositFormData.advisor,
+          doctor: noDepositFormData.doctor,
+          assistant: noDepositFormData.assistant,
+          room: noDepositFormData.room,
+          source: noDepositFormData.source,
+          appointmentTo: visitPurposeText,
+          appointmentNote: noDepositFormData.sessionName?.trim() || '',
+        });
+
+        if (apptResult?.success) {
+          showToast('อัพเดทนัดหมาย ProClinic สำเร็จ!');
+        } else {
+          showToast('บันทึกใน app แล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ' + (apptResult?.error || ''));
+        }
+      } else {
+        showToast('บันทึกข้อมูลนัดหมายสำเร็จ');
+      }
+    } catch (e) {
+      console.error('confirmUpdateAppointment:', e);
+      showToast('เกิดข้อผิดพลาด');
+    }
+    setIsGenerating(false);
+    setEditingAppointment(null);
+    setShowNoDepositForm(false);
+  };
+
   const openNamePrompt = (config) => {
     setPendingConfig(config);
     setSessionNameInput('');
@@ -1318,6 +1466,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const handleNoDepositCancel = async (session) => {
     try {
+      // Delete appointment from ProClinic first (if exists)
+      if (session.appointmentProClinicId) {
+        try {
+          await broker.deleteAppointment(session.appointmentProClinicId);
+        } catch (e) { console.warn('deleteAppointment failed (non-blocking):', e); }
+      }
+
       if (session.patientData) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
           isArchived: true, archivedAt: serverTimestamp()
@@ -2876,7 +3031,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <p className="text-xs text-gray-600 italic mt-1">รอลูกค้ากรอกข้อมูล...</p>
                       )}
 
-                      {/* Row 3: Status badges */}
+                      {/* Row 3: Appointment info */}
+                      {session.appointmentData && (
+                        <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] text-gray-400">
+                          <CalendarClock size={11} className="text-orange-400"/>
+                          <span className="font-bold text-orange-300">{session.appointmentData.appointmentDate ? (() => { const [y,m,d] = session.appointmentData.appointmentDate.split('-'); return `${parseInt(d)}/${parseInt(m)}/${parseInt(y)+543}`; })() : '-'}</span>
+                          {session.appointmentData.appointmentStartTime && <span>{session.appointmentData.appointmentStartTime}{session.appointmentData.appointmentEndTime ? ` - ${session.appointmentData.appointmentEndTime}` : ''}</span>}
+                          {session.appointmentData.doctor && depositOptions?.doctors && (() => { const doc = depositOptions.doctors.find(o => o.value === session.appointmentData.doctor); return doc ? <span className="text-gray-500">แพทย์: {doc.label}</span> : null; })()}
+                          {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
+                          {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
+                          {session.appointmentSyncStatus === 'pending' && <span className="text-yellow-500">กำลัง sync...</span>}
+                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: a.visitPurpose || [] }); setShowNoDepositForm(true); }} className="text-orange-400 hover:text-orange-300 font-bold underline underline-offset-2 ml-1">แก้ไขนัด</button>
+                        </div>
+                      )}
+                      {session.appointmentData?.visitPurpose?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {session.appointmentData.visitPurpose.map(v => <span key={v} className="text-[9px] bg-orange-950/30 text-orange-400 border border-orange-900/40 px-1.5 py-0.5 rounded">{v}</span>)}
+                        </div>
+                      )}
+
+                      {/* Row 4: Status badges */}
                       <div className="flex flex-wrap gap-2 mt-3">
                         {isCompleted ? (
                           <span className="text-[10px] bg-green-950/30 text-green-400 border border-green-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CheckCircle2 size={10}/> กรอกแล้ว</span>
@@ -4640,12 +4814,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองมัดจำ</span>
                           <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจอง<br/>ลิงก์ถาวร</span>
                         </button>
-                        <button onClick={() => openNamePrompt({isPermanent: true, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
+                        <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setEditingAppointment(null); setNoDepositFormData({ sessionName: '', appointmentDate: todayISO(), appointmentStartTime: '', appointmentEndTime: '', advisor: '', doctor: '', assistant: '', room: '', source: '', visitPurpose: [] }); setShowNoDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-orange-950/50 text-orange-400' : 'bg-orange-50 text-orange-500'}`}>
                             <UserPlus size={16} />
                           </div>
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองไม่มัดจำ</span>
-                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจองล่วงหน้า<br/>ไม่มีมัดจำ</span>
+                          <span className="text-[10px] text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจองล่วงหน้า<br/>นัดหมาย ProClinic</span>
                         </button>
                      </div>
 
@@ -4845,6 +5019,121 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <button onClick={() => setShowDepositForm(false)} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded-lg font-bold text-xs uppercase border border-[#333]">ยกเลิก</button>
                     <button onClick={confirmCreateDeposit} disabled={isGenerating || !depositFormData.paymentAmount} className="flex-1 px-4 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2">
                       {isGenerating ? <><Loader2 size={14} className="animate-spin"/> สร้าง...</> : <><Banknote size={14}/> สร้างคิวจอง</>}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ No-Deposit Appointment Form Modal ══════════════════════════════════ */}
+      {showNoDepositForm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className="bg-[#0a0a0a] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto border border-orange-900/50 shadow-[0_0_40px_rgba(194,65,12,0.15)] animate-in zoom-in-95">
+            <div className="sticky top-0 bg-[#0a0a0a] border-b border-orange-900/30 p-4 flex items-center justify-between z-10">
+              <h3 className="text-lg font-black text-orange-400 flex items-center gap-2"><UserPlus size={20}/> {editingAppointment ? 'แก้ไขนัดหมาย' : 'จองไม่มัดจำ + นัดหมาย'}</h3>
+              <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className="text-gray-500 hover:text-white"><X size={18}/></button>
+            </div>
+            <div className="p-4 space-y-4">
+              {depositOptionsLoading ? (
+                <div className="text-center py-12"><Loader2 size={32} className="animate-spin text-orange-500 mx-auto mb-3"/><p className="text-gray-500 text-sm">กำลังโหลดข้อมูลจาก ProClinic...</p></div>
+              ) : (
+                <>
+                  {/* ชื่อคิว */}
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ชื่อคิว / Note</label>
+                    <input type="text" value={noDepositFormData.sessionName} onChange={e => setNoDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-600"/>
+                  </div>
+
+                  {/* วันนัด + เวลา */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">วันนัด <span className="text-red-500">*</span></label>
+                      <DatePickerThai value={noDepositFormData.appointmentDate} onChange={v => setNoDepositFormData(p => ({...p, appointmentDate: v}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-orange-600"/>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">เริ่ม</label>
+                        <select value={noDepositFormData.appointmentStartTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-2.5 text-xs outline-none">
+                          <option value="">--</option>
+                          {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">สิ้นสุด</label>
+                        <select value={noDepositFormData.appointmentEndTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-2 py-2.5 text-xs outline-none">
+                          <option value="">--</option>
+                          {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ที่ปรึกษา */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ที่ปรึกษา</label>
+                    <select value={noDepositFormData.advisor} onChange={e => setNoDepositFormData(p => ({...p, advisor: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                      <option value="">-- เลือก --</option>
+                      {(depositOptions?.advisors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* แพทย์ */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">แพทย์</label>
+                    <select value={noDepositFormData.doctor} onChange={e => setNoDepositFormData(p => ({...p, doctor: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                      <option value="">-- เลือก --</option>
+                      {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* ผู้ช่วยแพทย์ */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ผู้ช่วยแพทย์</label>
+                    <select value={noDepositFormData.assistant} onChange={e => setNoDepositFormData(p => ({...p, assistant: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                      <option value="">-- เลือก --</option>
+                      {(depositOptions?.assistants || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* ห้องตรวจ */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ห้องตรวจ</label>
+                    <select value={noDepositFormData.room} onChange={e => setNoDepositFormData(p => ({...p, room: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                      <option value="">-- เลือก --</option>
+                      {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* ช่องทางนัดหมาย */}
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ช่องทางนัดหมาย</label>
+                    <select value={noDepositFormData.source} onChange={e => setNoDepositFormData(p => ({...p, source: e.target.value}))} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-3 py-2.5 text-sm outline-none">
+                      <option value="">-- เลือก --</option>
+                      {(depositOptions?.appointmentChannels || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* นัดมาเพื่อ — visit purpose */}
+                  <div className="border-t border-[#222] pt-4">
+                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-2">นัดมาเพื่อ</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
+                        <button key={r} type="button"
+                          onClick={() => setNoDepositFormData(p => ({...p, visitPurpose: p.visitPurpose.includes(r) ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r]}))}
+                          className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-all ${noDepositFormData.visitPurpose.includes(r) ? 'bg-orange-900/40 border-orange-600 text-orange-300' : 'bg-[#141414] border-[#333] text-gray-500 hover:text-gray-300'}`}
+                        >{r}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <div className="flex gap-3 pt-4 border-t border-[#222]">
+                    <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222] text-gray-300 rounded-lg font-bold text-xs uppercase border border-[#333]">ยกเลิก</button>
+                    <button onClick={editingAppointment ? confirmUpdateAppointment : confirmCreateNoDeposit} disabled={isGenerating || !noDepositFormData.appointmentDate} className="flex-1 px-4 py-3 bg-orange-700 hover:bg-orange-600 text-white rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2">
+                      {isGenerating ? <><Loader2 size={14} className="animate-spin"/> {editingAppointment ? 'อัพเดท...' : 'สร้าง...'}</> : <><CalendarClock size={14}/> {editingAppointment ? 'อัพเดทนัดหมาย' : 'สร้างคิวจอง'}</>}
                     </button>
                   </div>
                 </>
