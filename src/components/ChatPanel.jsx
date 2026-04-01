@@ -361,8 +361,9 @@ export default function ChatPanel({ db, appId, user }) {
       const resolvedAt = new Date();
 
       const firstContactAt = conv.createdAt || conv.lastMessageAt;
-      const responseTimeMs = firstContactAt
-        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
+      const lastCustomerMessageAt = conv.lastMessageAt || now;
+      const responseTimeMs = lastCustomerMessageAt
+        ? resolvedAt.getTime() - new Date(lastCustomerMessageAt).getTime()
         : null;
 
       // Save minimal history record
@@ -372,6 +373,7 @@ export default function ChatPanel({ db, appId, user }) {
         platform: conv.platform,
         lastMessage: conv.lastMessage || '',
         firstContactAt: firstContactAt || now,
+        lastCustomerMessageAt: lastCustomerMessageAt,
         resolvedAt: now,
         resolvedBy: user?.email || user?.uid || 'unknown',
         responseTimeMs: responseTimeMs,
@@ -497,7 +499,9 @@ export default function ChatPanel({ db, appId, user }) {
                       </span>
                     </div>
                     <p className="text-xs text-[var(--tx-muted)] truncate mt-1.5 ml-9">{h.lastMessage}</p>
-                    <div className="flex items-center gap-3 mt-1.5 ml-9 text-[10px] text-[var(--tx-muted)]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 ml-9 text-[10px] text-[var(--tx-muted)]">
+                      <span>ทักครั้งแรก: {h.firstContactAt ? new Date(h.firstContactAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
+                      <span>ข้อความสุดท้าย: {h.lastCustomerMessageAt ? new Date(h.lastCustomerMessageAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
                       <span>ตอบโดย: {h.resolvedBy}</span>
                       {responseMin !== null && (
                         <span className={`flex items-center gap-0.5 font-bold ${responseMin <= 5 ? 'text-green-500' : responseMin <= 30 ? 'text-yellow-500' : 'text-red-500'}`}>
