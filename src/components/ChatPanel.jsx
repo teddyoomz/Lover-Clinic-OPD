@@ -65,11 +65,19 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
     setSaving(true);
     setMsg('');
     try {
+      // Auto-enable if credentials are filled
+      const lineSave = { ...line };
+      if (lineSave.channelAccessToken && lineSave.channelSecret) lineSave.enabled = true;
+      const fbSave = { ...fb };
+      if (fbSave.pageAccessToken && fbSave.appSecret && fbSave.pageId) fbSave.enabled = true;
+
       await setDoc(doc(db, `artifacts/${appId}/public/data/clinic_settings`, 'chat_config'), {
-        line: { ...line },
-        facebook: { ...fb },
+        line: lineSave,
+        facebook: fbSave,
         updatedAt: new Date().toISOString(),
       });
+      setLine(lineSave);
+      setFb(fbSave);
       setMsg('✓ บันทึกสำเร็จ');
     } catch (err) {
       setMsg(`✗ ${err.message}`);
