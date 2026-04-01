@@ -93,7 +93,9 @@ async function apiFetch(endpoint, body, _retried) {
   }
 
   // If server says session expired or needs extension cookies — auto-recover via Cookie Relay
-  if ((data.extensionNeeded || data.sessionExpired) && !_retried) {
+  // Skip auto-recovery for connection test (action=login) — it should report actual status
+  const isConnectionTest = endpoint === 'connection' && body?.action === 'login';
+  if ((data.extensionNeeded || data.sessionExpired) && !_retried && !isConnectionTest) {
     console.log('[broker] Session expired or needs cookies — triggering Cookie Relay auto-recovery');
     // Ensure extension has credentials before auto-login attempt
     await ensureExtensionHasCredentials();
