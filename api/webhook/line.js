@@ -118,7 +118,7 @@ async function processEvent(event, config) {
   });
 
   // Update conversation
-  await firestorePatch(convPath, {
+  const convFields = {
     platform: { stringValue: 'line' },
     odriverId: { stringValue: userId },
     displayName: { stringValue: displayName },
@@ -126,7 +126,12 @@ async function processEvent(event, config) {
     lastMessage: { stringValue: text },
     lastMessageAt: { stringValue: now },
     unreadCount: { integerValue: String(currentUnread + 1) },
-  });
+  };
+  // Only set createdAt on brand-new conversations
+  if (!existingConv?.fields) {
+    convFields.createdAt = { stringValue: now };
+  }
+  await firestorePatch(convPath, convFields);
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────

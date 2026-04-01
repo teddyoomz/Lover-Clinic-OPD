@@ -2541,7 +2541,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {adminMode === 'chat' ? (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6">
-          <ChatPanel db={db} appId={appId} />
+          <ChatPanel db={db} appId={appId} user={user} />
         </div>
       ) : adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, getDocs, addDoc, limit as firestoreLimit } from 'firebase/firestore';
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
-  Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon
+  Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon,
+  CheckCircle2, History, Clock
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
@@ -202,10 +203,11 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
 
 // ─── Chat Detail View ──────────────────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack }) {
+function ChatDetailView({ db, appId, conversation, onBack, user }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -255,6 +257,50 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
     setSending(false);
   }
 
+  async function handleResolve() {
+    if (resolving) return;
+    if (!confirm('ยืนยันว่าตอบเรียบร้อยแล้ว? แชทนี้จะถูกย้ายไปประวัติ')) return;
+    setResolving(true);
+    try {
+      const convId = conversation.id;
+      const now = new Date().toISOString();
+      const resolvedAt = new Date();
+
+      // Calculate response time from createdAt (or fallback to earliest message)
+      const firstContactAt = conversation.createdAt || conversation.lastMessageAt;
+      const responseTimeMs = firstContactAt
+        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
+        : null;
+
+      // 1. Save minimal history record
+      const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
+      await addDoc(historyRef, {
+        displayName: conversation.displayName || 'ไม่ทราบชื่อ',
+        platform: conversation.platform,
+        lastMessage: conversation.lastMessage || '',
+        firstContactAt: firstContactAt || now,
+        resolvedAt: now,
+        resolvedBy: user?.email || user?.uid || 'unknown',
+        responseTimeMs: responseTimeMs,
+      });
+
+      // 2. Delete all messages in subcollection
+      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
+      const msgsSnap = await getDocs(msgsRef);
+      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // 3. Delete the conversation document
+      await deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_conversations`, convId));
+
+      // 4. Navigate back to list
+      onBack();
+    } catch (err) {
+      alert(`เกิดข้อผิดพลาด: ${err.message}`);
+    } finally {
+      setResolving(false);
+    }
+  }
+
   function formatTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -279,6 +325,12 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
+        <button onClick={handleResolve} disabled={resolving}
+          className="ml-auto px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
+          {resolving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+          <span className="hidden sm:inline">ตอบเรียบร้อยแล้ว</span>
+          <span className="sm:hidden">เสร็จ</span>
+        </button>
       </div>
 
       {/* Messages */}
@@ -320,10 +372,12 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 
 // ─── Main ChatPanel ────────────────────────────────────────────────────────
 
-export default function ChatPanel({ db, appId }) {
+export default function ChatPanel({ db, appId, user }) {
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
 
@@ -344,6 +398,16 @@ export default function ChatPanel({ db, appId }) {
       setConversations(convs);
     });
   }, [db, appId]);
+
+  // Listen to chat history (only when viewing)
+  useEffect(() => {
+    if (!showHistory) return;
+    const histRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
+    const q = query(histRef, orderBy('resolvedAt', 'desc'), firestoreLimit(200));
+    return onSnapshot(q, snap => {
+      setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, [showHistory, db, appId]);
 
   const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
   const fbUnread = conversations.filter(c => c.platform === 'facebook' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
@@ -367,7 +431,7 @@ export default function ChatPanel({ db, appId }) {
   if (selectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} />
+        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} user={user} />
       </div>
     );
   }
@@ -401,14 +465,66 @@ export default function ChatPanel({ db, appId }) {
             )}
           </div>
         </div>
-        <button onClick={() => setShowSettings(true)}
-          className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors" title="ตั้งค่าการเชื่อมต่อ">
-          <Settings size={16} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setShowHistory(!showHistory)}
+            className={`p-2 rounded-lg border border-[var(--bd)] transition-colors ${showHistory ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)]'}`}
+            title="ประวัติแชท">
+            <History size={16} />
+          </button>
+          <button onClick={() => setShowSettings(true)}
+            className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors" title="ตั้งค่าการเชื่อมต่อ">
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
 
+      {/* History view */}
+      {showHistory && (
+        <div>
+          {history.length === 0 ? (
+            <div className="text-center py-12">
+              <History size={28} className="text-[var(--tx-muted)] mx-auto mb-3" />
+              <p className="text-sm text-[var(--tx-muted)]">ยังไม่มีประวัติ</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {history.map(h => {
+                const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
+                const platformColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
+                return (
+                  <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: platformColor }}>
+                          {(h.displayName || '?')[0]}
+                        </div>
+                        <span className="text-sm font-bold text-[var(--tx-heading)]">{h.displayName}</span>
+                        <PlatformBadge platform={h.platform} />
+                      </div>
+                      <span className="text-[9px] text-[var(--tx-muted)]">
+                        {h.resolvedAt ? new Date(h.resolvedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--tx-muted)] truncate mt-1.5 ml-9">{h.lastMessage}</p>
+                    <div className="flex items-center gap-3 mt-1.5 ml-9 text-[10px] text-[var(--tx-muted)]">
+                      <span>ตอบโดย: {h.resolvedBy}</span>
+                      {responseMin !== null && (
+                        <span className={`flex items-center gap-0.5 font-bold ${responseMin <= 5 ? 'text-green-500' : responseMin <= 30 ? 'text-yellow-500' : 'text-red-500'}`}>
+                          <Clock size={10} />
+                          {responseMin < 1 ? '< 1 นาที' : responseMin < 60 ? `${responseMin} นาที` : `${Math.floor(responseMin / 60)} ชม. ${responseMin % 60} นาที`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Empty state / not configured */}
-      {noPlatformConfigured && (
+      {!showHistory && noPlatformConfigured && (
         <div className="text-center py-12">
           <div className="w-16 h-16 rounded-full bg-[var(--bg-hover)] flex items-center justify-center mx-auto mb-4">
             <MessageCircle size={28} className="text-[var(--tx-muted)]" />
@@ -422,7 +538,7 @@ export default function ChatPanel({ db, appId }) {
         </div>
       )}
 
-      {!noPlatformConfigured && filtered.length === 0 && (
+      {!showHistory && !noPlatformConfigured && filtered.length === 0 && (
         <div className="text-center py-12">
           <MessageCircle size={28} className="text-[var(--tx-muted)] mx-auto mb-3" />
           <p className="text-sm text-[var(--tx-muted)]">ยังไม่มีแชท</p>
@@ -431,7 +547,7 @@ export default function ChatPanel({ db, appId }) {
       )}
 
       {/* Conversation list */}
-      {filtered.length > 0 && (
+      {!showHistory && filtered.length > 0 && (
         <div className="space-y-1">
           {filtered.map(conv => {
             const platformColor = conv.platform === 'line' ? LINE_COLOR : FB_COLOR;
