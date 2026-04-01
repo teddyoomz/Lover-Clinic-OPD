@@ -365,9 +365,23 @@ export default function ChatPanel({ db, appId, user }) {
       const responseTimeMs = lastCustomerMessageAt
         ? resolvedAt.getTime() - new Date(lastCustomerMessageAt).getTime()
         : null;
-      const totalWaitTimeMs = firstContactAt
-        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
-        : null;
+
+      // Read messages to calculate max gap between customer messages
+      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
+      const msgsSnap = await getDocs(msgsRef);
+      const customerTimestamps = msgsSnap.docs
+        .map(d => d.data())
+        .filter(m => m.isFromCustomer && m.timestamp)
+        .map(m => new Date(m.timestamp).getTime())
+        .sort((a, b) => a - b);
+      let maxCustomerGapMs = null;
+      if (customerTimestamps.length >= 2) {
+        maxCustomerGapMs = 0;
+        for (let i = 1; i < customerTimestamps.length; i++) {
+          const gap = customerTimestamps[i] - customerTimestamps[i - 1];
+          if (gap > maxCustomerGapMs) maxCustomerGapMs = gap;
+        }
+      }
 
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
@@ -380,12 +394,10 @@ export default function ChatPanel({ db, appId, user }) {
         resolvedAt: now,
         resolvedBy: user?.email || user?.uid || 'unknown',
         responseTimeMs: responseTimeMs,
-        totalWaitTimeMs: totalWaitTimeMs,
+        maxCustomerGapMs: maxCustomerGapMs,
       });
 
       // Delete all messages in subcollection
-      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
-      const msgsSnap = await getDocs(msgsRef);
       await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
 
       // Delete the conversation document
@@ -487,10 +499,9 @@ export default function ChatPanel({ db, appId, user }) {
             <div className="space-y-1.5">
               {history.map(h => {
                 const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
-                const totalMin = h.totalWaitTimeMs ? Math.round(h.totalWaitTimeMs / 60000) : null;
+                const gapMin = h.maxCustomerGapMs ? Math.round(h.maxCustomerGapMs / 60000) : null;
                 const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
                 const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-yellow-500' : 'text-red-500';
-                const colorForTotal = (min) => min <= 10 ? 'text-green-500' : min <= 15 ? 'text-yellow-500' : 'text-red-500';
                 const fmtMin = (min) => min < 1 ? '< 1 นาที' : min < 60 ? `${min} นาที` : `${Math.floor(min / 60)} ชม. ${min % 60} นาที`;
                 return (
                   <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
@@ -518,9 +529,9 @@ export default function ChatPanel({ db, appId, user }) {
                           <Clock size={10} /> ตอบล่าสุด: {fmtMin(responseMin)}
                         </span>
                       )}
-                      {totalMin !== null && (
-                        <span className={`flex items-center gap-0.5 font-bold ${colorForTotal(totalMin)}`}>
-                          <Clock size={10} /> รวมทั้งหมด: {fmtMin(totalMin)}
+                      {gapMin !== null && (
+                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(gapMin)}`}>
+                          <Clock size={10} /> ช่วงห่างสูงสุด: {fmtMin(gapMin)}
                         </span>
                       )}
                     </div>
