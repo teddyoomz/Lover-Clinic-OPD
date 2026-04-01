@@ -168,6 +168,51 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
   const { totalUnread: chatUnread } = useChatUnread(db, appId);
 
+  // ── Admin presence tracking ──
+  const [onlineAdmins, setOnlineAdmins] = useState([]);
+  const tabIdRef = useRef(`${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+
+  // Heartbeat: write presence doc every 30s, delete on unmount
+  useEffect(() => {
+    const presenceCol = `artifacts/${appId}/public/data/admin_presence`;
+    const myDocRef = doc(db, presenceCol, tabIdRef.current);
+    const writePresence = () => setDoc(myDocRef, {
+      userId: user?.uid || 'unknown',
+      email: user?.email || '',
+      lastSeen: Date.now(),
+      userAgent: navigator.userAgent.slice(0, 80),
+    });
+    writePresence();
+    const interval = setInterval(writePresence, 30000);
+    const cleanup = () => { deleteDoc(myDocRef).catch(() => {}); };
+    window.addEventListener('beforeunload', cleanup);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', cleanup);
+      cleanup();
+    };
+  }, [db, appId, user]);
+
+  // Listen to all presence docs
+  useEffect(() => {
+    const presenceCol = collection(db, `artifacts/${appId}/public/data/admin_presence`);
+    return onSnapshot(presenceCol, snap => {
+      const now = Date.now();
+      const staleMs = 60000; // 60s = offline
+      const active = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.lastSeen && (now - d.lastSeen) < staleMs);
+      setOnlineAdmins(active);
+      // Clean up stale docs silently
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.lastSeen || (now - data.lastSeen) >= staleMs) {
+          deleteDoc(d.ref).catch(() => {});
+        }
+      });
+    });
+  }, [db, appId]);
+
   // ── Appointment calendar state ──
   const [apptMonth, setApptMonth] = useState(() => {
     const now = new Date();
@@ -2364,6 +2409,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </div>
                 </div>
               )}
+            </div>
+            {/* Online admins indicator */}
+            <div className="relative group">
+              <div className="flex items-center gap-1 px-2 py-1.5 sm:py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span className="text-[10px] sm:text-xs font-bold text-green-500">{onlineAdmins.length}</span>
+              </div>
+              {/* Tooltip on hover — show who's online */}
+              <div className="absolute right-0 top-full mt-1 w-48 bg-[#111] border border-[#333] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-2">แอดมินออนไลน์</p>
+                {onlineAdmins.map(a => (
+                  <div key={a.id} className="flex items-center gap-2 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span className="text-[11px] text-gray-300 truncate">{a.email || 'Unknown'}</span>
+                    {a.id === tabIdRef.current && <span className="text-[8px] text-green-600 font-bold">(คุณ)</span>}
+                  </div>
+                ))}
+              </div>
             </div>
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
             <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 sm:p-2.5 rounded-lg transition-all" title="ออกจากระบบ">
