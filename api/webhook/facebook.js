@@ -16,18 +16,27 @@ function verifySignature(rawBody, signature, appSecret) {
 }
 
 async function getChatConfig() {
-  const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
-  if (!res.ok) return null;
-  const doc = await res.json();
-  if (!doc.fields?.facebook?.mapValue?.fields) return null;
-  const f = doc.fields.facebook.mapValue.fields;
-  return {
-    pageAccessToken: f.pageAccessToken?.stringValue || '',
-    appSecret: f.appSecret?.stringValue || '',
-    verifyToken: f.verifyToken?.stringValue || '',
-    pageId: f.pageId?.stringValue || '',
-    enabled: f.enabled?.booleanValue === true,
-  };
+  try {
+    const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
+    if (!res.ok) { console.log('[fb-webhook] getChatConfig: Firestore fetch failed', res.status); return null; }
+    const doc = await res.json();
+    // Try mapValue format (saved via Firebase SDK from client)
+    const fbMap = doc.fields?.facebook?.mapValue?.fields;
+    if (fbMap) {
+      return {
+        pageAccessToken: fbMap.pageAccessToken?.stringValue || '',
+        appSecret: fbMap.appSecret?.stringValue || '',
+        verifyToken: fbMap.verifyToken?.stringValue || '',
+        pageId: fbMap.pageId?.stringValue || '',
+        enabled: fbMap.enabled?.booleanValue === true,
+      };
+    }
+    console.log('[fb-webhook] getChatConfig: no facebook mapValue found, fields:', JSON.stringify(doc.fields).slice(0, 200));
+    return null;
+  } catch (e) {
+    console.error('[fb-webhook] getChatConfig error:', e.message);
+    return null;
+  }
 }
 
 async function getFBProfile(psid, accessToken) {
@@ -140,14 +149,19 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
+  console.log(`[fb-webhook] ${req.method} received`);
+
   // Facebook webhook verification (GET)
   if (req.method === 'GET') {
-    const config = await getChatConfig();
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
+    console.log(`[fb-webhook] Verify: mode=${mode} token=${token} challenge=${challenge?.slice(0, 20)}`);
 
-    if (mode === 'subscribe' && token === config?.verifyToken) {
+    const config = await getChatConfig();
+    console.log(`[fb-webhook] Config verifyToken=${config?.verifyToken} match=${token === config?.verifyToken}`);
+
+    if (mode === 'subscribe' && config?.verifyToken && token === config.verifyToken) {
       console.log('[fb-webhook] Verification successful');
       return res.status(200).send(challenge);
     }
@@ -157,19 +171,23 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const config = await getChatConfig();
-  if (!config || !config.enabled || !config.appSecret) {
+  if (!config || !config.appSecret) {
+    console.log('[fb-webhook] Not configured — config:', !!config, 'appSecret:', !!config?.appSecret);
     return res.status(200).json({ message: 'Facebook chat not configured' });
   }
 
-  // Verify signature
+  // Verify signature (skip if no signature header — Facebook sometimes omits in test)
   const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
   const signature = req.headers['x-hub-signature-256'];
-  if (signature && !verifySignature(rawBody, signature, config.appSecret)) {
-    console.warn('[fb-webhook] Invalid signature');
-    return res.status(401).json({ error: 'Invalid signature' });
+  if (signature) {
+    if (!verifySignature(rawBody, signature, config.appSecret)) {
+      console.warn('[fb-webhook] Invalid signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  console.log(`[fb-webhook] POST body entries=${body.entry?.length || 0}`);
 
   // Process messaging entries
   const entries = body.entry || [];
