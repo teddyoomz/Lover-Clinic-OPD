@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, getDocs, addDoc, limit as firestoreLimit } from 'firebase/firestore';
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
@@ -12,30 +12,39 @@ import { app } from '../firebase.js';
 const LINE_COLOR = '#06C755';
 const FB_COLOR = '#0084FF';
 
-// ─── Chat API helpers ──────────────────────────────────────────────────────
-
-async function chatApiFetch(endpoint, body) {
-  const auth = getAuth(app);
-  const token = await auth.currentUser?.getIdToken();
-  if (!token) return { success: false, error: 'Not logged in' };
-  const res = await fetch(`/api/webhook/${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
-  return res.json();
-}
-
-function sendMessage(platform, odriverId, text, conversationId) {
-  return chatApiFetch('send', { platform, odriverId, text, conversationId });
-}
-
 // ─── Platform badge ────────────────────────────────────────────────────────
 
 function PlatformBadge({ platform }) {
   if (platform === 'line') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: LINE_COLOR + '22', color: LINE_COLOR }}>LINE</span>;
   if (platform === 'facebook') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: FB_COLOR + '22', color: FB_COLOR }}>FB</span>;
   return null;
+}
+
+// ─── Double beep using Web Audio API ──────────────────────────────────────
+
+function playDoubleBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(startTime) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+      osc.start(startTime);
+      osc.stop(startTime + 0.15);
+    }
+    const now = ctx.currentTime;
+    beep(now);
+    beep(now + 0.25);
+    // Close context after sounds finish
+    setTimeout(() => ctx.close().catch(() => {}), 600);
+  } catch (e) {
+    // AudioContext not available
+  }
 }
 
 // ─── Connection Settings Sub-panel ─────────────────────────────────────────
@@ -66,7 +75,6 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
     setSaving(true);
     setMsg('');
     try {
-      // Auto-enable if credentials are filled
       const lineSave = { ...line };
       if (lineSave.channelAccessToken && lineSave.channelSecret) lineSave.enabled = true;
       const fbSave = { ...fb };
@@ -201,15 +209,11 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
   );
 }
 
-// ─── Chat Detail View ──────────────────────────────────────────────────────
+// ─── Chat Detail View (read-only) ─────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack, user }) {
+function ChatDetailView({ db, appId, conversation, onBack }) {
   const [messages, setMessages] = useState([]);
-  const [newMsg, setNewMsg] = useState('');
-  const [sending, setSending] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
 
   // Listen to messages
   useEffect(() => {
@@ -243,64 +247,6 @@ function ChatDetailView({ db, appId, conversation, onBack, user }) {
     updateDoc(convRef, { unreadCount: 0 }).catch(() => {});
   }, [messages.length, conversation?.id, db, appId]);
 
-  async function handleSend() {
-    const text = newMsg.trim();
-    if (!text || sending) return;
-    setSending(true);
-    const result = await sendMessage(conversation.platform, conversation.odriverId, text, conversation.id);
-    if (result.success) {
-      setNewMsg('');
-      inputRef.current?.focus();
-    } else {
-      alert(`ส่งไม่สำเร็จ: ${result.error}`);
-    }
-    setSending(false);
-  }
-
-  async function handleResolve() {
-    if (resolving) return;
-    if (!confirm('ยืนยันว่าตอบเรียบร้อยแล้ว? แชทนี้จะถูกย้ายไปประวัติ')) return;
-    setResolving(true);
-    try {
-      const convId = conversation.id;
-      const now = new Date().toISOString();
-      const resolvedAt = new Date();
-
-      // Calculate response time from createdAt (or fallback to earliest message)
-      const firstContactAt = conversation.createdAt || conversation.lastMessageAt;
-      const responseTimeMs = firstContactAt
-        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
-        : null;
-
-      // 1. Save minimal history record
-      const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
-      await addDoc(historyRef, {
-        displayName: conversation.displayName || 'ไม่ทราบชื่อ',
-        platform: conversation.platform,
-        lastMessage: conversation.lastMessage || '',
-        firstContactAt: firstContactAt || now,
-        resolvedAt: now,
-        resolvedBy: user?.email || user?.uid || 'unknown',
-        responseTimeMs: responseTimeMs,
-      });
-
-      // 2. Delete all messages in subcollection
-      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
-      const msgsSnap = await getDocs(msgsRef);
-      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
-
-      // 3. Delete the conversation document
-      await deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_conversations`, convId));
-
-      // 4. Navigate back to list
-      onBack();
-    } catch (err) {
-      alert(`เกิดข้อผิดพลาด: ${err.message}`);
-    } finally {
-      setResolving(false);
-    }
-  }
-
   function formatTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -325,12 +271,7 @@ function ChatDetailView({ db, appId, conversation, onBack, user }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <button onClick={handleResolve} disabled={resolving}
-          className="ml-auto px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
-          {resolving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-          <span className="hidden sm:inline">ตอบเรียบร้อยแล้ว</span>
-          <span className="sm:hidden">เสร็จ</span>
-        </button>
+        <span className="text-[10px] text-[var(--tx-muted)]">อ่านอย่างเดียว</span>
       </div>
 
       {/* Messages */}
@@ -353,18 +294,9 @@ function ChatDetailView({ db, appId, conversation, onBack, user }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-[var(--bd)]">
-        <div className="flex items-center gap-2">
-          <input ref={inputRef} value={newMsg} onChange={e => setNewMsg(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="พิมพ์ข้อความ..." className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-full px-4 py-2.5 outline-none text-sm focus:border-[var(--accent)]" />
-          <button onClick={handleSend} disabled={!newMsg.trim() || sending}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40"
-            style={{ backgroundColor: platformColor }}>
-            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
-        </div>
+      {/* Read-only notice */}
+      <div className="p-3 border-t border-[var(--bd)] text-center">
+        <p className="text-[10px] text-[var(--tx-muted)]">ตอบแชทผ่านแอป LINE / Facebook Messenger โดยตรง</p>
       </div>
     </div>
   );
@@ -380,6 +312,10 @@ export default function ChatPanel({ db, appId, user }) {
   const [history, setHistory] = useState([]);
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
+  const [resolvingId, setResolvingId] = useState(null);
+  const isPlayingRef = useRef(false);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
 
   // Listen to chat config
   useEffect(() => {
@@ -389,10 +325,10 @@ export default function ChatPanel({ db, appId, user }) {
     });
   }, [db, appId]);
 
-  // Listen to conversations
+  // Listen to conversations — sorted oldest first (admins respond top-to-bottom)
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
-    const q = query(convsRef, orderBy('lastMessageAt', 'desc'));
+    const q = query(convsRef, orderBy('lastMessageAt', 'asc'));
     return onSnapshot(q, snap => {
       const convs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setConversations(convs);
@@ -409,6 +345,62 @@ export default function ChatPanel({ db, appId, user }) {
     });
   }, [showHistory, db, appId]);
 
+  // ─── Alert sound every 30s when there are unresolved conversations ─────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (conversationsRef.current.length > 0 && !isPlayingRef.current) {
+        isPlayingRef.current = true;
+        playDoubleBeep();
+        setTimeout(() => { isPlayingRef.current = false; }, 600);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ─── Resolve handler (no confirm, immediate) ─────────────────────────
+  const handleResolve = useCallback(async (conv, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    if (resolvingId) return;
+    setResolvingId(conv.id);
+    try {
+      const convId = conv.id;
+      const now = new Date().toISOString();
+      const resolvedAt = new Date();
+
+      const firstContactAt = conv.createdAt || conv.lastMessageAt;
+      const responseTimeMs = firstContactAt
+        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
+        : null;
+
+      // Save minimal history record
+      const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
+      await addDoc(historyRef, {
+        displayName: conv.displayName || 'ไม่ทราบชื่อ',
+        platform: conv.platform,
+        lastMessage: conv.lastMessage || '',
+        firstContactAt: firstContactAt || now,
+        resolvedAt: now,
+        resolvedBy: user?.email || user?.uid || 'unknown',
+        responseTimeMs: responseTimeMs,
+      });
+
+      // Delete all messages in subcollection
+      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
+      const msgsSnap = await getDocs(msgsRef);
+      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete the conversation document
+      await deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_conversations`, convId));
+
+      // Switch to history view
+      setShowHistory(true);
+    } catch (err) {
+      alert(`เกิดข้อผิดพลาด: ${err.message}`);
+    } finally {
+      setResolvingId(null);
+    }
+  }, [db, appId, user, resolvingId]);
+
   const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
   const fbUnread = conversations.filter(c => c.platform === 'facebook' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
 
@@ -417,6 +409,12 @@ export default function ChatPanel({ db, appId, user }) {
   const lineEnabled = chatConfig?.line?.enabled;
   const fbEnabled = chatConfig?.facebook?.enabled;
   const noPlatformConfigured = !lineEnabled && !fbEnabled;
+
+  function formatContactTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+  }
 
   // ─── Settings view ─────────────────────────────────────────────────────
   if (showSettings) {
@@ -427,11 +425,11 @@ export default function ChatPanel({ db, appId, user }) {
     );
   }
 
-  // ─── Chat detail view ─────────────────────────────────────────────────
+  // ─── Chat detail view (read-only) ─────────────────────────────────────
   if (selectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} user={user} />
+        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} />
       </div>
     );
   }
@@ -445,21 +443,21 @@ export default function ChatPanel({ db, appId, user }) {
           <h2 className="text-lg font-bold text-[var(--tx-heading)]">แชท</h2>
           {/* Platform filter pills */}
           <div className="flex items-center gap-1">
-            <button onClick={() => setFilter('all')}
-              className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)]'}`}>
+            <button onClick={() => { setFilter('all'); setShowHistory(false); }}
+              className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'all' && !showHistory ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)]'}`}>
               ทั้งหมด {lineUnread + fbUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{lineUnread + fbUnread}</span>}
             </button>
             {lineEnabled && (
-              <button onClick={() => setFilter('line')}
-                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'line' ? 'text-white' : 'text-[var(--tx-muted)]'}`}
-                style={filter === 'line' ? { backgroundColor: LINE_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
+              <button onClick={() => { setFilter('line'); setShowHistory(false); }}
+                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'line' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
+                style={filter === 'line' && !showHistory ? { backgroundColor: LINE_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
                 LINE {lineUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{lineUnread}</span>}
               </button>
             )}
             {fbEnabled && (
-              <button onClick={() => setFilter('facebook')}
-                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'facebook' ? 'text-white' : 'text-[var(--tx-muted)]'}`}
-                style={filter === 'facebook' ? { backgroundColor: FB_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
+              <button onClick={() => { setFilter('facebook'); setShowHistory(false); }}
+                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'facebook' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
+                style={filter === 'facebook' && !showHistory ? { backgroundColor: FB_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
                 FB {fbUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{fbUnread}</span>}
               </button>
             )}
@@ -490,12 +488,12 @@ export default function ChatPanel({ db, appId, user }) {
             <div className="space-y-1.5">
               {history.map(h => {
                 const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
-                const platformColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
+                const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
                 return (
                   <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: platformColor }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: pColor }}>
                           {(h.displayName || '?')[0]}
                         </div>
                         <span className="text-sm font-bold text-[var(--tx-heading)]">{h.displayName}</span>
@@ -550,39 +548,47 @@ export default function ChatPanel({ db, appId, user }) {
       {!showHistory && filtered.length > 0 && (
         <div className="space-y-1">
           {filtered.map(conv => {
-            const platformColor = conv.platform === 'line' ? LINE_COLOR : FB_COLOR;
+            const pColor = conv.platform === 'line' ? LINE_COLOR : FB_COLOR;
             const hasUnread = conv.unreadCount > 0;
+            const isResolving = resolvingId === conv.id;
+            const contactTime = conv.createdAt || conv.lastMessageAt;
             return (
-              <button key={conv.id} onClick={() => setSelectedConv(conv)}
-                className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-[var(--bg-hover)] ${hasUnread ? 'bg-[var(--bg-hover)]' : ''}`}>
-                {/* Avatar */}
-                {conv.pictureUrl ? (
-                  <img src={conv.pictureUrl} className="w-10 h-10 rounded-full object-cover flex-shrink-0" alt="" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ backgroundColor: platformColor }}>
-                    {(conv.displayName || '?')[0]}
-                  </div>
-                )}
-                {/* Info */}
-                <div className="flex-1 min-w-0">
+              <div key={conv.id}
+                className={`flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-[var(--bg-hover)] ${hasUnread ? 'bg-[var(--bg-hover)]' : ''}`}>
+                {/* Avatar — clickable to open detail */}
+                <button onClick={() => setSelectedConv(conv)} className="flex-shrink-0">
+                  {conv.pictureUrl ? (
+                    <img src={conv.pictureUrl} className="w-10 h-10 rounded-full object-cover" alt="" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: pColor }}>
+                      {(conv.displayName || '?')[0]}
+                    </div>
+                  )}
+                </button>
+                {/* Info — clickable to open detail */}
+                <button onClick={() => setSelectedConv(conv)} className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-1.5">
                     <span className={`text-sm truncate ${hasUnread ? 'font-bold text-[var(--tx-heading)]' : 'text-[var(--tx-heading)]'}`}>{conv.displayName}</span>
                     <PlatformBadge platform={conv.platform} />
+                    {hasUnread && (
+                      <span className="min-w-[18px] h-[18px] rounded-full text-white text-[9px] font-black flex items-center justify-center px-1" style={{ backgroundColor: pColor }}>
+                        {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                      </span>
+                    )}
                   </div>
                   <p className={`text-xs truncate ${hasUnread ? 'font-semibold text-[var(--tx-heading)]' : 'text-[var(--tx-muted)]'}`}>{conv.lastMessage}</p>
-                </div>
-                {/* Unread + time */}
-                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <span className="text-[9px] text-[var(--tx-muted)]">
-                    {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : ''}
-                  </span>
-                  {hasUnread && (
-                    <span className="min-w-[18px] h-[18px] rounded-full text-white text-[9px] font-black flex items-center justify-center px-1" style={{ backgroundColor: platformColor }}>
-                      {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </button>
+                  <p className="text-[9px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
+                    <Clock size={9} /> ทักมาเมื่อ {formatContactTime(contactTime)}
+                  </p>
+                </button>
+                {/* Resolve button */}
+                <button onClick={(e) => handleResolve(conv, e)} disabled={isResolving}
+                  className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
+                  {isResolving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                  <span className="hidden sm:inline">ตอบเรียบร้อยแล้ว</span>
+                  <span className="sm:hidden">เสร็จ</span>
+                </button>
+              </div>
             );
           })}
         </div>
