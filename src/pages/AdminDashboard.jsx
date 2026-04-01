@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -21,6 +21,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
+import ChatPanel, { useChatUnread } from '../components/ChatPanel.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -163,8 +164,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionNameInput, setSessionNameInput] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [editingNameValue, setEditingNameValue] = useState("");
-  const [adminMode, setAdminModeRaw] = useState('dashboard'); // dashboard, formBuilder, appointment
+  const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
+  const { totalUnread: chatUnread } = useChatUnread(db, appId);
 
   // ── Appointment calendar state ──
   const [apptMonth, setApptMonth] = useState(() => {
@@ -2371,8 +2373,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-6 gap-0.5 w-full xl:hidden z-0">
+        <div className="grid grid-cols-7 gap-0.5 w-full xl:hidden z-0">
           {[
+            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: chatUnread, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white' },
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
@@ -2395,6 +2398,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         {/* ── Desktop: full button row ── */}
         <div className="hidden xl:flex items-center gap-2 z-10 flex-wrap">
+          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
+            <MessageCircle size={16} /> แชท
+            {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
+          </button>
           <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}}>
             <Activity size={16} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
@@ -2466,7 +2473,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       </header>
 
-      {adminMode === 'clinicSettings' ? (
+      {adminMode === 'chat' ? (
+        <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6">
+          <ChatPanel db={db} appId={appId} />
+        </div>
+      ) : adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">
           <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
           {/* Form Builder shortcut */}
