@@ -22,26 +22,26 @@ function PlatformBadge({ platform }) {
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
 
-function playDoubleBeep() {
+function playAlertSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    function beep(startTime) {
+    function beep(startTime, freq) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0.3, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+      osc.frequency.value = freq;
+      osc.type = 'square';
+      gain.gain.setValueAtTime(0.6, startTime);
+      gain.gain.setValueAtTime(0.6, startTime + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.25);
       osc.start(startTime);
-      osc.stop(startTime + 0.15);
+      osc.stop(startTime + 0.25);
     }
     const now = ctx.currentTime;
-    beep(now);
-    beep(now + 0.25);
-    // Close context after sounds finish
-    setTimeout(() => ctx.close().catch(() => {}), 600);
+    beep(now, 1200);
+    beep(now + 0.35, 1500);
+    setTimeout(() => ctx.close().catch(() => {}), 900);
   } catch (e) {
     // AudioContext not available
   }
@@ -345,13 +345,24 @@ export default function ChatPanel({ db, appId, user }) {
     });
   }, [showHistory, db, appId]);
 
-  // ─── Alert sound every 30s when there are unresolved conversations ─────
+  // ─── Alert sound: immediate on first message + repeat every 30s ─────
+  const prevCountRef = useRef(0);
+  useEffect(() => {
+    // Play immediately when conversations go from 0 → >0
+    if (conversations.length > 0 && prevCountRef.current === 0 && !isPlayingRef.current) {
+      isPlayingRef.current = true;
+      playAlertSound();
+      setTimeout(() => { isPlayingRef.current = false; }, 900);
+    }
+    prevCountRef.current = conversations.length;
+  }, [conversations.length]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (conversationsRef.current.length > 0 && !isPlayingRef.current) {
         isPlayingRef.current = true;
-        playDoubleBeep();
-        setTimeout(() => { isPlayingRef.current = false; }, 600);
+        playAlertSound();
+        setTimeout(() => { isPlayingRef.current = false; }, 900);
       }
     }, 30000);
     return () => clearInterval(interval);
