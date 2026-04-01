@@ -372,7 +372,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const VAPID_KEY = 'BCCrQVfqNfY2JJQsqrJ0EdU0O1AYV2LOdReWyziuYDO5d2Wm8otNht_oqCwh8qvqTy9SYtdwlGF2XvXWtg1b5ao';
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 10000);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
     return () => clearInterval(timer);
   }, []);
 
