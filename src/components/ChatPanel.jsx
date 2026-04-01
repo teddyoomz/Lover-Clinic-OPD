@@ -241,20 +241,6 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Mark as read — writes to Firestore so ALL admins see unread cleared (via onSnapshot)
-  useEffect(() => {
-    if (!conversation?.id) return;
-    const convRef = doc(db, `artifacts/${appId}/public/data/chat_conversations`, conversation.id);
-    updateDoc(convRef, { unreadCount: 0 }).catch(() => {});
-  }, [conversation?.id, db, appId]);
-
-  // Also mark as read when new messages arrive while viewing
-  useEffect(() => {
-    if (!conversation?.id || messages.length === 0) return;
-    const convRef = doc(db, `artifacts/${appId}/public/data/chat_conversations`, conversation.id);
-    updateDoc(convRef, { unreadCount: 0 }).catch(() => {});
-  }, [messages.length, conversation?.id, db, appId]);
-
   function formatTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
