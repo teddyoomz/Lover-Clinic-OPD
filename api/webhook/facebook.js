@@ -40,19 +40,48 @@ async function getChatConfig() {
 }
 
 async function getFBProfile(psid, accessToken) {
-  try {
-    const res = await fetch(`https://graph.facebook.com/v21.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`);
-    if (!res.ok) {
-      const errText = await res.text();
-      console.warn(`[fb-webhook] getFBProfile failed for ${psid}: ${res.status} ${errText.slice(0, 200)}`);
-      return { name: psid, profile_pic: '' };
+  // Try up to 3 times with different strategies
+  const attempts = [
+    { fields: 'name,first_name,last_name,profile_pic', version: 'v21.0' },
+    { fields: 'name,first_name,last_name,profile_pic', version: 'v19.0' },
+    { fields: 'name', version: 'v21.0' },
+  ];
+
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      const { fields, version } = attempts[i];
+      const url = `https://graph.facebook.com/${version}/${psid}?fields=${fields}&access_token=${accessToken}`;
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[fb-webhook] getFBProfile attempt ${i + 1} failed for ${psid}: ${res.status} ${errText.slice(0, 300)}`);
+        // Wait before retry
+        if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+
+      const data = await res.json();
+      const name = data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim();
+
+      // If name is empty or still just digits, treat as failure
+      if (!name || /^\d+$/.test(name)) {
+        console.warn(`[fb-webhook] getFBProfile attempt ${i + 1}: got numeric/empty name "${name}" for ${psid}`);
+        if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+
+      console.log(`[fb-webhook] getFBProfile success for ${psid}: "${name}" (attempt ${i + 1})`);
+      return { name, profile_pic: data.profile_pic || '' };
+    } catch (e) {
+      console.warn(`[fb-webhook] getFBProfile attempt ${i + 1} error for ${psid}:`, e.message);
+      if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
     }
-    const data = await res.json();
-    return { name: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || psid, profile_pic: data.profile_pic || '' };
-  } catch (e) {
-    console.warn(`[fb-webhook] getFBProfile error for ${psid}:`, e.message);
-    return { name: psid, profile_pic: '' };
   }
+
+  // All attempts failed — return null to signal "don't overwrite with garbage"
+  console.warn(`[fb-webhook] getFBProfile: all attempts failed for ${psid}`);
+  return null;
 }
 
 async function firestorePatch(path, fields) {
@@ -77,22 +106,34 @@ async function processMessage(senderId, message, config) {
   const msgPath = `${convPath}/messages/${msgId}`;
   const now = new Date().toISOString();
 
-  // Get or create conversation — retry profile if name is still numeric
+  // Get or create conversation — always retry profile if name is missing/numeric
   const existingConv = await firestoreGet(convPath);
-  let displayName = senderId;
-  let pictureUrl = '';
-
   const existingName = existingConv?.fields?.displayName?.stringValue || '';
-  const nameIsNumeric = !existingName || /^\d+$/.test(existingName);
+  const existingPic = existingConv?.fields?.pictureUrl?.stringValue || '';
+  const nameIsGood = existingName && !/^\d+$/.test(existingName) && existingName !== 'ลูกค้า FB';
 
-  if (nameIsNumeric) {
-    // No name yet or still numeric → try fetching profile
-    const profile = await getFBProfile(senderId, config.pageAccessToken);
-    displayName = profile.name || senderId;
-    pictureUrl = profile.profile_pic || existingConv?.fields?.pictureUrl?.stringValue || '';
-  } else {
+  let displayName;
+  let pictureUrl;
+
+  if (nameIsGood) {
+    // Already have a real name — keep it, but try to get pic if missing
     displayName = existingName;
-    pictureUrl = existingConv?.fields?.pictureUrl?.stringValue || '';
+    pictureUrl = existingPic;
+    if (!pictureUrl) {
+      const profile = await getFBProfile(senderId, config.pageAccessToken);
+      if (profile) pictureUrl = profile.profile_pic || '';
+    }
+  } else {
+    // No name or still numeric/placeholder → fetch profile
+    const profile = await getFBProfile(senderId, config.pageAccessToken);
+    if (profile) {
+      displayName = profile.name;
+      pictureUrl = profile.profile_pic || existingPic;
+    } else {
+      // All fetch attempts failed — use placeholder, never save raw numeric ID
+      displayName = existingName && existingName !== senderId ? existingName : 'ลูกค้า FB';
+      pictureUrl = existingPic;
+    }
   }
 
   // Build message
