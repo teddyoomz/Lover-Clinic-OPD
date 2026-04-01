@@ -145,6 +145,19 @@ async function processMessage(senderId, message, config) {
 
 // ─── Handler ────────────────────────────────────────────────────────────────
 
+// Tell Vercel not to parse body — we need raw body for signature verification
+export const config = { api: { bodyParser: false } };
+
+// Read raw body from request stream
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -156,12 +169,10 @@ export default async function handler(req, res) {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    console.log(`[fb-webhook] Verify: mode=${mode} token=${token} challenge=${challenge?.slice(0, 20)}`);
+    console.log(`[fb-webhook] Verify: mode=${mode} token=${token}`);
 
-    const config = await getChatConfig();
-    console.log(`[fb-webhook] Config verifyToken=${config?.verifyToken} match=${token === config?.verifyToken}`);
-
-    if (mode === 'subscribe' && config?.verifyToken && token === config.verifyToken) {
+    const fbConfig = await getChatConfig();
+    if (mode === 'subscribe' && fbConfig?.verifyToken && token === fbConfig.verifyToken) {
       console.log('[fb-webhook] Verification successful');
       return res.status(200).send(challenge);
     }
@@ -170,24 +181,28 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).end();
 
-  const config = await getChatConfig();
-  if (!config || !config.appSecret) {
-    console.log('[fb-webhook] Not configured — config:', !!config, 'appSecret:', !!config?.appSecret);
+  const fbConfig = await getChatConfig();
+  if (!fbConfig || !fbConfig.appSecret) {
+    console.log('[fb-webhook] Not configured');
     return res.status(200).json({ message: 'Facebook chat not configured' });
   }
 
-  // Verify signature (skip if no signature header — Facebook sometimes omits in test)
-  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  // Read raw body for signature verification
+  const rawBodyBuf = await getRawBody(req);
+  const rawBody = rawBodyBuf.toString('utf8');
+
+  // Verify signature
   const signature = req.headers['x-hub-signature-256'];
   if (signature) {
-    if (!verifySignature(rawBody, signature, config.appSecret)) {
+    if (!verifySignature(rawBody, signature, fbConfig.appSecret)) {
       console.warn('[fb-webhook] Invalid signature');
       return res.status(401).json({ error: 'Invalid signature' });
     }
+    console.log('[fb-webhook] Signature verified ✓');
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  console.log(`[fb-webhook] POST body entries=${body.entry?.length || 0}`);
+  const body = JSON.parse(rawBody);
+  console.log(`[fb-webhook] POST entries=${body.entry?.length || 0}`);
 
   // Process messaging entries
   const entries = body.entry || [];
@@ -199,8 +214,8 @@ export default async function handler(req, res) {
       // Skip echo messages (sent by page itself)
       if (event.message?.is_echo) continue;
       // Only handle messages (not postbacks, etc.)
-      if (event.message && event.sender?.id && event.sender.id !== config.pageId) {
-        promises.push(processMessage(event.sender.id, event.message, config));
+      if (event.message && event.sender?.id && event.sender.id !== fbConfig.pageId) {
+        promises.push(processMessage(event.sender.id, event.message, fbConfig));
       }
     }
   }
