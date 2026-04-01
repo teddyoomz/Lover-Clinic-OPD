@@ -41,10 +41,16 @@ async function getChatConfig() {
 
 async function getFBProfile(psid, accessToken) {
   try {
-    const res = await fetch(`https://graph.facebook.com/${psid}?fields=name,profile_pic&access_token=${accessToken}`);
-    if (!res.ok) return { name: psid, profile_pic: '' };
-    return await res.json();
-  } catch {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[fb-webhook] getFBProfile failed for ${psid}: ${res.status} ${errText.slice(0, 200)}`);
+      return { name: psid, profile_pic: '' };
+    }
+    const data = await res.json();
+    return { name: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || psid, profile_pic: data.profile_pic || '' };
+  } catch (e) {
+    console.warn(`[fb-webhook] getFBProfile error for ${psid}:`, e.message);
     return { name: psid, profile_pic: '' };
   }
 }
@@ -71,18 +77,22 @@ async function processMessage(senderId, message, config) {
   const msgPath = `${convPath}/messages/${msgId}`;
   const now = new Date().toISOString();
 
-  // Get or create conversation
+  // Get or create conversation — retry profile if name is still numeric
   const existingConv = await firestoreGet(convPath);
   let displayName = senderId;
   let pictureUrl = '';
 
-  if (!existingConv?.fields?.displayName) {
+  const existingName = existingConv?.fields?.displayName?.stringValue || '';
+  const nameIsNumeric = !existingName || /^\d+$/.test(existingName);
+
+  if (nameIsNumeric) {
+    // No name yet or still numeric → try fetching profile
     const profile = await getFBProfile(senderId, config.pageAccessToken);
     displayName = profile.name || senderId;
-    pictureUrl = profile.profile_pic || '';
+    pictureUrl = profile.profile_pic || existingConv?.fields?.pictureUrl?.stringValue || '';
   } else {
-    displayName = existingConv.fields.displayName.stringValue || senderId;
-    pictureUrl = existingConv.fields.pictureUrl?.stringValue || '';
+    displayName = existingName;
+    pictureUrl = existingConv?.fields?.pictureUrl?.stringValue || '';
   }
 
   // Build message
