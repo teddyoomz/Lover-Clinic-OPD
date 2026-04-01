@@ -10,7 +10,13 @@ const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/procli
 // ─── Action: login (test connection) ────────────────────────────────────────
 
 async function handleLogin(req, res) {
-  await createSession();
+  const session = await createSession();
+  // Actually verify the session works by fetching a real page
+  const testText = await session.fetchText(`${session.origin}/admin/customer`);
+  const ok = testText.includes('admin/customer') || testText.includes('customer') || testText.length > 500;
+  if (!ok) {
+    return res.status(200).json({ success: false, error: 'Login สำเร็จแต่เข้าถึงหน้า ProClinic ไม่ได้ — session อาจหมดอายุ' });
+  }
   return res.status(200).json({ success: true });
 }
 

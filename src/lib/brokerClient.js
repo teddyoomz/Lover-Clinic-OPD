@@ -92,9 +92,9 @@ async function apiFetch(endpoint, body, _retried) {
     return { success: false, error: 'Invalid response' };
   }
 
-  // If server says it needs extension cookies and we haven't retried yet
-  if (data.extensionNeeded && !_retried) {
-    console.log('[broker] Server needs cookies — sending credentials to extension + requesting sync (forceLogin)');
+  // If server says session expired or needs extension cookies — auto-recover via Cookie Relay
+  if ((data.extensionNeeded || data.sessionExpired) && !_retried) {
+    console.log('[broker] Session expired or needs cookies — triggering Cookie Relay auto-recovery');
     // Ensure extension has credentials before auto-login attempt
     await ensureExtensionHasCredentials();
     const syncResult = await requestExtensionSync(true);

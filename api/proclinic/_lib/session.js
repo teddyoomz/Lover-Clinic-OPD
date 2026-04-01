@@ -256,7 +256,9 @@ export async function createSession(originArg, emailArg, passwordArg) {
           return retryText;
         } catch (e) {
           if (e instanceof SessionExpiredError) throw e;
-          throw new SessionExpiredError(`Auto re-login ล้มเหลว: ${e.message}`);
+          const err = new SessionExpiredError(`Auto re-login ล้มเหลว: ${e.message}`);
+          err.extensionNeeded = true;
+          throw err;
         }
       }
       return text;
