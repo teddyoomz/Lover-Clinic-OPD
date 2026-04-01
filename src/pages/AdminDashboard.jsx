@@ -168,25 +168,44 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
   const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
 
-  // ─── Chat alert sound: plays on ALL pages, not just chat tab ─────
+  // ─── Chat schedule: check if within operating hours ─────
+  const isChatActive = useMemo(() => {
+    if (cs.chatAlwaysOn) return true;
+    const now = new Date();
+    const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const day = bkk.getDay(); // 0=Sun, 6=Sat
+    const isWeekend = day === 0 || day === 6;
+    const openStr = isWeekend ? (cs.chatOpenTimeWeekend || '10:00') : (cs.chatOpenTime || '10:00');
+    const closeStr = isWeekend ? (cs.chatCloseTimeWeekend || '17:00') : (cs.chatCloseTime || '19:00');
+    const [oh, om] = openStr.split(':').map(Number);
+    const [ch, cm] = closeStr.split(':').map(Number);
+    const nowMin = bkk.getHours() * 60 + bkk.getMinutes();
+    const openMin = oh * 60 + om;
+    const closeMin = ch * 60 + cm;
+    return nowMin >= openMin && nowMin < closeMin;
+  }, [cs.chatAlwaysOn, cs.chatOpenTime, cs.chatCloseTime, cs.chatOpenTimeWeekend, cs.chatCloseTimeWeekend, currentTime]);
+
+  // ─── Chat alert sound: plays on ALL pages when chat is active ─────
   const chatIsPlayingRef = useRef(false);
   const chatPrevCountRef = useRef(0);
   const chatConvCountRef = useRef(0);
+  const isChatActiveRef = useRef(isChatActive);
   chatConvCountRef.current = chatConvCount;
+  isChatActiveRef.current = isChatActive;
 
   useEffect(() => {
-    // Play immediately when conversations go from 0 → >0
+    if (!isChatActive) { chatPrevCountRef.current = chatConvCount; return; }
     if (chatConvCount > 0 && chatPrevCountRef.current === 0 && !chatIsPlayingRef.current) {
       chatIsPlayingRef.current = true;
       playAlertSound();
       setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
     }
     chatPrevCountRef.current = chatConvCount;
-  }, [chatConvCount]);
+  }, [chatConvCount, isChatActive]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (chatConvCountRef.current > 0 && !chatIsPlayingRef.current) {
+      if (isChatActiveRef.current && chatConvCountRef.current > 0 && !chatIsPlayingRef.current) {
         chatIsPlayingRef.current = true;
         playAlertSound();
         setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
@@ -2468,7 +2487,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
         <div className="grid grid-cols-7 gap-0.5 w-full xl:hidden z-0">
           {[
-            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: chatUnread, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: true },
+            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
@@ -2491,7 +2510,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         {/* ── Desktop: full button row ── */}
         <div className="hidden xl:flex items-center gap-2 z-10 flex-wrap">
-          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
+          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : isChatActive && chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
             <MessageCircle size={16} /> แชท
             {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>

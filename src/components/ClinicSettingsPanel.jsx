@@ -126,6 +126,11 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         doctorEndTime: settings.doctorEndTime || DEFAULT_CLINIC_SETTINGS.doctorEndTime,
         doctorStartTimeWeekend: settings.doctorStartTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorStartTimeWeekend,
         doctorEndTimeWeekend: settings.doctorEndTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorEndTimeWeekend,
+        chatAlwaysOn: !!settings.chatAlwaysOn,
+        chatOpenTime: settings.chatOpenTime || DEFAULT_CLINIC_SETTINGS.chatOpenTime,
+        chatCloseTime: settings.chatCloseTime || DEFAULT_CLINIC_SETTINGS.chatCloseTime,
+        chatOpenTimeWeekend: settings.chatOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatOpenTimeWeekend,
+        chatCloseTimeWeekend: settings.chatCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatCloseTimeWeekend,
         practitioners: practitioners,
         updatedAt: serverTimestamp(),
       });
@@ -414,6 +419,53 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Chat System Schedule */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <MessageCircle size={14} style={{color: '#3b82f6'}}/> เวลาทำการระบบแชท
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            นอกเวลาทำการ ระบบแชทจะหยุดรับข้อความและไม่มีเสียงเตือน
+          </p>
+          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+            <input type="checkbox" checked={!!settings.chatAlwaysOn} onChange={e => setSettings(prev => ({ ...prev, chatAlwaysOn: e.target.checked }))}
+              className="w-4 h-4 rounded accent-blue-500" />
+            <span className="text-xs font-bold text-[var(--tx-heading)]">เปิดตลอด 24 ชม. (Always On)</span>
+          </label>
+          {!settings.chatAlwaysOn && (
+            <div className="space-y-3" lang="en-GB">
+              <div>
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">เปิด</span>
+                    <TimeSelect24 value={settings.chatOpenTime} onChange={v => setSettings(prev => ({ ...prev, chatOpenTime: v }))} focusColor="focus:border-blue-500" />
+                  </div>
+                  <span className="text-gray-600">—</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">ปิด</span>
+                    <TimeSelect24 value={settings.chatCloseTime} onChange={v => setSettings(prev => ({ ...prev, chatCloseTime: v }))} focusColor="focus:border-blue-500" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">เปิด</span>
+                    <TimeSelect24 value={settings.chatOpenTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, chatOpenTimeWeekend: v }))} focusColor="focus:border-blue-500" />
+                  </div>
+                  <span className="text-gray-600">—</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">ปิด</span>
+                    <TimeSelect24 value={settings.chatCloseTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, chatCloseTimeWeekend: v }))} focusColor="focus:border-blue-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Doctor Hours */}

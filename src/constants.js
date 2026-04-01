@@ -19,6 +19,12 @@ export const DEFAULT_CLINIC_SETTINGS = {
   doctorEndTime: '19:00',
   doctorStartTimeWeekend: '10:00',
   doctorEndTimeWeekend: '17:00',
+  // Chat system schedule
+  chatAlwaysOn: false,
+  chatOpenTime: '10:00',
+  chatCloseTime: '19:00',
+  chatOpenTimeWeekend: '10:00',
+  chatCloseTimeWeekend: '17:00',
 };
 
 export const PRESET_COLORS = [
