@@ -22,7 +22,7 @@ function PlatformBadge({ platform }) {
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
 
-function playAlertSound() {
+export function playAlertSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     function tone(startTime, freq, duration) {
@@ -321,9 +321,6 @@ export default function ChatPanel({ db, appId, user }) {
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
   const [resolvingId, setResolvingId] = useState(null);
-  const isPlayingRef = useRef(false);
-  const conversationsRef = useRef(conversations);
-  conversationsRef.current = conversations;
 
   // Listen to chat config
   useEffect(() => {
@@ -352,29 +349,6 @@ export default function ChatPanel({ db, appId, user }) {
       setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [showHistory, db, appId]);
-
-  // ─── Alert sound: immediate on first message + repeat every 30s ─────
-  const prevCountRef = useRef(0);
-  useEffect(() => {
-    // Play immediately when conversations go from 0 → >0
-    if (conversations.length > 0 && prevCountRef.current === 0 && !isPlayingRef.current) {
-      isPlayingRef.current = true;
-      playAlertSound();
-      setTimeout(() => { isPlayingRef.current = false; }, 900);
-    }
-    prevCountRef.current = conversations.length;
-  }, [conversations.length]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (conversationsRef.current.length > 0 && !isPlayingRef.current) {
-        isPlayingRef.current = true;
-        playAlertSound();
-        setTimeout(() => { isPlayingRef.current = false; }, 900);
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // ─── Resolve handler (no confirm, immediate) ─────────────────────────
   const handleResolve = useCallback(async (conv, e) => {
@@ -621,6 +595,7 @@ export default function ChatPanel({ db, appId, user }) {
 export function useChatUnread(db, appId) {
   const [lineUnread, setLineUnread] = useState(0);
   const [fbUnread, setFbUnread] = useState(0);
+  const [totalConversations, setTotalConversations] = useState(0);
 
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
@@ -636,8 +611,9 @@ export function useChatUnread(db, appId) {
       });
       setLineUnread(lu);
       setFbUnread(fu);
+      setTotalConversations(snap.docs.length);
     });
   }, [db, appId]);
 
-  return { lineUnread, fbUnread, totalUnread: lineUnread + fbUnread };
+  return { lineUnread, fbUnread, totalUnread: lineUnread + fbUnread, totalConversations };
 }

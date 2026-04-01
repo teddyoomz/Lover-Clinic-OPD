@@ -21,7 +21,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
-import ChatPanel, { useChatUnread } from '../components/ChatPanel.jsx';
+import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -166,7 +166,34 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [editingNameValue, setEditingNameValue] = useState("");
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
-  const { totalUnread: chatUnread } = useChatUnread(db, appId);
+  const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
+
+  // ─── Chat alert sound: plays on ALL pages, not just chat tab ─────
+  const chatIsPlayingRef = useRef(false);
+  const chatPrevCountRef = useRef(0);
+  const chatConvCountRef = useRef(0);
+  chatConvCountRef.current = chatConvCount;
+
+  useEffect(() => {
+    // Play immediately when conversations go from 0 → >0
+    if (chatConvCount > 0 && chatPrevCountRef.current === 0 && !chatIsPlayingRef.current) {
+      chatIsPlayingRef.current = true;
+      playAlertSound();
+      setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
+    }
+    chatPrevCountRef.current = chatConvCount;
+  }, [chatConvCount]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (chatConvCountRef.current > 0 && !chatIsPlayingRef.current) {
+        chatIsPlayingRef.current = true;
+        playAlertSound();
+        setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Admin presence tracking ──
   const [onlineAdmins, setOnlineAdmins] = useState([]);
