@@ -25,23 +25,31 @@ function PlatformBadge({ platform }) {
 function playAlertSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    function beep(startTime, freq) {
+    function tone(startTime, freq, duration) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
-      osc.type = 'square';
-      gain.gain.setValueAtTime(0.6, startTime);
-      gain.gain.setValueAtTime(0.6, startTime + 0.12);
-      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.25);
+      osc.type = 'sine';
+      // Smooth fade in/out like a phone notification
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.35, startTime + 0.03);
+      gain.gain.setValueAtTime(0.35, startTime + duration - 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
       osc.start(startTime);
-      osc.stop(startTime + 0.25);
+      osc.stop(startTime + duration);
     }
     const now = ctx.currentTime;
-    beep(now, 1200);
-    beep(now + 0.35, 1500);
-    setTimeout(() => ctx.close().catch(() => {}), 900);
+    // Soft tri-tone: ascending like a smartphone noti
+    tone(now, 784, 0.12);        // G5
+    tone(now + 0.15, 988, 0.12); // B5
+    tone(now + 0.30, 1175, 0.18); // D6 (hold slightly longer)
+    // Repeat once after a short pause
+    tone(now + 0.65, 784, 0.12);
+    tone(now + 0.80, 988, 0.12);
+    tone(now + 0.95, 1175, 0.18);
+    setTimeout(() => ctx.close().catch(() => {}), 1400);
   } catch (e) {
     // AudioContext not available
   }

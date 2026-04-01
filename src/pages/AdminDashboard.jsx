@@ -2441,7 +2441,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
         <div className="grid grid-cols-7 gap-0.5 w-full xl:hidden z-0">
           {[
-            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: chatUnread, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white' },
+            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: chatUnread, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: true },
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
@@ -2452,7 +2452,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
-                className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
+                className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : tab.blinkWhenBadge && tab.badge > 0 && !isActive ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
                 style={isActive && tab.activeStyle ? tab.activeStyle : {}}>
                 {tab.icon}
                 <span className="truncate w-full text-center px-0.5">{tab.label}</span>
@@ -2464,7 +2464,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         {/* ── Desktop: full button row ── */}
         <div className="hidden xl:flex items-center gap-2 z-10 flex-wrap">
-          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
+          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
             <MessageCircle size={16} /> แชท
             {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
