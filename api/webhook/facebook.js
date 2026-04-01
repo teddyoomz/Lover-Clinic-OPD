@@ -40,48 +40,47 @@ async function getChatConfig() {
 }
 
 async function getFBProfile(psid, accessToken) {
-  // Try up to 3 times with different strategies
-  const attempts = [
-    { fields: 'name,first_name,last_name,profile_pic', version: 'v21.0' },
-    { fields: 'name,first_name,last_name,profile_pic', version: 'v19.0' },
-    { fields: 'name', version: 'v21.0' },
-  ];
+  // First: check if token is valid at all
+  const tokenSnippet = accessToken ? `${accessToken.slice(0, 10)}...${accessToken.slice(-5)}` : 'EMPTY';
+  console.log(`[fb-webhook] getFBProfile: psid=${psid}, token=${tokenSnippet}`);
 
-  for (let i = 0; i < attempts.length; i++) {
-    try {
-      const { fields, version } = attempts[i];
-      const url = `https://graph.facebook.com/${version}/${psid}?fields=${fields}&access_token=${accessToken}`;
-      const res = await fetch(url);
+  try {
+    const url = `https://graph.facebook.com/v21.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`;
+    const res = await fetch(url);
+    const raw = await res.text();
+    console.log(`[fb-webhook] getFBProfile response: status=${res.status} body=${raw.slice(0, 500)}`);
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`[fb-webhook] getFBProfile attempt ${i + 1} failed for ${psid}: ${res.status} ${errText.slice(0, 300)}`);
-        // Wait before retry
-        if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
-        continue;
-      }
-
-      const data = await res.json();
-      const name = data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim();
-
-      // If name is empty or still just digits, treat as failure
-      if (!name || /^\d+$/.test(name)) {
-        console.warn(`[fb-webhook] getFBProfile attempt ${i + 1}: got numeric/empty name "${name}" for ${psid}`);
-        if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
-        continue;
-      }
-
-      console.log(`[fb-webhook] getFBProfile success for ${psid}: "${name}" (attempt ${i + 1})`);
-      return { name, profile_pic: data.profile_pic || '' };
-    } catch (e) {
-      console.warn(`[fb-webhook] getFBProfile attempt ${i + 1} error for ${psid}:`, e.message);
-      if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 500));
+    if (!res.ok) {
+      // Parse error to give clear diagnosis
+      try {
+        const err = JSON.parse(raw);
+        const code = err.error?.code;
+        const msg = err.error?.message || '';
+        if (code === 190) {
+          console.error(`[fb-webhook] TOKEN EXPIRED OR INVALID — need new Page Access Token! Error: ${msg}`);
+        } else if (code === 100) {
+          console.error(`[fb-webhook] PSID not found or no permission — Error: ${msg}`);
+        } else {
+          console.error(`[fb-webhook] API error code=${code}: ${msg}`);
+        }
+      } catch (_) {}
+      return null;
     }
-  }
 
-  // All attempts failed — return null to signal "don't overwrite with garbage"
-  console.warn(`[fb-webhook] getFBProfile: all attempts failed for ${psid}`);
-  return null;
+    const data = JSON.parse(raw);
+    const name = data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim();
+
+    if (!name || /^\d+$/.test(name)) {
+      console.warn(`[fb-webhook] getFBProfile: API returned numeric/empty name "${name}" for ${psid} — possible permission issue or Dev mode`);
+      return null;
+    }
+
+    console.log(`[fb-webhook] getFBProfile success: "${name}", pic=${data.profile_pic ? 'yes' : 'no'}`);
+    return { name, profile_pic: data.profile_pic || '' };
+  } catch (e) {
+    console.error(`[fb-webhook] getFBProfile network error: ${e.message}`);
+    return null;
+  }
 }
 
 async function firestorePatch(path, fields) {
