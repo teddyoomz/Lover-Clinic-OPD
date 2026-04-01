@@ -490,6 +490,7 @@ export default function ChatPanel({ db, appId, user }) {
                 const totalMin = h.totalWaitTimeMs ? Math.round(h.totalWaitTimeMs / 60000) : null;
                 const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
                 const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-yellow-500' : 'text-red-500';
+                const colorForTotal = (min) => min <= 10 ? 'text-green-500' : min <= 15 ? 'text-yellow-500' : 'text-red-500';
                 const fmtMin = (min) => min < 1 ? '< 1 นาที' : min < 60 ? `${min} นาที` : `${Math.floor(min / 60)} ชม. ${min % 60} นาที`;
                 return (
                   <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
@@ -518,7 +519,7 @@ export default function ChatPanel({ db, appId, user }) {
                         </span>
                       )}
                       {totalMin !== null && (
-                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(totalMin)}`}>
+                        <span className={`flex items-center gap-0.5 font-bold ${colorForTotal(totalMin)}`}>
                           <Clock size={10} /> รวมทั้งหมด: {fmtMin(totalMin)}
                         </span>
                       )}
