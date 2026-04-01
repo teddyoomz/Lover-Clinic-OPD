@@ -365,6 +365,9 @@ export default function ChatPanel({ db, appId, user }) {
       const responseTimeMs = lastCustomerMessageAt
         ? resolvedAt.getTime() - new Date(lastCustomerMessageAt).getTime()
         : null;
+      const totalWaitTimeMs = firstContactAt
+        ? resolvedAt.getTime() - new Date(firstContactAt).getTime()
+        : null;
 
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
@@ -377,6 +380,7 @@ export default function ChatPanel({ db, appId, user }) {
         resolvedAt: now,
         resolvedBy: user?.email || user?.uid || 'unknown',
         responseTimeMs: responseTimeMs,
+        totalWaitTimeMs: totalWaitTimeMs,
       });
 
       // Delete all messages in subcollection
@@ -483,7 +487,10 @@ export default function ChatPanel({ db, appId, user }) {
             <div className="space-y-1.5">
               {history.map(h => {
                 const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
+                const totalMin = h.totalWaitTimeMs ? Math.round(h.totalWaitTimeMs / 60000) : null;
                 const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
+                const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-yellow-500' : 'text-red-500';
+                const fmtMin = (min) => min < 1 ? '< 1 นาที' : min < 60 ? `${min} นาที` : `${Math.floor(min / 60)} ชม. ${min % 60} นาที`;
                 return (
                   <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
                     <div className="flex items-center justify-between">
@@ -503,10 +510,16 @@ export default function ChatPanel({ db, appId, user }) {
                       <span>ทักครั้งแรก: {h.firstContactAt ? new Date(h.firstContactAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
                       <span>ข้อความสุดท้าย: {h.lastCustomerMessageAt ? new Date(h.lastCustomerMessageAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
                       <span>ตอบโดย: {h.resolvedBy}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 ml-9 text-[10px]">
                       {responseMin !== null && (
-                        <span className={`flex items-center gap-0.5 font-bold ${responseMin <= 5 ? 'text-green-500' : responseMin <= 30 ? 'text-yellow-500' : 'text-red-500'}`}>
-                          <Clock size={10} />
-                          {responseMin < 1 ? '< 1 นาที' : responseMin < 60 ? `${responseMin} นาที` : `${Math.floor(responseMin / 60)} ชม. ${responseMin % 60} นาที`}
+                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(responseMin)}`}>
+                          <Clock size={10} /> ตอบล่าสุด: {fmtMin(responseMin)}
+                        </span>
+                      )}
+                      {totalMin !== null && (
+                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(totalMin)}`}>
+                          <Clock size={10} /> รวมทั้งหมด: {fmtMin(totalMin)}
                         </span>
                       )}
                     </div>
