@@ -45,7 +45,7 @@ async function getFBProfile(psid, accessToken) {
   console.log(`[fb-webhook] getFBProfile: psid=${psid}, token=${tokenSnippet}`);
 
   try {
-    const url = `https://graph.facebook.com/v21.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`;
+    const url = `https://graph.facebook.com/v25.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`;
     const res = await fetch(url);
     const raw = await res.text();
     console.log(`[fb-webhook] getFBProfile response: status=${res.status} body=${raw.slice(0, 500)}`);
