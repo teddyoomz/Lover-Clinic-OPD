@@ -1,6 +1,6 @@
 # LoverClinic App — Claude Master Index
 
-> อัพเดท: 2026-03-28 | Stack: React 19 + Vite + Firebase + Tailwind | Deploy: Vercel
+> อัพเดท: 2026-04-03 | Stack: React 19 + Vite + Firebase + Tailwind | Deploy: Vercel
 
 ---
 
@@ -65,6 +65,23 @@ vercel --prod
 ### 6. Stale closure pattern
 - useEffect ที่ขึ้นกับ async-loaded props → ใช้ ref หรือ `clinicSettingsLoaded` flag
 
+### 7. Firestore REST API — ต้องใส่ updateMask เสมอ
+- `firestorePatch()` ใน serverless functions ต้องใส่ `updateMask.fieldPaths` ใน query string
+- ถ้าไม่ใส่ → Firestore REST API จะ **ลบ field ทั้งหมด** ที่ไม่ได้ส่งไป (PATCH = replace entire doc)
+- Pattern ที่ถูกต้อง:
+  ```js
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  fetch(`${FIRESTORE_BASE}/${path}?${mask}`, { method: 'PATCH', body: JSON.stringify({ fields }) });
+  ```
+
+### 8. Chat system — Echo & Reply
+- **FB echo**: subscribe `message_echoes` ทั้งใน App Webhook Settings และ `POST /{PAGE_ID}/subscribed_apps` ด้วย
+- **Reply**: FB เท่านั้นที่ตอบจากแอปเราได้ (มี echo เห็นว่าใครตอบแล้ว)
+- **LINE**: ตอบจากแอปเราไม่ได้ (ไม่มี echo) → แสดง "ตอบแชท LINE ผ่าน LINE OA Chat เท่านั้น"
+- **lastMessage**: อัพเดทตามข้อความล่าสุดไม่ว่าใครส่ง (customer, echo, admin)
+- **displayName/pictureUrl**: แสดงของลูกค้าเสมอ ห้ามอัพเดทตามคนตอบ
+- **Chat history**: หน้าละ 20 รายการ + auto-delete เก่ากว่า 7 วัน
+
 ---
 
 ## 📁 โครงสร้างไฟล์หลัก
@@ -87,8 +104,12 @@ src/
 │   ├── CustomFormBuilder.jsx — Admin form template builder
 │   ├── PrintTemplates.jsx   — OfficialOPDPrint + DashboardOPDPrint
 │   ├── ClinicSettingsPanel.jsx — Admin settings (name, color, logo, phone, cooldown)
+│   ├── ChatPanel.jsx        — แชท FB/LINE: reply (FB only), echo, saved replies, history
 │   ├── ClinicLogo.jsx       — Logo component
 │   └── ThemeToggle.jsx      — Dark/light mode toggle
+api/webhook/                 — Chat webhook endpoints
+├── facebook.js (webhook handler + echo), line.js, send.js (ส่งข้อความ FB/LINE)
+└── saved-replies.js (proxy FB saved_message_responses)
 api/proclinic/               — Vercel Serverless Functions — 5 consolidated endpoints (ดู docs/API.md)
 ├── customer.js (create/update/delete/search), deposit.js (submit/update/cancel/options)
 ├── connection.js (login/credentials/clear), appointment.js (create/update/delete), courses.js
@@ -108,6 +129,9 @@ functions/
 - VAPID Key: อยู่ใน AdminDashboard.jsx constant `VAPID_KEY`
 - Cloud Functions deploy: `firebase deploy --only functions` จาก root
 - ProClinic credentials: Vercel env vars (`PROCLINIC_ORIGIN`, `PROCLINIC_EMAIL`, `PROCLINIC_PASSWORD`)
+- Facebook App ID: `959596076718659`
+- Facebook Page ID: `431688823362798`
+- Graph API version: `v25.0`
 
 ---
 
