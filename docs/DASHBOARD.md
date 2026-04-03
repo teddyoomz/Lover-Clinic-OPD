@@ -324,3 +324,68 @@ hasOPD = !!session.brokerProClinicId && session.brokerStatus === 'done'
   - `handleDepositSync` (บันทึกการจอง) สำเร็จ
   - `handleResync` (Resync ProClinic) สำเร็จ
 - Guard ใน handleViewSession: `isDepositKeepUnread = session.formType === 'deposit' && session.isUnread`
+
+---
+
+## Import from ProClinic (ประวัติ → นำเข้า)
+
+### UI
+- ปุ่ม **"นำเข้าจาก ProClinic"** อยู่ใน header ของหน้าประวัติ (`adminMode === 'history'`)
+- เปิด search modal → ค้นหาลูกค้าใน ProClinic → เลือก → preview → ยืนยัน
+
+### State
+
+| State | ประเภท | คำอธิบาย |
+|-------|--------|-----------|
+| `showImport` | boolean | เปิด/ปิด import modal |
+| `importSearch` | string | คำค้นหา (ชื่อ/เบอร์/HN) |
+| `importResults` | array | ผลลัพธ์จาก search API |
+| `importLoading` | boolean | spinner ระหว่างค้นหา |
+| `importPreview` | object | ข้อมูล patient + courses + appointments ที่ดึงมา preview |
+| `importPreviewLoading` | boolean | spinner ระหว่างดึง preview |
+| `importError` | string | error message |
+| `importSuccess` | string | success message หลัง import สำเร็จ |
+
+### Handlers
+
+| Function | คำอธิบาย |
+|----------|-----------|
+| `handleImportSearch()` | เรียก `searchCustomers(importSearch)` → set `importResults` |
+| `handleImportSelect(customer)` | เรียก `fetchPatient(proClinicId)` + `getCourses(proClinicId)` → set `importPreview` |
+| `checkImportDuplicate(proClinicId)` | ค้นหา session ที่มี `brokerProClinicId` ตรงกัน → return existing session หรือ null |
+| `handleImportConfirm()` | duplicate check → สร้าง session ใหม่ หรือ auto-resync session เดิม |
+
+### Flow
+
+```
+1. กดปุ่ม "นำเข้าจาก ProClinic" → showImport = true
+2. พิมพ์ค้นหา → handleImportSearch() → importResults
+3. เลือกลูกค้า → handleImportSelect(customer)
+   → fetchPatient(proClinicId) ดึงข้อมูลผู้ป่วย (reverse map จาก ProClinic)
+   → getCourses(proClinicId) ดึงคอร์ส + นัดหมาย
+   → importPreview = { patient, courses, appointments }
+4. กด "ยืนยันนำเข้า" → handleImportConfirm()
+   → checkImportDuplicate(proClinicId)
+     a. ถ้าเจอ session เดิม → auto-resync (update patientData + broker fields)
+     b. ถ้าไม่เจอ → สร้าง session ใหม่ IMP-XXXXXX
+5. importSuccess → แสดงข้อความสำเร็จ
+```
+
+### Session Document Structure (Imported)
+
+```js
+{
+  id: 'IMP-XXXXXX',               // prefix IMP- + 6 random chars
+  formType: 'intake',              // default form type
+  patientData: { ... },            // reverse-mapped จาก ProClinic fields
+  status: 'completed',
+  isArchived: true,                // เข้าประวัติทันที
+  isUnread: false,
+  brokerStatus: 'done',
+  brokerProClinicId: '...',        // ProClinic customer ID
+  brokerProClinicHN: '...',        // ProClinic HN
+  opdRecordedAt: serverTimestamp(),
+  importedAt: serverTimestamp(),    // flag ว่า import มา
+  createdAt: serverTimestamp(),
+  isPermanent: true,
+}

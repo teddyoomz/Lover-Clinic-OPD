@@ -1,7 +1,7 @@
 # Bug History & Resolved Fixes
 
 > อ่านไฟล์นี้ก่อนแตะ AdminDashboard.jsx หรือ broker-extension/
-> อัพเดทล่าสุด: 2026-03-29 (deposit confirm modal, deposit→queue flow, sync button fix, isUnread behavior)
+> อัพเดทล่าสุด: 2026-04-03 (firestorePatch updateMask, imported sessions history, FB echo subscription, ChatDetailView convId, handleResolve corrupted conv)
 
 ---
 
@@ -52,6 +52,16 @@
 | Deposit sync button ไม่อัพเดทสถานะหลัง sync | `hasOPD` check ใช้ `session.opdRecordedAt` ซึ่ง `serverTimestamp()` returns null ใน first snapshot (local estimate) → hasOPD = false ชั่วคราว | เปลี่ยน `hasOPD` check เป็น `!!session.brokerProClinicId && session.brokerStatus === 'done'` |
 | Deposit eye button crash เมื่อไม่มี patientData | `viewingSession.patientData` เป็น undefined → destructure crash | ใช้ `d = viewingSession.patientData \|\| {}` + ซ่อน grid ด้วย `style={display:'none'}` เมื่อไม่มี patientData (OXC parser ไม่รองรับ ternary กับ fragments) |
 | Deposit isUnread หายเมื่อแค่ดูข้อมูล | `handleViewSession` clear isUnread ทุกครั้งรวม deposit ที่ยังไม่ sync | เพิ่ม guard: `isDepositKeepUnread = session.formType === 'deposit' && session.isUnread` → ไม่ clear isUnread เมื่อแค่กดปุ่มตา/edit |
+| Imported sessions not showing in history page | Filter `!(s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)` excluded sessions with `isPermanent: true` | Don't set `isPermanent: true` on imported sessions |
+
+### Chat System (ChatPanel / Webhooks)
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| **firestorePatch without updateMask deletes all fields** (CRITICAL) | Firestore REST API `PATCH` without `updateMask` = replace entire document → echo/send.js updated conversation with only `lastMessage`+`lastMessageAt`, all other fields (displayName, pictureUrl, platform, odriverId) were deleted | Added `updateMask.fieldPaths` query params to `firestorePatch()` in both `facebook.js` and `send.js`. Pattern: `const mask = Object.keys(fields).map(f => 'updateMask.fieldPaths='+f).join('&')` |
+| FB message_echoes not received | Subscribing to `message_echoes` in webhook settings wasn't enough — Page itself needs to subscribe via `POST /{PAGE_ID}/subscribed_apps` with `subscribed_fields=messages,message_echoes,...` | Called the subscribed_apps endpoint with all required fields |
+| ChatDetailView messages not loading ("ยังไม่มีข้อความ") | `convId` was reconstructed as `fb_${conversation.odriverId}` but odriverId could be undefined after firestorePatch bug | Use `conversation.id` directly (which is the Firestore doc ID) |
+| handleResolve fails on corrupted conversations (`addDoc() called with invalid data. Unsupported field value: undefined`) | Conversations corrupted by firestorePatch bug had undefined `platform` | Fallback `conv.platform || (conv.id?.startsWith('line_') ? 'line' : 'facebook')` |
 
 ### Cookie Relay Extension (cookie-relay/)
 
@@ -161,6 +171,19 @@ const [depositToDelete, setDepositToDelete] = useState(null);
 // { session, action: 'archive' | 'cancel' | 'complete' }
 // Modal style: red สำหรับ delete/cancel, blue สำหรับ service complete
 // แสดงชื่อลูกค้าใน modal body
+```
+
+### Firestore REST API updateMask pattern (CRITICAL)
+```js
+// Firestore REST API PATCH without updateMask = replace ENTIRE document
+// ทุก field ที่ไม่ได้ส่งไปจะถูกลบ!
+
+// ❌ Wrong: PATCH without updateMask → deletes all other fields
+fetch(`${FIRESTORE_BASE}/${path}`, { method: 'PATCH', body: JSON.stringify({ fields }) });
+
+// ✅ Correct: always specify updateMask.fieldPaths
+const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+fetch(`${FIRESTORE_BASE}/${path}?${mask}`, { method: 'PATCH', body: JSON.stringify({ fields }) });
 ```
 
 ### fetch + redirect:'manual' pattern (ProClinic save)

@@ -27,6 +27,7 @@ brokerClient.js (frontend) → fetch /api/proclinic/* → Vercel Serverless Func
 | `/api/proclinic/delete` | POST | ลบ customer (verify existence first) | `{ success, notFound? }` |
 | `/api/proclinic/courses` | POST | ดึง courses + appointments | `{ success, courses, expiredCourses, appointments }` |
 | `/api/proclinic/search` | POST | ค้นหา customers | `{ success, customers: [{id, name, phone}] }` |
+| `/api/proclinic/customer` | POST | actions: fetchPatient | `{ success, patient, proClinicId, proClinicHN }` |
 | `/api/proclinic/login` | POST | ทดสอบ connection | `{ success }` |
 
 | `/api/proclinic/credentials` | POST | ส่ง ProClinic credentials ให้ extension | `{ success, origin, email, password }` |
@@ -62,6 +63,59 @@ brokerClient.js (frontend) → fetch /api/proclinic/* → Vercel Serverless Func
 - `computeBirthdate(patient)` — DOB from dobDay/Month/Year or age
 - `buildCreateFormData(patient, csrf, defaultFields)` — URLSearchParams for POST create
 - `buildUpdateFormData(patient, existingFields, csrf)` — Merge existing + new patient data
+- `reverseMapPatient(formFields)` — Reverse mapping จาก ProClinic form fields → app patientData format (ใช้โดย fetchPatient action)
+
+---
+
+## Customer Fetch (fetchPatient action)
+
+### `POST /api/proclinic/customer` — `action: 'fetchPatient'`
+
+ดึงข้อมูลผู้ป่วยจาก ProClinic edit page แล้ว reverse map กลับเป็น app patientData format
+
+**Input:**
+```json
+{ "action": "fetchPatient", "proClinicId": "12345" }
+```
+
+**Process:**
+```
+1. Fetch edit page: GET /customers/{proClinicId}/edit
+2. extractFormFields(html) → raw form field values (name, phone, DOB, etc.)
+3. extractHN(html) → ProClinic HN จากหน้า edit
+4. reverseMapPatient(formFields) → แปลง ProClinic field names → app patientData format
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "patient": {
+    "prefix": "นาย",
+    "firstName": "...",
+    "lastName": "...",
+    "phone": "...",
+    "dobDay": "15",
+    "dobMonth": "3",
+    "dobYear": "2530",
+    "address": "...",
+    "allergies": "...",
+    "underlying": "...",
+    "howFoundUs": ["Facebook"],
+    "emergencyName": "...",
+    "emergencyRelation": "...",
+    "emergencyPhone": "..."
+  },
+  "proClinicId": "12345",
+  "proClinicHN": "HN-00123"
+}
+```
+
+### reverseMapPatient() (fields.js)
+
+Reverse mapping จาก ProClinic form field names กลับเป็น app patientData — ตรงข้ามกับ `buildCreateFormData` / `buildUpdateFormData` ที่แปลง app → ProClinic
+
+ใช้สำหรับ Import from ProClinic flow เพื่อสร้าง session จากข้อมูลที่มีอยู่แล้วใน ProClinic
 
 ---
 
