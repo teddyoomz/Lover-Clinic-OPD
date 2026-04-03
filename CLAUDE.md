@@ -82,6 +82,15 @@ vercel --prod
 - **displayName/pictureUrl**: แสดงของลูกค้าเสมอ ห้ามอัพเดทตามคนตอบ
 - **Chat history**: หน้าละ 20 รายการ + auto-delete เก่ากว่า 7 วัน
 
+### 9. Import from ProClinic
+- ค้นหาลูกค้าจาก HN / เบอร์โทร / เลขบัตร ปชช → ดึงข้อมูลทั้งหมด + คอร์ส + นัดหมาย
+- `customer.js` action `fetchPatient` → ดึง edit page + `reverseMapPatient()` แปลง ProClinic fields → patientData
+- **Duplicate check**: ตรวจ HN / เบอร์ / เลขบัตร ซ้ำกับ sessions ที่มีอยู่
+  - ซ้ำ + sync ปกติ → เตือน + บล็อก
+  - ซ้ำ + หลุด sync (`brokerStatus !== 'done'`) → auto resync
+  - ไม่ซ้ำ → สร้าง session `IMP-XXXXXX`
+- **ห้ามใส่ `isPermanent: true`** ใน imported session → จะถูก filter ออกจากหน้าประวัติ
+
 ---
 
 ## 📁 โครงสร้างไฟล์หลัก
@@ -111,7 +120,7 @@ api/webhook/                 — Chat webhook endpoints
 ├── facebook.js (webhook handler + echo), line.js, send.js (ส่งข้อความ FB/LINE)
 └── saved-replies.js (proxy FB saved_message_responses)
 api/proclinic/               — Vercel Serverless Functions — 5 consolidated endpoints (ดู docs/API.md)
-├── customer.js (create/update/delete/search), deposit.js (submit/update/cancel/options)
+├── customer.js (create/update/delete/search/fetchPatient), deposit.js (submit/update/cancel/options)
 ├── connection.js (login/credentials/clear), appointment.js (create/update/delete), courses.js
 └── _lib/ (session.js, scraper.js, fields.js, auth.js)
 cookie-relay/                — Cookie Relay Extension MV3 (ดู docs/EXTENSION.md)
