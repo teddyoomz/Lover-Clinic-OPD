@@ -3,7 +3,7 @@ import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteD
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
   Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon,
-  CheckCircle2, History, Clock, ExternalLink
+  CheckCircle2, History, Clock
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
@@ -18,35 +18,6 @@ function PlatformBadge({ platform }) {
   if (platform === 'line') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: LINE_COLOR + '22', color: LINE_COLOR }}>LINE</span>;
   if (platform === 'facebook') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: FB_COLOR + '22', color: FB_COLOR }}>FB</span>;
   return null;
-}
-
-// ─── Reply in native app helpers ──────────────────────────────────────────
-
-function getReplyUrl(platform, odriverId, config) {
-  if (platform === 'facebook') {
-    const pageId = config?.fbPageId;
-    // PSID deep link not supported by Facebook — open Page inbox directly
-    if (pageId) {
-      return { primary: `https://www.facebook.com/${pageId}/inbox` };
-    }
-    return { primary: 'https://business.facebook.com/latest/inbox/all' };
-  }
-  if (platform === 'line') {
-    const botId = config?.lineBotUserId;
-    // LINE OA Chat — Messaging API userId ≠ chat.line.biz userId, deep link to specific user not possible
-    if (botId) {
-      return { primary: `https://chat.line.biz/${botId}` };
-    }
-    return { primary: 'https://chat.line.biz/' };
-  }
-  return null;
-}
-
-function openReplyApp(e, platform, odriverId, config) {
-  e.stopPropagation();
-  const urls = getReplyUrl(platform, odriverId, config);
-  if (!urls) return;
-  window.open(urls.primary, '_blank');
 }
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
@@ -90,7 +61,6 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
   const [line, setLine] = useState({
     channelAccessToken: chatConfig?.line?.channelAccessToken || '',
     channelSecret: chatConfig?.line?.channelSecret || '',
-    botUserId: chatConfig?.line?.botUserId || '',
     enabled: chatConfig?.line?.enabled ?? false,
   });
   const [fb, setFb] = useState({
@@ -175,10 +145,6 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
             </div>
           </div>
           <div>
-            <label className={labelCls}>OA Chat ID (ดูจาก URL ใน chat.line.biz/Uxx... เมื่อเปิดแชท)</label>
-            <input value={line.botUserId} onChange={e => setLine(p => ({ ...p, botUserId: e.target.value }))} className={inputCls} placeholder="U8e4bb0fc0bc98b863ffc096fba4db748" />
-          </div>
-          <div>
             <label className={labelCls}>Webhook URL (ใส่ใน LINE Developer Console)</label>
             <div className="flex items-center gap-2">
               <input readOnly value={`${webhookBase}/api/webhook/line`} className={`${inputCls} text-xs opacity-70`} />
@@ -253,7 +219,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
 
 // ─── Chat Detail View (read-only) ─────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack, replyConfig }) {
+function ChatDetailView({ db, appId, conversation, onBack }) {
   const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null);
 
@@ -299,14 +265,7 @@ function ChatDetailView({ db, appId, conversation, onBack, replyConfig }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, replyConfig)}
-          title={conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
-          className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold hover:opacity-80 transition-all flex items-center gap-1 text-white"
-          style={{ backgroundColor: platformColor }}>
-          <ExternalLink size={12} />
-          <span className="hidden sm:inline">{conversation.platform === 'line' ? 'ตอบใน LINE' : 'ตอบใน Messenger'}</span>
-          <span className="sm:hidden">ตอบ</span>
-        </button>
+        <span className="text-[10px] text-[var(--tx-muted)]">อ่านอย่างเดียว</span>
       </div>
 
       {/* Messages */}
@@ -331,12 +290,7 @@ function ChatDetailView({ db, appId, conversation, onBack, replyConfig }) {
 
       {/* Read-only notice */}
       <div className="p-3 border-t border-[var(--bd)] text-center">
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, replyConfig)}
-          className="text-xs font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-80 flex items-center gap-1.5 mx-auto"
-          style={{ backgroundColor: platformColor }}>
-          <ExternalLink size={14} />
-          {conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
-        </button>
+        <p className="text-[10px] text-[var(--tx-muted)]">ตอบแชทผ่านแอป LINE / Facebook Messenger โดยตรง</p>
       </div>
     </div>
   );
@@ -444,8 +398,9 @@ export default function ChatPanel({ db, appId, user }) {
     }
   }, [db, appId, user, resolvingId]);
 
-  const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
-  const fbUnread = conversations.filter(c => c.platform === 'facebook' && c.unreadCount > 0).reduce((s, c) => s + (c.unreadCount || 0), 0);
+  // Count number of PEOPLE with unread (not total messages)
+  const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).length;
+  const fbUnread = conversations.filter(c => c.platform === 'facebook' && c.unreadCount > 0).length;
 
   const filtered = filter === 'all' ? conversations : conversations.filter(c => c.platform === filter);
 
@@ -472,7 +427,7 @@ export default function ChatPanel({ db, appId, user }) {
   if (selectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} replyConfig={{ fbPageId: chatConfig?.facebook?.pageId, lineBotUserId: chatConfig?.line?.botUserId }} />
+        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} />
       </div>
     );
   }
@@ -635,13 +590,6 @@ export default function ChatPanel({ db, appId, user }) {
                     <Clock size={9} /> ทักมาเมื่อ {formatContactTime(contactTime)}
                   </p>
                 </button>
-                {/* Reply in native app */}
-                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId, { fbPageId: chatConfig?.facebook?.pageId, lineBotUserId: chatConfig?.line?.botUserId })}
-                  title={conv.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
-                  className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-hover)] transition-all"
-                  style={{ color: pColor }}>
-                  <ExternalLink size={15} />
-                </button>
                 {/* Resolve button */}
                 <button onClick={(e) => handleResolve(conv, e)} disabled={isResolving}
                   className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
@@ -673,8 +621,9 @@ export function useChatUnread(db, appId) {
         const data = d.data();
         const count = data.unreadCount || 0;
         if (count > 0) {
-          if (data.platform === 'line') lu += count;
-          else if (data.platform === 'facebook') fu += count;
+          // Count number of people, not total messages
+          if (data.platform === 'line') lu += 1;
+          else if (data.platform === 'facebook') fu += 1;
         }
       });
       setLineUnread(lu);
