@@ -418,6 +418,8 @@ export default function ChatPanel({ db, appId, user }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PER_PAGE = 20;
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
   const [resolvingId, setResolvingId] = useState(null);
@@ -440,13 +442,24 @@ export default function ChatPanel({ db, appId, user }) {
     });
   }, [db, appId]);
 
-  // Listen to chat history (only when viewing)
+  // Listen to chat history (only when viewing) + auto-delete > 7 days
   useEffect(() => {
     if (!showHistory) return;
+    setHistoryPage(0);
     const histRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
     const q = query(histRef, orderBy('resolvedAt', 'desc'), firestoreLimit(200));
     return onSnapshot(q, snap => {
-      setHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const valid = [];
+      snap.docs.forEach(d => {
+        const data = { id: d.id, ...d.data() };
+        if (data.resolvedAt && data.resolvedAt < sevenDaysAgo) {
+          deleteDoc(d.ref).catch(() => {});
+        } else {
+          valid.push(data);
+        }
+      });
+      setHistory(valid);
     });
   }, [showHistory, db, appId]);
 
@@ -599,7 +612,7 @@ export default function ChatPanel({ db, appId, user }) {
             </div>
           ) : (
             <div className="space-y-1.5">
-              {history.map(h => {
+              {history.slice(historyPage * HISTORY_PER_PAGE, (historyPage + 1) * HISTORY_PER_PAGE).map(h => {
                 const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
                 const gapMin = h.maxCustomerGapMs ? Math.round(h.maxCustomerGapMs / 60000) : null;
                 const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
@@ -640,6 +653,23 @@ export default function ChatPanel({ db, appId, user }) {
                   </div>
                 );
               })}
+              {/* Pagination */}
+              {history.length > HISTORY_PER_PAGE && (
+                <div className="flex items-center justify-center gap-3 pt-3">
+                  <button onClick={() => setHistoryPage(p => Math.max(0, p - 1))} disabled={historyPage === 0}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] disabled:opacity-30 transition-colors">
+                    ← ก่อนหน้า
+                  </button>
+                  <span className="text-[10px] text-[var(--tx-muted)]">
+                    {historyPage + 1} / {Math.ceil(history.length / HISTORY_PER_PAGE)}
+                  </span>
+                  <button onClick={() => setHistoryPage(p => Math.min(Math.ceil(history.length / HISTORY_PER_PAGE) - 1, p + 1))}
+                    disabled={historyPage >= Math.ceil(history.length / HISTORY_PER_PAGE) - 1}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] disabled:opacity-30 transition-colors">
+                    ถัดไป →
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
