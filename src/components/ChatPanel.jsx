@@ -33,9 +33,9 @@ function getReplyUrl(platform, odriverId, config) {
   }
   if (platform === 'line') {
     const botId = config?.lineBotUserId;
-    // LINE OA Chat deep link: chat.line.biz/{BOT_USER_ID}/chat/{USER_ID}
+    // LINE OA Chat — Messaging API userId ≠ chat.line.biz userId, deep link to specific user not possible
     if (botId) {
-      return { primary: `https://chat.line.biz/${botId}/chat/${odriverId}` };
+      return { primary: `https://chat.line.biz/${botId}` };
     }
     return { primary: 'https://chat.line.biz/' };
   }
@@ -175,8 +175,8 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
             </div>
           </div>
           <div>
-            <label className={labelCls}>Bot User ID (ดูจาก LINE OA Manager → Settings, ขึ้นต้น U...)</label>
-            <input value={line.botUserId} onChange={e => setLine(p => ({ ...p, botUserId: e.target.value }))} className={inputCls} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+            <label className={labelCls}>OA Chat ID (ดูจาก URL ใน chat.line.biz/Uxx... เมื่อเปิดแชท)</label>
+            <input value={line.botUserId} onChange={e => setLine(p => ({ ...p, botUserId: e.target.value }))} className={inputCls} placeholder="U8e4bb0fc0bc98b863ffc096fba4db748" />
           </div>
           <div>
             <label className={labelCls}>Webhook URL (ใส่ใน LINE Developer Console)</label>
