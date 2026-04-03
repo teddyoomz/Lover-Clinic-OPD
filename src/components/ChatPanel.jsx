@@ -23,16 +23,12 @@ function PlatformBadge({ platform }) {
 // ─── Reply in native app helpers ──────────────────────────────────────────
 
 function getReplyUrl(platform, odriverId, fbPageId) {
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (platform === 'facebook') {
-    // Use Meta Business Suite inbox — supports PSID directly
-    const bsUrl = fbPageId
-      ? `https://business.facebook.com/latest/inbox/all?asset_id=${fbPageId}&selected_item_id=${odriverId}`
+    // Facebook Page inbox — PSID deep link not supported, open inbox for admin to find
+    const inboxUrl = fbPageId
+      ? `https://www.facebook.com/${fbPageId}/inbox`
       : `https://business.facebook.com/latest/inbox/all`;
-    if (isMobile) {
-      return { primary: `fb-messenger://user-thread/${odriverId}`, fallback: bsUrl };
-    }
-    return { primary: bsUrl };
+    return { primary: inboxUrl };
   }
   if (platform === 'line') {
     return { primary: 'https://chat.line.biz/' };
