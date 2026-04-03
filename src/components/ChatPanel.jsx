@@ -25,9 +25,9 @@ function PlatformBadge({ platform }) {
 function getReplyUrl(platform, odriverId, config) {
   if (platform === 'facebook') {
     const pageId = config?.fbPageId;
-    // Business Suite inbox with thread_key=t_{PSID} for direct conversation
+    // PSID deep link not supported by Facebook — open Page inbox directly
     if (pageId) {
-      return { primary: `https://business.facebook.com/latest/inbox/all?asset_id=${pageId}&thread_key=t_${odriverId}` };
+      return { primary: `https://www.facebook.com/${pageId}/inbox` };
     }
     return { primary: 'https://business.facebook.com/latest/inbox/all' };
   }
