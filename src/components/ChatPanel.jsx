@@ -487,7 +487,7 @@ export default function ChatPanel({ db, appId, user }) {
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
       await addDoc(historyRef, {
         displayName: conv.displayName || 'ไม่ทราบชื่อ',
-        platform: conv.platform,
+        platform: conv.platform || (conv.id?.startsWith('line_') ? 'line' : 'facebook'),
         lastMessage: conv.lastMessage || '',
         firstContactAt: firstContactAt || now,
         lastCustomerMessageAt: lastCustomerMessageAt,
