@@ -241,7 +241,11 @@ async function processEchoMessage(recipientId, message) {
     isFromCustomer: { booleanValue: false },
   });
 
-  // Do NOT update lastMessage — keep showing customer's last message in the list
+  // Update lastMessage but NOT displayName/pictureUrl — keep customer profile
+  await firestorePatch(convPath, {
+    lastMessage: { stringValue: text },
+    lastMessageAt: { stringValue: now },
+  });
 
   console.log(`[fb-webhook] Echo saved for fb_${recipientId}: "${text.slice(0, 50)}"`);
 }

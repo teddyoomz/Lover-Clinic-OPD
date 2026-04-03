@@ -117,7 +117,12 @@ export default async function handler(req, res) {
       isFromCustomer: { booleanValue: false },
     });
 
-    // Do NOT update lastMessage — keep showing customer's last message in the list
+    // Update lastMessage but NOT displayName/pictureUrl — keep customer profile
+    const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/${convId}`;
+    await firestorePatch(convPath, {
+      lastMessage: { stringValue: text },
+      lastMessageAt: { stringValue: now },
+    });
 
     return res.status(200).json({ success: true });
   } catch (err) {
