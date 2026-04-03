@@ -118,6 +118,117 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}, countryOp
   return params;
 }
 
+// ─── Reverse mapping: ProClinic form fields → app patientData ───────────────
+
+const REVERSE_HOW_MAP = Object.fromEntries(
+  Object.entries(HOW_MAP).map(([k, v]) => [v, k])
+);
+
+const UNDERLYING_KEYWORDS = {
+  'ความดัน': 'ud_hypertension', 'hypertension': 'ud_hypertension',
+  'เบาหวาน': 'ud_diabetes', 'diabetes': 'ud_diabetes',
+  'ปอด': 'ud_lung', 'lung': 'ud_lung', 'หอบหืด': 'ud_lung', 'asthma': 'ud_lung',
+  'ไต': 'ud_kidney', 'kidney': 'ud_kidney',
+  'หัวใจ': 'ud_heart', 'heart': 'ud_heart',
+  'เลือด': 'ud_blood', 'blood': 'ud_blood',
+};
+
+export function reverseMapPatient(formFields) {
+  const f = formFields || {};
+  const patient = {};
+
+  // Direct mappings
+  if (f.prefix) patient.prefix = f.prefix;
+  if (f.firstname) patient.firstName = f.firstname;
+  if (f.lastname) patient.lastName = f.lastname;
+  if (f.telephone_number) patient.phone = f.telephone_number;
+  if (f.address) patient.address = f.address;
+  if (f.province) patient.province = f.province;
+  if (f.district) patient.district = f.district;
+  if (f.sub_district) patient.subDistrict = f.sub_district;
+  if (f.postal_code) patient.postalCode = f.postal_code;
+  if (f.gender) patient.gender = f.gender;
+
+  // Birthdate → dobDay/Month/Year + age
+  if (f.birthdate) {
+    const parts = f.birthdate.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const day = parseInt(parts[2]);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        patient.dobYear = String(year + 543); // ค.ศ. → พ.ศ.
+        patient.dobMonth = String(month);
+        patient.dobDay = String(day);
+        const today = new Date();
+        let age = today.getFullYear() - year;
+        if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age--;
+        patient.age = String(age);
+      }
+    }
+  }
+
+  // Source → howFoundUs
+  if (f.source_detail) {
+    patient.howFoundUs = f.source_detail.split(',').map(s => s.trim()).filter(Boolean);
+  } else if (f.source) {
+    const reversed = REVERSE_HOW_MAP[f.source] || f.source;
+    patient.howFoundUs = [reversed];
+  }
+
+  // Symptoms → visitReasons
+  if (f.symptoms) {
+    patient.visitReasons = f.symptoms.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  // Allergies
+  if (f.history_of_drug_allergy && f.history_of_drug_allergy.trim()) {
+    patient.hasAllergies = 'มี';
+    patient.allergiesDetail = f.history_of_drug_allergy.trim();
+  } else {
+    patient.hasAllergies = 'ไม่มี';
+  }
+
+  // Underlying conditions
+  const congenital = (f.congenital_disease || '').trim();
+  if (congenital) {
+    patient.hasUnderlying = 'มี';
+    const lower = congenital.toLowerCase();
+    for (const [keyword, field] of Object.entries(UNDERLYING_KEYWORDS)) {
+      if (lower.includes(keyword.toLowerCase())) patient[field] = true;
+    }
+    const hasKnown = Object.values(UNDERLYING_KEYWORDS).some(field => patient[field]);
+    if (!hasKnown) {
+      patient.ud_other = true;
+      patient.ud_otherDetail = congenital;
+    }
+  } else {
+    patient.hasUnderlying = 'ไม่มี';
+  }
+
+  // Clinical note
+  if (f.note) patient.clinicalSummary = f.note;
+
+  // Emergency contact
+  if (f.contact_1_firstname) patient.emergencyName = f.contact_1_firstname;
+  if (f.contact_1_lastname) patient.emergencyRelation = f.contact_1_lastname;
+  if (f.contact_1_telephone_number) patient.emergencyPhone = f.contact_1_telephone_number;
+
+  // Nationality
+  if (f.customer_type === 'ชาวต่างชาติ') {
+    patient.nationality = 'ต่างชาติ';
+    if (f.country) patient.nationalityCountry = f.country;
+  } else {
+    patient.nationality = 'ไทย';
+  }
+
+  // ID card — check multiple possible field names
+  const idCard = f.id_card_number || f.citizen_id || f.card_no || f.id_number || '';
+  if (idCard) patient.idCard = idCard;
+
+  return patient;
+}
+
 // ─── Build form data for UPDATE ─────────────────────────────────────────────
 
 export function buildUpdateFormData(patient, existingFields, csrf, countryOptions = []) {

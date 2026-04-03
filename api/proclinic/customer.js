@@ -2,7 +2,7 @@
 // Actions: create, update, delete, search
 import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch } from './_lib/scraper.js';
-import { buildCreateFormData, buildUpdateFormData } from './_lib/fields.js';
+import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
 
 // ─── Shared helper ──────────────────────────────────────────────────────────
@@ -213,6 +213,32 @@ async function handleDelete(req, res) {
   throw new Error(`Server ตอบกลับ status ${deleteRes.status}`);
 }
 
+// ─── Action: fetchPatient (import from ProClinic) ──────────────────────────
+
+async function handleFetchPatient(req, res) {
+  const { proClinicId } = req.body || {};
+  if (!proClinicId) {
+    return res.status(400).json({ success: false, error: 'Missing proClinicId' });
+  }
+
+  const session = await createSession();
+  const base = session.origin;
+  const editHtml = await session.fetchText(`${base}/admin/customer/${proClinicId}/edit`);
+
+  const isEditPage = editHtml.includes(`customer/${proClinicId}`) && editHtml.includes('name="firstname"');
+  if (!isEditPage) {
+    const err = new Error(`Customer ID ${proClinicId} ไม่พบใน ProClinic`);
+    err.notFound = true;
+    throw err;
+  }
+
+  const formFields = extractFormFields(editHtml);
+  const proClinicHN = extractHN(editHtml);
+  const patient = reverseMapPatient(formFields);
+
+  return res.status(200).json({ success: true, patient, proClinicId, proClinicHN });
+}
+
 // ─── Action: search ─────────────────────────────────────────────────────────
 
 async function handleSearch(req, res) {
@@ -244,6 +270,7 @@ export default async function handler(req, res) {
     if (action === 'update') return await handleUpdate(req, res);
     if (action === 'delete') return await handleDelete(req, res);
     if (action === 'search') return await handleSearch(req, res);
+    if (action === 'fetchPatient') return await handleFetchPatient(req, res);
     return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
   } catch (err) {
     const resp = { success: false, error: err.message };

@@ -356,6 +356,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
+  // ─── Import from ProClinic state ──────────────────────────
+  const [showImport, setShowImport] = useState(false);
+  const [importSearch, setImportSearch] = useState('');
+  const [importResults, setImportResults] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importPreviewLoading, setImportPreviewLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState('');
   const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
   const brokerPendingRef = useRef(brokerPending);
   brokerPendingRef.current = brokerPending;
@@ -2368,6 +2377,138 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const PROCLINIC_ORIGIN = 'https://trial.proclinicth.com';
   const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
 
+  // ── Import from ProClinic handlers ──────────────────────────────────────────
+  const handleImportSearch = async () => {
+    const q = importSearch.trim();
+    if (!q) return;
+    setImportLoading(true);
+    setImportResults(null);
+    setImportPreview(null);
+    setImportError('');
+    setImportSuccess('');
+    try {
+      const result = await broker.searchCustomers(q);
+      if (!result.success) throw new Error(result.error || 'ค้นหาไม่สำเร็จ');
+      setImportResults(result.customers || []);
+    } catch (err) {
+      setImportError(err.message);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleImportSelect = async (proClinicId) => {
+    setImportPreviewLoading(true);
+    setImportPreview(null);
+    setImportError('');
+    try {
+      const [patientRes, coursesRes] = await Promise.all([
+        broker.fetchPatientFromProClinic(proClinicId),
+        broker.getCourses(proClinicId),
+      ]);
+      if (!patientRes.success) throw new Error(patientRes.error || 'ดึงข้อมูลไม่สำเร็จ');
+      setImportPreview({
+        patient: patientRes.patient,
+        proClinicId: patientRes.proClinicId,
+        proClinicHN: patientRes.proClinicHN,
+        courses: coursesRes.success ? coursesRes.courses : [],
+        expiredCourses: coursesRes.success ? coursesRes.expiredCourses : [],
+        appointments: coursesRes.success ? coursesRes.appointments : [],
+      });
+    } catch (err) {
+      setImportError(err.message);
+    } finally {
+      setImportPreviewLoading(false);
+    }
+  };
+
+  const checkImportDuplicate = (patient, proClinicHN) => {
+    const allSessions = [...sessions, ...archivedSessions];
+    const normalPhone = (p) => (p || '').replace(/\D/g, '');
+    for (const s of allSessions) {
+      const d = s.patientData;
+      // HN match
+      if (proClinicHN && s.brokerProClinicHN === proClinicHN) {
+        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
+      }
+      // Phone match
+      if (patient.phone && d?.phone && normalPhone(patient.phone) === normalPhone(d.phone)) {
+        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
+      }
+      // ID card match
+      if (patient.idCard && d?.idCard && patient.idCard === d.idCard) {
+        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
+      }
+    }
+    return { duplicate: null, canResync: false };
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importPreview) return;
+    const { patient, proClinicId, proClinicHN, courses, expiredCourses, appointments } = importPreview;
+    setImportError('');
+    setImportSuccess('');
+
+    const { duplicate, canResync } = checkImportDuplicate(patient, proClinicHN);
+
+    if (duplicate && !canResync) {
+      setImportError(`ข้อมูลซ้ำกับ "${duplicate.sessionName || duplicate.id}" (${duplicate.id}) ที่มีอยู่แล้วในระบบ`);
+      return;
+    }
+
+    try {
+      if (duplicate && canResync) {
+        // Auto resync existing session
+        const sessionRef = doc(db, `artifacts/${appId}/public/data/opd_sessions`, duplicate.id);
+        await updateDoc(sessionRef, {
+          brokerProClinicId: proClinicId,
+          brokerProClinicHN: proClinicHN,
+          brokerStatus: 'done',
+          brokerError: null,
+          brokerFilledAt: new Date().toISOString(),
+          opdRecordedAt: new Date().toISOString(),
+          patientData: patient,
+          latestCourses: { courses, expiredCourses, appointments, fetchedAt: new Date().toISOString(), success: true },
+        });
+        setImportSuccess(`Resync สำเร็จ — อัพเดทข้อมูล "${duplicate.sessionName || duplicate.id}"`);
+      } else {
+        // Create new imported session
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        const sessionId = `IMP-${code}`;
+        const sessionName = [patient.firstName, patient.lastName].filter(Boolean).join(' ') || 'นำเข้าจาก ProClinic';
+        const sessionRef = doc(db, `artifacts/${appId}/public/data/opd_sessions`, sessionId);
+        await setDoc(sessionRef, {
+          status: 'completed',
+          isArchived: true,
+          archivedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          submittedAt: new Date().toISOString(),
+          isPermanent: true,
+          formType: 'intake',
+          sessionName,
+          patientData: patient,
+          brokerProClinicId: proClinicId,
+          brokerProClinicHN: proClinicHN,
+          brokerStatus: 'done',
+          brokerFilledAt: new Date().toISOString(),
+          opdRecordedAt: new Date().toISOString(),
+          brokerError: null,
+          latestCourses: { courses, expiredCourses, appointments, fetchedAt: new Date().toISOString(), success: true },
+          importedFromProClinic: true,
+          importedAt: new Date().toISOString(),
+        });
+        setImportSuccess(`นำเข้าสำเร็จ — ${sessionName} (${sessionId})`);
+      }
+      setImportPreview(null);
+      setImportResults(null);
+      setImportSearch('');
+    } catch (err) {
+      setImportError(`เกิดข้อผิดพลาด: ${err.message}`);
+    }
+  };
+
   // ── History page computed vars (ต้องอยู่นอก JSX — OXC parser ไม่รองรับ IIFE) ──
   const HISTORY_PAGE_SIZE = 10;
   const historyQ = historySearch.trim().toLowerCase();
@@ -2640,8 +2781,87 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <div className="flex items-center gap-3">
               <History size={20} className="text-amber-500" />
               <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-amber-500">ประวัติผู้ป่วย (Archive)</h2>
-              <span className="ml-auto text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
+              <span className="text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
+              <button onClick={() => { setShowImport(!showImport); setImportError(''); setImportSuccess(''); }}
+                className={`ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${showImport ? 'bg-teal-600 text-white border-teal-500' : 'bg-teal-950/30 text-teal-400 border-teal-800/50 hover:bg-teal-900/40'}`}>
+                <UserPlus size={13}/> นำเข้าจาก ProClinic
+              </button>
             </div>
+
+            {/* Import from ProClinic section */}
+            {showImport && (
+              <div className="bg-teal-950/20 border border-teal-800/40 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input value={importSearch} onChange={e => setImportSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleImportSearch(); }}
+                    placeholder="ค้นหา HN, เบอร์โทร, เลขบัตร ปชช, หรือชื่อ..."
+                    className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-sm text-[var(--tx-heading)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-teal-600 transition-colors" />
+                  <button onClick={handleImportSearch} disabled={importLoading || !importSearch.trim()}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5">
+                    {importLoading ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} ค้นหา
+                  </button>
+                </div>
+
+                {importError && <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2">{importError}</p>}
+                {importSuccess && <p className="text-xs text-green-400 bg-green-950/30 border border-green-800/40 rounded-lg px-3 py-2">{importSuccess}</p>}
+
+                {/* Search results */}
+                {importResults && !importPreview && (
+                  <div className="space-y-1">
+                    {importResults.length === 0 ? (
+                      <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่พบผลลัพธ์ใน ProClinic</p>
+                    ) : importResults.map(c => (
+                      <div key={c.id} className="flex items-center justify-between bg-[var(--bg-hover)] rounded-lg px-3 py-2">
+                        <div>
+                          <span className="text-sm font-bold text-[var(--tx-heading)]">{c.name || `ID: ${c.id}`}</span>
+                          {c.phone && <span className="ml-2 text-xs text-[var(--tx-muted)]">{c.phone}</span>}
+                        </div>
+                        <button onClick={() => handleImportSelect(c.id)} disabled={importPreviewLoading}
+                          className="text-xs font-bold px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors disabled:opacity-40">
+                          {importPreviewLoading ? <Loader2 size={12} className="animate-spin"/> : 'เลือก'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Preview */}
+                {importPreviewLoading && (
+                  <div className="flex justify-center py-6"><Loader2 size={24} className="animate-spin text-teal-400"/></div>
+                )}
+                {importPreview && (
+                  <div className="bg-[var(--bg-card)] border border-teal-800/40 rounded-xl p-4 space-y-3">
+                    <h4 className="text-sm font-bold text-teal-400 tracking-wider uppercase">ตรวจสอบข้อมูลก่อนนำเข้า</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-[var(--tx-muted)]">ชื่อ:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.prefix} {importPreview.patient.firstName} {importPreview.patient.lastName}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">HN:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.proClinicHN || '-'}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">เบอร์:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.phone || '-'}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">เลขบัตร:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.idCard || '-'}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">อายุ:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.age || '-'} ปี</span></div>
+                      <div><span className="text-[var(--tx-muted)]">เพศ:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.gender || '-'}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">จังหวัด:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.province || '-'}</span></div>
+                      <div><span className="text-[var(--tx-muted)]">แพ้ยา:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.hasAllergies === 'มี' ? importPreview.patient.allergiesDetail : 'ไม่มี'}</span></div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-[var(--tx-muted)]">
+                      <span><Package size={12} className="inline mr-1 text-teal-400"/>{importPreview.courses.length} คอร์ส</span>
+                      <span><PackageX size={12} className="inline mr-1 text-gray-500"/>{importPreview.expiredCourses.length} หมดอายุ</span>
+                      <span><CalendarClock size={12} className="inline mr-1 text-blue-400"/>{importPreview.appointments.length} นัดหมาย</span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button onClick={handleImportConfirm}
+                        className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5">
+                        <UserPlus size={14}/> ยืนยันนำเข้า
+                      </button>
+                      <button onClick={() => { setImportPreview(null); setImportResults(null); }}
+                        className="px-4 py-2 bg-[var(--bg-hover)] text-[var(--tx-muted)] text-sm rounded-lg border border-[var(--bd)] hover:text-[var(--tx-heading)] transition-colors">
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Search box */}
             <div className="relative">
               <input

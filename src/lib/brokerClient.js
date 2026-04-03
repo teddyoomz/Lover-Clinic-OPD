@@ -133,6 +133,11 @@ export function searchCustomers(query) {
   return apiFetch('customer', { action: 'search', query });
 }
 
+/** Fetch full patient data from ProClinic by ID → { success, patient, proClinicId, proClinicHN } */
+export function fetchPatientFromProClinic(proClinicId) {
+  return apiFetch('customer', { action: 'fetchPatient', proClinicId });
+}
+
 // ─── Public API — Deposit ───────────────────────────────────────────────────
 
 /** Get deposit form options (sellers, doctors, rooms, etc.) from ProClinic */
