@@ -358,48 +358,54 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Reply input */}
-      <div className="p-3 border-t border-[var(--bd)]">
-        <div className="flex items-center gap-2">
-          {/* Saved replies button */}
-          <div className="relative saved-replies-container">
-            <button onClick={() => { setShowSavedReplies(!showSavedReplies); if (!showSavedReplies) fetchSavedReplies(); }}
-              title="ข้อความสำเร็จรูป"
-              className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors flex-shrink-0">
-              <Bookmark size={16} />
+      {/* Reply input — Facebook only (LINE ไม่มี echo ดูไม่ได้ว่าคนอื่นตอบแล้ว) */}
+      {conversation?.platform === 'facebook' ? (
+        <div className="p-3 border-t border-[var(--bd)]">
+          <div className="flex items-center gap-2">
+            {/* Saved replies button */}
+            <div className="relative saved-replies-container">
+              <button onClick={() => { setShowSavedReplies(!showSavedReplies); if (!showSavedReplies) fetchSavedReplies(); }}
+                title="ข้อความสำเร็จรูป"
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors flex-shrink-0">
+                <Bookmark size={16} />
+              </button>
+              {showSavedReplies && (
+                <div className="absolute bottom-12 left-0 w-72 max-h-60 overflow-y-auto bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl shadow-2xl z-50 p-2">
+                  {loadingReplies ? (
+                    <div className="flex justify-center py-4"><Loader2 size={18} className="animate-spin text-[var(--tx-muted)]" /></div>
+                  ) : savedReplies.length > 0 ? savedReplies.map(r => (
+                    <button key={r.id} onClick={() => handleUseSavedReply(r)}
+                      className="w-full text-left p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors">
+                      <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{r.title}</p>
+                      <p className="text-[10px] text-[var(--tx-muted)] line-clamp-2">{r.message}</p>
+                    </button>
+                  )) : (
+                    <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่มีข้อความสำเร็จรูป</p>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Text input */}
+            <input ref={inputRef} value={newMsg} onChange={e => setNewMsg(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="พิมพ์ข้อความ..."
+              className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-full px-4 py-2.5 outline-none text-sm transition-colors"
+              style={{ borderColor: undefined }}
+              onFocus={e => e.target.style.borderColor = platformColor}
+              onBlur={e => e.target.style.borderColor = ''} />
+            {/* Send button */}
+            <button onClick={handleSend} disabled={!newMsg.trim() || sending}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 flex-shrink-0"
+              style={{ backgroundColor: platformColor }}>
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
-            {showSavedReplies && (
-              <div className="absolute bottom-12 left-0 w-72 max-h-60 overflow-y-auto bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl shadow-2xl z-50 p-2">
-                {loadingReplies ? (
-                  <div className="flex justify-center py-4"><Loader2 size={18} className="animate-spin text-[var(--tx-muted)]" /></div>
-                ) : savedReplies.length > 0 ? savedReplies.map(r => (
-                  <button key={r.id} onClick={() => handleUseSavedReply(r)}
-                    className="w-full text-left p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors">
-                    <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{r.title}</p>
-                    <p className="text-[10px] text-[var(--tx-muted)] line-clamp-2">{r.message}</p>
-                  </button>
-                )) : (
-                  <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่มีข้อความสำเร็จรูป</p>
-                )}
-              </div>
-            )}
           </div>
-          {/* Text input */}
-          <input ref={inputRef} value={newMsg} onChange={e => setNewMsg(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="พิมพ์ข้อความ..."
-            className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-full px-4 py-2.5 outline-none text-sm transition-colors"
-            style={{ borderColor: undefined }}
-            onFocus={e => e.target.style.borderColor = platformColor}
-            onBlur={e => e.target.style.borderColor = ''} />
-          {/* Send button */}
-          <button onClick={handleSend} disabled={!newMsg.trim() || sending}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 flex-shrink-0"
-            style={{ backgroundColor: platformColor }}>
-            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
         </div>
-      </div>
+      ) : (
+        <div className="p-3 border-t border-[var(--bd)]">
+          <p className="text-xs text-center text-[var(--tx-muted)]">ตอบแชท LINE ผ่าน LINE OA Chat เท่านั้น</p>
+        </div>
+      )}
     </div>
   );
 }
