@@ -22,12 +22,17 @@ function PlatformBadge({ platform }) {
 
 // ─── Reply in native app helpers ──────────────────────────────────────────
 
-function getReplyUrl(platform, odriverId) {
+function getReplyUrl(platform, odriverId, fbPageId) {
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (platform === 'facebook') {
-    return isMobile
-      ? { primary: `fb-messenger://user-thread/${odriverId}`, fallback: `https://www.messenger.com/t/${odriverId}` }
-      : { primary: `https://www.messenger.com/t/${odriverId}` };
+    // Use Meta Business Suite inbox — supports PSID directly
+    const bsUrl = fbPageId
+      ? `https://business.facebook.com/latest/inbox/all?asset_id=${fbPageId}&selected_item_id=${odriverId}`
+      : `https://business.facebook.com/latest/inbox/all`;
+    if (isMobile) {
+      return { primary: `fb-messenger://user-thread/${odriverId}`, fallback: bsUrl };
+    }
+    return { primary: bsUrl };
   }
   if (platform === 'line') {
     return { primary: 'https://chat.line.biz/' };
@@ -35,9 +40,9 @@ function getReplyUrl(platform, odriverId) {
   return null;
 }
 
-function openReplyApp(e, platform, odriverId) {
+function openReplyApp(e, platform, odriverId, fbPageId) {
   e.stopPropagation();
-  const urls = getReplyUrl(platform, odriverId);
+  const urls = getReplyUrl(platform, odriverId, fbPageId);
   if (!urls) return;
   if (urls.fallback) {
     window.location.href = urls.primary;
@@ -246,7 +251,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
 
 // ─── Chat Detail View (read-only) ─────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack }) {
+function ChatDetailView({ db, appId, conversation, onBack, fbPageId }) {
   const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null);
 
@@ -292,7 +297,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId)}
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, fbPageId)}
           title={conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
           className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold hover:opacity-80 transition-all flex items-center gap-1 text-white"
           style={{ backgroundColor: platformColor }}>
@@ -324,7 +329,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 
       {/* Read-only notice */}
       <div className="p-3 border-t border-[var(--bd)] text-center">
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId)}
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, fbPageId)}
           className="text-xs font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-80 flex items-center gap-1.5 mx-auto"
           style={{ backgroundColor: platformColor }}>
           <ExternalLink size={14} />
@@ -465,7 +470,7 @@ export default function ChatPanel({ db, appId, user }) {
   if (selectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} />
+        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} fbPageId={chatConfig?.facebook?.pageId} />
       </div>
     );
   }
@@ -629,7 +634,7 @@ export default function ChatPanel({ db, appId, user }) {
                   </p>
                 </button>
                 {/* Reply in native app */}
-                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId)}
+                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId, chatConfig?.facebook?.pageId)}
                   title={conv.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
                   className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-hover)] transition-all"
                   style={{ color: pColor }}>
