@@ -22,30 +22,31 @@ function PlatformBadge({ platform }) {
 
 // ─── Reply in native app helpers ──────────────────────────────────────────
 
-function getReplyUrl(platform, odriverId, fbPageId) {
+function getReplyUrl(platform, odriverId, config) {
   if (platform === 'facebook') {
-    // Facebook Page inbox — PSID deep link not supported, open inbox for admin to find
-    const inboxUrl = fbPageId
-      ? `https://www.facebook.com/${fbPageId}/inbox`
-      : `https://business.facebook.com/latest/inbox/all`;
-    return { primary: inboxUrl };
+    const pageId = config?.fbPageId;
+    // Business Suite inbox with thread_key=t_{PSID} for direct conversation
+    if (pageId) {
+      return { primary: `https://business.facebook.com/latest/inbox/all?asset_id=${pageId}&thread_key=t_${odriverId}` };
+    }
+    return { primary: 'https://business.facebook.com/latest/inbox/all' };
   }
   if (platform === 'line') {
+    const botId = config?.lineBotUserId;
+    // LINE OA Chat deep link: chat.line.biz/{BOT_USER_ID}/chat/{USER_ID}
+    if (botId) {
+      return { primary: `https://chat.line.biz/${botId}/chat/${odriverId}` };
+    }
     return { primary: 'https://chat.line.biz/' };
   }
   return null;
 }
 
-function openReplyApp(e, platform, odriverId, fbPageId) {
+function openReplyApp(e, platform, odriverId, config) {
   e.stopPropagation();
-  const urls = getReplyUrl(platform, odriverId, fbPageId);
+  const urls = getReplyUrl(platform, odriverId, config);
   if (!urls) return;
-  if (urls.fallback) {
-    window.location.href = urls.primary;
-    setTimeout(() => window.open(urls.fallback, '_blank'), 1500);
-  } else {
-    window.open(urls.primary, '_blank');
-  }
+  window.open(urls.primary, '_blank');
 }
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
@@ -89,6 +90,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
   const [line, setLine] = useState({
     channelAccessToken: chatConfig?.line?.channelAccessToken || '',
     channelSecret: chatConfig?.line?.channelSecret || '',
+    botUserId: chatConfig?.line?.botUserId || '',
     enabled: chatConfig?.line?.enabled ?? false,
   });
   const [fb, setFb] = useState({
@@ -173,6 +175,10 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
             </div>
           </div>
           <div>
+            <label className={labelCls}>Bot User ID (ดูจาก LINE OA Manager → Settings, ขึ้นต้น U...)</label>
+            <input value={line.botUserId} onChange={e => setLine(p => ({ ...p, botUserId: e.target.value }))} className={inputCls} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+          </div>
+          <div>
             <label className={labelCls}>Webhook URL (ใส่ใน LINE Developer Console)</label>
             <div className="flex items-center gap-2">
               <input readOnly value={`${webhookBase}/api/webhook/line`} className={`${inputCls} text-xs opacity-70`} />
@@ -247,7 +253,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
 
 // ─── Chat Detail View (read-only) ─────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack, fbPageId }) {
+function ChatDetailView({ db, appId, conversation, onBack, replyConfig }) {
   const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null);
 
@@ -293,7 +299,7 @@ function ChatDetailView({ db, appId, conversation, onBack, fbPageId }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, fbPageId)}
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, replyConfig)}
           title={conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
           className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold hover:opacity-80 transition-all flex items-center gap-1 text-white"
           style={{ backgroundColor: platformColor }}>
@@ -325,7 +331,7 @@ function ChatDetailView({ db, appId, conversation, onBack, fbPageId }) {
 
       {/* Read-only notice */}
       <div className="p-3 border-t border-[var(--bd)] text-center">
-        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, fbPageId)}
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId, replyConfig)}
           className="text-xs font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-80 flex items-center gap-1.5 mx-auto"
           style={{ backgroundColor: platformColor }}>
           <ExternalLink size={14} />
@@ -466,7 +472,7 @@ export default function ChatPanel({ db, appId, user }) {
   if (selectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} fbPageId={chatConfig?.facebook?.pageId} />
+        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} replyConfig={{ fbPageId: chatConfig?.facebook?.pageId, lineBotUserId: chatConfig?.line?.botUserId }} />
       </div>
     );
   }
@@ -630,7 +636,7 @@ export default function ChatPanel({ db, appId, user }) {
                   </p>
                 </button>
                 {/* Reply in native app */}
-                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId, chatConfig?.facebook?.pageId)}
+                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId, { fbPageId: chatConfig?.facebook?.pageId, lineBotUserId: chatConfig?.line?.botUserId })}
                   title={conv.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
                   className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-hover)] transition-all"
                   style={{ color: pColor }}>
