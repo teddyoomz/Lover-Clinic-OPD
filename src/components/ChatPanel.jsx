@@ -389,8 +389,7 @@ export default function ChatPanel({ db, appId, user }) {
       // Delete the conversation document
       await deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_conversations`, convId));
 
-      // Switch to history view
-      setShowHistory(true);
+      // Stay on conversation list (conversation disappears automatically via Firestore listener)
     } catch (err) {
       alert(`เกิดข้อผิดพลาด: ${err.message}`);
     } finally {
