@@ -3,7 +3,7 @@ import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteD
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
   Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon,
-  CheckCircle2, History, Clock
+  CheckCircle2, History, Clock, ExternalLink
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
@@ -18,6 +18,33 @@ function PlatformBadge({ platform }) {
   if (platform === 'line') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: LINE_COLOR + '22', color: LINE_COLOR }}>LINE</span>;
   if (platform === 'facebook') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: FB_COLOR + '22', color: FB_COLOR }}>FB</span>;
   return null;
+}
+
+// ─── Reply in native app helpers ──────────────────────────────────────────
+
+function getReplyUrl(platform, odriverId) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (platform === 'facebook') {
+    return isMobile
+      ? { primary: `fb-messenger://user-thread/${odriverId}`, fallback: `https://www.messenger.com/t/${odriverId}` }
+      : { primary: `https://www.messenger.com/t/${odriverId}` };
+  }
+  if (platform === 'line') {
+    return { primary: 'https://chat.line.biz/' };
+  }
+  return null;
+}
+
+function openReplyApp(e, platform, odriverId) {
+  e.stopPropagation();
+  const urls = getReplyUrl(platform, odriverId);
+  if (!urls) return;
+  if (urls.fallback) {
+    window.location.href = urls.primary;
+    setTimeout(() => window.open(urls.fallback, '_blank'), 1500);
+  } else {
+    window.open(urls.primary, '_blank');
+  }
 }
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
@@ -265,7 +292,14 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <span className="text-[10px] text-[var(--tx-muted)]">อ่านอย่างเดียว</span>
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId)}
+          title={conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
+          className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold hover:opacity-80 transition-all flex items-center gap-1 text-white"
+          style={{ backgroundColor: platformColor }}>
+          <ExternalLink size={12} />
+          <span className="hidden sm:inline">{conversation.platform === 'line' ? 'ตอบใน LINE' : 'ตอบใน Messenger'}</span>
+          <span className="sm:hidden">ตอบ</span>
+        </button>
       </div>
 
       {/* Messages */}
@@ -290,7 +324,12 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 
       {/* Read-only notice */}
       <div className="p-3 border-t border-[var(--bd)] text-center">
-        <p className="text-[10px] text-[var(--tx-muted)]">ตอบแชทผ่านแอป LINE / Facebook Messenger โดยตรง</p>
+        <button onClick={(e) => openReplyApp(e, conversation.platform, conversation.odriverId)}
+          className="text-xs font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-80 flex items-center gap-1.5 mx-auto"
+          style={{ backgroundColor: platformColor }}>
+          <ExternalLink size={14} />
+          {conversation.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
+        </button>
       </div>
     </div>
   );
@@ -588,6 +627,13 @@ export default function ChatPanel({ db, appId, user }) {
                   <p className="text-[9px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
                     <Clock size={9} /> ทักมาเมื่อ {formatContactTime(contactTime)}
                   </p>
+                </button>
+                {/* Reply in native app */}
+                <button onClick={(e) => openReplyApp(e, conv.platform, conv.odriverId)}
+                  title={conv.platform === 'line' ? 'ตอบใน LINE OA' : 'ตอบใน Messenger'}
+                  className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-hover)] transition-all"
+                  style={{ color: pColor }}>
+                  <ExternalLink size={15} />
                 </button>
                 {/* Resolve button */}
                 <button onClick={(e) => handleResolve(conv, e)} disabled={isResolving}
