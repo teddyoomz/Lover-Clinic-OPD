@@ -252,7 +252,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
   // Listen to messages
   useEffect(() => {
     if (!conversation) return;
-    const convId = `${conversation.platform === 'line' ? 'line' : 'fb'}_${conversation.odriverId}`;
+    const convId = conversation.id;
     const messagesRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
@@ -530,11 +530,13 @@ export default function ChatPanel({ db, appId, user }) {
     );
   }
 
-  // ─── Chat detail view (read-only) ─────────────────────────────────────
-  if (selectedConv) {
+  // ─── Chat detail view ───────────────────────────────────────────────
+  // Keep selectedConv in sync with realtime data
+  const liveSelectedConv = selectedConv ? (conversations.find(c => c.id === selectedConv.id) || selectedConv) : null;
+  if (liveSelectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={selectedConv} onBack={() => setSelectedConv(null)} />
+        <ChatDetailView db={db} appId={appId} conversation={liveSelectedConv} onBack={() => setSelectedConv(null)} />
       </div>
     );
   }
