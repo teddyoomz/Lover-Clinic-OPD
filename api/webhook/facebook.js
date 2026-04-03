@@ -198,6 +198,58 @@ async function processMessage(senderId, message, config) {
   await firestorePatch(convPath, convFields);
 }
 
+// ─── Process echo message (admin/AI reply from FB) ─────────────────────────
+
+const OUR_APP_ID = '959596076718659';
+
+async function processEchoMessage(recipientId, message) {
+  const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/fb_${recipientId}`;
+  const msgId = message.mid || `echo_${Date.now()}`;
+  const msgPath = `${convPath}/messages/${msgId}`;
+  const now = new Date().toISOString();
+
+  // Skip echoes from our own app (already saved by send.js)
+  if (String(message.app_id) === OUR_APP_ID) return;
+
+  // Check conversation exists
+  const existingConv = await firestoreGet(convPath);
+  if (!existingConv?.fields) return; // No conversation = ignore
+
+  // Parse message content
+  let text = '';
+  let messageType = 'text';
+  let imageUrl = '';
+
+  if (message.text) {
+    text = message.text;
+  } else if (message.attachments?.length) {
+    const att = message.attachments[0];
+    if (att.type === 'image') { text = '[รูปภาพ]'; messageType = 'image'; imageUrl = att.payload?.url || ''; }
+    else if (att.type === 'video') { text = '[วิดีโอ]'; messageType = 'video'; }
+    else if (att.type === 'audio') { text = '[เสียง]'; messageType = 'audio'; }
+    else { text = `[${att.type}]`; messageType = att.type; }
+  } else {
+    text = '[ข้อความที่ไม่รองรับ]';
+  }
+
+  // Save message as admin reply (isFromCustomer: false)
+  await firestorePatch(msgPath, {
+    text: { stringValue: text },
+    messageType: { stringValue: messageType },
+    imageUrl: { stringValue: imageUrl },
+    timestamp: { stringValue: now },
+    isFromCustomer: { booleanValue: false },
+  });
+
+  // Update conversation lastMessage only — do NOT increment unreadCount
+  await firestorePatch(convPath, {
+    lastMessage: { stringValue: text },
+    lastMessageAt: { stringValue: now },
+  });
+
+  console.log(`[fb-webhook] Echo saved for fb_${recipientId}: "${text.slice(0, 50)}"`);
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 // Tell Vercel not to parse body — we need raw body for signature verification
@@ -266,8 +318,12 @@ export default async function handler(req, res) {
   for (const entry of entries) {
     const messaging = entry.messaging || [];
     for (const event of messaging) {
-      // Skip echo messages (sent by page itself)
-      if (event.message?.is_echo) continue;
+      // Echo messages = admin/AI replied from FB — save as admin message
+      if (event.message?.is_echo) {
+        const recipientId = event.recipient?.id;
+        if (recipientId) promises.push(processEchoMessage(recipientId, event.message));
+        continue;
+      }
       // Only handle messages (not postbacks, etc.)
       if (event.message && event.sender?.id && event.sender.id !== fbConfig.pageId) {
         promises.push(processMessage(event.sender.id, event.message, fbConfig));
