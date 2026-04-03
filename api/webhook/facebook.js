@@ -241,11 +241,7 @@ async function processEchoMessage(recipientId, message) {
     isFromCustomer: { booleanValue: false },
   });
 
-  // Update conversation lastMessage only — do NOT increment unreadCount
-  await firestorePatch(convPath, {
-    lastMessage: { stringValue: text },
-    lastMessageAt: { stringValue: now },
-  });
+  // Do NOT update lastMessage — keep showing customer's last message in the list
 
   console.log(`[fb-webhook] Echo saved for fb_${recipientId}: "${text.slice(0, 50)}"`);
 }
