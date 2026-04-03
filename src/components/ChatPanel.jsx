@@ -257,7 +257,16 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     return onSnapshot(q, snap => {
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const msgs = [];
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.timestamp && data.timestamp < sevenDaysAgo) {
+          deleteDoc(d.ref).catch(() => {});
+        } else {
+          msgs.push({ id: d.id, ...data });
+        }
+      });
       setMessages(msgs);
     });
   }, [conversation, db, appId]);
@@ -412,7 +421,20 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 
 // ─── Main ChatPanel ────────────────────────────────────────────────────────
 
-export default function ChatPanel({ db, appId, user }) {
+// ─── Off-hours helper ──────────────────────────────────────────────────────
+function isWithinChatHours(timestamp, settings) {
+  if (!settings || settings.chatAlwaysOn) return true;
+  const d = new Date(timestamp);
+  const bangkokTime = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const day = bangkokTime.getDay(); // 0=Sun, 6=Sat
+  const hhmm = `${String(bangkokTime.getHours()).padStart(2, '0')}:${String(bangkokTime.getMinutes()).padStart(2, '0')}`;
+  const isWeekend = day === 0 || day === 6;
+  const open = isWeekend ? (settings.chatOpenTimeWeekend || '10:00') : (settings.chatOpenTime || '10:00');
+  const close = isWeekend ? (settings.chatCloseTimeWeekend || '17:00') : (settings.chatCloseTime || '19:00');
+  return hhmm >= open && hhmm < close;
+}
+
+export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -496,9 +518,12 @@ export default function ChatPanel({ db, appId, user }) {
         }
       }
 
+      // Check if first contact was outside business hours
+      const offHours = !isWithinChatHours(firstContactAt || now, clinicSettings);
+
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
-      await addDoc(historyRef, {
+      const historyData = {
         displayName: conv.displayName || 'ไม่ทราบชื่อ',
         platform: conv.platform || (conv.id?.startsWith('line_') ? 'line' : 'facebook'),
         lastMessage: conv.lastMessage || '',
@@ -506,14 +531,16 @@ export default function ChatPanel({ db, appId, user }) {
         lastCustomerMessageAt: lastCustomerMessageAt,
         resolvedAt: now,
         resolvedBy: user?.email || user?.uid || 'unknown',
-        responseTimeMs: responseTimeMs,
-        maxCustomerGapMs: maxCustomerGapMs,
-      });
+        responseTimeMs: offHours ? null : responseTimeMs,
+        maxCustomerGapMs: offHours ? null : maxCustomerGapMs,
+      };
+      if (offHours) historyData.offHours = true;
+      await addDoc(historyRef, historyData);
 
-      // Delete all messages in subcollection
-      await Promise.all(msgsSnap.docs.map(d => deleteDoc(d.ref)));
+      // Keep messages subcollection (don't delete) — old messages will show when customer returns
+      // Auto-cleanup of messages older than 7 days happens in ChatDetailView
 
-      // Delete the conversation document
+      // Delete the conversation document (removes from active list)
       await deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_conversations`, convId));
 
       // Stay on conversation list (conversation disappears automatically via Firestore listener)
@@ -639,15 +666,23 @@ export default function ChatPanel({ db, appId, user }) {
                       <span>ตอบโดย: {h.resolvedBy}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 ml-9 text-[10px]">
-                      {responseMin !== null && (
-                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(responseMin)}`}>
-                          <Clock size={10} /> ตอบล่าสุด: {fmtMin(responseMin)}
+                      {h.offHours ? (
+                        <span className="flex items-center gap-0.5 font-bold text-[var(--tx-muted)]">
+                          <Clock size={10} /> ลูกค้าทักนอกเวลา
                         </span>
-                      )}
-                      {gapMin !== null && (
-                        <span className={`flex items-center gap-0.5 font-bold ${colorFor(gapMin)}`}>
-                          <Clock size={10} /> ช่วงห่างสูงสุด: {fmtMin(gapMin)}
-                        </span>
+                      ) : (
+                        <>
+                          {responseMin !== null && (
+                            <span className={`flex items-center gap-0.5 font-bold ${colorFor(responseMin)}`}>
+                              <Clock size={10} /> ตอบล่าสุด: {fmtMin(responseMin)}
+                            </span>
+                          )}
+                          {gapMin !== null && (
+                            <span className={`flex items-center gap-0.5 font-bold ${colorFor(gapMin)}`}>
+                              <Clock size={10} /> ช่วงห่างสูงสุด: {fmtMin(gapMin)}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
