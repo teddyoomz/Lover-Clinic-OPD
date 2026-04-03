@@ -650,7 +650,10 @@ Inline component ด้านบนขวา — สลับ TH/EN
 15. **API Security (Firebase Auth)** — ทุก `/api/proclinic/*` endpoint ต้องมี `Authorization: Bearer <firebaseIdToken>` header. ตรวจสอบผ่าน `_lib/auth.js` → `verifyAuth()` (เรียก Firebase `accounts:lookup` REST API). brokerClient.js แนบ token อัตโนมัติทุก request
 16. **ProClinic credential reload** — เปลี่ยน env vars ใน Vercel แล้วกดปุ่ม "โหลด Credentials ใหม่" ใน ClinicSettingsPanel → เรียก `/api/proclinic/clear-session` → ลบ session cache จาก Firestore → ครั้งถัดไป API จะ login ใหม่ด้วย credentials ใหม่ (ไม่ต้อง redeploy)
 17. **Practitioner settings** — ClinicSettingsPanel: ดึงรายชื่อจาก ProClinic (via getDepositOptions) → admin กำหนด role (doctor/assistant/hidden) → save ลง `clinicSettings.practitioners[]`. ใช้สำหรับ filter ปฏิทินนัดหมาย + สร้างลิงก์ตารางรายแพทย์
-18. **Per-doctor schedule links** — สร้างลิงก์: พบแพทย์→เลือกแพทย์→bookedSlots เฉพาะคนนั้น, ไม่พบแพทย์→bookedSlots รวมผู้ช่วยทุกคน. ClinicSchedule.jsx ไม่ต้องแก้ (filter ที่ต้นทาง)
+18. **Chat system** — FB Messenger: full reply + echo support (admin replies show as blue bubbles). LINE: receive only, no reply from app. Saved Replies from FB API with 5-min cache. Badge = unread people count. History 20/page + auto-delete > 7 days
+19. **Import from ProClinic** — Search by HN/phone/ID card/name, preview patient data + courses + appointments, duplicate detection with auto-resync for broken sync, creates `IMP-XXXXXX` sessions. Uses `reverseMapPatient()` to map ProClinic fields back to app format
+20. **Firestore REST API updateMask** — All `firestorePatch()` calls must include `updateMask.fieldPaths` query params to prevent PATCH from deleting unmentioned fields (REST API quirk: PATCH = replace entire doc without mask)
+21. **Per-doctor schedule links** — สร้างลิงก์: พบแพทย์→เลือกแพทย์→bookedSlots เฉพาะคนนั้น, ไม่พบแพทย์→bookedSlots รวมผู้ช่วยทุกคน. ClinicSchedule.jsx ไม่ต้องแก้ (filter ที่ต้นทาง)
 
 ---
 
@@ -667,6 +670,11 @@ Inline component ด้านบนขวา — สลับ TH/EN
 - **Archive link fix** — PatientForm ตรวจ `data.isArchived` ใน onSnapshot → setIsClosed(true) และ return ทันที ป้องกันการกรอกซ้ำ
 - **VAPID Key** — ต้อง generate ใน Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair แล้วใส่ใน `VAPID_KEY` constant ใน AdminDashboard.jsx
 - **API Auth required** — ทุก `/api/proclinic/*` endpoint ต้องมี Firebase Auth token. ถ้าเพิ่ม endpoint ใหม่ต้อง import `verifyAuth` จาก `_lib/auth.js` เสมอ
+- **Firestore REST API updateMask** — `firestorePatch()` ใน serverless functions (facebook.js, send.js) ต้องใส่ `updateMask.fieldPaths` ใน query string เสมอ ไม่งั้น PATCH จะลบ field ที่ไม่ได้ส่งไป (REST API PATCH = replace entire doc)
+- **Chat echo dedup** — facebook.js webhook ใช้ `OUR_APP_ID` เช็ค echo events เพื่อ skip echoes จาก app อื่น
+- **Chat LINE limitation** — LINE ไม่มี echo API และตอบจากแอปเราไม่ได้ → ChatPanel แสดง disclaimer + ซ่อน reply input
+- **Chat saved replies cache** — 5-min cache ใน ChatPanel เพื่อลด API calls ไปยัง FB saved_message_responses
+- **Import duplicate detection** — Import from ProClinic ตรวจ HN/phone/ID card ซ้ำก่อนสร้าง session ใหม่ ถ้าเจอ broken sync → auto-resync แทนสร้างใหม่
 - **Cloud Functions deploy** — `cd F:\LoverClinic-app\functions && npm install` แล้ว `firebase deploy --only functions` จาก root
 - **iOS Push** — ต้องใช้ iOS 16.4+, เปิดจาก Safari แล้ว Share → "เพิ่มลงหน้าจอ (Add to Home Screen)" ก่อนถึงจะรับ push ได้
 - **FCM token lifecycle** — token เก็บใน Firestore `push_config/tokens`, auto-cleanup เมื่อ invalid (Cloud Function ทำ)
@@ -955,6 +963,8 @@ deleteProClinic(proClinicId, proClinicHN, patient)     // POST delete customer
 searchCustomers(query)                                 // POST search
 getCourses(proClinicId)                                // POST get courses
 testLogin()                                            // POST test login
+// Import
+fetchPatientFromProClinic(proClinicId)                   // POST fetchPatient → full patient data
 // Deposit
 getDepositOptions()                                    // GET dropdown options
 submitDeposit(proClinicId, proClinicHN, deposit)       // POST new deposit
