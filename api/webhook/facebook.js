@@ -84,7 +84,8 @@ async function getFBProfile(psid, accessToken) {
 }
 
 async function firestorePatch(path, fields) {
-  await fetch(`${FIRESTORE_BASE}/${path}`, {
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  await fetch(`${FIRESTORE_BASE}/${path}?${mask}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
