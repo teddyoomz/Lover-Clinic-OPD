@@ -55,7 +55,7 @@ async function sendFBMessage(psid, text, config) {
   const token = f?.pageAccessToken?.stringValue;
   if (!token) throw new Error('Facebook Page Access Token ไม่ได้ตั้งค่า');
 
-  const res = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, {
+  const res = await fetch(`https://graph.facebook.com/v25.0/me/messages?access_token=${token}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

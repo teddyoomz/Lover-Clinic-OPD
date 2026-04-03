@@ -3,7 +3,7 @@ import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteD
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
   Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon,
-  CheckCircle2, History, Clock
+  CheckCircle2, History, Clock, Bookmark
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
@@ -11,6 +11,25 @@ import { app } from '../firebase.js';
 // ─── LINE / FB brand colors ────────────────────────────────────────────────
 const LINE_COLOR = '#06C755';
 const FB_COLOR = '#0084FF';
+
+// ─── Chat API helpers ──────────────────────────────────────────────────────
+
+async function chatApiFetch(endpoint, body, method = 'POST') {
+  const auth = getAuth(app);
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) return { success: false, error: 'Not logged in' };
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  };
+  if (method === 'POST' && body) opts.body = JSON.stringify(body);
+  const res = await fetch(`/api/webhook/${endpoint}`, opts);
+  return res.json();
+}
+
+function sendMessage(platform, odriverId, text, conversationId) {
+  return chatApiFetch('send', { platform, odriverId, text, conversationId });
+}
 
 // ─── Platform badge ────────────────────────────────────────────────────────
 
@@ -217,11 +236,18 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
   );
 }
 
-// ─── Chat Detail View (read-only) ─────────────────────────────────────────
+// ─── Chat Detail View ──────────────────────────────────────────────────────
 
 function ChatDetailView({ db, appId, conversation, onBack }) {
   const [messages, setMessages] = useState([]);
+  const [newMsg, setNewMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const [savedReplies, setSavedReplies] = useState([]);
+  const [showSavedReplies, setShowSavedReplies] = useState(false);
+  const [loadingReplies, setLoadingReplies] = useState(false);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const savedRepliesCache = useRef({ data: null, fetchedAt: 0 });
 
   // Listen to messages
   useEffect(() => {
@@ -240,6 +266,51 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Close saved replies dropdown on outside click
+  useEffect(() => {
+    if (!showSavedReplies) return;
+    const handleClick = (e) => {
+      if (!e.target.closest('.saved-replies-container')) setShowSavedReplies(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showSavedReplies]);
+
+  async function handleSend() {
+    const text = newMsg.trim();
+    if (!text || sending) return;
+    setSending(true);
+    const result = await sendMessage(conversation.platform, conversation.odriverId, text, conversation.id);
+    if (result.success) {
+      setNewMsg('');
+      inputRef.current?.focus();
+    } else {
+      alert(`ส่งไม่สำเร็จ: ${result.error}`);
+    }
+    setSending(false);
+  }
+
+  async function fetchSavedReplies() {
+    const now = Date.now();
+    if (savedRepliesCache.current.data && now - savedRepliesCache.current.fetchedAt < 300000) {
+      setSavedReplies(savedRepliesCache.current.data);
+      return;
+    }
+    setLoadingReplies(true);
+    const result = await chatApiFetch('saved-replies', null, 'GET');
+    if (result.success) {
+      setSavedReplies(result.replies || []);
+      savedRepliesCache.current = { data: result.replies || [], fetchedAt: Date.now() };
+    }
+    setLoadingReplies(false);
+  }
+
+  function handleUseSavedReply(reply) {
+    setNewMsg(reply.message);
+    setShowSavedReplies(false);
+    inputRef.current?.focus();
+  }
 
   function formatTime(ts) {
     if (!ts) return '';
@@ -265,7 +336,6 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
           <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{conversation?.displayName}</div>
           <PlatformBadge platform={conversation?.platform} />
         </div>
-        <span className="text-[10px] text-[var(--tx-muted)]">อ่านอย่างเดียว</span>
       </div>
 
       {/* Messages */}
@@ -288,9 +358,47 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Read-only notice */}
-      <div className="p-3 border-t border-[var(--bd)] text-center">
-        <p className="text-[10px] text-[var(--tx-muted)]">ตอบแชทผ่านแอป LINE / Facebook Messenger โดยตรง</p>
+      {/* Reply input */}
+      <div className="p-3 border-t border-[var(--bd)]">
+        <div className="flex items-center gap-2">
+          {/* Saved replies button */}
+          <div className="relative saved-replies-container">
+            <button onClick={() => { setShowSavedReplies(!showSavedReplies); if (!showSavedReplies) fetchSavedReplies(); }}
+              title="ข้อความสำเร็จรูป"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors flex-shrink-0">
+              <Bookmark size={16} />
+            </button>
+            {showSavedReplies && (
+              <div className="absolute bottom-12 left-0 w-72 max-h-60 overflow-y-auto bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl shadow-2xl z-50 p-2">
+                {loadingReplies ? (
+                  <div className="flex justify-center py-4"><Loader2 size={18} className="animate-spin text-[var(--tx-muted)]" /></div>
+                ) : savedReplies.length > 0 ? savedReplies.map(r => (
+                  <button key={r.id} onClick={() => handleUseSavedReply(r)}
+                    className="w-full text-left p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors">
+                    <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{r.title}</p>
+                    <p className="text-[10px] text-[var(--tx-muted)] line-clamp-2">{r.message}</p>
+                  </button>
+                )) : (
+                  <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่มีข้อความสำเร็จรูป</p>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Text input */}
+          <input ref={inputRef} value={newMsg} onChange={e => setNewMsg(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="พิมพ์ข้อความ..."
+            className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-full px-4 py-2.5 outline-none text-sm transition-colors"
+            style={{ borderColor: undefined }}
+            onFocus={e => e.target.style.borderColor = platformColor}
+            onBlur={e => e.target.style.borderColor = ''} />
+          {/* Send button */}
+          <button onClick={handleSend} disabled={!newMsg.trim() || sending}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 flex-shrink-0"
+            style={{ backgroundColor: platformColor }}>
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          </button>
+        </div>
       </div>
     </div>
   );
