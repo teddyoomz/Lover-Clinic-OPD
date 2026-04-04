@@ -98,17 +98,15 @@ export default async function handler(req, res) {
       const base = session.origin;
       const allDates = getAllDatesForMonth(month);
 
-      // Fetch all days in batches of 7
+      // Fetch all days in parallel (single batch — all days at once)
       const allEvents = [];
       const seenIds = new Set();
-      const results = [];
-      for (let i = 0; i < allDates.length; i += 7) {
-        const batch = allDates.slice(i, i + 7);
-        const batchResults = await Promise.all(
-          batch.map(date => session.fetchJSON(`${base}/admin/api/appointment?date=${date}`))
-        );
-        results.push(...batchResults);
-      }
+      const results = await Promise.all(
+        allDates.map(date =>
+          session.fetchJSON(`${base}/admin/api/appointment?date=${date}`)
+            .catch(() => ({ appointment: [] }))
+        )
+      );
 
       for (const data of results) {
         const events = data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);

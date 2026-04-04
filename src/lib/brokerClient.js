@@ -49,7 +49,7 @@ async function ensureExtensionHasCredentials() {
 
 // ─── API fetch with auto-retry via extension ─────────────────────────────────
 
-async function apiFetch(endpoint, body, _retried) {
+async function apiFetch(endpoint, body, _retried, _htmlRetried) {
   // Get Firebase auth token for API authentication
   const auth = getAuth(app);
   const currentUser = auth.currentUser;
@@ -86,7 +86,18 @@ async function apiFetch(endpoint, body, _retried) {
   }
   let data;
   try {
-    data = await res.json();
+    const text = await res.text();
+    if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
+      // Server returned HTML (Vercel timeout/error page) — auto-retry once
+      if (!_htmlRetried) {
+        console.warn(`[broker] ${endpoint} got HTML response (timeout?) — retrying in 2s`);
+        await new Promise(r => setTimeout(r, 2000));
+        return apiFetch(endpoint, body, _retried, true);
+      }
+      console.warn(`[broker] ${endpoint} got HTML response after retry`);
+      return { success: false, error: 'Server timeout — ลองใหม่อีกครั้ง' };
+    }
+    data = JSON.parse(text);
   } catch {
     console.warn(`[broker] ${endpoint} invalid JSON response`);
     return { success: false, error: 'Invalid response' };
