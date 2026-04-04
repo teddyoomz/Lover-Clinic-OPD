@@ -442,6 +442,9 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const [history, setHistory] = useState([]);
   const [historyPage, setHistoryPage] = useState(0);
   const HISTORY_PER_PAGE = 20;
+  const [historyDetail, setHistoryDetail] = useState(null); // selected history item to view messages
+  const [historyMsgs, setHistoryMsgs] = useState([]);
+  const [historyMsgsLoading, setHistoryMsgsLoading] = useState(false);
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
   const [resolvingId, setResolvingId] = useState(null);
@@ -524,6 +527,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
       const historyData = {
+        convId: convId,
         displayName: conv.displayName || 'ไม่ทราบชื่อ',
         platform: conv.platform || (conv.id?.startsWith('line_') ? 'line' : 'facebook'),
         lastMessage: conv.lastMessage || '',
@@ -550,6 +554,25 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       setResolvingId(null);
     }
   }, [db, appId, user, resolvingId]);
+
+  // Open history detail — load messages from preserved subcollection
+  const openHistoryDetail = useCallback(async (h) => {
+    if (!h.convId) return;
+    setHistoryDetail(h);
+    setHistoryMsgs([]);
+    setHistoryMsgsLoading(true);
+    try {
+      const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${h.convId}/messages`);
+      const q = query(msgsRef, orderBy('timestamp', 'asc'));
+      const snap = await getDocs(q);
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setHistoryMsgs(msgs);
+    } catch (err) {
+      console.error('Failed to load history messages:', err);
+    } finally {
+      setHistoryMsgsLoading(false);
+    }
+  }, [db, appId]);
 
   // Count number of PEOPLE with unread (not total messages)
   const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).length;
@@ -646,7 +669,8 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                 const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-yellow-500' : 'text-red-500';
                 const fmtMin = (min) => min < 1 ? '< 1 นาที' : min < 60 ? `${min} นาที` : `${Math.floor(min / 60)} ชม. ${min % 60} นาที`;
                 return (
-                  <div key={h.id} className="p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
+                  <div key={h.id} onClick={() => h.convId && openHistoryDetail(h)}
+                    className={`p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] ${h.convId ? 'cursor-pointer hover:border-[var(--accent)] transition-colors' : ''}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: pColor }}>
@@ -707,6 +731,61 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* History detail — read-only message view */}
+      {historyDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setHistoryDetail(null)}>
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center gap-3 p-3 border-b border-[var(--bd)]">
+              <button onClick={() => setHistoryDetail(null)} className="text-[var(--tx-muted)] hover:text-[var(--tx-heading)]"><ChevronLeft size={20} /></button>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                style={{ backgroundColor: historyDetail.platform === 'line' ? LINE_COLOR : FB_COLOR }}>
+                {(historyDetail.displayName || '?')[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{historyDetail.displayName}</div>
+                <div className="flex items-center gap-1.5">
+                  <PlatformBadge platform={historyDetail.platform} />
+                  <span className="text-[9px] text-[var(--tx-muted)]">
+                    ประวัติ — {historyDetail.resolvedAt ? new Date(historyDetail.resolvedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {historyMsgsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[var(--tx-muted)]" /></div>
+              ) : historyMsgs.length === 0 ? (
+                <p className="text-center text-xs text-[var(--tx-muted)] py-8">ไม่มีข้อความ (อาจถูกลบตามกำหนด 7 วัน)</p>
+              ) : historyMsgs.map(m => {
+                const pColor = historyDetail.platform === 'line' ? LINE_COLOR : FB_COLOR;
+                return (
+                  <div key={m.id} className={`flex ${m.isFromCustomer ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.isFromCustomer
+                      ? 'bg-[var(--bg-hover)] text-[var(--tx-heading)] rounded-bl-md'
+                      : 'text-white rounded-br-md'}`}
+                      style={!m.isFromCustomer ? { backgroundColor: pColor } : {}}>
+                      {m.imageUrl && m.messageType === 'image' && (
+                        <img src={m.imageUrl} className="max-w-full rounded-lg mb-1" alt="attachment" />
+                      )}
+                      <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                      <p className={`text-[9px] mt-1 ${m.isFromCustomer ? 'text-[var(--tx-muted)]' : 'text-white/60'}`}>
+                        {m.timestamp ? new Date(m.timestamp).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : ''}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer — read only */}
+            <div className="p-3 border-t border-[var(--bd)]">
+              <p className="text-xs text-center text-[var(--tx-muted)]">ดูอย่างเดียว — ประวัติแชทที่จบแล้ว</p>
+            </div>
+          </div>
         </div>
       )}
 
