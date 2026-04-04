@@ -3285,7 +3285,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {dep.paymentAmount && <span className="text-[10px] bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded font-bold">฿{Number(dep.paymentAmount).toLocaleString()}</span>}
                           {dep.paymentChannel && <span className="text-[10px] bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{dep.paymentChannel}</span>}
                           {dep.depositDate && <span className="text-[10px] bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{toThaiDate(dep.depositDate)}</span>}
-                          {dep.hasAppointment && <span className="text-[10px] bg-blue-950/30 text-blue-400 border border-blue-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CalendarClock size={9}/> นัดหมาย {toThaiDate(dep.appointmentDate)}</span>}
+                          {dep.hasAppointment && <span className="text-[10px] bg-blue-950/30 text-blue-400 border border-blue-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CalendarClock size={9}/> นัดหมาย {toThaiDate(dep.appointmentDate)}{dep.appointmentStartTime ? ` ${dep.appointmentStartTime}${dep.appointmentEndTime ? `-${dep.appointmentEndTime}` : ''}` : ''}</span>}
                         </div>
                       )}
 
