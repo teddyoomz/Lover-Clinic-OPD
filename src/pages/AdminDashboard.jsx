@@ -1334,6 +1334,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsubscribe();
   }, [db, appId, user, isNotifEnabled, notifVolume]);
 
+  // ── Auto-fetch deposit options when viewing a session with deposit data ──
+  useEffect(() => {
+    if (viewingSession?.depositData && !depositOptions && !depositOptionsLoading) {
+      fetchDepositOptions();
+    }
+  }, [viewingSession]);
+
   useEffect(() => {
     if (viewingSession) {
       const latestSession = sessions.find(s => s.id === viewingSession.id)
