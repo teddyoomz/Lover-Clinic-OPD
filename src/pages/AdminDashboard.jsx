@@ -2596,6 +2596,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               )}
             </div>
+            {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
             {/* Online admins indicator */}
             <div className="relative group">
               <div className="flex items-center gap-1 px-2 py-1.5 sm:py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
@@ -2617,7 +2618,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 ))}
               </div>
             </div>
-            {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
             <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 sm:p-2.5 rounded-lg transition-all" title="ออกจากระบบ">
               <LogOut size={15} />
             </button>
@@ -2719,6 +2719,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             )}
           </div>
           {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} />}
+          {/* Online admins indicator — desktop */}
+          <div className="relative group">
+            <div className="flex items-center gap-1.5 px-3 py-3 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <span className="text-xs font-bold text-green-500">{onlineAdmins.length}</span>
+            </div>
+            <div className="absolute right-0 top-full mt-1 w-48 bg-[#111] border border-[#333] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-2">แอดมินออนไลน์</p>
+              {onlineAdmins.map(a => (
+                <div key={a.id} className="flex items-center gap-2 py-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
+                  <span className="text-[11px] text-gray-300 truncate">{a.email || 'Unknown'}</span>
+                  {a.id === tabIdRef.current && <span className="text-[8px] text-green-600 font-bold">(คุณ)</span>}
+                </div>
+              ))}
+            </div>
+          </div>
           <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-3 rounded-lg font-semibold transition-all shadow-sm flex-none" title="ออกจากระบบ">
             <LogOut size={16} />
           </button>
