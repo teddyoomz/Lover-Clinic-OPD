@@ -137,26 +137,58 @@ async function handleCreate(req, res) {
   formData.set('history_of_drug_allergy', treatment.drugAllergy || defaults.history_of_drug_allergy || '');
   formData.set('ht_treatment_history', treatment.treatmentHistory || defaults.ht_treatment_history || '');
 
-  // Medical cert defaults
-  formData.set('med_cert_is_actually_come', '0');
-  formData.set('med_cert_is_rest', '0');
-  formData.set('med_cert_period', '');
-  formData.set('med_cert_is_other', '0');
-  formData.set('med_cert_other_detail', '');
+  // Medical cert
+  formData.set('med_cert_is_actually_come', treatment.medCertActuallyCome ? '1' : '0');
+  formData.set('med_cert_is_rest', treatment.medCertIsRest ? '1' : '0');
+  formData.set('med_cert_period', treatment.medCertPeriod || '');
+  formData.set('med_cert_is_other', treatment.medCertIsOther ? '1' : '0');
+  formData.set('med_cert_other_detail', treatment.medCertOtherDetail || '');
 
-  // Empty defaults for complex sections (courses, products, payment)
-  formData.set('courses', '');
-  formData.set('products', '');
+  // Course items — array of { rowId } selected from customer courses
+  if (treatment.courseItems?.length) {
+    treatment.courseItems.forEach(item => {
+      formData.append('rowId[]', item.rowId);
+    });
+  }
+
+  // Courses & products JSON (ProClinic expects these as JSON strings)
+  formData.set('courses', treatment.coursesJson || '');
+  formData.set('products', treatment.productsJson || '');
   formData.set('appointment_id', treatment.appointmentId || '');
   formData.set('treatment_id', '');
-  formData.set('sale_date', treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10));
-  formData.set('coupon_code', '');
+
+  // Take-home medications (dynamic rows)
+  if (treatment.medications?.length) {
+    treatment.medications.forEach((med, i) => {
+      formData.append('takeaway_product_name[]', med.name || '');
+      formData.append('takeaway_product_dosage[]', med.dosage || '');
+      formData.append('takeaway_product_qty[]', med.qty || '');
+      formData.append('takeaway_product_unit_price[]', med.unitPrice || '');
+    });
+  }
+
+  // Insurance
+  formData.set('benefit_type', treatment.benefitType || '');
+  formData.set('insurance_company_id', treatment.insuranceCompanyId || '');
+  formData.set('customer_insurance_benefit_id', treatment.customerInsuranceBenefitId || '');
+
+  // Sale/payment
+  const saleDate = treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
+  formData.set('sale_date', saleDate);
+  formData.set('coupon_code', treatment.couponCode || '');
+  formData.set('sale_note', treatment.saleNote || '');
 
   // Payment — default to "pay later" (ชำระภายหลัง)
   formData.set('payment_type', treatment.paymentType || 'pay_later');
-  formData.set('payment_date', treatment.treatmentDate || new Date().toISOString().slice(0, 10));
+  formData.set('payment_date', treatment.paymentDate || saleDate);
   formData.set('payment_time', treatment.paymentTime || '');
   formData.set('payment_channel_id', treatment.paymentChannelId || '');
+
+  // Sellers (sales staff commission)
+  for (let i = 1; i <= 5; i++) {
+    formData.set(`seller_${i}_id`, treatment[`seller${i}Id`] || '');
+    formData.set(`seller_${i}_rate`, treatment[`seller${i}Rate`] || '');
+  }
 
   // Submit
   const submitRes = await session.fetch(`${base}/admin/treatment`, {

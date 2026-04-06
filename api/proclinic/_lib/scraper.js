@@ -676,10 +676,25 @@ export function extractTreatmentCreateOptions(html) {
   // Customer health info (pre-filled)
   opts.healthInfo = {
     doctorId: $('input[name="customer_doctor_id"]').val() || '',
-    bloodType: $('input[name="blood_type"]').val() || '',
-    congenitalDisease: $('input[name="congenital_disease"]').val() || $('textarea[name="congenital_disease"]').val() || '',
-    drugAllergy: $('input[name="history_of_drug_allergy"]').val() || $('textarea[name="history_of_drug_allergy"]').val() || '',
+    bloodType: $('select[name="blood_type"]').val() || $('input[name="blood_type"]').val() || '',
+    congenitalDisease: $('textarea[name="congenital_disease"]').val() || $('input[name="congenital_disease"]').val() || '',
+    drugAllergy: $('textarea[name="history_of_drug_allergy"]').val() || $('input[name="history_of_drug_allergy"]').val() || '',
+    treatmentHistory: $('textarea[name="ht_treatment_history"]').val() || $('input[name="ht_treatment_history"]').val() || '',
   };
+
+  // Vitals defaults (pre-filled from customer)
+  opts.vitalsDefaults = {
+    weight: $('input[name="ht_weight"]').val() || '',
+    height: $('input[name="ht_height"]').val() || '',
+  };
+
+  // Blood type options
+  opts.bloodTypeOptions = [];
+  $('select[name="blood_type"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.bloodTypeOptions.push({ id: val, name: text });
+  });
 
   // Payment channels
   opts.paymentChannels = [];
@@ -687,6 +702,72 @@ export function extractTreatmentCreateOptions(html) {
     const val = $(opt).val();
     const text = $(opt).text().trim();
     if (val && text) opts.paymentChannels.push({ id: val, name: text });
+  });
+
+  // Benefit types (insurance)
+  opts.benefitTypes = [];
+  $('select[name="benefit_type"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.benefitTypes.push({ id: val, name: text });
+  });
+
+  // Insurance companies
+  opts.insuranceCompanies = [];
+  $('select[name="insurance_company_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text && text !== 'เลือกบริษัทประกัน') opts.insuranceCompanies.push({ id: val, name: text });
+  });
+
+  // Sellers (staff who can be assigned sales commission)
+  opts.sellers = [];
+  $('select[name="seller_1_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.sellers.push({ id: val, name: text });
+  });
+
+  // Customer courses with products (for course usage section)
+  opts.customerCourses = [];
+  const seenCourseIds = new Set();
+  $('tr[class*="buying-course-"]').each((_, tr) => {
+    const cls = $(tr).attr('class') || '';
+    const m = cls.match(/buying-course-(\w+)/);
+    if (!m) return;
+    const courseId = m[1];
+    const isHeader = !cls.includes('course-products');
+    if (isHeader && !seenCourseIds.has(courseId)) {
+      seenCourseIds.add(courseId);
+      const courseName = $(tr).text().trim().replace(/\s+/g, ' ');
+      const products = [];
+      $(`tr.buying-course-${courseId}.course-products`).each((_, ptr) => {
+        const cb = $(ptr).find('input[name="rowId[]"]');
+        const name = $(ptr).find('.form-check').text().trim();
+        if (cb.length && name) {
+          products.push({ rowId: cb.val(), name });
+        }
+      });
+      if (products.length > 0) {
+        opts.customerCourses.push({ courseId, courseName, products });
+      }
+    }
+  });
+
+  // Dosage units (for take-home medications)
+  opts.dosageUnits = [];
+  $('select[name="dosage_unit"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.dosageUnits.push({ id: val, name: text });
+  });
+
+  // Wallet options
+  opts.wallets = [];
+  $('select[name="customer_wallet_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.wallets.push({ id: val, name: text });
   });
 
   return opts;

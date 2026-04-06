@@ -23,6 +23,7 @@ import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
+import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -168,6 +169,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
   const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
+  const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { customerId, patientName }
 
   // ─── Chat schedule: check if within operating hours ─────
   const isChatActive = useMemo(() => {
@@ -5294,7 +5296,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {/* Treatment History from ProClinic */}
               {viewingSession.brokerProClinicId && (
                 <div className="mt-8 pt-6 border-t border-[#222]">
-                  <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark} />
+                  <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
+                    onOpenCreateForm={(cid) => {
+                      const pd = viewingSession.patientData || {};
+                      const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
+                      setTreatmentFormMode({ customerId: cid, patientName: name });
+                    }} />
                 </div>
               )}
             </div>
@@ -5303,6 +5310,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
         );
       })()}
+
+      {/* Treatment Create Full Page */}
+      {treatmentFormMode && (
+        <TreatmentFormPage
+          customerId={treatmentFormMode.customerId}
+          patientName={treatmentFormMode.patientName}
+          isDark={isDark}
+          onClose={() => setTreatmentFormMode(null)}
+          onCreated={() => { setTreatmentFormMode(null); }}
+        />
+      )}
 
       {/* Unified Create Session Modal */}
       {showSessionModal && (
