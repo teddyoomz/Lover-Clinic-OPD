@@ -99,6 +99,77 @@ async function handleSearchProducts(req, res) {
   return res.status(200).json({ success: true, products, total: data.total || products.length });
 }
 
+// ── List purchasable items (courses/promotions/retail products) ──────────────
+async function handleListItems(req, res) {
+  const { itemType, query, page } = req.body || {};
+  const session = await createSession();
+  const base = session.origin;
+
+  // itemType: 'course' | 'promotion' | 'product'
+  const type = itemType || 'course';
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set('page', String(page || 1));
+
+  // Fetch all pages to get complete data
+  const allItems = [];
+  let totalItems = 0;
+  for (let p = 1; ; p++) {
+    params.set('page', String(p));
+    const apiUrl = `${base}/admin/api/item/${type}?${params.toString()}`;
+    const resp = await session.fetch(apiUrl, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) throw new Error(`ProClinic item API error: ${resp.status}`);
+    const data = await resp.json();
+    totalItems = data.total || 0;
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1)) break;
+    if (p >= 20) break; // safety limit
+  }
+
+  // Normalize based on type
+  const normalized = allItems.map(item => {
+    if (type === 'course') {
+      return {
+        id: item.id,
+        name: item.course_name,
+        price: item.sale_price || item.full_price || '0',
+        unit: 'คอร์ส',
+        category: item.course_category_name || '',
+        isVatIncluded: item.is_including_vat || 0,
+        isDf: item.is_df || 0,
+        itemType: 'course',
+      };
+    } else if (type === 'promotion') {
+      return {
+        id: item.id,
+        name: item.promotion_name,
+        price: item.sale_price || '0',
+        unit: 'โปรโมชัน',
+        category: '',
+        isVatIncluded: 0,
+        itemType: 'promotion',
+      };
+    } else {
+      return {
+        id: item.id,
+        name: item.product_name,
+        price: item.price || '0',
+        unit: item.unit_name || '',
+        category: item.product_category_name || '',
+        isVatIncluded: item.is_including_vat || 0,
+        isDf: item.is_df || 0,
+        itemType: 'product',
+      };
+    }
+  });
+
+  // Extract unique categories for sidebar
+  const categories = [...new Set(normalized.map(i => i.category).filter(Boolean))];
+
+  return res.status(200).json({ success: true, items: normalized, total: totalItems, categories });
+}
+
 // ─── Action: list — Get treatment list for a customer ──────────────────────
 
 async function handleList(req, res) {
@@ -475,6 +546,7 @@ export default async function handler(req, res) {
       case 'delete':        return await handleDelete(req, res);
       case 'searchProducts': return await handleSearchProducts(req, res);
       case 'getMedicationGroups': return await handleGetMedicationGroups(req, res);
+      case 'listItems':          return await handleListItems(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

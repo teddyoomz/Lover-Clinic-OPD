@@ -285,3 +285,8 @@ export function searchProducts({ productType, query, isTakeaway, perPage } = {})
 export function getMedicationGroups(productType) {
   return apiFetch('treatment', { action: 'getMedicationGroups', productType });
 }
+
+/** List purchasable items (courses/promotions/retail) → { success, items[], categories[] } */
+export function listItems(itemType, query) {
+  return apiFetch('treatment', { action: 'listItems', itemType, query });
+}

@@ -531,6 +531,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 - `createTreatment(customerId, treatment)` — create new treatment (enhanced: courseItems, medications, insurance, payment)
 - `updateTreatment(treatmentId, treatment)` — update existing treatment
 - `deleteTreatment(treatmentId)` — delete/cancel treatment
+- `listItems(itemType, query)` — list purchasable items (course/promotion/product) from ProClinic `/admin/api/item/{type}`
 
 ### Integration
 - **AdminDashboard.jsx**: TreatmentTimeline rendered in patient detail view (after Clinical Summary), conditioned on `viewingSession.brokerProClinicId`. Create button triggers `treatmentFormMode` state → opens TreatmentFormPage overlay

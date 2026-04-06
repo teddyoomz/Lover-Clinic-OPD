@@ -122,6 +122,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [consGroupChecked, setConsGroupChecked] = useState(new Set());
   const [consGroupLoading, setConsGroupLoading] = useState(false);
 
+  // Buy items modal (ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน)
+  const [buyModalOpen, setBuyModalOpen] = useState(false);
+  const [buyModalType, setBuyModalType] = useState('course'); // course | promotion | product
+  const [buyItems, setBuyItems] = useState({ course: [], promotion: [], product: [] });
+  const [buyCategories, setBuyCategories] = useState({ course: [], promotion: [], product: [] });
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyQuery, setBuyQuery] = useState('');
+  const [buySelectedCat, setBuySelectedCat] = useState('');
+  const [buyChecked, setBuyChecked] = useState(new Set()); // checked item IDs
+  const [buyQtyMap, setBuyQtyMap] = useState({}); // id → qty
+  const [buyDiscMap, setBuyDiscMap] = useState({}); // id → discount
+  const [buyVatMap, setBuyVatMap] = useState({}); // id → boolean
+  // Purchased items (displayed in grid below)
+  const [purchasedItems, setPurchasedItems] = useState([]); // { id, name, price, unit, qty, discount, vat, itemType }
+
   // Insurance
   const [benefitType, setBenefitType] = useState('');
   const [insuranceCompanyId, setInsuranceCompanyId] = useState('');
@@ -482,6 +497,85 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setConsGroupModalOpen(false);
   };
 
+  // ── Buy items modal (ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน) ──
+  const openBuyModal = async (type = 'course') => {
+    setBuyModalOpen(true);
+    setBuyModalType(type);
+    setBuyQuery('');
+    setBuySelectedCat('');
+    setBuyChecked(new Set());
+    setBuyQtyMap({});
+    setBuyDiscMap({});
+    setBuyVatMap({});
+    // Load data if not cached
+    if (buyItems[type]?.length > 0) return;
+    setBuyLoading(true);
+    try {
+      const data = await broker.listItems(type);
+      if (data.success) {
+        setBuyItems(prev => ({ ...prev, [type]: data.items || [] }));
+        setBuyCategories(prev => ({ ...prev, [type]: data.categories || [] }));
+        // Firestore backup
+        if (db && appId && data.items?.length) {
+          try {
+            const items = data.items;
+            for (let i = 0; i < items.length; i += 400) {
+              const batch = writeBatch(db);
+              items.slice(i, i + 400).forEach(p => {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', `purchasable_${type}`, 'items', String(p.id));
+                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (_e) { console.warn(`[TreatmentForm] Failed to backup ${type} items`, _e); }
+        }
+      }
+    } catch (_) {}
+    setBuyLoading(false);
+  };
+  const buyFilteredItems = useMemo(() => {
+    let items = buyItems[buyModalType] || [];
+    if (buySelectedCat) items = items.filter(i => i.category === buySelectedCat);
+    if (buyQuery) {
+      const q = buyQuery.toLowerCase();
+      items = items.filter(i => i.name.toLowerCase().includes(q));
+    }
+    return items;
+  }, [buyItems, buyModalType, buySelectedCat, buyQuery]);
+  const toggleBuyCheck = (id) => {
+    setBuyChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const confirmBuyModal = () => {
+    const items = buyItems[buyModalType] || [];
+    const newItems = items.filter(i => buyChecked.has(i.id)).map(i => {
+      const qty = parseInt(buyQtyMap[i.id]) || 0;
+      const disc = parseFloat(buyDiscMap[i.id]) || 0;
+      const vat = !!buyVatMap[i.id];
+      const price = parseFloat(i.price) || 0;
+      const afterDisc = price - disc;
+      const vatAmt = vat ? afterDisc * 0.07 : 0;
+      const net = Math.max(0, afterDisc + vatAmt);
+      return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType, category: i.category };
+    });
+    setPurchasedItems(prev => [...prev, ...newItems]);
+    setBuyModalOpen(false);
+  };
+  const removePurchasedItem = (idx) => {
+    setPurchasedItems(prev => prev.filter((_, i) => i !== idx));
+  };
+  // Group purchased items by type for display
+  const purchasedByType = useMemo(() => {
+    const grouped = { course: [], promotion: [], product: [] };
+    purchasedItems.forEach(item => {
+      if (grouped[item.itemType]) grouped[item.itemType].push(item);
+    });
+    return grouped;
+  }, [purchasedItems]);
+
   // ── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
@@ -504,6 +598,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medCertIsOther,
         medCertOtherDetail,
         courseItems: Array.from(selectedCourseItems).map(rowId => ({ rowId })),
+        purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
         treatmentItems,
@@ -539,6 +634,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
               medications: medications.filter(m => m.name).map(m => ({ id: m.id, name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
               consumables: consumables.filter(c => c.name).map(c => ({ id: c.id, name: c.name, qty: c.qty, unit: c.unit })),
+              purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
               courseItems: Array.from(selectedCourseItems),
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
               insurance: { benefitType, insuranceCompanyId },
@@ -1077,94 +1173,267 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             )}
           </FormSection>
 
-          {/* ── Course Usage + Treatment Items ────────────────────────────── */}
+          {/* ── ข้อมูลการใช้คอร์ส — matching ProClinic layout ──────────── */}
           <FormSection isDark={isDark}>
-            <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316" />
+            <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
+              <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => openBuyModal('course')}>
+                  <Plus size={10} /> ซื้อคอร์ส
+                </ActionBtn>
+                <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => openBuyModal('product')}>
+                  <Plus size={10} /> ซื้อสินค้าหน้าร้าน
+                </ActionBtn>
+                <ActionBtn color="#38bdf8" isDark={isDark} onClick={() => openBuyModal('promotion')}>
+                  <Plus size={10} /> ซื้อโปรโมชัน
+                </ActionBtn>
+              </div>
+            </SectionHeader>
 
-            {customerCourses.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-4">ลูกค้าไม่มีคอร์สที่ใช้งานอยู่</p>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                {/* LEFT: Course list with checkboxes */}
-                <div className="lg:col-span-3">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-2">คอร์ส/สินค้า</p>
-                  <div className={`rounded-lg border max-h-[400px] overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                    {/* Header */}
-                    <div className={`grid grid-cols-12 gap-1 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest border-b ${isDark ? 'text-gray-500 border-[#222]' : 'text-gray-500 border-gray-200'}`}>
-                      <div className="col-span-1"></div>
-                      <div className="col-span-7">คอร์ส</div>
-                      <div className="col-span-4 text-right">จำนวน</div>
-                    </div>
-                    {customerCourses.map(course => (
-                      <div key={course.courseId}>
-                        {/* Course header */}
-                        <div className={`grid grid-cols-12 gap-1 px-3 py-2 border-b ${isDark ? 'border-[#1a1a1a] bg-[#0d0d0d]' : 'border-gray-100 bg-gray-50/50'}`}>
-                          <div className="col-span-1"></div>
-                          <div className="col-span-7">
-                            <span className="text-[11px] font-bold" style={{ color: '#f97316' }}>{course.courseName}</span>
-                          </div>
-                          <div className="col-span-4"></div>
-                        </div>
-                        {/* Products */}
-                        {course.products.map(product => {
-                          const isSelected = selectedCourseItems.has(product.rowId);
-                          return (
-                            <label key={product.rowId}
-                              className={`grid grid-cols-12 gap-1 px-3 py-1.5 items-center cursor-pointer border-b transition-all ${
-                                isSelected
-                                  ? isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100'
-                                  : isDark ? 'border-[#1a1a1a] hover:bg-[#151515]' : 'border-gray-50 hover:bg-gray-100/50'
-                              }`}>
-                              <div className="col-span-1 flex items-center">
-                                <input type="checkbox" checked={isSelected} onChange={() => toggleCourseItem(product)}
-                                  className="rounded border-gray-400 text-orange-500 focus:ring-orange-500" />
-                              </div>
-                              <div className="col-span-7">
-                                <span className={`text-xs ${isSelected ? 'font-bold text-orange-400' : ''}`}>{product.name}</span>
-                              </div>
-                              <div className="col-span-4 text-right">
-                                {product.remaining && (
-                                  <span className="text-[10px] text-gray-500">{product.remaining} {product.unit}</span>
-                                )}
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
+            {/* Sub-label */}
+            <p className="text-[10px] text-gray-500 mb-3">คอร์ส/สินค้า/โปรโมชัน</p>
+
+            {/* 2x2 Display grid matching ProClinic */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* คอร์ส */}
+              <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                  <span className="text-[10px] font-bold" style={{ color: '#14b8a6' }}>คอร์ส</span>
+                  <span className="text-[10px] text-gray-500">จำนวน</span>
                 </div>
-
-                {/* RIGHT: Treatment items panel (selected items) */}
-                <div className="lg:col-span-2">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-2">รายการรักษา</p>
-                  <div className={`rounded-lg border min-h-[120px] ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                    {/* Header */}
-                    <div className={`grid grid-cols-12 gap-1 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest border-b ${isDark ? 'text-gray-500 border-[#222]' : 'text-gray-500 border-gray-200'}`}>
-                      <div className="col-span-6">รายการ</div>
-                      <div className="col-span-3">จำนวน</div>
-                      <div className="col-span-2">หน่วย</div>
-                      <div className="col-span-1"></div>
-                    </div>
-                    {treatmentItems.length === 0 ? (
-                      <p className="text-[10px] text-gray-500 text-center py-6">เลือกคอร์สด้านซ้ายเพื่อเพิ่มรายการ</p>
-                    ) : (
-                      treatmentItems.map(item => (
-                        <div key={item.id} className={`grid grid-cols-12 gap-1 px-3 py-1.5 items-center border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
-                          <div className="col-span-6 text-xs truncate">{item.name}</div>
-                          <div className="col-span-3">
-                            <input value={item.qty} onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
-                              className={`${inputCls} text-center !py-1 !text-[10px]`} />
-                          </div>
-                          <div className="col-span-2 text-[10px] text-gray-500">{item.unit}</div>
-                          <div className="col-span-1">
-                            <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300">
-                              <Trash2 size={10} />
-                            </button>
-                          </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {/* Customer courses (existing) */}
+                  {customerCourses.map(course => course.products.map(product => {
+                    const isSelected = selectedCourseItems.has(product.rowId);
+                    return (
+                      <label key={product.rowId} className={`flex items-center justify-between px-3 py-1.5 border-b cursor-pointer transition-all ${
+                        isSelected ? isDark ? 'bg-teal-500/10 border-teal-500/20' : 'bg-teal-50 border-teal-100'
+                        : isDark ? 'border-[#1a1a1a] hover:bg-[#151515]' : 'border-gray-50 hover:bg-gray-50'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleCourseItem(product)}
+                            className="w-3.5 h-3.5 rounded accent-teal-500" />
+                          <span className={`text-xs ${isSelected ? 'font-bold text-teal-400' : ''}`}>{product.name}</span>
                         </div>
-                      ))
-                    )}
+                        <span className="text-[10px] text-gray-500">{product.remaining} {product.unit}</span>
+                      </label>
+                    );
+                  }))}
+                  {/* Purchased courses */}
+                  {purchasedByType.course.map((item, idx) => (
+                    <div key={`pc-${idx}`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-teal-500/5' : 'border-gray-50 bg-teal-50/50'}`}>
+                      <div className="flex items-center gap-2">
+                        <Check size={12} className="text-teal-500" />
+                        <span className="text-xs font-medium">{item.name}</span>
+                        <span className="text-[9px] text-teal-500">(ซื้อเพิ่ม)</span>
+                        <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300"><Trash2 size={10} /></button>
+                      </div>
+                      <span className="text-[10px] text-gray-500">{item.qty} {item.unit}</span>
+                    </div>
+                  ))}
+                  {customerCourses.length === 0 && purchasedByType.course.length === 0 && (
+                    <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีคอร์ส</p>
+                  )}
+                </div>
+              </div>
+
+              {/* โปรโมชัน */}
+              <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                  <span className="text-[10px] font-bold" style={{ color: '#f59e0b' }}>โปรโมชัน</span>
+                  <span className="text-[10px] text-gray-500">จำนวน</span>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {purchasedByType.promotion.map((item, idx) => (
+                    <div key={`pp-${idx}`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-amber-500/5' : 'border-gray-50 bg-amber-50/50'}`}>
+                      <div className="flex items-center gap-2">
+                        <Check size={12} className="text-amber-500" />
+                        <span className="text-xs font-medium">{item.name}</span>
+                        <span className="text-[9px] text-amber-500">(ซื้อเพิ่ม)</span>
+                        <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300"><Trash2 size={10} /></button>
+                      </div>
+                      <span className="text-[10px] text-gray-500">{item.qty} {item.unit}</span>
+                    </div>
+                  ))}
+                  {purchasedByType.promotion.length === 0 && (
+                    <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีโปรโมชัน</p>
+                  )}
+                </div>
+              </div>
+
+              {/* สินค้าหน้าร้าน */}
+              <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                  <span className="text-[10px] font-bold" style={{ color: '#f97316' }}>สินค้าหน้าร้าน</span>
+                  <span className="text-[10px] text-gray-500">จำนวน</span>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {purchasedByType.product.map((item, idx) => (
+                    <div key={`pr-${idx}`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-orange-500/5' : 'border-gray-50 bg-orange-50/50'}`}>
+                      <div className="flex items-center gap-2">
+                        <Check size={12} className="text-orange-500" />
+                        <span className="text-xs font-medium">{item.name}</span>
+                        <span className="text-[9px] text-orange-500">(ซื้อเพิ่ม)</span>
+                        <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300"><Trash2 size={10} /></button>
+                      </div>
+                      <span className="text-[10px] text-gray-500">{item.qty} {item.unit}</span>
+                    </div>
+                  ))}
+                  {purchasedByType.product.length === 0 && (
+                    <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีสินค้าหน้าร้าน</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Lab / X-Ray (placeholder) */}
+              <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                  <span className="text-[10px] font-bold text-gray-500">Lab / X-Ray</span>
+                  <span className="text-[10px] text-gray-500">จำนวน</span>
+                </div>
+                <p className="text-[10px] text-gray-500 text-center py-4">ไม่พบรายการ Lab / X-Ray</p>
+              </div>
+            </div>
+
+            {/* Buy modal — ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน */}
+            {buyModalOpen && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setBuyModalOpen(false)}>
+                <div className={`w-full max-w-5xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                  onClick={e => e.stopPropagation()}>
+                  {/* Header */}
+                  <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <h3 className="text-sm font-black" style={{ color: '#14b8a6' }}>ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input value={buyQuery} onChange={e => setBuyQuery(e.target.value)}
+                          className={`${inputCls} !pl-8 !w-48`} placeholder="ค้นหาด้วยชื่อ" />
+                      </div>
+                      <select value={buyModalType} onChange={e => { setBuyModalType(e.target.value); setBuySelectedCat(''); setBuyChecked(new Set()); setBuyQtyMap({}); setBuyDiscMap({}); setBuyVatMap({}); if (!buyItems[e.target.value]?.length) openBuyModal(e.target.value); }}
+                        className={`${selectCls} !w-auto !text-xs`}>
+                        <option value="course">คอร์ส</option>
+                        <option value="promotion">โปรโมชัน</option>
+                        <option value="product">สินค้าหน้าร้าน</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex" style={{ minHeight: '400px' }}>
+                    {/* Left sidebar — categories */}
+                    <div className={`w-48 shrink-0 border-r overflow-y-auto ${isDark ? 'border-[#222] bg-[#0a0a0a]' : 'border-gray-200 bg-gray-50'}`}>
+                      {['promotion', 'course', 'product'].map(type => {
+                        const cats = buyCategories[type] || [];
+                        const typeLabel = type === 'promotion' ? 'โปรโมชัน' : type === 'course' ? 'คอร์ส' : 'สินค้าหน้าร้าน';
+                        const isActiveType = buyModalType === type;
+                        return (
+                          <div key={type}>
+                            <button onClick={() => { setBuyModalType(type); setBuySelectedCat(''); if (!buyItems[type]?.length) openBuyModal(type); }}
+                              className={`w-full text-left px-3 py-2 text-xs font-bold border-b flex items-center justify-between ${
+                                isActiveType ? 'text-teal-500' : isDark ? 'text-gray-400 border-[#1a1a1a]' : 'text-gray-600 border-gray-100'
+                              } ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                              {typeLabel}
+                              <span className="text-[10px]">{isActiveType ? '▼' : '▶'}</span>
+                            </button>
+                            {isActiveType && (
+                              <div>
+                                <button onClick={() => setBuySelectedCat('')}
+                                  className={`w-full text-left px-4 py-1.5 text-[11px] border-b transition-all ${
+                                    !buySelectedCat ? 'text-teal-500 font-bold' : isDark ? 'text-gray-400 hover:bg-[#151515]' : 'text-gray-500 hover:bg-gray-100'
+                                  } ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
+                                  {typeLabel}ทั้งหมด
+                                </button>
+                                {cats.map(cat => (
+                                  <button key={cat} onClick={() => setBuySelectedCat(cat)}
+                                    className={`w-full text-left px-4 py-1.5 text-[11px] border-b transition-all ${
+                                      buySelectedCat === cat ? 'text-teal-500 font-bold' : isDark ? 'text-gray-400 hover:bg-[#151515]' : 'text-gray-500 hover:bg-gray-100'
+                                    } ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
+                                    {cat}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Right — items table */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      <div className="overflow-x-auto overflow-y-auto flex-1">
+                        {buyLoading ? (
+                          <div className="flex items-center justify-center gap-2 py-12"><Loader2 size={16} className="animate-spin text-teal-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0" style={{ background: isDark ? '#0e0e0e' : 'white' }}>
+                              <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                <th className="text-left py-2 px-2 w-8"></th>
+                                <th className="text-left py-2 px-2">รายการ ({buyFilteredItems.length} รายการ)</th>
+                                <th className="text-center py-2 px-2 w-16">จำนวน</th>
+                                <th className="text-center py-2 px-2 w-12">หน่วย</th>
+                                <th className="text-center py-2 px-2 w-24">ราคาต่อหน่วย</th>
+                                <th className="text-center py-2 px-2 w-24">ส่วนลดต่อหน่วย</th>
+                                <th className="text-center py-2 px-2 w-16">VAT 7%</th>
+                                <th className="text-center py-2 px-2 w-24">ราคาสุทธิต่อหน่วย</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {buyFilteredItems.map(item => {
+                                const checked = buyChecked.has(item.id);
+                                const qty = parseInt(buyQtyMap[item.id]) || 0;
+                                const disc = parseFloat(buyDiscMap[item.id]) || 0;
+                                const vat = !!buyVatMap[item.id];
+                                const price = parseFloat(item.price) || 0;
+                                const afterDisc = price - disc;
+                                const vatAmt = vat ? afterDisc * 0.07 : 0;
+                                const net = Math.max(0, afterDisc + vatAmt);
+                                return (
+                                  <tr key={item.id} className={`border-t ${checked ? isDark ? 'bg-teal-500/10' : 'bg-teal-50' : ''} ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                                    <td className="py-2 px-2">
+                                      <input type="checkbox" checked={checked} onChange={() => toggleBuyCheck(item.id)}
+                                        className="w-3.5 h-3.5 rounded accent-teal-500" />
+                                    </td>
+                                    <td className="py-2 px-2 font-medium">{item.name}</td>
+                                    <td className="py-2 px-2">
+                                      <input type="number" value={buyQtyMap[item.id] || ''} min="0"
+                                        onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                        className={`${inputCls} text-center !py-1 !text-[10px] !w-14`} />
+                                    </td>
+                                    <td className="py-2 px-2 text-center text-gray-500">{item.unit}</td>
+                                    <td className="py-2 px-2 text-center">{parseFloat(item.price).toFixed(2)}</td>
+                                    <td className="py-2 px-2">
+                                      <input type="number" value={buyDiscMap[item.id] || ''} min="0"
+                                        onChange={e => setBuyDiscMap(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                        className={`${inputCls} text-center !py-1 !text-[10px] !w-14`} />
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <input type="checkbox" checked={vat}
+                                        onChange={e => setBuyVatMap(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                                        className="w-3.5 h-3.5 rounded accent-teal-500" />
+                                    </td>
+                                    <td className="py-2 px-2 text-center font-medium">{net.toFixed(2)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                      {/* Selected count */}
+                      <div className={`px-4 py-2 border-t text-[10px] text-gray-500 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                        รายการที่เลือก ({buyChecked.size} รายการ)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className={`flex items-center justify-center gap-3 px-5 py-3 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <button onClick={() => setBuyModalOpen(false)}
+                      className={`px-8 py-2 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={confirmBuyModal} disabled={buyChecked.size === 0}
+                      className="px-8 py-2 rounded-lg text-xs font-bold text-white bg-teal-500 hover:bg-teal-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      ยืนยัน
+                    </button>
                   </div>
                 </div>
               </div>
