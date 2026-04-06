@@ -545,7 +545,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const toggleBuyCheck = (id) => {
     setBuyChecked(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // Auto-set qty to 1 when checked
+        setBuyQtyMap(qm => ({ ...qm, [id]: qm[id] || '1' }));
+      }
       return next;
     });
   };
@@ -577,8 +583,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   }, [purchasedItems]);
 
   // ── Submit ──────────────────────────────────────────────────────────────
+  // Check if there's any sale/billing (purchased items, medications with price, etc.)
+  const hasSale = purchasedItems.length > 0
+    || medications.some(m => parseFloat(m.unitPrice) > 0 && !m.isPremium)
+    || consumables.length > 0;
+
   const handleSubmit = async () => {
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
+    if (assistantIds.length === 0) { setError('กรุณาเลือกผู้ช่วยแพทย์'); return; }
+    if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
+    if (hasSale) {
+      if (!paymentType) { setError('กรุณาเลือกการชำระเงิน'); return; }
+      if (!paymentChannelId) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
+    }
     setSaving(true);
     setError('');
     try {
