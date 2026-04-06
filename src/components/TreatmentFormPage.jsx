@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3 } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw } from 'lucide-react';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -36,7 +37,7 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, isDark, onClose, onSaved }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, isDark, db, appId, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
@@ -88,6 +89,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [medSearchLoading, setMedSearchLoading] = useState(false);
   const [medGroupModalOpen, setMedGroupModalOpen] = useState(false);
   const [medGroupProducts, setMedGroupProducts] = useState([]); // products for selected group
+  const [remedModalOpen, setRemedModalOpen] = useState(false);
 
   // Course items — selected rowIds
   const [selectedCourseItems, setSelectedCourseItems] = useState(new Set());
@@ -359,6 +361,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         : await broker.createTreatment(customerId, payload);
 
       if (data.success) {
+        // Save raw treatment data to our Firestore (backup — viewable even if ProClinic is down)
+        if (db && appId) {
+          try {
+            const localId = data.treatmentId || treatmentId || `local-${Date.now()}`;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'treatments', String(localId));
+            await setDoc(docRef, {
+              proClinicId: localId,
+              customerId,
+              patientName: patientName || '',
+              mode: isEdit ? 'edit' : 'create',
+              doctorId,
+              doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
+              assistantIds,
+              treatmentDate,
+              opd: { ...opd },
+              vitals: { ...vitals, bmi: bmi || '' },
+              healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
+              medications: medications.filter(m => m.name).map(m => ({ id: m.id, name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
+              consumables: consumables.filter(c => c.name).map(c => ({ id: c.id, name: c.name, qty: c.qty, unit: c.unit })),
+              courseItems: Array.from(selectedCourseItems),
+              treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
+              insurance: { benefitType, insuranceCompanyId },
+              payment: { paymentType, paymentChannelId, saleNote },
+              medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
+              syncedToProClinic: true,
+              savedAt: serverTimestamp(),
+            }, { merge: true });
+          } catch (e) {
+            console.warn('[TreatmentForm] Failed to save local backup:', e);
+          }
+        }
         setSuccess(true);
         setTimeout(() => { if (onSaved) onSaved(); }, 1200);
       } else {
@@ -597,12 +630,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <SectionHeader icon={Pill} title="สั่งยากลับบ้าน" isDark={isDark} accent="#10b981">
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                 {medicationGroups.length > 0 && (
-                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => { loadMedGroup(medicationGroups[0]?.id); }}>
+                  <ActionBtn color="#3b82f6" isDark={isDark} onClick={() => { loadMedGroup(medicationGroups[0]?.id); }}>
                     <Plus size={10} /> กลุ่มยากลับบ้าน
                   </ActionBtn>
                 )}
                 <ActionBtn color="#10b981" isDark={isDark} onClick={() => setMedSearchOpen(true)}>
                   <Plus size={10} /> ยากลับบ้าน
+                </ActionBtn>
+                <ActionBtn color="#38bdf8" isDark={isDark} onClick={() => setRemedModalOpen(true)}>
+                  <RotateCcw size={10} /> Remed
                 </ActionBtn>
               </div>
             </SectionHeader>
@@ -668,6 +704,40 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       </button>
                     ))}
                     {medGroupProducts.length === 0 && <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีรายการในกลุ่มนี้</p>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Remed modal — past medications from treatment history */}
+            {remedModalOpen && (
+              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-sky-900/30 bg-[#0a0c14]' : 'border-sky-200 bg-sky-50/30'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">ประวัติการสั่งยา (Remed)</p>
+                  <button onClick={() => setRemedModalOpen(false)} className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                </div>
+                {(options?.remedItems || []).length === 0 ? (
+                  <p className="text-[10px] text-gray-500 text-center py-4">ไม่พบประวัติการสั่งยาของผู้ป่วยรายนี้</p>
+                ) : (
+                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                    {options.remedItems.map((item, idx) => (
+                      <button key={idx} onClick={() => {
+                        setMedications(prev => [...prev, {
+                          id: item.productId || `remed-${idx}`,
+                          name: item.name,
+                          dosage: '',
+                          qty: item.qty || '1',
+                          unitPrice: item.price || '0',
+                          unit: '',
+                        }]);
+                      }}
+                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                        <span className="font-bold">{item.name}</span>
+                        <span className="text-[10px] text-gray-500">
+                          x{item.qty} {item.price !== '0' && item.price !== '0.00' ? `฿${item.price}` : ''}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

@@ -5326,6 +5326,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
           isDark={isDark}
+          db={db}
+          appId={appId}
           onClose={() => setTreatmentFormMode(null)}
           onSaved={() => { setTreatmentFormMode(null); setTreatmentRefreshKey(k => k + 1); }}
         />

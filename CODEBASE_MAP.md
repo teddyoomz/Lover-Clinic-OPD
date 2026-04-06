@@ -513,14 +513,16 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | Vital Signs | weight, height, BMI (auto), BT, PR, RR, SBP, DBP, O₂sat |
 | ใบรับรองแพทย์ | med cert checkboxes (actually came, rest period, other) |
 | OPD Card | CC, PE, DX, Dr.Note, Plan, Note, Additional Note (7 textareas) |
-| สั่งยากลับบ้าน | dynamic medication table (name, dosage, qty, unit price) |
+| สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + dynamic medication table (name, dosage, qty, unit price). Real ProClinic product search via JSON API |
 | ข้อมูลการใช้คอร์ส | customer course display + checkbox item selection |
 | เบิกประกัน | benefit type select, insurance company select |
 | การชำระเงิน | payment type (pay later/full/installment), channel, sale note |
 
-**Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets
+**Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets, medicationGroups, remedItems
 
-**Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay
+**Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay. Props include `db`, `appId` for Firestore backup.
+
+**Firestore backup:** On submit, saves raw treatment data (medications, consumables, courses, vitals, OPD, etc.) to `artifacts/{appId}/public/data/treatments/{proClinicId}` — viewable even if ProClinic is down
 
 ### Client (brokerClient.js) — Treatment Functions
 - `listTreatments(customerId, page)` — list treatments for a customer (paginated)

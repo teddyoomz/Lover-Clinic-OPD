@@ -778,6 +778,42 @@ export function extractTreatmentCreateOptions(html) {
     if (val && text) opts.consumableGroups.push({ id: val, name: text });
   });
 
+  // Remed — past medications from treatment history (pre-loaded in #remedModal)
+  opts.remedItems = [];
+  $('#remedModal').find('tr').each((_, tr) => {
+    const $tr = $(tr);
+    const cb = $tr.find('input[type="checkbox"]');
+    if (!cb.length) return;
+    const productId = cb.val() || '';
+    const cells = $tr.find('td');
+    // Try to extract product info from cells
+    let name = '';
+    cells.each((ci, td) => {
+      const t = $(td).text().trim();
+      if (t && !name && t.length > 1 && !/^\d/.test(t)) name = t;
+    });
+    const qtyInput = $tr.find('input[name*="qty"], input[type="number"]').first();
+    const qty = qtyInput.val() || '1';
+    const priceInput = $tr.find('input[name*="price"]').first();
+    const price = priceInput.val() || '0';
+    if (productId || name) {
+      opts.remedItems.push({ productId, name: name || `Product #${productId}`, qty, price });
+    }
+  });
+  // Fallback: also try div/label structure inside remedModal
+  if (opts.remedItems.length === 0) {
+    $('#remedModal').find('.form-check, .form-group').each((_, el) => {
+      const $el = $(el);
+      const cb = $el.find('input[type="checkbox"]');
+      if (!cb.length) return;
+      const productId = cb.val() || '';
+      const label = $el.find('label').text().trim() || $el.text().trim().split('\n')[0].trim();
+      if (productId || label) {
+        opts.remedItems.push({ productId, name: label || `Product #${productId}`, qty: '1', price: '0' });
+      }
+    });
+  }
+
   // Dosage units (for take-home medications)
   opts.dosageUnits = [];
   $('select[name="dosage_unit"] option').each((_, opt) => {

@@ -208,7 +208,7 @@ export const calculateMRS = (d) => {
 
 export const generateClinicalSummary = (d, formType = 'intake', customTemplate = null, lang = 'en') => {
   const parts = [];
-  const sep = '─────────────────────────────────';
+  const sep = '───';
   const isTh = lang === 'th';
 
   // ── IIEF interpretation in English ──
