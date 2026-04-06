@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Stethoscope, Loader2, RefreshCw, ChevronLeft, ChevronRight, FileText,
-         Edit3, Trash2, Plus, Save, X } from 'lucide-react';
+         Edit3, Trash2, Plus, X } from 'lucide-react';
 import * as broker from '../lib/brokerClient.js';
 
 function VitalBadge({ label, value, isDark }) {
@@ -20,103 +20,9 @@ function OPDField({ label, value, isDark }) {
   );
 }
 
-// ── Inline Edit Form ────────────────────────────────────────────────────────
-
-function TreatmentEditForm({ treatmentId, detail, isDark, onSaved, onCancel }) {
-  const [form, setForm] = useState({
-    symptoms: detail?.symptoms || '',
-    physicalExam: detail?.physicalExam || '',
-    diagnosis: detail?.diagnosis || '',
-    treatmentInfo: detail?.treatmentInfo || '',
-    treatmentPlan: detail?.treatmentPlan || '',
-    treatmentNote: detail?.treatmentNote || '',
-  });
-  const [vitals, setVitals] = useState({
-    weight: detail?.vitals?.weight || '',
-    height: detail?.vitals?.height || '',
-    temperature: detail?.vitals?.temperature || '',
-    pulseRate: detail?.vitals?.pulseRate || '',
-    respiratoryRate: detail?.vitals?.respiratoryRate || '',
-    systolicBP: detail?.vitals?.systolicBP || '',
-    diastolicBP: detail?.vitals?.diastolicBP || '',
-    oxygenSaturation: detail?.vitals?.oxygenSaturation || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-
-  const handleSave = async () => {
-    setSaving(true);
-    setErr('');
-    try {
-      const data = await broker.updateTreatment(treatmentId, { ...form, vitals });
-      if (data.success) {
-        onSaved();
-      } else {
-        setErr(data.error || 'บันทึกไม่สำเร็จ');
-      }
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const inputCls = `w-full rounded-lg px-3 py-2 text-[11px] outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
-  const labelCls = 'text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1';
-
-  return (
-    <div className="space-y-3">
-      {/* Vitals row */}
-      <div>
-        <p className={labelCls}>Vital Signs</p>
-        <div className="grid grid-cols-4 gap-1.5">
-          {[
-            ['weight', 'W (kg)'], ['height', 'H (cm)'], ['temperature', 'BT (°C)'], ['pulseRate', 'PR'],
-            ['respiratoryRate', 'RR'], ['systolicBP', 'SBP'], ['diastolicBP', 'DBP'], ['oxygenSaturation', 'O₂%'],
-          ].map(([key, label]) => (
-            <input key={key} placeholder={label} value={vitals[key]}
-              onChange={e => setVitals(prev => ({ ...prev, [key]: e.target.value }))}
-              className={`${inputCls} text-center !px-1`} />
-          ))}
-        </div>
-      </div>
-
-      {/* OPD fields */}
-      {[
-        ['symptoms', 'CC (อาการ)'],
-        ['physicalExam', 'PE (ตรวจร่างกาย)'],
-        ['diagnosis', 'DX (วินิจฉัย)'],
-        ['treatmentInfo', 'Tx (การรักษา)'],
-        ['treatmentPlan', 'Plan (แผนการรักษา)'],
-        ['treatmentNote', 'Note (หมายเหตุ)'],
-      ].map(([key, label]) => (
-        <div key={key}>
-          <p className={labelCls}>{label}</p>
-          <textarea value={form[key]} onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
-            rows={2} className={`${inputCls} resize-none`} />
-        </div>
-      ))}
-
-      {err && <p className="text-[10px] text-red-500 font-bold">{err}</p>}
-
-      <div className="flex gap-2 pt-1">
-        <button onClick={handleSave} disabled={saving}
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-all">
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          {saving ? 'กำลังบันทึก...' : 'บันทึก'}
-        </button>
-        <button onClick={onCancel} disabled={saving}
-          className={`px-3 py-2 rounded-lg text-[11px] font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-          ยกเลิก
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Main Timeline ───────────────────────────────────────────────────────────
 
-export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm }) {
+export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm, onOpenEditForm, refreshKey }) {
   const [treatments, setTreatments] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -125,7 +31,6 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   const [expandedId, setExpandedId] = useState(null);
   const [detailCache, setDetailCache] = useState({});
   const [detailLoading, setDetailLoading] = useState(null);
-  const [editingId, setEditingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchPage = async (p) => {
@@ -190,6 +95,14 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   useEffect(() => {
     if (customerId) fetchPage(1);
   }, [customerId]);
+
+  // Auto-refresh when returning from create/edit form
+  useEffect(() => {
+    if (refreshKey && customerId) {
+      setDetailCache({});
+      fetchPage(1);
+    }
+  }, [refreshKey]);
 
   const accent = isDark ? '#a78bfa' : '#7c3aed';
 
@@ -273,20 +186,11 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                         <Loader2 size={14} className="animate-spin" style={{ color: accent }} />
                         <span className="text-[10px] text-gray-600">กำลังโหลดรายละเอียด...</span>
                       </div>
-                    ) : editingId === t.id && detail ? (
-                      <TreatmentEditForm treatmentId={t.id} detail={detail} isDark={isDark}
-                        onSaved={() => {
-                          setEditingId(null);
-                          setDetailCache(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                          fetchDetail(t.id);
-                          fetchPage(page);
-                        }}
-                        onCancel={() => setEditingId(null)} />
                     ) : detail ? (
                       <div className="space-y-2.5">
                         {/* Action buttons */}
                         <div className="flex gap-2 mb-2">
-                          <button onClick={() => setEditingId(t.id)}
+                          <button onClick={() => { if (onOpenEditForm) onOpenEditForm(t.id, customerId); }}
                             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${isDark ? 'border-blue-900/50 text-blue-400 bg-blue-950/20 hover:bg-blue-950/40' : 'border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100'}`}>
                             <Edit3 size={10} /> แก้ไข
                           </button>

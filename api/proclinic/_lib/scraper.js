@@ -743,15 +743,39 @@ export function extractTreatmentCreateOptions(html) {
       const products = [];
       $(`tr.buying-course-${courseId}.course-products`).each((_, ptr) => {
         const cb = $(ptr).find('input[name="rowId[]"]');
-        const name = $(ptr).find('.form-check').text().trim();
-        if (cb.length && name) {
-          products.push({ rowId: cb.val(), name });
-        }
+        const checkDiv = $(ptr).find('.form-check');
+        const name = checkDiv.text().trim();
+        if (!cb.length || !name) return;
+        // Parse remaining qty + unit from the full li text: "Hifi หัว 4 100.00 Shot"
+        const li = checkDiv.closest('li');
+        const fullText = li.length ? li.text().trim().replace(/\s+/g, ' ') : name;
+        // Extract qty and unit from end of text: match "100.00 Shot" pattern
+        const qtyMatch = fullText.match(/(\d+(?:\.\d+)?)\s*([A-Za-zก-๙]+)\s*$/);
+        const remaining = qtyMatch ? qtyMatch[1] : '';
+        const unit = qtyMatch ? qtyMatch[2] : '';
+        const productName = qtyMatch ? fullText.replace(qtyMatch[0], '').trim() : name;
+        products.push({ rowId: cb.val(), name: productName || name, remaining, unit });
       });
       if (products.length > 0) {
         opts.customerCourses.push({ courseId, courseName, products });
       }
     }
+  });
+
+  // Medication groups (for take-home meds)
+  opts.medicationGroups = [];
+  $('select[name="takeaway_product_group_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.medicationGroups.push({ id: val, name: text });
+  });
+
+  // Consumable product groups
+  opts.consumableGroups = [];
+  $('select[name="consumable_product_group_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.consumableGroups.push({ id: val, name: text });
   });
 
   // Dosage units (for take-home medications)

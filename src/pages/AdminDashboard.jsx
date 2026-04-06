@@ -169,7 +169,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
   const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
-  const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { customerId, patientName }
+  const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { mode, customerId, treatmentId, patientName }
+  const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
 
   // ─── Chat schedule: check if within operating hours ─────
   const isChatActive = useMemo(() => {
@@ -5297,10 +5298,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {viewingSession.brokerProClinicId && (
                 <div className="mt-8 pt-6 border-t border-[#222]">
                   <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
+                    refreshKey={treatmentRefreshKey}
                     onOpenCreateForm={(cid) => {
                       const pd = viewingSession.patientData || {};
                       const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
-                      setTreatmentFormMode({ customerId: cid, patientName: name });
+                      setTreatmentFormMode({ mode: 'create', customerId: cid, patientName: name });
+                    }}
+                    onOpenEditForm={(tid, cid) => {
+                      const pd = viewingSession.patientData || {};
+                      const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
+                      setTreatmentFormMode({ mode: 'edit', customerId: cid, treatmentId: tid, patientName: name });
                     }} />
                 </div>
               )}
@@ -5311,14 +5318,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         );
       })()}
 
-      {/* Treatment Create Full Page */}
+      {/* Treatment Create/Edit Full Page */}
       {treatmentFormMode && (
         <TreatmentFormPage
+          mode={treatmentFormMode.mode || 'create'}
           customerId={treatmentFormMode.customerId}
+          treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
           isDark={isDark}
           onClose={() => setTreatmentFormMode(null)}
-          onCreated={() => { setTreatmentFormMode(null); }}
+          onSaved={() => { setTreatmentFormMode(null); setTreatmentRefreshKey(k => k + 1); }}
         />
       )}
 
