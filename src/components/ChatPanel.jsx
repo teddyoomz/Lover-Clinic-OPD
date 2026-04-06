@@ -504,12 +504,13 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
         ? resolvedAt.getTime() - new Date(lastCustomerMessageAt).getTime()
         : null;
 
-      // Read messages to calculate max gap between customer messages
+      // Read messages to calculate max gap between customer messages (this session only)
       const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${convId}/messages`);
       const msgsSnap = await getDocs(msgsRef);
+      const sessionStart = firstContactAt ? new Date(firstContactAt).getTime() : 0;
       const customerTimestamps = msgsSnap.docs
         .map(d => d.data())
-        .filter(m => m.isFromCustomer && m.timestamp)
+        .filter(m => m.isFromCustomer && m.timestamp && new Date(m.timestamp).getTime() >= sessionStart)
         .map(m => new Date(m.timestamp).getTime())
         .sort((a, b) => a - b);
       let maxCustomerGapMs = null;
