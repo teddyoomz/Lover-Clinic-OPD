@@ -233,6 +233,27 @@ async function handleGetCreateForm(req, res) {
 
   const options = extractTreatmentCreateOptions(html);
 
+  // Debug: include HTML snippet around course section to diagnose scraping
+  if (options.customerCourses.length === 0) {
+    const cheerio = (await import('cheerio')).default || await import('cheerio');
+    const $ = cheerio.load(html);
+    // Capture snippets of relevant elements to diagnose course structure
+    const debugSnippets = [];
+    // Look for rowId inputs
+    $('input[name="rowId[]"]').each((i, el) => {
+      if (i < 3) debugSnippets.push({ type: 'rowId_parent', html: $(el).parent().html()?.substring(0, 200) });
+    });
+    // Look for anything with "buying" or "course" in class
+    $('[class*="buying"], [class*="course"]').each((i, el) => {
+      if (i < 5) debugSnippets.push({ type: 'buying_class', tag: el.tagName, class: $(el).attr('class'), text: $(el).text().trim().substring(0, 100) });
+    });
+    // Look for checkboxes in any form-check
+    $('.form-check input[type="checkbox"]').each((i, el) => {
+      if (i < 3) debugSnippets.push({ type: 'form_check', parent_html: $(el).closest('.form-check').html()?.substring(0, 200) });
+    });
+    options._debug = { htmlLength: html.length, snippets: debugSnippets };
+  }
+
   return res.status(200).json({ success: true, options });
 }
 
