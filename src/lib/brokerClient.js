@@ -243,3 +243,35 @@ export function syncStaff() {
 export function syncCourses() {
   return apiFetch('master', { action: 'syncCourses' });
 }
+
+// ─── Public API — Treatment Records ─────────────────────────────────────────
+
+/** List treatments for a customer → { success, treatments[], page, totalPages } */
+export function listTreatments(customerId, page = 1) {
+  return apiFetch('treatment', { action: 'list', customerId, page });
+}
+
+/** Get full treatment detail → { success, treatment } */
+export function getTreatment(treatmentId) {
+  return apiFetch('treatment', { action: 'get', treatmentId });
+}
+
+/** Get create form options (doctors, health info, etc.) → { success, options } */
+export function getTreatmentCreateForm(customerId) {
+  return apiFetch('treatment', { action: 'getCreateForm', customerId });
+}
+
+/** Create new treatment → { success, treatmentId } */
+export function createTreatment(customerId, treatment) {
+  return apiFetch('treatment', { action: 'create', customerId, treatment });
+}
+
+/** Update existing treatment → { success } */
+export function updateTreatment(treatmentId, treatment) {
+  return apiFetch('treatment', { action: 'update', treatmentId, treatment });
+}
+
+/** Delete/cancel treatment → { success } */
+export function deleteTreatment(treatmentId) {
+  return apiFetch('treatment', { action: 'delete', treatmentId });
+}

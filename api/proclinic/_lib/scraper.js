@@ -439,6 +439,259 @@ export function extractListPagination(html) {
   return { maxPage };
 }
 
+// ─── Treatment List: Extract from customer detail page ─────────────────────
+// Scrapes /admin/customer/{id}?treatment_page=N center column
+// Structure: .card.mb-4 > .card-body > .timeline > div (each = 1 record)
+
+export function extractTreatmentList(html) {
+  const $ = cheerio.load(html);
+  const treatments = [];
+
+  // Find the center column card that contains treatment timeline
+  const timeline = $('.timeline.mb-2').first();
+  if (!timeline.length) return treatments;
+
+  timeline.children('div').each((_, record) => {
+    const $r = $(record);
+    const t = {};
+
+    // Section 0: header — date + edit link (contains treatment ID)
+    const editLink = $r.find('a[href*="/treatment/"][href*="/edit"]').first();
+    if (editLink.length) {
+      const m = editLink.attr('href')?.match(/treatment\/(\d+)\/edit/);
+      t.id = m ? m[1] : null;
+    }
+    if (!t.id) return; // skip non-treatment entries
+
+    // Cancel link (for detecting cancelled records)
+    const cancelLink = $r.find('a.text-danger').first();
+    t.canCancel = cancelLink.length > 0;
+
+    // Date
+    const dateEl = $r.find('p.d-inline-block.strong, p.strong').first();
+    t.date = dateEl.text().trim();
+
+    // Section 1: branch + doctor + assistants
+    const infoSection = $r.children('div').eq(1);
+    const spans = infoSection.find('span.me-2, span.me-0');
+    const parts = [];
+    spans.each((_, s) => {
+      const text = $(s).text().trim();
+      if (text && text !== '-') parts.push(text);
+    });
+    // First span = branch, second = doctor, rest = assistants
+    t.branch = '';
+    t.doctor = '';
+    t.assistants = [];
+    parts.forEach((p, i) => {
+      if (p.startsWith('สาขา')) t.branch = p.replace(/^สาขา\s*/, '');
+      else if (i === 1 || (!t.doctor && i > 0)) t.doctor = p;
+      else if (i > 1 && t.doctor) t.assistants.push(p);
+    });
+
+    // Section 2: treatment details — CC, DX, treatment info, plan, consent
+    const detailSection = $r.find('.row.g-2.mb-2').first();
+    if (detailSection.length) {
+      const detailText = detailSection.text().trim();
+
+      // Extract labeled fields
+      const ccMatch = detailText.match(/อาการ\s*[:：]\s*(.+?)(?=วินิจฉัยโรค|รายละเอียดการรักษา|แผนการรักษา|หมายเหตุ|$)/s);
+      t.cc = ccMatch ? ccMatch[1].trim() : '';
+
+      const dxMatch = detailText.match(/วินิจฉัยโรค\s*[:：]\s*(.+?)(?=รายละเอียดการรักษา|แผนการรักษา|หมายเหตุ|$)/s);
+      t.dx = dxMatch ? dxMatch[1].trim() : '';
+
+      const txMatch = detailText.match(/รายละเอียดการรักษา\s*[:：]\s*(.+?)(?=แผนการรักษา|หมายเหตุ|คนไข้เซ็น|ดูเอกสาร|$)/s);
+      t.treatmentInfo = txMatch ? txMatch[1].trim() : '';
+
+      const planMatch = detailText.match(/แผนการรักษา\s*[:：]\s*(.+?)(?=หมายเหตุ|$)/s);
+      t.plan = planMatch ? planMatch[1].trim() : '';
+
+      // Consent status
+      t.hasConsent = detailText.includes('คนไข้เซ็นยินยอม');
+    }
+
+    // Section 3: products used + retail items
+    const productSection = $r.find('.row.g-2.mb-3').first();
+    if (productSection.length) {
+      t.productsText = productSection.text().trim().replace(/\s+/g, ' ');
+    }
+
+    treatments.push(t);
+  });
+
+  return treatments;
+}
+
+// ─── Treatment Pagination: customer page uses ?treatment_page=N ─────────────
+
+export function extractTreatmentPagination(html) {
+  const $ = cheerio.load(html);
+  // Find pagination that uses treatment_page param
+  let maxPage = 1;
+  $('ul.pagination a[href]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    const m = href.match(/[?&]treatment_page=(\d+)/);
+    if (m) maxPage = Math.max(maxPage, parseInt(m[1]));
+  });
+  return { maxPage };
+}
+
+// ─── Treatment Detail: Extract from edit page ──────────────────────────────
+// Scrapes /admin/treatment/{id}/edit — returns full treatment data
+
+export function extractTreatmentDetail(html) {
+  const $ = cheerio.load(html);
+  const t = {};
+
+  // Basic fields from hidden inputs and form fields
+  t.customerId = $('input[name="customer_id"]').val() || '';
+  t.doctorId = $('select[name="doctor_id"]').val() || '';
+  t.doctorName = $('select[name="doctor_id"] option:selected').text().trim();
+  t.treatmentDate = $('input[name="treatment_date"]').val() || '';
+
+  // Assistants (multi-select)
+  t.assistantIds = [];
+  $('select[name="doctor_assistant_id[]"] option:selected').each((_, opt) => {
+    const val = $(opt).val();
+    if (val) t.assistantIds.push(val);
+  });
+
+  // OPD Card — textareas
+  t.symptoms = $('textarea[name="symptoms"]').val() || '';
+  t.physicalExam = $('textarea[name="physical_exam"]').val() || '';
+  t.diagnosis = $('textarea[name="diagnosis"]').val() || '';
+  t.treatmentInfo = $('textarea[name="treatment_information"]').val() || '';
+  t.treatmentPlan = $('textarea[name="treatment_plan"]').val() || '';
+  t.treatmentNote = $('textarea[name="treatment_note"]').val() || '';
+  t.additionalNote = $('textarea[name="additional_note"]').val() || '';
+
+  // Vital signs
+  t.vitals = {
+    weight: $('input[name="ht_weight"]').val() || '',
+    height: $('input[name="ht_height"]').val() || '',
+    temperature: $('input[name="ht_body_temperature"]').val() || '',
+    pulseRate: $('input[name="ht_pulse_rate"]').val() || '',
+    respiratoryRate: $('input[name="ht_respiratory_rate"]').val() || '',
+    systolicBP: $('input[name="ht_systolic_blood_pressure"]').val() || '',
+    diastolicBP: $('input[name="ht_diastolic_blood_pressure"]').val() || '',
+    oxygenSaturation: $('input[name="ht_oxygen_saturation"]').val() || '',
+  };
+
+  // Health info
+  t.healthInfo = {
+    bloodType: $('input[name="blood_type"]').val() || $('textarea[name="blood_type"]').val() || '',
+    congenitalDisease: $('textarea[name="congenital_disease"]').val() || $('input[name="congenital_disease"]').val() || '',
+    drugAllergy: $('textarea[name="history_of_drug_allergy"]').val() || $('input[name="history_of_drug_allergy"]').val() || '',
+    treatmentHistory: $('textarea[name="ht_treatment_history"]').val() || $('input[name="ht_treatment_history"]').val() || '',
+  };
+
+  // Consent image
+  t.consentImage = $('input[name="consent_image"]').val() || '';
+
+  // Medical certificate fields
+  t.medCert = {
+    isActuallyCome: $('input[name="med_cert_is_actually_come"]').val() === '1',
+    isRest: $('input[name="med_cert_is_rest"]').val() === '1',
+    period: $('input[name="med_cert_period"]').val() || '',
+    isOther: $('input[name="med_cert_is_other"]').val() === '1',
+    otherDetail: $('textarea[name="med_cert_other_detail"]').val() || $('input[name="med_cert_other_detail"]').val() || '',
+  };
+
+  // Treatment items from tables
+  t.treatmentItems = [];
+  t.consumables = [];
+  t.takeHomeMeds = [];
+  t.retailItems = [];
+
+  // Tables: [0] treatment items, [1] consumables, [2] take-home meds, [3+] doctor fees, [5+] DX codes
+  const tables = $('table');
+  tables.each((i, table) => {
+    const headers = $(table).find('th').map((_, th) => $(th).text().trim()).get();
+    const headerKey = headers.join('|');
+    const rows = [];
+    $(table).find('tbody tr').each((_, tr) => {
+      const cells = $(tr).find('td').map((_, td) => $(td).text().trim()).get();
+      if (cells.length >= 2 && !cells[0].includes('ไม่พบ')) {
+        rows.push(cells);
+      }
+    });
+
+    if (headerKey === 'รายการ|จำนวน') {
+      // Could be treatment items, consumables, or take-home meds
+      // Distinguish by position
+      if (t.treatmentItems.length === 0 && rows.length > 0) {
+        t.treatmentItems = rows.map(r => ({ name: r[0], quantity: r[1] }));
+      } else if (rows.length > 0) {
+        t.consumables = rows.map(r => ({ name: r[0], quantity: r[1] }));
+      }
+    }
+  });
+
+  // Doctor fees table
+  $('table').each((_, table) => {
+    const headers = $(table).find('th').map((_, th) => $(th).text().trim()).get();
+    if (headers.includes('ค่ามือ')) {
+      t.doctorFees = [];
+      $(table).find('tbody tr').each((_, tr) => {
+        const cells = $(tr).find('td').map((_, td) => $(td).text().trim()).get();
+        if (cells.length >= 3) {
+          t.doctorFees.push({ product: cells[1], fee: cells[2] });
+        }
+      });
+    }
+  });
+
+  return t;
+}
+
+// ─── Treatment Create Form: Extract options ─────────────────────────────────
+// Scrapes /admin/treatment/create?customer_id={id} — returns doctors, courses, etc.
+
+export function extractTreatmentCreateOptions(html) {
+  const $ = cheerio.load(html);
+  const opts = {};
+
+  // CSRF
+  opts.csrf = $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val() || '';
+
+  // Doctors
+  opts.doctors = [];
+  $('select[name="doctor_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text && text !== 'เลือกแพทย์ประจำตัว') {
+      opts.doctors.push({ id: val, name: text });
+    }
+  });
+
+  // Assistants
+  opts.assistants = [];
+  $('select[name="doctor_assistant_id[]"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.assistants.push({ id: val, name: text });
+  });
+
+  // Customer health info (pre-filled)
+  opts.healthInfo = {
+    doctorId: $('input[name="customer_doctor_id"]').val() || '',
+    bloodType: $('input[name="blood_type"]').val() || '',
+    congenitalDisease: $('input[name="congenital_disease"]').val() || $('textarea[name="congenital_disease"]').val() || '',
+    drugAllergy: $('input[name="history_of_drug_allergy"]').val() || $('textarea[name="history_of_drug_allergy"]').val() || '',
+  };
+
+  // Payment channels
+  opts.paymentChannels = [];
+  $('select[name="payment_channel_id"] option').each((_, opt) => {
+    const val = $(opt).val();
+    const text = $(opt).text().trim();
+    if (val && text) opts.paymentChannels.push({ id: val, name: text });
+  });
+
+  return opts;
+}
+
 // ─── Extract validation errors ──────────────────────────────────────────────
 
 export function extractValidationErrors(html) {
