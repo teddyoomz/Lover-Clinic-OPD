@@ -138,18 +138,50 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [purchasedItems, setPurchasedItems] = useState([]); // { id, name, price, unit, qty, discount, vat, itemType }
 
   // Insurance
+  const [isInsuranceClaimed, setIsInsuranceClaimed] = useState(false);
   const [benefitType, setBenefitType] = useState('');
   const [insuranceCompanyId, setInsuranceCompanyId] = useState('');
+  const [insuranceClaimAmount, setInsuranceClaimAmount] = useState('');
 
-  // Payment — ProClinic field names: status (0/2/4), payment_method, paid_amount
-  const [paymentStatus, setPaymentStatus] = useState('0'); // 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
-  const [paymentChannelId, setPaymentChannelId] = useState('');
-  const [paidAmount, setPaidAmount] = useState('');
+  // Discounts
+  const [medDiscountOverride, setMedDiscountOverride] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [billDiscount, setBillDiscount] = useState('');
+  const [billDiscountType, setBillDiscountType] = useState('amount');
+
+  // Deposit & Wallet
+  const [useDeposit, setUseDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [useWallet, setUseWallet] = useState(false);
+  const [walletId, setWalletId] = useState('');
+  const [walletAmount, setWalletAmount] = useState('');
+
+  // Payment
+  const [paymentStatus, setPaymentStatus] = useState('2'); // 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentTime, setPaymentTime] = useState('');
   const [refNo, setRefNo] = useState('');
   const [note, setNote] = useState('');
-  const [sellerId, setSellerId] = useState('');
   const [saleNote, setSaleNote] = useState('');
+
+  // Payment channels (3 rows)
+  const [pmChannels, setPmChannels] = useState([
+    { enabled: false, method: '', amount: '' },
+    { enabled: false, method: '', amount: '' },
+    { enabled: false, method: '', amount: '' },
+  ]);
+  const updatePmChannel = (idx, field, val) => setPmChannels(prev => prev.map((c, i) => i === idx ? { ...c, [field]: val } : c));
+
+  // Sellers (5 rows)
+  const [pmSellers, setPmSellers] = useState([
+    { enabled: false, id: '', percent: '100', total: '' },
+    { enabled: false, id: '', percent: '100', total: '' },
+    { enabled: false, id: '', percent: '100', total: '' },
+    { enabled: false, id: '', percent: '100', total: '' },
+    { enabled: false, id: '', percent: '100', total: '' },
+  ]);
+  const updatePmSeller = (idx, field, val) => setPmSellers(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
 
   // ── BMI auto-calc ──
   const bmi = useMemo(() => {
@@ -158,6 +190,38 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (w > 0 && h > 0) return (w / ((h / 100) ** 2)).toFixed(1);
     return '';
   }, [vitals.weight, vitals.height]);
+
+  // ── Billing calculation ──
+  const formatBaht = (n) => Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const billing = useMemo(() => {
+    const lines = [];
+    purchasedItems.forEach(p => {
+      const net = (parseFloat(p.unitPrice) || 0) * (parseInt(p.qty) || 1);
+      if (net > 0) lines.push({ name: p.name, amount: net, type: 'item' });
+    });
+    medications.filter(m => m.name && parseFloat(m.unitPrice) > 0 && !m.isPremium).forEach(m => {
+      lines.push({ name: m.name, amount: (parseFloat(m.unitPrice) || 0) * (parseInt(m.qty) || 1), type: 'med' });
+    });
+    consumables.filter(c => c.name).forEach(c => {
+      const net = (parseFloat(c.unitPrice) || 0) * (parseInt(c.qty) || 1);
+      if (net > 0) lines.push({ name: c.name, amount: net, type: 'cons' });
+    });
+    const subtotal = lines.reduce((s, l) => s + l.amount, 0);
+    const medSubtotal = lines.filter(l => l.type === 'med').reduce((s, l) => s + l.amount, 0);
+    const medDiscPct = parseFloat(options?.medicineDiscountPercent) || 0;
+    const medDisc = parseFloat(medDiscountOverride) || (medSubtotal * medDiscPct / 100);
+    const afterMedDisc = Math.max(0, subtotal - medDisc);
+    const billDiscAmt = billDiscountType === 'percent'
+      ? afterMedDisc * (parseFloat(billDiscount) || 0) / 100
+      : parseFloat(billDiscount) || 0;
+    const afterDiscount = Math.max(0, afterMedDisc - billDiscAmt);
+    const insDed = isInsuranceClaimed ? (parseFloat(insuranceClaimAmount) || 0) : 0;
+    const depDed = useDeposit ? (parseFloat(depositAmount) || 0) : 0;
+    const walDed = useWallet ? (parseFloat(walletAmount) || 0) : 0;
+    const netTotal = Math.max(0, afterDiscount - insDed - depDed - walDed);
+    return { lines, subtotal, medSubtotal, medDiscPct, medDisc, billDiscAmt, afterDiscount, insDed, depDed, walDed, netTotal };
+  }, [purchasedItems, medications, consumables, medDiscountOverride, billDiscount, billDiscountType,
+      isInsuranceClaimed, insuranceClaimAmount, useDeposit, depositAmount, useWallet, walletAmount, options]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -587,8 +651,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     return grouped;
   }, [purchasedItems]);
 
+  // ── Seller commission auto-calc ──
+  useEffect(() => {
+    if (billing.netTotal <= 0) return;
+    setPmSellers(prev => prev.map(s => {
+      if (!s.enabled) return s;
+      const pct = parseFloat(s.percent) || 0;
+      const newTotal = (billing.netTotal * pct / 100).toFixed(2);
+      return newTotal !== s.total ? { ...s, total: newTotal } : s;
+    }));
+  }, [billing.netTotal, pmSellers.map(s => s.percent + s.enabled).join()]);
+
+  // ── Payment auto-fill when status=2 (full payment) ──
+  useEffect(() => {
+    if (paymentStatus === '2' && billing.netTotal > 0) {
+      setPmChannels(prev => {
+        const newAmt = billing.netTotal.toFixed(2);
+        if (prev[0].enabled && prev[0].amount === newAmt) return prev;
+        return prev.map((c, i) => i === 0 ? { ...c, enabled: true, amount: newAmt } : c);
+      });
+    }
+  }, [paymentStatus, billing.netTotal]);
+
   // ── Submit ──────────────────────────────────────────────────────────────
-  // Check if there's any sale/billing (purchased items, medications with price, etc.)
   const hasSale = purchasedItems.length > 0
     || medications.some(m => parseFloat(m.unitPrice) > 0 && !m.isPremium)
     || consumables.length > 0;
@@ -598,17 +683,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (assistantIds.length === 0) { setError('กรุณาเลือกผู้ช่วยแพทย์'); return; }
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
-      if (!sellerId) { setError('กรุณาเลือกพนักงานขาย'); return; }
+      if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
-        if (!paymentChannelId) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
-        if (!paidAmount) { setError('กรุณากรอกจำนวนเงินที่ชำระ'); return; }
+        if (!pmChannels.some(c => c.enabled && c.method)) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
+        if (!pmChannels.some(c => c.enabled && parseFloat(c.amount) > 0)) { setError('กรุณากรอกจำนวนเงินที่ชำระ'); return; }
       }
     }
     setSaving(true);
     setError('');
     try {
-      // Look up payment channel name from ID for ProClinic's payment_method field
-      const selectedChannel = paymentChannels.find(c => String(c.id) === String(paymentChannelId));
+      // Build seller entries from pmSellers array
+      const sellerPayload = {};
+      pmSellers.forEach((s, i) => {
+        if (s.enabled && s.id) {
+          sellerPayload[`seller${i + 1}Id`] = s.id;
+          sellerPayload[`sellerPercent${i + 1}`] = s.percent;
+          sellerPayload[`sellerTotal${i + 1}`] = s.total;
+        }
+      });
       const payload = {
         doctorId,
         assistantIds,
@@ -629,18 +721,33 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
         treatmentItems,
+        // Billing
+        saleDate,
+        medicineDiscountPercent: billing.medDiscPct,
+        discount: String(billing.billDiscAmt || ''),
+        discountType: billDiscountType,
+        couponCode,
+        // Insurance
+        isInsuranceClaimed,
         benefitType,
         insuranceCompanyId,
-        seller1Id: sellerId,
-        sellerPercent1: '100',
+        totalClaimAmount: insuranceClaimAmount,
+        // Deposit & Wallet
+        useDeposit, depositAmount,
+        useWallet, walletId, walletAmount,
+        // Payment
         paymentStatus,
-        paymentMethod: selectedChannel?.name || paymentChannelId || '',
-        paidAmount,
+        paymentDate,
         paymentTime,
-        paymentDate: treatmentDate,
-        refNo,
-        note,
-        saleNote,
+        paymentMethod: pmChannels[0].enabled ? pmChannels[0].method : '',
+        paidAmount: pmChannels[0].enabled ? pmChannels[0].amount : '',
+        paymentMethod2: pmChannels[1].enabled ? pmChannels[1].method : '',
+        paidAmount2: pmChannels[1].enabled ? pmChannels[1].amount : '',
+        paymentMethod3: pmChannels[2].enabled ? pmChannels[2].method : '',
+        paidAmount3: pmChannels[2].enabled ? pmChannels[2].amount : '',
+        refNo, note, saleNote,
+        // Sellers
+        ...sellerPayload,
       };
 
       const data = isEdit
@@ -670,8 +777,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
               courseItems: Array.from(selectedCourseItems),
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
-              insurance: { benefitType, insuranceCompanyId },
-              payment: { paymentStatus, paymentChannelId, paymentMethod: selectedChannel?.name || '', paidAmount, paymentTime, refNo, note, saleNote, sellerId },
+              billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
+              insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
+              payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },
+              sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
@@ -724,6 +833,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const benefitTypes = options?.benefitTypes || [];
   const insuranceCompanies = options?.insuranceCompanies || [];
   const paymentChannels = options?.paymentChannels || [];
+  const wallets = options?.wallets || [];
+  const sellerOptions = options?.sellers || [];
   const medicationGroups = options?.medicationGroups || [];
   const consumableGroups = options?.consumableGroups || [];
 
@@ -1644,91 +1755,211 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             )}
           </FormSection>
 
-          {/* ── Insurance Claims ───────────────────────────────────────────── */}
+          {/* ── Insurance (เบิกประกัน) ─────────────────────────────────────── */}
           <FormSection isDark={isDark}>
-            <SectionHeader icon={Shield} title="เบิกประกัน" isDark={isDark} accent="#8b5cf6" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>ประเภทสิทธิ</label>
-                <select value={benefitType} onChange={e => setBenefitType(e.target.value)} className={selectCls}>
-                  <option value="">ไม่เบิก</option>
-                  {benefitTypes.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-              </div>
-              {benefitType && (
-                <div>
-                  <label className={labelCls}>บริษัทประกัน</label>
-                  <select value={insuranceCompanyId} onChange={e => setInsuranceCompanyId(e.target.value)} className={selectCls}>
-                    <option value="">เลือกบริษัทประกัน</option>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={isInsuranceClaimed} onChange={e => setIsInsuranceClaimed(e.target.checked)} className="w-3.5 h-3.5 accent-purple-500" />
+                <span className="text-xs font-bold" style={{ color: accent }}>เบิกประกัน</span>
+              </label>
+              {isInsuranceClaimed && (
+                <>
+                  <select value={benefitType} onChange={e => setBenefitType(e.target.value)} className={`${selectCls} max-w-[200px]`}>
+                    <option value="">ประเภทสิทธิ</option>
+                    {benefitTypes.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <select value={insuranceCompanyId} onChange={e => setInsuranceCompanyId(e.target.value)} className={`${selectCls} max-w-[200px]`}>
+                    <option value="">บริษัทประกัน</option>
                     {insuranceCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                </div>
+                </>
               )}
             </div>
           </FormSection>
 
-          {/* ── Payment ────────────────────────────────────────────────────── */}
+          {/* ── Expense Summary (สรุปค่าใช้จ่าย) ───────────────────────────── */}
+          {hasSale && (
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={DollarSign} title="สรุปค่าใช้จ่าย" isDark={isDark} accent="#10b981" />
+            <div className="space-y-1 text-xs">
+              {billing.lines.map((l, i) => (
+                <div key={i} className="flex justify-between py-0.5">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>{l.name}</span>
+                  <span className="font-mono">{formatBaht(l.amount)} บาท</span>
+                </div>
+              ))}
+              <div className={`flex justify-between py-1.5 mt-1 border-t font-bold ${isDark ? 'border-[#333]' : 'border-gray-200'}`}>
+                <span>ราคารวม</span>
+                <span className="font-mono">{formatBaht(billing.subtotal)} บาท</span>
+              </div>
+              {/* Medicine discount */}
+              <div className="flex justify-between items-center py-0.5">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ส่วนลดค่ายา ({billing.medDiscPct}%)</span>
+                <div className="flex items-center gap-1">
+                  <input type="number" value={medDiscountOverride} onChange={e => setMedDiscountOverride(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder={billing.medDisc.toFixed(2)} min="0" step="0.01" />
+                  <span className="text-[10px]">บาท</span>
+                </div>
+              </div>
+              {/* Coupon */}
+              <div className="flex justify-between items-center py-0.5">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>คูปองส่วนลด</span>
+                <div className="flex items-center gap-1">
+                  <input type="text" value={couponCode} onChange={e => setCouponCode(e.target.value)} className={`${inputCls} w-32 py-1`} placeholder="กรอกรหัสคูปอง" />
+                </div>
+              </div>
+              {/* Bill-end discount */}
+              <div className="flex justify-between items-center py-0.5">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ส่วนลดท้ายบิล</span>
+                <div className="flex items-center gap-1">
+                  <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
+                  <button onClick={() => setBillDiscountType(p => p === 'amount' ? 'percent' : 'amount')}
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isDark ? 'border-[#444] text-gray-300' : 'border-gray-300 text-gray-600'}`}>
+                    {billDiscountType === 'percent' ? '%' : '฿'}
+                  </button>
+                  <span className="text-[10px]">บาท</span>
+                </div>
+              </div>
+              {/* After discount */}
+              <div className={`flex justify-between py-1 font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                <span>ยอดหลังหักส่วนลด</span>
+                <span className="font-mono">{formatBaht(billing.afterDiscount)} บาท</span>
+              </div>
+              {/* Insurance deduction */}
+              {isInsuranceClaimed && (
+                <div className="flex justify-between items-center py-0.5">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ยอดเบิกประกัน</span>
+                  <div className="flex items-center gap-1">
+                    <input type="number" value={insuranceClaimAmount} onChange={e => setInsuranceClaimAmount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
+                    <span className="text-[10px]">บาท</span>
+                  </div>
+                </div>
+              )}
+              {/* Deposit */}
+              <div className="flex justify-between items-center py-0.5">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                  ยอดนัดจำ ({formatBaht(options?.depositBalance || 0)} บาท)
+                </span>
+                <div className="flex items-center gap-1">
+                  <input type="checkbox" checked={useDeposit} onChange={e => setUseDeposit(e.target.checked)} className="w-3 h-3 accent-purple-500" />
+                  <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
+                  <span className="text-[10px]">บาท</span>
+                </div>
+              </div>
+              {/* Wallet */}
+              {wallets.length > 0 && (
+                <div className="flex justify-between items-center py-0.5">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>Wallet</span>
+                  <div className="flex items-center gap-1">
+                    <input type="checkbox" checked={useWallet} onChange={e => setUseWallet(e.target.checked)} className="w-3 h-3 accent-purple-500" />
+                    <select value={walletId} onChange={e => setWalletId(e.target.value)} disabled={!useWallet} className={`${selectCls} w-40 py-1 text-[10px] ${!useWallet ? 'opacity-40' : ''}`}>
+                      <option value="">เลือกกระเป๋า</option>
+                      {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                    <input type="number" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} disabled={!useWallet} className={`${inputCls} w-20 text-right py-1 ${!useWallet ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
+                    <span className="text-[10px]">บาท</span>
+                  </div>
+                </div>
+              )}
+              {/* Net total */}
+              <div className={`flex justify-between py-2 mt-1 border-t text-sm font-black ${isDark ? 'border-[#333]' : 'border-gray-200'}`} style={{ color: accent }}>
+                <span>ยอดสุทธิ</span>
+                <span className="font-mono">{formatBaht(billing.netTotal)} บาท</span>
+              </div>
+            </div>
+          </FormSection>
+          )}
+
+          {/* ── Sale Note + Date ──────────────────────────────────────────────── */}
+          <FormSection isDark={isDark}>
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls}>หมายเหตุการขาย</label>
+                <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="กรอกหมายเหตุการขาย" />
+              </div>
+              <div className="w-48">
+                <label className={labelCls}>วันที่ขาย *</label>
+                <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+          </FormSection>
+
+          {/* ── Payment (การชำระเงิน) ─────────────────────────────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
 
-            {/* Row 1: Seller + Payment status */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Payment status — radio buttons */}
+            <div className="flex items-center gap-4 mb-3">
+              {[['4', 'แบ่งชำระ'], ['2', 'ชำระเต็มจำนวน'], ['0', 'ชำระภายหลัง']].map(([val, label]) => (
+                <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="paymentStatus" value={val} checked={paymentStatus === val}
+                    onChange={e => setPaymentStatus(e.target.value)} className="w-3.5 h-3.5 accent-purple-500" />
+                  <span className="text-xs">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* Payment date + time */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className={labelCls}>พนักงานขาย *</label>
-                <select value={sellerId} onChange={e => setSellerId(e.target.value)} className={selectCls}>
-                  <option value="">เลือกพนักงานขาย</option>
-                  {(options?.sellers || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <label className={labelCls}>วันที่ชำระเงิน *</label>
+                <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>รูปแบบชำระ</label>
-                <select value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)} className={selectCls}>
-                  <option value="0">ชำระภายหลัง</option>
-                  <option value="2">ชำระเต็มจำนวน</option>
-                  <option value="4">แบ่งชำระ</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>วันที่ขาย</label>
-                <input type="date" value={treatmentDate} readOnly className={`${inputCls} opacity-60`} />
+                <label className={labelCls}>เวลา</label>
+                <input type="time" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} />
               </div>
             </div>
 
-            {/* Row 2: Payment method + amount (visible when status is 2 or 4) */}
+            {/* Payment channels (3 rows) — visible when status is 2 or 4 */}
             {(paymentStatus === '2' || paymentStatus === '4') && (
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3">
-                <div>
-                  <label className={labelCls}>ช่องทางชำระ *</label>
-                  <select value={paymentChannelId} onChange={e => setPaymentChannelId(e.target.value)} className={selectCls}>
-                    <option value="">เลือกช่องทาง</option>
-                    {paymentChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>จำนวนเงิน *</label>
-                  <input type="number" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className={inputCls} placeholder="0.00" min="0" step="0.01" />
-                </div>
-                <div>
-                  <label className={labelCls}>เวลาชำระ</label>
-                  <input type="text" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} placeholder="เช่น 14:30" />
-                </div>
-                <div>
-                  <label className={labelCls}>เลขที่อ้างอิง</label>
-                  <input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="ref no." />
-                </div>
+              <div className="space-y-2 mb-3">
+                <label className={labelCls}>ช่องทางชำระเงิน</label>
+                {pmChannels.map((ch, idx) => (
+                  <div key={idx} className={`flex items-center gap-2 ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                    <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500" />
+                    <select value={ch.method} onChange={e => updatePmChannel(idx, 'method', e.target.value)} disabled={!ch.enabled} className={`${selectCls} flex-1`}>
+                      <option value="">เลือกช่องทางชำระเงิน</option>
+                      {paymentChannels.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                    <input type="number" value={ch.amount} onChange={e => updatePmChannel(idx, 'amount', e.target.value)} disabled={!ch.enabled}
+                      className={`${inputCls} w-36 text-right`} placeholder={`กรอกยอดชำระ ${idx + 1}`} min="0" step="0.01" />
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Row 3: Notes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            {/* Ref no + Note */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>เลขที่อ้างอิงใบเสร็จหน้าร้าน</label>
+                <input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} />
+              </div>
               <div>
                 <label className={labelCls}>หมายเหตุ</label>
                 <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุ" />
               </div>
-              <div>
-                <label className={labelCls}>หมายเหตุการขาย</label>
-                <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุการขาย" />
-              </div>
+            </div>
+          </FormSection>
+
+          {/* ── Sellers (พนักงานขาย) ──────────────────────────────────────────── */}
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
+            <div className="space-y-2">
+              {pmSellers.map((sl, idx) => (
+                <div key={idx} className={`flex items-center gap-2 ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                  <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500" />
+                  <select value={sl.id} onChange={e => updatePmSeller(idx, 'id', e.target.value)} disabled={!sl.enabled} className={`${selectCls} flex-1`}>
+                    <option value="">เลือกพนักงานขาย</option>
+                    {sellerOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input type="number" value={sl.percent} onChange={e => updatePmSeller(idx, 'percent', e.target.value)} disabled={!sl.enabled}
+                    className={`${inputCls} w-16 text-right`} placeholder="%" min="0" max="100" step="0.01" />
+                  <span className="text-[10px] text-gray-500">%</span>
+                  <input type="text" value={sl.total ? formatBaht(sl.total) : ''} readOnly disabled={!sl.enabled}
+                    className={`${inputCls} w-28 text-right opacity-70`} placeholder="ยอดคอม" />
+                  <span className="text-[10px] text-gray-500">บาท</span>
+                </div>
+              ))}
             </div>
           </FormSection>
 

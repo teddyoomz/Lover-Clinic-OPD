@@ -336,7 +336,7 @@ async function handleCreate(req, res) {
   formData.set('total_claim_amount', treatment.totalClaimAmount || '');
 
   // Sale/payment
-  const saleDate = treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
+  const saleDate = treatment.saleDate || treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
   formData.set('sale_date', saleDate);
   formData.set('coupon_code', treatment.couponCode || '');
   formData.set('sale_note', treatment.saleNote || '');
@@ -370,6 +370,18 @@ async function handleCreate(req, res) {
   // Discount
   formData.set('discount', treatment.discount || '');
   formData.set('discount_type', treatment.discountType || '');
+  formData.set('medicine_discount_percent', treatment.medicineDiscountPercent || '');
+
+  // Deposit & Wallet
+  if (treatment.useDeposit) {
+    formData.set('usingDeposit', '1');
+    formData.set('*deposit', treatment.depositAmount || '');
+  }
+  if (treatment.useWallet) {
+    formData.set('usingWallet', '1');
+    formData.set('customer_wallet_id', treatment.walletId || '');
+    formData.set('*credit', treatment.walletAmount || '');
+  }
 
   // Sellers (sales staff commission) — ProClinic: hasSeller + id + percent + total
   for (let i = 1; i <= 5; i++) {
@@ -520,6 +532,18 @@ async function handleUpdate(req, res) {
   formData.set('sale_note', treatment.saleNote ?? existing.sale_note ?? '');
   formData.set('discount', treatment.discount ?? existing.discount ?? '');
   formData.set('discount_type', treatment.discountType ?? existing.discount_type ?? '');
+  formData.set('medicine_discount_percent', treatment.medicineDiscountPercent ?? existing.medicine_discount_percent ?? '');
+
+  // Deposit & Wallet (preserve existing)
+  if (treatment.useDeposit || existing.usingDeposit) {
+    formData.set('usingDeposit', '1');
+    formData.set('*deposit', treatment.depositAmount ?? existing['*deposit'] ?? '');
+  }
+  if (treatment.useWallet || existing.usingWallet) {
+    formData.set('usingWallet', '1');
+    formData.set('customer_wallet_id', treatment.walletId ?? existing.customer_wallet_id ?? '');
+    formData.set('*credit', treatment.walletAmount ?? existing['*credit'] ?? '');
+  }
 
   // Sellers (preserve existing)
   for (let i = 1; i <= 5; i++) {

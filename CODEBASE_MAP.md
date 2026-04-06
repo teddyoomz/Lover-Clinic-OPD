@@ -515,8 +515,10 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | OPD Card | CC, PE, DX, Dr.Note, Plan, Note, Additional Note (7 textareas) |
 | สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + dynamic medication table (name, dosage, qty, unit price). Real ProClinic product search via JSON API |
 | ข้อมูลการใช้คอร์ส | customer course display + checkbox item selection |
-| เบิกประกัน | benefit type select, insurance company select |
-| การชำระเงิน | payment status (0=ภายหลัง/2=เต็ม/4=แบ่ง), channel, paid amount, time, ref_no, note, sale_note — matches ProClinic field names exactly |
+| เบิกประกัน | checkbox toggle + benefit type + company — controls insurance deduction in billing |
+| สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo |
+| การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note |
+| พนักงานขาย | 5 seller rows (checkbox+select+%+auto-calc commission). Commission = netTotal * percent / 100 |
 
 **Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets, medicationGroups, remedItems
 

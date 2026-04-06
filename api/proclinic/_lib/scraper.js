@@ -696,13 +696,26 @@ export function extractTreatmentCreateOptions(html) {
     if (val && text) opts.bloodTypeOptions.push({ id: val, name: text });
   });
 
-  // Payment channels
+  // Payment channels — ProClinic injects as JS array in <script> tag (same pattern as deposit.js)
   opts.paymentChannels = [];
-  $('select[name="payment_channel_id"] option').each((_, opt) => {
-    const val = $(opt).val();
-    const text = $(opt).text().trim();
-    if (val && text) opts.paymentChannels.push({ id: val, name: text });
+  $('script').each((_, s) => {
+    const text = $(s).html() || '';
+    const m = text.match(/paymentMethods\s*=\s*(\[.*?\])/s);
+    if (m) {
+      try {
+        const arr = JSON.parse(m[1]);
+        opts.paymentChannels = arr.map(v => ({ id: v, name: v }));
+      } catch {}
+    }
+    // Also try to extract medicine discount percent
+    const discMatch = text.match(/medicineDiscountPercent\s*[:=]\s*(\d+(?:\.\d+)?)/);
+    if (discMatch) opts.medicineDiscountPercent = parseFloat(discMatch[1]) || 0;
   });
+  if (opts.medicineDiscountPercent == null) {
+    // Fallback: try hidden input
+    const discInput = $('input[name="medicine_discount_percent"]').val();
+    opts.medicineDiscountPercent = discInput ? parseFloat(discInput) || 0 : 0;
+  }
 
   // Benefit types (insurance)
   opts.benefitTypes = [];
@@ -822,13 +835,30 @@ export function extractTreatmentCreateOptions(html) {
     if (val && text) opts.dosageUnits.push({ id: val, name: text });
   });
 
-  // Wallet options
+  // Wallet options — parse balance from text like "กระเป๋าเงินหลัก (500.00 บาท)"
   opts.wallets = [];
   $('select[name="customer_wallet_id"] option').each((_, opt) => {
     const val = $(opt).val();
     const text = $(opt).text().trim();
-    if (val && text) opts.wallets.push({ id: val, name: text });
+    if (val && text) {
+      const bm = text.match(/\(([\d,.]+)\s*(?:บาท|baht)\)/i);
+      const balance = bm ? parseFloat(bm[1].replace(/,/g, '')) || 0 : 0;
+      opts.wallets.push({ id: val, name: text, balance });
+    }
   });
+
+  // Deposit balance — try to extract from page text or hidden input
+  opts.depositBalance = 0;
+  const depInput = $('input[name="deposit_balance"], input[name="customer_deposit"]');
+  if (depInput.length) opts.depositBalance = parseFloat(depInput.val()) || 0;
+  // Fallback: look for text like "ยอดนัดจำ (500.00 บาท)"
+  if (!opts.depositBalance) {
+    $('script').each((_, s) => {
+      const text = $(s).html() || '';
+      const dm = text.match(/(?:deposit|depositBalance)\s*[:=]\s*([\d.]+)/);
+      if (dm) opts.depositBalance = parseFloat(dm[1]) || 0;
+    });
+  }
 
   return opts;
 }
