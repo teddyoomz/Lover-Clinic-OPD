@@ -82,6 +82,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Take-home medications
   const [medications, setMedications] = useState([]);
+  const [medSearchOpen, setMedSearchOpen] = useState(false);
+  const [medSearchQuery, setMedSearchQuery] = useState('');
+  const [medSearchResults, setMedSearchResults] = useState([]);
+  const [medSearchLoading, setMedSearchLoading] = useState(false);
+  const [medGroupModalOpen, setMedGroupModalOpen] = useState(false);
+  const [medGroupProducts, setMedGroupProducts] = useState([]); // products for selected group
 
   // Course items — selected rowIds
   const [selectedCourseItems, setSelectedCourseItems] = useState(new Set());
@@ -91,6 +97,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Consumables
   const [consumables, setConsumables] = useState([]);
+  const [consSearchOpen, setConsSearchOpen] = useState(false);
+  const [consSearchQuery, setConsSearchQuery] = useState('');
+  const [consSearchResults, setConsSearchResults] = useState([]);
+  const [consSearchLoading, setConsSearchLoading] = useState(false);
 
   // Insurance
   const [benefitType, setBenefitType] = useState('');
@@ -218,9 +228,62 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setSelectedCourseItems(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
 
-  // ── Medication CRUD ──
-  const addMedication = () => {
-    setMedications(prev => [...prev, { name: '', dosage: '', qty: '', unitPrice: '' }]);
+  // ── Medication search ──
+  const searchMedications = async (q) => {
+    setMedSearchQuery(q);
+    if (q.length < 1) { setMedSearchResults([]); return; }
+    setMedSearchLoading(true);
+    try {
+      const data = await broker.searchProducts({ productType: 'ยา', query: q, isTakeaway: true });
+      if (data.success) setMedSearchResults(data.products || []);
+    } catch (_) {}
+    setMedSearchLoading(false);
+  };
+  const addMedFromSearch = (product) => {
+    const dosageText = product.label
+      ? [product.label.administrationTimes, product.label.administrationMethod].filter(Boolean).join(', ')
+      : '';
+    setMedications(prev => [...prev, {
+      id: product.id,
+      name: product.name,
+      dosage: dosageText,
+      qty: product.label?.dosageAmount || '1',
+      unitPrice: product.price || '0',
+      unit: product.unit || product.label?.dosageUnit || '',
+    }]);
+    setMedSearchOpen(false);
+    setMedSearchQuery('');
+    setMedSearchResults([]);
+  };
+  const loadMedGroup = async (groupId) => {
+    // Group modal: show all products in a preset group — user picks which to add
+    // The group select changes which pre-defined set of meds to show
+    // For now, search by group name to get relevant products
+    const group = medicationGroups.find(g => g.id === groupId);
+    if (!group) return;
+    setMedSearchLoading(true);
+    try {
+      const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true });
+      if (data.success) setMedGroupProducts(data.products || []);
+    } catch (_) {}
+    setMedSearchLoading(false);
+    setMedGroupModalOpen(true);
+  };
+  const addMedGroupItems = (products) => {
+    products.forEach(p => {
+      const dosageText = p.label
+        ? [p.label.administrationTimes, p.label.administrationMethod].filter(Boolean).join(', ')
+        : '';
+      setMedications(prev => [...prev, {
+        id: p.id,
+        name: p.name,
+        dosage: dosageText,
+        qty: p.label?.dosageAmount || '1',
+        unitPrice: p.price || '0',
+        unit: p.unit || p.label?.dosageUnit || '',
+      }]);
+    });
+    setMedGroupModalOpen(false);
   };
   const updateMed = (i, field, value) => {
     setMedications(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m));
@@ -229,9 +292,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setMedications(prev => prev.filter((_, idx) => idx !== i));
   };
 
-  // ── Consumable CRUD ──
-  const addConsumable = () => {
-    setConsumables(prev => [...prev, { name: '', qty: '1', unit: '' }]);
+  // ── Consumable search ──
+  const searchConsumables = async (q) => {
+    setConsSearchQuery(q);
+    if (q.length < 1) { setConsSearchResults([]); return; }
+    setConsSearchLoading(true);
+    try {
+      const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', query: q });
+      if (data.success) setConsSearchResults(data.products || []);
+    } catch (_) {}
+    setConsSearchLoading(false);
+  };
+  const addConsFromSearch = (product) => {
+    setConsumables(prev => [...prev, {
+      id: product.id,
+      name: product.name,
+      qty: '1',
+      unit: product.unit || '',
+    }]);
+    setConsSearchOpen(false);
+    setConsSearchQuery('');
+    setConsSearchResults([]);
   };
   const updateConsumable = (i, field, value) => {
     setConsumables(prev => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
@@ -516,17 +597,85 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <SectionHeader icon={Pill} title="สั่งยากลับบ้าน" isDark={isDark} accent="#10b981">
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                 {medicationGroups.length > 0 && (
-                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => {/* group select handled inline */}}>
+                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => { loadMedGroup(medicationGroups[0]?.id); }}>
                     <Plus size={10} /> กลุ่มยากลับบ้าน
                   </ActionBtn>
                 )}
-                <ActionBtn color="#10b981" isDark={isDark} onClick={addMedication}>
+                <ActionBtn color="#10b981" isDark={isDark} onClick={() => setMedSearchOpen(true)}>
                   <Plus size={10} /> ยากลับบ้าน
                 </ActionBtn>
               </div>
             </SectionHeader>
+
+            {/* Medication search modal */}
+            {medSearchOpen && (
+              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-purple-900/30 bg-[#0d0a14]' : 'border-purple-200 bg-purple-50/30'}`}>
+                <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-2">ค้นหายากลับบ้าน</p>
+                <div className="flex gap-2 items-center mb-2">
+                  <div className="relative flex-1">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input value={medSearchQuery} onChange={e => searchMedications(e.target.value)}
+                      className={`${inputCls} !pl-8`} placeholder="พิมพ์ชื่อยาเพื่อค้นหา..." autoFocus />
+                  </div>
+                  <button onClick={() => { setMedSearchOpen(false); setMedSearchQuery(''); setMedSearchResults([]); }}
+                    className="text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                </div>
+                {medSearchLoading && <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-purple-400" /><span className="text-[10px] text-gray-500">กำลังค้นหา...</span></div>}
+                {medSearchResults.length > 0 && (
+                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                    {medSearchResults.map(p => (
+                      <button key={p.id} onClick={() => addMedFromSearch(p)}
+                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                        <div>
+                          <span className="font-bold">{p.name}</span>
+                          {p.category && <span className="text-[10px] text-gray-500 ml-2">[{p.category}]</span>}
+                          {p.label?.administrationTimes && <span className="text-[10px] text-green-500 ml-2">{p.label.administrationTimes}</span>}
+                        </div>
+                        <div className="text-right text-[10px] text-gray-500 whitespace-nowrap ml-2">
+                          {p.price !== '0' && p.price !== '0.00' ? `฿${p.price}` : ''} {p.unit}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {medSearchQuery && !medSearchLoading && medSearchResults.length === 0 && (
+                  <p className="text-[10px] text-gray-500 text-center py-2">ไม่พบรายการ</p>
+                )}
+              </div>
+            )}
+
+            {/* Medication group modal */}
+            {medGroupModalOpen && (
+              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-yellow-900/30 bg-[#0d0c0a]' : 'border-yellow-200 bg-yellow-50/30'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">เลือกกลุ่มยา</p>
+                  {medicationGroups.length > 1 && (
+                    <select onChange={e => loadMedGroup(e.target.value)} className={`${selectCls} !w-auto !text-[10px]`}>
+                      {medicationGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                  )}
+                  <button onClick={() => setMedGroupModalOpen(false)} className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                </div>
+                {medSearchLoading ? (
+                  <div className="flex items-center gap-2 py-4 justify-center"><Loader2 size={14} className="animate-spin text-yellow-400" /></div>
+                ) : (
+                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                    {medGroupProducts.map(p => (
+                      <button key={p.id} onClick={() => addMedFromSearch(p)}
+                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                        <span className="font-bold">{p.name}</span>
+                        <span className="text-[10px] text-gray-500">{p.unit} {p.price !== '0' && p.price !== '0.00' ? `฿${p.price}` : ''}</span>
+                      </button>
+                    ))}
+                    {medGroupProducts.length === 0 && <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีรายการในกลุ่มนี้</p>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Medication table */}
             {medications.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-4">ยังไม่มีรายการยากลับบ้าน — กด "ยากลับบ้าน" เพื่อเริ่มต้น</p>
+              <p className="text-[10px] text-gray-500 text-center py-4">ยังไม่มีรายการยากลับบ้าน — กด "ยากลับบ้าน" เพื่อค้นหาและเพิ่ม</p>
             ) : (
               <div className="space-y-2">
                 <div className="grid grid-cols-12 gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-500 px-1">
@@ -538,7 +687,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
                 {medications.map((med, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <input value={med.name} onChange={e => updateMed(i, 'name', e.target.value)} className={`${inputCls} col-span-4`} placeholder="ชื่อยา" />
+                    <div className="col-span-4 text-xs font-bold truncate px-1">{med.name}</div>
                     <input value={med.dosage} onChange={e => updateMed(i, 'dosage', e.target.value)} className={`${inputCls} col-span-3`} placeholder="วิธีรับประทาน" />
                     <input value={med.qty} onChange={e => updateMed(i, 'qty', e.target.value)} className={`${inputCls} col-span-2 text-center`} placeholder="0" />
                     <input value={med.unitPrice} onChange={e => updateMed(i, 'unitPrice', e.target.value)} className={`${inputCls} col-span-2 text-center`} placeholder="0" />
@@ -650,17 +799,50 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <SectionHeader icon={Package} title="สินค้าสิ้นเปลือง" isDark={isDark} accent="#eab308">
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                 {consumableGroups.length > 0 && (
-                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => {/* group select */}}>
+                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => setConsSearchOpen(true)}>
                     <Plus size={10} /> กลุ่มสินค้าสิ้นเปลือง
                   </ActionBtn>
                 )}
-                <ActionBtn color="#eab308" isDark={isDark} onClick={addConsumable}>
+                <ActionBtn color="#eab308" isDark={isDark} onClick={() => setConsSearchOpen(true)}>
                   <Plus size={10} /> สินค้าสิ้นเปลือง
                 </ActionBtn>
               </div>
             </SectionHeader>
+
+            {/* Consumable search */}
+            {consSearchOpen && (
+              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-yellow-900/30 bg-[#0d0c0a]' : 'border-yellow-200 bg-yellow-50/30'}`}>
+                <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest mb-2">ค้นหาสินค้าสิ้นเปลือง</p>
+                <div className="flex gap-2 items-center mb-2">
+                  <div className="relative flex-1">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input value={consSearchQuery} onChange={e => searchConsumables(e.target.value)}
+                      className={`${inputCls} !pl-8`} placeholder="พิมพ์ชื่อสินค้าเพื่อค้นหา..." autoFocus />
+                  </div>
+                  <button onClick={() => { setConsSearchOpen(false); setConsSearchQuery(''); setConsSearchResults([]); }}
+                    className="text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                </div>
+                {consSearchLoading && <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-yellow-400" /><span className="text-[10px] text-gray-500">กำลังค้นหา...</span></div>}
+                {consSearchResults.length > 0 && (
+                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                    {consSearchResults.map(p => (
+                      <button key={p.id} onClick={() => addConsFromSearch(p)}
+                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                        <span className="font-bold">{p.name}</span>
+                        <span className="text-[10px] text-gray-500">{p.unit}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {consSearchQuery && !consSearchLoading && consSearchResults.length === 0 && (
+                  <p className="text-[10px] text-gray-500 text-center py-2">ไม่พบรายการ</p>
+                )}
+              </div>
+            )}
+
+            {/* Consumable table */}
             {consumables.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-4">ยังไม่มีรายการสินค้าสิ้นเปลือง</p>
+              <p className="text-[10px] text-gray-500 text-center py-4">ยังไม่มีรายการสินค้าสิ้นเปลือง — กด "สินค้าสิ้นเปลือง" เพื่อค้นหาและเพิ่ม</p>
             ) : (
               <div className="space-y-2">
                 <div className="grid grid-cols-12 gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-500 px-1">
@@ -671,9 +853,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
                 {consumables.map((item, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <input value={item.name} onChange={e => updateConsumable(i, 'name', e.target.value)} className={`${inputCls} col-span-6`} placeholder="ชื่อสินค้า" />
+                    <div className="col-span-6 text-xs font-bold truncate px-1">{item.name}</div>
                     <input value={item.qty} onChange={e => updateConsumable(i, 'qty', e.target.value)} className={`${inputCls} col-span-3 text-center`} placeholder="1" />
-                    <input value={item.unit} onChange={e => updateConsumable(i, 'unit', e.target.value)} className={`${inputCls} col-span-2 text-center`} placeholder="หน่วย" />
+                    <div className="col-span-2 text-[10px] text-gray-500 px-1">{item.unit}</div>
                     <button onClick={() => removeConsumable(i)} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
                       <Trash2 size={12} />
                     </button>

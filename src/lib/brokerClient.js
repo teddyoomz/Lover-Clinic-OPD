@@ -275,3 +275,8 @@ export function updateTreatment(treatmentId, treatment) {
 export function deleteTreatment(treatmentId) {
   return apiFetch('treatment', { action: 'delete', treatmentId });
 }
+
+/** Search ProClinic products by type → { success, products[], total } */
+export function searchProducts({ productType, query, isTakeaway } = {}) {
+  return apiFetch('treatment', { action: 'searchProducts', productType, query, isTakeaway });
+}

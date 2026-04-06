@@ -10,6 +10,48 @@ import {
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 
+// ─── Action: searchProducts — Search ProClinic products via JSON API ───────
+
+async function handleSearchProducts(req, res) {
+  const { productType, query, isTakeaway } = req.body || {};
+  const session = await createSession();
+  const base = session.origin;
+
+  const params = new URLSearchParams();
+  if (productType) params.set('product_type', productType);
+  if (query) params.set('q', query);
+  if (isTakeaway) params.set('is_takeaway_product', '1');
+
+  const apiUrl = `${base}/admin/api/v2/product?${params.toString()}`;
+  const resp = await session.fetch(apiUrl, {
+    headers: { 'Accept': 'application/json' },
+  });
+
+  if (!resp.ok) throw new Error(`ProClinic product API error: ${resp.status}`);
+  const data = await resp.json();
+
+  // Normalize products
+  const products = (data.data || []).map(p => ({
+    id: p.id,
+    name: p.product_name,
+    unit: p.unit_name,
+    price: p.price || '0',
+    type: p.product_type,
+    category: p.product_category?.category_name || '',
+    label: p.product_label ? {
+      genericName: p.product_label.generic_name || '',
+      dosageAmount: p.product_label.dosage_amount || '',
+      dosageUnit: p.product_label.dosage_unit || '',
+      timesPerDay: p.product_label.times_per_day || '',
+      administrationMethod: p.product_label.administration_method || '',
+      administrationTimes: p.product_label.administration_times || '',
+      instructions: p.product_label.instructions || '',
+    } : null,
+  }));
+
+  return res.status(200).json({ success: true, products, total: data.total || products.length });
+}
+
 // ─── Action: list — Get treatment list for a customer ──────────────────────
 
 async function handleList(req, res) {
@@ -384,6 +426,7 @@ export default async function handler(req, res) {
       case 'create':        return await handleCreate(req, res);
       case 'update':        return await handleUpdate(req, res);
       case 'delete':        return await handleDelete(req, res);
+      case 'searchProducts': return await handleSearchProducts(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
