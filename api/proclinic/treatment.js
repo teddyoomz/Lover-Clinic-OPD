@@ -450,11 +450,17 @@ async function handleCreate(req, res) {
   formData.set('med_cert_is_other', treatment.medCertIsOther ? '1' : '0');
   formData.set('med_cert_other_detail', treatment.medCertOtherDetail || '');
 
-  // Course items — array of { rowId } selected from customer courses
+  // Course items — array of { rowId, qty } selected from customer courses
   formData.delete('rowId[]');
+  // Also clean any existing rowId_*_qty fields from defaults
+  for (const key of [...formData.keys()]) {
+    if (key.startsWith('rowId_') && key.endsWith('_qty')) formData.delete(key);
+  }
   if (treatment.courseItems?.length) {
     treatment.courseItems.forEach(item => {
       formData.append('rowId[]', item.rowId);
+      // ProClinic requires qty field for each checked course item
+      formData.set(`rowId_${item.rowId}_qty`, String(item.qty || 1));
     });
   }
 
@@ -535,7 +541,10 @@ async function handleCreate(req, res) {
   // Payment status — ProClinic uses: 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
   formData.set('status', treatment.paymentStatus ?? '0');
   formData.set('payment_date', treatment.paymentDate || saleDate);
-  formData.set('payment_time', treatment.paymentTime || '');
+  // ProClinic always sends payment_time (HH:mm) — default to current time
+  const now = new Date();
+  const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  formData.set('payment_time', treatment.paymentTime || defaultTime);
 
   // Payment methods (up to 3) — each has enable flag + channel + amount
   if (treatment.paymentMethod) {
@@ -560,21 +569,18 @@ async function handleCreate(req, res) {
 
   // Discount
   formData.set('discount', treatment.discount || '');
-  formData.set('discount_type', treatment.discountType || '');
+  formData.set('discount_type', treatment.discountType || defaults.discount_type || 'บาท');
   formData.set('medicine_discount_percent', treatment.medicineDiscountPercent || '');
 
-  // Deposit & Wallet
-  if (treatment.useDeposit) {
-    formData.set('usingDeposit', '1');
-    formData.set('*deposit', treatment.depositAmount || '');
-  }
-  if (treatment.useWallet) {
-    formData.set('usingWallet', '1');
-    formData.set('customer_wallet_id', treatment.walletId || '');
-    formData.set('*credit', treatment.walletAmount || '');
-  }
+  // Deposit & Wallet — ProClinic always sends these fields (default 0)
+  formData.set('usingDeposit', treatment.useDeposit ? '1' : (defaults.usingDeposit || '1'));
+  formData.set('deposit', treatment.depositAmount || '0');
+  formData.set('customer_wallet_id', treatment.walletId || defaults.customer_wallet_id || '');
+  formData.set('usingWallet', treatment.useWallet ? '1' : (defaults.usingWallet || '1'));
+  formData.set('credit', treatment.walletAmount || '0');
 
-  // Sellers (sales staff commission) — ProClinic: hasSeller + id + percent + total
+  // Sellers (sales staff commission) — ProClinic always sends hasSeller1
+  formData.set('hasSeller1', '1');
   for (let i = 1; i <= 5; i++) {
     const sId = treatment[`seller${i}Id`] || '';
     if (sId) {
@@ -585,9 +591,14 @@ async function handleCreate(req, res) {
     }
   }
 
-  // Log field count for debugging
-  const fieldCount = [...formData.entries()].length;
-  console.log(`[treatment] create — submitting ${fieldCount} fields for customer ${customerId}`);
+  // Log all fields for debugging
+  const allEntries = [...formData.entries()];
+  console.log(`[treatment] create — submitting ${allEntries.length} fields for customer ${customerId}`);
+  // Log df_ fields specifically
+  const dfEntries = allEntries.filter(([k]) => k.startsWith('df_'));
+  console.log(`[treatment] create — df_ fields (${dfEntries.length}):`, dfEntries.map(([k, v]) => `${k}=${v}`).join(', '));
+  // Log key fields
+  console.log(`[treatment] create — doctor_id=${formData.get('doctor_id')}, rowId[]=${formData.getAll('rowId[]').join(',')}, courseItems=${treatment.courseItems?.length || 0}`);
 
   // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
@@ -611,10 +622,33 @@ async function handleCreate(req, res) {
       console.warn(`[treatment] create FAILED — redirected to login: ${location}`);
       throw new Error('Session หมดอายุ — กรุณาลองใหม่');
     }
-    // Redirect back to create form = silent failure (ProClinic rejected but still redirected)
+    // Redirect back to create form = validation failed — follow to extract actual errors
     if (location.includes('/treatment/create')) {
       console.warn(`[treatment] create FAILED — redirected back to create form: ${location}`);
-      throw new Error('ProClinic ไม่รับข้อมูล — ตรวจสอบ field ที่กรอก');
+      try {
+        const errorPageHtml = await session.fetchText(location.startsWith('http') ? location : `${base}${location}`);
+        const validationErrors = extractValidationErrors(errorPageHtml);
+        if (validationErrors) {
+          console.warn(`[treatment] create validation errors: ${validationErrors}`);
+          throw new Error(`ProClinic validation: ${validationErrors}`);
+        }
+        // Also check for session flash error messages (Laravel puts them in .alert-danger)
+        const $ = (await import('cheerio')).load(errorPageHtml);
+        const flashErrors = [];
+        $('ul.alert-danger li, .alert-danger').each((_, el) => {
+          const t = $(el).text().trim();
+          if (t) flashErrors.push(t);
+        });
+        if (flashErrors.length) {
+          const msg = flashErrors.join('; ').substring(0, 300);
+          console.warn(`[treatment] create flash errors: ${msg}`);
+          throw new Error(`ProClinic: ${msg}`);
+        }
+      } catch (followErr) {
+        if (followErr.message.startsWith('ProClinic')) throw followErr;
+        console.warn(`[treatment] create — could not follow redirect: ${followErr.message}`);
+      }
+      throw new Error('ProClinic ไม่รับข้อมูล — redirect กลับหน้า create (ไม่พบ error message เฉพาะ)');
     }
     // Valid success: redirect to treatment/{id}/edit or customer/{id}
     const m = location.match(/treatment\/(\d+)/);

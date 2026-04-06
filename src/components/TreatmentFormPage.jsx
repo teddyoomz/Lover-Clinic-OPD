@@ -791,7 +791,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medCertPeriod,
         medCertIsOther,
         medCertOtherDetail,
-        courseItems: Array.from(selectedCourseItems).map(rowId => ({ rowId })),
+        courseItems: Array.from(selectedCourseItems).map(rowId => {
+          const ti = treatmentItems.find(t => t.id === rowId);
+          return { rowId, qty: ti?.qty || '1' };
+        }),
         doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, fee: f.fee, groupId: f.groupId })),
         purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
         medications: medications.filter(m => m.name),
