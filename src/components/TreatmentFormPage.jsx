@@ -899,12 +899,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* เพิ่มยากลับบ้าน modal — matching ProClinic */}
             {medModalOpen && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedModalOpen(false)}>
-                <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <h3 className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
                   </div>
-                  <div className="px-5 py-4 space-y-3 max-h-[80vh] overflow-y-auto">
+                  <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     {/* Product select with search */}
                     <div>
                       <label className={labelCls}>ยากลับบ้าน *</label>
@@ -1034,7 +1034,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* Medication group modal — full overlay matching ProClinic */}
             {medGroupModalOpen && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedGroupModalOpen(false)}>
-                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -1050,7 +1050,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     </select>
                   </div>
                   {/* Table */}
-                  <div className="px-5 py-3 max-h-[50vh] overflow-y-auto">
+                  <div className="px-5 py-3 flex-1 min-h-0 overflow-y-auto">
                     {medGroupLoading ? (
                       <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-emerald-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มยา...</span></div>
                     ) : selectedGroupProducts.length === 0 ? (
@@ -1297,7 +1297,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* Buy modal — ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน */}
             {buyModalOpen && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setBuyModalOpen(false)}>
-                <div className={`w-full max-w-5xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                <div className={`w-full max-w-5xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -1317,7 +1317,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     </div>
                   </div>
 
-                  <div className="flex" style={{ minHeight: '400px' }}>
+                  <div className="flex flex-1 min-h-0 overflow-hidden">
                     {/* Left sidebar — categories */}
                     <div className={`w-48 shrink-0 border-r overflow-y-auto ${isDark ? 'border-[#222] bg-[#0a0a0a]' : 'border-gray-200 bg-gray-50'}`}>
                       {['promotion', 'course', 'product'].map(type => {
@@ -1456,12 +1456,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* เพิ่มสินค้าสิ้นเปลือง modal — matching ProClinic */}
             {consModalOpen && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsModalOpen(false)}>
-                <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <h3 className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                   </div>
-                  <div className="px-5 py-4 space-y-3">
+                  <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     <div>
                       <label className={labelCls}>สินค้าสิ้นเปลือง *</label>
                       <div className="relative">
@@ -1510,7 +1510,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* Consumable group modal — full overlay matching ProClinic */}
             {consGroupModalOpen && (
               <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsGroupModalOpen(false)}>
-                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -1526,7 +1526,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     </select>
                   </div>
                   {/* Table */}
-                  <div className="px-5 py-3 max-h-[50vh] overflow-y-auto">
+                  <div className="px-5 py-3 flex-1 min-h-0 overflow-y-auto">
                     {consGroupLoading ? (
                       <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มสินค้า...</span></div>
                     ) : selectedConsGroupProducts.length === 0 ? (
