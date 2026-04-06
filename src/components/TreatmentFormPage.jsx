@@ -141,9 +141,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [benefitType, setBenefitType] = useState('');
   const [insuranceCompanyId, setInsuranceCompanyId] = useState('');
 
-  // Payment
-  const [paymentType, setPaymentType] = useState('pay_later');
+  // Payment — ProClinic field names: status (0/2/4), payment_method, paid_amount
+  const [paymentStatus, setPaymentStatus] = useState('0'); // 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
   const [paymentChannelId, setPaymentChannelId] = useState('');
+  const [paidAmount, setPaidAmount] = useState('');
+  const [paymentTime, setPaymentTime] = useState('');
+  const [refNo, setRefNo] = useState('');
+  const [note, setNote] = useState('');
   const [sellerId, setSellerId] = useState('');
   const [saleNote, setSaleNote] = useState('');
 
@@ -595,12 +599,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
       if (!sellerId) { setError('กรุณาเลือกพนักงานขาย'); return; }
-      if (!paymentType) { setError('กรุณาเลือกการชำระเงิน'); return; }
-      if (!paymentChannelId) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
+      if (paymentStatus === '2' || paymentStatus === '4') {
+        if (!paymentChannelId) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
+        if (!paidAmount) { setError('กรุณากรอกจำนวนเงินที่ชำระ'); return; }
+      }
     }
     setSaving(true);
     setError('');
     try {
+      // Look up payment channel name from ID for ProClinic's payment_method field
+      const selectedChannel = paymentChannels.find(c => String(c.id) === String(paymentChannelId));
       const payload = {
         doctorId,
         assistantIds,
@@ -624,10 +632,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         benefitType,
         insuranceCompanyId,
         seller1Id: sellerId,
-        paymentType,
-        paymentChannelId,
-        saleNote,
+        sellerPercent1: '100',
+        paymentStatus,
+        paymentMethod: selectedChannel?.name || paymentChannelId || '',
+        paidAmount,
+        paymentTime,
         paymentDate: treatmentDate,
+        refNo,
+        note,
+        saleNote,
       };
 
       const data = isEdit
@@ -658,7 +671,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               courseItems: Array.from(selectedCourseItems),
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
               insurance: { benefitType, insuranceCompanyId },
-              payment: { paymentType, paymentChannelId, saleNote, sellerId },
+              payment: { paymentStatus, paymentChannelId, paymentMethod: selectedChannel?.name || '', paidAmount, paymentTime, refNo, note, saleNote, sellerId },
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
@@ -1657,7 +1670,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           {/* ── Payment ────────────────────────────────────────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+
+            {/* Row 1: Seller + Payment status */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>พนักงานขาย *</label>
                 <select value={sellerId} onChange={e => setSellerId(e.target.value)} className={selectCls}>
@@ -1667,17 +1682,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
               <div>
                 <label className={labelCls}>รูปแบบชำระ</label>
-                <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className={selectCls}>
-                  <option value="pay_later">ชำระภายหลัง</option>
-                  <option value="full">ชำระเต็มจำนวน</option>
-                  <option value="installment">แบ่งชำระ</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>ช่องทางชำระ</label>
-                <select value={paymentChannelId} onChange={e => setPaymentChannelId(e.target.value)} className={selectCls}>
-                  <option value="">-</option>
-                  {paymentChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <select value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)} className={selectCls}>
+                  <option value="0">ชำระภายหลัง</option>
+                  <option value="2">ชำระเต็มจำนวน</option>
+                  <option value="4">แบ่งชำระ</option>
                 </select>
               </div>
               <div>
@@ -1685,9 +1693,42 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <input type="date" value={treatmentDate} readOnly className={`${inputCls} opacity-60`} />
               </div>
             </div>
-            <div className="mt-3">
-              <label className={labelCls}>หมายเหตุการขาย</label>
-              <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุ" />
+
+            {/* Row 2: Payment method + amount (visible when status is 2 or 4) */}
+            {(paymentStatus === '2' || paymentStatus === '4') && (
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3">
+                <div>
+                  <label className={labelCls}>ช่องทางชำระ *</label>
+                  <select value={paymentChannelId} onChange={e => setPaymentChannelId(e.target.value)} className={selectCls}>
+                    <option value="">เลือกช่องทาง</option>
+                    {paymentChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>จำนวนเงิน *</label>
+                  <input type="number" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} className={inputCls} placeholder="0.00" min="0" step="0.01" />
+                </div>
+                <div>
+                  <label className={labelCls}>เวลาชำระ</label>
+                  <input type="text" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} placeholder="เช่น 14:30" />
+                </div>
+                <div>
+                  <label className={labelCls}>เลขที่อ้างอิง</label>
+                  <input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="ref no." />
+                </div>
+              </div>
+            )}
+
+            {/* Row 3: Notes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className={labelCls}>หมายเหตุ</label>
+                <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุ" />
+              </div>
+              <div>
+                <label className={labelCls}>หมายเหตุการขาย</label>
+                <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุการขาย" />
+              </div>
             </div>
           </FormSection>
 

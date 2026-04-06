@@ -480,8 +480,8 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 | `handleList(req, res)` | Scrapes `/admin/customer/{id}?treatment_page=N` → treatment cards + pagination |
 | `handleGet(req, res)` | Scrapes `/admin/treatment/{id}/edit` → full treatment detail (OPD, vitals, items, fees) |
 | `handleGetCreateForm(req, res)` | Scrapes `/admin/treatment/create?customer_id={id}` → form options (doctors, health info, CSRF) |
-| `handleCreate(req, res)` | GET create page for CSRF + defaults, build URLSearchParams, POST `/admin/treatment` |
-| `handleUpdate(req, res)` | GET edit page for CSRF + existing values, overlay new values with `??`, POST with `_method=PUT` |
+| `handleCreate(req, res)` | GET create page for CSRF + defaults, build URLSearchParams, POST `/admin/treatment`. Payment fields match ProClinic exactly: `status` (0/2/4), `payment_method`, `paid_amount`, `hasPaymentMethod1`, `hasSeller1-5`, `sale_percent_1-5`, `ref_no`, `note` |
+| `handleUpdate(req, res)` | GET edit page for CSRF + existing values, overlay new values with `??`, POST with `_method=PUT`. Includes payment/seller/insurance fields |
 | `handleDelete(req, res)` | GET edit page for CSRF, POST with `_method=DELETE` |
 | `handler(req, res)` | Route dispatcher (verifyAuth + action routing) |
 
@@ -516,7 +516,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + dynamic medication table (name, dosage, qty, unit price). Real ProClinic product search via JSON API |
 | ข้อมูลการใช้คอร์ส | customer course display + checkbox item selection |
 | เบิกประกัน | benefit type select, insurance company select |
-| การชำระเงิน | payment type (pay later/full/installment), channel, sale note |
+| การชำระเงิน | payment status (0=ภายหลัง/2=เต็ม/4=แบ่ง), channel, paid amount, time, ref_no, note, sale_note — matches ProClinic field names exactly |
 
 **Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets, medicationGroups, remedItems
 

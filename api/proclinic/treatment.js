@@ -328,9 +328,12 @@ async function handleCreate(req, res) {
   }
 
   // Insurance
+  formData.set('is_insurance_claimed', treatment.isInsuranceClaimed ? '1' : '0');
+  formData.set('claim_type', treatment.claimType || '');
   formData.set('benefit_type', treatment.benefitType || '');
   formData.set('insurance_company_id', treatment.insuranceCompanyId || '');
   formData.set('customer_insurance_benefit_id', treatment.customerInsuranceBenefitId || '');
+  formData.set('total_claim_amount', treatment.totalClaimAmount || '');
 
   // Sale/payment
   const saleDate = treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
@@ -338,16 +341,45 @@ async function handleCreate(req, res) {
   formData.set('coupon_code', treatment.couponCode || '');
   formData.set('sale_note', treatment.saleNote || '');
 
-  // Payment — default to "pay later" (ชำระภายหลัง)
-  formData.set('payment_type', treatment.paymentType || 'pay_later');
+  // Payment status — ProClinic uses: 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
+  formData.set('status', treatment.paymentStatus ?? '0');
   formData.set('payment_date', treatment.paymentDate || saleDate);
   formData.set('payment_time', treatment.paymentTime || '');
-  formData.set('payment_channel_id', treatment.paymentChannelId || '');
 
-  // Sellers (sales staff commission)
+  // Payment methods (up to 3) — each has enable flag + channel + amount
+  if (treatment.paymentMethod) {
+    formData.set('hasPaymentMethod1', '1');
+    formData.set('payment_method', treatment.paymentMethod);
+    formData.set('paid_amount', treatment.paidAmount || '');
+  }
+  if (treatment.paymentMethod2) {
+    formData.set('hasPaymentMethod2', '1');
+    formData.set('payment_method_2', treatment.paymentMethod2);
+    formData.set('paid_amount_2', treatment.paidAmount2 || '');
+  }
+  if (treatment.paymentMethod3) {
+    formData.set('hasPaymentMethod3', '1');
+    formData.set('payment_method_3', treatment.paymentMethod3);
+    formData.set('paid_amount_3', treatment.paidAmount3 || '');
+  }
+
+  // Reference number & note
+  formData.set('ref_no', treatment.refNo || '');
+  formData.set('note', treatment.note || '');
+
+  // Discount
+  formData.set('discount', treatment.discount || '');
+  formData.set('discount_type', treatment.discountType || '');
+
+  // Sellers (sales staff commission) — ProClinic: hasSeller + id + percent + total
   for (let i = 1; i <= 5; i++) {
-    formData.set(`seller_${i}_id`, treatment[`seller${i}Id`] || '');
-    formData.set(`seller_${i}_rate`, treatment[`seller${i}Rate`] || '');
+    const sId = treatment[`seller${i}Id`] || '';
+    if (sId) {
+      formData.set(`hasSeller${i}`, '1');
+      formData.set(`seller_${i}_id`, sId);
+      formData.set(`sale_percent_${i}`, treatment[`sellerPercent${i}`] || (i === 1 ? '100' : ''));
+      formData.set(`sale_total_${i}`, treatment[`sellerTotal${i}`] || '');
+    }
   }
 
   // Submit
@@ -462,6 +494,43 @@ async function handleUpdate(req, res) {
   formData.set('med_cert_period', existing.med_cert_period || '');
   formData.set('med_cert_is_other', existing.med_cert_is_other || '0');
   formData.set('med_cert_other_detail', existing.med_cert_other_detail || '');
+
+  // Insurance (preserve existing or use provided)
+  formData.set('is_insurance_claimed', treatment.isInsuranceClaimed ? '1' : (existing.is_insurance_claimed || '0'));
+  formData.set('claim_type', treatment.claimType ?? existing.claim_type ?? '');
+  formData.set('benefit_type', treatment.benefitType ?? existing.benefit_type ?? '');
+  formData.set('insurance_company_id', treatment.insuranceCompanyId ?? existing.insurance_company_id ?? '');
+  formData.set('customer_insurance_benefit_id', treatment.customerInsuranceBenefitId ?? existing.customer_insurance_benefit_id ?? '');
+
+  // Payment status — preserve existing or use provided
+  formData.set('status', treatment.paymentStatus ?? existing.status ?? '0');
+  formData.set('sale_date', existing.sale_date || treatment.treatmentDate || '');
+  formData.set('payment_date', treatment.paymentDate ?? existing.payment_date ?? '');
+  formData.set('payment_time', treatment.paymentTime ?? existing.payment_time ?? '');
+
+  // Payment methods (preserve existing)
+  if (treatment.paymentMethod || existing.payment_method) {
+    formData.set('hasPaymentMethod1', '1');
+    formData.set('payment_method', treatment.paymentMethod ?? existing.payment_method ?? '');
+    formData.set('paid_amount', treatment.paidAmount ?? existing.paid_amount ?? '');
+  }
+
+  formData.set('ref_no', treatment.refNo ?? existing.ref_no ?? '');
+  formData.set('note', treatment.note ?? existing.note ?? '');
+  formData.set('sale_note', treatment.saleNote ?? existing.sale_note ?? '');
+  formData.set('discount', treatment.discount ?? existing.discount ?? '');
+  formData.set('discount_type', treatment.discountType ?? existing.discount_type ?? '');
+
+  // Sellers (preserve existing)
+  for (let i = 1; i <= 5; i++) {
+    const sId = treatment[`seller${i}Id`] || existing[`seller_${i}_id`] || '';
+    if (sId) {
+      formData.set(`hasSeller${i}`, '1');
+      formData.set(`seller_${i}_id`, sId);
+      formData.set(`sale_percent_${i}`, treatment[`sellerPercent${i}`] || existing[`sale_percent_${i}`] || (i === 1 ? '100' : ''));
+      formData.set(`sale_total_${i}`, treatment[`sellerTotal${i}`] || existing[`sale_total_${i}`] || '');
+    }
+  }
 
   // Consent (preserve)
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);
