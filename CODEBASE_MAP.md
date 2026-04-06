@@ -514,7 +514,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | ใบรับรองแพทย์ | med cert checkboxes (actually came, rest period, other) |
 | OPD Card | CC, PE, DX, Dr.Note, Plan, Note, Additional Note (7 textareas) |
 | สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + dynamic medication table (name, dosage, qty, unit price). Real ProClinic product search via JSON API |
-| ข้อมูลการใช้คอร์ส | customer course display + checkbox item selection |
+| ข้อมูลการใช้คอร์ส | 3-column grid matching ProClinic: คอร์ส (grouped by course header + checkable products) \| โปรโมชัน (purchased promotions) \| รายการรักษา (selected items with qty+delete). Purchased items auto-add to treatment items. Retail products shown below grid |
 | เบิกประกัน | checkbox toggle + benefit type + company — controls insurance deduction in billing |
 | สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo |
 | การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note |
