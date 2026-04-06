@@ -180,19 +180,29 @@ export default async function handler(req, res) {
     const coursePag = extractPagination(page1Html, '#course-tab');
     const expiredPag = extractPagination(page1Html, '#expired-course-tab');
 
-    // Additional course pages
+    // Fetch ALL additional pages in parallel (courses + expired)
+    const pagePromises = [];
     if (coursePag.param && coursePag.maxPage > 1) {
       for (let p = 2; p <= coursePag.maxPage; p++) {
-        const pageHtml = await session.fetchText(`${customerUrl}?${coursePag.param}=${p}`);
-        allCourses = [...allCourses, ...extractCourses(pageHtml, '#course-tab')];
+        pagePromises.push(
+          session.fetchText(`${customerUrl}?${coursePag.param}=${p}`)
+            .then(html => ({ type: 'course', html }))
+        );
       }
     }
-
-    // Additional expired course pages
     if (expiredPag.param && expiredPag.maxPage > 1) {
       for (let p = 2; p <= expiredPag.maxPage; p++) {
-        const pageHtml = await session.fetchText(`${customerUrl}?${expiredPag.param}=${p}`);
-        allExpired = [...allExpired, ...extractCourses(pageHtml, '#expired-course-tab')];
+        pagePromises.push(
+          session.fetchText(`${customerUrl}?${expiredPag.param}=${p}`)
+            .then(html => ({ type: 'expired', html }))
+        );
+      }
+    }
+    if (pagePromises.length) {
+      const pages = await Promise.all(pagePromises);
+      for (const pg of pages) {
+        if (pg.type === 'course') allCourses = [...allCourses, ...extractCourses(pg.html, '#course-tab')];
+        else allExpired = [...allExpired, ...extractCourses(pg.html, '#expired-course-tab')];
       }
     }
 

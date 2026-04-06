@@ -9,6 +9,7 @@ import {
   extractFormFields, extractValidationErrors,
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
+import * as cheerio from 'cheerio';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -379,13 +380,34 @@ async function handleCreate(req, res) {
   const session = await createSession();
   const base = session.origin;
 
-  // GET create page for CSRF + defaults
-  const createHtml = await session.fetchText(`${base}/admin/treatment/create?customer_id=${customerId}`);
+  // GET create page + treatment list IN PARALLEL (saves ~500-1500ms)
+  const [createHtml, preListHtml] = await Promise.all([
+    session.fetchText(`${base}/admin/treatment/create?customer_id=${customerId}`),
+    session.fetchText(`${base}/admin/treatment?customer_id=${customerId}`).catch(() => ''),
+  ]);
   const csrf = extractCSRF(createHtml);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า treatment create');
 
   // Get existing form defaults — ALL hidden fields, pre-filled values, etc.
   const defaults = extractFormFields(createHtml);
+
+  // Pre-compute existing treatment IDs (for post-submit verification)
+  const preSubmitIds = new Set();
+  if (preListHtml) {
+    try {
+      const $ = cheerio.load(preListHtml);
+      $('table tbody tr').each((_, row) => {
+        const link = $(row).find('a[href*="/treatment/"][href*="/edit"]').attr('href');
+        const id = link?.match(/treatment\/(\d+)\/edit/)?.[1];
+        if (id) preSubmitIds.add(id);
+        const no = $(row).find('td').first().text().trim();
+        if (no) preSubmitIds.add(no);
+      });
+      console.log(`[treatment] create — pre-submit: ${preSubmitIds.size} existing treatments`);
+    } catch (e) {
+      console.warn('[treatment] create — pre-submit list parse failed:', e.message);
+    }
+  }
 
   // ─── Build form data ────────────────────────────────────────────────────
   // CRITICAL: Start with ALL defaults from the create page. ProClinic has
@@ -620,24 +642,6 @@ async function handleCreate(req, res) {
     const dfFees = formData.getAll(`df_rowId_${rid}[]`);
     console.log(`[treatment] create — rowId ${rid}: qty=${qty}, df_fees=[${dfFees.join(',')}]`);
   });
-  // Capture existing treatment IDs BEFORE submit (to detect new ones after)
-  let preSubmitIds = new Set();
-  try {
-    const preListHtml = await session.fetchText(`${base}/admin/treatment?customer_id=${customerId}`);
-    const $ = (await import('cheerio')).load(preListHtml);
-    $('table tbody tr').each((_, row) => {
-      const link = $(row).find('a[href*="/treatment/"][href*="/edit"]').attr('href');
-      const id = link?.match(/treatment\/(\d+)\/edit/)?.[1];
-      if (id) preSubmitIds.add(id);
-      // Also capture treatment numbers (MC-XXXXX) for cancelled ones that don't have edit links
-      const no = $(row).find('td').first().text().trim();
-      if (no) preSubmitIds.add(no);
-    });
-    console.log(`[treatment] create — pre-submit: ${preSubmitIds.size} existing treatments`);
-  } catch (e) {
-    console.warn('[treatment] create — pre-submit list capture failed:', e.message);
-  }
-
   // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
     method: 'POST',
@@ -676,7 +680,7 @@ async function handleCreate(req, res) {
           throw new Error(`ProClinic validation: ${validationErrors}`);
         }
         // Also check for session flash error messages (Laravel puts them in .alert-danger)
-        const $ = (await import('cheerio')).load(errorPageHtml);
+        const $ = cheerio.load(errorPageHtml);
         const flashErrors = [];
         $('ul.alert-danger li, .alert-danger').each((_, el) => {
           const t = $(el).text().trim();
@@ -703,7 +707,7 @@ async function handleCreate(req, res) {
       try {
         const listUrl = `${base}/admin/treatment?customer_id=${customerId}`;
         const listHtml = await session.fetchText(listUrl);
-        const $ = (await import('cheerio')).load(listHtml);
+        const $ = cheerio.load(listHtml);
 
         // Find NEW treatments that weren't in the pre-submit list
         const rows = $('table tbody tr');

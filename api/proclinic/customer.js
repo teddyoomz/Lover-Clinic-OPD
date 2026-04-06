@@ -181,17 +181,17 @@ async function handleDelete(req, res) {
     }
   }
 
-  // Verify customer still exists
-  const editHtml = await session.fetchText(`${base}/admin/customer/${targetId}/edit`);
+  // Verify customer + get CSRF in parallel
+  const [editHtml, listHtml] = await Promise.all([
+    session.fetchText(`${base}/admin/customer/${targetId}/edit`),
+    session.fetchText(`${base}/admin/customer`),
+  ]);
   const isEditPage = editHtml.includes(`customer/${targetId}`) && editHtml.includes('name="firstname"');
   if (!isEditPage) {
     const err = new Error(`Customer ID ${targetId} ไม่พบใน ProClinic (อาจถูกลบไปแล้ว)`);
     err.notFound = true;
     throw err;
   }
-
-  // GET list page for CSRF
-  const listHtml = await session.fetchText(`${base}/admin/customer`);
   const csrf = extractCSRF(listHtml);
   if (!csrf) throw new Error('ไม่พบ CSRF token');
 
