@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw } from 'lucide-react';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -83,10 +83,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Take-home medications
   const [medications, setMedications] = useState([]);
-  const [medSearchOpen, setMedSearchOpen] = useState(false);
-  const [medSearchQuery, setMedSearchQuery] = useState('');
-  const [medSearchResults, setMedSearchResults] = useState([]);
-  const [medSearchLoading, setMedSearchLoading] = useState(false);
+  const [medModalOpen, setMedModalOpen] = useState(false);
+  const [medModalQuery, setMedModalQuery] = useState('');
+  const [medAllProducts, setMedAllProducts] = useState([]); // all meds loaded on open
+  const [medModalLoading, setMedModalLoading] = useState(false);
+  const [medModalSelected, setMedModalSelected] = useState(null); // selected product in modal
+  const [medModalQty, setMedModalQty] = useState('');
+  const [medModalPrice, setMedModalPrice] = useState('');
+  const [medModalDiscount, setMedModalDiscount] = useState('');
+  const [medModalDiscountType, setMedModalDiscountType] = useState('amount'); // amount | percent
+  const [medModalVat, setMedModalVat] = useState(false);
+  const [medModalPremium, setMedModalPremium] = useState(false);
+  const [medModalLabelOpen, setMedModalLabelOpen] = useState(false);
   const [medGroupModalOpen, setMedGroupModalOpen] = useState(false);
   const [medGroupData, setMedGroupData] = useState([]); // all groups from API
   const [medGroupSelectedId, setMedGroupSelectedId] = useState('');
@@ -102,10 +110,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Consumables
   const [consumables, setConsumables] = useState([]);
-  const [consSearchOpen, setConsSearchOpen] = useState(false);
-  const [consSearchQuery, setConsSearchQuery] = useState('');
-  const [consSearchResults, setConsSearchResults] = useState([]);
-  const [consSearchLoading, setConsSearchLoading] = useState(false);
+  const [consModalOpen, setConsModalOpen] = useState(false);
+  const [consModalQuery, setConsModalQuery] = useState('');
+  const [consAllProducts, setConsAllProducts] = useState([]);
+  const [consModalLoading, setConsModalLoading] = useState(false);
+  const [consModalSelected, setConsModalSelected] = useState(null);
+  const [consModalQty, setConsModalQty] = useState('');
   const [consGroupModalOpen, setConsGroupModalOpen] = useState(false);
   const [consGroupData, setConsGroupData] = useState([]);
   const [consGroupSelectedId, setConsGroupSelectedId] = useState('');
@@ -238,32 +248,77 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setSelectedCourseItems(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
 
-  // ── Medication search ──
-  const searchMedications = async (q) => {
-    setMedSearchQuery(q);
-    if (q.length < 1) { setMedSearchResults([]); return; }
-    setMedSearchLoading(true);
+  // ── Medication modal (เพิ่มยากลับบ้าน — matching ProClinic) ──
+  const openMedModal = async () => {
+    setMedModalOpen(true);
+    setMedModalQuery('');
+    setMedModalSelected(null);
+    setMedModalQty('');
+    setMedModalPrice('');
+    setMedModalDiscount('');
+    setMedModalDiscountType('amount');
+    setMedModalVat(false);
+    setMedModalPremium(false);
+    setMedModalLabelOpen(false);
+    if (medAllProducts.length > 0) return;
+    setMedModalLoading(true);
     try {
-      const data = await broker.searchProducts({ productType: 'ยา', query: q, isTakeaway: true });
-      if (data.success) setMedSearchResults(data.products || []);
+      const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
+      if (data.success) {
+        setMedAllProducts(data.products || []);
+        // Backup to Firestore
+        if (db && appId && data.products?.length) {
+          try {
+            const items = data.products;
+            for (let i = 0; i < items.length; i += 400) {
+              const batch = writeBatch(db);
+              items.slice(i, i + 400).forEach(p => {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'takeaway_products', 'items', String(p.id));
+                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (_e) { console.warn('[TreatmentForm] Failed to backup takeaway products', _e); }
+        }
+      }
     } catch (_) {}
-    setMedSearchLoading(false);
+    setMedModalLoading(false);
   };
-  const addMedFromSearch = (product) => {
-    const dosageText = product.label
-      ? [product.label.administrationTimes, product.label.administrationMethod].filter(Boolean).join(', ')
+  const medFilteredProducts = useMemo(() => {
+    if (!medModalQuery) return medAllProducts;
+    const q = medModalQuery.toLowerCase();
+    return medAllProducts.filter(p => p.name.toLowerCase().includes(q));
+  }, [medAllProducts, medModalQuery]);
+  const selectMedProduct = (p) => {
+    setMedModalSelected(p);
+    setMedModalQty(p.label?.dosageAmount || '1');
+    setMedModalPrice(p.price || '0');
+    setMedModalVat(!!p.isVatIncluded);
+    setMedModalDiscount('');
+    setMedModalDiscountType('amount');
+    setMedModalPremium(false);
+  };
+  const confirmMedModal = () => {
+    if (!medModalSelected) return;
+    const p = medModalSelected;
+    const dosageText = p.label
+      ? [p.label.administrationTimes, p.label.administrationMethod].filter(Boolean).join(', ')
       : '';
+    const price = parseFloat(medModalPrice) || 0;
+    const disc = parseFloat(medModalDiscount) || 0;
+    const discounted = medModalDiscountType === 'percent' ? price * (1 - disc / 100) : price - disc;
+    const vatAmount = medModalVat ? discounted * 0.07 : 0;
+    const netPrice = medModalPremium ? 0 : Math.max(0, discounted + vatAmount);
     setMedications(prev => [...prev, {
-      id: product.id,
-      name: product.name,
+      id: p.id,
+      name: p.name,
       dosage: dosageText,
-      qty: product.label?.dosageAmount || '1',
-      unitPrice: product.price || '0',
-      unit: product.unit || product.label?.dosageUnit || '',
+      qty: medModalQty || '1',
+      unitPrice: netPrice.toFixed(2),
+      unit: p.unit || p.label?.dosageUnit || '',
+      isPremium: medModalPremium,
     }]);
-    setMedSearchOpen(false);
-    setMedSearchQuery('');
-    setMedSearchResults([]);
+    setMedModalOpen(false);
   };
   const openMedGroupModal = async () => {
     setMedGroupModalOpen(true);
@@ -276,8 +331,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       if (data.success && data.groups?.length) {
         setMedGroupData(data.groups);
         setMedGroupSelectedId(String(data.groups[0].id));
-        // Auto-check all items in first group
         setMedGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+        // Backup to Firestore
+        if (db && appId) {
+          try {
+            const batch = writeBatch(db);
+            for (const g of data.groups) {
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'medication_groups', 'items', String(g.id));
+              batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
+            }
+            await batch.commit();
+          } catch (_e) { console.warn('[TreatmentForm] Failed to backup medication groups', _e); }
+        }
       }
     } catch (_) {}
     setMedGroupLoading(false);
@@ -317,27 +382,46 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setMedications(prev => prev.filter((_, idx) => idx !== i));
   };
 
-  // ── Consumable search ──
-  const searchConsumables = async (q) => {
-    setConsSearchQuery(q);
-    if (q.length < 1) { setConsSearchResults([]); return; }
-    setConsSearchLoading(true);
+  // ── Consumable modal (เพิ่มสินค้าสิ้นเปลือง — matching ProClinic) ──
+  const openConsModal = async () => {
+    setConsModalOpen(true);
+    setConsModalQuery('');
+    setConsModalSelected(null);
+    setConsModalQty('');
+    if (consAllProducts.length > 0) return;
+    setConsModalLoading(true);
     try {
-      const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', query: q });
-      if (data.success) setConsSearchResults(data.products || []);
+      const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
+      if (data.success) {
+        setConsAllProducts(data.products || []);
+        if (db && appId && data.products?.length) {
+          try {
+            const batch = writeBatch(db);
+            data.products.forEach(p => {
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_products', 'items', String(p.id));
+              batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+            });
+            await batch.commit();
+          } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable products', _e); }
+        }
+      }
     } catch (_) {}
-    setConsSearchLoading(false);
+    setConsModalLoading(false);
   };
-  const addConsFromSearch = (product) => {
+  const consFilteredProducts = useMemo(() => {
+    if (!consModalQuery) return consAllProducts;
+    const q = consModalQuery.toLowerCase();
+    return consAllProducts.filter(p => p.name.toLowerCase().includes(q));
+  }, [consAllProducts, consModalQuery]);
+  const confirmConsModal = () => {
+    if (!consModalSelected) return;
     setConsumables(prev => [...prev, {
-      id: product.id,
-      name: product.name,
-      qty: '1',
-      unit: product.unit || '',
+      id: consModalSelected.id,
+      name: consModalSelected.name,
+      qty: consModalQty || '1',
+      unit: consModalSelected.unit || '',
     }]);
-    setConsSearchOpen(false);
-    setConsSearchQuery('');
-    setConsSearchResults([]);
+    setConsModalOpen(false);
   };
   const updateConsumable = (i, field, value) => {
     setConsumables(prev => prev.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
@@ -359,6 +443,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         setConsGroupData(data.groups);
         setConsGroupSelectedId(String(data.groups[0].id));
         setConsGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+        // Backup to Firestore
+        if (db && appId) {
+          try {
+            const batch = writeBatch(db);
+            for (const g of data.groups) {
+              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_groups', 'items', String(g.id));
+              batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
+            }
+            await batch.commit();
+          } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable groups', _e); }
+        }
       }
     } catch (_) {}
     setConsGroupLoading(false);
@@ -696,7 +791,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <ActionBtn color="#3b82f6" isDark={isDark} onClick={openMedGroupModal}>
                   <Plus size={10} /> กลุ่มยากลับบ้าน
                 </ActionBtn>
-                <ActionBtn color="#10b981" isDark={isDark} onClick={() => setMedSearchOpen(true)}>
+                <ActionBtn color="#10b981" isDark={isDark} onClick={openMedModal}>
                   <Plus size={10} /> ยากลับบ้าน
                 </ActionBtn>
                 <ActionBtn color="#38bdf8" isDark={isDark} onClick={() => setRemedModalOpen(true)}>
@@ -705,40 +800,138 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             </SectionHeader>
 
-            {/* Medication search modal */}
-            {medSearchOpen && (
-              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-purple-900/30 bg-[#0d0a14]' : 'border-purple-200 bg-purple-50/30'}`}>
-                <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest mb-2">ค้นหายากลับบ้าน</p>
-                <div className="flex gap-2 items-center mb-2">
-                  <div className="relative flex-1">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input value={medSearchQuery} onChange={e => searchMedications(e.target.value)}
-                      className={`${inputCls} !pl-8`} placeholder="พิมพ์ชื่อยาเพื่อค้นหา..." autoFocus />
+            {/* เพิ่มยากลับบ้าน modal — matching ProClinic */}
+            {medModalOpen && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedModalOpen(false)}>
+                <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                  onClick={e => e.stopPropagation()}>
+                  <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
                   </div>
-                  <button onClick={() => { setMedSearchOpen(false); setMedSearchQuery(''); setMedSearchResults([]); }}
-                    className="text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
-                </div>
-                {medSearchLoading && <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-purple-400" /><span className="text-[10px] text-gray-500">กำลังค้นหา...</span></div>}
-                {medSearchResults.length > 0 && (
-                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
-                    {medSearchResults.map(p => (
-                      <button key={p.id} onClick={() => addMedFromSearch(p)}
-                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
-                        <div>
-                          <span className="font-bold">{p.name}</span>
-                          {p.category && <span className="text-[10px] text-gray-500 ml-2">[{p.category}]</span>}
-                          {p.label?.administrationTimes && <span className="text-[10px] text-green-500 ml-2">{p.label.administrationTimes}</span>}
+                  <div className="px-5 py-4 space-y-3 max-h-[80vh] overflow-y-auto">
+                    {/* Product select with search */}
+                    <div>
+                      <label className={labelCls}>ยากลับบ้าน *</label>
+                      <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 z-10" />
+                        <input value={medModalSelected ? medModalSelected.name : medModalQuery}
+                          onChange={e => { setMedModalQuery(e.target.value); setMedModalSelected(null); }}
+                          onFocus={() => { if (medModalSelected) { setMedModalQuery(medModalSelected.name); setMedModalSelected(null); } }}
+                          className={`${inputCls} !pl-8`} placeholder="เลือกยากลับบ้าน" autoFocus />
+                      </div>
+                      {!medModalSelected && (
+                        <div className={`rounded-lg border mt-1 max-h-40 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                          {medModalLoading ? (
+                            <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-emerald-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
+                          ) : medFilteredProducts.length === 0 ? (
+                            <p className="text-[10px] text-gray-500 text-center py-3">ไม่พบรายการ</p>
+                          ) : medFilteredProducts.map(p => (
+                            <button key={p.id} onClick={() => selectMedProduct(p)}
+                              className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                              <div>
+                                <span className="font-bold">{p.name}</span>
+                                {p.category && <span className="text-[10px] text-gray-500 ml-2">[{p.category}]</span>}
+                              </div>
+                              <span className="text-[10px] text-gray-500 whitespace-nowrap ml-2">฿{p.price} / {p.unit}</span>
+                            </button>
+                          ))}
                         </div>
-                        <div className="text-right text-[10px] text-gray-500 whitespace-nowrap ml-2">
-                          {p.price !== '0' && p.price !== '0.00' ? `฿${p.price}` : ''} {p.unit}
+                      )}
+                    </div>
+                    {/* Qty + Unit + Price */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelCls}>จำนวน *</label>
+                        <div className="flex">
+                          <input type="number" value={medModalQty} onChange={e => setMedModalQty(e.target.value)}
+                            className={`${inputCls} rounded-r-none`} placeholder="กรอกจำนวน" />
+                          <span className={`flex items-center px-2 text-[10px] border border-l-0 rounded-r-lg ${isDark ? 'border-[#333] bg-[#1a1a1a] text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                            {medModalSelected?.unit || 'หน่วย'}
+                          </span>
                         </div>
+                      </div>
+                      <div>
+                        <label className={labelCls}>ราคาต่อหน่วย *</label>
+                        <input type="number" value={medModalPrice} onChange={e => setMedModalPrice(e.target.value)}
+                          className={inputCls} placeholder="กรอกราคาต่อหน่วย" />
+                      </div>
+                      <div className="flex items-end pb-2">
+                        <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer">
+                          <input type="checkbox" checked={medModalPremium} onChange={e => setMedModalPremium(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded accent-emerald-500" />
+                          สินค้าของแถม
+                        </label>
+                      </div>
+                    </div>
+                    {/* Price summary */}
+                    <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-gray-50'}`}>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">สรุปราคาต่อหน่วย</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 w-24 shrink-0">ส่วนลดต่อหน่วย</span>
+                        <input type="number" value={medModalDiscount} onChange={e => setMedModalDiscount(e.target.value)}
+                          className={`${inputCls} !w-24`} placeholder="0" />
+                        <label className="flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer">
+                          <input type="radio" name="medDiscType" checked={medModalDiscountType === 'amount'} onChange={() => setMedModalDiscountType('amount')} className="w-3 h-3" /> บาท
+                        </label>
+                        <label className="flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer">
+                          <input type="radio" name="medDiscType" checked={medModalDiscountType === 'percent'} onChange={() => setMedModalDiscountType('percent')} className="w-3 h-3" /> %
+                        </label>
+                      </div>
+                      {(() => {
+                        const price = parseFloat(medModalPrice) || 0;
+                        const disc = parseFloat(medModalDiscount) || 0;
+                        const afterDisc = medModalDiscountType === 'percent' ? price * (1 - disc / 100) : price - disc;
+                        const vat = medModalVat ? afterDisc * 0.07 : 0;
+                        const net = medModalPremium ? 0 : Math.max(0, afterDisc + vat);
+                        return (
+                          <div className="space-y-1 text-[10px]">
+                            <div className="flex justify-between text-gray-500"><span>ราคาหลังหักส่วนลด</span><span>{afterDisc.toFixed(2)} บาท</span></div>
+                            <div className="flex items-center justify-between text-gray-500">
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" checked={medModalVat} onChange={e => setMedModalVat(e.target.checked)} className="w-3 h-3 rounded accent-emerald-500" />
+                                คำนวนค่าสินค้าเพิ่ม (VAT 7%)
+                              </label>
+                              <span>{vat.toFixed(2)} บาท</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-gray-300 pt-1 border-t border-dashed" style={{ borderColor: isDark ? '#333' : '#ddd' }}>
+                              <span>ราคาสุทธิ์ต่อหน่วย</span><span>{net.toFixed(2)} บาท</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {/* Label info (expandable) */}
+                    <div>
+                      <button onClick={() => setMedModalLabelOpen(!medModalLabelOpen)}
+                        className={`flex items-center gap-1.5 text-[10px] font-bold text-gray-500 hover:text-gray-400 transition-colors`}>
+                        <span className={`transition-transform ${medModalLabelOpen ? 'rotate-90' : ''}`}>▶</span>
+                        ข้อมูลฉลากยา
                       </button>
-                    ))}
+                      {medModalLabelOpen && medModalSelected?.label && (
+                        <div className={`mt-2 rounded-lg border p-3 space-y-2 text-xs ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-gray-50'}`}>
+                          <div><span className="text-[10px] font-bold text-gray-500">ชื่อสามัญ:</span> <span className="text-gray-400">{medModalSelected.label.genericName || '-'}</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">ข้อบ่งใช้:</span> <span className="text-gray-400">{medModalSelected.label.indications || '-'}</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">รับประทานครั้งละ:</span> <span className="text-gray-400">{medModalSelected.label.dosageAmount || '-'} {medModalSelected.label.dosageUnit || ''}</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">วันละ:</span> <span className="text-gray-400">{medModalSelected.label.timesPerDay || '-'} ครั้ง</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">วิธีรับประทาน:</span> <span className="text-gray-400">{medModalSelected.label.administrationMethod || '-'}</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">ช่วงเวลา:</span> <span className="text-gray-400">{medModalSelected.label.administrationTimes || '-'}</span></div>
+                          <div><span className="text-[10px] font-bold text-gray-500">คำแนะนำ:</span> <span className="text-gray-400">{medModalSelected.label.instructions || '-'}</span></div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-                {medSearchQuery && !medSearchLoading && medSearchResults.length === 0 && (
-                  <p className="text-[10px] text-gray-500 text-center py-2">ไม่พบรายการ</p>
-                )}
+                  {/* Footer */}
+                  <div className={`flex items-center justify-center gap-3 px-5 py-3 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <button onClick={() => setMedModalOpen(false)}
+                      className={`px-6 py-2 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={confirmMedModal} disabled={!medModalSelected}
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      ยืนยัน
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -985,40 +1178,63 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <ActionBtn color="#3b82f6" isDark={isDark} onClick={openConsGroupModal}>
                   <Plus size={10} /> กลุ่มสินค้าสิ้นเปลือง
                 </ActionBtn>
-                <ActionBtn color="#eab308" isDark={isDark} onClick={() => setConsSearchOpen(true)}>
+                <ActionBtn color="#eab308" isDark={isDark} onClick={openConsModal}>
                   <Plus size={10} /> สินค้าสิ้นเปลือง
                 </ActionBtn>
               </div>
             </SectionHeader>
 
-            {/* Consumable search */}
-            {consSearchOpen && (
-              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-yellow-900/30 bg-[#0d0c0a]' : 'border-yellow-200 bg-yellow-50/30'}`}>
-                <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest mb-2">ค้นหาสินค้าสิ้นเปลือง</p>
-                <div className="flex gap-2 items-center mb-2">
-                  <div className="relative flex-1">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input value={consSearchQuery} onChange={e => searchConsumables(e.target.value)}
-                      className={`${inputCls} !pl-8`} placeholder="พิมพ์ชื่อสินค้าเพื่อค้นหา..." autoFocus />
+            {/* เพิ่มสินค้าสิ้นเปลือง modal — matching ProClinic */}
+            {consModalOpen && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsModalOpen(false)}>
+                <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                  onClick={e => e.stopPropagation()}>
+                  <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <h3 className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                   </div>
-                  <button onClick={() => { setConsSearchOpen(false); setConsSearchQuery(''); setConsSearchResults([]); }}
-                    className="text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                  <div className="px-5 py-4 space-y-3">
+                    <div>
+                      <label className={labelCls}>สินค้าสิ้นเปลือง *</label>
+                      <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 z-10" />
+                        <input value={consModalSelected ? consModalSelected.name : consModalQuery}
+                          onChange={e => { setConsModalQuery(e.target.value); setConsModalSelected(null); }}
+                          onFocus={() => { if (consModalSelected) { setConsModalQuery(consModalSelected.name); setConsModalSelected(null); } }}
+                          className={`${inputCls} !pl-8`} placeholder="เลือกสินค้าสิ้นเปลือง" autoFocus />
+                      </div>
+                      {!consModalSelected && (
+                        <div className={`rounded-lg border mt-1 max-h-40 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                          {consModalLoading ? (
+                            <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
+                          ) : consFilteredProducts.length === 0 ? (
+                            <p className="text-[10px] text-gray-500 text-center py-3">ไม่พบรายการ</p>
+                          ) : consFilteredProducts.map(p => (
+                            <button key={p.id} onClick={() => { setConsModalSelected(p); setConsModalQty('1'); }}
+                              className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                              <span className="font-bold">{p.name}</span>
+                              <span className="text-[10px] text-gray-500">{p.unit}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelCls}>จำนวน *</label>
+                      <input type="number" value={consModalQty} onChange={e => setConsModalQty(e.target.value)}
+                        className={inputCls} placeholder="กรอกจำนวน" />
+                    </div>
+                  </div>
+                  <div className={`flex items-center justify-center gap-3 px-5 py-3 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <button onClick={() => setConsModalOpen(false)}
+                      className={`px-6 py-2 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={confirmConsModal} disabled={!consModalSelected}
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-yellow-500 hover:bg-yellow-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      ยืนยัน
+                    </button>
+                  </div>
                 </div>
-                {consSearchLoading && <div className="flex items-center gap-2 py-2"><Loader2 size={12} className="animate-spin text-yellow-400" /><span className="text-[10px] text-gray-500">กำลังค้นหา...</span></div>}
-                {consSearchResults.length > 0 && (
-                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
-                    {consSearchResults.map(p => (
-                      <button key={p.id} onClick={() => addConsFromSearch(p)}
-                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
-                        <span className="font-bold">{p.name}</span>
-                        <span className="text-[10px] text-gray-500">{p.unit}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {consSearchQuery && !consSearchLoading && consSearchResults.length === 0 && (
-                  <p className="text-[10px] text-gray-500 text-center py-2">ไม่พบรายการ</p>
-                )}
               </div>
             )}
 

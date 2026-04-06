@@ -57,7 +57,7 @@ async function handleGetMedicationGroups(req, res) {
 // ─── Action: searchProducts — Search ProClinic products via JSON API ───────
 
 async function handleSearchProducts(req, res) {
-  const { productType, query, isTakeaway } = req.body || {};
+  const { productType, query, isTakeaway, perPage } = req.body || {};
   const session = await createSession();
   const base = session.origin;
 
@@ -65,6 +65,7 @@ async function handleSearchProducts(req, res) {
   if (productType) params.set('product_type', productType);
   if (query) params.set('q', query);
   if (isTakeaway) params.set('is_takeaway_product', '1');
+  if (perPage) params.set('per_page', String(perPage));
 
   const apiUrl = `${base}/admin/api/v2/product?${params.toString()}`;
   const resp = await session.fetch(apiUrl, {
@@ -82,6 +83,7 @@ async function handleSearchProducts(req, res) {
     price: p.price || '0',
     type: p.product_type,
     category: p.product_category?.category_name || '',
+    isVatIncluded: p.is_vat_included || 0,
     label: p.product_label ? {
       genericName: p.product_label.generic_name || '',
       dosageAmount: p.product_label.dosage_amount || '',
@@ -90,6 +92,7 @@ async function handleSearchProducts(req, res) {
       administrationMethod: p.product_label.administration_method || '',
       administrationTimes: p.product_label.administration_times || '',
       instructions: p.product_label.instructions || '',
+      indications: p.product_label.indications || '',
     } : null,
   }));
 

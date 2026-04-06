@@ -277,8 +277,8 @@ export function deleteTreatment(treatmentId) {
 }
 
 /** Search ProClinic products by type → { success, products[], total } */
-export function searchProducts({ productType, query, isTakeaway } = {}) {
-  return apiFetch('treatment', { action: 'searchProducts', productType, query, isTakeaway });
+export function searchProducts({ productType, query, isTakeaway, perPage } = {}) {
+  return apiFetch('treatment', { action: 'searchProducts', productType, query, isTakeaway, perPage });
 }
 
 /** Get medication groups with products → { success, groups[] } */

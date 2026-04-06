@@ -522,7 +522,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 
 **Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay. Props include `db`, `appId` for Firestore backup.
 
-**Firestore backup:** On submit, saves raw treatment data (medications, consumables, courses, vitals, OPD, etc.) to `artifacts/{appId}/public/data/treatments/{proClinicId}` — viewable even if ProClinic is down
+**Firestore backup:** On submit, saves raw treatment data to `artifacts/{appId}/public/data/treatments/{proClinicId}`. On group modal open, saves medication groups → `master_data/medication_groups/items/{id}` and consumable groups → `master_data/consumable_groups/items/{id}`
 
 ### Client (brokerClient.js) — Treatment Functions
 - `listTreatments(customerId, page)` — list treatments for a customer (paginated)
