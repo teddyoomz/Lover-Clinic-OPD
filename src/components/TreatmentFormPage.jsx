@@ -765,7 +765,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   const handleSubmit = async () => {
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
-    if (assistantIds.length === 0) { setError('กรุณาเลือกผู้ช่วยแพทย์'); return; }
+    // assistantIds validation removed — ผู้ช่วยแพทย์ is optional
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
       if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
