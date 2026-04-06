@@ -144,6 +144,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Payment
   const [paymentType, setPaymentType] = useState('pay_later');
   const [paymentChannelId, setPaymentChannelId] = useState('');
+  const [sellerId, setSellerId] = useState('');
   const [saleNote, setSaleNote] = useState('');
 
   // ── BMI auto-calc ──
@@ -593,6 +594,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (assistantIds.length === 0) { setError('กรุณาเลือกผู้ช่วยแพทย์'); return; }
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
+      if (!sellerId) { setError('กรุณาเลือกพนักงานขาย'); return; }
       if (!paymentType) { setError('กรุณาเลือกการชำระเงิน'); return; }
       if (!paymentChannelId) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
     }
@@ -621,6 +623,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         treatmentItems,
         benefitType,
         insuranceCompanyId,
+        seller1Id: sellerId,
         paymentType,
         paymentChannelId,
         saleNote,
@@ -655,7 +658,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               courseItems: Array.from(selectedCourseItems),
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
               insurance: { benefitType, insuranceCompanyId },
-              payment: { paymentType, paymentChannelId, saleNote },
+              payment: { paymentType, paymentChannelId, saleNote, sellerId },
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
@@ -1654,7 +1657,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           {/* ── Payment ────────────────────────────────────────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label className={labelCls}>พนักงานขาย *</label>
+                <select value={sellerId} onChange={e => setSellerId(e.target.value)} className={selectCls}>
+                  <option value="">เลือกพนักงานขาย</option>
+                  {(options?.sellers || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
               <div>
                 <label className={labelCls}>รูปแบบชำระ</label>
                 <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className={selectCls}>
