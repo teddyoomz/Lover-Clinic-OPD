@@ -744,19 +744,36 @@ export function extractTreatmentCreateOptions(html) {
   // Customer courses with products (for course usage section)
   opts.customerCourses = [];
   const seenCourseIds = new Set();
-  $('tr[class*="buying-course-"]').each((_, tr) => {
-    const cls = $(tr).attr('class') || '';
+
+  // Debug: count elements to help diagnose scraping issues
+  const debugCounts = {
+    'tr[class*="buying-course-"]': $('tr[class*="buying-course-"]').length,
+    'input[name="rowId[]"]': $('input[name="rowId[]"]').length,
+    '[class*="buying-course"]': $('[class*="buying-course"]').length,
+    '[class*="course-products"]': $('[class*="course-products"]').length,
+    '.form-check': $('.form-check').length,
+    '[class*="buying"]': $('[class*="buying"]').length,
+  };
+  console.log('[scraper] treatment create — course element counts:', JSON.stringify(debugCounts));
+
+  // Try multiple selectors for course rows (ProClinic may use tr, div, or li)
+  const courseRows = $('[class*="buying-course-"]');
+  courseRows.each((_, el) => {
+    const $el = $(el);
+    const cls = $el.attr('class') || '';
     const m = cls.match(/buying-course-(\w+)/);
     if (!m) return;
     const courseId = m[1];
     const isHeader = !cls.includes('course-products');
     if (isHeader && !seenCourseIds.has(courseId)) {
       seenCourseIds.add(courseId);
-      const courseName = $(tr).text().trim().replace(/\s+/g, ' ');
+      const courseName = $el.text().trim().replace(/\s+/g, ' ');
       const products = [];
-      $(`tr.buying-course-${courseId}.course-products`).each((_, ptr) => {
-        const cb = $(ptr).find('input[name="rowId[]"]');
-        const checkDiv = $(ptr).find('.form-check');
+      // Find product rows matching this course (any element type)
+      $(`.buying-course-${courseId}.course-products`).each((_, ptr) => {
+        const $ptr = $(ptr);
+        const cb = $ptr.find('input[name="rowId[]"]');
+        const checkDiv = $ptr.find('.form-check');
         const name = checkDiv.text().trim();
         if (!cb.length || !name) return;
         // Parse remaining qty + unit from the full li text: "Hifi หัว 4 100.00 Shot"
@@ -774,6 +791,37 @@ export function extractTreatmentCreateOptions(html) {
       }
     }
   });
+
+  // Fallback: if no courses found via class selectors, try finding rowId[] checkboxes directly
+  if (opts.customerCourses.length === 0 && $('input[name="rowId[]"]').length > 0) {
+    console.log('[scraper] treatment create — fallback: found rowId[] inputs but no buying-course classes');
+    const fallbackProducts = [];
+    $('input[name="rowId[]"]').each((_, cb) => {
+      const $cb = $(cb);
+      const rowId = $cb.val();
+      // Try multiple parent structures
+      const label = $cb.closest('label');
+      const formCheck = $cb.closest('.form-check');
+      const li = $cb.closest('li');
+      const row = $cb.closest('tr, div, li');
+      const parent = label.length ? label : formCheck.length ? formCheck : li.length ? li : row;
+      const fullText = parent.text().trim().replace(/\s+/g, ' ');
+      // Extract product name, qty, and unit
+      const qtyMatch = fullText.match(/(\d+(?:\.\d+)?)\s*([A-Za-zก-๙]+)\s*$/);
+      const remaining = qtyMatch ? qtyMatch[1] : '';
+      const unit = qtyMatch ? qtyMatch[2] : '';
+      const productName = qtyMatch ? fullText.replace(qtyMatch[0], '').trim() : fullText;
+      if (rowId && productName) {
+        fallbackProducts.push({ rowId, name: productName, remaining, unit });
+      }
+    });
+    if (fallbackProducts.length > 0) {
+      opts.customerCourses.push({ courseId: 'all', courseName: 'คอร์สทั้งหมด', products: fallbackProducts });
+      console.log(`[scraper] treatment create — fallback found ${fallbackProducts.length} course products`);
+    }
+  }
+
+  console.log(`[scraper] treatment create — found ${opts.customerCourses.length} courses, ${opts.customerCourses.reduce((s, c) => s + c.products.length, 0)} products`);
 
   // Medication groups (for take-home meds)
   opts.medicationGroups = [];
