@@ -233,25 +233,34 @@ async function handleGetCreateForm(req, res) {
 
   const options = extractTreatmentCreateOptions(html);
 
-  // Debug: include HTML snippet around course section to diagnose scraping
+  // Debug: search script tags for course-related data when no courses found
   if (options.customerCourses.length === 0) {
     const cheerio = (await import('cheerio')).default || await import('cheerio');
     const $ = cheerio.load(html);
-    // Capture snippets of relevant elements to diagnose course structure
     const debugSnippets = [];
-    // Look for rowId inputs
-    $('input[name="rowId[]"]').each((i, el) => {
-      if (i < 3) debugSnippets.push({ type: 'rowId_parent', html: $(el).parent().html()?.substring(0, 200) });
+    // Search all script tags for course-related variables
+    $('script').each((i, s) => {
+      const text = $(s).html() || '';
+      if (text.length < 10) return;
+      // Find lines containing course/buying keywords
+      const courseMatches = text.match(/(?:course|buying|rowId|คอร์ส)[^\n]{0,200}/gi);
+      if (courseMatches) {
+        courseMatches.slice(0, 5).forEach(m => {
+          debugSnippets.push({ type: 'script_match', match: m.substring(0, 250) });
+        });
+      }
     });
-    // Look for anything with "buying" or "course" in class
-    $('[class*="buying"], [class*="course"]').each((i, el) => {
-      if (i < 5) debugSnippets.push({ type: 'buying_class', tag: el.tagName, class: $(el).attr('class'), text: $(el).text().trim().substring(0, 100) });
+    // Also find any AJAX/fetch URLs in scripts
+    $('script').each((_, s) => {
+      const text = $(s).html() || '';
+      const urlMatches = text.match(/(?:url|fetch|axios|get|post)\s*[:=(]\s*['"`]([^'"`]+customer[^'"`]*|[^'"`]*course[^'"`]*|[^'"`]*buying[^'"`]*|[^'"`]*treatment[^'"`]*api[^'"`]*)['"`]/gi);
+      if (urlMatches) {
+        urlMatches.slice(0, 5).forEach(m => {
+          debugSnippets.push({ type: 'api_url', match: m.substring(0, 200) });
+        });
+      }
     });
-    // Look for checkboxes in any form-check
-    $('.form-check input[type="checkbox"]').each((i, el) => {
-      if (i < 3) debugSnippets.push({ type: 'form_check', parent_html: $(el).closest('.form-check').html()?.substring(0, 200) });
-    });
-    options._debug = { htmlLength: html.length, snippets: debugSnippets };
+    options._debug = { htmlLength: html.length, snippetCount: debugSnippets.length, snippets: debugSnippets.slice(0, 15) };
   }
 
   return res.status(200).json({ success: true, options });
