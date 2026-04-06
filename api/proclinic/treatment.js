@@ -550,10 +550,42 @@ async function handleCreate(req, res) {
   const httpStatus = submitRes.status;
   const location = submitRes.headers?.get?.('location') || '';
 
-  // Success = redirect (302/303) to customer page or treatment page
+  // Redirect handling — verify it's a real success, not a redirect to login or back to create form
   if (httpStatus >= 300 && httpStatus < 400) {
+    // Redirect to login = session expired
+    if (location.includes('/login')) {
+      console.warn(`[treatment] create FAILED — redirected to login: ${location}`);
+      throw new Error('Session หมดอายุ — กรุณาลองใหม่');
+    }
+    // Redirect back to create form = silent failure (ProClinic rejected but still redirected)
+    if (location.includes('/treatment/create')) {
+      console.warn(`[treatment] create FAILED — redirected back to create form: ${location}`);
+      throw new Error('ProClinic ไม่รับข้อมูล — ตรวจสอบ field ที่กรอก');
+    }
+    // Valid success: redirect to treatment/{id}/edit or customer/{id}
     const m = location.match(/treatment\/(\d+)/);
     const newTreatmentId = m ? m[1] : null;
+    // Follow redirect to verify the treatment actually exists
+    if (!newTreatmentId && location.includes('/customer/')) {
+      // Redirected to customer page — treatment may or may not have been created
+      // Follow to check for success flash message or new treatment
+      console.log(`[treatment] create — redirect to customer page: ${location} (verifying...)`);
+      try {
+        const verifyHtml = await session.fetchText(location);
+        // ProClinic shows alert-success div on successful save
+        if (verifyHtml.includes('alert-success') || verifyHtml.includes('บันทึกเรียบร้อย')) {
+          console.log('[treatment] create SUCCESS — verified via customer page');
+          return res.status(200).json({ success: true, treatmentId: null });
+        }
+        console.warn('[treatment] create — no success indicator on customer page');
+        throw new Error('ไม่พบข้อมูลการรักษาใหม่ใน ProClinic — อาจบันทึกไม่สำเร็จ');
+      } catch (verifyErr) {
+        if (verifyErr.message.includes('ไม่พบ')) throw verifyErr;
+        // Network error on verify — report the redirect as success with warning
+        console.warn('[treatment] create — verify failed, assuming success from redirect:', verifyErr.message);
+        return res.status(200).json({ success: true, treatmentId: null, warning: 'ไม่สามารถตรวจสอบผลลัพธ์ได้ — กรุณาเช็คใน ProClinic' });
+      }
+    }
     console.log(`[treatment] create SUCCESS — redirect to ${location}, treatmentId=${newTreatmentId}`);
     return res.status(200).json({ success: true, treatmentId: newTreatmentId });
   }
@@ -723,8 +755,12 @@ async function handleUpdate(req, res) {
   });
 
   const updateStatus = updateRes.status;
+  const updateLocation = updateRes.headers?.get?.('location') || '';
   if (updateStatus >= 300 && updateStatus < 400) {
-    console.log(`[treatment] update SUCCESS — treatmentId=${treatmentId}`);
+    if (updateLocation.includes('/login')) {
+      throw new Error('Session หมดอายุ — กรุณาลองใหม่');
+    }
+    console.log(`[treatment] update SUCCESS — treatmentId=${treatmentId}, redirect to ${updateLocation}`);
     return res.status(200).json({ success: true });
   }
 
@@ -743,7 +779,7 @@ async function handleUpdate(req, res) {
 // ─── Action: delete — Cancel/delete treatment ──────────────────────────────
 
 async function handleDelete(req, res) {
-  const { treatmentId } = req.body || {};
+  const { treatmentId, cancelDetail } = req.body || {};
   if (!treatmentId) {
     return res.status(400).json({ success: false, error: 'Missing treatmentId' });
   }
@@ -751,26 +787,46 @@ async function handleDelete(req, res) {
   const session = await createSession();
   const base = session.origin;
 
-  // GET any page for CSRF
+  // GET edit page for CSRF token
   const editHtml = await session.fetchText(`${base}/admin/treatment/${treatmentId}/edit`);
   const csrf = extractCSRF(editHtml);
   if (!csrf) throw new Error('ไม่พบ CSRF token');
 
-  const deleteRes = await session.fetch(`${base}/admin/treatment/${treatmentId}`, {
+  // ProClinic uses POST /admin/treatment/cancel with treatment_id + cancel_detail
+  const cancelRes = await session.fetch(`${base}/admin/treatment/cancel`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
+      'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
     },
-    body: `_method=DELETE&_token=${encodeURIComponent(csrf)}`,
+    body: new URLSearchParams({
+      _token: csrf,
+      treatment_id: treatmentId,
+      cancel_detail: cancelDetail || '',
+    }).toString(),
     redirect: 'manual',
   });
 
-  if (deleteRes.status >= 200 && deleteRes.status < 400) {
+  const status = cancelRes.status;
+  // Success = redirect (302) to customer page or treatment page
+  if (status >= 300 && status < 400) {
+    const location = cancelRes.headers?.get?.('location') || '';
+    if (location.includes('/login')) {
+      throw new Error('Session หมดอายุ — กรุณาลองใหม่');
+    }
+    console.log(`[treatment] cancel SUCCESS — redirect to ${location}`);
     return res.status(200).json({ success: true });
   }
 
-  throw new Error(`Server ตอบกลับ status ${deleteRes.status}`);
+  // Check for errors in response
+  if (status === 200) {
+    const body = await cancelRes.text();
+    const errors = extractValidationErrors(body);
+    if (errors) throw new Error(`ProClinic: ${errors}`);
+  }
+
+  throw new Error(`ยกเลิกการรักษาไม่สำเร็จ — status ${status}`);
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────

@@ -271,9 +271,9 @@ export function updateTreatment(treatmentId, treatment) {
   return apiFetch('treatment', { action: 'update', treatmentId, treatment });
 }
 
-/** Delete/cancel treatment → { success } */
-export function deleteTreatment(treatmentId) {
-  return apiFetch('treatment', { action: 'delete', treatmentId });
+/** Cancel treatment → { success } */
+export function deleteTreatment(treatmentId, cancelDetail = '') {
+  return apiFetch('treatment', { action: 'delete', treatmentId, cancelDetail });
 }
 
 /** Search ProClinic products by type → { success, products[], total } */

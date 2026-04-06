@@ -74,10 +74,11 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   };
 
   const handleDelete = async (treatmentId) => {
-    if (!confirm('ยกเลิกการรักษานี้?')) return;
+    const cancelDetail = prompt('ยกเลิกการรักษานี้?\n\nกรอกรายละเอียดการยกเลิก (ถ้ามี):');
+    if (cancelDetail === null) return; // User pressed Cancel
     setDeletingId(treatmentId);
     try {
-      const data = await broker.deleteTreatment(treatmentId);
+      const data = await broker.deleteTreatment(treatmentId, cancelDetail);
       if (data.success) {
         fetchPage(page);
         setExpandedId(null);
