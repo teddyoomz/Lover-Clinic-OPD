@@ -45,7 +45,7 @@ api/webhook/                    — Chat webhook endpoints (FB/LINE)
 └── saved-replies.js            — GET endpoint proxying FB saved_message_responses
 api/proclinic/                  — Vercel Serverless Functions (7 consolidated endpoints)
 ├── customer.js                 — actions: create, update, delete, search, fetchPatient (import patient data)
-├── deposit.js                  — actions: submit, update, cancel, options (รวมจาก deposit-*.js)
+├── deposit.js                  — actions: submit, update, cancel, options (รวมจาก deposit-*.js). Options action backups to `pc_form_options/deposit` in Firestore
 ├── connection.js               — actions: login, credentials, clear (รวมจาก login/credentials/clear-session.js)
 ├── appointment.js              — actions: create, update, delete (ใหม่ — นัดหมาย ProClinic สำหรับจองไม่มัดจำ)
 ├── courses.js                  — actions: default(courses), sync-appointments, fetch-appointment-months (คงเดิม)
@@ -479,8 +479,8 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 |----------|-----------|
 | `handleList(req, res)` | Scrapes `/admin/customer/{id}?treatment_page=N` → treatment cards + pagination |
 | `handleGet(req, res)` | Scrapes `/admin/treatment/{id}/edit` → full treatment detail (OPD, vitals, items, fees) |
-| `handleGetCreateForm(req, res)` | Scrapes create page + calls `/admin/api/customer/{id}/inventory` API (parallel) → form options + customer courses/products. Saves inventory to Firestore backup (`pc_inventory/{customerId}`) |
-| `handleCreate(req, res)` | GET create page → copy ALL form defaults (hidden fields!) → override with our values → POST `/admin/treatment`. Includes: courses/products JSON from purchasedItems, consumables, medications, payment (status 0/2/4, payment_method, hasPaymentMethod1-3), sellers (hasSeller1-5), insurance, deposit/wallet. Success = redirect 302; failure = 200 with validation errors |
+| `handleGetCreateForm(req, res)` | Scrapes create page + inventory API (parallel) → form options + courses/products + customer promotions. Firestore backups: `pc_inventory/{customerId}`, `pc_doctors/all`, `pc_form_options/treatment` (blood types, insurance, payment channels, sellers, wallets, med/consumable groups, dosage units) |
+| `handleCreate(req, res)` | GET create page → copy ALL form defaults → override with our values → POST `/admin/treatment`. After success, async fetches treatment detail and saves to `pc_treatments/{id}` for standalone backup + course items debug logging. Success = redirect 302; failure = 200 with validation errors |
 | `handleUpdate(req, res)` | GET edit page → copy ALL existing form fields → override with new values → POST with `_method=PUT`. Same field pattern as create, with Referer header |
 | `handleDelete(req, res)` | GET edit page for CSRF, POST with `_method=DELETE` |
 | `handler(req, res)` | Route dispatcher (verifyAuth + action routing) |
@@ -516,7 +516,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | OPD Card | CC, PE, DX, Dr.Note, Plan, Note, Additional Note (7 textareas) |
 | ค่ามือแพทย์ & ผู้ช่วยแพทย์ | Auto-populated from doctor/assistant selection. Editable fee per person (pencil icon), deletable, + เพิ่ม button. Total display. Sends df_ hidden fields to ProClinic (df_doctor_id[], df_group_id[], df_rowId_{rowId}[]) |
 | สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + medication table (read-only display with edit pencil + delete icons). Edit opens modal pre-filled for in-place update. Real ProClinic product search via JSON API |
-| ข้อมูลการใช้คอร์ส | 3-column grid matching ProClinic: คอร์ส (grouped by course header + checkable products) \| โปรโมชัน (purchased promotions) \| รายการรักษา (selected items with qty+delete). Purchased items auto-add to treatment items. Retail products shown below grid |
+| ข้อมูลการใช้คอร์ส | 3-column grid matching ProClinic: คอร์ส (grouped by course header + checkable products, non-promotion only) \| โปรโมชัน (grouped by promotion header → sub-courses → checkable products, same UX as courses; plus purchased promotions) \| รายการรักษา (selected items with qty+delete). Checked items from both courses & promotions go to treatment items. Retail products shown below grid |
 | เบิกประกัน | checkbox toggle + benefit type + company — controls insurance deduction in billing. Hidden when no sale (`hasSale`) |
 | สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo. Hidden when no sale |
 | การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note. Hidden when no sale |
