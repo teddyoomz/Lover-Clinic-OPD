@@ -106,6 +106,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [consSearchQuery, setConsSearchQuery] = useState('');
   const [consSearchResults, setConsSearchResults] = useState([]);
   const [consSearchLoading, setConsSearchLoading] = useState(false);
+  const [consGroupModalOpen, setConsGroupModalOpen] = useState(false);
+  const [consGroupData, setConsGroupData] = useState([]);
+  const [consGroupSelectedId, setConsGroupSelectedId] = useState('');
+  const [consGroupChecked, setConsGroupChecked] = useState(new Set());
+  const [consGroupLoading, setConsGroupLoading] = useState(false);
 
   // Insurance
   const [benefitType, setBenefitType] = useState('');
@@ -339,6 +344,47 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   };
   const removeConsumable = (i) => {
     setConsumables(prev => prev.filter((_, idx) => idx !== i));
+  };
+
+  // ── Consumable group modal ──
+  const openConsGroupModal = async () => {
+    setConsGroupModalOpen(true);
+    setConsGroupChecked(new Set());
+    setConsGroupSelectedId('');
+    if (consGroupData.length > 0) return;
+    setConsGroupLoading(true);
+    try {
+      const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');
+      if (data.success && data.groups?.length) {
+        setConsGroupData(data.groups);
+        setConsGroupSelectedId(String(data.groups[0].id));
+        setConsGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+      }
+    } catch (_) {}
+    setConsGroupLoading(false);
+  };
+  const selectedConsGroupProducts = useMemo(() => {
+    const g = consGroupData.find(g => String(g.id) === consGroupSelectedId);
+    return g?.products || [];
+  }, [consGroupData, consGroupSelectedId]);
+  const toggleConsGroupCheck = (idx) => {
+    setConsGroupChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+  const confirmConsGroup = () => {
+    selectedConsGroupProducts.forEach((p, i) => {
+      if (!consGroupChecked.has(i)) return;
+      setConsumables(prev => [...prev, {
+        id: p.id,
+        name: p.name,
+        qty: p.qty || '1',
+        unit: p.unit || '',
+      }]);
+    });
+    setConsGroupModalOpen(false);
   };
 
   // ── Submit ──────────────────────────────────────────────────────────────
@@ -936,11 +982,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           <FormSection isDark={isDark}>
             <SectionHeader icon={Package} title="สินค้าสิ้นเปลือง" isDark={isDark} accent="#eab308">
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-                {consumableGroups.length > 0 && (
-                  <ActionBtn color="#f59e0b" isDark={isDark} onClick={() => setConsSearchOpen(true)}>
-                    <Plus size={10} /> กลุ่มสินค้าสิ้นเปลือง
-                  </ActionBtn>
-                )}
+                <ActionBtn color="#3b82f6" isDark={isDark} onClick={openConsGroupModal}>
+                  <Plus size={10} /> กลุ่มสินค้าสิ้นเปลือง
+                </ActionBtn>
                 <ActionBtn color="#eab308" isDark={isDark} onClick={() => setConsSearchOpen(true)}>
                   <Plus size={10} /> สินค้าสิ้นเปลือง
                 </ActionBtn>
@@ -975,6 +1019,85 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 {consSearchQuery && !consSearchLoading && consSearchResults.length === 0 && (
                   <p className="text-[10px] text-gray-500 text-center py-2">ไม่พบรายการ</p>
                 )}
+              </div>
+            )}
+
+            {/* Consumable group modal — full overlay matching ProClinic */}
+            {consGroupModalOpen && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsGroupModalOpen(false)}>
+                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                  onClick={e => e.stopPropagation()}>
+                  {/* Header */}
+                  <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <h3 className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
+                    <select value={consGroupSelectedId}
+                      onChange={e => {
+                        setConsGroupSelectedId(e.target.value);
+                        const g = consGroupData.find(g => String(g.id) === e.target.value);
+                        setConsGroupChecked(new Set((g?.products || []).map((_, i) => i)));
+                      }}
+                      className={`${selectCls} !w-auto !text-xs min-w-[180px]`}>
+                      {consGroupData.map(g => <option key={g.id} value={String(g.id)}>{g.name}</option>)}
+                    </select>
+                  </div>
+                  {/* Table */}
+                  <div className="px-5 py-3 max-h-[50vh] overflow-y-auto">
+                    {consGroupLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มสินค้า...</span></div>
+                    ) : selectedConsGroupProducts.length === 0 ? (
+                      <p className="text-xs text-gray-500 text-center py-8">กรุณาเลือกกลุ่มสินค้าสิ้นเปลือง</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            <th className="text-left py-1.5 pr-2 w-8"></th>
+                            <th className="text-left py-1.5">รายการ ({selectedConsGroupProducts.length} รายการ)</th>
+                            <th className="text-center py-1.5 w-16">จำนวน</th>
+                            <th className="text-center py-1.5 w-12">หน่วย</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedConsGroupProducts.map((p, i) => (
+                            <tr key={p.id} className={`border-t ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                              <td className="py-2 pr-2">
+                                <input type="checkbox" checked={consGroupChecked.has(i)} onChange={() => toggleConsGroupCheck(i)}
+                                  className="w-3.5 h-3.5 rounded accent-yellow-500" />
+                              </td>
+                              <td className="py-2 font-medium">{p.name}</td>
+                              <td className="py-2 text-center">{parseFloat(p.qty) || 1}</td>
+                              <td className="py-2 text-center text-gray-500">{p.unit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  {/* Selected items chips */}
+                  {consGroupChecked.size > 0 && (
+                    <div className={`px-5 py-2 border-t ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                      <p className="text-[10px] font-bold text-gray-500 mb-1.5">รายการที่เลือก ({consGroupChecked.size} รายการ)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedConsGroupProducts.map((p, i) => consGroupChecked.has(i) && (
+                          <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
+                            {p.name} ({parseFloat(p.qty)} {p.unit})
+                            <button onClick={() => toggleConsGroupCheck(i)} className="hover:text-red-400 ml-0.5">&times;</button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Footer buttons */}
+                  <div className={`flex items-center justify-center gap-3 px-5 py-3 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <button onClick={() => setConsGroupModalOpen(false)}
+                      className={`px-6 py-2 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={confirmConsGroup} disabled={consGroupChecked.size === 0}
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-yellow-500 hover:bg-yellow-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      ยืนยัน
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
