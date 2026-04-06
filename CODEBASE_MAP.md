@@ -513,12 +513,12 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | Vital Signs | weight, height, BMI (auto), BT, PR, RR, SBP, DBP, O₂sat |
 | ใบรับรองแพทย์ | med cert checkboxes (actually came, rest period, other) |
 | OPD Card | CC, PE, DX, Dr.Note, Plan, Note, Additional Note (7 textareas) |
-| สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + dynamic medication table (name, dosage, qty, unit price). Real ProClinic product search via JSON API |
+| สั่งยากลับบ้าน | 3 buttons (กลุ่มยากลับบ้าน, ยากลับบ้าน, Remed) + medication table (read-only display with edit pencil + delete icons). Edit opens modal pre-filled for in-place update. Real ProClinic product search via JSON API |
 | ข้อมูลการใช้คอร์ส | 3-column grid matching ProClinic: คอร์ส (grouped by course header + checkable products) \| โปรโมชัน (purchased promotions) \| รายการรักษา (selected items with qty+delete). Purchased items auto-add to treatment items. Retail products shown below grid |
-| เบิกประกัน | checkbox toggle + benefit type + company — controls insurance deduction in billing |
-| สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo |
-| การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note |
-| พนักงานขาย | 5 seller rows (checkbox+select+%+auto-calc commission). Commission = netTotal * percent / 100 |
+| เบิกประกัน | checkbox toggle + benefit type + company — controls insurance deduction in billing. Hidden when no sale (`hasSale`) |
+| สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo. Hidden when no sale |
+| การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note. Hidden when no sale |
+| พนักงานขาย | 5 seller rows (checkbox+select+%+auto-calc commission). Commission = netTotal * percent / 100. Hidden when no sale |
 
 **Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets, medicationGroups, remedItems
 

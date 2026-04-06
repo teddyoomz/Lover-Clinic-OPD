@@ -95,6 +95,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [medModalVat, setMedModalVat] = useState(false);
   const [medModalPremium, setMedModalPremium] = useState(false);
   const [medModalLabelOpen, setMedModalLabelOpen] = useState(false);
+  const [editingMedIndex, setEditingMedIndex] = useState(-1); // -1 = adding new, >= 0 = editing
   const [medGroupModalOpen, setMedGroupModalOpen] = useState(false);
   const [medGroupData, setMedGroupData] = useState([]); // all groups from API
   const [medGroupSelectedId, setMedGroupSelectedId] = useState('');
@@ -334,6 +335,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // ── Medication modal (เพิ่มยากลับบ้าน — matching ProClinic) ──
   const openMedModal = async () => {
+    setEditingMedIndex(-1); // Reset to "add new" mode
     setMedModalOpen(true);
     setMedModalQuery('');
     setMedModalSelected(null);
@@ -387,13 +389,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     const p = medModalSelected;
     const dosageText = p.label
       ? [p.label.administrationTimes, p.label.administrationMethod].filter(Boolean).join(', ')
-      : '';
+      : (editingMedIndex >= 0 ? medications[editingMedIndex]?.dosage || '' : '');
     const price = parseFloat(medModalPrice) || 0;
     const disc = parseFloat(medModalDiscount) || 0;
     const discounted = medModalDiscountType === 'percent' ? price * (1 - disc / 100) : price - disc;
     const vatAmount = medModalVat ? discounted * 0.07 : 0;
     const netPrice = medModalPremium ? 0 : Math.max(0, discounted + vatAmount);
-    setMedications(prev => [...prev, {
+    const medItem = {
       id: p.id,
       name: p.name,
       dosage: dosageText,
@@ -401,8 +403,46 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       unitPrice: netPrice.toFixed(2),
       unit: p.unit || p.label?.dosageUnit || '',
       isPremium: medModalPremium,
-    }]);
+    };
+    if (editingMedIndex >= 0) {
+      // Edit mode — update in-place
+      setMedications(prev => prev.map((m, idx) => idx === editingMedIndex ? medItem : m));
+      setEditingMedIndex(-1);
+    } else {
+      // Add mode — append
+      setMedications(prev => [...prev, medItem]);
+    }
     setMedModalOpen(false);
+  };
+  const editMedication = async (i) => {
+    const med = medications[i];
+    setEditingMedIndex(i);
+    // Pre-fill modal with existing values
+    const product = medAllProducts.find(p => p.id === med.id) || { id: med.id, name: med.name, unit: med.unit, price: med.unitPrice, label: null };
+    setMedModalSelected(product);
+    setMedModalQty(med.qty || '1');
+    setMedModalPrice(med.isPremium ? (product.price || med.unitPrice || '0') : (med.unitPrice || '0'));
+    setMedModalPremium(med.isPremium || false);
+    setMedModalDiscount('');
+    setMedModalDiscountType('amount');
+    setMedModalVat(false);
+    setMedModalLabelOpen(false);
+    setMedModalQuery('');
+    setMedModalOpen(true);
+    // Load product list if not loaded
+    if (medAllProducts.length === 0) {
+      setMedModalLoading(true);
+      try {
+        const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
+        if (data.success) {
+          setMedAllProducts(data.products || []);
+          // Re-find product with label
+          const found = (data.products || []).find(p => p.id === med.id);
+          if (found) setMedModalSelected(found);
+        }
+      } catch (_) {}
+      setMedModalLoading(false);
+    }
   };
   const openMedGroupModal = async () => {
     setMedGroupModalOpen(true);
@@ -687,7 +727,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // ── Submit ──────────────────────────────────────────────────────────────
   const hasSale = purchasedItems.length > 0
-    || medications.some(m => parseFloat(m.unitPrice) > 0 && !m.isPremium)
+    || medications.length > 0  // ANY medication triggers billing (even free/0 baht) — matches ProClinic
     || consumables.length > 0;
 
   const handleSubmit = async () => {
@@ -1058,7 +1098,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
+                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>{editingMedIndex >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
                   </div>
                   <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     {/* Product select with search */}
@@ -1315,14 +1355,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   <div className="col-span-1"></div>
                 </div>
                 {medications.map((med, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <div key={i} className={`grid grid-cols-12 gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
                     <div className="col-span-4 text-xs font-bold truncate px-1">{med.name}</div>
-                    <input value={med.dosage} onChange={e => updateMed(i, 'dosage', e.target.value)} className={`${inputCls} col-span-3`} placeholder="วิธีรับประทาน" />
-                    <input value={med.qty} onChange={e => updateMed(i, 'qty', e.target.value)} className={`${inputCls} col-span-2 text-center`} placeholder="0" />
-                    <input value={med.unitPrice} onChange={e => updateMed(i, 'unitPrice', e.target.value)} className={`${inputCls} col-span-2 text-center`} placeholder="0" />
-                    <button onClick={() => removeMed(i)} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="col-span-3 text-xs text-gray-400 truncate px-1">{med.dosage || '-'}</div>
+                    <div className="col-span-2 text-xs text-center">{med.qty} {med.unit}</div>
+                    <div className="col-span-2 text-xs text-center">{med.isPremium ? <span className="text-green-500">ของแถม</span> : med.unitPrice}</div>
+                    <div className="col-span-1 flex items-center justify-center gap-1">
+                      <button onClick={() => editMedication(i)} className="text-blue-400 hover:text-blue-300 transition-colors"><Edit3 size={11} /></button>
+                      <button onClick={() => removeMed(i)} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={11} /></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1794,7 +1835,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             )}
           </FormSection>
 
-          {/* ── Insurance (เบิกประกัน) ─────────────────────────────────────── */}
+          {/* ── Insurance (เบิกประกัน) — only when there's a sale ─────────── */}
+          {hasSale && (
           <FormSection isDark={isDark}>
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1815,6 +1857,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               )}
             </div>
           </FormSection>
+          )}
 
           {/* ── Expense Summary (สรุปค่าใช้จ่าย) ───────────────────────────── */}
           {hasSale && (
@@ -1908,7 +1951,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
           )}
 
-          {/* ── Sale Note + Date ──────────────────────────────────────────────── */}
+          {/* ── Sale Note + Date — only when there's a sale ─────────────────── */}
+          {hasSale && (
           <FormSection isDark={isDark}>
             <div className="space-y-3">
               <div>
@@ -1921,8 +1965,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             </div>
           </FormSection>
+          )}
 
-          {/* ── Payment (การชำระเงิน) ─────────────────────────────────────────── */}
+          {/* ── Payment (การชำระเงิน) — only when there's a sale ────────────── */}
+          {hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
 
@@ -1980,8 +2026,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             </div>
           </FormSection>
+          )}
 
-          {/* ── Sellers (พนักงานขาย) ──────────────────────────────────────────── */}
+          {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
+          {hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
@@ -2003,6 +2051,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               ))}
             </div>
           </FormSection>
+          )}
 
           {/* Submit (bottom) */}
           <div className="flex justify-end gap-3 pt-2 pb-8">
