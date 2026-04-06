@@ -498,7 +498,8 @@ Shared component used in AdminDashboard + PatientDashboard
 
 | Component | คำอธิบาย |
 |-----------|-----------|
-| `TreatmentTimeline` | Main: paginated list, expandable cards, refresh, create button. Props: customerId, isDark, onOpenCreateForm. States: treatments, page, totalPages, expandedId, detailCache, editingId, deletingId |
+| `TreatmentTimeline` | Main: paginated list, expandable cards, refresh, create button. Props: customerId, isDark, onOpenCreateForm. States: treatments, page, totalPages, expandedId, detailCache, editingId, deletingId, cancelModalOpen, cancelTarget, cancelDetail |
+| Cancel Modal | `cancelModalOpen` state → overlay modal with textarea for cancel reason (replaces `prompt()`). Calls `broker.deleteTreatment(cancelTarget, cancelDetail)` on confirm |
 | `TreatmentEditForm` | Inline edit form pre-filled from detail, saves via `broker.updateTreatment` |
 | `VitalBadge` | Small display for vital sign values (BT, PR, RR, BP, O2sat, weight, height) |
 | `OPDField` | Labeled text field display for OPD card sections (CC, PE, DX, Dr.Note, Plan) |
@@ -540,6 +541,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 - **AdminDashboard.jsx**: TreatmentTimeline rendered in patient detail view (after Clinical Summary), conditioned on `viewingSession.brokerProClinicId`. Create button triggers `treatmentFormMode` state → opens TreatmentFormPage overlay
 - **PatientDashboard.jsx**: TreatmentTimeline rendered for admin view (`isAdminView && sessionData.brokerProClinicId`)
 - Purple accent color: dark `#a78bfa`, light `#7c3aed`
+- **Reference:** `docs/TREATMENT_CREATE.md` — comprehensive ProClinic treatment create page map (field names, submit behavior, bugs & gotchas)
 
 ---
 
