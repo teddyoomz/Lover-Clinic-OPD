@@ -992,7 +992,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
                 <div>
                   <label className={labelCls}>วันที่รักษา</label>
-                  <input type="date" value={treatmentDate} onChange={e => setTreatmentDate(e.target.value)} className={inputCls} />
+                  <div className="relative">
+                    <input type="date" value={treatmentDate} onChange={e => setTreatmentDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
+                    <div className={inputCls}>{treatmentDate ? treatmentDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
+                  </div>
                 </div>
               </div>
             </FormSection>
@@ -2040,7 +2043,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
               <div className="w-48">
                 <label className={labelCls}>วันที่ขาย *</label>
-                <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={inputCls} />
+                <div className="relative">
+                  <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
+                  <div className={inputCls}>{saleDate ? saleDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
+                </div>
               </div>
             </div>
           </FormSection>
@@ -2066,7 +2072,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className={labelCls}>วันที่ชำระเงิน *</label>
-                <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputCls} />
+                <div className="relative">
+                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
+                  <div className={inputCls}>{paymentDate ? paymentDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
+                </div>
               </div>
               <div>
                 <label className={labelCls}>เวลา</label>
