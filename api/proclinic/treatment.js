@@ -87,6 +87,43 @@ async function saveDoctorDataToFirestore(doctors, assistants) {
   });
 }
 
+// ─── Firestore backup for treatment form options (standalone groundwork) ──────
+
+async function saveFormOptionsToFirestore(options) {
+  const docPath = `artifacts/${APP_ID}/public/data/pc_form_options/treatment`;
+  const toArray = (arr) => (arr || []).map(item => ({
+    mapValue: {
+      fields: Object.fromEntries(
+        Object.entries(item).map(([k, v]) => {
+          if (v === null || v === undefined) return [k, { nullValue: null }];
+          if (typeof v === 'boolean') return [k, { booleanValue: v }];
+          if (typeof v === 'number') return [k, { integerValue: String(v) }];
+          return [k, { stringValue: String(v) }];
+        })
+      ),
+    },
+  }));
+
+  const fields = {
+    bloodTypeOptions: { arrayValue: { values: toArray(options.bloodTypeOptions) } },
+    benefitTypes: { arrayValue: { values: toArray(options.benefitTypes) } },
+    insuranceCompanies: { arrayValue: { values: toArray(options.insuranceCompanies) } },
+    paymentChannels: { arrayValue: { values: toArray(options.paymentChannels) } },
+    sellers: { arrayValue: { values: toArray(options.sellers) } },
+    wallets: { arrayValue: { values: toArray(options.wallets) } },
+    medicationGroups: { arrayValue: { values: toArray(options.medicationGroups) } },
+    consumableGroups: { arrayValue: { values: toArray(options.consumableGroups) } },
+    dosageUnits: { arrayValue: { values: toArray(options.dosageUnits) } },
+    syncedAt: { stringValue: new Date().toISOString() },
+  };
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  await fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+}
+
 // ─── Action: getMedicationGroups — Fetch medication groups with products ─────
 
 async function handleGetMedicationGroups(req, res) {
@@ -374,6 +411,11 @@ async function handleGetCreateForm(req, res) {
       console.warn('[treatment] Firestore doctor backup failed:', err.message)
     );
   }
+
+  // Save form options (dropdowns) to Firestore for standalone groundwork (async)
+  saveFormOptionsToFirestore(options).catch(err =>
+    console.warn('[treatment] Firestore form options backup failed:', err.message)
+  );
 
   return res.status(200).json({ success: true, options });
 }
@@ -738,6 +780,36 @@ async function handleCreate(req, res) {
 
         if (found) {
           console.log(`[treatment] create SUCCESS — NEW treatment found: ${found.no} (id=${found.id}, status=${found.status})`);
+          // Backup: fetch treatment detail and log what ProClinic stored (async, helps debug course items bug)
+          if (found.id) {
+            session.fetchText(`${base}/admin/treatment/${found.id}/edit`)
+              .then(editHtml => {
+                const detail = extractTreatmentDetail(editHtml);
+                const itemCount = detail.treatmentItems?.length || 0;
+                const medCount = detail.medications?.length || 0;
+                const consCount = detail.consumables?.length || 0;
+                console.log(`[treatment] create detail — items=${itemCount}, meds=${medCount}, consumables=${consCount}`);
+                if (itemCount > 0) {
+                  console.log(`[treatment] create detail — treatment items: ${JSON.stringify(detail.treatmentItems)}`);
+                }
+                // Save to Firestore backup
+                const docPath = `artifacts/${APP_ID}/public/data/pc_treatments/${found.id}`;
+                const fields = {
+                  treatmentId: { stringValue: String(found.id) },
+                  treatmentNo: { stringValue: found.no || '' },
+                  customerId: { stringValue: String(customerId) },
+                  detail: { stringValue: JSON.stringify(detail) },
+                  createdAt: { stringValue: new Date().toISOString() },
+                };
+                const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+                fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fields }),
+                }).catch(() => {});
+              })
+              .catch(err => console.warn(`[treatment] create detail fetch failed:`, err.message));
+          }
           return res.status(200).json({ success: true, treatmentId: found.id, treatmentNo: found.no });
         }
 
@@ -759,6 +831,26 @@ async function handleCreate(req, res) {
       }
     }
     console.log(`[treatment] create SUCCESS — redirect to ${location}, treatmentId=${newTreatmentId}`);
+    // Backup treatment detail to Firestore (async)
+    session.fetchText(`${base}/admin/treatment/${newTreatmentId}/edit`)
+      .then(editHtml => {
+        const detail = extractTreatmentDetail(editHtml);
+        console.log(`[treatment] create detail — items=${detail.treatmentItems?.length || 0}, meds=${detail.medications?.length || 0}`);
+        const docPath = `artifacts/${APP_ID}/public/data/pc_treatments/${newTreatmentId}`;
+        const fields = {
+          treatmentId: { stringValue: String(newTreatmentId) },
+          customerId: { stringValue: String(customerId) },
+          detail: { stringValue: JSON.stringify(detail) },
+          createdAt: { stringValue: new Date().toISOString() },
+        };
+        const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+        fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }),
+        }).catch(() => {});
+      })
+      .catch(err => console.warn(`[treatment] create detail fetch failed:`, err.message));
     return res.status(200).json({ success: true, treatmentId: newTreatmentId });
   }
 

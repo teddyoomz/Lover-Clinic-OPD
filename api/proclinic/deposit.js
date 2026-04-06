@@ -5,6 +5,9 @@ import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
 
+const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
 function extractAllSelectOptions($, selectName) {
@@ -48,6 +51,35 @@ async function handleOptions(req, res) {
     appointmentEndTimes: extractAllSelectOptions($, 'appointment_end_time'),
     customerSources: extractAllSelectOptions($, 'customer_source'),
   };
+
+  // Backup deposit form options to Firestore for standalone groundwork (async)
+  try {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_form_options/deposit`;
+    const toArray = (arr) => (arr || []).map(item => ({
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(item).map(([k, v]) => [k, { stringValue: String(v ?? '') }])
+        ),
+      },
+    }));
+    const fields = {
+      paymentMethods: { arrayValue: { values: toArray(options.paymentMethods) } },
+      sellers: { arrayValue: { values: toArray(options.sellers) } },
+      advisors: { arrayValue: { values: toArray(options.advisors) } },
+      doctors: { arrayValue: { values: toArray(options.doctors) } },
+      assistants: { arrayValue: { values: toArray(options.assistants) } },
+      rooms: { arrayValue: { values: toArray(options.rooms) } },
+      appointmentChannels: { arrayValue: { values: toArray(options.appointmentChannels) } },
+      customerSources: { arrayValue: { values: toArray(options.customerSources) } },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(err => console.warn('[deposit] Firestore options backup failed:', err.message));
+  } catch (_) {}
 
   return res.status(200).json({ success: true, options });
 }
