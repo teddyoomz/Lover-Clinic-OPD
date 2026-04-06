@@ -614,6 +614,11 @@ async function handleCreate(req, res) {
 
   const httpStatus = submitRes.status;
   const location = submitRes.headers?.get?.('location') || '';
+  console.log(`[treatment] create — response: status=${httpStatus}, location="${location}"`);
+  // Log all response headers for debugging
+  const respHeaders = {};
+  submitRes.headers?.forEach?.((v, k) => { respHeaders[k] = v; });
+  console.log(`[treatment] create — response headers:`, JSON.stringify(respHeaders));
 
   // Redirect handling — verify it's a real success, not a redirect to login or back to create form
   if (httpStatus >= 300 && httpStatus < 400) {
@@ -654,24 +659,54 @@ async function handleCreate(req, res) {
     const m = location.match(/treatment\/(\d+)/);
     const newTreatmentId = m ? m[1] : null;
     // Follow redirect to verify the treatment actually exists
-    if (!newTreatmentId && location.includes('/customer/')) {
-      // Redirected to customer page — treatment may or may not have been created
-      // Follow to check for success flash message or new treatment
-      console.log(`[treatment] create — redirect to customer page: ${location} (verifying...)`);
+    if (!newTreatmentId) {
+      // No treatment ID in redirect URL — verify by scraping treatment list TABLE
+      console.log(`[treatment] create — redirect to ${location} (no treatmentId, verifying via treatment list table...)`);
       try {
-        const verifyHtml = await session.fetchText(location);
-        // ProClinic shows alert-success div on successful save
-        if (verifyHtml.includes('alert-success') || verifyHtml.includes('บันทึกเรียบร้อย')) {
-          console.log('[treatment] create SUCCESS — verified via customer page');
-          return res.status(200).json({ success: true, treatmentId: null });
+        const listUrl = `${base}/admin/treatment?customer_id=${customerId}`;
+        const listHtml = await session.fetchText(listUrl);
+        const $ = (await import('cheerio')).load(listHtml);
+
+        // Convert our YYYY-MM-DD to DD/MM/YYYY for comparison
+        const rawDate = treatment.treatmentDate || new Date().toISOString().slice(0, 10);
+        const [y, mo, d] = rawDate.split('-');
+        const todayDMY = `${d}/${mo}/${y}`;
+
+        // Parse table rows — columns: เลขที่รักษา, ลูกค้า, แพทย์, รายการรักษา, ..., วันที่รักษา(9), สถานะ(10)
+        const rows = $('table tbody tr');
+        let found = null;
+        rows.each((_, row) => {
+          if (found) return;
+          const cells = $(row).find('td');
+          if (cells.length < 10) return;
+          const dateCell = $(cells[9]).text().trim().substring(0, 10); // "DD/MM/YYYY"
+          const statusCell = $(cells[10]).text().trim().split('\n')[0].trim();
+          const editLink = $(row).find('a[href*="/treatment/"][href*="/edit"]').attr('href');
+          const tid = editLink?.match(/treatment\/(\d+)\/edit/)?.[1];
+          if (dateCell === todayDMY && statusCell === 'สำเร็จ' && tid) {
+            found = { id: tid, date: dateCell, status: statusCell };
+          }
+        });
+
+        if (found) {
+          console.log(`[treatment] create SUCCESS — verified in table: treatment ${found.id} dated ${found.date}`);
+          return res.status(200).json({ success: true, treatmentId: found.id });
         }
-        console.warn('[treatment] create — no success indicator on customer page');
-        throw new Error('ไม่พบข้อมูลการรักษาใหม่ใน ProClinic — อาจบันทึกไม่สำเร็จ');
+
+        // No matching treatment found today — this is a real failure
+        console.warn(`[treatment] create FAILED — redirect to ${location} but no สำเร็จ treatment for ${todayDMY}`);
+        // Try to get error from the redirected page
+        const absLocation = location.startsWith('http') ? location : `${base}${location}`;
+        const redirectHtml = await session.fetchText(absLocation);
+        const validationErrors = extractValidationErrors(redirectHtml);
+        if (validationErrors) {
+          throw new Error(`ProClinic: ${validationErrors}`);
+        }
+        throw new Error(`บันทึกไม่สำเร็จ — redirect ไป ${location} แต่ไม่พบ treatment ใหม่ (${todayDMY})`);
       } catch (verifyErr) {
-        if (verifyErr.message.includes('ไม่พบ')) throw verifyErr;
-        // Network error on verify — report the redirect as success with warning
-        console.warn('[treatment] create — verify failed, assuming success from redirect:', verifyErr.message);
-        return res.status(200).json({ success: true, treatmentId: null, warning: 'ไม่สามารถตรวจสอบผลลัพธ์ได้ — กรุณาเช็คใน ProClinic' });
+        if (verifyErr.message.startsWith('ProClinic') || verifyErr.message.startsWith('บันทึก')) throw verifyErr;
+        console.warn('[treatment] create — verify via table failed:', verifyErr.message);
+        throw new Error(`ไม่สามารถตรวจสอบผลลัพธ์ — redirect to ${location}: ${verifyErr.message}`);
       }
     }
     console.log(`[treatment] create SUCCESS — redirect to ${location}, treatmentId=${newTreatmentId}`);
