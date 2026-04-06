@@ -22,6 +22,7 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
+import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -5288,6 +5289,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
                 <textarea readOnly value={clinicalSummaryText} className="w-full bg-[#111] border border-[#222] text-gray-300 rounded-lg p-3 sm:p-4 text-[10px] sm:text-xs font-mono resize-none outline-none custom-scrollbar leading-relaxed" rows="8"/>
               </div>
+              )}
+
+              {/* Treatment History from ProClinic */}
+              {viewingSession.brokerProClinicId && (
+                <div className="mt-8 pt-6 border-t border-[#222]">
+                  <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark} />
+                </div>
               )}
             </div>
 
