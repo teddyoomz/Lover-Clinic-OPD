@@ -4,7 +4,7 @@ import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Ch
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
-import { clearProClinicSession, testLogin, getDepositOptions } from '../lib/brokerClient.js';
+import { clearProClinicSession, testLogin, getDepositOptions, syncProducts, syncDoctors, syncStaff, syncCourses } from '../lib/brokerClient.js';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = ['00', '15', '30', '45'];
@@ -47,6 +47,8 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   });
   const [fetchingPractitioners, setFetchingPractitioners] = useState(false);
   const [practitionerMsg, setPractitionerMsg] = useState('');
+  const [syncStatus, setSyncStatus] = useState({});  // { products: 'loading'|'done'|'error', ... }
+  const [syncResults, setSyncResults] = useState({}); // { products: { count, totalPages }, ... }
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -586,6 +588,88 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               <p className="text-[10px] text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
             </div>
           )}
+        </div>
+
+        {/* Master Data Sync */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Download size={14} style={{color: '#8b5cf6'}}/> Master Data Sync
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">ดึงข้อมูลหลักจาก ProClinic (ยา, คอร์ส, แพทย์, พนักงาน) มา cache ในระบบ</p>
+
+          {(() => {
+            const SYNC_TYPES = [
+              { key: 'products', label: 'ยา / บริการ / สินค้า', fn: syncProducts, icon: '💊', color: 'emerald' },
+              { key: 'doctors', label: 'แพทย์ / ผู้ช่วย', fn: syncDoctors, icon: '🩺', color: 'sky' },
+              { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
+              { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
+            ];
+            const colorMap = {
+              emerald: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40',
+              sky: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40',
+              purple: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40',
+              amber: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40',
+            };
+            const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
+
+            const runSync = async (key, fn) => {
+              setSyncStatus(prev => ({ ...prev, [key]: 'loading' }));
+              setSyncResults(prev => ({ ...prev, [key]: null }));
+              try {
+                const data = await fn();
+                if (data.success) {
+                  setSyncStatus(prev => ({ ...prev, [key]: 'done' }));
+                  setSyncResults(prev => ({ ...prev, [key]: { count: data.count, totalPages: data.totalPages } }));
+                } else {
+                  setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
+                  setSyncResults(prev => ({ ...prev, [key]: { error: data.error } }));
+                }
+              } catch (err) {
+                setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
+                setSyncResults(prev => ({ ...prev, [key]: { error: err.message } }));
+              }
+            };
+
+            const runAll = async () => {
+              for (const t of SYNC_TYPES) {
+                await runSync(t.key, t.fn);
+              }
+            };
+
+            return (
+              <div className="space-y-2">
+                {SYNC_TYPES.map(t => (
+                  <div key={t.key} className="flex items-center gap-3">
+                    <button
+                      onClick={() => runSync(t.key, t.fn)}
+                      disabled={syncStatus[t.key] === 'loading'}
+                      className={`px-3 py-2 rounded-lg text-sm font-bold tracking-wider transition-all flex items-center gap-2 border disabled:opacity-50 min-w-[200px] ${colorMap[t.color]}`}
+                    >
+                      {syncStatus[t.key] === 'loading'
+                        ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync...</>
+                        : <><span>{t.icon}</span> {t.label}</>
+                      }
+                    </button>
+                    {syncStatus[t.key] === 'done' && syncResults[t.key] && (
+                      <span className="text-sm text-green-500 font-bold">✓ {syncResults[t.key].count} รายการ ({syncResults[t.key].totalPages} หน้า)</span>
+                    )}
+                    {syncStatus[t.key] === 'error' && syncResults[t.key] && (
+                      <span className="text-sm text-red-500 font-bold">✗ {syncResults[t.key].error}</span>
+                    )}
+                  </div>
+                ))}
+                <div className="pt-2">
+                  <button
+                    onClick={runAll}
+                    disabled={isSyncing}
+                    className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] hover:bg-[var(--bg-base)] disabled:opacity-50"
+                  >
+                    {isSyncing ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync ทั้งหมด...</> : <><Download size={14}/> Sync ทั้งหมด</>}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ProClinic Integration */}
