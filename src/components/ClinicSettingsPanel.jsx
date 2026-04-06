@@ -618,6 +618,31 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               try {
                 const data = await fn();
                 if (data.success) {
+                  // Save master data to Firestore (backup — accessible even if ProClinic is down)
+                  if (db && appId && data.items?.length) {
+                    try {
+                      // Save metadata
+                      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key), {
+                        type: key,
+                        count: data.items.length,
+                        totalPages: data.totalPages,
+                        syncedAt: serverTimestamp(),
+                      });
+                      // Save items in batches of 400 (Firestore limit = 500 ops per batch)
+                      const BATCH_LIMIT = 400;
+                      for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
+                        const chunk = data.items.slice(start, start + BATCH_LIMIT);
+                        const batch = writeBatch(db);
+                        chunk.forEach((item, i) => {
+                          const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key, 'items', String(item.id || (start + i)));
+                          batch.set(itemRef, { ...item, _syncedAt: new Date().toISOString() });
+                        });
+                        await batch.commit();
+                      }
+                    } catch (e) {
+                      console.warn(`[MasterSync] Failed to save ${key} to Firestore:`, e);
+                    }
+                  }
                   setSyncStatus(prev => ({ ...prev, [key]: 'done' }));
                   setSyncResults(prev => ({ ...prev, [key]: { count: data.count, totalPages: data.totalPages } }));
                 } else {
