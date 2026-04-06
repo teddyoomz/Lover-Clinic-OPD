@@ -867,9 +867,21 @@ export function extractTreatmentCreateOptions(html) {
 
 export function extractValidationErrors(html) {
   const $ = cheerio.load(html);
+  // Laravel validation: .invalid-feedback shown next to fields
   const errEl = $('.invalid-feedback').not('[style*="none"]').first();
   if (errEl.length) return errEl.text().trim().substring(0, 200);
+  // Bootstrap alert
   const alert = $('.alert-danger, .text-danger').first();
   if (alert.length) return alert.text().trim().substring(0, 200);
+  // Legacy: .help-block in .has-error
+  const helpBlock = $('.has-error .help-block').first();
+  if (helpBlock.length) return helpBlock.text().trim().substring(0, 200);
+  // Collect ALL .invalid-feedback (even hidden ones might indicate errors)
+  const allErrors = [];
+  $('.invalid-feedback').each((_, el) => {
+    const t = $(el).text().trim();
+    if (t) allErrors.push(t);
+  });
+  if (allErrors.length) return allErrors.join(', ').substring(0, 300);
   return null;
 }

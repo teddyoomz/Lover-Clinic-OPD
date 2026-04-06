@@ -252,17 +252,31 @@ async function handleCreate(req, res) {
   const csrf = extractCSRF(createHtml);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า treatment create');
 
-  // Get existing form defaults
+  // Get existing form defaults — ALL hidden fields, pre-filled values, etc.
   const defaults = extractFormFields(createHtml);
 
-  // Build form data — merge defaults with provided treatment data
+  // ─── Build form data ────────────────────────────────────────────────────
+  // CRITICAL: Start with ALL defaults from the create page. ProClinic has
+  // hidden required fields (branch_id, form tokens, etc.) that we must preserve.
+  // Then override with our specific values.
   const formData = new URLSearchParams();
+
+  // Step 1: Copy ALL defaults (preserves hidden fields we don't know about)
+  for (const [key, val] of Object.entries(defaults)) {
+    // Skip array fields (they use [] suffix) — we handle those explicitly
+    if (key.endsWith('[]')) continue;
+    formData.set(key, val);
+  }
+
+  // Step 2: Override with CSRF + required identifiers
   formData.set('_token', csrf);
   formData.set('sale_type', 'customer');
   formData.set('customer_id', customerId);
 
   // Doctor & assistants
   formData.set('doctor_id', treatment.doctorId || defaults.doctor_id || '');
+  // Delete any default assistant value and append our array
+  formData.delete('doctor_assistant_id[]');
   if (treatment.assistantIds?.length) {
     treatment.assistantIds.forEach(id => formData.append('doctor_assistant_id[]', id));
   }
@@ -305,25 +319,47 @@ async function handleCreate(req, res) {
   formData.set('med_cert_other_detail', treatment.medCertOtherDetail || '');
 
   // Course items — array of { rowId } selected from customer courses
+  formData.delete('rowId[]');
   if (treatment.courseItems?.length) {
     treatment.courseItems.forEach(item => {
       formData.append('rowId[]', item.rowId);
     });
   }
 
-  // Courses & products JSON (ProClinic expects these as JSON strings)
-  formData.set('courses', treatment.coursesJson || '');
-  formData.set('products', treatment.productsJson || '');
+  // Purchased items → courses/products JSON
+  // ProClinic expects JSON strings: courses (คอร์ส+โปรโมชัน), products (สินค้าหน้าร้าน)
+  const purchasedCourses = (treatment.purchasedItems || []).filter(p => p.itemType === 'course' || p.itemType === 'promotion');
+  const purchasedProducts = (treatment.purchasedItems || []).filter(p => p.itemType === 'retail' || p.itemType === 'product');
+  formData.set('courses', purchasedCourses.length ? JSON.stringify(purchasedCourses.map(p => ({
+    id: p.id, name: p.name, qty: String(p.qty || 1), price: String(p.unitPrice || 0), unit: p.unit || '',
+  }))) : '');
+  formData.set('products', purchasedProducts.length ? JSON.stringify(purchasedProducts.map(p => ({
+    id: p.id, name: p.name, qty: String(p.qty || 1), price: String(p.unitPrice || 0), unit: p.unit || '',
+  }))) : '');
   formData.set('appointment_id', treatment.appointmentId || '');
   formData.set('treatment_id', '');
 
   // Take-home medications (dynamic rows)
+  formData.delete('takeaway_product_name[]');
+  formData.delete('takeaway_product_dosage[]');
+  formData.delete('takeaway_product_qty[]');
+  formData.delete('takeaway_product_unit_price[]');
   if (treatment.medications?.length) {
-    treatment.medications.forEach((med, i) => {
+    treatment.medications.forEach((med) => {
       formData.append('takeaway_product_name[]', med.name || '');
       formData.append('takeaway_product_dosage[]', med.dosage || '');
-      formData.append('takeaway_product_qty[]', med.qty || '');
-      formData.append('takeaway_product_unit_price[]', med.unitPrice || '');
+      formData.append('takeaway_product_qty[]', String(med.qty || ''));
+      formData.append('takeaway_product_unit_price[]', String(med.unitPrice || ''));
+    });
+  }
+
+  // Consumables (สินค้าสิ้นเปลือง)
+  formData.delete('consumable_product_name[]');
+  formData.delete('consumable_product_qty[]');
+  if (treatment.consumables?.length) {
+    treatment.consumables.forEach((c) => {
+      formData.append('consumable_product_name[]', c.name || '');
+      formData.append('consumable_product_qty[]', String(c.qty || 1));
     });
   }
 
@@ -394,38 +430,47 @@ async function handleCreate(req, res) {
     }
   }
 
-  // Submit
+  // Log field count for debugging
+  const fieldCount = [...formData.entries()].length;
+  console.log(`[treatment] create — submitting ${fieldCount} fields for customer ${customerId}`);
+
+  // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
+      'Referer': `${base}/admin/treatment/create?customer_id=${customerId}`,
     },
     body: formData.toString(),
     redirect: 'manual',
   });
 
-  const status = submitRes.status;
+  const httpStatus = submitRes.status;
   const location = submitRes.headers?.get?.('location') || '';
 
-  // Success = redirect to customer page or treatment page
-  if (status >= 300 && status < 400) {
-    // Extract treatment ID from redirect URL if possible
+  // Success = redirect (302/303) to customer page or treatment page
+  if (httpStatus >= 300 && httpStatus < 400) {
     const m = location.match(/treatment\/(\d+)/);
-    const treatmentId = m ? m[1] : null;
-    return res.status(200).json({ success: true, treatmentId });
+    const newTreatmentId = m ? m[1] : null;
+    console.log(`[treatment] create SUCCESS — redirect to ${location}, treatmentId=${newTreatmentId}`);
+    return res.status(200).json({ success: true, treatmentId: newTreatmentId });
   }
 
-  // Check for validation errors
+  // Status 200 = form re-rendered = submission FAILED (validation error or missing fields)
   const bodyHtml = await submitRes.text();
+
+  // Try to extract specific validation errors
   const errors = extractValidationErrors(bodyHtml);
-  if (errors) throw new Error(errors);
+  if (errors) {
+    console.warn(`[treatment] create FAILED — validation: ${errors}`);
+    throw new Error(`ProClinic validation: ${errors}`);
+  }
 
-  // May still succeed (200 with redirect in body)
-  const m = bodyHtml.match(/treatment\/(\d+)/);
-  if (m) return res.status(200).json({ success: true, treatmentId: m[1] });
-
-  throw new Error(`สร้าง treatment ไม่สำเร็จ — status=${status}`);
+  // No specific error found — log body snippet for debugging
+  const bodySnippet = bodyHtml.substring(0, 500).replace(/\s+/g, ' ');
+  console.warn(`[treatment] create FAILED — status=${httpStatus}, no redirect, body snippet: ${bodySnippet}`);
+  throw new Error(`สร้าง treatment ไม่สำเร็จ — ProClinic ไม่ redirect (status=${httpStatus}). อาจขาด field ที่จำเป็น`);
 }
 
 // ─── Action: update — Update existing treatment ────────────────────────────
@@ -452,18 +497,23 @@ async function handleUpdate(req, res) {
 
   const existing = extractFormFields(editHtml);
 
-  // Build form data — overlay provided fields on existing
+  // Build form data — start with ALL existing fields (preserves hidden required fields)
   const formData = new URLSearchParams();
+  for (const [key, val] of Object.entries(existing)) {
+    if (key.endsWith('[]')) continue;
+    formData.set(key, val);
+  }
+
+  // Override CSRF + method
   formData.set('_token', csrf);
   formData.set('_method', 'PUT');
-  formData.set('customer_id', existing.customer_id || '');
 
   // Doctor & assistants
   formData.set('doctor_id', treatment.doctorId ?? existing.doctor_id ?? '');
+  formData.delete('doctor_assistant_id[]');
   if (treatment.assistantIds?.length) {
     treatment.assistantIds.forEach(id => formData.append('doctor_assistant_id[]', id));
   } else if (existing['doctor_assistant_id[]']) {
-    // Preserve existing
     const val = existing['doctor_assistant_id[]'];
     (Array.isArray(val) ? val : [val]).forEach(id => {
       if (id) formData.append('doctor_assistant_id[]', id);
@@ -565,21 +615,28 @@ async function handleUpdate(req, res) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
+      'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
     },
     body: formData.toString(),
     redirect: 'manual',
   });
 
-  const status = updateRes.status;
-  if (status >= 300 && status < 400) {
+  const updateStatus = updateRes.status;
+  if (updateStatus >= 300 && updateStatus < 400) {
+    console.log(`[treatment] update SUCCESS — treatmentId=${treatmentId}`);
     return res.status(200).json({ success: true });
   }
 
   const bodyHtml = await updateRes.text();
   const errors = extractValidationErrors(bodyHtml);
-  if (errors) throw new Error(errors);
+  if (errors) {
+    console.warn(`[treatment] update FAILED — validation: ${errors}`);
+    throw new Error(`ProClinic validation: ${errors}`);
+  }
 
-  return res.status(200).json({ success: true });
+  const bodySnippet = bodyHtml.substring(0, 500).replace(/\s+/g, ' ');
+  console.warn(`[treatment] update FAILED — status=${updateStatus}, body snippet: ${bodySnippet}`);
+  throw new Error(`แก้ไข treatment ไม่สำเร็จ — status=${updateStatus}`);
 }
 
 // ─── Action: delete — Cancel/delete treatment ──────────────────────────────

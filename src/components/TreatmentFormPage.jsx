@@ -1915,14 +1915,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               <div className="space-y-2 mb-3">
                 <label className={labelCls}>ช่องทางชำระเงิน</label>
                 {pmChannels.map((ch, idx) => (
-                  <div key={idx} className={`flex items-center gap-2 ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
-                    <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500" />
-                    <select value={ch.method} onChange={e => updatePmChannel(idx, 'method', e.target.value)} disabled={!ch.enabled} className={`${selectCls} flex-1`}>
-                      <option value="">เลือกช่องทางชำระเงิน</option>
+                  <div key={idx} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                    <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
+                    <select value={ch.method} onChange={e => updatePmChannel(idx, 'method', e.target.value)} disabled={!ch.enabled}
+                      className={`${selectCls} !w-auto flex-1 min-w-[160px]`}>
+                      <option value="">เลือกช่องทาง</option>
                       {paymentChannels.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                     <input type="number" value={ch.amount} onChange={e => updatePmChannel(idx, 'amount', e.target.value)} disabled={!ch.enabled}
-                      className={`${inputCls} w-36 text-right`} placeholder={`กรอกยอดชำระ ${idx + 1}`} min="0" step="0.01" />
+                      className={`${inputCls} !w-32 text-right shrink-0`} placeholder={`ยอดชำระ ${idx + 1}`} min="0" step="0.01" />
                   </div>
                 ))}
               </div>
@@ -1946,18 +1947,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
               {pmSellers.map((sl, idx) => (
-                <div key={idx} className={`flex items-center gap-2 ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
-                  <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500" />
-                  <select value={sl.id} onChange={e => updatePmSeller(idx, 'id', e.target.value)} disabled={!sl.enabled} className={`${selectCls} flex-1`}>
+                <div key={idx} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                  <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
+                  <select value={sl.id} onChange={e => updatePmSeller(idx, 'id', e.target.value)} disabled={!sl.enabled}
+                    className={`${selectCls} !w-auto flex-1 min-w-[140px]`}>
                     <option value="">เลือกพนักงานขาย</option>
                     {sellerOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <input type="number" value={sl.percent} onChange={e => updatePmSeller(idx, 'percent', e.target.value)} disabled={!sl.enabled}
-                    className={`${inputCls} w-16 text-right`} placeholder="%" min="0" max="100" step="0.01" />
-                  <span className="text-[10px] text-gray-500">%</span>
+                    className={`${inputCls} !w-14 text-right shrink-0`} placeholder="%" min="0" max="100" step="0.01" />
+                  <span className="text-[10px] text-gray-500 shrink-0">%</span>
                   <input type="text" value={sl.total ? formatBaht(sl.total) : ''} readOnly disabled={!sl.enabled}
-                    className={`${inputCls} w-28 text-right opacity-70`} placeholder="ยอดคอม" />
-                  <span className="text-[10px] text-gray-500">บาท</span>
+                    className={`${inputCls} !w-24 text-right opacity-70 shrink-0`} placeholder="คอม" />
+                  <span className="text-[10px] text-gray-500 shrink-0">บาท</span>
                 </div>
               ))}
             </div>

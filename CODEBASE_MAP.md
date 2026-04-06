@@ -480,8 +480,8 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 | `handleList(req, res)` | Scrapes `/admin/customer/{id}?treatment_page=N` → treatment cards + pagination |
 | `handleGet(req, res)` | Scrapes `/admin/treatment/{id}/edit` → full treatment detail (OPD, vitals, items, fees) |
 | `handleGetCreateForm(req, res)` | Scrapes `/admin/treatment/create?customer_id={id}` → form options (doctors, health info, CSRF) |
-| `handleCreate(req, res)` | GET create page for CSRF + defaults, build URLSearchParams, POST `/admin/treatment`. Payment fields match ProClinic exactly: `status` (0/2/4), `payment_method`, `paid_amount`, `hasPaymentMethod1`, `hasSeller1-5`, `sale_percent_1-5`, `ref_no`, `note` |
-| `handleUpdate(req, res)` | GET edit page for CSRF + existing values, overlay new values with `??`, POST with `_method=PUT`. Includes payment/seller/insurance fields |
+| `handleCreate(req, res)` | GET create page → copy ALL form defaults (hidden fields!) → override with our values → POST `/admin/treatment`. Includes: courses/products JSON from purchasedItems, consumables, medications, payment (status 0/2/4, payment_method, hasPaymentMethod1-3), sellers (hasSeller1-5), insurance, deposit/wallet. Success = redirect 302; failure = 200 with validation errors |
+| `handleUpdate(req, res)` | GET edit page → copy ALL existing form fields → override with new values → POST with `_method=PUT`. Same field pattern as create, with Referer header |
 | `handleDelete(req, res)` | GET edit page for CSRF, POST with `_method=DELETE` |
 | `handler(req, res)` | Route dispatcher (verifyAuth + action routing) |
 
