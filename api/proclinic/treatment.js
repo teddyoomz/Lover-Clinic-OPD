@@ -233,34 +233,47 @@ async function handleGetCreateForm(req, res) {
 
   const options = extractTreatmentCreateOptions(html);
 
-  // Debug: search script tags for course-related data when no courses found
+  // If no courses found via HTML scraping, try ProClinic's internal APIs
   if (options.customerCourses.length === 0) {
+    const debugInfo = { htmlLength: html.length, apiAttempts: [] };
+    // Try multiple possible API endpoints for customer courses
+    const apiPaths = [
+      `/admin/api/buying-course/${customerId}`,
+      `/admin/api/buying-course?customer_id=${customerId}`,
+      `/admin/api/customer-course/${customerId}`,
+      `/admin/api/customer/${customerId}/courses`,
+      `/admin/treatment/get-buying-courses/${customerId}`,
+      `/admin/treatment/get-buying-course/${customerId}`,
+      `/admin/api/treatment/buying-course/${customerId}`,
+    ];
+    for (const path of apiPaths) {
+      try {
+        const resp = await session.fetch(`${base}${path}`, {
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const text = await resp.text();
+        const preview = text.substring(0, 300);
+        debugInfo.apiAttempts.push({ path, status: resp.status, preview });
+        if (resp.ok && text.startsWith('{') || text.startsWith('[')) {
+          try {
+            const data = JSON.parse(text);
+            debugInfo.foundApi = path;
+            debugInfo.apiData = JSON.stringify(data).substring(0, 500);
+          } catch {}
+        }
+        if (debugInfo.foundApi) break;
+      } catch (e) {
+        debugInfo.apiAttempts.push({ path, error: e.message });
+      }
+    }
+    // Also capture the form-add-course content
     const cheerio = (await import('cheerio')).default || await import('cheerio');
     const $ = cheerio.load(html);
-    const debugSnippets = [];
-    // Search all script tags for course-related variables
-    $('script').each((i, s) => {
-      const text = $(s).html() || '';
-      if (text.length < 10) return;
-      // Find lines containing course/buying keywords
-      const courseMatches = text.match(/(?:course|buying|rowId|คอร์ส)[^\n]{0,200}/gi);
-      if (courseMatches) {
-        courseMatches.slice(0, 5).forEach(m => {
-          debugSnippets.push({ type: 'script_match', match: m.substring(0, 250) });
-        });
-      }
-    });
-    // Also find any AJAX/fetch URLs in scripts
-    $('script').each((_, s) => {
-      const text = $(s).html() || '';
-      const urlMatches = text.match(/(?:url|fetch|axios|get|post)\s*[:=(]\s*['"`]([^'"`]+customer[^'"`]*|[^'"`]*course[^'"`]*|[^'"`]*buying[^'"`]*|[^'"`]*treatment[^'"`]*api[^'"`]*)['"`]/gi);
-      if (urlMatches) {
-        urlMatches.slice(0, 5).forEach(m => {
-          debugSnippets.push({ type: 'api_url', match: m.substring(0, 200) });
-        });
-      }
-    });
-    options._debug = { htmlLength: html.length, snippetCount: debugSnippets.length, snippets: debugSnippets.slice(0, 15) };
+    const courseForm = $('.form-add-course');
+    if (courseForm.length) {
+      debugInfo.formAddCourseHtml = courseForm.html()?.substring(0, 800);
+    }
+    options._debug = debugInfo;
   }
 
   return res.status(200).json({ success: true, options });
