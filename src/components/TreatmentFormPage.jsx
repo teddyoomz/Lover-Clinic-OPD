@@ -88,7 +88,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [medSearchResults, setMedSearchResults] = useState([]);
   const [medSearchLoading, setMedSearchLoading] = useState(false);
   const [medGroupModalOpen, setMedGroupModalOpen] = useState(false);
-  const [medGroupProducts, setMedGroupProducts] = useState([]); // products for selected group
+  const [medGroupData, setMedGroupData] = useState([]); // all groups from API
+  const [medGroupSelectedId, setMedGroupSelectedId] = useState('');
+  const [medGroupChecked, setMedGroupChecked] = useState(new Set()); // checked product indices
+  const [medGroupLoading, setMedGroupLoading] = useState(false);
   const [remedModalOpen, setRemedModalOpen] = useState(false);
 
   // Course items — selected rowIds
@@ -257,22 +260,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setMedSearchQuery('');
     setMedSearchResults([]);
   };
-  const loadMedGroup = async (groupId) => {
-    // Group modal: show all products in a preset group — user picks which to add
-    // The group select changes which pre-defined set of meds to show
-    // For now, search by group name to get relevant products
-    const group = medicationGroups.find(g => g.id === groupId);
-    if (!group) return;
-    setMedSearchLoading(true);
-    try {
-      const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true });
-      if (data.success) setMedGroupProducts(data.products || []);
-    } catch (_) {}
-    setMedSearchLoading(false);
+  const openMedGroupModal = async () => {
     setMedGroupModalOpen(true);
+    setMedGroupChecked(new Set());
+    setMedGroupSelectedId('');
+    if (medGroupData.length > 0) return; // already loaded
+    setMedGroupLoading(true);
+    try {
+      const data = await broker.getMedicationGroups('ยากลับบ้าน');
+      if (data.success && data.groups?.length) {
+        setMedGroupData(data.groups);
+        setMedGroupSelectedId(String(data.groups[0].id));
+        // Auto-check all items in first group
+        setMedGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+      }
+    } catch (_) {}
+    setMedGroupLoading(false);
   };
-  const addMedGroupItems = (products) => {
-    products.forEach(p => {
+  const selectedGroupProducts = useMemo(() => {
+    const g = medGroupData.find(g => String(g.id) === medGroupSelectedId);
+    return g?.products || [];
+  }, [medGroupData, medGroupSelectedId]);
+  const toggleMedGroupCheck = (idx) => {
+    setMedGroupChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+  const confirmMedGroup = () => {
+    selectedGroupProducts.forEach((p, i) => {
+      if (!medGroupChecked.has(i)) return;
       const dosageText = p.label
         ? [p.label.administrationTimes, p.label.administrationMethod].filter(Boolean).join(', ')
         : '';
@@ -280,7 +298,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         id: p.id,
         name: p.name,
         dosage: dosageText,
-        qty: p.label?.dosageAmount || '1',
+        qty: p.qty || p.label?.dosageAmount || '1',
         unitPrice: p.price || '0',
         unit: p.unit || p.label?.dosageUnit || '',
       }]);
@@ -629,11 +647,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           <FormSection isDark={isDark}>
             <SectionHeader icon={Pill} title="สั่งยากลับบ้าน" isDark={isDark} accent="#10b981">
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-                {medicationGroups.length > 0 && (
-                  <ActionBtn color="#3b82f6" isDark={isDark} onClick={() => { loadMedGroup(medicationGroups[0]?.id); }}>
-                    <Plus size={10} /> กลุ่มยากลับบ้าน
-                  </ActionBtn>
-                )}
+                <ActionBtn color="#3b82f6" isDark={isDark} onClick={openMedGroupModal}>
+                  <Plus size={10} /> กลุ่มยากลับบ้าน
+                </ActionBtn>
                 <ActionBtn color="#10b981" isDark={isDark} onClick={() => setMedSearchOpen(true)}>
                   <Plus size={10} /> ยากลับบ้าน
                 </ActionBtn>
@@ -680,32 +696,84 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             )}
 
-            {/* Medication group modal */}
+            {/* Medication group modal — full overlay matching ProClinic */}
             {medGroupModalOpen && (
-              <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-yellow-900/30 bg-[#0d0c0a]' : 'border-yellow-200 bg-yellow-50/30'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">เลือกกลุ่มยา</p>
-                  {medicationGroups.length > 1 && (
-                    <select onChange={e => loadMedGroup(e.target.value)} className={`${selectCls} !w-auto !text-[10px]`}>
-                      {medicationGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedGroupModalOpen(false)}>
+                <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+                  onClick={e => e.stopPropagation()}>
+                  {/* Header */}
+                  <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
+                    <select value={medGroupSelectedId}
+                      onChange={e => {
+                        setMedGroupSelectedId(e.target.value);
+                        const g = medGroupData.find(g => String(g.id) === e.target.value);
+                        setMedGroupChecked(new Set((g?.products || []).map((_, i) => i)));
+                      }}
+                      className={`${selectCls} !w-auto !text-xs min-w-[180px]`}>
+                      {medGroupData.map(g => <option key={g.id} value={String(g.id)}>{g.name}</option>)}
                     </select>
-                  )}
-                  <button onClick={() => setMedGroupModalOpen(false)} className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
-                </div>
-                {medSearchLoading ? (
-                  <div className="flex items-center gap-2 py-4 justify-center"><Loader2 size={14} className="animate-spin text-yellow-400" /></div>
-                ) : (
-                  <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
-                    {medGroupProducts.map(p => (
-                      <button key={p.id} onClick={() => addMedFromSearch(p)}
-                        className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
-                        <span className="font-bold">{p.name}</span>
-                        <span className="text-[10px] text-gray-500">{p.unit} {p.price !== '0' && p.price !== '0.00' ? `฿${p.price}` : ''}</span>
-                      </button>
-                    ))}
-                    {medGroupProducts.length === 0 && <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีรายการในกลุ่มนี้</p>}
                   </div>
-                )}
+                  {/* Table */}
+                  <div className="px-5 py-3 max-h-[50vh] overflow-y-auto">
+                    {medGroupLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-emerald-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มยา...</span></div>
+                    ) : selectedGroupProducts.length === 0 ? (
+                      <p className="text-xs text-gray-500 text-center py-8">กรุณาเลือกกลุ่มยากลับบ้าน</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            <th className="text-left py-1.5 pr-2 w-8"></th>
+                            <th className="text-left py-1.5">รายการยากลับบ้าน ({selectedGroupProducts.length} รายการ)</th>
+                            <th className="text-center py-1.5 w-16">จำนวน</th>
+                            <th className="text-center py-1.5 w-12">หน่วย</th>
+                            <th className="text-center py-1.5 w-20">ราคาต่อหน่วย</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedGroupProducts.map((p, i) => (
+                            <tr key={p.id} className={`border-t ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                              <td className="py-2 pr-2">
+                                <input type="checkbox" checked={medGroupChecked.has(i)} onChange={() => toggleMedGroupCheck(i)}
+                                  className="w-3.5 h-3.5 rounded accent-emerald-500" />
+                              </td>
+                              <td className="py-2 font-medium">{p.name}</td>
+                              <td className="py-2 text-center">{parseFloat(p.qty) || 1}</td>
+                              <td className="py-2 text-center text-gray-500">{p.unit}</td>
+                              <td className="py-2 text-center">{parseFloat(p.price).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  {/* Selected items chips */}
+                  {medGroupChecked.size > 0 && (
+                    <div className={`px-5 py-2 border-t ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
+                      <p className="text-[10px] font-bold text-gray-500 mb-1.5">รายการที่เลือก ({medGroupChecked.size} รายการ)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedGroupProducts.map((p, i) => medGroupChecked.has(i) && (
+                          <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                            {p.name} ({parseFloat(p.qty)} {p.unit})
+                            <button onClick={() => toggleMedGroupCheck(i)} className="hover:text-red-400 ml-0.5">&times;</button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Footer buttons */}
+                  <div className={`flex items-center justify-center gap-3 px-5 py-3 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <button onClick={() => setMedGroupModalOpen(false)}
+                      className={`px-6 py-2 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+                      ยกเลิก
+                    </button>
+                    <button onClick={confirmMedGroup} disabled={medGroupChecked.size === 0}
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      ยืนยัน
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

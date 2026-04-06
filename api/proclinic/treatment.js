@@ -10,6 +10,50 @@ import {
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 
+// ─── Action: getMedicationGroups — Fetch medication groups with products ─────
+
+async function handleGetMedicationGroups(req, res) {
+  const { productType } = req.body || {};
+  const session = await createSession();
+  const base = session.origin;
+
+  const type = productType || 'ยากลับบ้าน';
+  const apiUrl = `${base}/admin/api/product-group?product_type=${encodeURIComponent(type)}`;
+  const resp = await session.fetch(apiUrl, {
+    headers: { 'Accept': 'application/json' },
+  });
+
+  if (!resp.ok) throw new Error(`ProClinic product-group API error: ${resp.status}`);
+  const data = await resp.json();
+
+  // Normalize groups + embedded products
+  const groups = (data.data || []).map(g => ({
+    id: g.id,
+    name: g.group_name,
+    productType: g.product_type,
+    products: (g.products || []).map(p => ({
+      id: p.id,
+      name: p.product_name,
+      unit: p.unit_name,
+      price: p.price || '0',
+      qty: p.pivot?.qty || '1',
+      isVatIncluded: p.is_vat_included || 0,
+      category: p.product_category?.category_name || '',
+      label: p.product_label ? {
+        genericName: p.product_label.generic_name || '',
+        dosageAmount: p.product_label.dosage_amount || '',
+        dosageUnit: p.product_label.dosage_unit || '',
+        timesPerDay: p.product_label.times_per_day || '',
+        administrationMethod: p.product_label.administration_method || '',
+        administrationTimes: p.product_label.administration_times || '',
+        instructions: p.product_label.instructions || '',
+      } : null,
+    })),
+  }));
+
+  return res.status(200).json({ success: true, groups });
+}
+
 // ─── Action: searchProducts — Search ProClinic products via JSON API ───────
 
 async function handleSearchProducts(req, res) {
@@ -427,6 +471,7 @@ export default async function handler(req, res) {
       case 'update':        return await handleUpdate(req, res);
       case 'delete':        return await handleDelete(req, res);
       case 'searchProducts': return await handleSearchProducts(req, res);
+      case 'getMedicationGroups': return await handleGetMedicationGroups(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

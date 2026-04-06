@@ -280,3 +280,8 @@ export function deleteTreatment(treatmentId) {
 export function searchProducts({ productType, query, isTakeaway } = {}) {
   return apiFetch('treatment', { action: 'searchProducts', productType, query, isTakeaway });
 }
+
+/** Get medication groups with products → { success, groups[] } */
+export function getMedicationGroups(productType) {
+  return apiFetch('treatment', { action: 'getMedicationGroups', productType });
+}
