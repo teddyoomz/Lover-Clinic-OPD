@@ -916,7 +916,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   const doctors = options?.doctors || [];
   const assistants = options?.assistants || [];
-  const customerCourses = options?.customerCourses || [];
+  const allCustomerCourses = options?.customerCourses || [];
+  const customerPromotions = options?.customerPromotions || [];
+
+  // Split courses: regular courses vs promotion-linked courses
+  const customerCourses = allCustomerCourses.filter(c => !c.promotionId);
+  const promotionCourses = allCustomerCourses.filter(c => c.promotionId);
+
+  // Group promotion-linked courses by promotionId with promotion name
+  const customerPromotionGroups = useMemo(() => {
+    const groups = {};
+    promotionCourses.forEach(c => {
+      const pid = c.promotionId;
+      if (!groups[pid]) {
+        const promo = customerPromotions.find(p => String(p.id) === String(pid));
+        groups[pid] = {
+          promotionId: pid,
+          promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
+          courses: [],
+        };
+      }
+      groups[pid].courses.push(c);
+    });
+    return Object.values(groups);
+  }, [promotionCourses, customerPromotions]);
+
   const bloodTypeOptions = options?.bloodTypeOptions || [];
   const benefitTypes = options?.benefitTypes || [];
   const insuranceCompanies = options?.insuranceCompanies || [];
@@ -1531,9 +1555,44 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   <span className="text-[10px] text-gray-500">จำนวน</span>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
+                  {/* Customer promotions — grouped by promotion with sub-courses & products */}
+                  {customerPromotionGroups.map(group => (
+                    <div key={`promo-${group.promotionId}`}>
+                      {/* Promotion header (grouping label — not checkable) */}
+                      <div className={`px-3 py-1 border-b text-[10px] font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-amber-400/80' : 'border-gray-100 bg-amber-50/50 text-amber-700'}`}>
+                        {group.promotionName}
+                      </div>
+                      {/* Sub-courses under this promotion */}
+                      {group.courses.map(course => (
+                        <div key={course.courseId}>
+                          {/* Course sub-header */}
+                          <div className={`px-3 pl-5 py-0.5 border-b text-[10px] font-semibold ${isDark ? 'border-[#1a1a1a] bg-[#080808] text-amber-300/60' : 'border-gray-50 bg-amber-50/30 text-amber-600'}`}>
+                            {course.courseName}
+                          </div>
+                          {/* Products — checkable (same as course products) */}
+                          {course.products.map(product => {
+                            const isSelected = selectedCourseItems.has(product.rowId);
+                            return (
+                              <label key={product.rowId} className={`flex items-center justify-between px-3 pl-7 py-1.5 border-b cursor-pointer transition-all ${
+                                isSelected ? isDark ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-100'
+                                : isDark ? 'border-[#1a1a1a] hover:bg-[#151515]' : 'border-gray-50 hover:bg-gray-50'
+                              }`}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <input type="checkbox" checked={isSelected} onChange={() => toggleCourseItem(product)}
+                                    className="w-3.5 h-3.5 rounded accent-amber-500 shrink-0" />
+                                  <span className={`text-xs truncate ${isSelected ? 'font-bold text-amber-400' : ''}`}>{product.name}</span>
+                                </div>
+                                <span className="text-[10px] text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {/* Purchased promotions (ซื้อเพิ่ม) */}
                   {purchasedByType.promotion.map((item, idx) => (
                     <div key={`pp-${idx}`}>
-                      {/* Promotion header with delete */}
                       <div className={`flex items-center justify-between px-3 py-1 border-b text-[10px] font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-amber-400/80' : 'border-gray-100 bg-amber-50/50 text-amber-700'}`}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="truncate">{item.name}</span>
@@ -1544,7 +1603,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       </div>
                     </div>
                   ))}
-                  {purchasedByType.promotion.length === 0 && (
+                  {customerPromotionGroups.length === 0 && purchasedByType.promotion.length === 0 && (
                     <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีโปรโมชัน</p>
                   )}
                 </div>

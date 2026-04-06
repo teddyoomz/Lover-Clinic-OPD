@@ -351,7 +351,16 @@ async function handleGetCreateForm(req, res) {
     }));
     options.customerCourses = courses;
     options.customerProducts = inventoryData.customer_products || [];
-    console.log(`[treatment] inventory API — ${courses.length} courses, ${courses.reduce((s, c) => s + c.products.length, 0)} products`);
+
+    // Extract customer promotions (groups of courses bought as a promotion package)
+    const promotions = (inventoryData.customer_promotions || []).map(p => ({
+      id: p.id,
+      promotionName: p.promotion?.promotion_name || p.promotion_name || '',
+      qty: p.qty || 1,
+    }));
+    options.customerPromotions = promotions;
+
+    console.log(`[treatment] inventory API — ${courses.length} courses, ${courses.reduce((s, c) => s + c.products.length, 0)} products, ${promotions.length} promotions`);
 
     // Save inventory to Firestore as backup (async, don't block response)
     saveInventoryToFirestore(customerId, courses).catch(err =>
