@@ -673,6 +673,16 @@ export function extractTreatmentCreateOptions(html) {
     if (val && text) opts.assistants.push({ id: val, name: text });
   });
 
+  // Doctor fee group IDs (df_group_id) — embedded as HTML-encoded JSON in page source
+  const dfGroupMap = {};
+  const dfGroupRegex = /&quot;id&quot;:(\d+).*?&quot;df_group_id&quot;:(\d+)/g;
+  let dfMatch;
+  while ((dfMatch = dfGroupRegex.exec(html)) !== null) {
+    dfGroupMap[dfMatch[1]] = dfMatch[2];
+  }
+  opts.doctors.forEach(d => { d.dfGroupId = dfGroupMap[d.id] || ''; });
+  opts.assistants.forEach(a => { a.dfGroupId = dfGroupMap[a.id] || ''; });
+
   // Customer health info (pre-filled)
   opts.healthInfo = {
     doctorId: $('input[name="customer_doctor_id"]').val() || '',

@@ -32,6 +32,9 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   const [detailCache, setDetailCache] = useState({});
   const [detailLoading, setDetailLoading] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelDetail, setCancelDetail] = useState('');
 
   const fetchPage = async (p) => {
     setLoading(true);
@@ -73,23 +76,29 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
     }
   };
 
-  const handleDelete = async (treatmentId) => {
-    const cancelDetail = prompt('ยกเลิกการรักษานี้?\n\nกรอกรายละเอียดการยกเลิก (ถ้ามี):');
-    if (cancelDetail === null) return; // User pressed Cancel
-    setDeletingId(treatmentId);
+  const openCancelModal = (treatmentId) => {
+    setCancelTarget(treatmentId);
+    setCancelDetail('');
+    setCancelModalOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelModalOpen(false);
+    setDeletingId(cancelTarget);
     try {
-      const data = await broker.deleteTreatment(treatmentId, cancelDetail);
+      const data = await broker.deleteTreatment(cancelTarget, cancelDetail);
       if (data.success) {
         fetchPage(page);
         setExpandedId(null);
-        setDetailCache(prev => { const n = { ...prev }; delete n[treatmentId]; return n; });
+        setDetailCache(prev => { const n = { ...prev }; delete n[cancelTarget]; return n; });
       } else {
-        alert(data.error || 'ลบไม่สำเร็จ');
+        alert(data.error || 'ยกเลิกไม่สำเร็จ');
       }
     } catch (e) {
       alert(e.message);
     } finally {
       setDeletingId(null);
+      setCancelTarget(null);
     }
   };
 
@@ -108,6 +117,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   const accent = isDark ? '#a78bfa' : '#7c3aed';
 
   return (
+    <>
     <section>
       <div className="flex items-center gap-2 mb-3">
         <span style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }}><Stethoscope size={14} /></span>
@@ -195,7 +205,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${isDark ? 'border-blue-900/50 text-blue-400 bg-blue-950/20 hover:bg-blue-950/40' : 'border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100'}`}>
                             <Edit3 size={10} /> แก้ไข
                           </button>
-                          <button onClick={() => handleDelete(t.id)} disabled={deletingId === t.id}
+                          <button onClick={() => openCancelModal(t.id)} disabled={deletingId === t.id}
                             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-50 ${isDark ? 'border-red-900/50 text-red-400 bg-red-950/20 hover:bg-red-950/40' : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'}`}>
                             {deletingId === t.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
                             {deletingId === t.id ? 'กำลังลบ...' : 'ยกเลิก'}
@@ -273,5 +283,34 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
         </div>
       )}
     </section>
+
+    {/* ── Cancel Treatment Modal ── */}
+    {cancelModalOpen && (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setCancelModalOpen(false)}>
+        <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#222]' : 'bg-white'}`}
+          onClick={e => e.stopPropagation()}>
+          <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+            <h3 className="text-sm font-black" style={{ color: '#14b8a6' }}>ยกเลิกการรักษา</h3>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block">รายละเอียดการยกเลิก</label>
+            <textarea value={cancelDetail} onChange={e => setCancelDetail(e.target.value)} rows={4}
+              className={`w-full rounded-lg px-3 py-2 text-xs outline-none border resize-none transition-all ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-200 focus:border-teal-500' : 'bg-white border-gray-200 text-gray-800 focus:border-teal-400'}`}
+              placeholder="กรอกรายละเอียดการยกเลิก (ถ้ามี)" autoFocus />
+          </div>
+          <div className={`flex justify-end gap-3 px-5 py-4 border-t ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+            <button onClick={() => setCancelModalOpen(false)}
+              className={`px-5 py-2 rounded-xl text-xs font-bold border transition-all ${isDark ? 'border-[#333] text-gray-400 hover:bg-[#1a1a1a]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+              ยกเลิก
+            </button>
+            <button onClick={confirmCancel}
+              className="px-5 py-2 rounded-xl text-xs font-black bg-teal-600 text-white hover:bg-teal-500 transition-all">
+              ยืนยัน
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

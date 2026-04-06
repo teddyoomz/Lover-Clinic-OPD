@@ -62,6 +62,30 @@ async function saveInventoryToFirestore(customerId, courses) {
   console.log(`[treatment] inventory saved to Firestore for customer ${customerId} — ${courses.length} courses`);
 }
 
+async function saveDoctorDataToFirestore(doctors, assistants) {
+  const docPath = `artifacts/${APP_ID}/public/data/pc_doctors/all`;
+  const toMap = (arr) => arr.map(d => ({
+    mapValue: {
+      fields: {
+        id: { stringValue: String(d.id || '') },
+        name: { stringValue: d.name || '' },
+        dfGroupId: { stringValue: String(d.dfGroupId || '') },
+      },
+    },
+  }));
+  const fields = {
+    doctors: { arrayValue: { values: toMap(doctors) } },
+    assistants: { arrayValue: { values: toMap(assistants) } },
+    syncedAt: { stringValue: new Date().toISOString() },
+  };
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  await fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+}
+
 // ─── Action: getMedicationGroups — Fetch medication groups with products ─────
 
 async function handleGetMedicationGroups(req, res) {
@@ -334,6 +358,13 @@ async function handleGetCreateForm(req, res) {
     );
   }
 
+  // Save doctor/assistant dfGroupId data to Firestore backup (async)
+  if (options.doctors?.length || options.assistants?.length) {
+    saveDoctorDataToFirestore(options.doctors || [], options.assistants || []).catch(err =>
+      console.warn('[treatment] Firestore doctor backup failed:', err.message)
+    );
+  }
+
   return res.status(200).json({ success: true, options });
 }
 
@@ -425,6 +456,29 @@ async function handleCreate(req, res) {
     treatment.courseItems.forEach(item => {
       formData.append('rowId[]', item.rowId);
     });
+  }
+
+  // Doctor fees (ค่ามือแพทย์) — df_ hidden fields required by ProClinic
+  const dfDoctors = [treatment.doctorId, ...(treatment.assistantIds || [])].filter(Boolean);
+  const checkedRowIds = (treatment.courseItems || []).map(item => item.rowId);
+  const doctorFees = treatment.doctorFees || [];
+  // Clean any existing df_ fields from defaults
+  for (const key of [...formData.keys()]) {
+    if (key.startsWith('df_')) formData.delete(key);
+  }
+  if (dfDoctors.length > 0) {
+    dfDoctors.forEach(docId => {
+      const feeEntry = doctorFees.find(f => String(f.doctorId) === String(docId));
+      formData.append('df_doctor_id[]', docId);
+      formData.append('df_group_id[]', feeEntry?.groupId || '');
+      // For each checked course product, set fee amount
+      checkedRowIds.forEach(rowId => {
+        formData.append(`df_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
+        formData.append(`df_suggestion_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
+        formData.append(`df_is_checked_rowId_${rowId}[]`, '1');
+      });
+    });
+    console.log(`[treatment] create — df_ fields: ${dfDoctors.length} doctors x ${checkedRowIds.length} rowIds`);
   }
 
   // Purchased items → courses/products JSON

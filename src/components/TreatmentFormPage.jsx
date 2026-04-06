@@ -56,6 +56,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [assistantIds, setAssistantIds] = useState([]);
   const [treatmentDate, setTreatmentDate] = useState(new Date().toISOString().slice(0, 10));
 
+  // Doctor fees (ค่ามือแพทย์)
+  const [doctorFees, setDoctorFees] = useState([]); // [{doctorId, name, fee, groupId}]
+  const [dfEditingIdx, setDfEditingIdx] = useState(-1); // -1=none, >=0=editing inline
+
   // Health Info
   const [bloodType, setBloodType] = useState('');
   const [congenitalDisease, setCongenitalDisease] = useState('');
@@ -300,6 +304,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       return [...prev, id];
     });
   };
+
+  // ── Auto-populate doctor fees when doctor/assistants change ──
+  useEffect(() => {
+    if (!options) return;
+    const allDoctors = options.doctors || [];
+    const allAssistants = options.assistants || [];
+    const selectedIds = [doctorId, ...assistantIds].filter(Boolean);
+    setDoctorFees(prev => {
+      // Keep existing entries that are still selected, add new ones
+      const kept = prev.filter(f => selectedIds.includes(String(f.doctorId)));
+      const newEntries = selectedIds
+        .filter(id => !kept.some(f => String(f.doctorId) === String(id)))
+        .map(id => {
+          const doc = allDoctors.find(d => String(d.id) === String(id)) || allAssistants.find(a => String(a.id) === String(id));
+          return { doctorId: id, name: doc?.name || '', fee: '0', groupId: doc?.dfGroupId || '' };
+        });
+      return [...kept, ...newEntries];
+    });
+  }, [doctorId, assistantIds, options]);
 
   // ── Course item toggle — also update treatment items ──
   const toggleCourseItem = (product) => {
@@ -769,6 +792,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medCertIsOther,
         medCertOtherDetail,
         courseItems: Array.from(selectedCourseItems).map(rowId => ({ rowId })),
+        doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, fee: f.fee, groupId: f.groupId })),
         purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
@@ -828,6 +852,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               consumables: consumables.filter(c => c.name).map(c => ({ id: c.id, name: c.name, qty: c.qty, unit: c.unit })),
               purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
               courseItems: Array.from(selectedCourseItems),
+              doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
               billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
               insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
@@ -1075,6 +1100,49 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
         {/* ════ FULL-WIDTH BOTTOM SECTIONS ════ */}
         <div className="space-y-4 mt-4">
+
+          {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={DollarSign} title="ค่ามือแพทย์ & ผู้ช่วยแพทย์" isDark={isDark} accent="#14b8a6">
+              <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => {
+                const allPeople = [...(options?.doctors || []), ...(options?.assistants || [])];
+                const available = allPeople.filter(p => !doctorFees.some(f => String(f.doctorId) === String(p.id)));
+                if (available.length === 0) return;
+                const name = available[0].name;
+                setDoctorFees(prev => [...prev, { doctorId: available[0].id, name, fee: '0', groupId: available[0].dfGroupId || '' }]);
+              }}>
+                <Plus size={10} /> เพิ่ม
+              </ActionBtn>
+            </SectionHeader>
+            {doctorFees.length === 0 ? (
+              <p className="text-[10px] text-gray-500 text-center py-3">เลือกแพทย์และผู้ช่วยด้านบน → รายชื่อจะปรากฏที่นี่อัตโนมัติ</p>
+            ) : (
+              <div className="space-y-1.5">
+                {doctorFees.map((df, i) => (
+                  <div key={df.doctorId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
+                    <span className="text-xs font-bold flex-1 min-w-0 truncate">{df.name}</span>
+                    {dfEditingIdx === i ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-gray-500">ค่ามือ</span>
+                        <input type="number" value={df.fee} onChange={e => setDoctorFees(prev => prev.map((f, idx) => idx === i ? { ...f, fee: e.target.value } : f))}
+                          className={`${inputCls} !w-20 text-center !py-1`} min="0" step="0.01" autoFocus
+                          onBlur={() => setDfEditingIdx(-1)} onKeyDown={e => e.key === 'Enter' && setDfEditingIdx(-1)} />
+                        <span className="text-[10px] text-gray-500">บาท</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 shrink-0">(ค่ามือ {parseFloat(df.fee || 0).toFixed(2)} บาท)</span>
+                    )}
+                    <button onClick={() => setDfEditingIdx(i)} className="text-blue-400 hover:text-blue-300 transition-colors shrink-0"><Edit3 size={11} /></button>
+                    <button onClick={() => setDoctorFees(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 transition-colors shrink-0"><Trash2 size={11} /></button>
+                  </div>
+                ))}
+                <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                  <span style={{ color: '#14b8a6' }}>ยอดรวมค่ามือ</span>
+                  <span className="font-mono" style={{ color: '#14b8a6' }}>{doctorFees.reduce((s, f) => s + (parseFloat(f.fee) || 0), 0).toFixed(2)} บาท</span>
+                </div>
+              </div>
+            )}
+          </FormSection>
 
           {/* ── Take-Home Medications ──────────────────────────────────────── */}
           <FormSection isDark={isDark}>
