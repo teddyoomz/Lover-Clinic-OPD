@@ -54,7 +54,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
   const [assistantIds, setAssistantIds] = useState([]);
-  const [treatmentDate, setTreatmentDate] = useState(new Date().toISOString().slice(0, 10));
+  // Use local date (user's timezone) — toISOString() returns UTC which is wrong for GMT+7
+  const [treatmentDate, setTreatmentDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   // Doctor fees (ค่ามือแพทย์)
   const [doctorFees, setDoctorFees] = useState([]); // [{doctorId, name, fee, groupId}]
@@ -163,8 +167,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Payment
   const [paymentStatus, setPaymentStatus] = useState('2'); // 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10));
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saleDate, setSaleDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [paymentDate, setPaymentDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [paymentTime, setPaymentTime] = useState('');
   const [refNo, setRefNo] = useState('');
   const [note, setNote] = useState('');

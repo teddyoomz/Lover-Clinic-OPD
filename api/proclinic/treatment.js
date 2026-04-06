@@ -414,7 +414,9 @@ async function handleCreate(req, res) {
   }
 
   // Date
-  formData.set('treatment_date', treatment.treatmentDate || defaults.treatment_date || new Date().toISOString().slice(0, 10));
+  // Fallback date uses Bangkok timezone (GMT+7) — Vercel runs in UTC
+  const bangkokDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+  formData.set('treatment_date', treatment.treatmentDate || defaults.treatment_date || bangkokDate);
 
   // OPD Card fields
   formData.set('symptoms', treatment.symptoms || '');
@@ -535,7 +537,7 @@ async function handleCreate(req, res) {
   }
 
   // Sale/payment
-  const saleDate = treatment.saleDate || treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
+  const saleDate = treatment.saleDate || treatment.treatmentDate || defaults.sale_date || bangkokDate;
   formData.set('sale_date', saleDate);
   formData.set('coupon_code', treatment.couponCode || '');
   formData.set('sale_note', treatment.saleNote || '');
@@ -552,8 +554,9 @@ async function handleCreate(req, res) {
   }
   formData.set('payment_date', treatment.paymentDate || saleDate);
   // ProClinic always sends payment_time (HH:mm) — default to current time
-  const now = new Date();
-  const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  // Use Bangkok timezone for default time (Vercel runs in UTC)
+  const nowBangkok = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const defaultTime = `${String(nowBangkok.getHours()).padStart(2, '0')}:${String(nowBangkok.getMinutes()).padStart(2, '0')}`;
   formData.set('payment_time', treatment.paymentTime || defaultTime);
 
   // Payment methods (up to 3) — only send when user selected a payment method
