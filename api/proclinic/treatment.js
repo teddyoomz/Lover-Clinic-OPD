@@ -391,8 +391,7 @@ async function handleCreate(req, res) {
   // CRITICAL: Start with ALL defaults from the create page. ProClinic has
   // hidden required fields (branch_id, form tokens, etc.) that we must preserve.
   // Then override with our specific values.
-  // Use native FormData (multipart/form-data) — ProClinic form uses enctype="multipart/form-data"
-  const formData = new FormData();
+  const formData = new URLSearchParams();
 
   // Step 1: Copy ALL defaults (preserves hidden fields we don't know about)
   for (const [key, val] of Object.entries(defaults)) {
@@ -637,14 +636,14 @@ async function handleCreate(req, res) {
   }
 
   // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
-  // Use FormData body directly (multipart/form-data) — matches ProClinic's form enctype
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
     method: 'POST',
     headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
       'Referer': `${base}/admin/treatment/create?customer_id=${customerId}`,
     },
-    body: formData,
+    body: formData.toString(),
     redirect: 'manual',
   });
 
