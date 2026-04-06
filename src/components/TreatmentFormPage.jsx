@@ -800,33 +800,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
         treatmentItems,
-        // Billing
-        saleDate,
-        medicineDiscountPercent: billing.medDiscPct,
-        discount: String(billing.billDiscAmt || ''),
-        discountType: billDiscountType,
-        couponCode,
-        // Insurance
-        isInsuranceClaimed,
-        benefitType,
-        insuranceCompanyId,
-        totalClaimAmount: insuranceClaimAmount,
-        // Deposit & Wallet
-        useDeposit, depositAmount,
-        useWallet, walletId, walletAmount,
-        // Payment
-        paymentStatus,
-        paymentDate,
-        paymentTime,
-        paymentMethod: pmChannels[0].enabled ? pmChannels[0].method : '',
-        paidAmount: pmChannels[0].enabled ? pmChannels[0].amount : '',
-        paymentMethod2: pmChannels[1].enabled ? pmChannels[1].method : '',
-        paidAmount2: pmChannels[1].enabled ? pmChannels[1].amount : '',
-        paymentMethod3: pmChannels[2].enabled ? pmChannels[2].method : '',
-        paidAmount3: pmChannels[2].enabled ? pmChannels[2].amount : '',
-        refNo, note, saleNote,
-        // Sellers
-        ...sellerPayload,
+        // Billing/Payment — only include when there's an actual sale
+        ...(hasSale ? {
+          saleDate,
+          medicineDiscountPercent: billing.medDiscPct,
+          discount: String(billing.billDiscAmt || ''),
+          discountType: billDiscountType,
+          couponCode,
+          isInsuranceClaimed,
+          benefitType,
+          insuranceCompanyId,
+          totalClaimAmount: insuranceClaimAmount,
+          useDeposit, depositAmount,
+          useWallet, walletId, walletAmount,
+          paymentStatus,
+          paymentDate,
+          paymentTime,
+          paymentMethod: pmChannels[0].enabled ? pmChannels[0].method : '',
+          paidAmount: pmChannels[0].enabled ? pmChannels[0].amount : '',
+          paymentMethod2: pmChannels[1].enabled ? pmChannels[1].method : '',
+          paidAmount2: pmChannels[1].enabled ? pmChannels[1].amount : '',
+          paymentMethod3: pmChannels[2].enabled ? pmChannels[2].method : '',
+          paidAmount3: pmChannels[2].enabled ? pmChannels[2].amount : '',
+          refNo, note, saleNote,
+          ...sellerPayload,
+        } : {}),
       };
 
       const data = isEdit
