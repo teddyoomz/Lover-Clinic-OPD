@@ -10,6 +10,58 @@ import {
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 
+const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+
+// ─── Firestore backup for customer inventory (courses) ─────────────────────
+
+async function saveInventoryToFirestore(customerId, courses) {
+  const docPath = `artifacts/${APP_ID}/public/data/pc_inventory/${customerId}`;
+  const courseValues = courses.map(c => ({
+    mapValue: {
+      fields: {
+        courseId: { stringValue: c.courseId || '' },
+        customerCourseId: { integerValue: String(c.customerCourseId || 0) },
+        courseName: { stringValue: c.courseName || '' },
+        courseType: { stringValue: c.courseType || '' },
+        qty: { stringValue: String(c.qty || '0') },
+        promotionId: c.promotionId ? { integerValue: String(c.promotionId) } : { nullValue: null },
+        products: {
+          arrayValue: {
+            values: c.products.map(p => ({
+              mapValue: {
+                fields: {
+                  rowId: { stringValue: p.rowId || '' },
+                  productId: { integerValue: String(p.productId || 0) },
+                  name: { stringValue: p.name || '' },
+                  unit: { stringValue: p.unit || '' },
+                  remaining: { stringValue: String(p.remaining || '0') },
+                  qty: { stringValue: String(p.qty || '0') },
+                  used: { stringValue: String(p.used || '0') },
+                },
+              },
+            })),
+          },
+        },
+      },
+    },
+  }));
+
+  const fields = {
+    customerId: { stringValue: String(customerId) },
+    courses: { arrayValue: { values: courseValues.length ? courseValues : [] } },
+    syncedAt: { stringValue: new Date().toISOString() },
+    totalCourses: { integerValue: String(courses.length) },
+  };
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  await fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+  console.log(`[treatment] inventory saved to Firestore for customer ${customerId} — ${courses.length} courses`);
+}
+
 // ─── Action: getMedicationGroups — Fetch medication groups with products ─────
 
 async function handleGetMedicationGroups(req, res) {
@@ -229,51 +281,57 @@ async function handleGetCreateForm(req, res) {
 
   const session = await createSession();
   const base = session.origin;
-  const html = await session.fetchText(`${base}/admin/treatment/create?customer_id=${customerId}`);
+
+  // Fetch treatment create page (for form options) AND inventory API (for courses) in parallel
+  const [html, inventoryData] = await Promise.all([
+    session.fetchText(`${base}/admin/treatment/create?customer_id=${customerId}`),
+    (async () => {
+      try {
+        const invResp = await session.fetch(`${base}/admin/api/customer/${customerId}/inventory`, {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!invResp.ok) {
+          console.warn(`[treatment] inventory API HTTP ${invResp.status}`);
+          return null;
+        }
+        return await invResp.json();
+      } catch (err) {
+        console.warn('[treatment] inventory API error:', err.message);
+        return null;
+      }
+    })(),
+  ]);
 
   const options = extractTreatmentCreateOptions(html);
 
-  // If no courses found via HTML scraping, try ProClinic's internal APIs
-  if (options.customerCourses.length === 0) {
-    const debugInfo = { htmlLength: html.length, apiAttempts: [] };
-    // Try multiple possible API endpoints for customer courses
-    const apiPaths = [
-      `/admin/api/buying-course/${customerId}`,
-      `/admin/api/buying-course?customer_id=${customerId}`,
-      `/admin/api/customer-course/${customerId}`,
-      `/admin/api/customer/${customerId}/courses`,
-      `/admin/treatment/get-buying-courses/${customerId}`,
-      `/admin/treatment/get-buying-course/${customerId}`,
-      `/admin/api/treatment/buying-course/${customerId}`,
-    ];
-    for (const path of apiPaths) {
-      try {
-        const resp = await session.fetch(`${base}${path}`, {
-          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        });
-        const text = await resp.text();
-        const preview = text.substring(0, 300);
-        debugInfo.apiAttempts.push({ path, status: resp.status, preview });
-        if (resp.ok && text.startsWith('{') || text.startsWith('[')) {
-          try {
-            const data = JSON.parse(text);
-            debugInfo.foundApi = path;
-            debugInfo.apiData = JSON.stringify(data).substring(0, 500);
-          } catch {}
-        }
-        if (debugInfo.foundApi) break;
-      } catch (e) {
-        debugInfo.apiAttempts.push({ path, error: e.message });
-      }
-    }
-    // Also capture the form-add-course content
-    const cheerio = (await import('cheerio')).default || await import('cheerio');
-    const $ = cheerio.load(html);
-    const courseForm = $('.form-add-course');
-    if (courseForm.length) {
-      debugInfo.formAddCourseHtml = courseForm.html()?.substring(0, 800);
-    }
-    options._debug = debugInfo;
+  // Use inventory API data for courses (JS-rendered, not in static HTML)
+  if (inventoryData) {
+    const courses = (inventoryData.customer_courses || []).map(c => ({
+      courseId: c.rowId,
+      customerCourseId: c.id,
+      courseName: c.course?.course_name || '',
+      courseType: c.course?.course_type || '',
+      qty: c.qty,
+      promotionId: c.customer_promotion_id || null,
+      products: (c.available_customer_products || []).map(p => ({
+        rowId: p.rowId,
+        productId: p.product_id,
+        name: p.product?.product_name || '',
+        unit: p.product?.unit_name || '',
+        remaining: p.remaining_qty || '0',
+        qty: p.qty || '0',
+        used: p.used_qty || '0',
+        isMainProduct: p.is_main_product || 0,
+      })),
+    }));
+    options.customerCourses = courses;
+    options.customerProducts = inventoryData.customer_products || [];
+    console.log(`[treatment] inventory API — ${courses.length} courses, ${courses.reduce((s, c) => s + c.products.length, 0)} products`);
+
+    // Save inventory to Firestore as backup (async, don't block response)
+    saveInventoryToFirestore(customerId, courses).catch(err =>
+      console.warn('[treatment] Firestore inventory backup failed:', err.message)
+    );
   }
 
   return res.status(200).json({ success: true, options });

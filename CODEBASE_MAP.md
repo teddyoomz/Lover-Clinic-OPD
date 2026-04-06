@@ -479,7 +479,7 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 |----------|-----------|
 | `handleList(req, res)` | Scrapes `/admin/customer/{id}?treatment_page=N` → treatment cards + pagination |
 | `handleGet(req, res)` | Scrapes `/admin/treatment/{id}/edit` → full treatment detail (OPD, vitals, items, fees) |
-| `handleGetCreateForm(req, res)` | Scrapes `/admin/treatment/create?customer_id={id}` → form options (doctors, health info, CSRF) |
+| `handleGetCreateForm(req, res)` | Scrapes create page + calls `/admin/api/customer/{id}/inventory` API (parallel) → form options + customer courses/products. Saves inventory to Firestore backup (`pc_inventory/{customerId}`) |
 | `handleCreate(req, res)` | GET create page → copy ALL form defaults (hidden fields!) → override with our values → POST `/admin/treatment`. Includes: courses/products JSON from purchasedItems, consumables, medications, payment (status 0/2/4, payment_method, hasPaymentMethod1-3), sellers (hasSeller1-5), insurance, deposit/wallet. Success = redirect 302; failure = 200 with validation errors |
 | `handleUpdate(req, res)` | GET edit page → copy ALL existing form fields → override with new values → POST with `_method=PUT`. Same field pattern as create, with Referer header |
 | `handleDelete(req, res)` | GET edit page for CSRF, POST with `_method=DELETE` |
@@ -491,7 +491,7 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 | `extractTreatmentList(html)` | Parse customer detail page center column → treatment cards (date, doctor, assistants, CC, DX, products) |
 | `extractTreatmentPagination(html)` | Detect max page from `?treatment_page=N` pagination links |
 | `extractTreatmentDetail(html)` | Parse treatment edit page → all fields: doctorId, vitals, OPD textareas, items, fees, consent, medCert |
-| `extractTreatmentCreateOptions(html)` | Parse create form → doctors, assistants, healthInfo, paymentChannels, CSRF token |
+| `extractTreatmentCreateOptions(html)` | Parse create form → doctors, assistants, healthInfo, paymentChannels, CSRF token (courses via inventory API in treatment.js) |
 
 ### src/components/TreatmentTimeline.jsx
 Shared component used in AdminDashboard + PatientDashboard
@@ -524,7 +524,7 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 
 **Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay. Props include `db`, `appId` for Firestore backup.
 
-**Firestore backup:** On submit, saves raw treatment data to `artifacts/{appId}/public/data/treatments/{proClinicId}`. On group modal open, saves medication groups → `master_data/medication_groups/items/{id}` and consumable groups → `master_data/consumable_groups/items/{id}`
+**Firestore backup:** On submit, saves raw treatment data to `artifacts/{appId}/public/data/treatments/{proClinicId}`. On group modal open, saves medication groups → `master_data/medication_groups/items/{id}` and consumable groups → `master_data/consumable_groups/items/{id}`. On form load, saves customer inventory (courses) → `pc_inventory/{customerId}`
 
 ### Client (brokerClient.js) — Treatment Functions
 - `listTreatments(customerId, page)` — list treatments for a customer (paginated)

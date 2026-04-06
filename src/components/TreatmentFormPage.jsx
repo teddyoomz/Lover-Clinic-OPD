@@ -235,11 +235,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           return;
         }
         setOptions(formData.options);
-        // Debug: log course scraping diagnostics
-        if (formData.options._debug) {
-          console.warn('[TreatmentForm] Course scraping debug:', JSON.stringify(formData.options._debug, null, 2));
-        }
-        console.log('[TreatmentForm] customerCourses:', formData.options.customerCourses?.length, formData.options.customerCourses);
 
         if (isEdit && treatmentId) {
           // Load existing treatment data for edit
