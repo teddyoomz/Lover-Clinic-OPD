@@ -221,3 +221,25 @@ export function updateAppointment(appointmentId, appointment) {
 export function deleteAppointment(appointmentId) {
   return apiFetch('appointment', { action: 'delete', appointmentId });
 }
+
+// ─── Public API — Master Data Sync ────────────────────────────────────────
+
+/** Sync products (ยา/บริการ/สินค้า) from ProClinic → { success, items[], count, totalPages } */
+export function syncProducts() {
+  return apiFetch('master', { action: 'syncProducts' });
+}
+
+/** Sync doctors & assistants from ProClinic → { success, items[], count, totalPages } */
+export function syncDoctors() {
+  return apiFetch('master', { action: 'syncDoctors' });
+}
+
+/** Sync staff (พนักงาน) from ProClinic → { success, items[], count, totalPages } */
+export function syncStaff() {
+  return apiFetch('master', { action: 'syncStaff' });
+}
+
+/** Sync courses (คอร์ส) from ProClinic → { success, items[], count, totalPages } */
+export function syncCourses() {
+  return apiFetch('master', { action: 'syncCourses' });
+}

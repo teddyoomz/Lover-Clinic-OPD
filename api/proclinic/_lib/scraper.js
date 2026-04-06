@@ -233,6 +233,212 @@ export function extractSelectOptions(html, selectName) {
   return options;
 }
 
+// ─── Master Data: Products extraction ───────────────────────────────────────
+// Scrapes /admin/product list page — returns array of product objects
+
+export function extractProductList(html) {
+  const $ = cheerio.load(html);
+  const products = [];
+
+  // ProClinic uses a table or card-based list — find rows in table tbody
+  $('table tbody tr').each((_, tr) => {
+    const cells = $(tr).find('td');
+    if (cells.length < 5) return;
+
+    // Extract product ID from edit/delete button data-url
+    let id = null;
+    const editLink = $(tr).find('a[href*="/product/"]').first();
+    if (editLink.length) {
+      const m = editLink.attr('href')?.match(/\/product\/(\d+)/);
+      if (m) id = m[1];
+    }
+    if (!id) {
+      const delBtn = $(tr).find('button[data-url*="/product/"]').first();
+      if (delBtn.length) {
+        const m = delBtn.attr('data-url')?.match(/\/product\/(\d+)/);
+        if (m) id = m[1];
+      }
+    }
+
+    const name = cells.eq(0).text().trim();
+    const unit = cells.eq(1).text().trim();
+    const priceText = cells.eq(2).text().trim().replace(/[^\d.]/g, '');
+    const price = priceText ? parseFloat(priceText) : 0;
+    const category = cells.eq(3).text().trim();
+    const type = cells.eq(4).text().trim();
+    const status = $(tr).find('.badge').last().text().trim() || 'ใช้งาน';
+
+    if (name) {
+      products.push({ id, name, unit, price, category, type, status });
+    }
+  });
+
+  return products;
+}
+
+// ─── Master Data: Doctors/Assistants extraction ─────────────────────────────
+// Scrapes /admin/doctor list page
+
+export function extractDoctorList(html) {
+  const $ = cheerio.load(html);
+  const doctors = [];
+
+  $('table tbody tr').each((_, tr) => {
+    const cells = $(tr).find('td');
+    if (cells.length < 5) return;
+
+    let id = null;
+    const editLink = $(tr).find('a[href*="/doctor/"]').first();
+    if (editLink.length) {
+      const m = editLink.attr('href')?.match(/\/doctor\/(\d+)/);
+      if (m) id = m[1];
+    }
+    if (!id) {
+      const delBtn = $(tr).find('button[data-url*="/doctor/"]').first();
+      if (delBtn.length) {
+        const m = delBtn.attr('data-url')?.match(/\/doctor\/(\d+)/);
+        if (m) id = m[1];
+      }
+    }
+
+    // Name is usually in the first cell, might have email below
+    const nameCell = cells.eq(0);
+    const nameText = nameCell.find('strong, b, a').first().text().trim() || nameCell.contents().first().text().trim();
+    const email = nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '';
+    const name = nameText.split('\n')[0].trim();
+
+    const color = cells.eq(1).text().trim();
+    const hourlyRate = cells.eq(2).text().trim().replace(/[^\d.]/g, '');
+    const position = cells.eq(3).text().trim(); // แพทย์ or ผู้ช่วยแพทย์
+    const branches = cells.eq(4).text().trim();
+    const status = $(tr).find('.badge').last().text().trim() || 'ใช้งาน';
+
+    if (name) {
+      doctors.push({
+        id, name, email, color,
+        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : 0,
+        position, branches, status
+      });
+    }
+  });
+
+  return doctors;
+}
+
+// ─── Master Data: Staff extraction ──────────────────────────────────────────
+// Scrapes /admin/user list page
+
+export function extractStaffList(html) {
+  const $ = cheerio.load(html);
+  const staff = [];
+
+  $('table tbody tr').each((_, tr) => {
+    const cells = $(tr).find('td');
+    if (cells.length < 5) return;
+
+    let id = null;
+    const editLink = $(tr).find('a[href*="/user/"]').first();
+    if (editLink.length) {
+      const m = editLink.attr('href')?.match(/\/user\/(\d+)/);
+      if (m) id = m[1];
+    }
+    if (!id) {
+      const delBtn = $(tr).find('button[data-url*="/user/"]').first();
+      if (delBtn.length) {
+        const m = delBtn.attr('data-url')?.match(/\/user\/(\d+)/);
+        if (m) id = m[1];
+      }
+    }
+
+    const nameCell = cells.eq(0);
+    const name = nameCell.find('strong, b, a').first().text().trim() || nameCell.contents().first().text().trim();
+    const email = nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '';
+    const color = cells.eq(1).text().trim();
+    const position = cells.eq(2).text().trim();
+    const branches = cells.eq(3).text().trim();
+    const status = $(tr).find('.badge').last().text().trim() || 'ใช้งาน';
+
+    if (name.split('\n')[0].trim()) {
+      staff.push({ id, name: name.split('\n')[0].trim(), email, color, position, branches, status });
+    }
+  });
+
+  return staff;
+}
+
+// ─── Master Data: Course list extraction ────────────────────────────────────
+// Scrapes /admin/course list page
+
+export function extractCourseList(html) {
+  const $ = cheerio.load(html);
+  const courses = [];
+
+  $('table tbody tr').each((_, tr) => {
+    const cells = $(tr).find('td');
+    if (cells.length < 5) return;
+
+    let id = null;
+    const editLink = $(tr).find('a[href*="/course/"]').first();
+    if (editLink.length) {
+      const m = editLink.attr('href')?.match(/\/course\/(\d+)/);
+      if (m) id = m[1];
+    }
+    if (!id) {
+      const delBtn = $(tr).find('button[data-url*="/course/"]').first();
+      if (delBtn.length) {
+        const m = delBtn.attr('data-url')?.match(/\/course\/(\d+)/);
+        if (m) id = m[1];
+      }
+    }
+
+    const code = cells.eq(0).text().trim();
+    const nameCell = cells.eq(1);
+    const name = nameCell.contents().first().text().trim() || nameCell.text().split('\n')[0].trim();
+    const courseType = nameCell.find('.badge, small').first().text().trim(); // ระบุสินค้า/บุฟเฟต์/เหมา
+
+    // Products in course — may have sub-list
+    const productsCell = cells.eq(2);
+    const productTexts = [];
+    productsCell.find('li, div, span').each((_, el) => {
+      const t = $(el).text().trim();
+      if (t && t.length < 100) productTexts.push(t);
+    });
+    const products = productTexts.length ? productTexts.join('; ') : productsCell.text().trim().substring(0, 200);
+
+    const category = cells.eq(3).text().trim();
+    const priceText = cells.eq(4).text().trim().replace(/[^\d.]/g, '');
+    const price = priceText ? parseFloat(priceText) : 0;
+    const status = $(tr).find('.badge').last().text().trim() || 'ใช้งาน';
+
+    if (name) {
+      courses.push({ id, code, name, courseType, products, category, price, status });
+    }
+  });
+
+  return courses;
+}
+
+// ─── Generic pagination for list pages ──────────────────────────────────────
+
+export function extractListPagination(html) {
+  const $ = cheerio.load(html);
+  const pag = $('ul.pagination, .pagination').first();
+  if (!pag.length) return { maxPage: 1 };
+
+  let maxPage = 1;
+  pag.find('a[href]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    const m = href.match(/[?&]page=(\d+)/i);
+    if (m) maxPage = Math.max(maxPage, parseInt(m[2] || m[1]));
+    // Also try matching just numbers in the link text
+    const text = $(a).text().trim();
+    const num = parseInt(text);
+    if (!isNaN(num) && num > maxPage) maxPage = num;
+  });
+
+  return { maxPage };
+}
+
 // ─── Extract validation errors ──────────────────────────────────────────────
 
 export function extractValidationErrors(html) {
