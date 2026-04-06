@@ -736,6 +736,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     return grouped;
   }, [purchasedItems]);
 
+  // Group promotion-linked courses by promotionId with promotion name
+  const customerPromotionGroups = useMemo(() => {
+    const allCourses = options?.customerCourses || [];
+    const promos = options?.customerPromotions || [];
+    const promoCourses = allCourses.filter(c => c.promotionId);
+    const groups = {};
+    promoCourses.forEach(c => {
+      const pid = c.promotionId;
+      if (!groups[pid]) {
+        const promo = promos.find(p => String(p.id) === String(pid));
+        groups[pid] = {
+          promotionId: pid,
+          promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
+          courses: [],
+        };
+      }
+      groups[pid].courses.push(c);
+    });
+    return Object.values(groups);
+  }, [options]);
+
   // ── Seller commission auto-calc ──
   useEffect(() => {
     if (billing.netTotal <= 0) return;
@@ -917,29 +938,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const doctors = options?.doctors || [];
   const assistants = options?.assistants || [];
   const allCustomerCourses = options?.customerCourses || [];
-  const customerPromotions = options?.customerPromotions || [];
-
-  // Split courses: regular courses vs promotion-linked courses
   const customerCourses = allCustomerCourses.filter(c => !c.promotionId);
-  const promotionCourses = allCustomerCourses.filter(c => c.promotionId);
-
-  // Group promotion-linked courses by promotionId with promotion name
-  const customerPromotionGroups = useMemo(() => {
-    const groups = {};
-    promotionCourses.forEach(c => {
-      const pid = c.promotionId;
-      if (!groups[pid]) {
-        const promo = customerPromotions.find(p => String(p.id) === String(pid));
-        groups[pid] = {
-          promotionId: pid,
-          promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
-          courses: [],
-        };
-      }
-      groups[pid].courses.push(c);
-    });
-    return Object.values(groups);
-  }, [promotionCourses, customerPromotions]);
+  const customerPromotions = options?.customerPromotions || [];
 
   const bloodTypeOptions = options?.bloodTypeOptions || [];
   const benefitTypes = options?.benefitTypes || [];
