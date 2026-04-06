@@ -391,7 +391,8 @@ async function handleCreate(req, res) {
   // CRITICAL: Start with ALL defaults from the create page. ProClinic has
   // hidden required fields (branch_id, form tokens, etc.) that we must preserve.
   // Then override with our specific values.
-  const formData = new URLSearchParams();
+  // Use native FormData (multipart/form-data) — ProClinic form uses enctype="multipart/form-data"
+  const formData = new FormData();
 
   // Step 1: Copy ALL defaults (preserves hidden fields we don't know about)
   for (const [key, val] of Object.entries(defaults)) {
@@ -605,7 +606,18 @@ async function handleCreate(req, res) {
   const allEntries = [...formData.entries()];
   console.log(`[treatment] create — submitting ${allEntries.length} fields for customer ${customerId}`);
   console.log(`[treatment] create — status=${formData.get('status') ?? '(not set)'}, doctor_id=${formData.get('doctor_id')}, rowId[]=${formData.getAll('rowId[]').join(',')}`);
-
+  // Detailed logging for course items + doctor fees
+  const sentRowIds = formData.getAll('rowId[]');
+  const sentDfDoctors = formData.getAll('df_doctor_id[]');
+  const sentDfGroups = formData.getAll('df_group_id[]');
+  console.log(`[treatment] create — courseItems from frontend: ${JSON.stringify(treatment.courseItems || [])}`);
+  console.log(`[treatment] create — rowId[] sent: [${sentRowIds.join(', ')}] (${sentRowIds.length} items)`);
+  console.log(`[treatment] create — df_doctor_id[]: [${sentDfDoctors.join(', ')}], df_group_id[]: [${sentDfGroups.join(', ')}]`);
+  sentRowIds.forEach(rid => {
+    const qty = formData.get(`rowId_${rid}_qty`);
+    const dfFees = formData.getAll(`df_rowId_${rid}[]`);
+    console.log(`[treatment] create — rowId ${rid}: qty=${qty}, df_fees=[${dfFees.join(',')}]`);
+  });
   // Capture existing treatment IDs BEFORE submit (to detect new ones after)
   let preSubmitIds = new Set();
   try {
@@ -625,14 +637,14 @@ async function handleCreate(req, res) {
   }
 
   // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
+  // Use FormData body directly (multipart/form-data) — matches ProClinic's form enctype
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
       'Referer': `${base}/admin/treatment/create?customer_id=${customerId}`,
     },
-    body: formData.toString(),
+    body: formData,
     redirect: 'manual',
   });
 
