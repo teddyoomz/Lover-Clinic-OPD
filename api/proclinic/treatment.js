@@ -524,13 +524,15 @@ async function handleCreate(req, res) {
     });
   }
 
-  // Insurance
-  formData.set('is_insurance_claimed', treatment.isInsuranceClaimed ? '1' : '0');
-  formData.set('claim_type', treatment.claimType || '');
-  formData.set('benefit_type', treatment.benefitType || '');
-  formData.set('insurance_company_id', treatment.insuranceCompanyId || '');
-  formData.set('customer_insurance_benefit_id', treatment.customerInsuranceBenefitId || '');
-  formData.set('total_claim_amount', treatment.totalClaimAmount || '');
+  // Insurance — only send when explicitly enabled (checkbox/radio: unchecked = don't send)
+  if (treatment.isInsuranceClaimed) {
+    formData.set('is_insurance_claimed', '1');
+    if (treatment.claimType) formData.set('claim_type', treatment.claimType);
+    formData.set('benefit_type', treatment.benefitType || '');
+    formData.set('insurance_company_id', treatment.insuranceCompanyId || '');
+    formData.set('customer_insurance_benefit_id', treatment.customerInsuranceBenefitId || '');
+    formData.set('total_claim_amount', treatment.totalClaimAmount || '');
+  }
 
   // Sale/payment
   const saleDate = treatment.saleDate || treatment.treatmentDate || defaults.sale_date || new Date().toISOString().slice(0, 10);
@@ -538,15 +540,23 @@ async function handleCreate(req, res) {
   formData.set('coupon_code', treatment.couponCode || '');
   formData.set('sale_note', treatment.saleNote || '');
 
-  // Payment status — ProClinic uses: 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
-  formData.set('status', treatment.paymentStatus ?? '0');
+  // Payment status — radio buttons: 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
+  // CRITICAL: ProClinic's radio is UNCHECKED by default → FormData does NOT send 'status'.
+  // When status is absent, ProClinic creates treatment as "สำเร็จ" (completed).
+  // Sending status=0 creates "แบบร่าง" (draft) which is filtered from default list!
+  // → Only send status when explicitly set by user (has sale/payment)
+  if (treatment.paymentStatus != null && treatment.paymentStatus !== '') {
+    formData.set('status', treatment.paymentStatus);
+  } else {
+    formData.delete('status'); // Ensure we don't inherit from defaults
+  }
   formData.set('payment_date', treatment.paymentDate || saleDate);
   // ProClinic always sends payment_time (HH:mm) — default to current time
   const now = new Date();
   const defaultTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   formData.set('payment_time', treatment.paymentTime || defaultTime);
 
-  // Payment methods (up to 3) — each has enable flag + channel + amount
+  // Payment methods (up to 3) — only send when user selected a payment method
   if (treatment.paymentMethod) {
     formData.set('hasPaymentMethod1', '1');
     formData.set('payment_method', treatment.paymentMethod);
@@ -591,14 +601,28 @@ async function handleCreate(req, res) {
     }
   }
 
-  // Log all fields for debugging
+  // Log key fields for debugging
   const allEntries = [...formData.entries()];
   console.log(`[treatment] create — submitting ${allEntries.length} fields for customer ${customerId}`);
-  // Log df_ fields specifically
-  const dfEntries = allEntries.filter(([k]) => k.startsWith('df_'));
-  console.log(`[treatment] create — df_ fields (${dfEntries.length}):`, dfEntries.map(([k, v]) => `${k}=${v}`).join(', '));
-  // Log key fields
-  console.log(`[treatment] create — doctor_id=${formData.get('doctor_id')}, rowId[]=${formData.getAll('rowId[]').join(',')}, courseItems=${treatment.courseItems?.length || 0}`);
+  console.log(`[treatment] create — status=${formData.get('status') ?? '(not set)'}, doctor_id=${formData.get('doctor_id')}, rowId[]=${formData.getAll('rowId[]').join(',')}`);
+
+  // Capture existing treatment IDs BEFORE submit (to detect new ones after)
+  let preSubmitIds = new Set();
+  try {
+    const preListHtml = await session.fetchText(`${base}/admin/treatment?customer_id=${customerId}`);
+    const $ = (await import('cheerio')).load(preListHtml);
+    $('table tbody tr').each((_, row) => {
+      const link = $(row).find('a[href*="/treatment/"][href*="/edit"]').attr('href');
+      const id = link?.match(/treatment\/(\d+)\/edit/)?.[1];
+      if (id) preSubmitIds.add(id);
+      // Also capture treatment numbers (MC-XXXXX) for cancelled ones that don't have edit links
+      const no = $(row).find('td').first().text().trim();
+      if (no) preSubmitIds.add(no);
+    });
+    console.log(`[treatment] create — pre-submit: ${preSubmitIds.size} existing treatments`);
+  } catch (e) {
+    console.warn('[treatment] create — pre-submit list capture failed:', e.message);
+  }
 
   // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
@@ -660,37 +684,34 @@ async function handleCreate(req, res) {
     const newTreatmentId = m ? m[1] : null;
     // Follow redirect to verify the treatment actually exists
     if (!newTreatmentId) {
-      // No treatment ID in redirect URL — verify by scraping treatment list TABLE
-      console.log(`[treatment] create — redirect to ${location} (no treatmentId, verifying via treatment list table...)`);
+      // No treatment ID in redirect URL — verify by finding NEW entries in treatment list
+      console.log(`[treatment] create — redirect to ${location} (no treatmentId, verifying via pre/post comparison...)`);
       try {
         const listUrl = `${base}/admin/treatment?customer_id=${customerId}`;
         const listHtml = await session.fetchText(listUrl);
         const $ = (await import('cheerio')).load(listHtml);
 
-        // Convert our YYYY-MM-DD to DD/MM/YYYY for comparison
-        const rawDate = treatment.treatmentDate || new Date().toISOString().slice(0, 10);
-        const [y, mo, d] = rawDate.split('-');
-        const todayDMY = `${d}/${mo}/${y}`;
-
-        // Parse table rows — columns: เลขที่รักษา, ลูกค้า, แพทย์, รายการรักษา, ..., วันที่รักษา(9), สถานะ(10)
+        // Find NEW treatments that weren't in the pre-submit list
         const rows = $('table tbody tr');
         let found = null;
         rows.each((_, row) => {
           if (found) return;
           const cells = $(row).find('td');
           if (cells.length < 10) return;
-          const dateCell = $(cells[9]).text().trim().substring(0, 10); // "DD/MM/YYYY"
-          const statusCell = $(cells[10]).text().trim().split('\n')[0].trim();
+          const treatmentNo = $(cells[0]).text().trim();
           const editLink = $(row).find('a[href*="/treatment/"][href*="/edit"]').attr('href');
           const tid = editLink?.match(/treatment\/(\d+)\/edit/)?.[1];
-          if (dateCell === todayDMY && statusCell === 'สำเร็จ' && tid) {
-            found = { id: tid, date: dateCell, status: statusCell };
+          const statusCell = $(cells[10]).text().trim().split('\n')[0].trim();
+          // Check if this is a NEW entry (not in pre-submit list)
+          const isNew = tid ? !preSubmitIds.has(tid) : !preSubmitIds.has(treatmentNo);
+          if (isNew) {
+            found = { id: tid || null, no: treatmentNo, status: statusCell };
           }
         });
 
         if (found) {
-          console.log(`[treatment] create SUCCESS — verified in table: treatment ${found.id} dated ${found.date}`);
-          return res.status(200).json({ success: true, treatmentId: found.id });
+          console.log(`[treatment] create SUCCESS — NEW treatment found: ${found.no} (id=${found.id}, status=${found.status})`);
+          return res.status(200).json({ success: true, treatmentId: found.id, treatmentNo: found.no });
         }
 
         // No matching treatment found today — this is a real failure
@@ -702,7 +723,8 @@ async function handleCreate(req, res) {
         if (validationErrors) {
           throw new Error(`ProClinic: ${validationErrors}`);
         }
-        throw new Error(`บันทึกไม่สำเร็จ — redirect ไป ${location} แต่ไม่พบ treatment ใหม่ (${todayDMY})`);
+        console.warn(`[treatment] create — pre-submit had ${preSubmitIds.size} entries, post-submit found no new ones`);
+        throw new Error(`บันทึกไม่สำเร็จ — redirect ไป ${location} แต่ไม่พบ treatment ใหม่`);
       } catch (verifyErr) {
         if (verifyErr.message.startsWith('ProClinic') || verifyErr.message.startsWith('บันทึก')) throw verifyErr;
         console.warn('[treatment] create — verify via table failed:', verifyErr.message);
