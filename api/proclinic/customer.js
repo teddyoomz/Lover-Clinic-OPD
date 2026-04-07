@@ -297,15 +297,15 @@ async function handleSearch(req, res) {
     await Promise.all(needsDetail.map(async (c) => {
       try {
         const editHtml = await session.fetchText(`${base}/admin/customer/${c.id}/edit`);
-        const $ = cheerio.load(editHtml);
-        const firstName = $('input[name="first_name"]').val() || '';
-        const lastName = $('input[name="last_name"]').val() || '';
-        const prefix = $('select[name="prefix"] option:selected').text().trim() || '';
-        const phone = $('input[name="phone"]').val() || '';
-        const hnVal = $('input[name="hn_id"]').val() || '';
+        const fields = extractFormFields(editHtml);
+        const firstName = fields.firstname || '';
+        const lastName = fields.lastname || '';
+        const prefix = fields.prefix || '';
+        const phone = fields.phone || '';
+        const hnVal = extractHN(editHtml) || '';
         if (firstName || lastName) c.name = [prefix, firstName, lastName].filter(Boolean).join(' ');
         if (phone && !c.phone) c.phone = phone;
-        if (hnVal && !c.hn) c.hn = `HN${hnVal}`;
+        if (hnVal && !c.hn) c.hn = hnVal;
       } catch {}
     }));
   }
