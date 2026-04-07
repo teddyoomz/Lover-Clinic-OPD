@@ -3,7 +3,7 @@ import { Plus, Edit3, Trash2, FileImage } from 'lucide-react';
 import ChartTemplateSelector from './ChartTemplateSelector.jsx';
 import ChartCanvas from './ChartCanvas.jsx';
 
-export default function ChartSection({ charts, onChartsChange, isDark, accent }) {
+export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasTemplate, setCanvasTemplate] = useState(null);
@@ -78,7 +78,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent })
       )}
 
       {/* Template selector modal */}
-      <ChartTemplateSelector isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} onSelect={handleSelectTemplate} isDark={isDark} />
+      <ChartTemplateSelector isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} onSelect={handleSelectTemplate} isDark={isDark} db={db} appId={appId} />
 
       {/* Drawing canvas (full-screen) */}
       {canvasOpen && (

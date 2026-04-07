@@ -89,13 +89,29 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
 
       // ── New chart with template ──
       } else if (template?.imageUrl) {
-        // Pre-load image to get dimensions, then size canvas to match ratio
+        // For ProClinic templates, fetch via proxy (CORS blocked otherwise)
+        let imgSrc = template.imageUrl;
+        if (template.isProClinic && template.imageUrl.includes('proclinicth.com')) {
+          try {
+            const broker = await import('../lib/brokerClient.js');
+            const token = await broker.getCachedIdToken();
+            const proxyRes = await fetch('/api/proclinic/treatment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ action: 'proxyImage', url: template.imageUrl }),
+            });
+            if (proxyRes.ok) {
+              const blob = await proxyRes.blob();
+              imgSrc = URL.createObjectURL(blob);
+            }
+          } catch (e) { console.warn('[ChartCanvas] proxy failed:', e); }
+        }
         const imgEl = await new Promise((resolve) => {
           const img = new window.Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => resolve(img);
           img.onerror = () => resolve(null);
-          img.src = template.imageUrl;
+          img.src = imgSrc;
         });
 
         if (imgEl) {

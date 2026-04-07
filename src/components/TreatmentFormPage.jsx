@@ -1175,7 +1175,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
           {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
           <FormSection isDark={isDark}>
-            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" />
+            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} />
           </FormSection>
 
           {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}

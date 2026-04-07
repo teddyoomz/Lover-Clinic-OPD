@@ -51,7 +51,7 @@ async function ensureExtensionHasCredentials() {
 let _cachedToken = null;
 let _cachedTokenExp = 0;
 
-async function getCachedIdToken() {
+export async function getCachedIdToken() {
   const auth = getAuth(app);
   const currentUser = auth.currentUser;
   if (!currentUser) return null;
@@ -286,6 +286,11 @@ export function deleteTreatment(treatmentId, cancelDetail = '') {
 /** Upload chart image to ProClinic treatment */
 export function uploadChart(treatmentId, fileIndex, imageBase64) {
   return apiFetch('treatment', { action: 'uploadChart', treatmentId, fileIndex, imageBase64 });
+}
+
+/** Get chart templates from ProClinic */
+export function getChartTemplates() {
+  return apiFetch('treatment', { action: 'getChartTemplates' });
 }
 
 /** Search ProClinic products by type → { success, products[], total } */

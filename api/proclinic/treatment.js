@@ -1288,6 +1288,67 @@ async function _handleUploadChart_DEPRECATED(req, res) {
   });
 }
 
+// ─── Action: getChartTemplates — Fetch ProClinic chart templates ──────────
+
+async function handleGetChartTemplates(req, res) {
+  const session = await createSession();
+  const base = session.origin;
+  // Use any existing treatment to get the template list (they're global)
+  const html = await session.fetchText(`${base}/admin/treatment/3259/edit`);
+  const $ = cheerio.load(html);
+
+  const templates = [];
+  $('input[name="select_chart_template"]').each((_, el) => {
+    const $el = $(el);
+    const id = $el.attr('id') || '';
+    const downloadUrl = $el.val() || '';
+    const $parent = $el.closest('.col-6, .col-md-4');
+    const name = $parent.find('.ellipsis').text().trim() || $parent.find('p').last().text().trim() || '';
+    const imgSrc = $parent.find('img').attr('data-src') || $parent.find('img').attr('src') || '';
+    if (downloadUrl) {
+      templates.push({ id, name, imageUrl: imgSrc, downloadUrl });
+    }
+  });
+
+  // Backup to Firestore
+  try {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_chart_templates/all`;
+    const fields = {
+      templates: { stringValue: JSON.stringify(templates) },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(() => {});
+  } catch (_) {}
+
+  return res.status(200).json({ success: true, templates });
+}
+
+// ─── Action: proxyImage — Proxy ProClinic image (requires cookies) ────────
+
+async function handleProxyImage(req, res) {
+  const { url } = req.body || {};
+  if (!url || !url.includes('proclinicth.com')) {
+    return res.status(400).json({ success: false, error: 'Invalid URL' });
+  }
+  const session = await createSession();
+  const imgRes = await session.fetch(url, {
+    headers: { 'Accept': 'image/*' },
+    redirect: 'follow',
+  });
+  if (!imgRes.ok) {
+    return res.status(imgRes.status).json({ success: false, error: `Image fetch failed: ${imgRes.status}` });
+  }
+  const buffer = Buffer.from(await imgRes.arrayBuffer());
+  const ct = imgRes.headers.get('content-type') || 'image/jpeg';
+  res.setHeader('Content-Type', ct);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.status(200).send(buffer);
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -1313,6 +1374,8 @@ export default async function handler(req, res) {
       case 'searchProducts': return await handleSearchProducts(req, res);
       case 'getMedicationGroups': return await handleGetMedicationGroups(req, res);
       case 'listItems':          return await handleListItems(req, res);
+      case 'getChartTemplates':  return await handleGetChartTemplates(req, res);
+      case 'proxyImage':         return await handleProxyImage(req, res);
       // chart_image[] is now sent as part of treatment create/update form data (not separate endpoint)
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
