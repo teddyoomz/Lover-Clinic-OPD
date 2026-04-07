@@ -177,8 +177,8 @@ async function handleUpdate(req, res) {
   params.set('customer_note', '');
   params.set('appointment_color', '');
 
-  // POST /admin/appointment
-  const submitRes = await session.fetch(`${base}/admin/appointment`, {
+  // PUT /admin/appointment/{id} (Laravel resource route expects ID in URL)
+  const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -190,8 +190,9 @@ async function handleUpdate(req, res) {
   });
 
   const status = submitRes.status;
+  const location = submitRes.headers?.get('location') || '';
   if (status >= 300 && status < 400) {
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, _debug: { status, location } });
   }
 
   if (status === 200) {
@@ -204,7 +205,7 @@ async function handleUpdate(req, res) {
 
   let bodyHtml = '';
   try { bodyHtml = await submitRes.text(); } catch {}
-  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status})`);
+  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status}): ${location}`);
 }
 
 // ─── Action: delete ─────────────────────────────────────────────────────────
@@ -259,8 +260,11 @@ function mapAppointment(event) {
     hnId: p.hn_id || '-',
     doctorName: p.doctor_name || '-',
     doctorId: p.doctor_id ? String(p.doctor_id) : null,
+    advisorId: p.advisor_id ? String(p.advisor_id) : null,
     assistants: p.assistants || '-',
     roomName: p.examination_room_name || '-',
+    roomId: p.examination_room_id ? String(p.examination_room_id) : null,
+    source: p.source || null,
     date: p.appointment_date || event.start?.substring(0, 10) || '',
     startTime: p.appointment_start_time || event.start?.substring(11, 16) || '',
     endTime: p.appointment_end_time || event.end?.substring(11, 16) || '',

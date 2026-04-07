@@ -596,7 +596,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptFormData({
       date: appt.date || '', startTime: appt.startTime || '', endTime: appt.endTime || '',
       doctor: appt.doctorId || '', advisor: appt.advisorId || '', room: appt.roomId || '',
-      source: '', appointmentTo: appt.appointmentTo || '', note: appt.note || '',
+      source: appt.source || '', appointmentTo: appt.appointmentTo || '', note: appt.note || '',
     });
     if (!depositOptions) fetchDepositOptions();
   };
