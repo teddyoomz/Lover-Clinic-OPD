@@ -1,7 +1,7 @@
 // ─── Customer API (consolidated) ─────────────────────────────────────────────
 // Actions: create, update, delete, search
 import { createSession, handleCors } from './_lib/session.js';
-import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch } from './_lib/scraper.js';
+import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch, extractCustomerProfile, extractCourses, extractAppointments, extractTreatmentList, extractPatientName, extractPagination } from './_lib/scraper.js';
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
@@ -316,6 +316,106 @@ async function handleSearch(req, res) {
   return res.status(200).json({ success: true, customers });
 }
 
+// ─── Action: fetchCustomerFull ──────────────────────────────────────────────
+// Fetches ALL data from both edit page AND view page for a customer.
+// Returns: patient (personal info), profile (extra view-page fields),
+// courses, expiredCourses, appointments, treatments.
+
+async function handleFetchCustomerFull(req, res) {
+  const { proClinicId } = req.body || {};
+  if (!proClinicId) {
+    return res.status(400).json({ success: false, error: 'Missing proClinicId' });
+  }
+
+  const session = await createSession();
+  const base = session.origin;
+
+  // Fetch edit page + view page in parallel
+  const [editHtml, viewHtml] = await Promise.all([
+    session.fetchText(`${base}/admin/customer/${proClinicId}/edit`),
+    session.fetchText(`${base}/admin/customer/${proClinicId}`),
+  ]);
+
+  // ── Edit page → patient personal info ──
+  const isEditPage = editHtml.includes(`customer/${proClinicId}`) && editHtml.includes('name="firstname"');
+  if (!isEditPage) {
+    const err = new Error(`Customer ID ${proClinicId} ไม่พบใน ProClinic`);
+    err.notFound = true;
+    throw err;
+  }
+  const formFields = extractFormFields(editHtml);
+  const proClinicHN = extractHN(editHtml);
+  const patient = reverseMapPatient(formFields);
+
+  // ── View page → profile extras + courses + appointments + treatments ──
+  const profile = extractCustomerProfile(viewHtml);
+  const patientName = extractPatientName(viewHtml);
+  const courses = extractCourses(viewHtml, '#course-tab');
+  const expiredCourses = extractCourses(viewHtml, '#expired-course-tab');
+  const appointments = extractAppointments(viewHtml);
+  const treatments = extractTreatmentList(viewHtml);
+
+  // Fetch additional course pages if paginated
+  const coursePag = extractPagination(viewHtml, '#course-tab');
+  const expiredPag = extractPagination(viewHtml, '#expired-course-tab');
+  const pagePromises = [];
+  if (coursePag.param && coursePag.maxPage > 1) {
+    for (let p = 2; p <= coursePag.maxPage; p++) {
+      pagePromises.push(
+        session.fetchText(`${base}/admin/customer/${proClinicId}?${coursePag.param}=${p}`)
+          .then(html => ({ type: 'course', html })).catch(() => null)
+      );
+    }
+  }
+  if (expiredPag.param && expiredPag.maxPage > 1) {
+    for (let p = 2; p <= expiredPag.maxPage; p++) {
+      pagePromises.push(
+        session.fetchText(`${base}/admin/customer/${proClinicId}?${expiredPag.param}=${p}`)
+          .then(html => ({ type: 'expired', html })).catch(() => null)
+      );
+    }
+  }
+  if (pagePromises.length) {
+    const pages = await Promise.all(pagePromises);
+    for (const pg of pages) {
+      if (!pg) continue;
+      if (pg.type === 'course') courses.push(...extractCourses(pg.html, '#course-tab'));
+      else expiredCourses.push(...extractCourses(pg.html, '#expired-course-tab'));
+    }
+  }
+
+  // Backup to Firestore (async, fire-and-forget)
+  try {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_customers/${proClinicId}`;
+    const fields = {
+      proClinicId: { stringValue: String(proClinicId) },
+      proClinicHN: { stringValue: proClinicHN || '' },
+      patient: { stringValue: JSON.stringify(patient) },
+      profile: { stringValue: JSON.stringify(profile) },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(() => {});
+  } catch (_) {}
+
+  return res.status(200).json({
+    success: true,
+    proClinicId,
+    proClinicHN,
+    patientName,
+    patient,
+    profile,
+    courses,
+    expiredCourses,
+    appointments,
+    treatments,
+  });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -332,6 +432,7 @@ export default async function handler(req, res) {
     if (action === 'delete') return await handleDelete(req, res);
     if (action === 'search') return await handleSearch(req, res);
     if (action === 'fetchPatient') return await handleFetchPatient(req, res);
+    if (action === 'fetchCustomerFull') return await handleFetchCustomerFull(req, res);
     return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
   } catch (err) {
     const resp = { success: false, error: err.message };

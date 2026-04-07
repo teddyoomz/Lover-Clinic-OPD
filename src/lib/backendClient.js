@@ -73,17 +73,22 @@ export async function getSyncStatus() {
 
 /**
  * Save a customer cloned from ProClinic to backend database.
- * Patient object uses the same shape as reverseMapPatient() output.
+ * Stores ALL data: patient (edit page), profile (view page extras),
+ * courses, expiredCourses, appointments, treatments.
  */
-export async function saveCustomer(proClinicId, proClinicHN, patient, courses = [], appointments = []) {
+export async function saveCustomer(proClinicId, proClinicHN, data = {}) {
   const ref = docRef('be_customers', String(proClinicId));
   const now = new Date().toISOString();
   await setDoc(ref, {
     proClinicId: String(proClinicId),
     proClinicHN: proClinicHN || '',
-    patient: patient || {},
-    courses: courses || [],
-    appointments: appointments || [],
+    patientName: data.patientName || '',
+    patient: data.patient || {},
+    profile: data.profile || {},
+    courses: data.courses || [],
+    expiredCourses: data.expiredCourses || [],
+    appointments: data.appointments || [],
+    treatments: data.treatments || [],
     importedAt: now,
     lastUpdatedAt: now,
   }, { merge: true });

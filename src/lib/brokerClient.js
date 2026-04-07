@@ -156,6 +156,11 @@ export function fetchPatientFromProClinic(proClinicId) {
   return apiFetch('customer', { action: 'fetchPatient', proClinicId });
 }
 
+/** Fetch ALL customer data (personal + profile + courses + treatments) → full object */
+export function fetchCustomerFull(proClinicId) {
+  return apiFetch('customer', { action: 'fetchCustomerFull', proClinicId });
+}
+
 // ─── Public API — Deposit ───────────────────────────────────────────────────
 
 /** Get deposit form options (sellers, doctors, rooms, etc.) from ProClinic */

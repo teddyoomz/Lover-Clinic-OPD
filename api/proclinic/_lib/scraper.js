@@ -72,7 +72,38 @@ export function extractSearchResults(html) {
       if (hnMatch) hn = hnMatch[0].trim();
     }
 
-    customers.push({ id, name, phone, hn });
+    // ── Extract extra fields visible in search cards ──
+    let gender = null, birthday = null, age = null, purchaseTotal = null;
+    let nextAppointment = null, lastOrderDate = null, branch = null;
+    if (row.length) {
+      const text = row.text();
+
+      // Gender
+      const genderMatch = text.match(/เพศ\s*[:：]?\s*(ชาย|หญิง)/);
+      if (genderMatch) gender = genderMatch[1];
+
+      // Birthday + age
+      const bdMatch = text.match(/วันเกิด\s*[:：]?\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(?:\(อายุ\s*(\d+)\s*ปี\))?/);
+      if (bdMatch) { birthday = bdMatch[1]; if (bdMatch[2]) age = bdMatch[2]; }
+
+      // Purchase total
+      const ptMatch = text.match(/ยอดสั่งซื้อ\s*[:：]?\s*([\d,.]+)\s*บาท/);
+      if (ptMatch) purchaseTotal = ptMatch[1];
+
+      // Next appointment
+      const apptMatch = text.match(/นัดหมาย\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4}\s*\|\s*[\d:]+\s*-\s*[\d:]+)/);
+      if (apptMatch) nextAppointment = apptMatch[1].trim();
+
+      // Last order date
+      const loMatch = text.match(/สั่งซื้อล่าสุด\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4})/);
+      if (loMatch) lastOrderDate = loMatch[1].trim();
+
+      // Branch badge
+      const branchBadge = row.find('.badge:contains("สาขา")').first().text().trim();
+      if (branchBadge) branch = branchBadge.replace(/^สาขา\s*/, '');
+    }
+
+    customers.push({ id, name, phone, hn, gender, birthday, age, purchaseTotal, nextAppointment, lastOrderDate, branch });
   });
 
   return customers;
@@ -204,6 +235,101 @@ export function extractPatientName(html) {
     $('title').text().split('|')[0].trim()
   );
   return (rawName && rawName !== '0') ? rawName : '';
+}
+
+// ─── Extract customer profile from VIEW page (/admin/customer/{id}) ─────────
+// Scrapes ALL visible data from the customer detail page left sidebar.
+// This includes fields NOT available on the edit page: weight, height, BMI,
+// purchase total, points, wallet, member info, etc.
+
+export function extractCustomerProfile(html) {
+  const $ = cheerio.load(html);
+  const profile = {};
+
+  // ── Name & HN from page header ──
+  profile.name = $('h5.mb-0').first().text().trim() || '';
+  const hnEl = $('span.badge, .hn-badge, [class*="hn"]').first();
+  if (hnEl.length) profile.hn = hnEl.text().trim();
+
+  // ── Parse ALL text in the left sidebar for label:value pairs ──
+  // ProClinic uses various structures: tables, divs, dt/dd, or plain text
+  const fullText = $('body').text();
+
+  // Generic label-value extractor with Thai labels
+  const labelPatterns = [
+    { key: 'memberNo', rx: /รหัสสมาชิก\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'customerType', rx: /ประเภท(?:ลูกค้า)?\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'gender', rx: /เพศ\s*[:：]?\s*(ชาย|หญิง|male|female|-)/i },
+    { key: 'birthday', rx: /วันเกิด\s*[:：]?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i },
+    { key: 'age', rx: /(?:อายุ|age)\s*[:：]?\s*(\d+)\s*(?:ปี|years?)/i },
+    { key: 'nationality', rx: /สัญชาติ\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'idCard', rx: /เลขบัตร\s*(?:ปชช\.?|ประชาชน)?\s*[:：]?\s*([\d-]+)/i },
+    { key: 'phone', rx: /(?:โทร|เบอร์โทร|Tel)\s*[:：]?\s*(0[\d-]{8,12})/i },
+    { key: 'weight', rx: /น้ำหนัก\s*[:：]?\s*([\d.]+)/i },
+    { key: 'height', rx: /ส่วนสูง\s*[:：]?\s*([\d.]+)/i },
+    { key: 'bmi', rx: /BMI\s*[:：]?\s*([\d.]+)/i },
+    { key: 'occupation', rx: /อาชีพ\s*[:：]?\s*(.+?)(?:\n|รายได้|$)/i },
+    { key: 'income', rx: /รายได้\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'memberCard', rx: /บัตรสมาชิก\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'points', rx: /คะแนน(?:สะสม)?\s*[:：]?\s*([\d,.]+)/i },
+    { key: 'pointsExpiring', rx: /คะแนน(?:หมดอายุ|จะหมด)\s*[:：]?\s*([\d,.]+)/i },
+    { key: 'wallet', rx: /(?:Wallet|วอลเล็ท)\s*[:：]?\s*([\d,.]+)/i },
+    { key: 'purchaseTotal', rx: /ยอดสั่งซื้อ\s*[:：]?\s*([\d,.]+)\s*(?:บาท)?/i },
+    { key: 'lastOrderDate', rx: /สั่งซื้อล่าสุด\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'address', rx: /ที่อยู่\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'source', rx: /ที่มา\s*[:：]?\s*(.+?)(?:\n|$)/i },
+    { key: 'clinicalNote', rx: /หมายเหตุ\s*[:：]?\s*(.+?)(?:\n|$)/i },
+  ];
+
+  for (const { key, rx } of labelPatterns) {
+    const m = fullText.match(rx);
+    if (m && m[1]) {
+      profile[key] = m[1].trim().replace(/\s+/g, ' ');
+      // Clean up common trailing noise
+      if (profile[key] === '-' || profile[key] === '0') profile[key] = '';
+    }
+  }
+
+  // ── Try structured table/grid extraction (more reliable if available) ──
+  // ProClinic often uses .row > .col pattern or table rows
+  $('tr, .row, dl, .d-flex').each((_, el) => {
+    const text = $(el).text().trim();
+    for (const { key, rx } of labelPatterns) {
+      if (profile[key]) continue; // already found
+      const m = text.match(rx);
+      if (m && m[1]) {
+        profile[key] = m[1].trim().replace(/\s+/g, ' ');
+        if (profile[key] === '-') profile[key] = '';
+      }
+    }
+  });
+
+  // ── VIP/Badge extraction ──
+  const badges = [];
+  $('.badge').each((_, el) => {
+    const t = $(el).text().trim();
+    if (t && !t.match(/^(สาขา|HN|MC-)/i)) badges.push(t);
+  });
+  if (badges.length) profile.badges = badges;
+
+  // ── Branch badge ──
+  const branchBadge = $('.badge:contains("สาขา")').first().text().trim();
+  if (branchBadge) profile.branch = branchBadge.replace(/^สาขา\s*/, '');
+
+  // ── Avatar/photo URL ──
+  const avatarImg = $('img[src*="customer"], img[src*="avatar"], img.rounded-circle').first();
+  if (avatarImg.length) profile.avatarUrl = avatarImg.attr('src') || '';
+
+  // ── Points/stats from card elements ──
+  // ProClinic shows Recency/Frequency/Monetary in a stats section
+  const recencyMatch = fullText.match(/Recency\s*[:：]?\s*(\d+)/i);
+  if (recencyMatch) profile.recency = recencyMatch[1];
+  const frequencyMatch = fullText.match(/Frequency\s*[:：]?\s*(\d+)/i);
+  if (frequencyMatch) profile.frequency = frequencyMatch[1];
+  const monetaryMatch = fullText.match(/Monetary\s*[:：]?\s*([\d,.]+)/i);
+  if (monetaryMatch) profile.monetary = monetaryMatch[1];
+
+  return profile;
 }
 
 // ─── Extract all form fields from edit page ─────────────────────────────────
