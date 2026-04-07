@@ -105,15 +105,21 @@ async function handleCreate(req, res) {
       }
     } catch { /* best effort */ }
 
-    return res.status(200).json({ success: true, appointmentProClinicId });
+    return res.status(200).json({ success: true, appointmentProClinicId, _debug: { status, location } });
   }
 
-  // Check for errors
+  // Non-redirect: follow and inspect
   let bodyHtml = '';
   try { bodyHtml = await submitRes.text(); } catch {}
+
+  // Status 200 might be a success page with a flash message
+  if (status === 200 && (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success'))) {
+    return res.status(200).json({ success: true, appointmentProClinicId: null, _debug: { status, note: '200 with success msg' } });
+  }
+
   const $ = cheerio.load(bodyHtml);
   const laravelMsg = $('.exception-message, .exception_message, h1').first().text().trim();
-  const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
+  const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 500);
 
   throw new Error(`สร้างนัดหมายไม่สำเร็จ (${status}): ${errorDetail || 'Unknown'}`);
 }
