@@ -162,12 +162,6 @@ export async function performLogin(origin, email, password) {
   throw err;
 }
 
-// ─── Module-level cookie cache (survive across requests in same Vercel instance) ──
-let _memoryCookies = null;
-let _memoryCookiesOrigin = null;
-let _memoryCookiesTime = 0;
-const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
 // ─── Create session (login once, reuse for multiple requests) ────────────────
 
 export async function createSession(originArg, emailArg, passwordArg) {
@@ -178,17 +172,8 @@ export async function createSession(originArg, emailArg, passwordArg) {
   if (!origin || !email || !password) {
     throw new Error('ไม่พบ ProClinic credentials — ตั้งค่า PROCLINIC_ORIGIN/EMAIL/PASSWORD ใน Vercel Environment Variables');
   }
-
-  // Try module-level memory cache first (instant — no network call)
-  let cookies = null;
-  if (_memoryCookies && _memoryCookiesOrigin === origin && Date.now() - _memoryCookiesTime < MEMORY_CACHE_TTL) {
-    cookies = [..._memoryCookies];
-  }
-
-  // Fallback: load from Firestore (only if memory cache is empty/expired)
-  if (!cookies) {
-    cookies = await loadCachedCookies(origin);
-  }
+  // Load cached cookies from Firestore (single source of truth)
+  let cookies = await loadCachedCookies(origin);
 
   if (!cookies) {
     // No cache → login once, then cache for all future requests
@@ -203,11 +188,6 @@ export async function createSession(originArg, emailArg, passwordArg) {
     }
   }
 
-  // Update memory cache
-  _memoryCookies = [...cookies];
-  _memoryCookiesOrigin = origin;
-  _memoryCookiesTime = Date.now();
-
   // Shared state for the session — fetchText auto re-logins if expired
   const sessionState = { origin, email, password, cookies };
 
@@ -215,9 +195,6 @@ export async function createSession(originArg, emailArg, passwordArg) {
     console.log('[session] mid-request re-login triggered');
     const result = await performLogin(origin, email, password);
     sessionState.cookies = result.cookies;
-    // Update module-level cache
-    _memoryCookies = [...result.cookies];
-    _memoryCookiesTime = Date.now();
   }
 
   // Return session object (origin exposed so API routes can build URLs)
