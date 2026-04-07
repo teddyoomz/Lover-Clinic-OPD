@@ -4,6 +4,7 @@ import { createSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch } from './_lib/scraper.js';
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
+import * as cheerio from 'cheerio';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -280,7 +281,7 @@ async function handleFetchPatient(req, res) {
 // ─── Action: search ─────────────────────────────────────────────────────────
 
 async function handleSearch(req, res) {
-  const { query } = req.body || {};
+  const { query, debug } = req.body || {};
   if (!query) {
     return res.status(400).json({ success: false, error: 'Missing query' });
   }
@@ -290,6 +291,28 @@ async function handleSearch(req, res) {
   const html = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(query)}`);
   const customers = extractSearchResults(html);
 
+  // If scraper couldn't get name/phone, fetch each customer's edit page in parallel (max 10)
+  const needsDetail = customers.filter(c => !c.name).slice(0, 10);
+  if (needsDetail.length > 0) {
+    await Promise.all(needsDetail.map(async (c) => {
+      try {
+        const editHtml = await session.fetchText(`${base}/admin/customer/${c.id}/edit`);
+        const $ = cheerio.load(editHtml);
+        const firstName = $('input[name="first_name"]').val() || '';
+        const lastName = $('input[name="last_name"]').val() || '';
+        const prefix = $('select[name="prefix"] option:selected').text().trim() || '';
+        const phone = $('input[name="phone"]').val() || '';
+        const hnVal = $('input[name="hn_id"]').val() || '';
+        if (firstName || lastName) c.name = [prefix, firstName, lastName].filter(Boolean).join(' ');
+        if (phone && !c.phone) c.phone = phone;
+        if (hnVal && !c.hn) c.hn = `HN${hnVal}`;
+      } catch {}
+    }));
+  }
+
+  if (debug) {
+    return res.status(200).json({ success: true, customers, _htmlLen: html.length });
+  }
   return res.status(200).json({ success: true, customers });
 }
 
