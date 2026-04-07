@@ -1048,6 +1048,11 @@ async function handleUpdate(req, res) {
   formData.set('_token', csrf);
   formData.set('_method', 'PUT');
 
+  // Fields that ProClinic's JS fills at submit time (not in edit page HTML)
+  if (!formData.has('courses')) formData.set('courses', '[]');
+  if (!formData.has('products')) formData.set('products', '[]');
+  if (!formData.has('sale_type')) formData.set('sale_type', 'customer');
+
   // Doctor & assistants
   formData.set('doctor_id', treatment.doctorId ?? existing.doctor_id ?? '');
   formData.delete('doctor_assistant_id[]');
