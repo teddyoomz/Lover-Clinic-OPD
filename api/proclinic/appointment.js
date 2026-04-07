@@ -26,9 +26,16 @@ async function handleCreate(req, res) {
   params.set('_token', csrf);
   params.set('type', '');
   params.set('current_doctor_id', '');
-  params.set('appointment_type', 'sales');
+  params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-  params.set('customer_option', 'none');
+
+  // Customer association
+  if (appointment.customerId) {
+    params.set('customer_option', 'existed');
+    params.set('customer_id', String(appointment.customerId));
+  } else {
+    params.set('customer_option', 'none');
+  }
 
   // Required fields
   params.set('appointment_date', appointment.appointmentDate || '');
@@ -137,9 +144,15 @@ async function handleUpdate(req, res) {
   params.set('is_basic_flow', 'true');
   params.set('type', '');
   params.set('current_doctor_id', '');
-  params.set('appointment_type', 'sales');
+  params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-  params.set('customer_option', 'none');
+
+  if (appointment.customerId) {
+    params.set('customer_option', 'existed');
+    params.set('customer_id', String(appointment.customerId));
+  } else {
+    params.set('customer_option', 'none');
+  }
 
   // Fields
   params.set('appointment_date', appointment.appointmentDate || '');
@@ -234,6 +247,116 @@ async function handleDelete(req, res) {
   throw new Error(`ลบนัดหมายไม่สำเร็จ (status ${deleteRes.status})`);
 }
 
+// ─── Action: listByCustomer — Get all appointments for a specific customer ──
+
+const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+
+function mapAppointment(event) {
+  const p = event.extendedProps || {};
+  return {
+    id: String(p.id || event.id || ''),
+    customerName: p.customer_name || '-',
+    customerId: p.customer_id ? String(p.customer_id) : null,
+    hnId: p.hn_id || '-',
+    doctorName: p.doctor_name || '-',
+    doctorId: p.doctor_id ? String(p.doctor_id) : null,
+    assistants: p.assistants || '-',
+    roomName: p.examination_room_name || '-',
+    date: p.appointment_date || event.start?.substring(0, 10) || '',
+    startTime: p.appointment_start_time || event.start?.substring(11, 16) || '',
+    endTime: p.appointment_end_time || event.end?.substring(11, 16) || '',
+    note: p.note || null,
+    appointmentTo: p.appointment_to || null,
+    status: p.status || null,
+    confirmed: p.confirmed || false,
+  };
+}
+
+async function handleListByCustomer(req, res) {
+  const { customerId } = req.body || {};
+  if (!customerId) return res.status(400).json({ success: false, error: 'Missing customerId' });
+
+  const session = await createSession();
+  const base = session.origin;
+
+  // Fetch customer page to get appointment modal + customer name
+  const html = await session.fetchText(`${base}/admin/customer/${customerId}`);
+  if (html.length < 1000 || html.includes('/login')) throw new Error('Session expired');
+
+  // Extract customer name
+  const $ = cheerio.load(html);
+  const customerName = $('h5.card-title, .customer-name, .card-header h5').first().text().trim()
+    || $('title').text().replace(/ProClinic.*/, '').trim() || '';
+
+  // Extract basic appointments from modal (date, time, doctor, branch, room, notes)
+  const { extractAppointments: extractAppts } = await import('./_lib/scraper.js');
+  const basicAppts = extractAppts(html);
+
+  // For each appointment date, fetch the JSON API to get appointment IDs
+  const uniqueDates = [...new Set(basicAppts.map(a => {
+    // Parse Thai date format or ISO — the modal may use Thai format
+    const m = a.date.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[0];
+    // Try Thai: "15 เม.ย. 2569" or similar
+    return a.date;
+  }).filter(Boolean))];
+
+  // Also check next 90 days for future appointments
+  const today = new Date();
+  const futureDates = [];
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    futureDates.push(d.toISOString().substring(0, 10));
+  }
+
+  // Combine unique dates from modal + future dates, deduplicate
+  const allDates = [...new Set([...uniqueDates, ...futureDates])];
+
+  // Fetch appointment API for relevant dates (batch in parallel, max 30 at a time)
+  const appointments = [];
+  const cidStr = String(customerId);
+  for (let i = 0; i < allDates.length; i += 30) {
+    const batch = allDates.slice(i, i + 30);
+    const results = await Promise.all(batch.map(async date => {
+      try {
+        const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
+        const events = Array.isArray(data) ? data : data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
+        return events.filter(ev => {
+          const p = ev.extendedProps || {};
+          return String(p.customer_id) === cidStr;
+        }).map(mapAppointment);
+      } catch { return []; }
+    }));
+    results.forEach(arr => appointments.push(...arr));
+  }
+
+  // Deduplicate by appointment ID
+  const seen = new Set();
+  const unique = appointments.filter(a => {
+    if (!a.id || seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  }).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+
+  // Backup to Firestore (async, non-blocking)
+  const docPath = `artifacts/${APP_ID}/public/data/pc_customer_appointments/${customerId}`;
+  const fields = {
+    customerId: { stringValue: cidStr },
+    customerName: { stringValue: customerName },
+    appointments: { stringValue: JSON.stringify(unique) },
+    syncedAt: { stringValue: new Date().toISOString() },
+  };
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  }).catch(() => {});
+
+  return res.status(200).json({ success: true, customerName, appointments: unique });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -248,6 +371,7 @@ export default async function handler(req, res) {
     if (action === 'create') return await handleCreate(req, res);
     if (action === 'update') return await handleUpdate(req, res);
     if (action === 'delete') return await handleDelete(req, res);
+    if (action === 'listByCustomer') return await handleListByCustomer(req, res);
     return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
   } catch (err) {
     const resp = { success: false, error: err.message };

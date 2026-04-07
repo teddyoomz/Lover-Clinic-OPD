@@ -61,7 +61,14 @@ export function extractSearchResults(html) {
       if (ph) phone = ph[0];
     }
 
-    customers.push({ id, name, phone });
+    // HN pattern (e.g. MC-69001234, HN12345, or just numbers)
+    let hn = null;
+    if (row.length) {
+      const hnMatch = row.text().match(/(?:MC-?\d+|HN[\s-]?\d+|\b\d{5,10}\b)/i);
+      if (hnMatch) hn = hnMatch[0].trim();
+    }
+
+    customers.push({ id, name, phone, hn });
   });
 
   return customers;

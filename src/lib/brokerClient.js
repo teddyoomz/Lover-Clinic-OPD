@@ -229,6 +229,11 @@ export function deleteAppointment(appointmentId) {
   return apiFetch('appointment', { action: 'delete', appointmentId });
 }
 
+/** List all appointments for a customer → { success, customerName, appointments[] } */
+export function listCustomerAppointments(customerId) {
+  return apiFetch('appointment', { action: 'listByCustomer', customerId });
+}
+
 // ─── Public API — Master Data Sync ────────────────────────────────────────
 
 /** Sync products (ยา/บริการ/สินค้า) from ProClinic → { success, items[], count, totalPages } */

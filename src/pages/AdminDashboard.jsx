@@ -278,6 +278,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
   const [apptFilterPractitioner, setApptFilterPractitioner] = useState('all'); // 'all' | practitioner id string
 
+  // ── Appointment Manager (search & manage) state ──
+  const [apptSearchQuery, setApptSearchQuery] = useState('');
+  const [apptSearchResults, setApptSearchResults] = useState(null);
+  const [apptSearching, setApptSearching] = useState(false);
+  const [apptSelectedCustomer, setApptSelectedCustomer] = useState(null); // { id, name, hn, phone }
+  const [apptCustomerAppts, setApptCustomerAppts] = useState([]);
+  const [apptCustomerLoading, setApptCustomerLoading] = useState(false);
+  const [apptFormMode, setApptFormMode] = useState(null); // null | { mode: 'create'|'edit', appointmentId? }
+  const [apptFormData, setApptFormData] = useState({ date: '', startTime: '', endTime: '', doctor: '', appointmentTo: '', note: '' });
+  const [apptFormSaving, setApptFormSaving] = useState(false);
+
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [schedStartMonth, setSchedStartMonth] = useState(() => {
@@ -543,6 +554,99 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     check(); // run immediately on mount too
     return () => clearInterval(interval);
   }, [db, appId, noDepositSessions, depositSessions, schedList]);
+
+  // ── Appointment Manager handlers ──
+  const handleApptSearch = async () => {
+    const q = (apptSearchQuery || '').trim();
+    if (!q) return;
+    setApptSearching(true);
+    setApptSearchResults(null);
+    setApptSelectedCustomer(null);
+    try {
+      const res = await broker.searchCustomers(q);
+      setApptSearchResults(res.success ? (res.customers || []) : []);
+    } catch (e) {
+      showToast(`ค้นหาไม่สำเร็จ: ${e.message}`, 4000);
+      setApptSearchResults([]);
+    }
+    setApptSearching(false);
+  };
+
+  const handleApptSelectCustomer = async (customer) => {
+    setApptSelectedCustomer(customer);
+    setApptSearchResults(null);
+    setApptFormMode(null);
+    setApptCustomerLoading(true);
+    try {
+      const res = await broker.listCustomerAppointments(customer.id);
+      if (res.success) {
+        setApptCustomerAppts(res.appointments || []);
+        // Update customer name if API returned a better one
+        if (res.customerName && !customer.name) setApptSelectedCustomer(prev => ({ ...prev, name: res.customerName }));
+      } else {
+        showToast(res.error || 'โหลดนัดหมายไม่สำเร็จ', 4000);
+      }
+    } catch (e) { showToast(e.message, 4000); }
+    setApptCustomerLoading(false);
+  };
+
+  const handleApptEdit = (appt) => {
+    setApptFormMode({ mode: 'edit', appointmentId: appt.id });
+    setApptFormData({
+      date: appt.date || '', startTime: appt.startTime || '', endTime: appt.endTime || '',
+      doctor: appt.doctorId || '', appointmentTo: appt.appointmentTo || '', note: appt.note || '',
+    });
+  };
+
+  const handleApptFormSubmit = async () => {
+    if (!apptFormData.date || !apptFormData.startTime || !apptFormData.endTime) {
+      showToast('กรุณากรอกวันที่และเวลา', 3000); return;
+    }
+    setApptFormSaving(true);
+    try {
+      const payload = {
+        customerId: apptSelectedCustomer.id,
+        appointmentDate: apptFormData.date,
+        appointmentStartTime: apptFormData.startTime,
+        appointmentEndTime: apptFormData.endTime,
+        doctor: apptFormData.doctor || undefined,
+        appointmentTo: apptFormData.appointmentTo || undefined,
+        appointmentNote: apptFormData.note || undefined,
+      };
+      let res;
+      if (apptFormMode.mode === 'edit') {
+        res = await broker.updateAppointment(apptFormMode.appointmentId, payload);
+      } else {
+        res = await broker.createAppointment(payload);
+      }
+      if (res.success) {
+        showToast(apptFormMode.mode === 'create' ? 'สร้างนัดหมายสำเร็จ' : 'แก้ไขนัดหมายสำเร็จ', 3000);
+        setApptFormMode(null);
+        setApptFormData({ date: '', startTime: '', endTime: '', doctor: '', appointmentTo: '', note: '' });
+        // Re-fetch appointments (real-time update)
+        const refresh = await broker.listCustomerAppointments(apptSelectedCustomer.id);
+        if (refresh.success) setApptCustomerAppts(refresh.appointments || []);
+      } else {
+        showToast(res.error || 'ไม่สำเร็จ', 4000);
+      }
+    } catch (e) { showToast(e.message, 4000); }
+    setApptFormSaving(false);
+  };
+
+  const handleApptDelete = async (appointmentId) => {
+    if (!confirm('ลบนัดหมายนี้?')) return;
+    try {
+      const res = await broker.deleteAppointment(appointmentId);
+      if (res.success) {
+        showToast('ลบนัดหมายสำเร็จ', 3000);
+        // Re-fetch (real-time update)
+        const refresh = await broker.listCustomerAppointments(apptSelectedCustomer.id);
+        if (refresh.success) setApptCustomerAppts(refresh.appointments || []);
+      } else {
+        showToast(res.error || 'ลบไม่สำเร็จ', 4000);
+      }
+    } catch (e) { showToast(e.message, 4000); }
+  };
 
   // ── Load saved schedule day preferences + schedule list ──
   useEffect(() => {
@@ -3855,6 +3959,186 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* ══ Appointment Manager — Search & Manage ══ */}
+            <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-[var(--bd)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserPlus size={16} className="text-emerald-400" />
+                  <h3 className="text-sm font-bold text-[var(--tx-heading)]">จัดการนัดหมายลูกค้า</h3>
+                </div>
+                {/* Search input */}
+                <div className="flex gap-2">
+                  <input type="text" placeholder="ค้นหา ชื่อ นามสกุล เลขบัตร ปชช. หรือ HN..."
+                    value={apptSearchQuery || ''}
+                    onChange={e => setApptSearchQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleApptSearch(); }}
+                    className="flex-1 text-sm px-3 py-2 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)] placeholder-gray-500 focus:outline-none focus:border-sky-500" />
+                  <button onClick={handleApptSearch} disabled={apptSearching || !apptSearchQuery?.trim()}
+                    className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5">
+                    {apptSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    ค้นหา
+                  </button>
+                </div>
+                {/* Search results */}
+                {apptSearchResults && apptSearchResults.length > 0 && !apptSelectedCustomer && (
+                  <div className="mt-3 space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                    {apptSearchResults.map(c => (
+                      <button key={c.id} onClick={() => handleApptSelectCustomer(c)}
+                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--bd)] hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all flex items-center gap-3">
+                        <User size={14} className="text-emerald-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-bold text-[var(--tx-heading)] truncate block">{c.name || `ลูกค้า #${c.id}`}</span>
+                          <span className="text-[10px] text-gray-500">{c.hn ? `HN: ${c.hn}` : ''}{c.phone ? ` | ${c.phone}` : ''} | ID: {c.id}</span>
+                        </div>
+                        <ChevronRight size={14} className="text-gray-500" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {apptSearchResults && apptSearchResults.length === 0 && !apptSearching && (
+                  <p className="mt-3 text-xs text-gray-500 text-center py-2">ไม่พบลูกค้า</p>
+                )}
+              </div>
+
+              {/* Selected customer — appointment list + add/edit form */}
+              {apptSelectedCustomer && (
+                <div className="p-4 sm:p-5">
+                  {/* Customer header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <User size={14} className="text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[var(--tx-heading)]">{apptSelectedCustomer.name || `ลูกค้า #${apptSelectedCustomer.id}`}</p>
+                        <p className="text-[10px] text-gray-500">{apptSelectedCustomer.hn ? `HN: ${apptSelectedCustomer.hn}` : ''} ID: {apptSelectedCustomer.id}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setApptFormMode({ mode: 'create' }); }}
+                        className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 flex items-center gap-1">
+                        <PlusCircle size={12} /> เพิ่มนัดหมาย
+                      </button>
+                      <button onClick={() => { setApptSelectedCustomer(null); setApptCustomerAppts([]); setApptFormMode(null); }}
+                        className="p-1.5 rounded-lg border border-[var(--bd)] text-gray-500 hover:text-white transition-colors">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add/Edit form */}
+                  {apptFormMode && (
+                    <div className="mb-4 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 mb-3">
+                        {apptFormMode.mode === 'create' ? 'เพิ่มนัดหมายใหม่' : 'แก้ไขนัดหมาย'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">วันที่</label>
+                          <input type="date" value={apptFormData.date || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">เวลาเริ่ม</label>
+                          <input type="time" value={apptFormData.startTime || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, startTime: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">เวลาสิ้นสุด</label>
+                          <input type="time" value={apptFormData.endTime || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, endTime: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">แพทย์</label>
+                          <select value={apptFormData.doctor || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, doctor: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- ไม่ระบุ --</option>
+                            {practitioners.filter(p => p.role === 'doctor').map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">จุดประสงค์</label>
+                          <select value={apptFormData.appointmentTo || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, appointmentTo: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- ไม่ระบุ --</option>
+                            <option value="ปรึกษา">ปรึกษา</option>
+                            <option value="ทำหัตถการ">ทำหัตถการ</option>
+                            <option value="ติดตามผล">ติดตามผล</option>
+                            <option value="รับยา">รับยา</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <label className="text-[9px] font-bold text-gray-500 uppercase">หมายเหตุ</label>
+                        <textarea value={apptFormData.note || ''}
+                          onChange={e => setApptFormData(p => ({ ...p, note: e.target.value }))}
+                          rows={2} className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)] resize-none" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleApptFormSubmit} disabled={apptFormSaving}
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5">
+                          {apptFormSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                          {apptFormMode.mode === 'create' ? 'สร้างนัดหมาย' : 'บันทึก'}
+                        </button>
+                        <button onClick={() => setApptFormMode(null)}
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold border border-[var(--bd)] text-gray-400 hover:text-white">
+                          ยกเลิก
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Appointment list */}
+                  {apptCustomerLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6">
+                      <Loader2 size={16} className="animate-spin text-emerald-400" />
+                      <span className="text-xs text-gray-500">กำลังโหลดนัดหมาย...</span>
+                    </div>
+                  ) : apptCustomerAppts.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-gray-500">ไม่พบนัดหมาย</div>
+                  ) : (
+                    <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                      {apptCustomerAppts.map(a => {
+                        const isPast = a.date < new Date().toISOString().substring(0, 10);
+                        return (
+                          <div key={a.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${isPast ? 'border-[var(--bd)] opacity-60' : 'border-emerald-500/20 bg-emerald-500/5'}`}>
+                            <div className="text-center shrink-0 w-14">
+                              <p className="text-[10px] font-bold text-emerald-400">{a.date.substring(5)}</p>
+                              <p className="text-[9px] text-gray-500">{a.startTime}-{a.endTime}</p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{a.doctorName || '-'}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{a.appointmentTo || ''}{a.note ? ` | ${a.note}` : ''}{a.roomName && a.roomName !== '-' ? ` | ${a.roomName}` : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => handleApptEdit(a)} title="แก้ไข"
+                                className="p-1.5 rounded-lg border border-[var(--bd)] text-sky-400 hover:bg-sky-500/10 transition-colors">
+                                <Edit3 size={12} />
+                              </button>
+                              <button onClick={() => handleApptDelete(a.id)} title="ลบ"
+                                className="p-1.5 rounded-lg border border-[var(--bd)] text-red-400 hover:bg-red-500/10 transition-colors">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Selected date appointments */}
