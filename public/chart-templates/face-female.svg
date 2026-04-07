@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" fill="none" stroke="#888" stroke-width="1.5">
+  <!-- Female face outline - softer oval -->
+  <ellipse cx="200" cy="225" rx="115" ry="150" />
+  <!-- Ears -->
+  <ellipse cx="83" cy="225" rx="12" ry="24" />
+  <ellipse cx="317" cy="225" rx="12" ry="24" />
+  <!-- Eyes (larger, more lashes) -->
+  <ellipse cx="155" cy="200" rx="24" ry="12" />
+  <ellipse cx="245" cy="200" rx="24" ry="12" />
+  <circle cx="155" cy="200" r="6" fill="#888" />
+  <circle cx="245" cy="200" r="6" fill="#888" />
+  <!-- Eyelashes -->
+  <path d="M131 195 L125 188" />
+  <path d="M179 195 L185 188" />
+  <path d="M221 195 L215 188" />
+  <path d="M269 195 L275 188" />
+  <!-- Eyebrows (thinner, more arched) -->
+  <path d="M128 178 Q155 165 182 178" stroke-width="1.2" />
+  <path d="M218 178 Q245 165 272 178" stroke-width="1.2" />
+  <!-- Nose (smaller) -->
+  <path d="M200 215 L192 250 Q200 256 208 250 Z" />
+  <!-- Lips (fuller) -->
+  <path d="M170 288 Q185 280 200 285 Q215 280 230 288" />
+  <path d="M170 288 Q200 308 230 288" />
+  <!-- Neck (slimmer) -->
+  <line x1="175" y1="372" x2="168" y2="450" />
+  <line x1="225" y1="372" x2="232" y2="450" />
+  <!-- Shoulders -->
+  <path d="M168 450 Q130 455 70 465" />
+  <path d="M232 450 Q270 455 330 465" />
+  <!-- Hair -->
+  <path d="M85 210 Q70 80 200 60 Q330 80 315 210" stroke-width="2" />
+  <path d="M70 210 Q60 300 80 380" stroke-width="1.5" />
+  <path d="M330 210 Q340 300 320 380" stroke-width="1.5" />
+  <!-- Center line -->
+  <line x1="200" y1="60" x2="200" y2="450" stroke="#ddd" stroke-dasharray="4 4" stroke-width="0.5" />
+</svg>

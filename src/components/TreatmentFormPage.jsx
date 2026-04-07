@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Search, Package, Edit3, RotateCcw } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
+import ChartSection from './ChartSection.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [medCertPeriod, setMedCertPeriod] = useState('');
   const [medCertIsOther, setMedCertIsOther] = useState(false);
   const [medCertOtherDetail, setMedCertOtherDetail] = useState('');
+
+  // Chart drawings (max 2)
+  const [charts, setCharts] = useState([]);
 
   // Take-home medications
   const [medications, setMedications] = useState([]);
@@ -899,6 +903,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },
               sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
+              charts: charts.map(c => ({ dataUrl: c.dataUrl, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });
@@ -1146,6 +1151,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
         {/* ════ FULL-WIDTH BOTTOM SECTIONS ════ */}
         <div className="space-y-4 mt-4">
+
+          {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
+          <FormSection isDark={isDark}>
+            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" />
+          </FormSection>
 
           {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
           <FormSection isDark={isDark}>

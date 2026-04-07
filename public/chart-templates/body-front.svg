@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 800" fill="none" stroke="#888" stroke-width="1.5">
+  <!-- Head -->
+  <ellipse cx="200" cy="50" rx="35" ry="42" />
+  <!-- Neck -->
+  <line x1="185" y1="90" x2="185" y2="115" />
+  <line x1="215" y1="90" x2="215" y2="115" />
+  <!-- Shoulders -->
+  <path d="M185 115 Q160 118 100 135" />
+  <path d="M215 115 Q240 118 300 135" />
+  <!-- Torso -->
+  <line x1="100" y1="135" x2="95" y2="180" />
+  <line x1="300" y1="135" x2="305" y2="180" />
+  <!-- Arms -->
+  <path d="M95 180 L75 280 L65 350" />
+  <path d="M305 180 L325 280 L335 350" />
+  <!-- Hands -->
+  <ellipse cx="60" cy="360" rx="12" ry="18" />
+  <ellipse cx="340" cy="360" rx="12" ry="18" />
+  <!-- Chest area -->
+  <line x1="100" y1="180" x2="115" y2="300" />
+  <line x1="300" y1="180" x2="285" y2="300" />
+  <!-- Waist -->
+  <path d="M115 300 Q130 310 140 320" />
+  <path d="M285 300 Q270 310 260 320" />
+  <!-- Hips -->
+  <path d="M140 320 Q130 350 135 390" />
+  <path d="M260 320 Q270 350 265 390" />
+  <!-- Legs -->
+  <line x1="135" y1="390" x2="145" y2="560" />
+  <line x1="265" y1="390" x2="255" y2="560" />
+  <!-- Inner thighs -->
+  <line x1="175" y1="390" x2="180" y2="560" />
+  <line x1="225" y1="390" x2="220" y2="560" />
+  <!-- Knees -->
+  <ellipse cx="162" cy="565" rx="20" ry="12" />
+  <ellipse cx="238" cy="565" rx="20" ry="12" />
+  <!-- Lower legs -->
+  <line x1="145" y1="575" x2="148" y2="700" />
+  <line x1="180" y1="575" x2="177" y2="700" />
+  <line x1="220" y1="575" x2="223" y2="700" />
+  <line x1="255" y1="575" x2="252" y2="700" />
+  <!-- Feet -->
+  <path d="M148 700 Q140 720 130 730 L185 730 Q177 720 177 700" />
+  <path d="M223 700 Q223 720 215 730 L270 730 Q260 720 252 700" />
+  <!-- Navel -->
+  <circle cx="200" cy="310" r="3" />
+  <!-- Center line -->
+  <line x1="200" y1="8" x2="200" y2="730" stroke="#ddd" stroke-dasharray="4 4" stroke-width="0.5" />
+  <!-- Nipple markers -->
+  <circle cx="160" cy="210" r="3" stroke="#ccc" />
+  <circle cx="240" cy="210" r="3" stroke="#ccc" />
+</svg>

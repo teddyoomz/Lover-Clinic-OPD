@@ -3,7 +3,8 @@
     "allow": [
       "Bash(wc -l src/pages/*.jsx src/components/*.jsx)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(vercel --prod)"
     ]
   }
 }
