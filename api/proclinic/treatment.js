@@ -644,9 +644,11 @@ async function handleCreate(req, res) {
     });
   }
 
-  // Lab items
+  // Lab items — generate rowId matching ProClinic's 16-char random string
+  const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
   if (treatment.labItems?.length) {
-    treatment.labItems.forEach((lab, i) => {
+    treatment.labItems.forEach((lab) => {
+      const rid = lab.rowId || genRowId();
       formData.append('lab_id[]', lab.id || '');
       formData.append('lab_product_id[]', lab.productId || '');
       formData.append('lab_product_qty[]', String(lab.qty || 1));
@@ -655,7 +657,7 @@ async function handleCreate(req, res) {
       formData.append('lab_product_discount[]', String(lab.discount || 0));
       formData.append('lab_product_discount_type[]', lab.discountType || 'บาท');
       formData.append('lab_product_original_price[]', String(lab.originalPrice || lab.price || 0));
-      formData.append('lab_product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('lab_product_rowId[]', rid);
       formData.append('lab_information[]', lab.information || '');
       // Lab images per product
       if (lab.images?.length) {
@@ -664,11 +666,11 @@ async function handleCreate(req, res) {
           formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
         });
       }
-      // Also add to product arrays (ProClinic expects lab in product_id[] too)
+      // ProClinic expects lab items in both lab_* AND product_* arrays (same rowId)
       formData.append('product_id[]', lab.productId || '');
       formData.append('product_qty[]', String(lab.qty || 1));
       formData.append('product_price[]', String(lab.price || 0));
-      formData.append('product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('product_rowId[]', rid);
       formData.append('product_is_premium[]', 'false');
       formData.append('product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
       formData.append('product_discount[]', String(lab.discount || 0));
@@ -795,6 +797,7 @@ async function handleCreate(req, res) {
   const allEntries = [...formData.entries()];
   console.log(`[treatment] create — submitting ${allEntries.length} fields for customer ${customerId}`);
   console.log(`[treatment] create — status=${formData.get('status') ?? '(not set)'}, doctor_id=${formData.get('doctor_id')}, rowId[]=${formData.getAll('rowId[]').join(',')}`);
+  console.log(`[treatment] create — lab_product_id[]=${formData.getAll('lab_product_id[]').join(',')}, lab_product_rowId[]=${formData.getAll('lab_product_rowId[]').join(',')}, product_id[]=${formData.getAll('product_id[]').join(',')}`);
   // Detailed logging for course items + doctor fees
   const sentRowIds = formData.getAll('rowId[]');
   const sentDfDoctors = formData.getAll('df_doctor_id[]');
