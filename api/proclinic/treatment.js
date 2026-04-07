@@ -592,19 +592,20 @@ async function handleCreate(req, res) {
   for (const key of [...formData.keys()]) {
     if (key.startsWith('df_')) formData.delete(key);
   }
+  const allDfRowIds = [...checkedRowIds, ...labRowIds];
   if (dfDoctors.length > 0) {
     dfDoctors.forEach(docId => {
       const feeEntry = doctorFees.find(f => String(f.doctorId) === String(docId));
       formData.append('df_doctor_id[]', docId);
       formData.append('df_group_id[]', feeEntry?.groupId || '');
-      // For each checked course product, set fee amount
-      checkedRowIds.forEach(rowId => {
+      // For each product (course items + lab), set fee amount
+      allDfRowIds.forEach(rowId => {
         formData.append(`df_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
         formData.append(`df_suggestion_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
         formData.append(`df_is_checked_rowId_${rowId}[]`, '1');
       });
     });
-    console.log(`[treatment] create — df_ fields: ${dfDoctors.length} doctors x ${checkedRowIds.length} rowIds`);
+    console.log(`[treatment] create — df_ fields: ${dfDoctors.length} doctors x ${allDfRowIds.length} rowIds (${checkedRowIds.length} course + ${labRowIds.length} lab)`);
   }
 
   // Purchased items → courses/products JSON
@@ -646,9 +647,11 @@ async function handleCreate(req, res) {
 
   // Lab items — generate rowId matching ProClinic's 16-char random string
   const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
+  const labRowIds = [];
   if (treatment.labItems?.length) {
     treatment.labItems.forEach((lab) => {
       const rid = lab.rowId || genRowId();
+      labRowIds.push(rid);
       formData.append('lab_id[]', lab.id || '');
       formData.append('lab_product_id[]', lab.productId || '');
       formData.append('lab_product_qty[]', String(lab.qty || 1));
@@ -678,6 +681,15 @@ async function handleCreate(req, res) {
       formData.append('product_original_price[]', String(lab.originalPrice || lab.price || 0));
     });
     console.log(`[treatment] create — ${treatment.labItems.length} lab items`);
+    // Dump all lab fields for debugging
+    const labFields = {};
+    for (const [k, v] of formData.entries()) {
+      if (k.startsWith('lab_') || (k.startsWith('product_') && !k.includes('name'))) {
+        if (!labFields[k]) labFields[k] = [];
+        labFields[k].push(v.substring(0, 100));
+      }
+    }
+    console.log(`[treatment] create — lab fields dump:`, JSON.stringify(labFields));
   }
 
   // Chart images — sent as hidden fields (data URLs from canvas drawing)
