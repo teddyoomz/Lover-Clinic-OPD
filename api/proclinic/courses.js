@@ -98,17 +98,36 @@ export default async function handler(req, res) {
       const base = session.origin;
       const allDates = getAllDatesForMonth(month);
 
-      // Fetch all days in parallel (single batch — all days at once)
+      // Fetch all days in parallel — track failures to prevent saving empty data
       const allEvents = [];
       const seenIds = new Set();
+      let failedCount = 0;
       const results = await Promise.all(
         allDates.map(date =>
           session.fetchJSON(`${base}/admin/api/appointment?date=${date}`)
-            .catch(() => ({ appointment: [] }))
+            .catch((err) => {
+              failedCount++;
+              console.warn(`[appointments] fetch failed for ${date}: ${err.message}`);
+              return { appointment: [], _failed: true };
+            })
         )
       );
 
+      // If ALL requests failed, don't overwrite Firestore with empty data
+      if (failedCount === allDates.length) {
+        console.error(`[appointments] ALL ${allDates.length} requests failed — NOT saving to Firestore`);
+        return res.status(200).json({
+          success: false,
+          error: 'ดึงข้อมูลนัดหมายไม่ได้ — session อาจหมดอายุ กรุณาลองอีกครั้ง',
+          month,
+        });
+      }
+      if (failedCount > 0) {
+        console.warn(`[appointments] ${failedCount}/${allDates.length} requests failed — partial data`);
+      }
+
       for (const data of results) {
+        if (data._failed) continue; // skip failed entries
         const events = data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
         for (const event of events) {
           const mapped = mapAppointment(event);
@@ -123,7 +142,7 @@ export default async function handler(req, res) {
       // Sort by date + time
       allEvents.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
 
-      // Save to Firestore
+      // Save to Firestore (safe — at least some requests succeeded)
       await saveAppointmentsToFirestore(month, allEvents);
 
       return res.status(200).json({

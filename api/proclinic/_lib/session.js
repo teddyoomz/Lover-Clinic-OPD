@@ -286,6 +286,20 @@ export async function createSession(originArg, emailArg, passwordArg) {
         const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
         return retryRes.json();
       }
+      // Check content-type: if ProClinic returns HTML instead of JSON, session is likely expired
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('json')) {
+        const body = await res.text();
+        if (body.includes('action="/login"') || body.includes('name="password"')) {
+          console.log('[session] fetchJSON got HTML login page — auto re-login & retry');
+          await reLogin();
+          const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
+          const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+          return retryRes.json();
+        }
+        // Not JSON and not login page — try parsing anyway
+        try { return JSON.parse(body); } catch { throw new Error(`Expected JSON but got ${ct}: ${body.substring(0, 200)}`); }
+      }
       return res.json();
     },
   };
