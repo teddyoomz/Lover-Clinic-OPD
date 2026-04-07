@@ -186,13 +186,8 @@ async function handleUpdate(req, res) {
   params.set('appointment_type', existingData.appointment_type || 'sales');
   params.set('appointment_option', 'once');
 
-  // CRITICAL: preserve customer association
-  if (existingData.customer_id) {
-    params.set('customer_option', 'existed');
-    params.set('customer_id', String(existingData.customer_id));
-  } else {
-    params.set('customer_option', 'none');
-  }
+  // Do NOT send customer_option on update — ProClinic trial breaks with 'existed'
+  // and 'none' removes the customer link. Omitting lets ProClinic keep existing customer.
 
   // Fields: use new values if provided, else keep existing
   params.set('appointment_date', appointment.appointmentDate || existingData.appointment_date || '');
