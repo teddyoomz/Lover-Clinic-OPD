@@ -584,6 +584,10 @@ async function handleCreate(req, res) {
     });
   }
 
+  // Pre-generate lab rowIds (needed for doctor fee allocation below)
+  const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
+  const labRowIds = (treatment.labItems || []).map(lab => lab.rowId || genRowId());
+
   // Doctor fees (ค่ามือแพทย์) — df_ hidden fields required by ProClinic
   const dfDoctors = [treatment.doctorId, ...(treatment.assistantIds || [])].filter(Boolean);
   const checkedRowIds = (treatment.courseItems || []).map(item => item.rowId);
@@ -645,13 +649,10 @@ async function handleCreate(req, res) {
     });
   }
 
-  // Lab items — generate rowId matching ProClinic's 16-char random string
-  const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
-  const labRowIds = [];
+  // Lab items
   if (treatment.labItems?.length) {
-    treatment.labItems.forEach((lab) => {
-      const rid = lab.rowId || genRowId();
-      labRowIds.push(rid);
+    treatment.labItems.forEach((lab, i) => {
+      const rid = labRowIds[i];
       formData.append('lab_id[]', lab.id || '');
       formData.append('lab_product_id[]', lab.productId || '');
       formData.append('lab_product_qty[]', String(lab.qty || 1));
