@@ -1014,7 +1014,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           }
         }
         setSuccess(true);
-        setTimeout(() => { if (onSaved) onSaved(); }, 1200);
+        const savedId = data.treatmentId || treatmentId || '';
+        setTimeout(() => { if (onSaved) onSaved(savedId); }, 1200);
       } else {
         setError(data.error || (isEdit ? 'บันทึกไม่สำเร็จ' : 'สร้างไม่สำเร็จ'));
       }

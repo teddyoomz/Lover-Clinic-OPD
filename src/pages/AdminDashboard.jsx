@@ -171,6 +171,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { mode, customerId, treatmentId, patientName }
   const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
+  const [autoExpandTreatmentId, setAutoExpandTreatmentId] = useState('');
 
   // ─── Chat schedule: check if within operating hours ─────
   const isChatActive = useMemo(() => {
@@ -5246,7 +5247,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {viewingSession.brokerProClinicId && (
                 <div className="mt-8 pt-6 border-t border-[#222]">
                   <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
-                    refreshKey={treatmentRefreshKey}
+                    refreshKey={treatmentRefreshKey} autoExpandId={autoExpandTreatmentId}
                     onOpenCreateForm={(cid) => {
                       const pd = viewingSession.patientData || {};
                       const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
@@ -5278,7 +5279,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           db={db}
           appId={appId}
           onClose={() => setTreatmentFormMode(null)}
-          onSaved={() => { setTreatmentFormMode(null); setTreatmentRefreshKey(k => k + 1); }}
+          onSaved={(savedTreatmentId) => { setTreatmentFormMode(null); setAutoExpandTreatmentId(savedTreatmentId || ''); setTreatmentRefreshKey(k => k + 1); }}
         />
       )}
 

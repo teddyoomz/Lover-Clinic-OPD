@@ -22,7 +22,7 @@ function OPDField({ label, value, isDark }) {
 
 // ── Main Timeline ───────────────────────────────────────────────────────────
 
-export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm, onOpenEditForm, refreshKey }) {
+export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm, onOpenEditForm, refreshKey, autoExpandId }) {
   const [treatments, setTreatments] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -113,7 +113,18 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   useEffect(() => {
     if (refreshKey && customerId) {
       setDetailCache({});
-      fetchPage(1);
+      fetchPage(1).then(() => {
+        // Auto-expand the just-saved treatment and pre-fetch its detail
+        if (autoExpandId) {
+          const tid = String(autoExpandId);
+          setExpandedId(tid);
+          // Fetch detail immediately so user sees it without extra click
+          setDetailLoading(tid);
+          broker.getTreatment(tid).then(data => {
+            if (data.success) setDetailCache(prev => ({ ...prev, [tid]: data.treatment }));
+          }).catch(() => {}).finally(() => setDetailLoading(null));
+        }
+      });
     }
   }, [refreshKey]);
 
