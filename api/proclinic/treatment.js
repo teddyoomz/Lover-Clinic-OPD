@@ -300,6 +300,35 @@ async function handleList(req, res) {
   const treatments = extractTreatmentList(html);
   const { maxPage } = extractTreatmentPagination(html);
 
+  // Backup treatment list to Firestore for standalone (async)
+  if (treatments.length) {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_treatment_history/${customerId}`;
+    const treatmentValues = treatments.map(t => ({
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(t).map(([k, v]) => {
+            if (v === null || v === undefined) return [k, { nullValue: null }];
+            if (typeof v === 'boolean') return [k, { booleanValue: v }];
+            if (Array.isArray(v)) return [k, { arrayValue: { values: v.map(s => ({ stringValue: String(s) })) } }];
+            return [k, { stringValue: String(v) }];
+          })
+        ),
+      },
+    }));
+    const pgKey = `page_${page}`;
+    const fields = {
+      [pgKey]: { arrayValue: { values: treatmentValues } },
+      totalPages: { integerValue: String(maxPage) },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(err => console.warn('[treatment] Firestore treatment history backup failed:', err.message));
+  }
+
   return res.status(200).json({
     success: true,
     treatments,
@@ -329,6 +358,21 @@ async function handleGet(req, res) {
 
   const treatment = extractTreatmentDetail(html);
   treatment.id = treatmentId;
+
+  // Backup treatment detail to Firestore for standalone (async)
+  const docPath = `artifacts/${APP_ID}/public/data/pc_treatments/${treatmentId}`;
+  const fields = {
+    treatmentId: { stringValue: String(treatmentId) },
+    customerId: { stringValue: String(treatment.customerId || '') },
+    detail: { stringValue: JSON.stringify(treatment) },
+    viewedAt: { stringValue: new Date().toISOString() },
+  };
+  const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+  fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  }).catch(() => {});
 
   return res.status(200).json({ success: true, treatment });
 }

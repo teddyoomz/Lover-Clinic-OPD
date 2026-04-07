@@ -5,6 +5,9 @@ import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, ext
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
 
+const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
+
 // ─── Shared helper ──────────────────────────────────────────────────────────
 
 async function resolveCustomerId(session, base, proClinicId, proClinicHN, patient) {
@@ -94,6 +97,24 @@ async function handleCreate(req, res) {
     const editHtml = await session.fetchText(`${base}/admin/customer/${proClinicId}/edit`);
     proClinicHN = extractHN(editHtml);
   } catch (_) { /* non-fatal */ }
+
+  // Backup new customer to Firestore for standalone (async)
+  try {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_customers/${proClinicId}`;
+    const fields = {
+      proClinicId: { stringValue: String(proClinicId) },
+      proClinicHN: { stringValue: proClinicHN || '' },
+      patient: { stringValue: JSON.stringify(patient) },
+      createdAt: { stringValue: new Date().toISOString() },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(() => {});
+  } catch (_) {}
 
   return res.status(200).json({ success: true, proClinicId, proClinicHN });
 }
@@ -235,6 +256,23 @@ async function handleFetchPatient(req, res) {
   const formFields = extractFormFields(editHtml);
   const proClinicHN = extractHN(editHtml);
   const patient = reverseMapPatient(formFields);
+
+  // Backup customer to dedicated Firestore collection for standalone (async)
+  try {
+    const docPath = `artifacts/${APP_ID}/public/data/pc_customers/${proClinicId}`;
+    const fields = {
+      proClinicId: { stringValue: String(proClinicId) },
+      proClinicHN: { stringValue: proClinicHN || '' },
+      patient: { stringValue: JSON.stringify(patient) },
+      syncedAt: { stringValue: new Date().toISOString() },
+    };
+    const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+    fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).catch(() => {});
+  } catch (_) {}
 
   return res.status(200).json({ success: true, patient, proClinicId, proClinicHN });
 }

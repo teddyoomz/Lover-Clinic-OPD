@@ -206,6 +206,30 @@ export default async function handler(req, res) {
       }
     }
 
+    // Backup courses/expired/appointments to Firestore for standalone (async)
+    if (allCourses.length || allExpired.length) {
+      try {
+        const docPath = `artifacts/${APP_ID}/public/data/pc_courses/${proClinicId}`;
+        const fields = {
+          proClinicId: { stringValue: String(proClinicId) },
+          patientName: { stringValue: patientName || '' },
+          courses: { stringValue: JSON.stringify(allCourses) },
+          expiredCourses: { stringValue: JSON.stringify(allExpired) },
+          appointments: { stringValue: JSON.stringify(appointments) },
+          totalCourses: { integerValue: String(allCourses.length) },
+          totalExpired: { integerValue: String(allExpired.length) },
+          totalAppointments: { integerValue: String(appointments.length) },
+          syncedAt: { stringValue: new Date().toISOString() },
+        };
+        const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
+        fetch(`${FIRESTORE_BASE}/${docPath}?${mask}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }),
+        }).catch(() => {});
+      } catch (_) {}
+    }
+
     return res.status(200).json({
       success: true, patientName,
       courses: allCourses, expiredCourses: allExpired, appointments,
