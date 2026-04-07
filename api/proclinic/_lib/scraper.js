@@ -72,38 +72,7 @@ export function extractSearchResults(html) {
       if (hnMatch) hn = hnMatch[0].trim();
     }
 
-    // ── Extract extra fields visible in search cards ──
-    let gender = null, birthday = null, age = null, purchaseTotal = null;
-    let nextAppointment = null, lastOrderDate = null, branch = null;
-    if (row.length) {
-      const text = row.text();
-
-      // Gender
-      const genderMatch = text.match(/เพศ\s*[:：]?\s*(ชาย|หญิง)/);
-      if (genderMatch) gender = genderMatch[1];
-
-      // Birthday + age
-      const bdMatch = text.match(/วันเกิด\s*[:：]?\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*(?:\(อายุ\s*(\d+)\s*ปี\))?/);
-      if (bdMatch) { birthday = bdMatch[1]; if (bdMatch[2]) age = bdMatch[2]; }
-
-      // Purchase total
-      const ptMatch = text.match(/ยอดสั่งซื้อ\s*[:：]?\s*([\d,.]+)\s*บาท/);
-      if (ptMatch) purchaseTotal = ptMatch[1];
-
-      // Next appointment
-      const apptMatch = text.match(/นัดหมาย\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4}\s*\|\s*[\d:]+\s*-\s*[\d:]+)/);
-      if (apptMatch) nextAppointment = apptMatch[1].trim();
-
-      // Last order date
-      const loMatch = text.match(/สั่งซื้อล่าสุด\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4})/);
-      if (loMatch) lastOrderDate = loMatch[1].trim();
-
-      // Branch badge
-      const branchBadge = row.find('.badge:contains("สาขา")').first().text().trim();
-      if (branchBadge) branch = branchBadge.replace(/^สาขา\s*/, '');
-    }
-
-    customers.push({ id, name, phone, hn, gender, birthday, age, purchaseTotal, nextAppointment, lastOrderDate, branch });
+    customers.push({ id, name, phone, hn });
   });
 
   return customers;
@@ -235,104 +204,6 @@ export function extractPatientName(html) {
     $('title').text().split('|')[0].trim()
   );
   return (rawName && rawName !== '0') ? rawName : '';
-}
-
-// ─── Extract customer profile from VIEW page (/admin/customer/{id}) ─────────
-// Scrapes ALL visible data from the customer detail page left sidebar.
-// This includes fields NOT available on the edit page: weight, height, BMI,
-// purchase total, points, wallet, member info, etc.
-
-export function extractCustomerProfile(html) {
-  const $ = cheerio.load(html);
-  const profile = {};
-  const fullText = $('body').text().replace(/\s+/g, ' ');
-
-  // ── HN from page ──
-  const hnMatch = fullText.match(/HN\s*(\d{5,})/i);
-  if (hnMatch) profile.hn = hnMatch[1];
-
-  // ── Branch badge ──
-  $('[class*="badge"]').each((_, el) => {
-    const t = $(el).text().trim();
-    if (t.startsWith('สาขา')) profile.branch = t.replace(/^สาขา\s*/, '');
-  });
-
-  // ── VIP/member badges (only known meaningful ones) ──
-  const badgeSet = new Set();
-  $('[class*="badge"]').each((_, el) => {
-    const t = $(el).text().trim();
-    if (/^(VIP|Champions|Gold|Silver|Platinum|Premium)/i.test(t)) badgeSet.add(t);
-  });
-  if (badgeSet.size) profile.badges = [...badgeSet];
-
-  // ── Data from left sidebar: scan small elements for label-value ──
-  // ProClinic renders label + value in adjacent elements. We look for specific
-  // Thai labels in elements shorter than 200 chars to avoid false positives.
-  $('td, th, dt, dd, p, span, div, li').each((_, el) => {
-    const t = $(el).text().trim().replace(/\s+/g, ' ');
-    if (t.length > 200 || t.length < 2) return;
-
-    // Weight/Height/BMI (only on view page, not edit)
-    if (!profile.weight && /^น้ำหนัก$/.test(t)) {
-      const next = $(el).next().text().trim();
-      if (/^[\d.]+$/.test(next)) profile.weight = next;
-    }
-    if (!profile.height && /^ส่วนสูง$/.test(t)) {
-      const next = $(el).next().text().trim();
-      if (/^[\d.]+$/.test(next)) profile.height = next;
-    }
-    if (!profile.bmi && /^BMI$/i.test(t)) {
-      const next = $(el).next().text().trim();
-      const bm = next.match(/^([\d.]+)/);
-      if (bm) profile.bmi = bm[1];
-    }
-
-    // Occupation/Income
-    if (!profile.occupation && /^อาชีพ\/รายได้$/.test(t)) {
-      const next = $(el).next().text().trim();
-      if (next && next !== '-') profile.occupation = next;
-    }
-
-    // Member card type
-    if (!profile.memberCard && /^บัตรสมาชิก$/.test(t)) {
-      const next = $(el).next().text().trim();
-      if (next && next !== '-') profile.memberCard = next;
-    }
-  });
-
-  // ── Numeric stats from full page text (unique patterns) ──
-  const pt = fullText.match(/ยอดสั่งซื้อ\s*([\d,]+(?:\.\d+)?)\s*บาท/);
-  if (pt) profile.purchaseTotal = pt[1];
-
-  const pts = fullText.match(/คะแนนสะสม\s*([\d,]+)/);
-  if (pts) profile.points = pts[1];
-
-  const ptsExp = fullText.match(/คะแนนหมดอายุ\s*([\d,]+)/);
-  if (ptsExp) profile.pointsExpiring = ptsExp[1];
-
-  const wal = fullText.match(/Wallet\s*([\d,]+)/i);
-  if (wal) profile.wallet = wal[1];
-
-  const rec = fullText.match(/Recency\s*([\d,]+)/i);
-  if (rec) profile.recency = rec[1];
-
-  const freq = fullText.match(/Frequency\s*([\d,]+)/i);
-  if (freq) profile.frequency = freq[1];
-
-  const mon = fullText.match(/Monetary\s*([\d,.]+[MKBmkb]?)/i);
-  if (mon) profile.monetary = mon[1];
-
-  const lo = fullText.match(/สั่งซื้อล่าสุด\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4})/);
-  if (lo) profile.lastOrderDate = lo[1].trim();
-
-  // ── Avatar URL ──
-  const img = $('img.rounded-circle').first();
-  if (img.length) {
-    const src = img.attr('src') || '';
-    if (src && !src.includes('default') && src.startsWith('http')) profile.avatarUrl = src;
-  }
-
-  return profile;
 }
 
 // ─── Extract all form fields from edit page ─────────────────────────────────
