@@ -47,24 +47,28 @@ export function extractSearchResults(html) {
       row = row.parent();
     }
 
-    let name = null, phone = null;
+    let name = null, phone = null, hn = null;
     if (row.length) {
       const text = row.text();
 
-      // Thai prefix name pattern
-      const prefixRx = /(?:นาย|นาง(?:สาว)?|ด\.(?:ช|ญ)\.|Mr\.|Ms\.|Mrs\.|Miss|ดร\.|คุณ)\s+[\u0E00-\u0E7Fa-zA-Z0-9]+(?:\s+[\u0E00-\u0E7Fa-zA-Z0-9]+)*/;
-      const nm = text.match(prefixRx);
-      if (nm) name = nm[0].replace(/\s+/g, ' ').trim();
+      // Try name from link to customer page first
+      const nameLink = row.find(`a[href*="/customer/${id}"]`).first().text().trim();
+      if (nameLink && nameLink.length > 1) {
+        name = nameLink.replace(/\s+/g, ' ').trim();
+      }
+      // Fallback: Thai prefix name pattern
+      if (!name) {
+        const prefixRx = /(?:นาย|นาง(?:สาว)?|ด\.(?:ช|ญ)\.|Mr\.|Ms\.|Mrs\.|Miss|ดร\.|คุณ)\s+[\u0E00-\u0E7Fa-zA-Z0-9]+(?:\s+[\u0E00-\u0E7Fa-zA-Z0-9]+)*/;
+        const nm = text.match(prefixRx);
+        if (nm) name = nm[0].replace(/\s+/g, ' ').trim();
+      }
 
       // Phone pattern
       const ph = text.match(/0\d{8,9}/);
       if (ph) phone = ph[0];
-    }
 
-    // HN pattern (e.g. MC-69001234, HN12345, or just numbers)
-    let hn = null;
-    if (row.length) {
-      const hnMatch = row.text().match(/(?:MC-?\d+|HN[\s-]?\d+|\b\d{5,10}\b)/i);
+      // HN pattern (e.g. MC-69001234, HN12345, HN68000229)
+      const hnMatch = text.match(/HN[\s-]?\d+|MC-?\d+/i);
       if (hnMatch) hn = hnMatch[0].trim();
     }
 
