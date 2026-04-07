@@ -645,6 +645,13 @@ export function extractTreatmentDetail(html) {
     });
   }
 
+  // Treatment files (PDF attachments — "ไฟล์" tab, max 2 files)
+  t.treatmentFiles = [];
+  for (let fi = 1; fi <= 2; fi++) {
+    const fileId = $(`input[name="treatment_file_${fi}_id"]`).val() || '';
+    if (fileId) t.treatmentFiles.push({ slot: fi, fileId });
+  }
+
   // Medical certificate fields
   t.medCert = {
     isActuallyCome: $('input[name="med_cert_is_actually_come"]').val() === '1',

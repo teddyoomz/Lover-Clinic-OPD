@@ -885,7 +885,14 @@ async function handleCreate(req, res) {
     const dfFees = formData.getAll(`df_rowId_${rid}[]`);
     console.log(`[treatment] create — rowId ${rid}: qty=${qty}, df_fees=[${dfFees.join(',')}]`);
   });
-  // Collect lab PDF files (base64 → multipart Blob)
+  // Treatment files (ไฟล์ tab — max 2 PDF files)
+  if (treatment.treatmentFiles?.length) {
+    treatment.treatmentFiles.forEach(f => {
+      formData.set(`treatment_file_${f.slot}_id`, f.fileId || '');
+    });
+  }
+
+  // Collect all PDF files for multipart (lab + treatment files)
   const pdfFiles = [];
   if (treatment.labItems?.length) {
     treatment.labItems.forEach(lab => {
@@ -894,6 +901,17 @@ async function handleCreate(req, res) {
           fieldName: `lab_file_${lab.productId}`,
           base64Data: lab.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
           fileName: lab.pdfFileName || 'lab_file.pdf',
+        });
+      }
+    });
+  }
+  if (treatment.treatmentFiles?.length) {
+    treatment.treatmentFiles.forEach(f => {
+      if (f.pdfBase64) {
+        pdfFiles.push({
+          fieldName: `treatment_file_${f.slot}`,
+          base64Data: f.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
+          fileName: f.pdfFileName || `treatment_file_${f.slot}.pdf`,
         });
       }
     });
@@ -1324,7 +1342,14 @@ async function handleUpdate(req, res) {
   // Consent (preserve)
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);
 
-  // Collect lab PDF files for multipart upload
+  // Treatment files (ไฟล์ tab — max 2 PDF files)
+  if (treatment.treatmentFiles?.length) {
+    treatment.treatmentFiles.forEach(f => {
+      formData.set(`treatment_file_${f.slot}_id`, f.fileId || '');
+    });
+  }
+
+  // Collect all PDF files for multipart upload (lab + treatment files)
   const pdfFiles = [];
   if (Array.isArray(treatment.labItems)) {
     treatment.labItems.forEach(lab => {
@@ -1333,6 +1358,17 @@ async function handleUpdate(req, res) {
           fieldName: `lab_file_${lab.productId}`,
           base64Data: lab.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
           fileName: lab.pdfFileName || 'lab_file.pdf',
+        });
+      }
+    });
+  }
+  if (treatment.treatmentFiles?.length) {
+    treatment.treatmentFiles.forEach(f => {
+      if (f.pdfBase64) {
+        pdfFiles.push({
+          fieldName: `treatment_file_${f.slot}`,
+          base64Data: f.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
+          fileName: f.pdfFileName || `treatment_file_${f.slot}.pdf`,
         });
       }
     });
@@ -1635,7 +1671,7 @@ export default async function handler(req, res) {
       case 'listItems':          return await handleListItems(req, res);
       case 'getChartTemplates':  return await handleGetChartTemplates(req, res);
       case 'proxyImage':         return await handleProxyImage(req, res);
-      // chart_image[] is now sent as part of treatment create/update form data (not separate endpoint)
+      // debugFileFields removed — field names discovered: treatment_file_1, treatment_file_1_id, treatment_file_2, treatment_file_2_id
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

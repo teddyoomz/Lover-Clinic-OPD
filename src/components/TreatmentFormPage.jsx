@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import ChartSection from './ChartSection.jsx';
@@ -137,6 +137,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Lab items
   const [labItems, setLabItems] = useState([]);
+  // Treatment files (ไฟล์ tab — max 2 PDFs)
+  const [treatmentFiles, setTreatmentFiles] = useState([
+    { slot: 1, fileId: '', pdfBase64: '', pdfFileName: '' },
+    { slot: 2, fileId: '', pdfBase64: '', pdfFileName: '' },
+  ]);
   const [labModalOpen, setLabModalOpen] = useState(false);
   const [labModalQuery, setLabModalQuery] = useState('');
   const [labProducts, setLabProducts] = useState([]);
@@ -350,6 +355,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             if (t.afterImages?.length) setAfterImages(t.afterImages);
             if (t.otherImages?.length) setOtherImages(t.otherImages);
             if (t.labItems?.length) setLabItems(t.labItems);
+            if (t.treatmentFiles?.length) {
+              setTreatmentFiles(prev => prev.map(slot => {
+                const found = t.treatmentFiles.find(f => f.slot === slot.slot);
+                return found ? { ...slot, fileId: found.fileId } : slot;
+              }));
+            }
           }
           // Load charts from Firestore backup (async — don't block form render)
           if (db && appId && treatmentId) {
@@ -1021,6 +1032,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
           pdfBase64: l.pdfBase64 || '', pdfFileName: l.pdfFileName || '',
         })),
+        treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({
+          slot: f.slot, fileId: f.fileId || '', pdfBase64: f.pdfBase64 || '', pdfFileName: f.pdfFileName || '',
+        })),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
           saleDate,
@@ -1084,6 +1098,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
               beforeImages, afterImages, otherImages,
               labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
+              treatmentFiles: treatmentFiles.filter(f => f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId })),
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });
@@ -1605,6 +1620,51 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             </div>
           )}
+
+          {/* ── Treatment Files (ไฟล์การรักษา — PDF, max 2) ────────────────── */}
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={Paperclip} title="ไฟล์การรักษา" isDark={isDark} accent="#8b5cf6">
+              <span className="text-[9px] text-gray-500">PDF, ไม่เกิน 10MB/ไฟล์, สูงสุด 2 ไฟล์</span>
+            </SectionHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {treatmentFiles.map((tf, ti) => (
+                <div key={tf.slot} className={`rounded-lg border-2 border-dashed p-4 flex flex-col items-center justify-center min-h-[100px] transition-all ${
+                  tf.pdfBase64 || tf.fileId
+                    ? isDark ? 'border-purple-500/40 bg-purple-950/10' : 'border-purple-300 bg-purple-50/50'
+                    : isDark ? 'border-[#333] hover:border-[#444]' : 'border-gray-300 hover:border-gray-400'
+                }`}>
+                  {tf.pdfBase64 || tf.fileId ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Paperclip size={20} className={isDark ? 'text-purple-400' : 'text-purple-500'} />
+                      <span className={`text-[11px] font-bold text-center ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
+                        {tf.pdfFileName || (tf.fileId ? `ไฟล์ #${tf.fileId}` : `ไฟล์ ${tf.slot}`)}
+                      </span>
+                      <button type="button" onClick={() => setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: '', pdfFileName: '', fileId: '' } : f))}
+                        className={`text-[10px] font-bold px-2 py-1 rounded border transition-all flex items-center gap-1 ${isDark ? 'border-red-900/50 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>
+                        <X size={10} /> ลบไฟล์
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center gap-2 w-full">
+                      <Paperclip size={20} className="text-gray-500 opacity-40" />
+                      <span className={`text-[10px] font-bold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>แนบไฟล์ (PDF, ไม่เกิน 10MB)</span>
+                      <input type="file" accept="application/pdf" className="hidden" onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 10 * 1024 * 1024) { alert('ไฟล์ PDF ขนาดไม่เกิน 10MB'); return; }
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: ev.target.result, pdfFileName: file.name, fileId: '' } : f));
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }} />
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+          </FormSection>
 
           {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
           <FormSection isDark={isDark}>
