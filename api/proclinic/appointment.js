@@ -28,7 +28,13 @@ async function handleCreate(req, res) {
   params.set('current_doctor_id', '');
   params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-  params.set('customer_option', 'none');
+  // Link to customer if customerId provided
+  if (appointment.customerId) {
+    params.set('customer_option', 'existed');
+    params.set('customer_id', String(appointment.customerId));
+  } else {
+    params.set('customer_option', 'none');
+  }
 
   // Required fields
   params.set('appointment_date', appointment.appointmentDate || '');

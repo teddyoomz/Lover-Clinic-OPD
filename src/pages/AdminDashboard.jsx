@@ -631,6 +631,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         source: apptFormData.source || 'walk-in',
         appointmentTo: apptFormData.appointmentTo || undefined,
         appointmentNote: noteWithCust,
+        customerId: apptSelectedCustomer.id,
       };
       let res;
       if (apptFormMode.mode === 'edit') {
