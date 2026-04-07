@@ -245,112 +245,91 @@ export function extractPatientName(html) {
 export function extractCustomerProfile(html) {
   const $ = cheerio.load(html);
   const profile = {};
+  const fullText = $('body').text().replace(/\s+/g, ' ');
 
-  // ── Name from page header ──
-  profile.name = extractPatientName(html);
+  // ── HN from page ──
+  const hnMatch = fullText.match(/HN\s*(\d{5,})/i);
+  if (hnMatch) profile.hn = hnMatch[1];
 
-  // ── HN from hidden input or page text ──
-  const hnInput = $('input[name="hn_no"]').val();
-  if (hnInput) profile.hn = hnInput;
-  if (!profile.hn) {
-    const hnMatch = $('body').text().match(/HN[\s:-]?(\d{3,})/i);
-    if (hnMatch) profile.hn = hnMatch[1];
-  }
-
-  // ── Structured extraction: find label-value pairs in table/row elements ──
-  // ProClinic uses <tr><td>label</td><td>value</td></tr> or similar structures
-  // We scan ALL small containers and match Thai labels precisely
-  const pairs = {};
-  const containers = $('tr, .d-flex, .row, dt, dd, li, p, div.mb-1, div.mb-2, div.mb-3, div.col, td');
-  containers.each((_, el) => {
-    const text = $(el).text().trim().replace(/\s+/g, ' ');
-    if (text.length > 500) return; // skip large containers to avoid false matches
-
-    // Match "label value" or "label : value" patterns in small containers
-    const matchers = [
-      { key: 'gender', rx: /^เพศ\s*[:：]?\s*(ชาย|หญิง|-)/u },
-      { key: 'birthday', rx: /วันเกิด\s*[:：]?\s*(\d{1,2}\/\d{1,2}\/\d{4})/u },
-      { key: 'age', rx: /อายุ\s*[:：]?\s*(\d+)\s*ปี/u },
-      { key: 'nationality', rx: /^สัญชาติ\s*[:：]?\s*(\S+)/u },
-      { key: 'idCard', rx: /เลขบัตร(?:ปชช)?\.?\s*[:：]?\s*([\d-]{5,})/u },
-      { key: 'weight', rx: /^น้ำหนัก\s*[:：]?\s*([\d.]+)/u },
-      { key: 'height', rx: /^ส่วนสูง\s*[:：]?\s*([\d.]+)/u },
-      { key: 'bmi', rx: /^BMI\s*[:：]?\s*([\d.]+)/iu },
-      { key: 'occupation', rx: /^อาชีพ(?:\/รายได้)?\s*[:：]?\s*(.+)/u },
-      { key: 'memberCard', rx: /^บัตรสมาชิก\s*[:：]?\s*(.+)/u },
-      { key: 'address', rx: /^ที่อยู่\s*[:：]?\s*(.{10,})/u },
-      { key: 'source', rx: /^ที่มา\s*[:：]?\s*(.+)/u },
-      { key: 'clinicalNote', rx: /^หมายเหตุ\s*[:：]?\s*(.+)/u },
-    ];
-
-    for (const { key, rx } of matchers) {
-      if (pairs[key]) continue;
-      const m = text.match(rx);
-      if (m && m[1]) {
-        const val = m[1].trim();
-        if (val && val !== '-' && val !== '0') pairs[key] = val;
-      }
-    }
-  });
-  Object.assign(profile, pairs);
-
-  // ── Numeric stats (search in full text but with stricter patterns) ──
-  const fullText = $('body').text();
-
-  // Purchase total: "ยอดสั่งซื้อ" followed by number + "บาท" (in ProClinic stats area)
-  const ptMatch = fullText.match(/ยอดสั่งซื้อ\s*[:：]?\s*([\d,]+(?:\.\d+)?)\s*บาท/u);
-  if (ptMatch) profile.purchaseTotal = ptMatch[1];
-
-  // Points
-  const ptsMatch = fullText.match(/คะแนนสะสม\s*[:：]?\s*([\d,]+)/u);
-  if (ptsMatch) profile.points = ptsMatch[1];
-  const ptsExpMatch = fullText.match(/คะแนนหมดอายุ\s*[:：]?\s*([\d,]+)/u);
-  if (ptsExpMatch) profile.pointsExpiring = ptsExpMatch[1];
-
-  // Wallet
-  const walletMatch = fullText.match(/Wallet\s*[:：]?\s*([\d,]+)/iu);
-  if (walletMatch) profile.wallet = walletMatch[1];
-
-  // Recency / Frequency / Monetary
-  const recMatch = fullText.match(/Recency\s*([\d,]+)/i);
-  if (recMatch) profile.recency = recMatch[1];
-  const freqMatch = fullText.match(/Frequency\s*([\d,]+)/i);
-  if (freqMatch) profile.frequency = freqMatch[1];
-  const monMatch = fullText.match(/Monetary\s*([\d,.]+)/i);
-  if (monMatch) profile.monetary = monMatch[1];
-
-  // Last order date
-  const loMatch = fullText.match(/สั่งซื้อล่าสุด\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4})/u);
-  if (loMatch) profile.lastOrderDate = loMatch[1].trim();
-
-  // ── Branch badge (first badge containing "สาขา") ──
-  const branchBadge = $('[class*="badge"]').filter((_, el) => $(el).text().includes('สาขา')).first().text().trim();
-  if (branchBadge) profile.branch = branchBadge.replace(/^สาขา\s*/, '');
-
-  // ── VIP/member badges (filter to only meaningful ones) ──
-  const meaningfulBadges = new Set(['VIP', 'VIP+', 'Champions', 'ลูกค้าทั่วไป', 'ลูกค้าใหม่', 'ลูกค้าเก่า', 'Gold', 'Silver', 'Platinum']);
-  const badges = [];
+  // ── Branch badge ──
   $('[class*="badge"]').each((_, el) => {
     const t = $(el).text().trim();
-    if (t && (meaningfulBadges.has(t) || t.match(/^(VIP|Gold|Silver|Platinum|Champions|Premium)/i))) {
-      if (!badges.includes(t)) badges.push(t);
+    if (t.startsWith('สาขา')) profile.branch = t.replace(/^สาขา\s*/, '');
+  });
+
+  // ── VIP/member badges (only known meaningful ones) ──
+  const badgeSet = new Set();
+  $('[class*="badge"]').each((_, el) => {
+    const t = $(el).text().trim();
+    if (/^(VIP|Champions|Gold|Silver|Platinum|Premium)/i.test(t)) badgeSet.add(t);
+  });
+  if (badgeSet.size) profile.badges = [...badgeSet];
+
+  // ── Data from left sidebar: scan small elements for label-value ──
+  // ProClinic renders label + value in adjacent elements. We look for specific
+  // Thai labels in elements shorter than 200 chars to avoid false positives.
+  $('td, th, dt, dd, p, span, div, li').each((_, el) => {
+    const t = $(el).text().trim().replace(/\s+/g, ' ');
+    if (t.length > 200 || t.length < 2) return;
+
+    // Weight/Height/BMI (only on view page, not edit)
+    if (!profile.weight && /^น้ำหนัก$/.test(t)) {
+      const next = $(el).next().text().trim();
+      if (/^[\d.]+$/.test(next)) profile.weight = next;
+    }
+    if (!profile.height && /^ส่วนสูง$/.test(t)) {
+      const next = $(el).next().text().trim();
+      if (/^[\d.]+$/.test(next)) profile.height = next;
+    }
+    if (!profile.bmi && /^BMI$/i.test(t)) {
+      const next = $(el).next().text().trim();
+      const bm = next.match(/^([\d.]+)/);
+      if (bm) profile.bmi = bm[1];
+    }
+
+    // Occupation/Income
+    if (!profile.occupation && /^อาชีพ\/รายได้$/.test(t)) {
+      const next = $(el).next().text().trim();
+      if (next && next !== '-') profile.occupation = next;
+    }
+
+    // Member card type
+    if (!profile.memberCard && /^บัตรสมาชิก$/.test(t)) {
+      const next = $(el).next().text().trim();
+      if (next && next !== '-') profile.memberCard = next;
     }
   });
-  if (badges.length) profile.badges = badges;
 
-  // ── Customer type ──
-  const ctMatch = fullText.match(/ประเภทลูกค้า\s*[:：]?\s*(\S+)/u);
-  if (ctMatch && ctMatch[1] !== '-') profile.customerType = ctMatch[1];
+  // ── Numeric stats from full page text (unique patterns) ──
+  const pt = fullText.match(/ยอดสั่งซื้อ\s*([\d,]+(?:\.\d+)?)\s*บาท/);
+  if (pt) profile.purchaseTotal = pt[1];
 
-  // ── Member number ──
-  const memMatch = fullText.match(/รหัสสมาชิก\s*[:：]?\s*(\S+)/u);
-  if (memMatch && memMatch[1] !== '-') profile.memberNo = memMatch[1];
+  const pts = fullText.match(/คะแนนสะสม\s*([\d,]+)/);
+  if (pts) profile.points = pts[1];
+
+  const ptsExp = fullText.match(/คะแนนหมดอายุ\s*([\d,]+)/);
+  if (ptsExp) profile.pointsExpiring = ptsExp[1];
+
+  const wal = fullText.match(/Wallet\s*([\d,]+)/i);
+  if (wal) profile.wallet = wal[1];
+
+  const rec = fullText.match(/Recency\s*([\d,]+)/i);
+  if (rec) profile.recency = rec[1];
+
+  const freq = fullText.match(/Frequency\s*([\d,]+)/i);
+  if (freq) profile.frequency = freq[1];
+
+  const mon = fullText.match(/Monetary\s*([\d,.]+[MKBmkb]?)/i);
+  if (mon) profile.monetary = mon[1];
+
+  const lo = fullText.match(/สั่งซื้อล่าสุด\s*[:：]?\s*(\d{1,2}\s+\S+\s+\d{4})/);
+  if (lo) profile.lastOrderDate = lo[1].trim();
 
   // ── Avatar URL ──
-  const avatarImg = $('img.rounded-circle, img[src*="customer"], img[src*="avatar"]').first();
-  if (avatarImg.length) {
-    const src = avatarImg.attr('src') || '';
-    if (src && !src.includes('default')) profile.avatarUrl = src;
+  const img = $('img.rounded-circle').first();
+  if (img.length) {
+    const src = img.attr('src') || '';
+    if (src && !src.includes('default') && src.startsWith('http')) profile.avatarUrl = src;
   }
 
   return profile;
