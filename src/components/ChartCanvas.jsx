@@ -40,8 +40,8 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       if (cancelled || !canvasElRef.current) return;
 
       const container = containerRef.current;
-      const cw = Math.min(container?.clientWidth || 600, 800);
-      const ch = Math.min(container?.clientHeight || 700, 900);
+      const cw = container?.clientWidth || 700;
+      const ch = container?.clientHeight || 800;
 
       const canvas = new fabric.Canvas(canvasElRef.current, {
         width: cw, height: ch,
@@ -53,25 +53,37 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       canvas.freeDrawingBrush.color = '#e53e3e';
       canvas.freeDrawingBrush.width = 4;
 
-      // Load existing data (re-edit mode)
+      // Load existing data (re-edit mode) — OR — template background
       if (existingData?.fabricJson) {
         try {
-          const jsonData = typeof existingData.fabricJson === 'string'
-            ? JSON.parse(existingData.fabricJson)
-            : existingData.fabricJson;
+          const jsonStr = typeof existingData.fabricJson === 'string'
+            ? existingData.fabricJson
+            : JSON.stringify(existingData.fabricJson);
+          const jsonData = JSON.parse(jsonStr);
+          // Adjust canvas size to match saved data
+          if (jsonData.width) canvas.setWidth(jsonData.width);
+          if (jsonData.height) canvas.setHeight(jsonData.height);
           await canvas.loadFromJSON(jsonData);
+          canvas.getObjects().forEach(obj => {
+            // Re-lock template backgrounds
+            if (obj.type === 'image' && !obj.selectable) {
+              obj.set({ selectable: false, evented: false, hoverCursor: 'default' });
+            }
+          });
           canvas.renderAll();
+          console.log('[ChartCanvas] restored', canvas.getObjects().length, 'objects from JSON');
         } catch (e) {
           console.warn('[ChartCanvas] loadFromJSON failed:', e);
         }
       } else if (template?.imageUrl) {
-        // Load template as background image using HTML Image element
+        // Load template as background image
         await new Promise((resolve) => {
-          const img = new Image();
+          const img = new window.Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
             const fabricImg = new fabric.FabricImage(img);
-            const scale = Math.min((cw - 20) / fabricImg.width, (ch - 20) / fabricImg.height, 1);
+            // Scale template to fit canvas with padding
+            const scale = Math.min((cw - 40) / fabricImg.width, (ch - 40) / fabricImg.height);
             fabricImg.set({
               scaleX: scale, scaleY: scale,
               left: (cw - fabricImg.width * scale) / 2,
@@ -82,10 +94,11 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
             canvas.add(fabricImg);
             canvas.sendObjectToBack(fabricImg);
             canvas.renderAll();
+            console.log('[ChartCanvas] template loaded:', fabricImg.width, 'x', fabricImg.height, 'scale:', scale.toFixed(2));
             resolve();
           };
           img.onerror = () => {
-            console.warn('[ChartCanvas] template image failed to load:', template.imageUrl);
+            console.warn('[ChartCanvas] template image failed:', template.imageUrl);
             resolve();
           };
           img.src = template.imageUrl;
