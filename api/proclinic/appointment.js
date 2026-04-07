@@ -72,9 +72,14 @@ async function handleCreate(req, res) {
   });
 
   const status = submitRes.status;
+  const location = submitRes.headers?.get?.('location') || '';
+  console.log(`[appointment] create — status=${status}, location=${location}`);
 
-  // Success: redirect (302/303)
+  // Success: redirect (302/303) — but follow redirect to check if it's actually successful
   if (status >= 300 && status < 400) {
+    // If redirect goes to /login, session expired
+    if (location.includes('/login')) throw new Error('Session หมดอายุ — กรุณาลองใหม่');
+    console.log(`[appointment] create — redirect OK to: ${location}`);
     // Find appointment ID from API: GET appointments for that date, match by time+doctor
     let appointmentProClinicId = null;
     try {
