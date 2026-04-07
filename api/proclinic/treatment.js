@@ -596,20 +596,19 @@ async function handleCreate(req, res) {
   for (const key of [...formData.keys()]) {
     if (key.startsWith('df_')) formData.delete(key);
   }
-  const allDfRowIds = [...checkedRowIds, ...labRowIds];
-  if (dfDoctors.length > 0) {
+  // Doctor fees — only for course items (NOT lab items, which are handled separately by ProClinic)
+  if (dfDoctors.length > 0 && checkedRowIds.length > 0) {
     dfDoctors.forEach(docId => {
       const feeEntry = doctorFees.find(f => String(f.doctorId) === String(docId));
       formData.append('df_doctor_id[]', docId);
       formData.append('df_group_id[]', feeEntry?.groupId || '');
-      // For each product (course items + lab), set fee amount
-      allDfRowIds.forEach(rowId => {
+      checkedRowIds.forEach(rowId => {
         formData.append(`df_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
         formData.append(`df_suggestion_rowId_${rowId}[]`, String(feeEntry?.fee || '0'));
         formData.append(`df_is_checked_rowId_${rowId}[]`, '1');
       });
     });
-    console.log(`[treatment] create — df_ fields: ${dfDoctors.length} doctors x ${allDfRowIds.length} rowIds (${checkedRowIds.length} course + ${labRowIds.length} lab)`);
+    console.log(`[treatment] create — df_ fields: ${dfDoctors.length} doctors x ${checkedRowIds.length} rowIds`);
   }
 
   // Purchased items → courses/products JSON
@@ -700,27 +699,11 @@ async function handleCreate(req, res) {
           formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
         });
       }
-      // ProClinic expects lab items in both lab_* AND product_* arrays (same rowId)
-      formData.append('product_id[]', lab.productId || '');
-      formData.append('product_qty[]', String(lab.qty || 1));
-      formData.append('product_price[]', String(lab.price || 0));
-      formData.append('product_rowId[]', rid);
-      formData.append('product_is_premium[]', 'false');
-      formData.append('product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
-      formData.append('product_discount[]', String(lab.discount || 0));
-      formData.append('product_discount_type[]', lab.discountType || 'บาท');
-      formData.append('product_original_price[]', String(lab.originalPrice || lab.price || 0));
+      // NOTE: Do NOT add product_*[] fields for lab items — curl testing confirmed
+      // that product_id[]/product_qty[]/etc. cause ProClinic to reject the form (302 back to create).
+      // Lab items are processed via lab_*[] fields + products JSON only.
     });
     console.log(`[treatment] create — ${treatment.labItems.length} lab items`);
-    // Dump all lab fields for debugging
-    const labFields = {};
-    for (const [k, v] of formData.entries()) {
-      if (k.startsWith('lab_') || (k.startsWith('product_') && !k.includes('name'))) {
-        if (!labFields[k]) labFields[k] = [];
-        labFields[k].push(v.substring(0, 100));
-      }
-    }
-    console.log(`[treatment] create — lab fields dump:`, JSON.stringify(labFields));
   }
 
   // Chart images — sent as hidden fields (data URLs from canvas drawing)
@@ -1188,11 +1171,9 @@ async function handleUpdate(req, res) {
 
   // Lab items (update)
   if (Array.isArray(treatment.labItems)) {
-    // Clear existing lab fields + product fields (will rebuild)
+    // Clear existing lab fields (will rebuild)
     ['lab_id[]','lab_product_id[]','lab_product_qty[]','lab_product_price[]','lab_product_is_vat_included[]',
-     'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]',
-     'product_id[]','product_qty[]','product_price[]','product_rowId[]','product_is_premium[]','product_is_vat_included[]',
-     'product_discount[]','product_discount_type[]','product_original_price[]'
+     'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]'
     ].forEach(f => formData.delete(f));
     const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
     const labRowIds = treatment.labItems.map(lab => lab.rowId || genRowId());
@@ -1232,16 +1213,7 @@ async function handleUpdate(req, res) {
           formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
         });
       }
-      // product_*[] entries (same as create)
-      formData.append('product_id[]', lab.productId || '');
-      formData.append('product_qty[]', String(lab.qty || 1));
-      formData.append('product_price[]', String(lab.price || 0));
-      formData.append('product_rowId[]', rid);
-      formData.append('product_is_premium[]', 'false');
-      formData.append('product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
-      formData.append('product_discount[]', String(lab.discount || 0));
-      formData.append('product_discount_type[]', lab.discountType || 'บาท');
-      formData.append('product_original_price[]', String(lab.originalPrice || lab.price || 0));
+      // NOTE: Do NOT add product_*[] fields — they cause ProClinic to reject the form
     });
   }
 
