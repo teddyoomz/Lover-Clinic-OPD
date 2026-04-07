@@ -146,7 +146,7 @@ artifacts/{appId}/public/data/push_config/tokens
 ### defaultFormData (บรรทัด 48)
 Fields ทั้งหมดใน patient intake form:
 - `prefix, firstName, lastName, gender`
-- `dobDay, dobMonth, dobYear, age`
+- `dobDay, dobMonth, dobYear, age, bloodType`
 - `address, phone, isInternationalPhone, phoneCountryCode`
 - `emergencyName, emergencyRelation, emergencyPhone, isInternationalEmergencyPhone, emergencyPhoneCountryCode`
 - `visitReasons[], visitReasonOther`
@@ -480,8 +480,8 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 | `handleList(req, res)` | Scrapes `/admin/customer/{id}?treatment_page=N` → treatment cards + pagination |
 | `handleGet(req, res)` | Scrapes `/admin/treatment/{id}/edit` → full treatment detail (OPD, vitals, items, fees) |
 | `handleGetCreateForm(req, res)` | Scrapes create page + inventory API (parallel) → form options + courses/products + customer promotions. Firestore backups: `pc_inventory/{customerId}`, `pc_doctors/all`, `pc_form_options/treatment` (blood types, insurance, payment channels, sellers, wallets, med/consumable groups, dosage units) |
-| `handleCreate(req, res)` | GET create page → copy ALL form defaults → override with our values → POST `/admin/treatment`. After success, async fetches treatment detail and saves to `pc_treatments/{id}` for standalone backup + course items debug logging. Success = redirect 302; failure = 200 with validation errors |
-| `handleUpdate(req, res)` | GET edit page → copy ALL existing form fields → override with new values → POST with `_method=PUT`. Same field pattern as create, with Referer header |
+| `handleCreate(req, res)` | GET create page → copy ALL form defaults → override with our values → POST `/admin/treatment`. Sends chart_image[], before_image[], after_image[], images[] as data URLs. After success, async fetches treatment detail and saves to `pc_treatments/{id}` for standalone backup. Success = redirect 302; failure = 200 with validation errors |
+| `handleUpdate(req, res)` | GET edit page → copy ALL existing form fields → override with new values → POST with `_method=PUT`. Preserves existing treatment images or replaces with new ones. Same field pattern as create, with Referer header |
 | `handleDelete(req, res)` | GET edit page for CSRF, POST with `_method=DELETE` |
 | `handler(req, res)` | Route dispatcher (verifyAuth + action routing) |
 
@@ -490,7 +490,7 @@ Route handler — actions: `list`, `get`, `getCreateForm`, `create`, `update`, `
 |----------|-----------|
 | `extractTreatmentList(html)` | Parse customer detail page center column → treatment cards (date, doctor, assistants, CC, DX, products) |
 | `extractTreatmentPagination(html)` | Detect max page from `?treatment_page=N` pagination links |
-| `extractTreatmentDetail(html)` | Parse treatment edit page → all fields: doctorId, vitals, OPD textareas, items, fees, consent, medCert |
+| `extractTreatmentDetail(html)` | Parse treatment edit page → all fields: doctorId, vitals, OPD textareas, items, fees, consent, medCert, beforeImages/afterImages/otherImages |
 | `extractTreatmentCreateOptions(html)` | Parse create form → doctors, assistants, healthInfo, paymentChannels, CSRF token (courses via inventory API in treatment.js) |
 
 ### src/components/TreatmentTimeline.jsx
@@ -521,12 +521,15 @@ Full-page treatment create form — mirrors ProClinic `/admin/treatment/create` 
 | สรุปค่าใช้จ่าย | itemized billing: subtotal, medicine discount (%), coupon, bill-end discount (amt/%), insurance/deposit/wallet deductions, net total. Auto-calc via `billing` useMemo. Hidden when no sale |
 | การชำระเงิน | radio buttons status (0/2/4), payment date+time, 3 payment channels (checkbox+select+amount), ref_no, note. Hidden when no sale |
 | พนักงานขาย | 5 seller rows (checkbox+select+%+auto-calc commission). Commission = netTotal * percent / 100. Hidden when no sale |
+| รูปภาพการรักษา | 3 galleries: Before (max 12), After (max 12), อื่นๆ (max 12). Client-side resize 1920x1920 JPEG 0.8. State: `beforeImages`, `afterImages`, `otherImages` [{dataUrl, id}]. Sends `before_image[]`, `after_image[]`, `images[]` to ProClinic |
+
+**Auto-fill from OPD:** Receives `patientData` prop → auto-fills blood type (matched by name to ProClinic options), underlying conditions → congenital disease, allergies → drug allergy, current medications → treatment history, visit reasons → OPD symptoms
 
 **Data loading:** `broker.getTreatmentCreateForm(customerId)` → doctors, assistants, healthInfo, vitalsDefaults, bloodTypeOptions, customerCourses, benefitTypes, insuranceCompanies, paymentChannels, sellers, dosageUnits, wallets, medicationGroups, remedItems
 
-**Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay. Props include `db`, `appId` for Firestore backup.
+**Navigation:** AdminDashboard `treatmentFormMode` state → renders as z-[80] full-screen overlay. Props include `db`, `appId`, `patientData` for Firestore backup + auto-fill.
 
-**Firestore backup:** On submit, saves raw treatment data to `artifacts/{appId}/public/data/treatments/{proClinicId}`. On group modal open, saves medication groups → `master_data/medication_groups/items/{id}` and consumable groups → `master_data/consumable_groups/items/{id}`. On form load, saves customer inventory (courses) → `pc_inventory/{customerId}`
+**Firestore backup:** On submit, saves raw treatment data to `artifacts/{appId}/public/data/treatments/{proClinicId}` including charts, beforeImages, afterImages, otherImages. On group modal open, saves medication groups → `master_data/medication_groups/items/{id}` and consumable groups → `master_data/consumable_groups/items/{id}`. On form load, saves customer inventory (courses) → `pc_inventory/{customerId}`
 
 ### Client (brokerClient.js) — Treatment Functions
 - `listTreatments(customerId, page)` — list treatments for a customer (paginated)
@@ -963,23 +966,22 @@ hn_no  ← ห้ามแตะ! ProClinic กำหนดเอง
 
 ### AdminDashboard.jsx — Broker Logic (Server API only, no Extension)
 
-**Auto-sync Trigger** (ใน Firestore onSnapshot ~line 263)
+**Desync on Patient Edit** (ใน Firestore onSnapshot — ภายใน `if (oldS)` block)
+เมื่อลูกค้าแก้ข้อมูล → **ไม่ auto-sync** แต่หลุด sync แทน → admin ต้องกด OPD ใหม่
 ```js
 if (
   oldStr !== newStr              // patientData เปลี่ยน
   && newS.brokerStatus === 'done'
   && newS.brokerProClinicId
-  && oldS.brokerStatus === 'done'          // ป้องกัน sync ตอน pending→done
-  && oldS.brokerProClinicId === newS.brokerProClinicId  // ป้องกัน sync ตอน ID set ใหม่
-  && lastAutoSyncedStrRef.current[newS.id] !== newStr  // ป้องกัน re-trigger ด้วย data เดิม
+  && oldS.brokerStatus === 'done'
+  && oldS.brokerProClinicId === newS.brokerProClinicId
+  && lastAutoSyncedStrRef.current[newS.id] !== newStr
 ) {
-  lastAutoSyncedStrRef.current[newS.id] = newStr;
-  → broker.updateProClinic(proClinicId, proClinicHN, patient)  // Server API
+  → updateDoc(ref, { brokerStatus: null, brokerError: null, brokerJob: null })
 }
 ```
-> `lastAutoSyncedStrRef` = `useRef({})` → sessionId → JSON.stringify(patientData) ที่ sync ล่าสุด
-> ป้องกัน snapshot ที่ Firestore batch เข้าด้วยกัน (เช่น `isUnread=false` + broker update)
-> ทำให้ prevRef มี patientData เก่า → guard oldStr !== newStr ผ่าน → re-trigger
+> ใช้ `brokerDesyncSessions` array แทน `brokerSyncSessions` เดิม
+> Clinical summary sync ใช้ภาษาอังกฤษ ('en') ทุกจุดที่ส่งไป ProClinic
 
 **Banner Logic** (useEffect ~line 332) — ⚠️ ต้องไม่ evaluate banner ขณะ brokerChanged
 ```js
