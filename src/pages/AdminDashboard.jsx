@@ -4153,10 +4153,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
                       {apptCustomerAppts.map(a => {
                         const isPast = a.date < new Date().toISOString().substring(0, 10);
+                        // Format: dd เดือน พ.ศ.
+                        const [ay, amo, ad] = (a.date || '').split('-').map(Number);
+                        const thMo = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+                        const dateDisplay = ad && amo ? `${ad} ${thMo[amo - 1]} ${ay + 543}` : a.date;
                         return (
                           <div key={a.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${isPast ? 'border-[var(--bd)] opacity-60' : 'border-emerald-500/20 bg-emerald-500/5'}`}>
-                            <div className="text-center shrink-0 w-14">
-                              <p className="text-[10px] font-bold text-emerald-400">{a.date.substring(5)}</p>
+                            <div className="text-center shrink-0 w-24">
+                              <p className="text-[10px] font-bold text-emerald-400">{dateDisplay}</p>
                               <p className="text-[9px] text-gray-500">{a.startTime}-{a.endTime}</p>
                             </div>
                             <div className="flex-1 min-w-0">
