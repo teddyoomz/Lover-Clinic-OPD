@@ -291,32 +291,49 @@ async function handleListByCustomer(req, res) {
   const { extractAppointments: extractAppts } = await import('./_lib/scraper.js');
   const basicAppts = extractAppts(html);
 
-  // For each appointment date, fetch the JSON API to get appointment IDs
-  const uniqueDates = [...new Set(basicAppts.map(a => {
-    // Parse Thai date format or ISO — the modal may use Thai format
-    const m = a.date.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[0];
-    // Try Thai: "15 เม.ย. 2569" or similar
-    return a.date;
-  }).filter(Boolean))];
+  // Parse Thai dates from modal → ISO format
+  // Thai months: "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", etc. + Buddhist year (พ.ศ.)
+  const thaiMonthMap = { 'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04', 'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08', 'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12' };
+  const parseThaiDate = (dateStr) => {
+    // Try ISO first: "2026-04-15"
+    const iso = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[0];
+    // Try Thai: "15 เม.ย. 2569" or "15 เม.ย.2569"
+    const thai = dateStr.match(/(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(\d{4})/);
+    if (thai) {
+      const mm = thaiMonthMap[thai[2]];
+      const yyyy = parseInt(thai[3]) > 2500 ? parseInt(thai[3]) - 543 : parseInt(thai[3]);
+      return `${yyyy}-${mm}-${String(parseInt(thai[1])).padStart(2, '0')}`;
+    }
+    // Try "dd/mm/yyyy"
+    const slash = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slash) {
+      const yyyy = parseInt(slash[3]) > 2500 ? parseInt(slash[3]) - 543 : parseInt(slash[3]);
+      return `${yyyy}-${slash[2].padStart(2, '0')}-${slash[1].padStart(2, '0')}`;
+    }
+    return null;
+  };
 
-  // Also check next 90 days for future appointments
+  // Get exact appointment dates from modal (most efficient — no scanning needed)
+  const modalDates = basicAppts.map(a => parseThaiDate(a.date)).filter(Boolean);
+
+  // Also include next 14 days as safety net for very recent appointments
   const today = new Date();
-  const futureDates = [];
-  for (let i = 0; i < 90; i++) {
+  const nearDates = [];
+  for (let i = 0; i < 14; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    futureDates.push(d.toISOString().substring(0, 10));
+    nearDates.push(d.toISOString().substring(0, 10));
   }
 
-  // Combine unique dates from modal + future dates, deduplicate
-  const allDates = [...new Set([...uniqueDates, ...futureDates])];
+  const allDates = [...new Set([...modalDates, ...nearDates])];
 
-  // Fetch appointment API for relevant dates (batch in parallel, max 30 at a time)
+  // Fetch appointment API for each date to get appointment IDs
   const appointments = [];
   const cidStr = String(customerId);
-  for (let i = 0; i < allDates.length; i += 30) {
-    const batch = allDates.slice(i, i + 30);
+  // Batch in parallel (max 50 at a time)
+  for (let i = 0; i < allDates.length; i += 50) {
+    const batch = allDates.slice(i, i + 50);
     const results = await Promise.all(batch.map(async date => {
       try {
         const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
