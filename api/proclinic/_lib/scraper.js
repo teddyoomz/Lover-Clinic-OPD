@@ -589,6 +589,26 @@ export function extractTreatmentDetail(html) {
   // Consent image
   t.consentImage = $('input[name="consent_image"]').val() || '';
 
+  // Treatment images (Before/After/Other galleries)
+  t.beforeImages = [];
+  $('input[name="before_image[]"]').each((i, el) => {
+    const dataUrl = $(el).val();
+    const id = $('input[name="before_image_id[]"]').eq(i).val() || '';
+    if (dataUrl) t.beforeImages.push({ dataUrl, id });
+  });
+  t.afterImages = [];
+  $('input[name="after_image[]"]').each((i, el) => {
+    const dataUrl = $(el).val();
+    const id = $('input[name="after_image_id[]"]').eq(i).val() || '';
+    if (dataUrl) t.afterImages.push({ dataUrl, id });
+  });
+  t.otherImages = [];
+  $('input[name="images[]"]').each((i, el) => {
+    const dataUrl = $(el).val();
+    const id = $('input[name="image_id[]"]').eq(i).val() || '';
+    if (dataUrl) t.otherImages.push({ dataUrl, id });
+  });
+
   // Medical certificate fields
   t.medCert = {
     isActuallyCome: $('input[name="med_cert_is_actually_come"]').val() === '1',

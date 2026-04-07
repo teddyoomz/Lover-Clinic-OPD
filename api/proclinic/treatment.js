@@ -655,6 +655,29 @@ async function handleCreate(req, res) {
     console.log(`[treatment] create — ${treatment.chartImages.length} chart images attached (${treatment.chartImages.map(u => Math.round(u.length/1024) + 'KB').join(', ')})`);
   }
 
+  // Treatment images — Before/After/Other galleries (data URLs, same pattern as chart_image)
+  if (treatment.beforeImages?.length) {
+    treatment.beforeImages.forEach(img => {
+      formData.append('before_image[]', img.dataUrl || '');
+      formData.append('before_image_id[]', img.id || '');
+    });
+    console.log(`[treatment] create — ${treatment.beforeImages.length} before images`);
+  }
+  if (treatment.afterImages?.length) {
+    treatment.afterImages.forEach(img => {
+      formData.append('after_image[]', img.dataUrl || '');
+      formData.append('after_image_id[]', img.id || '');
+    });
+    console.log(`[treatment] create — ${treatment.afterImages.length} after images`);
+  }
+  if (treatment.otherImages?.length) {
+    treatment.otherImages.forEach(img => {
+      formData.append('images[]', img.dataUrl || '');
+      formData.append('image_id[]', img.id || '');
+    });
+    console.log(`[treatment] create — ${treatment.otherImages.length} other images`);
+  }
+
   // Insurance — only send when explicitly enabled (checkbox/radio: unchecked = don't send)
   if (treatment.isInsuranceClaimed) {
     formData.set('is_insurance_claimed', '1');
@@ -1081,6 +1104,29 @@ async function handleUpdate(req, res) {
       formData.set(`sale_total_${i}`, treatment[`sellerTotal${i}`] || existing[`sale_total_${i}`] || '');
     }
   }
+
+  // Treatment images — Before/After/Other (preserve existing or use new from frontend)
+  ['before_image', 'after_image', 'images'].forEach((prefix, pi) => {
+    const propNames = ['beforeImages', 'afterImages', 'otherImages'];
+    const idSuffix = prefix === 'images' ? 'image_id' : `${prefix}_id`;
+    formData.delete(`${prefix}[]`);
+    formData.delete(`${idSuffix}[]`);
+    if (treatment[propNames[pi]]?.length) {
+      treatment[propNames[pi]].forEach(img => {
+        formData.append(`${prefix}[]`, img.dataUrl || '');
+        formData.append(`${idSuffix}[]`, img.id || '');
+      });
+    } else {
+      // Preserve existing from edit page
+      $(`input[name="${prefix}[]"]`).each((_, el) => {
+        const val = $(el).val();
+        if (val) formData.append(`${prefix}[]`, val);
+      });
+      $(`input[name="${idSuffix}[]"]`).each((_, el) => {
+        formData.append(`${idSuffix}[]`, $(el).val() || '');
+      });
+    }
+  });
 
   // Consent (preserve)
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);

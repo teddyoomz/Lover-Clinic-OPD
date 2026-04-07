@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3, RotateCcw } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import ChartSection from './ChartSection.jsx';
@@ -92,6 +92,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Chart drawings (max 2)
   const [charts, setCharts] = useState([]);
+
+  // Treatment images (Before/After/Other) — each item: { dataUrl, id }
+  const [beforeImages, setBeforeImages] = useState([]);
+  const [afterImages, setAfterImages] = useState([]);
+  const [otherImages, setOtherImages] = useState([]);
 
   // Take-home medications
   const [medications, setMedications] = useState([]);
@@ -289,6 +294,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 price: item.price || '',
               })));
             }
+            // Treatment images from ProClinic edit page
+            if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
+            if (t.afterImages?.length) setAfterImages(t.afterImages);
+            if (t.otherImages?.length) setOtherImages(t.otherImages);
           }
           // Load charts from Firestore backup (async — don't block form render)
           if (db && appId && treatmentId) {
@@ -305,6 +314,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         savedAt: c.savedAt || '',
                       })).filter(c => c.dataUrl));
                     }
+                    if (saved.beforeImages?.length) setBeforeImages(saved.beforeImages);
+                    if (saved.afterImages?.length) setAfterImages(saved.afterImages);
+                    if (saved.otherImages?.length) setOtherImages(saved.otherImages);
                   }
                 }).catch(() => {});
             });
@@ -901,6 +913,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         treatmentItems,
         // Chart images — sent as chart_image[] to ProClinic (data URLs from canvas)
         chartImages: charts.filter(c => c.dataUrl).map(c => c.dataUrl),
+        // Treatment images — Before/After/Other galleries
+        beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+        afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+        otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
           saleDate,
@@ -962,6 +978,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
+              beforeImages, afterImages, otherImages,
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });
@@ -1213,6 +1230,73 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
           <FormSection isDark={isDark}>
             <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} />
+          </FormSection>
+
+          {/* ── Treatment Images (รูปภาพการรักษา) ────────────────────────── */}
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={Camera} title="รูปภาพการรักษา" isDark={isDark} accent="#f59e0b" />
+            {[
+              { label: 'รูปภาพก่อนรักษา (Before)', images: beforeImages, setImages: setBeforeImages },
+              { label: 'รูปภาพหลังรักษา (After)', images: afterImages, setImages: setAfterImages },
+              { label: 'รูปภาพการรักษาอื่นๆ', images: otherImages, setImages: setOtherImages },
+            ].map(({ label, images, setImages }, gi) => (
+              <div key={gi} className={gi > 0 ? 'mt-4 pt-3 border-t ' + (isDark ? 'border-[#222]' : 'border-gray-200') : ''}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label} <span className="text-gray-600 normal-case">({images.length}/12)</span></span>
+                  {images.length < 12 && (
+                    <label className="text-[10px] font-bold text-amber-500 cursor-pointer flex items-center gap-1 hover:text-amber-400">
+                      <Plus size={10} /> เพิ่มรูป
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                        const files = Array.from(e.target.files || []);
+                        const remain = 12 - images.length;
+                        const toProcess = files.slice(0, remain);
+                        toProcess.forEach(file => {
+                          if (file.size > 10 * 1024 * 1024) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const img = new Image();
+                            img.onload = () => {
+                              let w = img.width, h = img.height;
+                              if (w > h) { if (w > 1920) { h *= 1920 / w; w = 1920; } }
+                              else { if (h > 1920) { w *= 1920 / h; h = 1920; } }
+                              const canvas = document.createElement('canvas');
+                              canvas.width = w; canvas.height = h;
+                              const ctx = canvas.getContext('2d');
+                              ctx.imageSmoothingEnabled = true;
+                              ctx.imageSmoothingQuality = 'high';
+                              ctx.drawImage(img, 0, 0, w, h);
+                              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                              setImages(prev => prev.length < 12 ? [...prev, { dataUrl, id: '' }] : prev);
+                            };
+                            img.src = ev.target.result;
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        e.target.value = '';
+                      }} />
+                    </label>
+                  )}
+                </div>
+                {images.length === 0 ? (
+                  <div className={`text-center py-4 rounded-lg border border-dashed ${isDark ? 'border-[#333] text-gray-600' : 'border-gray-300 text-gray-400'}`}>
+                    <ImageIcon size={20} className="mx-auto mb-1 opacity-40" />
+                    <p className="text-[10px]">ไม่พบรูปภาพ</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {images.map((img, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
+                        <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                        <button onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </FormSection>
 
           {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
