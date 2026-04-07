@@ -609,6 +609,40 @@ export function extractTreatmentDetail(html) {
     if (dataUrl) t.otherImages.push({ dataUrl, id });
   });
 
+  // Lab items
+  t.labItems = [];
+  const labIds = $('input[name="lab_id[]"]').map((_, el) => $(el).val()).get();
+  const labProductIds = $('input[name="lab_product_id[]"]').map((_, el) => $(el).val()).get();
+  const labQtys = $('input[name="lab_product_qty[]"]').map((_, el) => $(el).val()).get();
+  const labPrices = $('input[name="lab_product_price[]"]').map((_, el) => $(el).val()).get();
+  const labVats = $('input[name="lab_product_is_vat_included[]"]').map((_, el) => $(el).val()).get();
+  const labDiscounts = $('input[name="lab_product_discount[]"]').map((_, el) => $(el).val()).get();
+  const labDiscountTypes = $('input[name="lab_product_discount_type[]"]').map((_, el) => $(el).val()).get();
+  const labOrigPrices = $('input[name="lab_product_original_price[]"]').map((_, el) => $(el).val()).get();
+  const labRowIds = $('input[name="lab_product_rowId[]"]').map((_, el) => $(el).val()).get();
+  const labInfos = $('textarea[name="lab_information[]"]').map((_, el) => $(el).val()).get();
+  for (let i = 0; i < labProductIds.length; i++) {
+    const pid = labProductIds[i];
+    if (!pid) continue;
+    const images = [];
+    $(`input[name="lab_image_${pid}[]"]`).each((j, el) => {
+      const dataUrl = $(el).val();
+      const imgId = $(`input[name="lab_image_id_${pid}[]"]`).eq(j).val() || '';
+      if (dataUrl) images.push({ dataUrl, id: imgId });
+    });
+    // Get product name from the lab-item heading
+    const itemEl = $(`.lab-item[data-product-id="${pid}"]`).eq(0);
+    const productName = itemEl.find('h6').first().text().trim() || '';
+    t.labItems.push({
+      id: labIds[i] || '', productId: pid, productName,
+      qty: labQtys[i] || '1', price: labPrices[i] || '0',
+      originalPrice: labOrigPrices[i] || '0', discount: labDiscounts[i] || '0',
+      discountType: labDiscountTypes[i] || 'บาท',
+      isVatIncluded: labVats[i] === 'true', rowId: labRowIds[i] || '',
+      information: labInfos[i] || '', images,
+    });
+  }
+
   // Medical certificate fields
   t.medCert = {
     isActuallyCome: $('input[name="med_cert_is_actually_come"]').val() === '1',

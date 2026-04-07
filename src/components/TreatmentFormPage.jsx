@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import ChartSection from './ChartSection.jsx';
@@ -97,6 +97,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [beforeImages, setBeforeImages] = useState([]);
   const [afterImages, setAfterImages] = useState([]);
   const [otherImages, setOtherImages] = useState([]);
+
+  // Lab items
+  const [labItems, setLabItems] = useState([]);
+  const [labModalOpen, setLabModalOpen] = useState(false);
+  const [labModalQuery, setLabModalQuery] = useState('');
+  const [labProducts, setLabProducts] = useState([]);
+  const [labModalLoading, setLabModalLoading] = useState(false);
+  const [labModalSelected, setLabModalSelected] = useState(null);
+  const [labModalQty, setLabModalQty] = useState('1');
+  const [labModalPrice, setLabModalPrice] = useState('');
+  const [labModalDiscount, setLabModalDiscount] = useState('');
+  const [labModalDiscountType, setLabModalDiscountType] = useState('amount');
+  const [labModalVat, setLabModalVat] = useState(false);
+  const [editingLabIndex, setEditingLabIndex] = useState(-1);
 
   // Take-home medications
   const [medications, setMedications] = useState([]);
@@ -298,6 +312,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
             if (t.afterImages?.length) setAfterImages(t.afterImages);
             if (t.otherImages?.length) setOtherImages(t.otherImages);
+            if (t.labItems?.length) setLabItems(t.labItems);
           }
           // Load charts from Firestore backup (async — don't block form render)
           if (db && appId && treatmentId) {
@@ -317,6 +332,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     if (saved.beforeImages?.length) setBeforeImages(saved.beforeImages);
                     if (saved.afterImages?.length) setAfterImages(saved.afterImages);
                     if (saved.otherImages?.length) setOtherImages(saved.otherImages);
+                    if (saved.labItems?.length) setLabItems(saved.labItems);
                   }
                 }).catch(() => {});
             });
@@ -917,6 +933,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
         afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
         otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+        labItems: labItems.map(l => ({
+          id: l.id || '', productId: l.productId, productName: l.productName,
+          qty: l.qty, price: l.price, originalPrice: l.originalPrice || l.price,
+          discount: l.discount || '0', discountType: l.discountType || 'บาท',
+          isVatIncluded: l.isVatIncluded || false, rowId: l.rowId || '',
+          information: l.information || '',
+          images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+        })),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
           saleDate,
@@ -978,7 +1002,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
-              beforeImages, afterImages, otherImages,
+              beforeImages, afterImages, otherImages, labItems,
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });
@@ -1298,6 +1322,174 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
             ))}
           </FormSection>
+
+          {/* ── Lab Items ────────────────────────────────────────────────── */}
+          <FormSection isDark={isDark}>
+            <SectionHeader icon={FlaskConical} title="Lab" isDark={isDark} accent="#06b6d4">
+              <ActionBtn color="#06b6d4" isDark={isDark} onClick={async () => {
+                setLabModalOpen(true); setLabModalSelected(null); setLabModalQty('1'); setLabModalPrice(''); setLabModalDiscount(''); setLabModalDiscountType('amount'); setLabModalVat(false); setEditingLabIndex(-1);
+                if (labProducts.length === 0) {
+                  setLabModalLoading(true);
+                  try {
+                    const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
+                    if (r.success) setLabProducts(r.products || []);
+                  } catch {}
+                  setLabModalLoading(false);
+                }
+              }}>
+                <Plus size={10} /> เพิ่ม Lab
+              </ActionBtn>
+            </SectionHeader>
+            {labItems.length === 0 ? (
+              <p className="text-[10px] text-gray-500 text-center py-3">ยังไม่มี Lab — กด "เพิ่ม Lab" เพื่อเพิ่ม</p>
+            ) : (
+              <div className="space-y-3">
+                {labItems.map((lab, li) => (
+                  <div key={li} className={`p-3 rounded-lg border ${isDark ? 'bg-[#111] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold flex-1 truncate">{lab.productName}</span>
+                      <span className="text-[10px] text-gray-400">{lab.qty} {lab.unitName || ''} @ {lab.price}</span>
+                      <button onClick={() => {
+                        setEditingLabIndex(li);
+                        setLabModalSelected({ id: lab.productId, name: lab.productName, unit: lab.unitName, price: lab.originalPrice || lab.price });
+                        setLabModalQty(String(lab.qty)); setLabModalPrice(String(lab.originalPrice || lab.price));
+                        setLabModalDiscount(String(lab.discount || '')); setLabModalDiscountType(lab.discountType === '%' ? 'percent' : 'amount');
+                        setLabModalVat(!!lab.isVatIncluded); setLabModalOpen(true);
+                        if (labProducts.length === 0) broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
+                      }} className="text-cyan-500 hover:text-cyan-400"><Edit3 size={12} /></button>
+                      <button onClick={() => setLabItems(prev => prev.filter((_, i) => i !== li))} className="text-red-500 hover:text-red-400"><Trash2 size={12} /></button>
+                    </div>
+                    <textarea value={lab.information || ''} onChange={e => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, information: e.target.value } : l))}
+                      rows={2} className={`w-full text-[11px] rounded-lg px-2 py-1.5 resize-none outline-none border mb-2 ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-300' : 'bg-white border-gray-200'}`} placeholder="รายละเอียด Lab" />
+                    {/* Lab images (max 6) */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">รูปภาพ ({(lab.images||[]).length}/6)</span>
+                      {(lab.images||[]).length < 6 && (
+                        <label className="text-[9px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
+                          <Plus size={8} /> เพิ่มรูป
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                            const files = Array.from(e.target.files || []).slice(0, 6 - (lab.images||[]).length);
+                            files.forEach(file => {
+                              if (file.size > 10*1024*1024) return;
+                              const reader = new FileReader();
+                              reader.onload = ev => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  let w = img.width, h = img.height;
+                                  if (w > h) { if (w > 1920) { h *= 1920/w; w = 1920; } } else { if (h > 1920) { w *= 1920/h; h = 1920; } }
+                                  const c = document.createElement('canvas'); c.width = w; c.height = h;
+                                  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                                  ctx.drawImage(img, 0, 0, w, h);
+                                  const dataUrl = c.toDataURL('image/jpeg', 0.8);
+                                  setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: [...(l.images||[]).slice(0, 5), { dataUrl, id: '' }] } : l));
+                                };
+                                img.src = ev.target.result;
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                            e.target.value = '';
+                          }} />
+                        </label>
+                      )}
+                    </div>
+                    {(lab.images||[]).length > 0 && (
+                      <div className="grid grid-cols-6 gap-1">
+                        {lab.images.map((img, ii) => (
+                          <div key={ii} className="relative aspect-square rounded overflow-hidden border border-[#333] group">
+                            <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                            <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l))}
+                              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </FormSection>
+
+          {/* Lab Modal */}
+          {labModalOpen && (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" onClick={() => setLabModalOpen(false)}>
+              <div className={`w-full max-w-md rounded-2xl p-5 mx-4 ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white'}`} onClick={e => e.stopPropagation()}>
+                <h4 className="text-sm font-bold text-cyan-500 mb-4">{editingLabIndex >= 0 ? 'แก้ไข Lab' : 'เพิ่ม Lab'}</h4>
+                {labModalLoading ? <div className="text-center py-6"><Loader2 size={20} className="animate-spin mx-auto text-gray-500" /></div> : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className={labelCls}>เลือก Lab</label>
+                      <select value={labModalSelected?.id || ''} onChange={e => {
+                        const p = labProducts.find(p => String(p.id) === e.target.value);
+                        if (p) { setLabModalSelected(p); setLabModalPrice(p.price || '0'); setLabModalVat(!!p.isVatIncluded); }
+                      }} className={selectCls} disabled={editingLabIndex >= 0}>
+                        <option value="">-- เลือก --</option>
+                        {labProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>จำนวน</label>
+                        <input type="number" step="0.01" min="0.01" value={labModalQty} onChange={e => setLabModalQty(e.target.value)} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>ราคาต่อหน่วย</label>
+                        <input type="number" step="0.01" min="0" value={labModalPrice} onChange={e => setLabModalPrice(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>ส่วนลด</label>
+                        <input type="number" step="0.01" min="0" value={labModalDiscount} onChange={e => setLabModalDiscount(e.target.value)} className={inputCls} placeholder="0" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>ประเภทส่วนลด</label>
+                        <select value={labModalDiscountType} onChange={e => setLabModalDiscountType(e.target.value)} className={selectCls}>
+                          <option value="amount">บาท</option>
+                          <option value="percent">%</option>
+                        </select>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-400">
+                      <input type="checkbox" checked={labModalVat} onChange={e => setLabModalVat(e.target.checked)} /> VAT 7%
+                    </label>
+                    {(() => {
+                      const p = parseFloat(labModalPrice) || 0;
+                      const d = parseFloat(labModalDiscount) || 0;
+                      const afterDisc = labModalDiscountType === 'percent' ? p * (1 - d/100) : p - d;
+                      const vat = labModalVat ? afterDisc * 0.07 : 0;
+                      const total = afterDisc + vat;
+                      return <div className={`text-xs font-bold text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ราคาสุทธิ: {total.toFixed(2)} บาท</div>;
+                    })()}
+                    <div className="flex gap-2 pt-2">
+                      <button onClick={() => setLabModalOpen(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${isDark ? 'border-[#333] text-gray-400' : 'border-gray-300 text-gray-500'}`}>ยกเลิก</button>
+                      <button disabled={!labModalSelected} onClick={() => {
+                        const p = parseFloat(labModalPrice) || 0;
+                        const d = parseFloat(labModalDiscount) || 0;
+                        const afterDisc = labModalDiscountType === 'percent' ? p * (1 - d/100) : p - d;
+                        const vat = labModalVat ? afterDisc * 0.07 : 0;
+                        const finalPrice = (afterDisc + vat).toFixed(2);
+                        const item = {
+                          id: editingLabIndex >= 0 ? labItems[editingLabIndex]?.id || '' : '',
+                          productId: labModalSelected.id, productName: labModalSelected.name, unitName: labModalSelected.unit || '',
+                          qty: labModalQty || '1', price: finalPrice, originalPrice: labModalPrice,
+                          discount: labModalDiscount || '0', discountType: labModalDiscountType === 'percent' ? '%' : 'บาท',
+                          isVatIncluded: labModalVat, rowId: editingLabIndex >= 0 ? labItems[editingLabIndex]?.rowId || '' : '',
+                          information: editingLabIndex >= 0 ? labItems[editingLabIndex]?.information || '' : '',
+                          images: editingLabIndex >= 0 ? labItems[editingLabIndex]?.images || [] : [],
+                        };
+                        if (editingLabIndex >= 0) {
+                          setLabItems(prev => prev.map((l, i) => i === editingLabIndex ? item : l));
+                        } else {
+                          setLabItems(prev => [...prev, item]);
+                        }
+                        setLabModalOpen(false);
+                      }} className="flex-1 py-2 rounded-lg text-xs font-bold bg-cyan-600 text-white disabled:opacity-40">ยืนยัน</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
           <FormSection isDark={isDark}>

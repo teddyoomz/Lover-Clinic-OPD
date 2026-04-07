@@ -171,12 +171,13 @@ async function handleGetMedicationGroups(req, res) {
 // ─── Action: searchProducts — Search ProClinic products via JSON API ───────
 
 async function handleSearchProducts(req, res) {
-  const { productType, query, isTakeaway, perPage } = req.body || {};
+  const { productType, serviceType, query, isTakeaway, perPage } = req.body || {};
   const session = await createSession();
   const base = session.origin;
 
   const params = new URLSearchParams();
   if (productType) params.set('product_type', productType);
+  if (serviceType) params.set('service_type', serviceType);
   if (query) params.set('q', query);
   if (isTakeaway) params.set('is_takeaway_product', '1');
   if (perPage) params.set('per_page', String(perPage));
@@ -643,6 +644,40 @@ async function handleCreate(req, res) {
     });
   }
 
+  // Lab items
+  if (treatment.labItems?.length) {
+    treatment.labItems.forEach((lab, i) => {
+      formData.append('lab_id[]', lab.id || '');
+      formData.append('lab_product_id[]', lab.productId || '');
+      formData.append('lab_product_qty[]', String(lab.qty || 1));
+      formData.append('lab_product_price[]', String(lab.price || 0));
+      formData.append('lab_product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
+      formData.append('lab_product_discount[]', String(lab.discount || 0));
+      formData.append('lab_product_discount_type[]', lab.discountType || 'บาท');
+      formData.append('lab_product_original_price[]', String(lab.originalPrice || lab.price || 0));
+      formData.append('lab_product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('lab_information[]', lab.information || '');
+      // Lab images per product
+      if (lab.images?.length) {
+        lab.images.forEach(img => {
+          formData.append(`lab_image_${lab.productId}[]`, img.dataUrl || '');
+          formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
+        });
+      }
+      // Also add to product arrays (ProClinic expects lab in product_id[] too)
+      formData.append('product_id[]', lab.productId || '');
+      formData.append('product_qty[]', String(lab.qty || 1));
+      formData.append('product_price[]', String(lab.price || 0));
+      formData.append('product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('product_is_premium[]', 'false');
+      formData.append('product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
+      formData.append('product_discount[]', String(lab.discount || 0));
+      formData.append('product_discount_type[]', lab.discountType || 'บาท');
+      formData.append('product_original_price[]', String(lab.originalPrice || lab.price || 0));
+    });
+    console.log(`[treatment] create — ${treatment.labItems.length} lab items`);
+  }
+
   // Chart images — sent as hidden fields (data URLs from canvas drawing)
   // ProClinic stores these as chart_image[] + chart_image_ids[] in the treatment form
   formData.delete('chart_image[]');
@@ -1103,6 +1138,32 @@ async function handleUpdate(req, res) {
       formData.set(`sale_percent_${i}`, treatment[`sellerPercent${i}`] || existing[`sale_percent_${i}`] || (i === 1 ? '100' : ''));
       formData.set(`sale_total_${i}`, treatment[`sellerTotal${i}`] || existing[`sale_total_${i}`] || '');
     }
+  }
+
+  // Lab items (update)
+  if (Array.isArray(treatment.labItems)) {
+    // Clear existing lab fields
+    ['lab_id[]','lab_product_id[]','lab_product_qty[]','lab_product_price[]','lab_product_is_vat_included[]',
+     'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]'
+    ].forEach(f => formData.delete(f));
+    treatment.labItems.forEach((lab, i) => {
+      formData.append('lab_id[]', lab.id || '');
+      formData.append('lab_product_id[]', lab.productId || '');
+      formData.append('lab_product_qty[]', String(lab.qty || 1));
+      formData.append('lab_product_price[]', String(lab.price || 0));
+      formData.append('lab_product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
+      formData.append('lab_product_discount[]', String(lab.discount || 0));
+      formData.append('lab_product_discount_type[]', lab.discountType || 'บาท');
+      formData.append('lab_product_original_price[]', String(lab.originalPrice || lab.price || 0));
+      formData.append('lab_product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('lab_information[]', lab.information || '');
+      if (lab.images?.length) {
+        lab.images.forEach(img => {
+          formData.append(`lab_image_${lab.productId}[]`, img.dataUrl || '');
+          formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
+        });
+      }
+    });
   }
 
   // Treatment images — Before/After/Other
