@@ -2056,7 +2056,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       if (!proClinicId) {
         // First time: create customer in ProClinic
-        await updateDoc(ref, { brokerStatus: 'pending' });
+        // Fire-and-forget: don't block API call on Firestore write
+        updateDoc(ref, { brokerStatus: 'pending' }).catch(() => {});
         showToast('กำลังสร้างลูกค้าใน ProClinic...');
         const result = await broker.fillProClinic(patient);
         if (!result?.success) throw new Error(result?.error || 'สร้างลูกค้าไม่สำเร็จ');

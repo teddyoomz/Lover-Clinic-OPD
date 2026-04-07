@@ -47,23 +47,30 @@ async function ensureExtensionHasCredentials() {
   } catch (_) {}
 }
 
+// ─── Cached auth token (avoid re-fetching on every call) ────────────────────
+let _cachedToken = null;
+let _cachedTokenExp = 0;
+
+async function getCachedIdToken() {
+  const auth = getAuth(app);
+  const currentUser = auth.currentUser;
+  if (!currentUser) return null;
+  // Reuse token if still valid (refresh 2 min before expiry)
+  if (_cachedToken && Date.now() < _cachedTokenExp - 120_000) return _cachedToken;
+  _cachedToken = await currentUser.getIdToken();
+  // Firebase tokens last 1 hour
+  _cachedTokenExp = Date.now() + 3_600_000;
+  return _cachedToken;
+}
+
 // ─── API fetch with auto-retry via extension ─────────────────────────────────
 
 async function apiFetch(endpoint, body, _retried, _htmlRetried) {
-  // Get Firebase auth token for API authentication
-  const auth = getAuth(app);
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
+  // Get cached Firebase auth token
+  const token = await getCachedIdToken();
+  if (!token) {
     console.warn(`[broker] ${endpoint} — not logged in`);
     return { success: false, error: 'Not logged in' };
-  }
-
-  let token;
-  try {
-    token = await currentUser.getIdToken();
-  } catch (err) {
-    console.warn(`[broker] ${endpoint} — failed to get auth token`, err);
-    return { success: false, error: 'Failed to get auth token' };
   }
 
   let res;

@@ -393,7 +393,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     startSyncTimeout();
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sid);
-      await updateDoc(ref, { lastCoursesAutoFetch: serverTimestamp(), coursesRefreshRequest: null });
+      // Fire-and-forget: don't block API call on Firestore write
+      updateDoc(ref, { lastCoursesAutoFetch: serverTimestamp(), coursesRefreshRequest: null }).catch(() => {});
       const result = await broker.getCourses(proClinicId);
       clearSyncTimeout();
       setScriptSyncing(false);

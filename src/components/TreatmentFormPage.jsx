@@ -242,18 +242,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   useEffect(() => {
     (async () => {
       try {
-        // Always load form options (doctors, courses, etc.)
-        const formData = await broker.getTreatmentCreateForm(customerId);
-        if (!formData.success || !formData.options) {
-          setError(formData.error || 'ไม่สามารถโหลดฟอร์มได้');
-          setLoading(false);
-          return;
-        }
-        setOptions(formData.options);
-
+        // Edit mode: load form options + treatment detail IN PARALLEL
         if (isEdit && treatmentId) {
-          // Load existing treatment data for edit
-          const detail = await broker.getTreatment(treatmentId);
+          const [formData, detail] = await Promise.all([
+            broker.getTreatmentCreateForm(customerId),
+            broker.getTreatment(treatmentId),
+          ]);
+          if (!formData.success || !formData.options) {
+            setError(formData.error || 'ไม่สามารถโหลดฟอร์มได้');
+            setLoading(false);
+            return;
+          }
+          setOptions(formData.options);
           if (detail.success && detail.treatment) {
             const t = detail.treatment;
             if (t.doctorId) setDoctorId(t.doctorId);
@@ -287,7 +287,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             }
           }
         } else {
-          // Create mode — pre-fill defaults
+          // Create mode — load form options only
+          const formData = await broker.getTreatmentCreateForm(customerId);
+          if (!formData.success || !formData.options) {
+            setError(formData.error || 'ไม่สามารถโหลดฟอร์มได้');
+            setLoading(false);
+            return;
+          }
+          setOptions(formData.options);
+          // Pre-fill defaults
           const hi = formData.options.healthInfo || {};
           if (hi.doctorId) setDoctorId(hi.doctorId);
           if (hi.bloodType) setBloodType(hi.bloodType);
