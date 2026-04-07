@@ -22,7 +22,9 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent })
   };
 
   const handleSave = (chartData) => {
-    const entry = { ...chartData, template: canvasTemplate, savedAt: new Date().toISOString() };
+    // Ensure fabricJson is serialized as string for reliable storage/restore
+    const fabricJson = typeof chartData.fabricJson === 'string' ? chartData.fabricJson : JSON.stringify(chartData.fabricJson);
+    const entry = { ...chartData, fabricJson, template: canvasTemplate, savedAt: new Date().toISOString() };
     if (editingIdx >= 0) {
       onChartsChange(prev => prev.map((c, i) => i === editingIdx ? entry : c));
     } else {
