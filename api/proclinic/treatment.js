@@ -1048,6 +1048,29 @@ async function handleUpdate(req, res) {
     formData.set('*credit', treatment.walletAmount ?? existing['*credit'] ?? '');
   }
 
+  // Chart images — preserve existing or use new from frontend
+  formData.delete('chart_image[]');
+  formData.delete('chart_image_ids[]');
+  if (treatment.chartImages?.length) {
+    treatment.chartImages.forEach((dataUrl) => {
+      formData.append('chart_image[]', dataUrl);
+      formData.append('chart_image_ids[]', '');
+    });
+  } else {
+    // Preserve existing chart_image fields from edit page
+    const existingCharts = [];
+    const existingChartIds = [];
+    const $ = cheerio.load(editHtml);
+    $('input[name="chart_image[]"]').each((_, el) => { existingCharts.push($(el).val() || ''); });
+    $('input[name="chart_image_ids[]"]').each((_, el) => { existingChartIds.push($(el).val() || ''); });
+    existingCharts.forEach((img, i) => {
+      if (img) {
+        formData.append('chart_image[]', img);
+        formData.append('chart_image_ids[]', existingChartIds[i] || '');
+      }
+    });
+  }
+
   // Sellers (preserve existing)
   for (let i = 1; i <= 5; i++) {
     const sId = treatment[`seller${i}Id`] || existing[`seller_${i}_id`] || '';

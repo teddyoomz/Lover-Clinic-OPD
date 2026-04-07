@@ -62,17 +62,33 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
           const jsonStr = typeof existingData.fabricJson === 'string'
             ? existingData.fabricJson : JSON.stringify(existingData.fabricJson);
           const jsonData = JSON.parse(jsonStr);
-          const savedW = jsonData.width || maxW;
-          const savedH = jsonData.height || maxH;
-          // Fit saved canvas size into container
-          const fitScale = Math.min(maxW / savedW, maxH / savedH, 1);
-          const canvas = initCanvas(Math.round(savedW * fitScale), Math.round(savedH * fitScale));
+          const savedW = jsonData.width || 500;
+          const savedH = jsonData.height || 700;
+          // Use saved aspect ratio, fit into container
+          const savedRatio = savedW / savedH;
+          let canvasW, canvasH;
+          if (maxW / maxH > savedRatio) {
+            canvasH = maxH;
+            canvasW = Math.round(maxH * savedRatio);
+          } else {
+            canvasW = maxW;
+            canvasH = Math.round(maxW / savedRatio);
+          }
+          const canvas = initCanvas(canvasW, canvasH);
           await canvas.loadFromJSON(jsonData);
-          if (fitScale < 1) {
-            // Scale all objects to fit
+          // Force canvas size back (loadFromJSON may override)
+          const scaleX = canvasW / savedW;
+          const scaleY = canvasH / savedH;
+          canvas.setWidth(canvasW);
+          canvas.setHeight(canvasH);
+          if (Math.abs(scaleX - 1) > 0.01 || Math.abs(scaleY - 1) > 0.01) {
             canvas.getObjects().forEach(obj => {
-              obj.set({ scaleX: (obj.scaleX || 1) * fitScale, scaleY: (obj.scaleY || 1) * fitScale,
-                left: (obj.left || 0) * fitScale, top: (obj.top || 0) * fitScale });
+              obj.set({
+                scaleX: (obj.scaleX || 1) * scaleX,
+                scaleY: (obj.scaleY || 1) * scaleY,
+                left: (obj.left || 0) * scaleX,
+                top: (obj.top || 0) * scaleY,
+              });
             });
           }
           canvas.getObjects().forEach(obj => {
