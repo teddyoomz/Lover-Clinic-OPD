@@ -215,8 +215,11 @@ async function handleUpdate(req, res) {
   params.set('customer_note', '');
   params.set('appointment_color', existingData.appointment_color || '');
 
-  // 4. POST /admin/appointment/{id} with _method=PUT
-  const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
+  // Include appointment_id in body (ProClinic routes update via same URL as create)
+  params.set('appointment_id', appointmentId);
+
+  // 4. POST /admin/appointment (same URL as create, _method=PUT differentiates)
+  const submitRes = await session.fetch(`${base}/admin/appointment`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
