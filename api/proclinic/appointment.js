@@ -177,52 +177,34 @@ async function handleUpdate(req, res) {
   params.set('customer_note', '');
   params.set('appointment_color', '');
 
-  // Try multiple URL patterns to find which ProClinic accepts
-  const attempts = [
-    { url: `${base}/admin/appointment`, label: 'POST /admin/appointment (original)' },
-    { url: `${base}/admin/appointment/${appointmentId}`, label: `POST /admin/appointment/${appointmentId}` },
-  ];
+  // POST /admin/appointment with _method=PUT + appointment_id in body
+  const submitRes = await session.fetch(`${base}/admin/appointment`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-TOKEN': csrf,
+      'Referer': `${base}/admin/appointment`,
+    },
+    body: params.toString(),
+    redirect: 'manual',
+  });
 
-  for (const attempt of attempts) {
-    const submitRes = await session.fetch(attempt.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRF-TOKEN': csrf,
-        'Referer': `${base}/admin/appointment`,
-      },
-      body: params.toString(),
-      redirect: 'manual',
-    });
+  const status = submitRes.status;
+  if (status >= 300 && status < 400) {
+    return res.status(200).json({ success: true });
+  }
 
-    const status = submitRes.status;
-    const location = submitRes.headers?.get('location') || '';
-    console.log(`[appointment update] ${attempt.label} → ${status} location=${location}`);
-
-    if (status === 405) continue; // try next pattern
-
-    if (status >= 300 && status < 400) {
-      // Verify the update by re-fetching the appointment
-      let verified = false;
-      try {
-        const checkDate = appointment.appointmentDate;
-        const checkData = await session.fetchJSON(`${base}/admin/api/appointment?date=${checkDate}`);
-        const events = Array.isArray(checkData) ? checkData : checkData.appointment || [];
-        verified = events.some(ev => String((ev.extendedProps || {}).id) === String(appointmentId));
-      } catch {}
-      return res.status(200).json({ success: true, _debug: { status, location, attempt: attempt.label, verified } });
-    }
-
-    if (status === 200) {
-      let bodyHtml = '';
-      try { bodyHtml = await submitRes.text(); } catch {}
-      if (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success')) {
-        return res.status(200).json({ success: true, _debug: { attempt: attempt.label } });
-      }
+  if (status === 200) {
+    let bodyHtml = '';
+    try { bodyHtml = await submitRes.text(); } catch {}
+    if (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success')) {
+      return res.status(200).json({ success: true });
     }
   }
 
-  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ — ไม่มี URL pattern ที่ ProClinic รับ`);
+  let bodyHtml = '';
+  try { bodyHtml = await submitRes.text(); } catch {}
+  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status})`);
 }
 
 // ─── Action: delete ─────────────────────────────────────────────────────────
