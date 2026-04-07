@@ -862,6 +862,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
         treatmentItems,
+        // Chart images — sent as chart_image[] to ProClinic (data URLs from canvas)
+        chartImages: charts.filter(c => c.dataUrl).map(c => c.dataUrl),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
           saleDate,
@@ -929,20 +931,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           } catch (e) {
             console.warn('[TreatmentForm] Failed to save local backup:', e);
           }
-        }
-        // Upload charts to ProClinic (async — don't block success)
-        const tid = data.treatmentId || treatmentId;
-        if (charts.length > 0 && tid) {
-          charts.forEach((chart, i) => {
-            if (i < 2 && chart.dataUrl) {
-              const base64 = chart.dataUrl.split(',')[1];
-              if (base64) {
-                broker.uploadChart(tid, i + 1, base64)
-                  .then(r => console.log(`[Chart] upload ${i + 1}:`, r.success ? 'OK' : r.error))
-                  .catch(err => console.warn(`[Chart] upload ${i + 1} failed:`, err.message));
-              }
-            }
-          });
         }
         setSuccess(true);
         setTimeout(() => { if (onSaved) onSaved(); }, 1200);

@@ -643,6 +643,18 @@ async function handleCreate(req, res) {
     });
   }
 
+  // Chart images — sent as hidden fields (data URLs from canvas drawing)
+  // ProClinic stores these as chart_image[] + chart_image_ids[] in the treatment form
+  formData.delete('chart_image[]');
+  formData.delete('chart_image_ids[]');
+  if (treatment.chartImages?.length) {
+    treatment.chartImages.forEach((dataUrl) => {
+      formData.append('chart_image[]', dataUrl);
+      formData.append('chart_image_ids[]', ''); // empty = new chart
+    });
+    console.log(`[treatment] create — ${treatment.chartImages.length} chart images attached (${treatment.chartImages.map(u => Math.round(u.length/1024) + 'KB').join(', ')})`);
+  }
+
   // Insurance — only send when explicitly enabled (checkbox/radio: unchecked = don't send)
   if (treatment.isInsuranceClaimed) {
     formData.set('is_insurance_claimed', '1');
