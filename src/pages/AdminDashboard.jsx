@@ -4156,18 +4156,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="text-center py-6 text-xs text-gray-500">ไม่พบนัดหมาย</div>
                   ) : (
                     <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar" ref={el => {
-                      // Auto-scroll to first future appointment after load
+                      if (el && el._scrolled) return;
                       if (el && apptCustomerAppts.length > 0) {
+                        el._scrolled = true;
                         const todayISO = new Date().toISOString().substring(0, 10);
                         const firstFutureIdx = apptCustomerAppts.findIndex(a => a.date >= todayISO);
-                        const targetIdx = firstFutureIdx >= 0 ? firstFutureIdx : apptCustomerAppts.length - 1;
-                        const target = el.children[targetIdx];
-                        if (target) requestAnimationFrame(() => target.scrollIntoView({ block: 'start', behavior: 'instant' }));
+                        if (firstFutureIdx > 0) {
+                          const target = el.children[firstFutureIdx];
+                          if (target) requestAnimationFrame(() => el.scrollTop = target.offsetTop - el.offsetTop);
+                        }
                       }
                     }}>
                       {apptCustomerAppts.map(a => {
                         const isPast = a.date < new Date().toISOString().substring(0, 10);
-                        // Format: dd เดือน พ.ศ.
                         const [ay, amo, ad] = (a.date || '').split('-').map(Number);
                         const thMo = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
                         const dateDisplay = ad && amo ? `${ad} ${thMo[amo - 1]} ${ay + 543}` : a.date;
@@ -4181,18 +4182,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{a.doctorName || '-'}</p>
                               <p className="text-[10px] text-gray-500 truncate">{a.appointmentTo || ''}{a.note ? ` | ${a.note}` : ''}{a.roomName && a.roomName !== '-' ? ` | ${a.roomName}` : ''}</p>
                             </div>
-                            {!isPast && (
-                              <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1 shrink-0">
+                              {!isPast && (
                                 <button onClick={() => handleApptEdit(a)} title="แก้ไข"
                                   className="p-1.5 rounded-lg border border-[var(--bd)] text-sky-400 hover:bg-sky-500/10 transition-colors">
                                   <Edit3 size={12} />
                                 </button>
-                                <button onClick={() => handleApptDelete(a.id)} title="ลบ"
-                                  className="p-1.5 rounded-lg border border-[var(--bd)] text-red-400 hover:bg-red-500/10 transition-colors">
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            )}
+                              )}
+                              <button onClick={() => handleApptDelete(a.id)} title="ลบ"
+                                className="p-1.5 rounded-lg border border-[var(--bd)] text-red-400 hover:bg-red-500/10 transition-colors">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
