@@ -31,6 +31,27 @@ function toMultipartFormData(urlParams, pdfFiles) {
   return fd;
 }
 
+// ─── Helper: resolve ProClinic image URLs to data URLs ─────────────────────
+// ProClinic stores lab images as server URLs (e.g. /storage/lab/...) in hidden inputs.
+// We fetch them server-side and convert to base64 data URLs for the frontend.
+async function resolveImageUrls(session, images) {
+  if (!images?.length) return images;
+  return Promise.all(images.map(async (img) => {
+    if (!img.dataUrl || img.dataUrl.startsWith('data:')) return img;
+    // It's a URL — fetch and convert to data URL
+    try {
+      const url = img.dataUrl.startsWith('http') ? img.dataUrl : `${session.origin}${img.dataUrl.startsWith('/') ? '' : '/'}${img.dataUrl}`;
+      const resp = await session.fetch(url, { headers: { 'Accept': 'image/*' }, redirect: 'follow' });
+      if (!resp.ok) return img;
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      const ct = resp.headers.get('content-type') || 'image/jpeg';
+      return { ...img, dataUrl: `data:${ct};base64,${buffer.toString('base64')}` };
+    } catch {
+      return img;
+    }
+  }));
+}
+
 // ─── Firestore backup for customer inventory (courses) ─────────────────────
 
 async function saveInventoryToFirestore(customerId, courses) {
@@ -376,6 +397,17 @@ async function handleGet(req, res) {
 
   const treatment = extractTreatmentDetail(html);
   treatment.id = treatmentId;
+
+  // Resolve ProClinic image URLs → data URLs (lab images may be server URLs, not data URLs)
+  const imageArrays = ['beforeImages', 'afterImages', 'otherImages'];
+  await Promise.all([
+    ...imageArrays.map(async key => {
+      if (treatment[key]?.length) treatment[key] = await resolveImageUrls(session, treatment[key]);
+    }),
+    ...(treatment.labItems || []).map(async lab => {
+      if (lab.images?.length) lab.images = await resolveImageUrls(session, lab.images);
+    }),
+  ]);
 
   // Backup treatment detail to Firestore for standalone (async)
   const docPath = `artifacts/${APP_ID}/public/data/pc_treatments/${treatmentId}`;
