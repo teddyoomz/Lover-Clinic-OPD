@@ -1137,18 +1137,13 @@ async function handleDelete(req, res) {
   throw new Error(`ยกเลิกการรักษาไม่สำเร็จ — status ${status}`);
 }
 
-// ─── Action: uploadChart — Upload chart image to existing treatment ────────
+// ─── Action: uploadChart — Upload chart image to ProClinic's Chart system ──
 
 async function handleUploadChart(req, res) {
   const { treatmentId, fileIndex, imageBase64 } = req.body || {};
   if (!treatmentId || !imageBase64) {
     return res.status(400).json({ success: false, error: 'Missing treatmentId or imageBase64' });
   }
-  const idx = parseInt(fileIndex) || 1; // 1 or 2
-  if (idx < 1 || idx > 2) {
-    return res.status(400).json({ success: false, error: 'fileIndex must be 1 or 2' });
-  }
-  // Base64 size check (~3MB limit)
   if (imageBase64.length > 4_000_000) {
     return res.status(400).json({ success: false, error: 'Image too large (max ~3MB)' });
   }
@@ -1156,71 +1151,106 @@ async function handleUploadChart(req, res) {
   const session = await createSession();
   const base = session.origin;
 
-  // GET the edit page to get CSRF + existing form fields
+  // Step 1: Discover Chart API by scraping the treatment edit page for JS/API URLs
   const editHtml = await session.fetchText(`${base}/admin/treatment/${treatmentId}/edit`);
   const csrf = extractCSRF(editHtml);
   if (!csrf) throw new Error('ไม่พบ CSRF token');
 
-  // Extract existing fields to preserve them
-  const existing = extractFormFields(editHtml);
-
-  // Build multipart/form-data with the chart image
-  const boundary = `----ChartUpload${Date.now()}`;
-  const parts = [];
-
-  // Add CSRF token
-  parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="_token"\r\n\r\n${csrf}`);
-  parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="_method"\r\n\r\nPUT`);
-
-  // Add ALL existing fields (preserve treatment data)
-  for (const [key, val] of Object.entries(existing)) {
-    if (key === '_token' || key === '_method') continue;
-    if (key === `treatment_file_${idx}`) continue; // will be overridden by our file
-    parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}`);
+  // Look for chart-related API endpoints in the page JavaScript
+  // ProClinic Vue.js apps typically call /admin/api/document-chart or /admin/document/chart
+  const chartApiPatterns = [
+    /\/admin\/api\/document[_-]?chart/gi,
+    /\/admin\/document[_-]?chart/gi,
+    /\/admin\/api\/chart/gi,
+    /document.chart|chartStore|chartCreate/gi,
+  ];
+  const foundUrls = [];
+  for (const pat of chartApiPatterns) {
+    const matches = editHtml.match(pat);
+    if (matches) foundUrls.push(...matches);
   }
+  console.log(`[chart] found chart-related URLs in edit page: ${JSON.stringify([...new Set(foundUrls)])}`);
 
-  // Add the chart image as a file
+  // Step 2: Try the most likely ProClinic Chart API endpoint
+  // ProClinic Chart system uses POST /admin/document/chart with multipart form data
   const imageBuffer = Buffer.from(imageBase64, 'base64');
-  const filePart = `--${boundary}\r\nContent-Disposition: form-data; name="treatment_file_${idx}"; filename="chart_${idx}.png"\r\nContent-Type: image/png\r\n\r\n`;
-  const endPart = `\r\n--${boundary}--\r\n`;
 
-  // Combine text parts + binary file
-  const textParts = parts.join('\r\n') + '\r\n';
-  const textBuffer = Buffer.from(textParts, 'utf-8');
-  const filePartBuffer = Buffer.from(filePart, 'utf-8');
-  const endPartBuffer = Buffer.from(endPart, 'utf-8');
-  const body = Buffer.concat([textBuffer, filePartBuffer, imageBuffer, endPartBuffer]);
+  // Try document-chart API first (ProClinic's common pattern)
+  const chartEndpoints = [
+    `${base}/admin/document/chart`,
+    `${base}/admin/api/document-chart`,
+    `${base}/admin/api/chart`,
+  ];
 
-  console.log(`[treatment] uploadChart — treatmentId=${treatmentId}, file=${idx}, size=${imageBuffer.length} bytes`);
+  for (const endpoint of chartEndpoints) {
+    try {
+      // Build multipart body for chart creation
+      const boundary = `----ChartUpload${Date.now()}`;
+      const fieldParts = [
+        `--${boundary}\r\nContent-Disposition: form-data; name="_token"\r\n\r\n${csrf}`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="treatment_id"\r\n\r\n${treatmentId}`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="type"\r\n\r\nchart`,
+      ];
+      const textBuffer = Buffer.from(fieldParts.join('\r\n') + '\r\n', 'utf-8');
+      const filePartBuffer = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="chart.png"\r\nContent-Type: image/png\r\n\r\n`, 'utf-8');
+      const endBuffer = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf-8');
+      const body = Buffer.concat([textBuffer, filePartBuffer, imageBuffer, endBuffer]);
 
-  const uploadRes = await session.fetch(`${base}/admin/treatment/${treatmentId}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      'X-CSRF-TOKEN': csrf,
-      'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
-    },
-    body,
-    redirect: 'manual',
-  });
+      console.log(`[chart] trying endpoint: ${endpoint}`);
+      const chartRes = await session.fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'X-CSRF-TOKEN': csrf,
+          'Accept': 'application/json',
+          'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
+        },
+        body,
+        redirect: 'manual',
+      });
 
-  const status = uploadRes.status;
-  const location = uploadRes.headers?.get?.('location') || '';
-  console.log(`[treatment] uploadChart — response: status=${status}, location="${location}"`);
+      const chartStatus = chartRes.status;
+      console.log(`[chart] ${endpoint} → status=${chartStatus}`);
 
-  if (status >= 300 && status < 400 && !location.includes('/login')) {
-    return res.status(200).json({ success: true, treatmentId });
+      if (chartStatus === 200 || chartStatus === 201) {
+        const responseText = await chartRes.text();
+        console.log(`[chart] response: ${responseText.substring(0, 500)}`);
+        try {
+          const data = JSON.parse(responseText);
+          return res.status(200).json({ success: true, treatmentId, chartData: data });
+        } catch (_) {
+          // Non-JSON success response
+          if (!responseText.includes('login') && !responseText.includes('error')) {
+            return res.status(200).json({ success: true, treatmentId });
+          }
+        }
+      } else if (chartStatus >= 300 && chartStatus < 400) {
+        const loc = chartRes.headers?.get?.('location') || '';
+        if (!loc.includes('/login')) {
+          return res.status(200).json({ success: true, treatmentId });
+        }
+      }
+      // If 404/405/422, try next endpoint
+    } catch (err) {
+      console.warn(`[chart] ${endpoint} failed:`, err.message);
+    }
   }
 
-  // Try to extract error
-  let errorMsg = `Upload chart ไม่สำเร็จ — status ${status}`;
-  try {
-    const body = await uploadRes.text();
-    const errors = extractValidationErrors(body);
-    if (errors) errorMsg = `ProClinic: ${errors}`;
-  } catch (_) {}
+  // Fallback: log what we found in the HTML for future debugging
+  // Extract all API-like URLs from inline scripts
+  const apiUrls = new Set();
+  const apiMatch = editHtml.matchAll(/['"`](\/admin\/api\/[^'"`\s]+)['"`]/g);
+  for (const m of apiMatch) apiUrls.add(m[1]);
+  const docMatch = editHtml.matchAll(/['"`](\/admin\/document[^'"`\s]*)['"`]/g);
+  for (const m of docMatch) apiUrls.add(m[1]);
+  console.log(`[chart] all API URLs found in treatment edit page: ${JSON.stringify([...apiUrls])}`);
 
-  throw new Error(errorMsg);
+  return res.status(200).json({
+    success: false,
+    error: 'ไม่พบ Chart API endpoint ใน ProClinic — กรุณาตรวจสอบ DevTools',
+    discoveredUrls: [...apiUrls],
+    foundPatterns: [...new Set(foundUrls)],
+  });
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────
