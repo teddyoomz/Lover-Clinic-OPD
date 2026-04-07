@@ -613,15 +613,43 @@ async function handleCreate(req, res) {
   }
 
   // Purchased items → courses/products JSON
-  // ProClinic expects JSON strings: courses (คอร์ส+โปรโมชัน), products (สินค้าหน้าร้าน)
+  // ProClinic expects JSON strings: courses (คอร์ส+โปรโมชัน), products (ALL products including lab)
+  // CRITICAL: ProClinic's JS pushes ALL product types (lab, xray, buying, etc.) into the `products`
+  // JSON array before form.submit(). The backend reads this JSON to process products.
   const purchasedCourses = (treatment.purchasedItems || []).filter(p => p.itemType === 'course' || p.itemType === 'promotion');
   const purchasedProducts = (treatment.purchasedItems || []).filter(p => p.itemType === 'retail' || p.itemType === 'product');
+
+  // Build the comprehensive products JSON array (matches ProClinic's JS `products` array)
+  const allProducts = [];
+  // Add purchased retail/product items
+  purchasedProducts.forEach(p => {
+    allProducts.push({
+      type: 'product', rowId: null, parentRowId: null,
+      id: p.id, product_code: '', product_name: p.name, unit_name: p.unit || '',
+      qty: parseFloat(p.qty || 1), price: parseFloat(p.unitPrice || 0),
+      course_id: null, qty_per_course: null, is_premium: 0, buying: 1,
+      product_type: '', promotion_id: null, qty_per_time: null,
+      is_df: 0, min_qty: 0, max_qty: null, is_vat_included: false, is_hidden: 0,
+    });
+  });
+  // Add lab items to products JSON (ProClinic requires this for lab processing)
+  (treatment.labItems || []).forEach((lab, i) => {
+    allProducts.push({
+      type: 'lab', rowId: labRowIds[i], parentRowId: null,
+      id: lab.productId, product_code: '', product_name: lab.productName || '',
+      unit_name: lab.unitName || '', qty: parseFloat(lab.qty || 1),
+      price: parseFloat(lab.price || 0), course_id: null, qty_per_course: null,
+      is_premium: 0, buying: 1, product_type: lab.productType || 'บริการ',
+      promotion_id: null, qty_per_time: null, is_df: 1,
+      min_qty: 0, max_qty: null, is_vat_included: lab.isVatIncluded || false,
+      is_hidden: 0,
+    });
+  });
+
   formData.set('courses', purchasedCourses.length ? JSON.stringify(purchasedCourses.map(p => ({
     id: p.id, name: p.name, qty: String(p.qty || 1), price: String(p.unitPrice || 0), unit: p.unit || '',
   }))) : '');
-  formData.set('products', purchasedProducts.length ? JSON.stringify(purchasedProducts.map(p => ({
-    id: p.id, name: p.name, qty: String(p.qty || 1), price: String(p.unitPrice || 0), unit: p.unit || '',
-  }))) : '');
+  formData.set('products', allProducts.length ? JSON.stringify(allProducts) : '');
   formData.set('appointment_id', treatment.appointmentId || '');
   formData.set('treatment_id', '');
 
@@ -663,6 +691,8 @@ async function handleCreate(req, res) {
       formData.append('lab_product_original_price[]', String(lab.originalPrice || lab.price || 0));
       formData.append('lab_product_rowId[]', rid);
       formData.append('lab_information[]', lab.information || '');
+      // Lab PDF file field (ProClinic always generates lab_file_id_{productId} even when empty)
+      formData.set(`lab_file_id_${lab.productId}`, lab.fileId || '');
       // Lab images per product
       if (lab.images?.length) {
         lab.images.forEach(img => {
@@ -1158,11 +1188,32 @@ async function handleUpdate(req, res) {
 
   // Lab items (update)
   if (Array.isArray(treatment.labItems)) {
-    // Clear existing lab fields
+    // Clear existing lab fields + product fields (will rebuild)
     ['lab_id[]','lab_product_id[]','lab_product_qty[]','lab_product_price[]','lab_product_is_vat_included[]',
-     'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]'
+     'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]',
+     'product_id[]','product_qty[]','product_price[]','product_rowId[]','product_is_premium[]','product_is_vat_included[]',
+     'product_discount[]','product_discount_type[]','product_original_price[]'
     ].forEach(f => formData.delete(f));
+    const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
+    const labRowIds = treatment.labItems.map(lab => lab.rowId || genRowId());
+    // Build products JSON with lab items (ProClinic requires this)
+    const labProductsJson = treatment.labItems.map((lab, i) => ({
+      type: 'lab', rowId: labRowIds[i], parentRowId: null,
+      id: lab.productId, product_code: '', product_name: lab.productName || '',
+      unit_name: lab.unitName || '', qty: parseFloat(lab.qty || 1),
+      price: parseFloat(lab.price || 0), course_id: null, qty_per_course: null,
+      is_premium: 0, buying: 1, product_type: lab.productType || 'บริการ',
+      promotion_id: null, qty_per_time: null, is_df: 1,
+      min_qty: 0, max_qty: null, is_vat_included: lab.isVatIncluded || false,
+      is_hidden: 0,
+    }));
+    // Merge with existing products JSON if present
+    const existingProducts = (() => { try { return JSON.parse(formData.get('products') || '[]'); } catch { return []; } })();
+    const nonLabProducts = existingProducts.filter(p => p.type !== 'lab');
+    formData.set('products', JSON.stringify([...nonLabProducts, ...labProductsJson]));
+
     treatment.labItems.forEach((lab, i) => {
+      const rid = labRowIds[i];
       formData.append('lab_id[]', lab.id || '');
       formData.append('lab_product_id[]', lab.productId || '');
       formData.append('lab_product_qty[]', String(lab.qty || 1));
@@ -1171,14 +1222,26 @@ async function handleUpdate(req, res) {
       formData.append('lab_product_discount[]', String(lab.discount || 0));
       formData.append('lab_product_discount_type[]', lab.discountType || 'บาท');
       formData.append('lab_product_original_price[]', String(lab.originalPrice || lab.price || 0));
-      formData.append('lab_product_rowId[]', lab.rowId || String(1000 + i));
+      formData.append('lab_product_rowId[]', rid);
       formData.append('lab_information[]', lab.information || '');
+      // Lab PDF file field
+      formData.set(`lab_file_id_${lab.productId}`, lab.fileId || '');
       if (lab.images?.length) {
         lab.images.forEach(img => {
           formData.append(`lab_image_${lab.productId}[]`, img.dataUrl || '');
           formData.append(`lab_image_id_${lab.productId}[]`, img.id || '');
         });
       }
+      // product_*[] entries (same as create)
+      formData.append('product_id[]', lab.productId || '');
+      formData.append('product_qty[]', String(lab.qty || 1));
+      formData.append('product_price[]', String(lab.price || 0));
+      formData.append('product_rowId[]', rid);
+      formData.append('product_is_premium[]', 'false');
+      formData.append('product_is_vat_included[]', lab.isVatIncluded ? 'true' : 'false');
+      formData.append('product_discount[]', String(lab.discount || 0));
+      formData.append('product_discount_type[]', lab.discountType || 'บาท');
+      formData.append('product_original_price[]', String(lab.originalPrice || lab.price || 0));
     });
   }
 

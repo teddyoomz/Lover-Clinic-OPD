@@ -935,6 +935,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
         labItems: labItems.map(l => ({
           id: l.id || '', productId: l.productId, productName: l.productName,
+          unitName: l.unitName || '', productType: l.productType || 'บริการ',
           qty: l.qty, price: l.price, originalPrice: l.originalPrice || l.price,
           discount: l.discount || '0', discountType: l.discountType || 'บาท',
           isVatIncluded: l.isVatIncluded || false, rowId: l.rowId || '',
