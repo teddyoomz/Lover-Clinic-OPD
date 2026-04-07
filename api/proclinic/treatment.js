@@ -1253,6 +1253,48 @@ async function handleUploadChart(req, res) {
   });
 }
 
+// ─── Debug: discover Chart API from treatment edit page ───────────────────
+
+async function handleDebugChartApi(req, res) {
+  const { treatmentId } = req.body || {};
+  const tid = treatmentId || '3259';
+  const session = await createSession();
+  const base = session.origin;
+  const html = await session.fetchText(`${base}/admin/treatment/${tid}/edit`);
+
+  // Find all API-like URLs
+  const apis = new Set();
+  for (const m of html.matchAll(/['"`](\/admin\/api\/[^'"`\s]+)['"`]/g)) apis.add(m[1]);
+  for (const m of html.matchAll(/['"`](\/admin\/document[^'"`\s]*)['"`]/g)) apis.add(m[1]);
+
+  // Find chart-related patterns
+  const chartPatterns = html.match(/document[-_]?chart|chart[-_]?template|chart[-_]?image|chartStore|addChart|createChart|saveChart|chart_id|chartModal|chart-tab/gi) || [];
+
+  // Extract chart section HTML context
+  const chartContexts = [];
+  let idx = 0;
+  while ((idx = html.indexOf('chart', idx)) !== -1) {
+    const start = Math.max(0, idx - 50);
+    const end = Math.min(html.length, idx + 80);
+    const ctx = html.substring(start, end).replace(/\s+/g, ' ').trim();
+    if (!chartContexts.includes(ctx)) chartContexts.push(ctx);
+    idx += 5;
+    if (chartContexts.length > 20) break;
+  }
+
+  // Look for Vue component data/methods related to charts
+  const vuePatterns = html.match(/charts?\s*[:=]\s*\[|document_chart|treatment_chart|chart_type|chart_data/gi) || [];
+
+  return res.status(200).json({
+    success: true,
+    apiUrls: [...apis],
+    chartPatterns: [...new Set(chartPatterns)],
+    vuePatterns: [...new Set(vuePatterns)],
+    chartContexts: chartContexts.slice(0, 15),
+    htmlSize: html.length,
+  });
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -1279,6 +1321,7 @@ export default async function handler(req, res) {
       case 'getMedicationGroups': return await handleGetMedicationGroups(req, res);
       case 'listItems':          return await handleListItems(req, res);
       case 'uploadChart':        return await handleUploadChart(req, res);
+      case 'debugChartApi':       return await handleDebugChartApi(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
