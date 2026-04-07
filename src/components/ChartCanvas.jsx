@@ -36,9 +36,11 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       const fabric = await import('fabric');
       if (cancelled || !canvasElRef.current) return;
 
+      // Wait a tick for flex layout to compute container size
+      await new Promise(r => setTimeout(r, 50));
       const container = containerRef.current;
-      const maxW = container?.clientWidth || 700;
-      const maxH = container?.clientHeight || 800;
+      const maxW = (container?.clientWidth || 700) - 32;  // minus padding
+      const maxH = (container?.clientHeight || 800) - 32;
 
       // Helper: create canvas with given size, setup brush
       const initCanvas = (w, h) => {
@@ -108,12 +110,16 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
           }
           const canvas = initCanvas(canvasW, canvasH);
           const fabricImg = new fabric.FabricImage(imgEl);
-          const scale = Math.min(canvasW / fabricImg.width, canvasH / fabricImg.height);
+          // Scale to fill canvas (leave small margin)
+          const scale = Math.min((canvasW - 8) / fabricImg.width, (canvasH - 8) / fabricImg.height);
+          const scaledW = fabricImg.width * scale;
+          const scaledH = fabricImg.height * scale;
           fabricImg.set({
             scaleX: scale, scaleY: scale,
-            left: (canvasW - fabricImg.width * scale) / 2,
-            top: (canvasH - fabricImg.height * scale) / 2,
+            left: Math.round((canvasW - scaledW) / 2),
+            top: Math.round((canvasH - scaledH) / 2),
             selectable: false, evented: false, hoverCursor: 'default',
+            originX: 'left', originY: 'top',
           });
           canvas.add(fabricImg);
           canvas.sendObjectToBack(fabricImg);

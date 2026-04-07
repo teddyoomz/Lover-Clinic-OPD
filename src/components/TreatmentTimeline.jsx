@@ -88,9 +88,12 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
     try {
       const data = await broker.deleteTreatment(cancelTarget, cancelDetail);
       if (data.success) {
-        fetchPage(page);
+        // Remove card from list INSTANTLY — don't wait for API re-fetch
+        setTreatments(prev => prev.filter(t => String(t.id) !== String(cancelTarget)));
         setExpandedId(null);
         setDetailCache(prev => { const n = { ...prev }; delete n[cancelTarget]; return n; });
+        // Background refresh to get accurate data from ProClinic
+        fetchPage(page);
       } else {
         alert(data.error || 'ยกเลิกไม่สำเร็จ');
       }
