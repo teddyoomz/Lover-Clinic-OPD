@@ -44,11 +44,11 @@ api/webhook/                    — Chat webhook endpoints (FB/LINE)
 ├── send.js                     — Send messages to FB/LINE (Graph API v25)
 └── saved-replies.js            — GET endpoint proxying FB saved_message_responses
 api/proclinic/                  — Vercel Serverless Functions (7 consolidated endpoints)
-├── customer.js                 — actions: create, update, delete, search, fetchPatient (import patient data)
+├── customer.js                 — actions: create, update, delete, search, fetchPatient. Backups to `pc_customers/{proClinicId}` on create + fetchPatient
 ├── deposit.js                  — actions: submit, update, cancel, options (รวมจาก deposit-*.js). Options action backups to `pc_form_options/deposit` in Firestore
 ├── connection.js               — actions: login, credentials, clear (รวมจาก login/credentials/clear-session.js)
 ├── appointment.js              — actions: create, update, delete (ใหม่ — นัดหมาย ProClinic สำหรับจองไม่มัดจำ)
-├── courses.js                  — actions: default(courses), sync-appointments, fetch-appointment-months (คงเดิม)
+├── courses.js                  — actions: default(courses), sync-appointments, fetch-appointment-months. Backups to `pc_courses/{proClinicId}` + `pc_appointments/{YYYY-MM}`
 ├── master.js                   — actions: syncProducts, syncDoctors, syncStaff, syncCourses (Master Data Sync)
 ├── treatment.js                — actions: list, get, getCreateForm, create, update, delete (Treatment Records Phase 2)
 └── _lib/ (session.js, scraper.js, fields.js, auth.js — fields.js has reverseMapPatient())
