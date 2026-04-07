@@ -286,7 +286,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptCustomerAppts, setApptCustomerAppts] = useState([]);
   const [apptCustomerLoading, setApptCustomerLoading] = useState(false);
   const [apptFormMode, setApptFormMode] = useState(null); // null | { mode: 'create'|'edit', appointmentId? }
-  const [apptFormData, setApptFormData] = useState({ date: '', startTime: '', endTime: '', doctor: '', appointmentTo: '', note: '' });
+  const [apptFormData, setApptFormData] = useState({ date: '', startTime: '', endTime: '', doctor: '', advisor: '', room: '', source: '', appointmentTo: '', note: '' });
   const [apptFormSaving, setApptFormSaving] = useState(false);
 
   // ── Schedule Link modal state ──
@@ -577,6 +577,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptSearchResults(null);
     setApptFormMode(null);
     setApptCustomerLoading(true);
+    if (!depositOptions) fetchDepositOptions();
     try {
       const res = await broker.listCustomerAppointments(customer.id);
       if (res.success) {
@@ -594,8 +595,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptFormMode({ mode: 'edit', appointmentId: appt.id });
     setApptFormData({
       date: appt.date || '', startTime: appt.startTime || '', endTime: appt.endTime || '',
-      doctor: appt.doctorId || '', appointmentTo: appt.appointmentTo || '', note: appt.note || '',
+      doctor: appt.doctorId || '', advisor: appt.advisorId || '', room: appt.roomId || '',
+      source: '', appointmentTo: appt.appointmentTo || '', note: appt.note || '',
     });
+    if (!depositOptions) fetchDepositOptions();
   };
 
   const handleApptFormSubmit = async () => {
@@ -609,11 +612,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const noteWithCust = apptFormData.note
         ? `[${custLabel}] ${apptFormData.note}`
         : `[${custLabel}]`;
+
+      // advisor + room + source are REQUIRED by ProClinic
+      const advisorVal = apptFormData.advisor || (depositOptions?.advisors?.[0]?.value) || '';
+      const roomVal = apptFormData.room || (depositOptions?.rooms?.[0]?.value) || '';
+      if (!advisorVal || !roomVal) {
+        showToast('กรุณาเลือกที่ปรึกษาและห้องตรวจ', 3000);
+        setApptFormSaving(false);
+        return;
+      }
       const payload = {
         appointmentDate: apptFormData.date,
         appointmentStartTime: apptFormData.startTime,
         appointmentEndTime: apptFormData.endTime,
+        advisor: advisorVal,
         doctor: apptFormData.doctor || undefined,
+        room: roomVal,
+        source: apptFormData.source || 'walk-in',
         appointmentTo: apptFormData.appointmentTo || undefined,
         appointmentNote: noteWithCust,
       };
@@ -626,7 +641,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (res.success) {
         showToast(apptFormMode.mode === 'create' ? 'สร้างนัดหมายสำเร็จ' : 'แก้ไขนัดหมายสำเร็จ', 3000);
         setApptFormMode(null);
-        setApptFormData({ date: '', startTime: '', endTime: '', doctor: '', appointmentTo: '', note: '' });
+        setApptFormData({ date: '', startTime: '', endTime: '', doctor: '', advisor: '', room: '', source: '', appointmentTo: '', note: '' });
         // Re-fetch appointments (real-time update)
         const refresh = await broker.listCustomerAppointments(apptSelectedCustomer.id);
         if (refresh.success) setApptCustomerAppts(refresh.appointments || []);
@@ -4060,13 +4075,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                         <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">ที่ปรึกษา *</label>
+                          <select value={apptFormData.advisor || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, advisor: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- เลือก --</option>
+                            {(depositOptions?.advisors || []).map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">แพทย์</label>
                           <select value={apptFormData.doctor || ''}
                             onChange={e => setApptFormData(p => ({ ...p, doctor: e.target.value }))}
                             className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
                             <option value="">-- ไม่ระบุ --</option>
-                            {practitioners.filter(p => p.role === 'doctor').map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
+                            {(depositOptions?.doctors || practitioners.filter(p => p.role === 'doctor')).map(o => (
+                              <option key={o.value || o.id} value={o.value || o.id}>{o.label || o.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">ห้องตรวจ *</label>
+                          <select value={apptFormData.room || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, room: e.target.value }))}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- เลือก --</option>
+                            {(depositOptions?.rooms || []).map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
                           </select>
                         </div>
