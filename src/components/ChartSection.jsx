@@ -64,7 +64,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent })
         <div className="grid grid-cols-2 gap-2">
           {charts.map((chart, idx) => (
             <div key={idx} className={`relative rounded-lg border overflow-hidden group ${isDark ? 'border-[#333]' : 'border-gray-200'}`}>
-              <img src={chart.dataUrl} alt={`Chart ${idx + 1}`} className="w-full aspect-[3/4] object-contain bg-white" />
+              <img src={chart.dataUrl} alt={`Chart ${idx + 1}`} className="w-full object-contain bg-white" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
                 <button onClick={() => handleEdit(idx)} className="p-2 bg-white/90 rounded-full text-blue-600 hover:bg-white shadow"><Edit3 size={14} /></button>
                 <button onClick={() => handleDelete(idx)} className="p-2 bg-white/90 rounded-full text-red-500 hover:bg-white shadow"><Trash2 size={14} /></button>

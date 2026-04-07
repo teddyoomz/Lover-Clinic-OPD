@@ -290,6 +290,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               })));
             }
           }
+          // Load charts from Firestore backup (async — don't block form render)
+          if (db && appId && treatmentId) {
+            import('firebase/firestore').then(({ getDoc, doc: docRef }) => {
+              getDoc(docRef(db, 'artifacts', appId, 'public', 'data', 'treatments', String(treatmentId)))
+                .then(snap => {
+                  if (snap.exists()) {
+                    const saved = snap.data();
+                    if (saved.charts?.length) {
+                      setCharts(saved.charts.map(c => ({
+                        dataUrl: c.dataUrl || '',
+                        fabricJson: c.fabricJson || null,
+                        templateId: c.templateId || 'blank',
+                        savedAt: c.savedAt || '',
+                      })).filter(c => c.dataUrl));
+                    }
+                  }
+                }).catch(() => {});
+            });
+          }
         } else {
           // Create mode — load form options only
           const formData = await broker.getTreatmentCreateForm(customerId);
@@ -903,7 +922,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },
               sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
-              charts: charts.map(c => ({ dataUrl: c.dataUrl, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
+              charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });

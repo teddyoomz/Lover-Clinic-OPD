@@ -17,13 +17,11 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
   const [canRedo, setCanRedo] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Push state to undo/redo history
   const pushHistory = () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const json = JSON.stringify(canvas.toJSON());
     const h = historyRef.current;
-    // Trim future states
     h.length = historyIdxRef.current + 1;
     h.push(json);
     if (h.length > 40) h.shift();
@@ -32,7 +30,6 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
     setCanRedo(false);
   };
 
-  // Initialize fabric canvas
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -40,94 +37,109 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       if (cancelled || !canvasElRef.current) return;
 
       const container = containerRef.current;
-      const cw = container?.clientWidth || 700;
-      const ch = container?.clientHeight || 800;
+      const maxW = container?.clientWidth || 700;
+      const maxH = container?.clientHeight || 800;
 
-      const canvas = new fabric.Canvas(canvasElRef.current, {
-        width: cw, height: ch,
-        backgroundColor: '#ffffff',
-        isDrawingMode: true,
-      });
-      fabricRef.current = canvas;
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-      canvas.freeDrawingBrush.color = '#e53e3e';
-      canvas.freeDrawingBrush.width = 4;
+      // Helper: create canvas with given size, setup brush
+      const initCanvas = (w, h) => {
+        const canvas = new fabric.Canvas(canvasElRef.current, {
+          width: w, height: h,
+          backgroundColor: '#ffffff',
+          isDrawingMode: true,
+        });
+        fabricRef.current = canvas;
+        canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+        canvas.freeDrawingBrush.color = '#e53e3e';
+        canvas.freeDrawingBrush.width = 4;
+        return canvas;
+      };
 
-      // Load existing data (re-edit mode) — OR — template background
+      // ── Restore existing chart (edit mode) ──
       if (existingData?.fabricJson) {
         try {
           const jsonStr = typeof existingData.fabricJson === 'string'
-            ? existingData.fabricJson
-            : JSON.stringify(existingData.fabricJson);
+            ? existingData.fabricJson : JSON.stringify(existingData.fabricJson);
           const jsonData = JSON.parse(jsonStr);
-          // Adjust canvas size to match saved data
-          if (jsonData.width) canvas.setWidth(jsonData.width);
-          if (jsonData.height) canvas.setHeight(jsonData.height);
+          const savedW = jsonData.width || maxW;
+          const savedH = jsonData.height || maxH;
+          // Fit saved canvas size into container
+          const fitScale = Math.min(maxW / savedW, maxH / savedH, 1);
+          const canvas = initCanvas(Math.round(savedW * fitScale), Math.round(savedH * fitScale));
           await canvas.loadFromJSON(jsonData);
+          if (fitScale < 1) {
+            // Scale all objects to fit
+            canvas.getObjects().forEach(obj => {
+              obj.set({ scaleX: (obj.scaleX || 1) * fitScale, scaleY: (obj.scaleY || 1) * fitScale,
+                left: (obj.left || 0) * fitScale, top: (obj.top || 0) * fitScale });
+            });
+          }
           canvas.getObjects().forEach(obj => {
-            // Re-lock template backgrounds
-            if (obj.type === 'image' && !obj.selectable) {
-              obj.set({ selectable: false, evented: false, hoverCursor: 'default' });
-            }
+            if (obj.type === 'image') obj.set({ selectable: false, evented: false, hoverCursor: 'default' });
           });
           canvas.renderAll();
-          console.log('[ChartCanvas] restored', canvas.getObjects().length, 'objects from JSON');
         } catch (e) {
-          console.warn('[ChartCanvas] loadFromJSON failed:', e);
+          console.warn('[ChartCanvas] restore failed:', e);
+          initCanvas(maxW, maxH);
         }
+
+      // ── New chart with template ──
       } else if (template?.imageUrl) {
-        // Load template as background image
-        await new Promise((resolve) => {
+        // Pre-load image to get dimensions, then size canvas to match ratio
+        const imgEl = await new Promise((resolve) => {
           const img = new window.Image();
           img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            const fabricImg = new fabric.FabricImage(img);
-            // Scale template to fit canvas with padding
-            const scale = Math.min((cw - 40) / fabricImg.width, (ch - 40) / fabricImg.height);
-            fabricImg.set({
-              scaleX: scale, scaleY: scale,
-              left: (cw - fabricImg.width * scale) / 2,
-              top: (ch - fabricImg.height * scale) / 2,
-              selectable: false, evented: false,
-              hoverCursor: 'default',
-            });
-            canvas.add(fabricImg);
-            canvas.sendObjectToBack(fabricImg);
-            canvas.renderAll();
-            console.log('[ChartCanvas] template loaded:', fabricImg.width, 'x', fabricImg.height, 'scale:', scale.toFixed(2));
-            resolve();
-          };
-          img.onerror = () => {
-            console.warn('[ChartCanvas] template image failed:', template.imageUrl);
-            resolve();
-          };
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
           img.src = template.imageUrl;
         });
+
+        if (imgEl) {
+          const imgRatio = imgEl.naturalWidth / imgEl.naturalHeight;
+          // Fit canvas to image ratio within container
+          let canvasW, canvasH;
+          if (maxW / maxH > imgRatio) {
+            // Container is wider than image ratio → height-limited
+            canvasH = maxH;
+            canvasW = Math.round(maxH * imgRatio);
+          } else {
+            // Container is taller → width-limited
+            canvasW = maxW;
+            canvasH = Math.round(maxW / imgRatio);
+          }
+          const canvas = initCanvas(canvasW, canvasH);
+          const fabricImg = new fabric.FabricImage(imgEl);
+          const scale = Math.min(canvasW / fabricImg.width, canvasH / fabricImg.height);
+          fabricImg.set({
+            scaleX: scale, scaleY: scale,
+            left: (canvasW - fabricImg.width * scale) / 2,
+            top: (canvasH - fabricImg.height * scale) / 2,
+            selectable: false, evented: false, hoverCursor: 'default',
+          });
+          canvas.add(fabricImg);
+          canvas.sendObjectToBack(fabricImg);
+          canvas.renderAll();
+        } else {
+          initCanvas(maxW, maxH);
+        }
+
+      // ── Blank canvas ──
+      } else {
+        // Blank: use portrait ratio
+        const h = maxH;
+        const w = Math.min(maxW, Math.round(h * 0.7));
+        initCanvas(w, h);
       }
 
-      // Initial history state
+      const canvas = fabricRef.current;
       historyRef.current = [JSON.stringify(canvas.toJSON())];
       historyIdxRef.current = 0;
       setLoading(false);
-
-      // Track changes for undo/redo
       canvas.on('path:created', pushHistory);
       canvas.on('object:modified', pushHistory);
-      canvas.on('object:added', () => {
-        // Only push for non-drawing-mode additions (shapes, text)
-        if (!canvas.isDrawingMode) pushHistory();
-      });
     })();
-    return () => {
-      cancelled = true;
-      if (fabricRef.current) {
-        fabricRef.current.dispose();
-        fabricRef.current = null;
-      }
-    };
+    return () => { cancelled = true; if (fabricRef.current) { fabricRef.current.dispose(); fabricRef.current = null; } };
   }, []); // eslint-disable-line
 
-  // Update brush settings
   useEffect(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
@@ -149,21 +161,12 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
     if (!canvas) return;
     const fabric = await import('fabric');
     canvas.isDrawingMode = false;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const cx = canvas.width / 2, cy = canvas.height / 2;
     let obj;
-    if (type === 'circle') {
-      obj = new fabric.Circle({ left: cx - 30, top: cy - 30, radius: 30, fill: 'transparent', stroke: color, strokeWidth: width });
-    } else if (type === 'line') {
-      obj = new fabric.Line([cx - 40, cy, cx + 40, cy], { stroke: color, strokeWidth: width });
-    } else if (type === 'text') {
-      obj = new fabric.Textbox('ข้อความ', { left: cx - 40, top: cy - 10, fontSize: 18, fill: color, width: 120, fontFamily: 'sans-serif' });
-    }
-    if (obj) {
-      canvas.add(obj);
-      canvas.setActiveObject(obj);
-      canvas.renderAll();
-    }
+    if (type === 'circle') obj = new fabric.Circle({ left: cx - 30, top: cy - 30, radius: 30, fill: 'transparent', stroke: color, strokeWidth: width });
+    else if (type === 'line') obj = new fabric.Line([cx - 40, cy, cx + 40, cy], { stroke: color, strokeWidth: width });
+    else if (type === 'text') obj = new fabric.Textbox('ข้อความ', { left: cx - 40, top: cy - 10, fontSize: 18, fill: color, width: 120, fontFamily: 'sans-serif' });
+    if (obj) { canvas.add(obj); canvas.setActiveObject(obj); canvas.renderAll(); pushHistory(); }
     setTool('select');
   };
 
@@ -173,34 +176,30 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
     await fabricRef.current.loadFromJSON(JSON.parse(historyRef.current[historyIdxRef.current]));
     fabricRef.current.renderAll();
     setCanUndo(historyIdxRef.current > 0);
-    setCanRedo(historyIdxRef.current < historyRef.current.length - 1);
+    setCanRedo(true);
   };
-
   const handleRedo = async () => {
     if (historyIdxRef.current >= historyRef.current.length - 1 || !fabricRef.current) return;
     historyIdxRef.current++;
     await fabricRef.current.loadFromJSON(JSON.parse(historyRef.current[historyIdxRef.current]));
     fabricRef.current.renderAll();
-    setCanUndo(historyIdxRef.current > 0);
+    setCanUndo(true);
     setCanRedo(historyIdxRef.current < historyRef.current.length - 1);
   };
-
   const handleClear = () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const objects = canvas.getObjects();
-    // Keep first object if it's the template background
     const startIdx = (objects.length > 0 && !objects[0].selectable) ? 1 : 0;
     for (let i = objects.length - 1; i >= startIdx; i--) canvas.remove(objects[i]);
     canvas.renderAll();
     pushHistory();
   };
-
   const handleSave = () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const dataUrl = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
-    const fabricJson = canvas.toJSON();
+    const fabricJson = JSON.stringify(canvas.toJSON());
     onSave({ dataUrl, fabricJson, templateId: template?.id || 'blank' });
   };
 
@@ -244,11 +243,10 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
           <Check size={12} /> ยืนยัน
         </button>
       </div>
-
-      {/* Canvas */}
-      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-gray-100 p-2">
+      {/* Canvas area — centered */}
+      <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-gray-200 p-4">
         {loading && <div className="absolute text-gray-400 text-sm">กำลังโหลด...</div>}
-        <canvas ref={canvasElRef} />
+        <canvas ref={canvasElRef} className="shadow-lg" />
       </div>
     </div>
   );
