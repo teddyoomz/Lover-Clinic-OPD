@@ -4056,9 +4056,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                         <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">วันที่</label>
-                          <input type="date" lang="en-GB" value={apptFormData.date || ''}
-                            onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
-                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                          <div className="relative">
+                            <input type="text" readOnly
+                              value={apptFormData.date ? (() => { const [y,m,d] = apptFormData.date.split('-'); return `${d}/${m}/${y}`; })() : ''}
+                              placeholder="dd/mm/yyyy"
+                              className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)] pointer-events-none" />
+                            <input type="date" value={apptFormData.date || ''}
+                              onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
+                              className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+                          </div>
                         </div>
                         <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">เวลาเริ่ม</label>

@@ -291,51 +291,29 @@ async function handleListByCustomer(req, res) {
   const { extractAppointments: extractAppts } = await import('./_lib/scraper.js');
   const basicAppts = extractAppts(html);
 
-  // Parse Thai dates from modal → ISO format
-  // Thai months: "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", etc. + Buddhist year (พ.ศ.)
-  const thaiMonthMap = { 'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04', 'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08', 'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12' };
-  const parseThaiDate = (dateStr) => {
-    // Try ISO first: "2026-04-15"
-    const iso = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) return iso[0];
-    // Try Thai: "15 เม.ย. 2569" or "15 เม.ย.2569"
-    const thai = dateStr.match(/(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(\d{4})/);
-    if (thai) {
-      const mm = thaiMonthMap[thai[2]];
-      const yyyy = parseInt(thai[3]) > 2500 ? parseInt(thai[3]) - 543 : parseInt(thai[3]);
-      return `${yyyy}-${mm}-${String(parseInt(thai[1])).padStart(2, '0')}`;
-    }
-    // Try "dd/mm/yyyy"
-    const slash = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (slash) {
-      const yyyy = parseInt(slash[3]) > 2500 ? parseInt(slash[3]) - 543 : parseInt(slash[3]);
-      return `${yyyy}-${slash[2].padStart(2, '0')}-${slash[1].padStart(2, '0')}`;
-    }
-    return null;
-  };
-
-  // Get exact appointment dates from modal
-  const modalDates = basicAppts.map(a => parseThaiDate(a.date)).filter(Boolean);
-
-  // Also scan next 365 days to catch ALL future appointments
+  // Strategy: Use FullCalendar range query (start/end) to fetch all appointments
+  // in one request per month, then filter by customer_id — much faster than day-by-day
   const today = new Date();
-  const futureDates = [];
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    futureDates.push(d.toISOString().substring(0, 10));
+  const cidStr = String(customerId);
+  const appointments = [];
+
+  // Fetch 12 months ahead, one request per month (FullCalendar JSON feed style)
+  const monthFetches = [];
+  for (let m = 0; m < 12; m++) {
+    const start = new Date(today.getFullYear(), today.getMonth() + m, 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + m + 1, 1);
+    const startStr = start.toISOString().substring(0, 10);
+    const endStr = end.toISOString().substring(0, 10);
+    monthFetches.push({ startStr, endStr });
   }
 
-  const allDates = [...new Set([...modalDates, ...futureDates])];
-
-  // Fetch appointment API for each date (batch 50 parallel)
-  const appointments = [];
-  const cidStr = String(customerId);
-  for (let i = 0; i < allDates.length; i += 50) {
-    const batch = allDates.slice(i, i + 50);
-    const results = await Promise.all(batch.map(async date => {
+  // Batch 4 months at a time (4 parallel requests)
+  for (let i = 0; i < monthFetches.length; i += 4) {
+    const batch = monthFetches.slice(i, i + 4);
+    const results = await Promise.all(batch.map(async ({ startStr, endStr }) => {
       try {
-        const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
+        // Try FullCalendar range params first
+        const data = await session.fetchJSON(`${base}/admin/api/appointment?start=${startStr}&end=${endStr}`);
         const events = Array.isArray(data) ? data : data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
         return events.filter(ev => {
           const p = ev.extendedProps || {};
@@ -344,6 +322,29 @@ async function handleListByCustomer(req, res) {
       } catch { return []; }
     }));
     results.forEach(arr => appointments.push(...arr));
+  }
+
+  // Fallback: if range query returned nothing but modal shows appointments,
+  // try day-by-day for known modal dates only
+  if (appointments.length === 0 && basicAppts.length > 0) {
+    const thaiMonthMap = { 'ม.ค.': '01', 'ก.พ.': '02', 'มี.ค.': '03', 'เม.ย.': '04', 'พ.ค.': '05', 'มิ.ย.': '06', 'ก.ค.': '07', 'ส.ค.': '08', 'ก.ย.': '09', 'ต.ค.': '10', 'พ.ย.': '11', 'ธ.ค.': '12' };
+    const parseDate = (s) => {
+      const iso = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (iso) return iso[0];
+      const thai = s.match(/(\d{1,2})\s*(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)\s*(\d{4})/);
+      if (thai) { const y = parseInt(thai[3]) > 2500 ? parseInt(thai[3]) - 543 : parseInt(thai[3]); return `${y}-${thaiMonthMap[thai[2]]}-${String(parseInt(thai[1])).padStart(2,'0')}`; }
+      const sl = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (sl) { const y = parseInt(sl[3]) > 2500 ? parseInt(sl[3]) - 543 : parseInt(sl[3]); return `${y}-${sl[2].padStart(2,'0')}-${sl[1].padStart(2,'0')}`; }
+      return null;
+    };
+    const modalDates = [...new Set(basicAppts.map(a => parseDate(a.date)).filter(Boolean))];
+    const fallbackResults = await Promise.all(modalDates.map(async date => {
+      try {
+        const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
+        const events = Array.isArray(data) ? data : data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
+        return events.filter(ev => String((ev.extendedProps || {}).customer_id) === cidStr).map(mapAppointment);
+      } catch { return []; }
+    }));
+    fallbackResults.forEach(arr => appointments.push(...arr));
   }
 
   // Deduplicate by appointment ID
