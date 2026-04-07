@@ -702,12 +702,12 @@ async function handleCreate(req, res) {
   formData.set('discount_type', treatment.discountType || defaults.discount_type || 'บาท');
   formData.set('medicine_discount_percent', treatment.medicineDiscountPercent || '');
 
-  // Deposit & Wallet — ProClinic always sends these fields (default 0)
-  formData.set('usingDeposit', treatment.useDeposit ? '1' : (defaults.usingDeposit || '1'));
-  formData.set('deposit', treatment.depositAmount || '0');
+  // Deposit & Wallet — only enable when user explicitly checked
+  formData.set('usingDeposit', treatment.useDeposit ? '1' : '0');
+  formData.set('deposit', treatment.useDeposit ? (treatment.depositAmount || '0') : '0');
   formData.set('customer_wallet_id', treatment.walletId || defaults.customer_wallet_id || '');
-  formData.set('usingWallet', treatment.useWallet ? '1' : (defaults.usingWallet || '1'));
-  formData.set('credit', treatment.walletAmount || '0');
+  formData.set('usingWallet', treatment.useWallet ? '1' : '0');
+  formData.set('credit', treatment.useWallet ? (treatment.walletAmount || '0') : '0');
 
   // Sellers (sales staff commission) — ProClinic always sends hasSeller1
   formData.set('hasSeller1', '1');
@@ -991,12 +991,12 @@ async function handleUpdate(req, res) {
   formData.set('history_of_drug_allergy', treatment.drugAllergy ?? existing.history_of_drug_allergy ?? '');
   formData.set('ht_treatment_history', treatment.treatmentHistory ?? existing.ht_treatment_history ?? '');
 
-  // Med cert (preserve existing)
-  formData.set('med_cert_is_actually_come', existing.med_cert_is_actually_come || '0');
-  formData.set('med_cert_is_rest', existing.med_cert_is_rest || '0');
-  formData.set('med_cert_period', existing.med_cert_period || '');
-  formData.set('med_cert_is_other', existing.med_cert_is_other || '0');
-  formData.set('med_cert_other_detail', existing.med_cert_other_detail || '');
+  // Med cert (use frontend values if provided, otherwise preserve existing)
+  formData.set('med_cert_is_actually_come', treatment.medCertActuallyCome ? '1' : (existing.med_cert_is_actually_come || '0'));
+  formData.set('med_cert_is_rest', treatment.medCertIsRest ? '1' : (existing.med_cert_is_rest || '0'));
+  formData.set('med_cert_period', treatment.medCertPeriod ?? existing.med_cert_period ?? '');
+  formData.set('med_cert_is_other', treatment.medCertIsOther ? '1' : (existing.med_cert_is_other || '0'));
+  formData.set('med_cert_other_detail', treatment.medCertOtherDetail ?? existing.med_cert_other_detail ?? '');
 
   // Insurance (preserve existing or use provided)
   formData.set('is_insurance_claimed', treatment.isInsuranceClaimed ? '1' : (existing.is_insurance_claimed || '0'));

@@ -835,8 +835,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         ...(hasSale ? {
           saleDate,
           medicineDiscountPercent: billing.medDiscPct,
-          discount: String(billing.billDiscAmt || ''),
-          discountType: billDiscountType,
+          discount: billDiscount || '',
+          discountType: billDiscountType === 'percent' ? '%' : 'บาท',
           couponCode,
           isInsuranceClaimed,
           benefitType,
