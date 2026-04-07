@@ -140,11 +140,9 @@ async function handleUpdate(req, res) {
   const csrf = extractCSRF(html);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า appointment');
 
-  // Build form data with _method=PUT
+  // Build form data for PUT
   const params = new URLSearchParams();
   params.set('_token', csrf);
-  params.set('_method', 'PUT');
-  params.set('appointment_id', appointmentId);
   params.set('is_basic_flow', 'true');
   params.set('type', '');
   params.set('current_doctor_id', '');
@@ -177,9 +175,9 @@ async function handleUpdate(req, res) {
   params.set('customer_note', '');
   params.set('appointment_color', '');
 
-  // PUT /admin/appointment/{id} (Laravel resource route expects ID in URL)
+  // PUT /admin/appointment/{id} — actual PUT method (not POST with _method)
   const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
-    method: 'POST',
+    method: 'PUT',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
