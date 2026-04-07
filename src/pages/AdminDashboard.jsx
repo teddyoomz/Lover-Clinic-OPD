@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -24,6 +24,7 @@ import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
+import BackendDashboard from './BackendDashboard.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -2703,7 +2704,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-7 gap-0.5 w-full xl:hidden z-0">
+        <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
@@ -2712,8 +2713,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
             { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
             { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'backend', icon: <Database size={14} />, label: 'หลังบ้าน', activeClass: 'bg-violet-700 text-white' },
           ].map(tab => {
-            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
+            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : tab.mode === 'backend' ? adminMode === 'backend' : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
                 className={`py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : tab.blinkWhenBadge && tab.badge > 0 && !isActive ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
@@ -2752,6 +2754,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </button>
           <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
             <Palette size={16} /> ตั้งค่า
+          </button>
+          <button onClick={() => setAdminMode('backend')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'backend' ? 'bg-violet-700 text-white shadow-[0_0_15px_rgba(109,40,217,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-violet-400 hover:border-violet-700/50'}`} title="ระบบหลังบ้าน">
+            <Database size={16} /> หลังบ้าน
           </button>
           <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
           <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-white px-3 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
@@ -2823,7 +2828,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       </header>
 
-      {adminMode === 'chat' ? (
+      {adminMode === 'backend' ? (
+        <BackendDashboard
+          db={db} appId={appId} isDark={isDark} clinicSettings={cs}
+          showToast={showToast}
+          onOpenTreatmentForm={(config) => setTreatmentFormMode(config)}
+          onClose={() => setAdminMode('dashboard')}
+        />
+      ) : adminMode === 'chat' ? (
         <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6">
           <ChatPanel db={db} appId={appId} user={user} clinicSettings={clinicSettings} />
         </div>
@@ -5638,6 +5650,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
           patientData={treatmentFormMode.patientData}
+          saveTarget={treatmentFormMode.saveTarget || 'proclinic'}
           isDark={isDark}
           db={db}
           appId={appId}

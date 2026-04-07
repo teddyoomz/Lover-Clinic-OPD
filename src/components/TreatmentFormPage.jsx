@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
+import * as backendClient from '../lib/backendClient.js';
 import ChartSection from './ChartSection.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, saveTarget = 'proclinic', isDark, db, appId, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
@@ -1064,6 +1065,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           ...sellerPayload,
         } : {}),
       };
+
+      // ── Backend save path: save directly to be_treatments, skip ProClinic ──
+      if (saveTarget === 'backend') {
+        const bmi = (vitals.weight && vitals.height) ? (parseFloat(vitals.weight) / Math.pow(parseFloat(vitals.height) / 100, 2)).toFixed(1) : '';
+        const docId = await backendClient.saveBackendTreatment({
+          customerId,
+          patientName: patientName || '',
+          mode: 'create',
+          doctorId,
+          doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
+          assistantIds,
+          treatmentDate,
+          opd: { ...opd },
+          vitals: { ...vitals, bmi },
+          healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
+          medications: medications.filter(m => m.name).map(m => ({ id: m.id, name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
+          consumables: consumables.filter(c => c.name).map(c => ({ id: c.id, name: c.name, qty: c.qty, unit: c.unit })),
+          purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
+          courseItems: Array.from(selectedCourseItems),
+          doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
+          treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
+          billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
+          charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
+          beforeImages, afterImages, otherImages,
+          labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
+        });
+        setSuccess(true);
+        setTimeout(() => { if (onSaved) onSaved(docId); }, 1200);
+        setSaving(false);
+        return;
+      }
 
       const data = isEdit
         ? await broker.updateTreatment(treatmentId, payload)
