@@ -28,9 +28,9 @@ async function handleCreate(req, res) {
   params.set('current_doctor_id', '');
   params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-  // Link to customer if customerId provided
+  // Link to customer — ProClinic uses 'choose' (not 'existed')
   if (appointment.customerId) {
-    params.set('customer_option', 'existed');
+    params.set('customer_option', 'choose');
     params.set('customer_id', String(appointment.customerId));
   } else {
     params.set('customer_option', 'none');

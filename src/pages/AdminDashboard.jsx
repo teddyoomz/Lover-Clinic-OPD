@@ -4068,15 +4068,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">เวลาเริ่ม</label>
-                          <input type="time" value={apptFormData.startTime || ''}
-                            onChange={e => setApptFormData(p => ({ ...p, startTime: e.target.value }))}
-                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                          <select value={apptFormData.startTime || ''}
+                            onChange={e => {
+                              const st = e.target.value;
+                              setApptFormData(p => {
+                                // Auto-set endTime = startTime + 30min
+                                const [h,m] = st.split(':').map(Number);
+                                const endMin = h * 60 + m + 30;
+                                const endH = String(Math.floor(endMin / 60)).padStart(2,'0');
+                                const endM = String(endMin % 60).padStart(2,'0');
+                                return { ...p, startTime: st, endTime: `${endH}:${endM}` };
+                              });
+                            }}
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- เลือก --</option>
+                            {Array.from({ length: 29 }, (_, i) => { const t = 8 * 60 + 30 + i * 30; const h = String(Math.floor(t/60)).padStart(2,'0'); const m = String(t%60).padStart(2,'0'); return <option key={`${h}:${m}`} value={`${h}:${m}`}>{h}:{m}</option>; })}
+                          </select>
                         </div>
                         <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">เวลาสิ้นสุด</label>
-                          <input type="time" value={apptFormData.endTime || ''}
+                          <select value={apptFormData.endTime || ''}
                             onChange={e => setApptFormData(p => ({ ...p, endTime: e.target.value }))}
-                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
+                            className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]">
+                            <option value="">-- เลือก --</option>
+                            {Array.from({ length: 29 }, (_, i) => { const t = 8 * 60 + 30 + i * 30; const h = String(Math.floor(t/60)).padStart(2,'0'); const m = String(t%60).padStart(2,'0'); return <option key={`${h}:${m}`} value={`${h}:${m}`}>{h}:{m}</option>; })}
+                          </select>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
