@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import ChartSection from './ChartSection.jsx';
@@ -36,6 +36,42 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
   );
 }
 
+function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inputCls, labelCls }) {
+  const [copied, setCopied] = useState(false);
+  const hasPrev = !!(prevValue && prevValue.trim());
+
+  const handleCopyAndFill = () => {
+    navigator.clipboard.writeText(prevValue).catch(() => {});
+    onChange(prevValue);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      {hasPrev && (
+        <div className={`mb-1.5 rounded-lg border px-3 py-2 ${isDark ? 'bg-[#0d0d0d] border-[#2a2a2a]' : 'bg-amber-50/40 border-amber-200/50'}`}>
+          <div className="flex items-center justify-between mb-1">
+            <span className={`text-[8px] font-bold uppercase tracking-widest ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>ครั้งก่อน</span>
+            <button type="button" onClick={handleCopyAndFill}
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 ${
+                copied
+                  ? isDark ? 'bg-green-950/40 text-green-400 border-green-900/50' : 'bg-green-50 text-green-600 border-green-200'
+                  : isDark ? 'bg-[#111] border-[#333] text-gray-400 hover:text-amber-400 hover:border-amber-500/30' : 'bg-white border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300'
+              }`}>
+              {copied ? <Check size={9} /> : <Copy size={9} />}
+              {copied ? 'คัดลอกแล้ว' : 'ใช้ข้อมูลนี้'}
+            </button>
+          </div>
+          <p className={`text-[11px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{prevValue}</p>
+        </div>
+      )}
+      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={`${inputCls} resize-none`} />
+    </div>
+  );
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved }) {
@@ -51,6 +87,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [options, setOptions] = useState(null);
+  const [prevTreatment, setPrevTreatment] = useState(null);
 
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
@@ -357,8 +394,32 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           if (vd.weight) setVitals(v => ({ ...v, weight: vd.weight }));
           if (vd.height) setVitals(v => ({ ...v, height: vd.height }));
 
-          // ── Auto-fill จาก OPD patientData (override ProClinic defaults) ──
-          if (patientData) {
+          // ── Fetch latest treatment for this customer ──
+          let hasPrevTreatment = false;
+          try {
+            const listRes = await broker.listTreatments(customerId, 1);
+            if (listRes.success && listRes.treatments?.length > 0) {
+              const latestId = listRes.treatments[0].id;
+              if (latestId) {
+                const detailRes = await broker.getTreatment(latestId);
+                if (detailRes.success && detailRes.treatment) {
+                  const prev = detailRes.treatment;
+                  setPrevTreatment(prev);
+                  hasPrevTreatment = true;
+                  // Override health info from latest treatment (not patientData)
+                  if (prev.healthInfo?.bloodType) setBloodType(prev.healthInfo.bloodType);
+                  if (prev.healthInfo?.congenitalDisease) setCongenitalDisease(prev.healthInfo.congenitalDisease);
+                  if (prev.healthInfo?.drugAllergy) setDrugAllergy(prev.healthInfo.drugAllergy);
+                  if (prev.healthInfo?.treatmentHistory) setTreatmentHistory(prev.healthInfo.treatmentHistory);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[TreatmentForm] Failed to fetch previous treatment:', e.message);
+          }
+
+          // ── First treatment — auto-fill from patientData in English ──
+          if (!hasPrevTreatment && patientData) {
             const pd = patientData;
             // กรุ๊ปเลือด — match by name against bloodTypeOptions
             if (pd.bloodType && pd.bloodType !== 'ไม่ทราบ') {
@@ -366,15 +427,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               const match = bto.find(b => b.name === pd.bloodType);
               if (match) setBloodType(match.id);
             }
-            // โรคประจำตัว
+            // โรคประจำตัว — English
             if (pd.hasUnderlying === 'มี') {
               const pmh = [];
-              if (pd.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-              if (pd.ud_diabetes) pmh.push('เบาหวาน');
-              if (pd.ud_lung) pmh.push('โรคปอด');
-              if (pd.ud_kidney) pmh.push('โรคไต');
-              if (pd.ud_heart) pmh.push('โรคหัวใจ');
-              if (pd.ud_blood) pmh.push('โรคโลหิต');
+              if (pd.ud_hypertension) pmh.push('Hypertension');
+              if (pd.ud_diabetes) pmh.push('Diabetes');
+              if (pd.ud_lung) pmh.push('Lung Disease');
+              if (pd.ud_kidney) pmh.push('Kidney Disease');
+              if (pd.ud_heart) pmh.push('Heart Disease');
+              if (pd.ud_blood) pmh.push('Blood Disease');
               if (pd.ud_other && pd.ud_otherDetail) pmh.push(pd.ud_otherDetail);
               if (pmh.length) setCongenitalDisease(pmh.join(', '));
             }
@@ -382,14 +443,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             if (pd.hasAllergies === 'มี' && pd.allergiesDetail) {
               setDrugAllergy(pd.allergiesDetail);
             }
-            // ยาที่ใช้ประจำ → ประวัติการรักษาอื่นๆ
+            // ยาที่ใช้ประจำ
             if (pd.currentMedication) {
               setTreatmentHistory(pd.currentMedication);
             }
-            // สาเหตุที่มาพบแพทย์ → OPD symptoms
+          }
+
+          // ── visitReasons → OPD symptoms (always, English) ──
+          if (patientData) {
+            const pd = patientData;
+            const reasonMap = {
+              'สมรรถภาพทางเพศ': 'Erectile Dysfunction / Sexual Health',
+              'โรคระบบทางเดินปัสสาวะ': 'Urology / Urinary Tract Issues',
+              'ดูแลสุขภาพองค์รวม': 'General Health / Wellness',
+              'เสริมฮอร์โมน': 'Hormone Replacement Therapy (HRT)',
+              'โรคติดต่อทางเพศสัมพันธ์': 'STD / STI Testing & Treatment',
+              'ขลิบ': 'Circumcision',
+              'ทำหมัน': 'Vasectomy',
+              'เลาะสารเหลว': 'Foreign Body Removal (Genital)',
+            };
             const reasons = Array.isArray(pd.visitReasons) ? pd.visitReasons : pd.visitReason ? [pd.visitReason] : [];
             if (reasons.length) {
-              const reasonText = reasons.map(r => r === 'อื่นๆ' && pd.visitReasonOther ? `อื่นๆ: ${pd.visitReasonOther}` : r).join(', ');
+              const reasonText = reasons.map(r => {
+                if (r === 'อื่นๆ') return pd.visitReasonOther ? `Other: ${pd.visitReasonOther}` : 'Other';
+                return reasonMap[r] || r;
+              }).join(', ');
               setOpd(prev => ({ ...prev, symptoms: prev.symptoms ? prev.symptoms : reasonText }));
             }
           }
@@ -1231,7 +1309,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           {/* ════ RIGHT PANEL — OPD Card ════ */}
           <div className="space-y-4">
             <FormSection isDark={isDark}>
-              <SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent} />
+              <SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent}>
+                {prevTreatment && (
+                  <span className={`text-[9px] font-bold ${isDark ? 'text-amber-500/60' : 'text-amber-600/60'}`}>
+                    มีข้อมูลครั้งก่อน {prevTreatment.treatmentDate ? `(${prevTreatment.treatmentDate})` : ''}
+                  </span>
+                )}
+              </SectionHeader>
               <div className="space-y-3">
                 {[
                   ['symptoms', 'CC — อาการ (Chief Complaint)', 3],
@@ -1242,10 +1326,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   ['treatmentNote', 'Note — หมายเหตุการรักษา', 2],
                   ['additionalNote', 'หมายเหตุเพิ่มเติม', 2],
                 ].map(([key, label, rows]) => (
-                  <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <textarea value={opd[key]} onChange={e => setOpd(prev => ({ ...prev, [key]: e.target.value }))} rows={rows} className={`${inputCls} resize-none`} />
-                  </div>
+                  <OPDFieldWithPrev key={key} label={label} rows={rows}
+                    value={opd[key]} onChange={val => setOpd(prev => ({ ...prev, [key]: val }))}
+                    prevValue={prevTreatment?.[key] || ''} isDark={isDark} inputCls={inputCls} labelCls={labelCls} />
                 ))}
               </div>
             </FormSection>
