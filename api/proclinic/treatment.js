@@ -1343,10 +1343,12 @@ async function handleUpdate(req, res) {
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);
 
   // Treatment files (ไฟล์ tab — max 2 PDF files)
-  if (treatment.treatmentFiles?.length) {
-    treatment.treatmentFiles.forEach(f => {
-      formData.set(`treatment_file_${f.slot}_id`, f.fileId || '');
-    });
+  // Always set both slots — empty string clears existing file
+  if (Array.isArray(treatment.treatmentFiles)) {
+    for (let slot = 1; slot <= 2; slot++) {
+      const f = treatment.treatmentFiles.find(tf => tf.slot === slot);
+      formData.set(`treatment_file_${slot}_id`, f?.fileId || '');
+    }
   }
 
   // Collect all PDF files for multipart upload (lab + treatment files)

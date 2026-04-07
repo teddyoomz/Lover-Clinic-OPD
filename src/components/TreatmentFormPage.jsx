@@ -460,8 +460,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             }
           }
 
-          // ── visitReasons → OPD symptoms (always, English) ──
-          if (patientData) {
+          // ── visitReasons → OPD symptoms (first treatment only, English) ──
+          if (!hasPrevTreatment && patientData) {
             const pd = patientData;
             const reasonMap = {
               'สมรรถภาพทางเพศ': 'Erectile Dysfunction / Sexual Health',
@@ -1032,7 +1032,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
           pdfBase64: l.pdfBase64 || '', pdfFileName: l.pdfFileName || '',
         })),
-        treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({
+        treatmentFiles: (isEdit
+          ? treatmentFiles  // Edit: send ALL slots so deleted files get cleared
+          : treatmentFiles.filter(f => f.pdfBase64 || f.fileId)  // Create: only send slots with data
+        ).map(f => ({
           slot: f.slot, fileId: f.fileId || '', pdfBase64: f.pdfBase64 || '', pdfFileName: f.pdfFileName || '',
         })),
         // Billing/Payment — only include when there's an actual sale
