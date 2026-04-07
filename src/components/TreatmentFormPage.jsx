@@ -1004,7 +1004,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               sellers: pmSellers.filter(s => s.enabled),
               medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
               charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
-              beforeImages, afterImages, otherImages, labItems,
+              beforeImages, afterImages, otherImages,
+              labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
               syncedToProClinic: true,
               savedAt: serverTimestamp(),
             }, { merge: true });

@@ -1212,10 +1212,15 @@ async function handleUpdate(req, res) {
 
   // Lab items (update)
   if (Array.isArray(treatment.labItems)) {
-    // Clear existing lab fields (will rebuild)
+    // Clear existing lab fields (will rebuild) — including dynamic per-product fields
     ['lab_id[]','lab_product_id[]','lab_product_qty[]','lab_product_price[]','lab_product_is_vat_included[]',
      'lab_product_discount[]','lab_product_discount_type[]','lab_product_original_price[]','lab_product_rowId[]','lab_information[]'
     ].forEach(f => formData.delete(f));
+    // Clean up per-product lab file fields from edit page (may reference old/removed products)
+    for (const key of [...formData.keys()]) {
+      if (key.startsWith('lab_file_id_') || key.startsWith('lab_file_')) formData.delete(key);
+      if (key.startsWith('lab_image_') || key.startsWith('lab_image_id_')) formData.delete(key);
+    }
     const genRowId = () => { let r = ''; const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; for (let i = 0; i < 16; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
     const labRowIds = treatment.labItems.map(lab => lab.rowId || genRowId());
     // Build products JSON with lab items (ProClinic requires this)
