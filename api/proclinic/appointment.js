@@ -140,10 +140,11 @@ async function handleUpdate(req, res) {
   const csrf = extractCSRF(html);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า appointment');
 
-  // Build form data — POST with _method=PUT (same pattern as delete)
+  // Build form data — POST with _method=PUT + appointment_id
   const params = new URLSearchParams();
   params.set('_token', csrf);
   params.set('_method', 'PUT');
+  params.set('appointment_id', appointmentId);
   params.set('is_basic_flow', 'true');
   params.set('type', '');
   params.set('current_doctor_id', '');
@@ -176,35 +177,52 @@ async function handleUpdate(req, res) {
   params.set('customer_note', '');
   params.set('appointment_color', '');
 
-  // POST /admin/appointment/{id} with _method=PUT (Laravel form method spoofing)
-  const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-CSRF-TOKEN': csrf,
-      'Referer': `${base}/admin/appointment`,
-    },
-    body: params.toString(),
-    redirect: 'manual',
-  });
+  // Try multiple URL patterns to find which ProClinic accepts
+  const attempts = [
+    { url: `${base}/admin/appointment`, label: 'POST /admin/appointment (original)' },
+    { url: `${base}/admin/appointment/${appointmentId}`, label: `POST /admin/appointment/${appointmentId}` },
+  ];
 
-  const status = submitRes.status;
-  const location = submitRes.headers?.get('location') || '';
-  if (status >= 300 && status < 400) {
-    return res.status(200).json({ success: true, _debug: { status, location } });
-  }
+  for (const attempt of attempts) {
+    const submitRes = await session.fetch(attempt.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN': csrf,
+        'Referer': `${base}/admin/appointment`,
+      },
+      body: params.toString(),
+      redirect: 'manual',
+    });
 
-  if (status === 200) {
-    let bodyHtml = '';
-    try { bodyHtml = await submitRes.text(); } catch {}
-    if (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success')) {
-      return res.status(200).json({ success: true });
+    const status = submitRes.status;
+    const location = submitRes.headers?.get('location') || '';
+    console.log(`[appointment update] ${attempt.label} → ${status} location=${location}`);
+
+    if (status === 405) continue; // try next pattern
+
+    if (status >= 300 && status < 400) {
+      // Verify the update by re-fetching the appointment
+      let verified = false;
+      try {
+        const checkDate = appointment.appointmentDate;
+        const checkData = await session.fetchJSON(`${base}/admin/api/appointment?date=${checkDate}`);
+        const events = Array.isArray(checkData) ? checkData : checkData.appointment || [];
+        verified = events.some(ev => String((ev.extendedProps || {}).id) === String(appointmentId));
+      } catch {}
+      return res.status(200).json({ success: true, _debug: { status, location, attempt: attempt.label, verified } });
+    }
+
+    if (status === 200) {
+      let bodyHtml = '';
+      try { bodyHtml = await submitRes.text(); } catch {}
+      if (bodyHtml.includes('สำเร็จ') || bodyHtml.includes('success')) {
+        return res.status(200).json({ success: true, _debug: { attempt: attempt.label } });
+      }
     }
   }
 
-  let bodyHtml = '';
-  try { bodyHtml = await submitRes.text(); } catch {}
-  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status}): ${location}`);
+  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ — ไม่มี URL pattern ที่ ProClinic รับ`);
 }
 
 // ─── Action: delete ─────────────────────────────────────────────────────────
