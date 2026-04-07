@@ -1166,22 +1166,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               lastNotifiedStrRef.current[newS.id] = newStr;
               updatedSessions.push(newS);
             }
-          } else if (newS.isUnread && newS.patientData && newS.status === 'completed') {
-            // Session ใหม่ที่ส่งข้อมูลมาแล้ว แต่ไม่เจอใน prevRef (เช่น สร้าง+ส่งพร้อมกัน, หรือ listener restart)
-            const newStr = stableStr(newS.patientData || {});
-            if (isNotifEnabled && lastNotifiedStrRef.current[newS.id] !== newStr) {
-              lastNotifiedStrRef.current[newS.id] = newStr;
-              updatedSessions.push(newS);
-            }
             // ── ตัดสายวงจร: isUnread true→false = admin กด Report ──────────────────
             if (oldS.isUnread && !newS.isUnread) {
               lastViewedStrRef.current[newS.id] = newStr;
               lastAutoSyncedStrRef.current[newS.id] = newStr;
-              delete lastNotifiedStrRef.current[newS.id]; // reset → พร้อม notify ใหม่เมื่อมี update ถัดไป
+              delete lastNotifiedStrRef.current[newS.id];
               return;
             }
             // ── Patient edit detected: drop sync status → admin ต้องกด OPD ใหม่ ──
-            // deposit sessions: ไม่เกี่ยว
             if (
               oldStr !== newStr && newStr !== '{}' && newS.patientData &&
               newS.formType !== 'deposit' &&
@@ -1193,6 +1185,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             ) {
               lastAutoSyncedStrRef.current[newS.id] = newStr;
               brokerDesyncSessions.push(newS);
+            }
+          } else if (newS.isUnread && newS.patientData && newS.status === 'completed') {
+            // Session ใหม่ที่ส่งข้อมูลมาแล้ว แต่ไม่เจอใน prevRef (เช่น สร้าง+ส่งพร้อมกัน, หรือ listener restart)
+            const newStr = stableStr(newS.patientData || {});
+            if (isNotifEnabled && lastNotifiedStrRef.current[newS.id] !== newStr) {
+              lastNotifiedStrRef.current[newS.id] = newStr;
+              updatedSessions.push(newS);
             }
           }
         });
