@@ -1251,6 +1251,17 @@ async function handleUpdate(req, res) {
   // Consent (preserve)
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);
 
+  // Log form data keys for debugging
+  const formBody = formData.toString();
+  const formKeys = [...formData.keys()];
+  console.log(`[treatment] update — submitting ${formKeys.length} fields (body ${formBody.length} chars)`);
+  console.log(`[treatment] update — fields: ${formKeys.join(', ')}`);
+  // Log lab-specific and products fields
+  const productsVal = formData.get('products');
+  if (productsVal) console.log(`[treatment] update — products JSON: ${productsVal.substring(0, 300)}`);
+  const labFields = formKeys.filter(k => k.startsWith('lab_'));
+  if (labFields.length) console.log(`[treatment] update — lab fields: ${labFields.map(k => `${k}=${formData.get(k)}`).join(', ')}`);
+
   // Submit
   const updateRes = await session.fetch(`${base}/admin/treatment/${treatmentId}`, {
     method: 'POST',
@@ -1259,7 +1270,7 @@ async function handleUpdate(req, res) {
       'X-CSRF-TOKEN': csrf,
       'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
     },
-    body: formData.toString(),
+    body: formBody,
     redirect: 'manual',
   });
 
@@ -1280,8 +1291,9 @@ async function handleUpdate(req, res) {
     throw new Error(`ProClinic validation: ${errors}`);
   }
 
-  const bodySnippet = bodyHtml.substring(0, 500).replace(/\s+/g, ' ');
-  console.warn(`[treatment] update FAILED — status=${updateStatus}, body snippet: ${bodySnippet}`);
+  // Log more of the error page for debugging
+  const bodySnippet = bodyHtml.substring(0, 1500).replace(/\s+/g, ' ');
+  console.warn(`[treatment] update FAILED — status=${updateStatus}, body: ${bodySnippet}`);
   throw new Error(`แก้ไข treatment ไม่สำเร็จ — status=${updateStatus}`);
 }
 
