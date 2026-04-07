@@ -4057,13 +4057,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <div>
                           <label className="text-[9px] font-bold text-gray-500 uppercase">วันที่</label>
                           <div className="relative">
-                            <input type="text" readOnly
-                              value={apptFormData.date ? (() => { const [y,m,d] = apptFormData.date.split('-'); return `${d}/${m}/${y}`; })() : ''}
-                              placeholder="dd/mm/yyyy"
-                              className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)] pointer-events-none" />
                             <input type="date" value={apptFormData.date || ''}
                               onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
-                              className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+                              className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-transparent cursor-pointer" />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-[var(--tx-normal)] pointer-events-none">
+                              {apptFormData.date ? (() => { const [y,m,d] = apptFormData.date.split('-'); return `${d}/${m}/${y}`; })() : 'dd/mm/yyyy'}
+                            </span>
                           </div>
                         </div>
                         <div>
@@ -4156,7 +4155,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   ) : apptCustomerAppts.length === 0 ? (
                     <div className="text-center py-6 text-xs text-gray-500">ไม่พบนัดหมาย</div>
                   ) : (
-                    <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                    <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar" ref={el => {
+                      // Auto-scroll to first future appointment after load
+                      if (el && apptCustomerAppts.length > 0) {
+                        const todayISO = new Date().toISOString().substring(0, 10);
+                        const firstFutureIdx = apptCustomerAppts.findIndex(a => a.date >= todayISO);
+                        const targetIdx = firstFutureIdx >= 0 ? firstFutureIdx : apptCustomerAppts.length - 1;
+                        const target = el.children[targetIdx];
+                        if (target) requestAnimationFrame(() => target.scrollIntoView({ block: 'start', behavior: 'instant' }));
+                      }
+                    }}>
                       {apptCustomerAppts.map(a => {
                         const isPast = a.date < new Date().toISOString().substring(0, 10);
                         // Format: dd เดือน พ.ศ.
@@ -4166,23 +4174,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         return (
                           <div key={a.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${isPast ? 'border-[var(--bd)] opacity-60' : 'border-emerald-500/20 bg-emerald-500/5'}`}>
                             <div className="text-center shrink-0 w-24">
-                              <p className="text-[10px] font-bold text-emerald-400">{dateDisplay}</p>
+                              <p className={`text-[10px] font-bold ${isPast ? 'text-gray-500' : 'text-emerald-400'}`}>{dateDisplay}</p>
                               <p className="text-[9px] text-gray-500">{a.startTime}-{a.endTime}</p>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{a.doctorName || '-'}</p>
                               <p className="text-[10px] text-gray-500 truncate">{a.appointmentTo || ''}{a.note ? ` | ${a.note}` : ''}{a.roomName && a.roomName !== '-' ? ` | ${a.roomName}` : ''}</p>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button onClick={() => handleApptEdit(a)} title="แก้ไข"
-                                className="p-1.5 rounded-lg border border-[var(--bd)] text-sky-400 hover:bg-sky-500/10 transition-colors">
-                                <Edit3 size={12} />
-                              </button>
-                              <button onClick={() => handleApptDelete(a.id)} title="ลบ"
-                                className="p-1.5 rounded-lg border border-[var(--bd)] text-red-400 hover:bg-red-500/10 transition-colors">
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
+                            {!isPast && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => handleApptEdit(a)} title="แก้ไข"
+                                  className="p-1.5 rounded-lg border border-[var(--bd)] text-sky-400 hover:bg-sky-500/10 transition-colors">
+                                  <Edit3 size={12} />
+                                </button>
+                                <button onClick={() => handleApptDelete(a.id)} title="ลบ"
+                                  className="p-1.5 rounded-lg border border-[var(--bd)] text-red-400 hover:bg-red-500/10 transition-colors">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
