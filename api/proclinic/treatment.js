@@ -1137,6 +1137,92 @@ async function handleDelete(req, res) {
   throw new Error(`ยกเลิกการรักษาไม่สำเร็จ — status ${status}`);
 }
 
+// ─── Action: uploadChart — Upload chart image to existing treatment ────────
+
+async function handleUploadChart(req, res) {
+  const { treatmentId, fileIndex, imageBase64 } = req.body || {};
+  if (!treatmentId || !imageBase64) {
+    return res.status(400).json({ success: false, error: 'Missing treatmentId or imageBase64' });
+  }
+  const idx = parseInt(fileIndex) || 1; // 1 or 2
+  if (idx < 1 || idx > 2) {
+    return res.status(400).json({ success: false, error: 'fileIndex must be 1 or 2' });
+  }
+  // Base64 size check (~3MB limit)
+  if (imageBase64.length > 4_000_000) {
+    return res.status(400).json({ success: false, error: 'Image too large (max ~3MB)' });
+  }
+
+  const session = await createSession();
+  const base = session.origin;
+
+  // GET the edit page to get CSRF + existing form fields
+  const editHtml = await session.fetchText(`${base}/admin/treatment/${treatmentId}/edit`);
+  const csrf = extractCSRF(editHtml);
+  if (!csrf) throw new Error('ไม่พบ CSRF token');
+
+  // Extract existing fields to preserve them
+  const existing = extractFormFields(editHtml);
+
+  // Build multipart/form-data with the chart image
+  const boundary = `----ChartUpload${Date.now()}`;
+  const parts = [];
+
+  // Add CSRF token
+  parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="_token"\r\n\r\n${csrf}`);
+  parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="_method"\r\n\r\nPUT`);
+
+  // Add ALL existing fields (preserve treatment data)
+  for (const [key, val] of Object.entries(existing)) {
+    if (key === '_token' || key === '_method') continue;
+    if (key === `treatment_file_${idx}`) continue; // will be overridden by our file
+    parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}`);
+  }
+
+  // Add the chart image as a file
+  const imageBuffer = Buffer.from(imageBase64, 'base64');
+  const filePart = `--${boundary}\r\nContent-Disposition: form-data; name="treatment_file_${idx}"; filename="chart_${idx}.png"\r\nContent-Type: image/png\r\n\r\n`;
+  const endPart = `\r\n--${boundary}--\r\n`;
+
+  // Combine text parts + binary file
+  const textParts = parts.join('\r\n') + '\r\n';
+  const textBuffer = Buffer.from(textParts, 'utf-8');
+  const filePartBuffer = Buffer.from(filePart, 'utf-8');
+  const endPartBuffer = Buffer.from(endPart, 'utf-8');
+  const body = Buffer.concat([textBuffer, filePartBuffer, imageBuffer, endPartBuffer]);
+
+  console.log(`[treatment] uploadChart — treatmentId=${treatmentId}, file=${idx}, size=${imageBuffer.length} bytes`);
+
+  const uploadRes = await session.fetch(`${base}/admin/treatment/${treatmentId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'X-CSRF-TOKEN': csrf,
+      'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
+    },
+    body,
+    redirect: 'manual',
+  });
+
+  const status = uploadRes.status;
+  const location = uploadRes.headers?.get?.('location') || '';
+  console.log(`[treatment] uploadChart — response: status=${status}, location="${location}"`);
+
+  if (status >= 300 && status < 400 && !location.includes('/login')) {
+    return res.status(200).json({ success: true, treatmentId });
+  }
+
+  // Try to extract error
+  let errorMsg = `Upload chart ไม่สำเร็จ — status ${status}`;
+  try {
+    const body = await uploadRes.text();
+    const errors = extractValidationErrors(body);
+    if (errors) errorMsg = `ProClinic: ${errors}`;
+  } catch (_) {}
+
+  throw new Error(errorMsg);
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -1162,6 +1248,7 @@ export default async function handler(req, res) {
       case 'searchProducts': return await handleSearchProducts(req, res);
       case 'getMedicationGroups': return await handleGetMedicationGroups(req, res);
       case 'listItems':          return await handleListItems(req, res);
+      case 'uploadChart':        return await handleUploadChart(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

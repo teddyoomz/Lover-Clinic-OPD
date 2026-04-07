@@ -930,6 +930,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             console.warn('[TreatmentForm] Failed to save local backup:', e);
           }
         }
+        // Upload charts to ProClinic (async — don't block success)
+        const tid = data.treatmentId || treatmentId;
+        if (charts.length > 0 && tid) {
+          charts.forEach((chart, i) => {
+            if (i < 2 && chart.dataUrl) {
+              const base64 = chart.dataUrl.split(',')[1];
+              if (base64) {
+                broker.uploadChart(tid, i + 1, base64)
+                  .then(r => console.log(`[Chart] upload ${i + 1}:`, r.success ? 'OK' : r.error))
+                  .catch(err => console.warn(`[Chart] upload ${i + 1} failed:`, err.message));
+              }
+            }
+          });
+        }
         setSuccess(true);
         setTimeout(() => { if (onSaved) onSaved(); }, 1200);
       } else {

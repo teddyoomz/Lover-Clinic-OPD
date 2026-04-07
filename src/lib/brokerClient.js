@@ -283,6 +283,11 @@ export function deleteTreatment(treatmentId, cancelDetail = '') {
   return apiFetch('treatment', { action: 'delete', treatmentId, cancelDetail });
 }
 
+/** Upload chart image to ProClinic treatment */
+export function uploadChart(treatmentId, fileIndex, imageBase64) {
+  return apiFetch('treatment', { action: 'uploadChart', treatmentId, fileIndex, imageBase64 });
+}
+
 /** Search ProClinic products by type → { success, products[], total } */
 export function searchProducts({ productType, query, isTakeaway, perPage } = {}) {
   return apiFetch('treatment', { action: 'searchProducts', productType, query, isTakeaway, perPage });
