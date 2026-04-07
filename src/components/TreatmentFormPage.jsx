@@ -38,7 +38,7 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, isDark, db, appId, onClose, onSaved }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
@@ -318,7 +318,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             return;
           }
           setOptions(formData.options);
-          // Pre-fill defaults
+          // Pre-fill defaults from ProClinic
           const hi = formData.options.healthInfo || {};
           if (hi.doctorId) setDoctorId(hi.doctorId);
           if (hi.bloodType) setBloodType(hi.bloodType);
@@ -328,6 +328,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           const vd = formData.options.vitalsDefaults || {};
           if (vd.weight) setVitals(v => ({ ...v, weight: vd.weight }));
           if (vd.height) setVitals(v => ({ ...v, height: vd.height }));
+
+          // ── Auto-fill จาก OPD patientData (override ProClinic defaults) ──
+          if (patientData) {
+            const pd = patientData;
+            // กรุ๊ปเลือด — match by name against bloodTypeOptions
+            if (pd.bloodType && pd.bloodType !== 'ไม่ทราบ') {
+              const bto = formData.options.bloodTypeOptions || [];
+              const match = bto.find(b => b.name === pd.bloodType);
+              if (match) setBloodType(match.id);
+            }
+            // โรคประจำตัว
+            if (pd.hasUnderlying === 'มี') {
+              const pmh = [];
+              if (pd.ud_hypertension) pmh.push('ความดันโลหิตสูง');
+              if (pd.ud_diabetes) pmh.push('เบาหวาน');
+              if (pd.ud_lung) pmh.push('โรคปอด');
+              if (pd.ud_kidney) pmh.push('โรคไต');
+              if (pd.ud_heart) pmh.push('โรคหัวใจ');
+              if (pd.ud_blood) pmh.push('โรคโลหิต');
+              if (pd.ud_other && pd.ud_otherDetail) pmh.push(pd.ud_otherDetail);
+              if (pmh.length) setCongenitalDisease(pmh.join(', '));
+            }
+            // แพ้ยา/อาหาร
+            if (pd.hasAllergies === 'มี' && pd.allergiesDetail) {
+              setDrugAllergy(pd.allergiesDetail);
+            }
+            // ยาที่ใช้ประจำ → ประวัติการรักษาอื่นๆ
+            if (pd.currentMedication) {
+              setTreatmentHistory(pd.currentMedication);
+            }
+            // สาเหตุที่มาพบแพทย์ → OPD symptoms
+            const reasons = Array.isArray(pd.visitReasons) ? pd.visitReasons : pd.visitReason ? [pd.visitReason] : [];
+            if (reasons.length) {
+              const reasonText = reasons.map(r => r === 'อื่นๆ' && pd.visitReasonOther ? `อื่นๆ: ${pd.visitReasonOther}` : r).join(', ');
+              setOpd(prev => ({ ...prev, symptoms: prev.symptoms ? prev.symptoms : reasonText }));
+            }
+          }
         }
       } catch (e) {
         setError(e.message);

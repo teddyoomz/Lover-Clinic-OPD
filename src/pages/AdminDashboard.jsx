@@ -5250,7 +5250,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     onOpenCreateForm={(cid) => {
                       const pd = viewingSession.patientData || {};
                       const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
-                      setTreatmentFormMode({ mode: 'create', customerId: cid, patientName: name });
+                      setTreatmentFormMode({ mode: 'create', customerId: cid, patientName: name, patientData: pd });
                     }}
                     onOpenEditForm={(tid, cid) => {
                       const pd = viewingSession.patientData || {};
@@ -5273,6 +5273,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           customerId={treatmentFormMode.customerId}
           treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
+          patientData={treatmentFormMode.patientData}
           isDark={isDark}
           db={db}
           appId={appId}
