@@ -1105,19 +1105,22 @@ async function handleUpdate(req, res) {
     }
   }
 
-  // Treatment images — Before/After/Other (preserve existing or use new from frontend)
+  // Treatment images — Before/After/Other
+  // Array provided (even empty) = use it (empty = delete all). Undefined = preserve existing.
   ['before_image', 'after_image', 'images'].forEach((prefix, pi) => {
     const propNames = ['beforeImages', 'afterImages', 'otherImages'];
     const idSuffix = prefix === 'images' ? 'image_id' : `${prefix}_id`;
     formData.delete(`${prefix}[]`);
     formData.delete(`${idSuffix}[]`);
-    if (treatment[propNames[pi]]?.length) {
-      treatment[propNames[pi]].forEach(img => {
+    const imgs = treatment[propNames[pi]];
+    if (Array.isArray(imgs)) {
+      // Explicitly provided — send what we have (empty = delete all)
+      imgs.forEach(img => {
         formData.append(`${prefix}[]`, img.dataUrl || '');
         formData.append(`${idSuffix}[]`, img.id || '');
       });
     } else {
-      // Preserve existing from edit page
+      // Not provided — preserve existing from edit page
       $(`input[name="${prefix}[]"]`).each((_, el) => {
         const val = $(el).val();
         if (val) formData.append(`${prefix}[]`, val);
