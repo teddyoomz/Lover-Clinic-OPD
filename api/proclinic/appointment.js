@@ -134,51 +134,94 @@ async function handleUpdate(req, res) {
 
   const session = await createSession();
   const base = session.origin;
-  const { extractFormFields } = await import('./_lib/scraper.js');
 
-  // 1. GET existing appointment edit page → preserve ALL form fields
-  let editUrl = `${base}/admin/appointment/${appointmentId}/edit`;
-  let editHtml = await session.fetchText(editUrl);
-  // If /edit doesn't work, try without /edit
-  if (editHtml.length < 500 || editHtml.includes('/login')) {
-    editUrl = `${base}/admin/appointment/${appointmentId}`;
-    editHtml = await session.fetchText(editUrl);
+  // 1. GET /admin/appointment for CSRF token
+  const html = await session.fetchText(`${base}/admin/appointment`);
+  const csrf = extractCSRF(html);
+  if (!csrf) throw new Error('ไม่พบ CSRF token');
+
+  // 2. GET existing appointment data from API to preserve customer_id etc.
+  let existingData = {};
+  if (appointment.appointmentDate) {
+    try {
+      const apiData = await session.fetchJSON(`${base}/admin/api/appointment?date=${appointment.appointmentDate}`);
+      const events = Array.isArray(apiData) ? apiData : apiData.appointment || Object.values(apiData).filter(v => v && typeof v === 'object' && v.id);
+      const match = events.find(ev => String((ev.extendedProps || {}).id || ev.id) === String(appointmentId));
+      if (match) existingData = match.extendedProps || {};
+    } catch {}
   }
-  const csrf = extractCSRF(editHtml);
-  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า appointment edit');
+  // If not found by new date, try original date from existing data
+  if (!existingData.id) {
+    try {
+      // Scan today ± 365 days to find the appointment's original date
+      const dates = [];
+      const today = new Date();
+      for (let i = -30; i < 365; i++) {
+        const d = new Date(today); d.setDate(d.getDate() + i);
+        dates.push(d.toISOString().substring(0, 10));
+      }
+      // Check in batches of 30
+      outer: for (let i = 0; i < dates.length; i += 30) {
+        const batch = dates.slice(i, i + 30);
+        const results = await Promise.all(batch.map(async date => {
+          try {
+            const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
+            const events = Array.isArray(data) ? data : data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
+            return events.find(ev => String((ev.extendedProps || {}).id || ev.id) === String(appointmentId));
+          } catch { return null; }
+        }));
+        const found = results.find(r => r);
+        if (found) { existingData = found.extendedProps || {}; break outer; }
+      }
+    } catch {}
+  }
 
-  // 2. Extract ALL existing form fields (preserves customer_id, customer_option, etc.)
-  const existing = extractFormFields(editHtml);
-
-  // 3. Build params: start from existing, override only what changed
+  // 3. Build form — preserve existing fields, override with changes
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(existing)) {
-    if (key !== '_method') params.set(key, value);
-  }
   params.set('_token', csrf);
   params.set('_method', 'PUT');
+  params.set('is_basic_flow', 'true');
+  params.set('type', '');
+  params.set('current_doctor_id', existingData.doctor_id || '');
+  params.set('appointment_type', existingData.appointment_type || 'sales');
+  params.set('appointment_option', 'once');
 
-  // Override with our updated values
-  if (appointment.appointmentDate) params.set('appointment_date', appointment.appointmentDate);
-  if (appointment.appointmentStartTime) params.set('appointment_start_time', appointment.appointmentStartTime);
-  if (appointment.appointmentEndTime) params.set('appointment_end_time', appointment.appointmentEndTime);
-  if (appointment.appointmentStartTime && appointment.appointmentEndTime) {
-    params.set('times', `${appointment.appointmentStartTime},${appointment.appointmentEndTime}`);
+  // CRITICAL: preserve customer association
+  if (existingData.customer_id) {
+    params.set('customer_option', 'existed');
+    params.set('customer_id', String(existingData.customer_id));
+  } else {
+    params.set('customer_option', 'none');
   }
-  if (appointment.advisor) params.set('advisor_id', appointment.advisor);
-  if (appointment.doctor) params.set('doctor_id', appointment.doctor);
-  if (appointment.room) params.set('examination_room_id', appointment.room);
-  if (appointment.source) params.set('source', appointment.source);
-  if (appointment.appointmentTo) params.set('appointment_to', appointment.appointmentTo);
-  if (appointment.appointmentNote != null) params.set('appointment_note', appointment.appointmentNote);
 
-  // 4. POST to /admin/appointment/{id} with _method=PUT
+  // Fields: use new values if provided, else keep existing
+  params.set('appointment_date', appointment.appointmentDate || existingData.appointment_date || '');
+  params.set('appointment_start_time', appointment.appointmentStartTime || existingData.appointment_start_time || '');
+  params.set('appointment_end_time', appointment.appointmentEndTime || existingData.appointment_end_time || '');
+  const st = appointment.appointmentStartTime || existingData.appointment_start_time || '';
+  const et = appointment.appointmentEndTime || existingData.appointment_end_time || '';
+  params.set('times', st && et ? `${st},${et}` : '');
+
+  params.set('advisor_id', appointment.advisor || existingData.advisor_id || '');
+  params.set('doctor_id', appointment.doctor || existingData.doctor_id || '');
+  params.set('examination_room_id', appointment.room || existingData.examination_room_id || '');
+  params.set('source', appointment.source || existingData.source || 'walk-in');
+  params.set('appointment_to', appointment.appointmentTo || existingData.appointment_to || '');
+  params.set('appointment_note', appointment.appointmentNote != null ? appointment.appointmentNote : (existingData.note || ''));
+
+  params.set('appointment_location', '');
+  params.set('expected_sales', '');
+  params.set('preparation', '');
+  params.set('customer_note', '');
+  params.set('appointment_color', existingData.appointment_color || '');
+
+  // 4. POST /admin/appointment/{id} with _method=PUT
   const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
-      'Referer': editUrl,
+      'Referer': `${base}/admin/appointment`,
     },
     body: params.toString(),
     redirect: 'manual',
