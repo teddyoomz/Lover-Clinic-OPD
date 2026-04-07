@@ -314,24 +314,23 @@ async function handleListByCustomer(req, res) {
     return null;
   };
 
-  // Get exact appointment dates from modal (most efficient — no scanning needed)
+  // Get exact appointment dates from modal
   const modalDates = basicAppts.map(a => parseThaiDate(a.date)).filter(Boolean);
 
-  // Also include next 14 days as safety net for very recent appointments
+  // Also scan next 365 days to catch ALL future appointments
   const today = new Date();
-  const nearDates = [];
-  for (let i = 0; i < 14; i++) {
+  const futureDates = [];
+  for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    nearDates.push(d.toISOString().substring(0, 10));
+    futureDates.push(d.toISOString().substring(0, 10));
   }
 
-  const allDates = [...new Set([...modalDates, ...nearDates])];
+  const allDates = [...new Set([...modalDates, ...futureDates])];
 
-  // Fetch appointment API for each date to get appointment IDs
+  // Fetch appointment API for each date (batch 50 parallel)
   const appointments = [];
   const cidStr = String(customerId);
-  // Batch in parallel (max 50 at a time)
   for (let i = 0; i < allDates.length; i += 50) {
     const batch = allDates.slice(i, i + 50);
     const results = await Promise.all(batch.map(async date => {

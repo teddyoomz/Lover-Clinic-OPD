@@ -4055,26 +4055,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                         <div>
-                          <label className="text-[9px] font-bold text-gray-500 uppercase">วันที่ (dd/mm/yyyy)</label>
-                          <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy"
-                            value={apptFormData._dateInput != null ? apptFormData._dateInput : (apptFormData.date ? (() => { const [y,m,d] = apptFormData.date.split('-'); return `${d}/${m}/${y}`; })() : '')}
-                            onChange={e => {
-                              let v = e.target.value.replace(/[^\d/]/g, '');
-                              // Auto-insert slashes after dd and mm
-                              const digits = v.replace(/\//g, '');
-                              if (digits.length >= 4) v = digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4,8);
-                              else if (digits.length >= 2) v = digits.slice(0,2) + '/' + digits.slice(2);
-                              else v = digits;
-                              // Parse dd/mm/yyyy → yyyy-mm-dd
-                              const parts = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                              if (parts) {
-                                const iso = `${parts[3]}-${parts[2]}-${parts[1]}`;
-                                setApptFormData(p => ({ ...p, date: iso, _dateInput: v }));
-                              } else {
-                                setApptFormData(p => ({ ...p, _dateInput: v }));
-                              }
-                            }}
-                            onBlur={() => setApptFormData(p => { const { _dateInput, ...rest } = p; return rest; })}
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">วันที่</label>
+                          <input type="date" lang="en-GB" value={apptFormData.date || ''}
+                            onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
                             className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
                         </div>
                         <div>
