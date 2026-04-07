@@ -939,8 +939,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           qty: l.qty, price: l.price, originalPrice: l.originalPrice || l.price,
           discount: l.discount || '0', discountType: l.discountType || 'บาท',
           isVatIncluded: l.isVatIncluded || false, rowId: l.rowId || '',
-          information: l.information || '',
+          information: l.information || '', fileId: l.fileId || '',
           images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+          pdfBase64: l.pdfBase64 || '', pdfFileName: l.pdfFileName || '',
         })),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
@@ -1404,6 +1405,32 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         ))}
                       </div>
                     )}
+                    {/* Lab PDF attachment */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">PDF</span>
+                      {lab.pdfBase64 || lab.fileId ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
+                          <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfFileName: '', fileId: '' } : l))}
+                            className="text-red-400 hover:text-red-300"><X size={10} /></button>
+                        </div>
+                      ) : (
+                        <label className="text-[9px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
+                          <Plus size={8} /> แนบ PDF
+                          <input type="file" accept="application/pdf" className="hidden" onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 10*1024*1024) { alert('ไฟล์ PDF ขนาดไม่เกิน 10MB'); return; }
+                            const reader = new FileReader();
+                            reader.onload = ev => {
+                              setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: ev.target.result, pdfFileName: file.name, fileId: '' } : l));
+                            };
+                            reader.readAsDataURL(file);
+                            e.target.value = '';
+                          }} />
+                        </label>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1469,14 +1496,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         const afterDisc = labModalDiscountType === 'percent' ? p * (1 - d/100) : p - d;
                         const vat = labModalVat ? afterDisc * 0.07 : 0;
                         const finalPrice = (afterDisc + vat).toFixed(2);
+                        const existing = editingLabIndex >= 0 ? labItems[editingLabIndex] : null;
                         const item = {
-                          id: editingLabIndex >= 0 ? labItems[editingLabIndex]?.id || '' : '',
+                          id: existing?.id || '',
                           productId: labModalSelected.id, productName: labModalSelected.name, unitName: labModalSelected.unit || '',
                           qty: labModalQty || '1', price: finalPrice, originalPrice: labModalPrice,
                           discount: labModalDiscount || '0', discountType: labModalDiscountType === 'percent' ? '%' : 'บาท',
-                          isVatIncluded: labModalVat, rowId: editingLabIndex >= 0 ? labItems[editingLabIndex]?.rowId || '' : '',
-                          information: editingLabIndex >= 0 ? labItems[editingLabIndex]?.information || '' : '',
-                          images: editingLabIndex >= 0 ? labItems[editingLabIndex]?.images || [] : [],
+                          isVatIncluded: labModalVat, rowId: existing?.rowId || '',
+                          information: existing?.information || '',
+                          images: existing?.images || [],
+                          fileId: existing?.fileId || '', pdfBase64: existing?.pdfBase64 || '', pdfFileName: existing?.pdfFileName || '',
                         };
                         if (editingLabIndex >= 0) {
                           setLabItems(prev => prev.map((l, i) => i === editingLabIndex ? item : l));

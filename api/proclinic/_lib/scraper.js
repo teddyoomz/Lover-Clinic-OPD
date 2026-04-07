@@ -633,13 +633,15 @@ export function extractTreatmentDetail(html) {
     // Get product name from the lab-item heading
     const itemEl = $(`.lab-item[data-product-id="${pid}"]`).eq(0);
     const productName = itemEl.find('h6').first().text().trim() || '';
+    // Lab PDF file ID
+    const fileId = $(`input[name="lab_file_id_${pid}"]`).val() || '';
     t.labItems.push({
       id: labIds[i] || '', productId: pid, productName,
       qty: labQtys[i] || '1', price: labPrices[i] || '0',
       originalPrice: labOrigPrices[i] || '0', discount: labDiscounts[i] || '0',
       discountType: labDiscountTypes[i] || 'บาท',
       isVatIncluded: labVats[i] === 'true', rowId: labRowIds[i] || '',
-      information: labInfos[i] || '', images,
+      information: labInfos[i] || '', images, fileId,
     });
   }
 

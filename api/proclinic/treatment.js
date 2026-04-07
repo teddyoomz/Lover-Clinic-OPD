@@ -14,6 +14,23 @@ import * as cheerio from 'cheerio';
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 
+// ─── Helper: convert URLSearchParams to multipart FormData with PDF files ────
+// Used when lab items have PDF attachments — ProClinic requires multipart/form-data for file uploads.
+function toMultipartFormData(urlParams, pdfFiles) {
+  const fd = new FormData();
+  // Transfer all existing fields from URLSearchParams
+  for (const [key, val] of urlParams.entries()) {
+    fd.append(key, val);
+  }
+  // Append PDF files as Blobs
+  for (const { fieldName, base64Data, fileName } of pdfFiles) {
+    const binary = Buffer.from(base64Data, 'base64');
+    const blob = new Blob([binary], { type: 'application/pdf' });
+    fd.append(fieldName, blob, fileName || 'lab_file.pdf');
+  }
+  return fd;
+}
+
 // ─── Firestore backup for customer inventory (courses) ─────────────────────
 
 async function saveInventoryToFirestore(customerId, courses) {
@@ -836,15 +853,34 @@ async function handleCreate(req, res) {
     const dfFees = formData.getAll(`df_rowId_${rid}[]`);
     console.log(`[treatment] create — rowId ${rid}: qty=${qty}, df_fees=[${dfFees.join(',')}]`);
   });
-  // Submit — ProClinic redirects (302) on success, returns 200 with form on failure
+  // Collect lab PDF files (base64 → multipart Blob)
+  const pdfFiles = [];
+  if (treatment.labItems?.length) {
+    treatment.labItems.forEach(lab => {
+      if (lab.pdfBase64) {
+        pdfFiles.push({
+          fieldName: `lab_file_${lab.productId}`,
+          base64Data: lab.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
+          fileName: lab.pdfFileName || 'lab_file.pdf',
+        });
+      }
+    });
+  }
+
+  // Submit — use multipart if PDF files, otherwise url-encoded
+  let submitBody, submitHeaders;
+  if (pdfFiles.length) {
+    submitBody = toMultipartFormData(formData, pdfFiles);
+    submitHeaders = { 'X-CSRF-TOKEN': csrf, 'Referer': `${base}/admin/treatment/create?customer_id=${customerId}` };
+    console.log(`[treatment] create — submitting multipart with ${pdfFiles.length} PDF files`);
+  } else {
+    submitBody = formData.toString();
+    submitHeaders = { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': csrf, 'Referer': `${base}/admin/treatment/create?customer_id=${customerId}` };
+  }
   const submitRes = await session.fetch(`${base}/admin/treatment`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-CSRF-TOKEN': csrf,
-      'Referer': `${base}/admin/treatment/create?customer_id=${customerId}`,
-    },
-    body: formData.toString(),
+    headers: submitHeaders,
+    body: submitBody,
     redirect: 'manual',
   });
 
@@ -1251,26 +1287,34 @@ async function handleUpdate(req, res) {
   // Consent (preserve)
   if (existing.consent_image) formData.set('consent_image', existing.consent_image);
 
-  // Log form data keys for debugging
-  const formBody = formData.toString();
-  const formKeys = [...formData.keys()];
-  console.log(`[treatment] update — submitting ${formKeys.length} fields (body ${formBody.length} chars)`);
-  console.log(`[treatment] update — fields: ${formKeys.join(', ')}`);
-  // Log lab-specific and products fields
-  const productsVal = formData.get('products');
-  if (productsVal) console.log(`[treatment] update — products JSON: ${productsVal.substring(0, 300)}`);
-  const labFields = formKeys.filter(k => k.startsWith('lab_'));
-  if (labFields.length) console.log(`[treatment] update — lab fields: ${labFields.map(k => `${k}=${formData.get(k)}`).join(', ')}`);
+  // Collect lab PDF files for multipart upload
+  const pdfFiles = [];
+  if (Array.isArray(treatment.labItems)) {
+    treatment.labItems.forEach(lab => {
+      if (lab.pdfBase64) {
+        pdfFiles.push({
+          fieldName: `lab_file_${lab.productId}`,
+          base64Data: lab.pdfBase64.replace(/^data:application\/pdf;base64,/, ''),
+          fileName: lab.pdfFileName || 'lab_file.pdf',
+        });
+      }
+    });
+  }
 
-  // Submit
+  // Submit — use multipart if PDF files, otherwise url-encoded
+  let submitBody, submitHeaders;
+  if (pdfFiles.length) {
+    submitBody = toMultipartFormData(formData, pdfFiles);
+    submitHeaders = { 'X-CSRF-TOKEN': csrf, 'Referer': `${base}/admin/treatment/${treatmentId}/edit` };
+    console.log(`[treatment] update — submitting multipart with ${pdfFiles.length} PDF files`);
+  } else {
+    submitBody = formData.toString();
+    submitHeaders = { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': csrf, 'Referer': `${base}/admin/treatment/${treatmentId}/edit` };
+  }
   const updateRes = await session.fetch(`${base}/admin/treatment/${treatmentId}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-CSRF-TOKEN': csrf,
-      'Referer': `${base}/admin/treatment/${treatmentId}/edit`,
-    },
-    body: formBody,
+    headers: submitHeaders,
+    body: submitBody,
     redirect: 'manual',
   });
 
