@@ -301,7 +301,7 @@ async function handleSearch(req, res) {
         const firstName = fields.firstname || '';
         const lastName = fields.lastname || '';
         const prefix = fields.prefix || '';
-        const phone = fields.phone || '';
+        const phone = fields.telephone_number || fields.phone || '';
         const hnVal = extractHN(editHtml) || '';
         if (firstName || lastName) c.name = [prefix, firstName, lastName].filter(Boolean).join(' ');
         if (phone && !c.phone) c.phone = phone;
