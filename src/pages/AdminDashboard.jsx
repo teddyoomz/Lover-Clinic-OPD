@@ -1154,6 +1154,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
         let brokerSyncSessions = [];
+        let brokerDesyncSessions = [];
         allNotifData.forEach(newS => {
           const oldS = prevSessionsRef.current.find(s => s.id === newS.id);
           if (oldS) {
@@ -1179,8 +1180,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               delete lastNotifiedStrRef.current[newS.id]; // reset → พร้อม notify ใหม่เมื่อมี update ถัดไป
               return;
             }
-            // ── Auto-sync ProClinic: patientData เปลี่ยนจริง + session done+linked ──
-            // deposit sessions: manual sync only — ห้าม auto-sync
+            // ── Patient edit detected: drop sync status → admin ต้องกด OPD ใหม่ ──
+            // deposit sessions: ไม่เกี่ยว
             if (
               oldStr !== newStr && newStr !== '{}' && newS.patientData &&
               newS.formType !== 'deposit' &&
@@ -1191,7 +1192,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               !autoSyncInFlightRef.current.has(newS.id)
             ) {
               lastAutoSyncedStrRef.current[newS.id] = newStr;
-              brokerSyncSessions.push(newS);
+              brokerDesyncSessions.push(newS);
             }
           }
         });
@@ -1202,69 +1203,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           showToast(`อัปเดตข้อมูลประวัติ: ${names}`);
         }
 
-        // ── Auto-sync ProClinic เมื่อลูกค้าส่ง update ข้อมูลมาใหม่ ─────────────────
-        brokerSyncSessions.forEach(session => {
-          autoSyncInFlightRef.current.add(session.id);
-          const d = session.patientData;
-          const reasons = getReasons(d);
-          const pmh = [];
-          if (d?.hasUnderlying === 'มี') {
-            if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-            if (d.ud_diabetes)     pmh.push('เบาหวาน');
-            if (d.ud_lung)         pmh.push('โรคปอด');
-            if (d.ud_kidney)       pmh.push('โรคไต');
-            if (d.ud_heart)        pmh.push('โรคหัวใจ');
-            if (d.ud_blood)        pmh.push('โรคโลหิต');
-            if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-          }
-          const patient = {
-            prefix: d?.prefix || '', firstName: d?.firstName || '',
-            lastName: d?.lastName || '', phone: d?.phone || '',
-            age: d?.age || '', reasons,
-            dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
-            address: d?.address || '', province: d?.province || '',
-            district: d?.district || '', subDistrict: d?.subDistrict || '', postalCode: d?.postalCode || '',
-            nationality: d?.nationality || 'ไทย', nationalityCountry: d?.nationalityCountry || '',
-            howFoundUs: d?.howFoundUs || [],
-            allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
-            underlying: pmh.join(', '),
-            emergencyName:     d?.emergencyName     || '',
-            emergencyRelation: d?.emergencyRelation || '',
-            emergencyPhone:    d?.emergencyPhone    || '',
-            clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
-          };
-          broker.updateProClinic(session.brokerProClinicId, session.brokerProClinicHN || null, patient)
-            .then(async (result) => {
-              autoSyncInFlightRef.current.delete(session.id);
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-              if (result?.success) {
-                await updateDoc(ref, { brokerFilledAt: new Date().toISOString(), brokerLastAutoSyncAt: new Date().toISOString(), brokerError: null, brokerStatus: 'done', brokerJob: null }).catch(() => {});
-              } else if (result?.notFound) {
-                // HN ไม่เจอใน ProClinic → ถอด HN/OPD แล้ว create ใหม่อัตโนมัติ
-                await updateDoc(ref, {
-                  brokerProClinicId: null, brokerProClinicHN: null,
-                  opdRecordedAt: null, brokerLastAutoSyncAt: null,
-                  brokerStatus: null, brokerError: null, brokerJob: null,
-                  patientLinkToken: null, patientLinkEnabled: false,
-                });
-                try {
-                  const createResult = await broker.fillProClinic(patient);
-                  if (createResult?.success) {
-                    await updateDoc(ref, {
-                      opdRecordedAt: new Date().toISOString(),
-                      brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
-                      brokerError: null, brokerJob: null,
-                      ...(createResult.proClinicId ? { brokerProClinicId: createResult.proClinicId } : {}),
-                      ...(createResult.proClinicHN ? { brokerProClinicHN: createResult.proClinicHN } : {}),
-                    });
-                  } else {
-                    await updateDoc(ref, { brokerStatus: 'failed', brokerError: createResult?.error || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
-                  }
-                } catch(e) { /* create retry failed silently */ }
-              } else {
-                await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'auto-sync failed', brokerJob: null }).catch(() => {});
-              }
-            }).catch(() => { autoSyncInFlightRef.current.delete(session.id); });
+        // ── ลูกค้าแก้ข้อมูล → หลุด sync รอ admin กด OPD ใหม่ ─────────────────
+        brokerDesyncSessions.forEach(session => {
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+          updateDoc(ref, { brokerStatus: null, brokerError: null, brokerJob: null }).catch(() => {});
         });
       } else {
         // ── First load: stamp ทุก session เพื่อป้องกัน re-sync + notification ซ้ำตอนเปิดหน้า ──
@@ -1839,7 +1781,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       emergencyName:     d?.emergencyName     || '',
       emergencyRelation: d?.emergencyRelation || '',
       emergencyPhone:    d?.emergencyPhone    || '',
-      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
+      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'en'),
     };
 
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
@@ -1947,7 +1889,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       emergencyName:     d?.emergencyName     || '',
       emergencyRelation: d?.emergencyRelation || '',
       emergencyPhone:    d?.emergencyPhone    || '',
-      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'th'),
+      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'en'),
     };
 
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
@@ -2044,7 +1986,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       emergencyName: d?.emergencyName || '',
       emergencyRelation: d?.emergencyRelation || '',
       emergencyPhone: d?.emergencyPhone || '',
-      clinicalSummary: generateClinicalSummary(d, 'intake', null, 'th'),
+      clinicalSummary: generateClinicalSummary(d, 'intake', null, 'en'),
     };
 
     try {
