@@ -1072,6 +1072,7 @@ async function handleUpdate(req, res) {
   }
 
   // Chart images — preserve existing or use new from frontend
+  const $ = cheerio.load(editHtml);
   formData.delete('chart_image[]');
   formData.delete('chart_image_ids[]');
   if (treatment.chartImages?.length) {
@@ -1083,7 +1084,6 @@ async function handleUpdate(req, res) {
     // Preserve existing chart_image fields from edit page
     const existingCharts = [];
     const existingChartIds = [];
-    const $ = cheerio.load(editHtml);
     $('input[name="chart_image[]"]').each((_, el) => { existingCharts.push($(el).val() || ''); });
     $('input[name="chart_image_ids[]"]').each((_, el) => { existingChartIds.push($(el).val() || ''); });
     existingCharts.forEach((img, i) => {
