@@ -604,14 +604,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
     setApptFormSaving(true);
     try {
+      // Include customer name in note for ProClinic identification
+      const custLabel = apptSelectedCustomer.name || `ID:${apptSelectedCustomer.id}`;
+      const noteWithCust = apptFormData.note
+        ? `[${custLabel}] ${apptFormData.note}`
+        : `[${custLabel}]`;
       const payload = {
-        customerId: apptSelectedCustomer.id,
         appointmentDate: apptFormData.date,
         appointmentStartTime: apptFormData.startTime,
         appointmentEndTime: apptFormData.endTime,
         doctor: apptFormData.doctor || undefined,
         appointmentTo: apptFormData.appointmentTo || undefined,
-        appointmentNote: apptFormData.note || undefined,
+        appointmentNote: noteWithCust,
       };
       let res;
       if (apptFormMode.mode === 'edit') {

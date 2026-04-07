@@ -28,14 +28,7 @@ async function handleCreate(req, res) {
   params.set('current_doctor_id', '');
   params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-
-  // Customer association
-  if (appointment.customerId) {
-    params.set('customer_option', 'existed');
-    params.set('customer_id', String(appointment.customerId));
-  } else {
-    params.set('customer_option', 'none');
-  }
+  params.set('customer_option', 'none');
 
   // Required fields
   params.set('appointment_date', appointment.appointmentDate || '');
@@ -146,13 +139,7 @@ async function handleUpdate(req, res) {
   params.set('current_doctor_id', '');
   params.set('appointment_type', appointment.appointmentType || 'sales');
   params.set('appointment_option', 'once');
-
-  if (appointment.customerId) {
-    params.set('customer_option', 'existed');
-    params.set('customer_id', String(appointment.customerId));
-  } else {
-    params.set('customer_option', 'none');
-  }
+  params.set('customer_option', 'none');
 
   // Fields
   params.set('appointment_date', appointment.appointmentDate || '');
