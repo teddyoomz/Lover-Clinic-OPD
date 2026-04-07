@@ -4904,6 +4904,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">ยาที่ใช้ประจำ</span>
                           <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
                         </div>
+                        {d.bloodType && d.bloodType !== 'ไม่ทราบ' && (
+                          <div className="p-3 bg-[#141414] rounded border border-[#222]">
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">กรุ๊ปเลือด</span>
+                            <span className="font-bold text-sm text-gray-300">{d.bloodType}</span>
+                          </div>
+                        )}
                         {d.pregnancy && d.pregnancy !== 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์' && (
                           <div className={`p-3 rounded border ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'bg-pink-950/20 border-pink-900/50' : 'bg-[#141414] border-[#222]'}`}>
                             <span className={`text-[10px] uppercase tracking-widest block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
