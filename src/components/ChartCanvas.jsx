@@ -57,46 +57,33 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       };
 
       // ── Restore existing chart (edit mode) ──
-      if (existingData?.fabricJson) {
-        try {
-          const jsonStr = typeof existingData.fabricJson === 'string'
-            ? existingData.fabricJson : JSON.stringify(existingData.fabricJson);
-          const jsonData = JSON.parse(jsonStr);
-          const savedW = jsonData.width || 500;
-          const savedH = jsonData.height || 700;
-          // Use saved aspect ratio, fit into container
-          const savedRatio = savedW / savedH;
+      // Use the saved PNG dataUrl as background (faster + no loadFromJSON hang)
+      if (existingData?.dataUrl) {
+        const imgEl = await new Promise((resolve) => {
+          const img = new window.Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = existingData.dataUrl;
+        });
+        if (imgEl) {
+          const imgRatio = imgEl.naturalWidth / imgEl.naturalHeight;
           let canvasW, canvasH;
-          if (maxW / maxH > savedRatio) {
-            canvasH = maxH;
-            canvasW = Math.round(maxH * savedRatio);
-          } else {
-            canvasW = maxW;
-            canvasH = Math.round(maxW / savedRatio);
-          }
+          if (maxW / maxH > imgRatio) { canvasH = maxH; canvasW = Math.round(maxH * imgRatio); }
+          else { canvasW = maxW; canvasH = Math.round(maxW / imgRatio); }
           const canvas = initCanvas(canvasW, canvasH);
-          await canvas.loadFromJSON(jsonData);
-          // Force canvas size back (loadFromJSON may override)
-          const scaleX = canvasW / savedW;
-          const scaleY = canvasH / savedH;
-          canvas.setWidth(canvasW);
-          canvas.setHeight(canvasH);
-          if (Math.abs(scaleX - 1) > 0.01 || Math.abs(scaleY - 1) > 0.01) {
-            canvas.getObjects().forEach(obj => {
-              obj.set({
-                scaleX: (obj.scaleX || 1) * scaleX,
-                scaleY: (obj.scaleY || 1) * scaleY,
-                left: (obj.left || 0) * scaleX,
-                top: (obj.top || 0) * scaleY,
-              });
-            });
-          }
-          canvas.getObjects().forEach(obj => {
-            if (obj.type === 'image') obj.set({ selectable: false, evented: false, hoverCursor: 'default' });
+          const fabricImg = new fabric.FabricImage(imgEl);
+          const scale = Math.min(canvasW / fabricImg.width, canvasH / fabricImg.height);
+          fabricImg.set({
+            scaleX: scale, scaleY: scale,
+            left: Math.round((canvasW - fabricImg.width * scale) / 2),
+            top: Math.round((canvasH - fabricImg.height * scale) / 2),
+            selectable: false, evented: false, hoverCursor: 'default',
+            originX: 'left', originY: 'top',
           });
+          canvas.add(fabricImg);
+          canvas.sendObjectToBack(fabricImg);
           canvas.renderAll();
-        } catch (e) {
-          console.warn('[ChartCanvas] restore failed:', e);
+        } else {
           initCanvas(maxW, maxH);
         }
 
