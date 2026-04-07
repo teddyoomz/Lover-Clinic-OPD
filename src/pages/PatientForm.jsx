@@ -657,6 +657,18 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ปี'} className={`${inputClass} bg-blue-950/20 border-blue-900/50 text-blue-400 font-bold text-center text-xl`} />
                   </div>
                 )}
+                {(isFollowUp || isCustom) && (
+                  <div className="w-full sm:w-1/2">
+                    <label className={labelClass}>{language === 'en' ? 'Blood Type' : 'กรุ๊ปเลือด'}</label>
+                    <select name="bloodType" value={formData.bloodType || ''} onChange={handleInputChange} className={inputClass}>
+                      <option value="">-- {language === 'en' ? 'Unknown' : 'ไม่ทราบ'} --</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="O">O</option>
+                      <option value="AB">AB</option>
+                    </select>
+                  </div>
+                )}
                 
                 {(isFollowUp || isCustom) && (
                    <div className="w-full sm:w-1/2">
@@ -724,6 +736,16 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       <label className={labelClass}>{language === 'en' ? 'Age' : 'อายุ'} <span className="text-red-600">*</span></label>
                       <input type="number" name="age" value={formData.age || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Years' : 'ระบุเป็นตัวเลข'} className={`${inputClass} bg-red-950/20 border-red-900/50 text-red-500 font-bold text-center text-xl`} />
                     </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{language === 'en' ? 'Blood Type' : 'กรุ๊ปเลือด'}</label>
+                    <select name="bloodType" value={formData.bloodType || ''} onChange={handleInputChange} className={inputClass}>
+                      <option value="">-- {language === 'en' ? 'Unknown' : 'ไม่ทราบ'} --</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="O">O</option>
+                      <option value="AB">AB</option>
+                    </select>
                   </div>
                   <div>
                     <label className={labelClass}>{language === 'en' ? 'Address' : 'ที่อยู่'}</label>
