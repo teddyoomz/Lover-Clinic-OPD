@@ -134,64 +134,62 @@ async function handleUpdate(req, res) {
 
   const session = await createSession();
   const base = session.origin;
+  const { extractFormFields } = await import('./_lib/scraper.js');
 
-  // GET /admin/appointment → extract CSRF
-  const html = await session.fetchText(`${base}/admin/appointment`);
-  const csrf = extractCSRF(html);
-  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า appointment');
+  // 1. GET existing appointment edit page → preserve ALL form fields
+  let editUrl = `${base}/admin/appointment/${appointmentId}/edit`;
+  let editHtml = await session.fetchText(editUrl);
+  // If /edit doesn't work, try without /edit
+  if (editHtml.length < 500 || editHtml.includes('/login')) {
+    editUrl = `${base}/admin/appointment/${appointmentId}`;
+    editHtml = await session.fetchText(editUrl);
+  }
+  const csrf = extractCSRF(editHtml);
+  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า appointment edit');
 
-  // Build form data — POST with _method=PUT + appointment_id
+  // 2. Extract ALL existing form fields (preserves customer_id, customer_option, etc.)
+  const existing = extractFormFields(editHtml);
+
+  // 3. Build params: start from existing, override only what changed
   const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(existing)) {
+    if (key !== '_method') params.set(key, value);
+  }
   params.set('_token', csrf);
   params.set('_method', 'PUT');
-  params.set('appointment_id', appointmentId);
-  params.set('is_basic_flow', 'true');
-  params.set('type', '');
-  params.set('current_doctor_id', '');
-  params.set('appointment_type', appointment.appointmentType || 'sales');
-  params.set('appointment_option', 'once');
-  params.set('customer_option', 'none');
 
-  // Fields
-  params.set('appointment_date', appointment.appointmentDate || '');
-  params.set('appointment_start_time', appointment.appointmentStartTime || '');
-  params.set('appointment_end_time', appointment.appointmentEndTime || '');
-
+  // Override with our updated values
+  if (appointment.appointmentDate) params.set('appointment_date', appointment.appointmentDate);
+  if (appointment.appointmentStartTime) params.set('appointment_start_time', appointment.appointmentStartTime);
+  if (appointment.appointmentEndTime) params.set('appointment_end_time', appointment.appointmentEndTime);
   if (appointment.appointmentStartTime && appointment.appointmentEndTime) {
     params.set('times', `${appointment.appointmentStartTime},${appointment.appointmentEndTime}`);
-  } else {
-    params.set('times', '');
   }
-
   if (appointment.advisor) params.set('advisor_id', appointment.advisor);
   if (appointment.doctor) params.set('doctor_id', appointment.doctor);
-  if (appointment.assistant) params.set('doctor_assistant_id[]', appointment.assistant);
   if (appointment.room) params.set('examination_room_id', appointment.room);
   if (appointment.source) params.set('source', appointment.source);
   if (appointment.appointmentTo) params.set('appointment_to', appointment.appointmentTo);
-  if (appointment.appointmentNote) params.set('appointment_note', appointment.appointmentNote);
+  if (appointment.appointmentNote != null) params.set('appointment_note', appointment.appointmentNote);
 
-  params.set('appointment_location', '');
-  params.set('expected_sales', '');
-  params.set('preparation', '');
-  params.set('customer_note', '');
-  params.set('appointment_color', '');
-
-  // POST /admin/appointment with _method=PUT + appointment_id in body
-  const submitRes = await session.fetch(`${base}/admin/appointment`, {
+  // 4. POST to /admin/appointment/{id} with _method=PUT
+  const submitRes = await session.fetch(`${base}/admin/appointment/${appointmentId}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-CSRF-TOKEN': csrf,
-      'Referer': `${base}/admin/appointment`,
+      'Referer': editUrl,
     },
     body: params.toString(),
     redirect: 'manual',
   });
 
   const status = submitRes.status;
+  const location = submitRes.headers?.get('location') || '';
+
+  // 302 redirect = success (Laravel redirects after successful update)
   if (status >= 300 && status < 400) {
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, _debug: { status, location } });
   }
 
   if (status === 200) {
@@ -204,7 +202,8 @@ async function handleUpdate(req, res) {
 
   let bodyHtml = '';
   try { bodyHtml = await submitRes.text(); } catch {}
-  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status})`);
+  const snippet = bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
+  throw new Error(`แก้ไขนัดหมายไม่สำเร็จ (${status}): ${snippet}`);
 }
 
 // ─── Action: delete ─────────────────────────────────────────────────────────
