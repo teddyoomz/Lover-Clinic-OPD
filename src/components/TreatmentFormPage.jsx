@@ -309,7 +309,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       try {
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
-          const { getAllMasterDataItems, getTreatment: getBackendTreatment } = await import('../lib/backendClient.js');
+          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer } = await import('../lib/backendClient.js');
           const [doctorItems, productItems, staffItems] = await Promise.all([
             getAllMasterDataItems('doctors'),
             getAllMasterDataItems('products'),
@@ -317,12 +317,44 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           ]);
           const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
           const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
+
+          // Load customer courses from be_customers (NOT from ProClinic)
+          let customerCoursesForForm = [];
+          let customerPromotionsForForm = [];
+          if (customerId) {
+            try {
+              const custData = await getBackendCustomer(customerId);
+              const rawCourses = custData?.courses || [];
+              // Transform scraped course format → TreatmentFormPage format
+              // From: { name, product, qty: "200 / 200 U", value, status, expiry }
+              // To: { courseId, courseName, promotionId?, products: [{ rowId, name, remaining, unit, total }] }
+              customerCoursesForForm = rawCourses.map((c, i) => {
+                const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+                const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
+                const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
+                const unit = qtyMatch ? qtyMatch[3].trim() : '';
+                return {
+                  courseId: `be-course-${i}`,
+                  courseName: c.name || '',
+                  products: [{
+                    rowId: `be-row-${i}`,
+                    name: c.product || c.name || '',
+                    remaining: remaining > 0 ? `${remaining}` : '0',
+                    total: `${total}`,
+                    unit: unit || 'ครั้ง',
+                  }],
+                };
+              }).filter(c => c.courseName);
+            } catch {}
+          }
+
           const backendOptions = {
             doctors: allDoctors.map(d => ({ id: d.id, name: d.name, position: d.position })),
             assistants: allDoctors.filter(d => d.position?.includes('ผู้ช่วย')).map(d => ({ id: d.id, name: d.name })),
             bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'],
             products: productItems,
-            customerCourses: [], customerPromotions: [],
+            customerCourses: customerCoursesForForm,
+            customerPromotions: customerPromotionsForForm,
             benefitTypes: [], insuranceCompanies: [],
             paymentChannels: ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'],
             wallets: [],

@@ -63,6 +63,13 @@ vercel --prod
 - Credentials อยู่ใน Vercel env vars
 - **429 Rate Limit**: ถ้าเจอ `API Error: Request rejected (429)` → รอ 5-10 วินาทีแล้ว retry อัตโนมัติ หรือ refresh หน้า (ProClinic/Vercel มี rate limit)
 
+### 10. Backend ใช้ข้อมูลจาก Firestore เท่านั้น (กฎเหล็ก)
+- หน้า Backend Dashboard **ห้าม fetch ข้อมูลจาก ProClinic โดยตรง** ระหว่างใช้งาน
+- ข้อมูลทั้งหมด (สินค้า, คอร์ส, แพทย์, ลูกค้า) ต้อง **ดูดมาเก็บใน Firestore ก่อน** (clone/sync)
+- แล้ว**ใช้จาก Firestore** (`be_*`, `master_data/*`) เท่านั้น
+- ถ้าข้อมูลไม่มี → ไปดูดมาเก็บก่อน → แล้วค่อยใช้จากที่ดูดมา
+- Flow: ProClinic → sync/clone → Firestore → Backend UI (**ทางเดียว**)
+
 ### 6. Stale closure pattern
 - useEffect ที่ขึ้นกับ async-loaded props → ใช้ ref หรือ `clinicSettingsLoaded` flag
 
