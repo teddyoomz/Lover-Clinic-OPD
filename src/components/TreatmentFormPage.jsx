@@ -340,14 +340,26 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.healthInfo?.drugAllergy) setDrugAllergy(t.healthInfo.drugAllergy);
               if (t.vitals) setVitals(v => ({ ...v, ...t.vitals }));
               setOpd({ symptoms: t.symptoms || '', physicalExam: t.physicalExam || '', diagnosis: t.diagnosis || '', treatmentInfo: t.treatmentInfo || '', treatmentPlan: t.treatmentPlan || '', treatmentNote: t.treatmentNote || '', additionalNote: t.additionalNote || '' });
+              if (t.healthInfo?.treatmentHistory) setTreatmentHistory(t.healthInfo.treatmentHistory);
               if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
               if (t.afterImages?.length) setAfterImages(t.afterImages);
               if (t.otherImages?.length) setOtherImages(t.otherImages);
+              if (t.charts?.length) setCharts(t.charts.map(c => ({ dataUrl: c.dataUrl || '', fabricJson: c.fabricJson || null, templateId: c.templateId || 'blank', savedAt: c.savedAt || '' })));
               if (t.labItems?.length) setLabItems(t.labItems);
               if (t.medications?.length) setMedications(t.medications);
               if (t.consumables?.length) setConsumables(t.consumables);
               if (t.treatmentItems?.length) setTreatmentItems(t.treatmentItems.map((item, i) => ({ id: `existing-${i}`, name: item.name || '', qty: item.qty || '1', unit: item.unit || '', price: item.price || '' })));
               if (t.doctorFees?.length) setDoctorFees(t.doctorFees);
+              if (t.treatmentFiles?.length) setTreatmentFiles(prev => prev.map(slot => {
+                const found = t.treatmentFiles.find(f => f.slot === slot.slot);
+                return found ? { ...slot, ...found } : slot;
+              }));
+              // Medical certificate
+              if (t.medCertActuallyCome != null) setMedCertActuallyCome(t.medCertActuallyCome);
+              if (t.medCertIsRest != null) setMedCertIsRest(t.medCertIsRest);
+              if (t.medCertPeriod) setMedCertPeriod(t.medCertPeriod);
+              if (t.medCertIsOther != null) setMedCertIsOther(t.medCertIsOther);
+              if (t.medCertOtherDetail) setMedCertOtherDetail(t.medCertOtherDetail);
             }
           }
           // Pre-fill from patient data
