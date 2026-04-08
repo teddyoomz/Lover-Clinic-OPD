@@ -1464,12 +1464,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   const getBadgeForFormType = (formType, customTemplate) => {
-    if (formType === 'deposit') return <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>;
-    if (formType === 'followup_ed') return <span className="bg-purple-950/50 text-purple-400 border border-purple-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: IIEF</span>;
-    if (formType === 'followup_adam') return <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: ADAM</span>;
-    if (formType === 'followup_mrs') return <span className="bg-pink-950/50 text-pink-400 border border-pink-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block">FOLLOW-UP: MRS</span>;
-    if (formType === 'custom') return <span className="bg-cyan-950/50 text-cyan-400 border border-cyan-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block flex items-center gap-1"><LayoutTemplate size={10}/> {customTemplate?.title || 'CUSTOM FORM'}</span>;
-    return <span className="bg-gray-800 text-gray-300 border border-gray-700 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap inline-block">INTAKE</span>;
+    if (formType === 'deposit') return <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>;
+    if (formType === 'followup_ed') return <span className="bg-purple-950/50 text-purple-400 border border-purple-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block">FOLLOW-UP: IIEF</span>;
+    if (formType === 'followup_adam') return <span className="bg-blue-950/50 text-blue-400 border border-blue-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block">FOLLOW-UP: ADAM</span>;
+    if (formType === 'followup_mrs') return <span className="bg-pink-950/50 text-pink-400 border border-pink-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block">FOLLOW-UP: MRS</span>;
+    if (formType === 'custom') return <span className="bg-cyan-950/50 text-cyan-400 border border-cyan-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block flex items-center gap-1"><LayoutTemplate size={10}/> {customTemplate?.title || 'CUSTOM FORM'}</span>;
+    return <span className="bg-gray-800 text-gray-300 border border-gray-700 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block">INTAKE</span>;
   };
 
   // ── Deposit: fetch options from ProClinic ──
@@ -2626,7 +2626,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             <ClinicLogo className="h-7 sm:h-10 max-w-[80px] sm:max-w-[160px] xl:max-w-[200px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
             <div className="h-6 sm:h-8 w-px bg-[var(--bd)] shrink-0 hidden sm:block"></div>
-            <p className="text-[11px] sm:text-xs text-[var(--tx-muted)] tracking-wider truncate hidden sm:block">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
+            <p className="text-[11px] sm:text-xs text-[var(--tx-muted)] truncate hidden sm:block">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
           </div>
           {/* Mobile-only: icon-only actions */}
           <div className="flex items-center gap-1 sm:gap-1.5 xl:hidden shrink-0">
@@ -3048,7 +3048,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             disabled={isPending || isDone}
                             title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
                             className={`p-2 rounded-lg border transition-all ${
-                              isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
+                              isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
                               isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
                               isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
                               'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
@@ -3071,7 +3071,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         onClick={() => setPatientLinkModal(session.id)}
                         title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ดูข้อมูล: เปิดใช้งาน' : 'ลิงก์ดูข้อมูล: ปิดใช้งาน') : 'สร้างลิงก์ดูข้อมูล'}
                         className={`p-2 rounded-lg border transition-all ${
-                          session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
+                          session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50' :
                           session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
                           'bg-[var(--bg-hover)] text-gray-600 border-dashed border-[var(--bd)] hover:text-gray-400'
                         }`}
@@ -3112,8 +3112,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <span className="font-bold text-[var(--tx-heading)] text-sm">
                           {d.prefix && d.prefix !== 'ไม่ระบุ' ? d.prefix : ''} {d.firstName} {d.lastName}
                         </span>
-                        {isPerf && <Flame size={14} className="text-red-500 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]" />}
-                        {isHrt && <Activity size={14} className="text-orange-500 drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]" />}
+                        {isPerf && <Flame size={14} className="text-red-500" />}
+                        {isHrt && <Activity size={14} className="text-orange-500" />}
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                         <span>อายุ: {d.age || '-'} ปี</span>
@@ -3147,7 +3147,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <span className="text-xs font-black font-semibold text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
                         <span className="text-[11px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
                           {formatBangkokTime(session.opdRecordedAt)}
-                          {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
+                          {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black">HN {session.brokerProClinicHN}</span>}
                         </span>
                         {session.brokerLastAutoSyncAt && (
                           <span className="text-[8px] text-[var(--opd-color)] opacity-70 font-mono flex items-center gap-1">
@@ -3210,7 +3210,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 return (
                   <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
                     {/* QR image — white card with glow */}
-                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.25)]">
+                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
                       <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
                     </div>
                     {/* Session name */}
@@ -3220,7 +3220,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {/* Token */}
                     <div className="w-full text-left">
                       <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
-                      <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-emerald-400">{selectedQR}</p>
+                      <p className="font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-emerald-400">{selectedQR}</p>
                     </div>
                     {/* Link */}
                     <div className="w-full text-left">
@@ -3283,7 +3283,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const needsSync = isCompleted && (!hasOPD || !hasDeposit || dataUpdated);
                 const isSyncing = session.brokerStatus === 'pending' || session.depositSyncStatus === 'pending';
                 return (
-                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-[var(--bd)]'}`}>
+                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 bg-red-950/10' : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -3296,12 +3296,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               className="bg-[var(--bg-input)] border border-emerald-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
                           ) : (
                             <>
-                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shrink-0">New</span>}
                               <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-emerald-400 shrink-0"><Edit3 size={12}/></button>
                             </>
                           )}
-                          <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
+                          <span className="bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap flex items-center gap-1"><Banknote size={10}/> จองมัดจำ</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-deposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-emerald-400'}`} title="QR Code">
@@ -3484,7 +3484,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
                 return (
                   <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
-                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(194,65,12,0.25)]">
+                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
                       <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
                     </div>
                     <div className="w-full text-center">
@@ -3492,7 +3492,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     <div className="w-full text-left">
                       <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
-                      <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-orange-400">{selectedQR}</p>
+                      <p className="font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-orange-400">{selectedQR}</p>
                     </div>
                     <div className="w-full text-left">
                       <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
@@ -3547,7 +3547,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const d = session.patientData;
                 const isCompleted = session.status === 'completed' && d;
                 return (
-                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? (isDark ? 'border-red-600/60 shadow-[0_0_18px_rgba(220,38,38,0.25)] bg-red-950/10' : 'border-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)] bg-pink-50/50') : 'border-[var(--bd)]'}`}>
+                  <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? (isDark ? 'border-red-600/60 bg-red-950/10' : 'border-pink-400 bg-pink-50/50') : 'border-[var(--bd)]'}`}>
                     <div className="p-4">
                       {/* Row 1: Name + actions */}
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -3560,12 +3560,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               className="bg-[var(--bg-input)] border border-orange-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
                           ) : (
                             <>
-                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shrink-0">New</span>}
                               <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-orange-400 shrink-0"><Edit3 size={12}/></button>
                             </>
                           )}
-                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wider whitespace-nowrap flex items-center gap-1 border ${isDark ? 'bg-orange-950/50 text-orange-400 border-orange-900/50' : 'bg-pink-100 text-pink-600 border-pink-300'}`}><UserPlus size={10}/> จองไม่มัดจำ</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap flex items-center gap-1 border ${isDark ? 'bg-orange-950/50 text-orange-400 border-orange-900/50' : 'bg-pink-100 text-pink-600 border-pink-300'}`}><UserPlus size={10}/> จองไม่มัดจำ</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel-nodeposit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-1.5 rounded border transition-colors ${selectedQR === session.id ? (isDark ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-pink-100 border-pink-400 text-pink-600') : (isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-orange-400' : 'bg-pink-50 border-pink-200 text-pink-400 hover:text-pink-600')}`} title="QR Code">
@@ -4678,7 +4678,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </div>
                   <div className="w-full text-left">
                     <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">{tokenLabel}</p>
-                    <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all" style={{color: isPlMode ? '#a855f7' : ac}}>{tokenValue}</p>
+                    <p className="font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all" style={{color: isPlMode ? '#a855f7' : ac}}>{tokenValue}</p>
                   </div>
                   <div className="w-full text-left">
                     <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
@@ -4752,7 +4752,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           ) : (
                             <div className="flex items-center gap-1.5 relative">
                               {session.isUnread && (
-                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>
+                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shrink-0">New</span>
                               )}
                               <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-blue-400 shrink-0"><Edit3 size={12} /></button>
@@ -4770,7 +4770,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             onClick={() => setPatientLinkModal(session.id)}
                             title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ดูข้อมูล: เปิดใช้งาน' : 'ลิงก์ดูข้อมูล: ปิดใช้งาน') : 'สร้างลิงก์ดูข้อมูล'}
                             className={`p-2 rounded-lg border transition-all ${
-                              session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50 shadow-[0_0_6px_rgba(168,85,247,0.3)]' :
+                              session.patientLinkToken && session.patientLinkEnabled ? 'bg-purple-950/30 text-purple-400 border-purple-900/50' :
                               session.patientLinkToken ? 'bg-[var(--bg-hover)] text-gray-500 border-[var(--bd)] opacity-60' :
                               'bg-[var(--bg-hover)] text-gray-600 border-dashed border-[var(--bd)] hover:text-gray-400'
                             }`}
@@ -4790,7 +4790,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 disabled={isPending || isDone}
                                 title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
                                 className={`p-2 rounded-lg border transition-all ${
-                                  isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
+                                  isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
                                   isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
                                   isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
                                   'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
@@ -4824,8 +4824,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <div className="flex flex-col gap-2 bg-[var(--bg-card)] rounded-xl p-3 border border-[var(--bd)]">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-bold text-[var(--tx-heading)] text-sm">{data.prefix !== 'ไม่ระบุ' ? data.prefix : ''} {data.firstName} {data.lastName}</span>
-                            {isPerf && <Flame size={14} className="text-red-500 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]" />}
-                            {isHrt && <Activity size={14} className="text-orange-500 drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]" />}
+                            {isPerf && <Flame size={14} className="text-red-500" />}
+                            {isHrt && <Activity size={14} className="text-orange-500" />}
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                             <span>อายุ: {data.age || '-'} ปี</span>
@@ -4908,11 +4908,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             <span className="text-xs font-black font-semibold text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
                             <span className="text-[11px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
                               {formatBangkokTime(session.opdRecordedAt)}
-                                {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
+                                {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black">HN {session.brokerProClinicHN}</span>}
                               {session.brokerProClinicId && (
                                 <a href={getProClinicUrl(session.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
                                   onClick={e => e.stopPropagation()}
-                                  className="px-1 py-px rounded border border-emerald-800/50 text-emerald-500 hover:text-emerald-300 font-black tracking-wider text-[8px] transition-colors"
+                                  className="px-1 py-px rounded border border-emerald-800/50 text-emerald-500 hover:text-emerald-300 font-black text-[8px] transition-colors"
                                   title={getProClinicUrl(session.brokerProClinicId)}>↗</a>
                               )}
                             </span>
@@ -4952,7 +4952,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         
         return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
-          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-[0_0_50px_rgba(220,38,38,0.15)] border border-[var(--bd)] w-full max-w-5xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden relative">
+          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-2xl border border-[var(--bd)] w-full max-w-5xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden relative">
             
             {hasNewUpdate && (
               <div className="bg-blue-600 text-white px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 shadow-lg relative z-20">
@@ -4987,7 +4987,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <h3 className="font-black text-white font-semibold text-xs sm:text-sm leading-tight">
                     {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'ประวัติผู้ป่วย OPD'}
                   </h3>
-                  <p className="text-[11px] text-red-500 font-mono tracking-widest mt-0.5">ID: {viewingSession.id}</p>
+                  <p className="text-[11px] text-red-500 font-mono mt-0.5">ID: {viewingSession.id}</p>
                 </div>
               </div>
 
@@ -5024,7 +5024,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <Printer size={13} /> พิมพ์สรุป A4
                     </button>
                     <button onClick={() => setPrintMode('official')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold font-semibold shadow-[0_0_10px_rgba(220,38,38,0.2)] whitespace-nowrap">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
                       <Printer size={13} /> พิมพ์ฟอร์มมาตรฐาน
                     </button>
                   </>
@@ -5045,9 +5045,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       }
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
                         isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
-                        isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
+                        isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
                         isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                        viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_12px_rgba(20,184,166,0.2)]' :
+                        viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)]' :
                         'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'
                       }`}
                     >
@@ -5075,7 +5075,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <p className="text-xs text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
                     บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
                     {viewingSession.brokerProClinicHN && (
-                      <span className="px-1.5 py-0.5 rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] text-[var(--opd-color)] font-black tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] text-[var(--opd-color)] font-black">
                         HN {viewingSession.brokerProClinicHN}
                       </span>
                     )}
@@ -5143,7 +5143,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">เพศ:</span><span className="col-span-2 font-bold text-white">{d.gender || '-'}</span></div>
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันเกิด:</span><span className="col-span-2 font-bold text-white">{renderDobFormat(d)} <span className="text-red-500 font-mono text-xs ml-2">[{d.age} ปี]</span></span></div>
                       {d.idCard && (
-                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500 flex items-center gap-1"><CreditCard size={12}/> บัตร/Passport:</span><span className="col-span-2 font-bold text-white font-mono tracking-wider">{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span></div>
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500 flex items-center gap-1"><CreditCard size={12}/> บัตร/Passport:</span><span className="col-span-2 font-bold text-white font-mono">{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span></div>
                       )}
 
                       {(isFollowUp || isCustom) && (
@@ -5253,7 +5253,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {/* Custom Form Answers Viewer */}
               {isCustom && viewingSession.customTemplate && (
                 <div className="mt-6 bg-[var(--bg-elevated)] p-5 sm:p-8 rounded-2xl border border-cyan-900/40 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-cyan-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-lg">CUSTOM</div>
+                  <div className="absolute top-0 right-0 bg-cyan-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs shadow-lg">CUSTOM</div>
                   <h4 className="text-xs font-black text-cyan-500 font-semibold mb-6 flex items-center gap-2">
                     <LayoutTemplate size={12}/> แบบฟอร์ม: {viewingSession.customTemplate.title}
                   </h4>
@@ -5334,7 +5334,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const mrsRes = calculateMRS(d);
                     return (
                       <div className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-pink-900/50 shadow-inner relative overflow-hidden">
-                         <h4 className="text-xs font-black text-pink-500 font-semibold mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]">
+                         <h4 className="text-xs font-black text-pink-500 font-semibold mb-6 flex items-center gap-2">
                           <Activity size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'การประเมินส่วนที่ 1'}: อาการวัยทอง (MRS)
                         </h4>
                         <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
@@ -5372,9 +5372,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const iiefScore = calculateIIEFScore(d);
                     const interp = getIIEFInterpretation(iiefScore);
                     return (
-                      <div className="bg-gradient-to-br from-[#1a0505] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-red-900/50 shadow-[0_0_30px_rgba(220,38,38,0.05)] relative overflow-hidden">
+                      <div className="bg-gradient-to-br from-[#1a0505] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-red-900/50 relative overflow-hidden">
                         <Flame className="absolute bottom-[-20px] right-[-20px] w-48 h-48 text-red-600 opacity-5 pointer-events-none" />
-                        <h4 className="text-xs font-black text-red-500 font-semibold mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]">
+                        <h4 className="text-xs font-black text-red-500 font-semibold mb-6 flex items-center gap-2">
                           <Flame size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'ส่วนที่ 3'}: ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)
                         </h4>
                         <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
@@ -5609,7 +5609,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <button onClick={() => setSummaryLang('en')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'en' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>EN</button>
                       <button onClick={() => setSummaryLang('th')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'th' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>TH</button>
                     </div>
-                    <button onClick={() => handleCopyToClipboard(clinicalSummaryText, false)} className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 px-3 py-1.5 border rounded text-xs uppercase font-bold tracking-widest transition-colors ${isCopied ? 'bg-green-950/40 text-green-500 border-green-900/50' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 border-[var(--bd-strong)]'}`}>
+                    <button onClick={() => handleCopyToClipboard(clinicalSummaryText, false)} className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 px-3 py-1.5 border rounded text-xs uppercase font-bold transition-colors ${isCopied ? 'bg-green-950/40 text-green-500 border-green-900/50' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 border-[var(--bd-strong)]'}`}>
                       {isCopied ? <CheckCircle2 size={12} /> : <ClipboardList size={12} />}
                       {isCopied ? 'คัดลอกสำเร็จ' : 'คัดลอกข้อความ'}
                     </button>
@@ -5761,7 +5761,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* ══ Deposit Creation Form Modal ══════════════════════════════════════════ */}
       {showDepositForm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto border border-emerald-900/50 shadow-[0_0_40px_rgba(5,150,105,0.15)] animate-in zoom-in-95">
+          <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto border border-emerald-900/50 shadow-2xl animate-in zoom-in-95">
             <div className="sticky top-0 bg-[var(--bg-elevated)] border-b border-emerald-900/30 p-4 flex items-center justify-between z-10">
               <h3 className="text-lg font-black text-emerald-400 flex items-center gap-2"><Banknote size={20}/> สร้างคิวลูกค้าจอง</h3>
               <button onClick={() => setShowDepositForm(false)} className="text-gray-500 hover:text-white"><X size={18}/></button>
@@ -5913,7 +5913,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* ══ No-Deposit Appointment Form Modal ══════════════════════════════════ */}
       {showNoDepositForm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-          <div className={`rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-in zoom-in-95 ${isDark ? 'bg-[var(--bg-elevated)] border border-orange-900/50 shadow-[0_0_40px_rgba(194,65,12,0.15)]' : 'bg-white border border-pink-200 shadow-xl'}`}>
+          <div className={`rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-in zoom-in-95 ${isDark ? 'bg-[var(--bg-elevated)] border border-orange-900/50 shadow-2xl' : 'bg-white border border-pink-200 shadow-xl'}`}>
             <div className={`sticky top-0 border-b p-4 flex items-center justify-between z-10 ${isDark ? 'bg-[var(--bg-elevated)] border-orange-900/30' : 'bg-white border-pink-200'}`}>
               <h3 className={`text-lg font-black flex items-center gap-2 ${isDark ? 'text-orange-400' : 'text-pink-600'}`}><UserPlus size={20}/> {editingAppointment ? 'แก้ไขนัดหมาย' : 'จองไม่มัดจำ + นัดหมาย'}</h3>
               <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className={`${isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}><X size={18}/></button>
@@ -6145,7 +6145,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {/* Restore to Queue Modal */}
       {sessionToRestore && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="px-6 pt-6 pb-4 border-b border-[var(--bd)]">
               <div className="flex items-center gap-3 mb-1">
                 <div className="p-2 rounded-xl bg-orange-950/40 border border-orange-800/40"><RotateCcw size={18} className="text-orange-400" /></div>
@@ -6278,7 +6278,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           : 'ย้ายไปประวัติจอง (กู้คืนได้)';
         const confirmLabel = isComplete ? 'ยืนยัน' : isCancel ? 'ยกเลิกการจอง' : 'ยืนยันการลบ';
         const confirmBg = isComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700';
-        const confirmGlow = isComplete ? 'shadow-[0_0_15px_rgba(96,165,250,0.3)]' : 'shadow-[0_0_15px_rgba(220,38,38,0.3)]';
+        const confirmGlow = '';
         const borderColor = isComplete ? 'border-blue-900/50' : 'border-red-900/50';
         const boxGlow = isComplete ? '0 0 40px rgba(96,165,250,0.15)' : `0 0 40px rgba(${acRgb},0.15)`;
         return (
@@ -6325,7 +6325,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             }</p>
             <div className="flex gap-3">
               <button onClick={() => setSessionToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
-              <button onClick={() => deleteSession(sessionToDelete)} className={`flex-1 px-4 py-3 text-white rounded font-bold text-xs ${isServiceDone ? 'bg-emerald-600 hover:bg-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-600 hover:bg-red-700 shadow-[0_0_15px_rgba(220,38,38,0.3)]'}`}>{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบ'}</button>
+              <button onClick={() => deleteSession(sessionToDelete)} className={`flex-1 px-4 py-3 text-white rounded font-bold text-xs ${isServiceDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบ'}</button>
             </div>
           </div>
         </div>
@@ -6466,7 +6466,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* Gen button */}
                   <button onClick={handleGenScheduleLink} disabled={schedGenLoading}
-                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? (isDark ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-100 border border-green-300 text-green-600 opacity-70') : (isDark ? 'bg-green-600 hover:bg-green-700 text-white shadow-[0_0_20px_rgba(22,163,74,0.3)]' : 'bg-pink-500 hover:bg-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]')}`}>
+                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? (isDark ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-100 border border-green-300 text-green-600 opacity-70') : (isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white')}`}>
                     {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
                   </button>
                 </div>
