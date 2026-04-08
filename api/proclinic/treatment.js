@@ -299,9 +299,20 @@ async function handleListItems(req, res) {
         name: item.promotion_name,
         price: item.sale_price || '0',
         unit: 'โปรโมชัน',
-        category: '',
+        category: item.promotion_category_name || '',
         isVatIncluded: 0,
         itemType: 'promotion',
+        // Include sub-items from ProClinic promotion data
+        courses: (item.courses || []).map(c => ({
+          id: c.id, name: c.course_name || c.name, qty: c.qty || 1,
+          products: (c.products || c.course_products || []).map(p => ({
+            id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '',
+          })),
+        })),
+        products: (item.products || []).map(p => ({
+          id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '', price: p.price || '0',
+        })),
+        _rawKeys: Object.keys(item),
       };
     } else {
       return {
