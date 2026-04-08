@@ -36,10 +36,11 @@ src/
 │   └── backend/                — Backend Dashboard components (ระบบหลังบ้าน)
 │       ├── CloneTab.jsx        — Tab "Clone ลูกค้า": search ProClinic + clone progress UI
 │       ├── CustomerCard.jsx    — Reusable card: customer info display (search/cloned modes)
-│       └── CustomerListTab.jsx — Tab "ข้อมูลลูกค้า": card grid of cloned customers + filter
+│       ├── CustomerListTab.jsx — Tab "ข้อมูลลูกค้า": card grid of cloned customers + filter
+│       └── MasterDataTab.jsx   — Tab "ข้อมูลพื้นฐาน": sync buttons + 4 sub-tabs (Products/Doctors/Staff/Courses) + data table + search/filter
 ├── lib/
 │   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
-│   ├── backendClient.js        — Firestore CRUD for be_customers, be_treatments collections
+│   ├── backendClient.js        — Firestore CRUD for be_customers, be_treatments + master data read/sync (getMasterDataMeta, getAllMasterDataItems, runMasterDataSync)
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
