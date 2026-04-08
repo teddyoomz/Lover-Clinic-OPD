@@ -1121,7 +1121,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
         const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
-        const backendDetail = {
+        // Strip undefined values — Firestore rejects any field with value undefined
+        const clean = (obj) => JSON.parse(JSON.stringify(obj));
+        const backendDetail = clean({
           treatmentDate,
           doctorId,
           doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
@@ -1143,7 +1145,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
           doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
           treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, fileName: f.fileName })),
-        };
+        });
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
           : await createBackendTreatment(customerId, backendDetail);
