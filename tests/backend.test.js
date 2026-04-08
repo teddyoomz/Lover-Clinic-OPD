@@ -333,3 +333,81 @@ describe('Parse Thai Date', () => {
   it('null returns null', () => expect(parseThaiDate(null)).toBe(null));
   it('empty returns null', () => expect(parseThaiDate('')).toBe(null));
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. PROMOTION COURSE PICKER LOGIC
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Promotion Course Picker', () => {
+  it('create promotion courses entries with promotionId', () => {
+    const promoId = 33;
+    const promoName = 'Nov';
+    const selectedCourses = [
+      { id: '1003', name: 'Filler 3900 แถมสลายแฟต', price: '3900', unit: 'คอร์ส' },
+      { id: '775', name: 'Allergan กราม', price: '1000', unit: 'คอร์ส' },
+    ];
+    const entries = selectedCourses.map(c => ({
+      courseId: `promo-${promoId}-course-${c.id}`,
+      courseName: c.name,
+      promotionId: promoId,
+      products: [{ rowId: `promo-${promoId}-row-${c.id}`, name: c.name, remaining: '1', total: '1', unit: c.unit || 'คอร์ส' }],
+    }));
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0].promotionId).toBe(33);
+    expect(entries[0].courseName).toBe('Filler 3900 แถมสลายแฟต');
+    expect(entries[0].products[0].rowId).toBe('promo-33-row-1003');
+    expect(entries[1].courseName).toBe('Allergan กราม');
+  });
+
+  it('group promotion courses by promotionId', () => {
+    const allCourses = [
+      { courseId: 'c1', courseName: 'Regular', promotionId: undefined, products: [{ rowId: 'r1', name: 'P1', remaining: '5' }] },
+      { courseId: 'pc1', courseName: 'Filler', promotionId: 33, products: [{ rowId: 'pr1', name: 'Filler', remaining: '1' }] },
+      { courseId: 'pc2', courseName: 'Allergan', promotionId: 33, products: [{ rowId: 'pr2', name: 'Allergan', remaining: '1' }] },
+      { courseId: 'pc3', courseName: 'Botox', promotionId: 99, products: [{ rowId: 'pr3', name: 'Botox', remaining: '1' }] },
+    ];
+    const promos = [{ id: 33, promotionName: 'Nov' }, { id: 99, promotionName: 'Dec' }];
+
+    // Regular courses (no promotionId)
+    const regularCourses = allCourses.filter(c => !c.promotionId);
+    expect(regularCourses).toHaveLength(1);
+
+    // Promotion groups
+    const promoCourses = allCourses.filter(c => c.promotionId);
+    const groups = {};
+    promoCourses.forEach(c => {
+      const pid = c.promotionId;
+      if (!groups[pid]) {
+        const promo = promos.find(p => String(p.id) === String(pid));
+        groups[pid] = { promotionId: pid, promotionName: promo?.promotionName || '', courses: [] };
+      }
+      groups[pid].courses.push(c);
+    });
+    const groupList = Object.values(groups);
+
+    expect(groupList).toHaveLength(2);
+    expect(groupList[0].promotionName).toBe('Nov');
+    expect(groupList[0].courses).toHaveLength(2);
+    expect(groupList[1].promotionName).toBe('Dec');
+    expect(groupList[1].courses).toHaveLength(1);
+  });
+
+  it('selected course items from promotion appear in treatment items', () => {
+    const selectedCourseItems = new Set(['promo-33-row-1003']); // user ticked Filler
+    const allCourses = [
+      { courseId: 'pc1', courseName: 'Filler 3900', promotionId: 33, products: [{ rowId: 'promo-33-row-1003', name: 'Filler Deep', remaining: '1', unit: 'cc' }] },
+    ];
+    // Build treatment items from selected
+    const items = [];
+    for (const c of allCourses) {
+      for (const p of c.products) {
+        if (selectedCourseItems.has(p.rowId)) {
+          items.push({ rowId: p.rowId, courseName: c.courseName, productName: p.name, qty: '1', unit: p.unit });
+        }
+      }
+    }
+    expect(items).toHaveLength(1);
+    expect(items[0].productName).toBe('Filler Deep');
+    expect(items[0].courseName).toBe('Filler 3900');
+  });
+});
