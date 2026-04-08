@@ -24,7 +24,7 @@ const STATUSES = [
   { value: 'done', label: 'เสร็จแล้ว', bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
-const DEFAULT_ROOMS = ['ห้อง 1','ห้อง 2','ห้อง 3','ห้อง 4'];
+const FALLBACK_ROOMS = ['ห้อง 1','ห้อง 2','ห้อง 3']; // fallback only if no data at all
 const SLOT_H = 36; // px per 30-min slot
 
 // Generate time slots 08:30 - 22:30 (30-min)
@@ -80,12 +80,20 @@ export default function AppointmentTab({ clinicSettings }) {
   useEffect(() => { if (selectedDate) loadDay(selectedDate); }, [selectedDate, loadDay]);
 
   // ── Derived: rooms, doctors for the day ──
+  // Collect all known rooms from month data + day data
+  const [allKnownRooms, setAllKnownRooms] = useState([]);
+  useEffect(() => {
+    // Gather rooms from all appointments across the month
+    const roomSet = new Set();
+    Object.values(monthAppts).forEach(arr => arr.forEach(a => { if (a.roomName) roomSet.add(a.roomName); }));
+    dayAppts.forEach(a => { if (a.roomName) roomSet.add(a.roomName); });
+    if (roomSet.size > 0) setAllKnownRooms([...roomSet].sort());
+  }, [monthAppts, dayAppts]);
+
   const rooms = useMemo(() => {
-    const fromAppts = [...new Set(dayAppts.map(a => a.roomName).filter(Boolean))];
-    if (fromAppts.length >= 2) return fromAppts;
-    const merged = [...new Set([...fromAppts, ...DEFAULT_ROOMS])];
-    return merged;
-  }, [dayAppts]);
+    if (allKnownRooms.length > 0) return allKnownRooms;
+    return FALLBACK_ROOMS;
+  }, [allKnownRooms]);
 
   const dayDoctors = useMemo(() => {
     const map = {};
@@ -461,7 +469,7 @@ export default function AppointmentTab({ clinicSettings }) {
                   <select value={formData.roomName} onChange={e => setFormData(p => ({...p, roomName:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
-                    {[...new Set([...rooms, ...DEFAULT_ROOMS])].map(r => <option key={r} value={r}>{r}</option>)}
+                    {[...new Set([...rooms, ...FALLBACK_ROOMS])].map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
               </div>

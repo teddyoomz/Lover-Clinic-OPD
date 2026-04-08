@@ -4,7 +4,24 @@
 // Reports progress through a callback: onProgress({ step, label, percent, detail })
 
 import * as broker from './brokerClient.js';
-import { saveCustomer, updateCustomer, saveTreatment } from './backendClient.js';
+import { saveCustomer, updateCustomer, saveTreatment, createBackendAppointment } from './backendClient.js';
+
+// ─── Parse Thai date "8 เมษายน 2026" → "2026-04-08" ────────────────────────
+const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function parseThaiDate(str) {
+  if (!str) return null;
+  // Try ISO format first "2026-04-08"
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // Try "8 เมษายน 2026"
+  const m = str.match(/(\d{1,2})\s+(\S+)\s+(\d{4})/);
+  if (!m) return null;
+  const day = m[1].padStart(2, '0');
+  const monthIdx = TH_MONTHS.indexOf(m[2]);
+  if (monthIdx < 0) return null;
+  const month = String(monthIdx + 1).padStart(2, '0');
+  const year = parseInt(m[3]) > 2400 ? m[3] - 543 : m[3]; // handle BE year
+  return `${year}-${month}-${day}`;
+}
 
 // ─── Promise pool — batched concurrent requests ─────────────────────────────
 async function promisePool(items, concurrency, fn, onItemDone) {
@@ -103,11 +120,38 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
   try {
     const coursesResult = await broker.getCourses(proClinicId);
     if (coursesResult?.success) {
+      const appts = coursesResult.appointments || [];
       await updateCustomer(proClinicId, {
         courses: coursesResult.courses || [],
         expiredCourses: coursesResult.expiredCourses || [],
-        appointments: coursesResult.appointments || [],
+        appointments: appts,
       });
+      // Also save appointments to be_appointments collection for calendar view
+      for (const appt of appts) {
+        try {
+          // Parse time "10:30 - 11:00" → startTime + endTime
+          const timeParts = (appt.time || '').split('-').map(s => s.trim());
+          const startTime = timeParts[0] || '';
+          const endTime = timeParts[1] || '';
+          // Parse Thai date "8 เมษายน 2026" → "2026-04-08"
+          const dateISO = parseThaiDate(appt.date);
+          if (dateISO) {
+            await createBackendAppointment(JSON.parse(JSON.stringify({
+              customerId: String(proClinicId),
+              customerName: profileResult.patient?.firstName ? `${profileResult.patient.prefix || ''} ${profileResult.patient.firstName} ${profileResult.patient.lastName || ''}`.trim() : '',
+              customerHN: profileResult.proClinicHN || '',
+              date: dateISO,
+              startTime, endTime,
+              doctorName: appt.doctor || '',
+              roomName: appt.room || '',
+              notes: appt.notes || '',
+              branch: appt.branch || '',
+              status: 'confirmed',
+              source: 'cloned',
+            })));
+          }
+        } catch {} // skip individual appointment errors
+      }
       progress.courses = true;
     } else {
       errors.push(`[Step 2] ${coursesResult?.error || 'ดึงคอร์สไม่สำเร็จ'}`);
