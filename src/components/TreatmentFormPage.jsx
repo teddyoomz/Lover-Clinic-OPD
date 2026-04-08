@@ -1461,11 +1461,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   </div>
                 </div>
                 <div>
-                  <label className={labelCls}>วันที่รักษา</label>
-                  <div className="relative">
-                    <input type="date" value={treatmentDate} onChange={e => setTreatmentDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
-                    <div className={inputCls}>{treatmentDate ? treatmentDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
-                  </div>
+                  <label className={labelCls}>วันที่รักษา *</label>
+                  <input type="date" value={treatmentDate} onChange={e => setTreatmentDate(e.target.value)} className={`${inputCls} cursor-pointer`} />
                 </div>
               </div>
             </FormSection>
