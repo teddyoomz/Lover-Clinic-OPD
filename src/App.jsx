@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 import PatientForm from './pages/PatientForm.jsx';
 import PatientDashboard from './pages/PatientDashboard.jsx';
 import ClinicSchedule from './pages/ClinicSchedule.jsx';
+import BackendDashboard from './pages/BackendDashboard.jsx';
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -34,6 +35,7 @@ export default function App() {
   const sessionFromUrl = params.get('session');
   const patientFromUrl = params.get('patient');
   const scheduleFromUrl = params.get('schedule');
+  const backendMode = params.get('backend');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), (snap) => {
@@ -116,6 +118,11 @@ export default function App() {
 
   if (!user || user.isAnonymous) {
     return <AdminLogin auth={auth} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />;
+  }
+
+  // Backend Dashboard — opens in a new browser tab
+  if (backendMode === '1') {
+    return <BackendDashboard clinicSettings={clinicSettings} />;
   }
 
   return (

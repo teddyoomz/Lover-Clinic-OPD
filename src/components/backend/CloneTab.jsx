@@ -1,0 +1,227 @@
+// ─── CloneTab — Search ProClinic + Clone customer data ──────────────────────
+// Search by HN (last 3-4 digits), name, surname, or ID card number.
+// Display results as cards with "ดูดข้อมูลทั้งหมด" button.
+
+import { useState, useRef, useCallback } from 'react';
+import { Search, Loader2, AlertCircle, Download, Info } from 'lucide-react';
+import { searchCustomers } from '../../lib/brokerClient.js';
+import { customerExists } from '../../lib/backendClient.js';
+import { cloneCustomer } from '../../lib/cloneOrchestrator.js';
+import { hexToRgb } from '../../utils.js';
+import CustomerCard from './CustomerCard.jsx';
+
+export default function CloneTab({ clinicSettings, theme }) {
+  const ac = clinicSettings?.accentColor || '#dc2626';
+  const acRgb = hexToRgb(ac);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null); // null = not searched, [] = no results
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
+  // Clone state (per customer)
+  const [cloneStates, setCloneStates] = useState({}); // { [id]: { status, progress } }
+  const abortControllerRef = useRef(null);
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  const handleSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setSearching(true);
+    setSearchError('');
+    setSearchResults(null);
+
+    try {
+      const result = await searchCustomers(q);
+      if (!result?.success) {
+        setSearchError(result?.error || 'ค้นหาไม่สำเร็จ');
+        setSearchResults([]);
+        return;
+      }
+      const customers = result.customers || [];
+      setSearchResults(customers);
+
+      // Check which customers already exist in be_customers
+      const existsChecks = await Promise.all(
+        customers.map(async (c) => {
+          try {
+            const exists = await customerExists(c.id);
+            return { id: c.id, exists };
+          } catch { return { id: c.id, exists: false }; }
+        })
+      );
+
+      const existsMap = {};
+      existsChecks.forEach(({ id, exists }) => {
+        if (exists) existsMap[id] = { status: 'exists', progress: null };
+      });
+      setCloneStates(prev => ({ ...prev, ...existsMap }));
+    } catch (err) {
+      setSearchError(err.message || 'เกิดข้อผิดพลาดในการค้นหา');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  // ── Clone ─────────────────────────────────────────────────────────────────
+
+  const handleClone = useCallback(async (proClinicId) => {
+    // Update status to cloning
+    setCloneStates(prev => ({
+      ...prev,
+      [proClinicId]: { status: 'cloning', progress: { step: 0, label: 'เริ่มต้น...', percent: 0 } },
+    }));
+
+    // Create abort controller
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const result = await cloneCustomer(
+        proClinicId,
+        // Progress callback
+        (progress) => {
+          setCloneStates(prev => ({
+            ...prev,
+            [proClinicId]: { status: 'cloning', progress },
+          }));
+        },
+        controller.signal
+      );
+
+      if (result.success) {
+        setCloneStates(prev => ({
+          ...prev,
+          [proClinicId]: { status: 'done', progress: null },
+        }));
+      } else {
+        setCloneStates(prev => ({
+          ...prev,
+          [proClinicId]: { status: 'error', progress: null, error: result.error },
+        }));
+      }
+    } catch (err) {
+      setCloneStates(prev => ({
+        ...prev,
+        [proClinicId]: { status: 'error', progress: null, error: err.message },
+      }));
+    }
+  }, []);
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Search Bar ── */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="ค้นหา HN (3-4 ตัวท้าย), ชื่อ, นามสกุล, หรือเลขบัตรประชาชน..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-2 transition-all"
+              style={{ '--tw-ring-color': `rgba(${acRgb},0.4)` }}
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={searching || !searchQuery.trim()}
+            className="px-5 py-2.5 rounded-lg font-bold text-sm text-white transition-all disabled:opacity-50 flex items-center gap-2 hover:shadow-lg active:scale-[0.97]"
+            style={{ backgroundColor: ac, boxShadow: `0 0 12px rgba(${acRgb},0.25)` }}
+          >
+            {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            ค้นหา
+          </button>
+        </div>
+
+        {/* Hint */}
+        <p className="mt-2 text-[10px] text-[var(--tx-muted)] flex items-center gap-1">
+          <Info size={10} /> ค้นหาจาก ProClinic โดยตรง — ต้อง login ProClinic ก่อน (ผ่าน Cookie Relay Extension)
+        </p>
+      </div>
+
+      {/* ── Search Error ── */}
+      {searchError && (
+        <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-red-400">ค้นหาไม่สำเร็จ</p>
+            <p className="text-xs text-red-400/70 mt-1">{searchError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Search Results ── */}
+      {searchResults !== null && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">
+              ผลการค้นหา
+            </h2>
+            <span className="text-xs text-[var(--tx-muted)]">
+              {searchResults.length} รายการ
+            </span>
+          </div>
+
+          {searchResults.length === 0 && !searching ? (
+            <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
+              <Search size={32} className="mx-auto text-[var(--tx-muted)] mb-3" />
+              <p className="text-sm text-[var(--tx-muted)]">ไม่พบผลลัพธ์สำหรับ "{searchQuery}"</p>
+              <p className="text-xs text-[var(--tx-muted)] mt-1">ลองค้นหาด้วย HN, ชื่อ, หรือเบอร์โทร</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {searchResults.map((customer) => {
+                const state = cloneStates[customer.id] || { status: 'idle' };
+                return (
+                  <CustomerCard
+                    key={customer.id}
+                    customer={customer}
+                    accentColor={ac}
+                    mode="search"
+                    cloneStatus={state.status}
+                    cloneProgress={state.progress}
+                    onClone={handleClone}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Empty State (before search) ── */}
+      {searchResults === null && !searching && (
+        <div className="text-center py-20">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+            style={{ backgroundColor: `rgba(${acRgb},0.1)`, border: `1px solid rgba(${acRgb},0.2)` }}>
+            <Download size={28} style={{ color: ac }} />
+          </div>
+          <h3 className="text-lg font-bold text-[var(--tx-heading)] mb-2">Clone ข้อมูลลูกค้า</h3>
+          <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto">
+            ค้นหาลูกค้าจาก ProClinic แล้วดูดข้อมูลทั้งหมด (ข้อมูลส่วนตัว, คอร์ส, นัดหมาย, ประวัติการรักษา) มาเก็บไว้ในระบบหลังบ้านของเรา
+          </p>
+        </div>
+      )}
+
+      {/* ── Loading overlay ── */}
+      {searching && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-[var(--tx-muted)]" />
+          <span className="ml-3 text-sm text-[var(--tx-muted)]">กำลังค้นหาจาก ProClinic...</span>
+        </div>
+      )}
+    </div>
+  );
+}

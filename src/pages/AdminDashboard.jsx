@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
@@ -2703,7 +2703,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
 
         {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-7 gap-0.5 w-full xl:hidden z-0">
+        <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
             { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
@@ -2712,7 +2712,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
             { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
             { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: '_backend', icon: <Database size={14} />, label: 'หลังบ้าน', activeClass: 'bg-violet-700 text-white', isExternal: true },
           ].map(tab => {
+            if (tab.isExternal) {
+              return (
+                <button key={tab.mode} onClick={() => window.open('?backend=1', '_blank')}
+                  className="py-2 rounded-xl font-bold text-[9px] sm:text-[10px] flex flex-col items-center justify-center gap-0.5 transition-all relative bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50">
+                  {tab.icon}
+                  <span className="truncate w-full text-center px-0.5">{tab.label}</span>
+                </button>
+              );
+            }
             const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
             return (
               <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
@@ -2752,6 +2762,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           </button>
           <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
             <Palette size={16} /> ตั้งค่า
+          </button>
+          <button onClick={() => window.open('?backend=1', '_blank')} className="px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]" title="ระบบหลังบ้าน (เปิด tab ใหม่)">
+            <Database size={16} /> หลังบ้าน
           </button>
           <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
           <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[#1a1a1a] hover:bg-[#222] border border-[#333] text-white px-3 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
