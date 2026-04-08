@@ -677,22 +677,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (medAllProducts.length > 0) return;
     setMedModalLoading(true);
     try {
-      const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
-      if (data.success) {
-        setMedAllProducts(data.products || []);
-        // Backup to Firestore
-        if (db && appId && data.products?.length) {
-          try {
-            const items = data.products;
-            for (let i = 0; i < items.length; i += 400) {
-              const batch = writeBatch(db);
-              items.slice(i, i + 400).forEach(p => {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'takeaway_products', 'items', String(p.id));
-                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-              });
-              await batch.commit();
-            }
-          } catch (_e) { console.warn('[TreatmentForm] Failed to backup takeaway products', _e); }
+      if (saveTarget === 'backend') {
+        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const all = await getAllMasterDataItems('products');
+        setMedAllProducts(all.filter(p => p.type === 'ยา').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category })));
+      } else {
+        const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
+        if (data.success) {
+          setMedAllProducts(data.products || []);
+          if (db && appId && data.products?.length) {
+            try {
+              const items = data.products;
+              for (let i = 0; i < items.length; i += 400) {
+                const batch = writeBatch(db);
+                items.slice(i, i + 400).forEach(p => {
+                  const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'takeaway_products', 'items', String(p.id));
+                  batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+                });
+                await batch.commit();
+              }
+            } catch (_e) { console.warn('[TreatmentForm] Failed to backup takeaway products', _e); }
+          }
         }
       }
     } catch (_) {}
@@ -779,23 +784,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (medGroupData.length > 0) return; // already loaded
     setMedGroupLoading(true);
     try {
-      const data = await broker.getMedicationGroups('ยากลับบ้าน');
-      if (data.success && data.groups?.length) {
-        setMedGroupData(data.groups);
-        setMedGroupSelectedId(String(data.groups[0].id));
-        setMedGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
-        // Backup to Firestore
-        if (db && appId) {
-          try {
-            const batch = writeBatch(db);
-            for (const g of data.groups) {
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'medication_groups', 'items', String(g.id));
-              batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
-            }
-            await batch.commit();
-          } catch (_e) { console.warn('[TreatmentForm] Failed to backup medication groups', _e); }
+      if (saveTarget === 'backend') {
+        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const cached = await getAllMasterDataItems('medication_groups');
+        if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
+      } else {
+        const data = await broker.getMedicationGroups('ยากลับบ้าน');
+        if (data.success && data.groups?.length) {
+          setMedGroupData(data.groups);
+          setMedGroupSelectedId(String(data.groups[0].id));
+          setMedGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+          if (db && appId) {
+            try {
+              const batch = writeBatch(db);
+              for (const g of data.groups) {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'medication_groups', 'items', String(g.id));
+                batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
+              }
+              await batch.commit();
+            } catch (_e) { console.warn('[TreatmentForm] Failed to backup medication groups', _e); }
         }
       }
+      } // close else (ProClinic mode)
     } catch (_) {}
     setMedGroupLoading(false);
   };
@@ -843,18 +853,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (consAllProducts.length > 0) return;
     setConsModalLoading(true);
     try {
-      const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
-      if (data.success) {
-        setConsAllProducts(data.products || []);
-        if (db && appId && data.products?.length) {
-          try {
-            const batch = writeBatch(db);
-            data.products.forEach(p => {
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_products', 'items', String(p.id));
-              batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-            });
-            await batch.commit();
-          } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable products', _e); }
+      if (saveTarget === 'backend') {
+        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const all = await getAllMasterDataItems('products');
+        setConsAllProducts(all.filter(p => p.type === 'สินค้าสิ้นเปลือง').map(p => ({ id: p.id, name: p.name, unit: p.unit, category: p.category })));
+      } else {
+        const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
+        if (data.success) {
+          setConsAllProducts(data.products || []);
+          if (db && appId && data.products?.length) {
+            try {
+              const batch = writeBatch(db);
+              data.products.forEach(p => {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_products', 'items', String(p.id));
+                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+              });
+              await batch.commit();
+            } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable products', _e); }
+          }
         }
       }
     } catch (_) {}
@@ -890,21 +906,26 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (consGroupData.length > 0) return;
     setConsGroupLoading(true);
     try {
-      const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');
-      if (data.success && data.groups?.length) {
-        setConsGroupData(data.groups);
-        setConsGroupSelectedId(String(data.groups[0].id));
-        setConsGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
-        // Backup to Firestore
-        if (db && appId) {
-          try {
-            const batch = writeBatch(db);
-            for (const g of data.groups) {
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_groups', 'items', String(g.id));
-              batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
-            }
-            await batch.commit();
-          } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable groups', _e); }
+      if (saveTarget === 'backend') {
+        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const cached = await getAllMasterDataItems('consumable_groups');
+        if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
+      } else {
+        const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');
+        if (data.success && data.groups?.length) {
+          setConsGroupData(data.groups);
+          setConsGroupSelectedId(String(data.groups[0].id));
+          setConsGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
+          if (db && appId) {
+            try {
+              const batch = writeBatch(db);
+              for (const g of data.groups) {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_groups', 'items', String(g.id));
+                batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
+              }
+              await batch.commit();
+            } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable groups', _e); }
+          }
         }
       }
     } catch (_) {}
@@ -962,9 +983,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', courseType: c.courseType }));
           categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
         } else if (type === 'promotion') {
-          // Promotions not synced yet — show empty with message
-          items = [];
-          categories = [];
+          const all = await getAllMasterDataItems('promotions');
+          items = all.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, type: 'promotion' }));
+          categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         }
         setBuyItems(prev => ({ ...prev, [type]: items }));
         setBuyCategories(prev => ({ ...prev, [type]: categories }));
@@ -1615,8 +1636,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 if (labProducts.length === 0) {
                   setLabModalLoading(true);
                   try {
-                    const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
-                    if (r.success) setLabProducts(r.products || []);
+                    if (saveTarget === 'backend') {
+                      const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+                      const all = await getAllMasterDataItems('products');
+                      setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category || '').toLowerCase().includes('lab')).map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit })));
+                    } else {
+                      const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
+                      if (r.success) setLabProducts(r.products || []);
+                    }
                   } catch {}
                   setLabModalLoading(false);
                 }
@@ -1639,7 +1666,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         setLabModalQty(String(lab.qty)); setLabModalPrice(String(lab.originalPrice || lab.price));
                         setLabModalDiscount(String(lab.discount || '')); setLabModalDiscountType(lab.discountType === '%' ? 'percent' : 'amount');
                         setLabModalVat(!!lab.isVatIncluded); setLabModalOpen(true);
-                        if (labProducts.length === 0) broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
+                        if (labProducts.length === 0) {
+                          if (saveTarget === 'backend') {
+                            import('../lib/backendClient.js').then(({ getAllMasterDataItems }) => getAllMasterDataItems('products').then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
+                          } else {
+                            broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
+                          }
+                        }
                       }} className="text-cyan-500 hover:text-cyan-400"><Edit3 size={12} /></button>
                       <button onClick={() => setLabItems(prev => prev.filter((_, i) => i !== li))} className="text-red-500 hover:text-red-400"><Trash2 size={12} /></button>
                     </div>

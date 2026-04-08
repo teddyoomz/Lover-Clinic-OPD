@@ -8,14 +8,22 @@ import {
   Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown
 } from 'lucide-react';
 import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync } from '../../lib/backendClient.js';
-import { syncProducts, syncDoctors, syncStaff, syncCourses } from '../../lib/brokerClient.js';
+import { syncProducts, syncDoctors, syncStaff, syncCourses, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
+
+// Wrapper: listItems('promotion') → format like syncProducts response
+async function syncPromotions() {
+  const data = await listItems('promotion');
+  if (!data?.success) return data;
+  return { success: true, items: data.items || [], count: (data.items || []).length, totalPages: 1 };
+}
 
 const SYNC_TYPES = [
   { key: 'products', label: 'ยา / บริการ / สินค้า', fn: syncProducts, icon: '💊', color: 'emerald' },
   { key: 'doctors', label: 'แพทย์ / ผู้ช่วย', fn: syncDoctors, icon: '🩺', color: 'sky' },
   { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
   { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
+  { key: 'promotions', label: 'โปรโมชัน', fn: syncPromotions, icon: '🏷️', color: 'rose' },
 ];
 
 const SYNC_COLOR_MAP = {
@@ -23,6 +31,7 @@ const SYNC_COLOR_MAP = {
   sky: { btn: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40', badge: 'bg-sky-900/40 text-sky-400' },
   purple: { btn: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40', badge: 'bg-purple-900/40 text-purple-400' },
   amber: { btn: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40', badge: 'bg-amber-900/40 text-amber-400' },
+  rose: { btn: 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40', badge: 'bg-rose-900/40 text-rose-400' },
 };
 
 // Table column definitions per sub-tab
@@ -56,6 +65,11 @@ const COLUMNS = {
     { key: 'price', label: 'ราคา', w: 'w-20', align: 'text-right' },
     { key: 'status', label: 'สถานะ', w: 'w-16' },
   ],
+  promotions: [
+    { key: 'name', label: 'ชื่อโปรโมชัน', sticky: true },
+    { key: 'price', label: 'ราคา', w: 'w-20', align: 'text-right' },
+    { key: 'category', label: 'หมวด', w: 'w-24' },
+  ],
 };
 
 // Filter config per sub-tab
@@ -72,6 +86,9 @@ const FILTER_CONFIG = {
   ],
   courses: [
     { key: 'courseType', label: 'ประเภท', field: 'courseType' },
+    { key: 'category', label: 'หมวด', field: 'category' },
+  ],
+  promotions: [
     { key: 'category', label: 'หมวด', field: 'category' },
   ],
 };

@@ -69,6 +69,8 @@ vercel --prod
 - แล้ว**ใช้จาก Firestore** (`be_*`, `master_data/*`) เท่านั้น
 - ถ้าข้อมูลไม่มี → ไปดูดมาเก็บก่อน → แล้วค่อยใช้จากที่ดูดมา
 - Flow: ProClinic → sync/clone → Firestore → Backend UI (**ทางเดียว**)
+- **ถ้าเจอข้อมูลที่ยังไม่มี** → ไปสร้างปุ่ม sync ใหม่ใน **หน้าข้อมูลพื้นฐาน** → sync มาเก็บ → แล้วค่อยใช้
+- **ห้าม fetch จาก ProClinic นอกหน้าข้อมูลพื้นฐาน** — ทุก sync/clone ต้องผ่านหน้านี้หน้าเดียว
 
 ### 6. Stale closure pattern
 - useEffect ที่ขึ้นกับ async-loaded props → ใช้ ref หรือ `clinicSettingsLoaded` flag
