@@ -312,11 +312,17 @@ export function extractDoctorList(html) {
       }
     }
 
-    // Name is usually in the first cell, might have email below
+    // Name is the first text node inside the <p> tag (before <span>, <br>, <a>)
     const nameCell = cells.eq(0);
-    const nameText = nameCell.find('strong, b, a').first().text().trim() || nameCell.contents().first().text().trim();
-    const email = nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '';
-    const name = nameText.split('\n')[0].trim();
+    const pTag = nameCell.find('p').first();
+    let name = '';
+    if (pTag.length) {
+      // Get only the first text node (the name) — before any child elements
+      name = pTag.contents().filter(function() { return this.type === 'text'; }).first().text().trim();
+    }
+    if (!name) name = nameCell.find('strong, b').first().text().trim() || nameCell.contents().first().text().trim();
+    name = name.split('\n')[0].trim();
+    const email = nameCell.find('.__cf_email__').first().attr('data-cfemail') ? '[cf-protected]' : (nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '');
 
     const color = cells.eq(1).text().trim();
     const hourlyRate = cells.eq(2).text().trim().replace(/[^\d.]/g, '');
@@ -362,15 +368,21 @@ export function extractStaffList(html) {
     }
 
     const nameCell = cells.eq(0);
-    const name = nameCell.find('strong, b, a').first().text().trim() || nameCell.contents().first().text().trim();
-    const email = nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '';
+    const pTag = nameCell.find('p').first();
+    let name = '';
+    if (pTag.length) {
+      name = pTag.contents().filter(function() { return this.type === 'text'; }).first().text().trim();
+    }
+    if (!name) name = nameCell.find('strong, b').first().text().trim() || nameCell.contents().first().text().trim();
+    name = name.split('\n')[0].trim();
+    const email = nameCell.find('.__cf_email__').first().attr('data-cfemail') ? '[cf-protected]' : (nameCell.find('small, .text-muted').first().text().trim().replace(/\s+/g, '') || '');
     const color = cells.eq(1).text().trim();
     const position = cells.eq(2).text().trim();
     const branches = cells.eq(3).text().trim();
     const status = $(tr).find('.badge').last().text().trim() || 'ใช้งาน';
 
-    if (name.split('\n')[0].trim()) {
-      staff.push({ id, name: name.split('\n')[0].trim(), email, color, position, branches, status });
+    if (name) {
+      staff.push({ id, name, email, color, position, branches, status });
     }
   });
 
