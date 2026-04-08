@@ -315,14 +315,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             getAllMasterDataItems('products'),
             getAllMasterDataItems('staff'),
           ]);
+          const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
+          const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
           const backendOptions = {
-            doctors: doctorItems.filter(d => d.status !== 'พักใช้งาน').map(d => ({ id: d.id, name: d.name, position: d.position })),
-            assistants: doctorItems.filter(d => d.position?.includes('ผู้ช่วย')).map(d => ({ id: d.id, name: d.name })),
+            doctors: allDoctors.map(d => ({ id: d.id, name: d.name, position: d.position })),
+            assistants: allDoctors.filter(d => d.position?.includes('ผู้ช่วย')).map(d => ({ id: d.id, name: d.name })),
             bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'],
             products: productItems,
             customerCourses: [], customerPromotions: [],
             benefitTypes: [], insuranceCompanies: [],
-            paymentChannels: [], wallets: [], sellers: staffItems,
+            paymentChannels: ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'],
+            wallets: [],
+            sellers: [...allStaff, ...allDoctors.map(d => ({ id: d.id, name: d.name, position: d.position }))],
             medicationGroups: [], consumableGroups: [],
             healthInfo: {}, vitalsDefaults: {},
           };
@@ -360,6 +364,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.medCertPeriod) setMedCertPeriod(t.medCertPeriod);
               if (t.medCertIsOther != null) setMedCertIsOther(t.medCertIsOther);
               if (t.medCertOtherDetail) setMedCertOtherDetail(t.medCertOtherDetail);
+              // Billing & Payment (Phase 5A)
+              if (t.purchasedItems?.length) setPurchasedItems(t.purchasedItems);
+              if (t.payment?.paymentStatus) setPaymentStatus(t.payment.paymentStatus);
+              if (t.payment?.paymentDate) setPaymentDate(t.payment.paymentDate);
+              if (t.payment?.paymentTime) setPaymentTime(t.payment.paymentTime);
+              if (t.payment?.refNo) setRefNo(t.payment.refNo);
+              if (t.payment?.channels?.length) setPmChannels(prev => prev.map((ch, i) => t.payment.channels[i] ? { ...ch, ...t.payment.channels[i], enabled: true } : ch));
+              if (t.sellers?.length) setPmSellers(prev => prev.map((s, i) => t.sellers[i] ? { ...s, ...t.sellers[i], enabled: true } : s));
+              if (t.payment?.saleNote) setSaleNote(t.payment.saleNote);
             }
           }
           // Pre-fill from patient data
@@ -1038,7 +1051,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
     // assistantIds validation removed — ผู้ช่วยแพทย์ is optional
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
-    if (hasSale && saveTarget !== 'backend') {
+    if (hasSale) {
       if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
         if (!pmChannels.some(c => c.enabled && c.method)) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
@@ -1157,6 +1170,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
           doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
           treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, fileName: f.fileName })),
+          // Billing & Payment (Phase 5A)
+          purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
+          billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
+          payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note: note, saleNote },
+          sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
+          hasSale,
         });
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
@@ -2116,7 +2135,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
 
           {/* ── ข้อมูลการใช้คอร์ส — matching ProClinic layout ──────────── */}
-          {saveTarget !== 'backend' && <FormSection isDark={isDark}>
+          {<FormSection isDark={isDark}>
             <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
               {!isEdit && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
@@ -2637,7 +2656,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
 
           {/* ── Insurance (เบิกประกัน) — only when there's a sale ─────────── */}
-          {saveTarget !== 'backend' && hasSale && (
+          {hasSale && (
           <FormSection isDark={isDark}>
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -2661,7 +2680,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Expense Summary (สรุปค่าใช้จ่าย) ───────────────────────────── */}
-          {saveTarget !== 'backend' && hasSale && (
+          {hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="สรุปค่าใช้จ่าย" isDark={isDark} accent="#10b981" />
             <div className="space-y-1 text-xs">
@@ -2753,7 +2772,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Sale Note + Date — only when there's a sale ─────────────────── */}
-          {saveTarget !== 'backend' && hasSale && (
+          {hasSale && (
           <FormSection isDark={isDark}>
             <div className="space-y-3">
               <div>
@@ -2772,7 +2791,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Payment (การชำระเงิน) — only when there's a sale ────────────── */}
-          {saveTarget !== 'backend' && hasSale && (
+          {hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
 
@@ -2836,7 +2855,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
-          {saveTarget !== 'backend' && hasSale && (
+          {hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">

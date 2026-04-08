@@ -61,6 +61,7 @@ vercel --prod
 - `/api/proclinic/*` ทำงานบน production (Vercel) เท่านั้น
 - localhost จะ error `fetchCoursesViaApi` เป็นเรื่องปกติ ไม่ต้องแก้
 - Credentials อยู่ใน Vercel env vars
+- **429 Rate Limit**: ถ้าเจอ `API Error: Request rejected (429)` → รอ 5-10 วินาทีแล้ว retry อัตโนมัติ หรือ refresh หน้า (ProClinic/Vercel มี rate limit)
 
 ### 6. Stale closure pattern
 - useEffect ที่ขึ้นกับ async-loaded props → ใช้ ref หรือ `clinicSettingsLoaded` flag
