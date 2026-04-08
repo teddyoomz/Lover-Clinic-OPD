@@ -14,6 +14,7 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
+import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
@@ -47,6 +48,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const tabs = [
     { id: 'clone', icon: <Download size={16} />, label: 'Clone ลูกค้า', color: 'violet' },
     { id: 'customers', icon: <Users size={16} />, label: 'ข้อมูลลูกค้า', color: 'teal' },
+    { id: 'masterdata', icon: <Database size={16} />, label: 'ข้อมูลพื้นฐาน', color: 'amber' },
   ];
 
   return (
@@ -88,6 +90,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                 const colorMap = {
                   violet: { active: 'bg-violet-700 text-white shadow-[0_0_15px_rgba(139,92,246,0.4)]', hover: 'hover:text-violet-400 hover:border-violet-800/50' },
                   teal: { active: 'bg-teal-700 text-white shadow-[0_0_15px_rgba(20,184,166,0.4)]', hover: 'hover:text-teal-400 hover:border-teal-800/50' },
+                  amber: { active: 'bg-amber-700 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]', hover: 'hover:text-amber-400 hover:border-amber-800/50' },
                 };
                 const cm = colorMap[tab.color];
                 return (
@@ -125,6 +128,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             theme={theme}
             onViewCustomer={(c) => { setViewingCustomer(c); }}
           />
+        ) : activeTab === 'masterdata' ? (
+          <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
     </div>

@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, orderBy } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, orderBy, writeBatch } from 'firebase/firestore';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -77,4 +77,52 @@ export async function getTreatment(treatmentId) {
   const snap = await getDoc(treatmentDoc(treatmentId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
+}
+
+// ─── Master Data Read + Sync ────────────────────────────────────────────────
+
+const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);
+const masterDataItemsCol = (type) => collection(db, ...basePath(), 'master_data', type, 'items');
+
+/** Read master data metadata (count, syncedAt) */
+export async function getMasterDataMeta(type) {
+  const snap = await getDoc(masterDataDoc(type));
+  if (!snap.exists()) return null;
+  return snap.data();
+}
+
+/** Read all items from master_data/{type}/items */
+export async function getAllMasterDataItems(type) {
+  const snap = await getDocs(masterDataItemsCol(type));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/** Run sync: call broker function → write metadata + items to Firestore.
+ *  Same logic as ClinicSettingsPanel.jsx lines 621-644. */
+export async function runMasterDataSync(type, syncFn) {
+  const data = await syncFn();
+  if (!data?.success) return { success: false, error: data?.error || 'Sync failed' };
+  if (!data.items?.length) return { success: true, count: 0, totalPages: 0 };
+
+  // Write metadata
+  await setDoc(masterDataDoc(type), {
+    type,
+    count: data.items.length,
+    totalPages: data.totalPages || 1,
+    syncedAt: new Date().toISOString(),
+  });
+
+  // Write items in batches of 400 (Firestore limit = 500 ops per batch)
+  const BATCH_LIMIT = 400;
+  for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
+    const chunk = data.items.slice(start, start + BATCH_LIMIT);
+    const batch = writeBatch(db);
+    chunk.forEach((item, i) => {
+      const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(item.id || (start + i)));
+      batch.set(ref, { ...item, _syncedAt: new Date().toISOString() });
+    });
+    await batch.commit();
+  }
+
+  return { success: true, count: data.items.length, totalPages: data.totalPages || 1 };
 }
