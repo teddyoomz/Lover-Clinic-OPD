@@ -157,6 +157,11 @@ export function searchCustomers(query) {
   return apiFetch('customer', { action: 'search', query });
 }
 
+/** List ALL customers paginated → { success, customers, page, maxPage } */
+export function listAllCustomers(page = 1) {
+  return apiFetch('customer', { action: 'list', page });
+}
+
 /** Fetch full patient data from ProClinic by ID → { success, patient, proClinicId, proClinicHN } */
 export function fetchPatientFromProClinic(proClinicId) {
   return apiFetch('customer', { action: 'fetchPatient', proClinicId });

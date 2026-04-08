@@ -3,10 +3,10 @@
 // Display results as cards with "ดูดข้อมูลทั้งหมด" button.
 
 import { useState, useRef, useCallback } from 'react';
-import { Search, Loader2, AlertCircle, Download, Info } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Download, Info, Users, Pause, Play, X, CheckCircle2, RefreshCw, SkipForward, Zap } from 'lucide-react';
 import { searchCustomers } from '../../lib/brokerClient.js';
 import { customerExists } from '../../lib/backendClient.js';
-import { cloneCustomer } from '../../lib/cloneOrchestrator.js';
+import { smartClone, cloneAllCustomers } from '../../lib/cloneOrchestrator.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
 
@@ -23,6 +23,13 @@ export default function CloneTab({ clinicSettings, theme }) {
   // Clone state (per customer)
   const [cloneStates, setCloneStates] = useState({}); // { [id]: { status, progress } }
   const abortControllerRef = useRef(null);
+
+  // Bulk clone state
+  const [bulkPhase, setBulkPhase] = useState('idle'); // idle|listing|checking|cloning|paused|done|cancelled|error
+  const [bulkProgress, setBulkProgress] = useState(null);
+  const [bulkLog, setBulkLog] = useState([]);
+  const bulkControlRef = useRef(null);
+  const bulkAbortRef = useRef(null);
 
   // ── Search ────────────────────────────────────────────────────────────────
 
@@ -85,7 +92,7 @@ export default function CloneTab({ clinicSettings, theme }) {
     abortControllerRef.current = controller;
 
     try {
-      const result = await cloneCustomer(
+      const result = await smartClone(
         proClinicId,
         // Progress callback
         (progress) => {
@@ -115,6 +122,40 @@ export default function CloneTab({ clinicSettings, theme }) {
       }));
     }
   }, []);
+
+  // ── Bulk Clone handlers ─────────────────────────────────────────────────
+  const handleStartBulk = useCallback(() => {
+    const controller = new AbortController();
+    bulkAbortRef.current = controller;
+    setBulkPhase('listing');
+    setBulkLog([]);
+    setBulkProgress(null);
+
+    const { promise, pause, resume } = cloneAllCustomers(
+      (state) => {
+        setBulkProgress(state);
+        setBulkLog([...(state.log || [])]);
+        if (state.phase === 'done' || state.phase === 'cancelled') setBulkPhase(state.phase);
+        else if (state.phase === 'error') setBulkPhase('error');
+        else if (state.phase === 'paused') setBulkPhase('paused');
+        else setBulkPhase(state.phase);
+      },
+      controller.signal
+    );
+    bulkControlRef.current = { pause, resume };
+    promise.catch(() => setBulkPhase('error'));
+  }, []);
+
+  const handlePauseBulk = () => { bulkControlRef.current?.pause(); setBulkPhase('paused'); };
+  const handleResumeBulk = () => { bulkControlRef.current?.resume(); setBulkPhase('cloning'); };
+  const handleCancelBulk = () => { bulkAbortRef.current?.abort(); setBulkPhase('cancelled'); };
+
+  const fmtEta = (secs) => {
+    if (!secs || secs <= 0) return '';
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m} นาที ${s} วินาที` : `${s} วินาที`;
+  };
 
   return (
     <div className="space-y-6">
@@ -149,6 +190,127 @@ export default function CloneTab({ clinicSettings, theme }) {
         <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
           <Info size={12} /> ค้นหาจาก ProClinic โดยตรง — ต้อง login ProClinic ก่อน (ผ่าน Cookie Relay Extension)
         </p>
+      </div>
+
+      {/* ── Bulk Clone Section ── */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-5">
+        {bulkPhase === 'idle' ? (
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
+                <Users size={16} style={{ color: ac }} /> Clone ลูกค้าทุกคน
+              </h3>
+              <p className="text-xs text-[var(--tx-muted)] mt-1">ดูดข้อมูลทุกคนจาก ProClinic อัตโนมัติ — ข้ามคนที่ไม่มีอะไรเปลี่ยน</p>
+            </div>
+            <button onClick={handleStartBulk}
+              className="px-5 py-2.5 rounded-lg font-bold text-sm text-white flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all"
+              style={{ backgroundColor: ac }}>
+              <Download size={15} /> เริ่มดูดทุกคน
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
+                <Users size={16} style={{ color: ac }} />
+                {bulkPhase === 'listing' ? 'กำลังดึงรายชื่อ...' :
+                 bulkPhase === 'checking' ? 'กำลังตรวจสอบ...' :
+                 bulkPhase === 'cloning' ? 'กำลัง Clone...' :
+                 bulkPhase === 'paused' ? 'หยุดชั่วคราว' :
+                 bulkPhase === 'done' ? 'เสร็จแล้ว' :
+                 bulkPhase === 'cancelled' ? 'ยกเลิกแล้ว' : 'เกิดข้อผิดพลาด'}
+              </h3>
+              <div className="flex items-center gap-2">
+                {(bulkPhase === 'cloning' || bulkPhase === 'listing' || bulkPhase === 'checking') && (
+                  <>
+                    <button onClick={handlePauseBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all flex items-center gap-1">
+                      <Pause size={12} /> หยุด
+                    </button>
+                    <button onClick={handleCancelBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 transition-all flex items-center gap-1">
+                      <X size={12} /> ยกเลิก
+                    </button>
+                  </>
+                )}
+                {bulkPhase === 'paused' && (
+                  <>
+                    <button onClick={handleResumeBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-900/20 border border-emerald-700/40 text-emerald-400 hover:bg-emerald-900/30 transition-all flex items-center gap-1">
+                      <Play size={12} /> เดินต่อ
+                    </button>
+                    <button onClick={handleCancelBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 transition-all flex items-center gap-1">
+                      <X size={12} /> ยกเลิก
+                    </button>
+                  </>
+                )}
+                {(bulkPhase === 'done' || bulkPhase === 'cancelled' || bulkPhase === 'error') && (
+                  <button onClick={() => { setBulkPhase('idle'); setBulkProgress(null); setBulkLog([]); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all flex items-center gap-1">
+                    <RefreshCw size={12} /> Clone ใหม่
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            {bulkProgress && (
+              <div>
+                <div className="w-full h-2 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${bulkProgress.percent || 0}%`,
+                      backgroundColor: bulkPhase === 'paused' ? '#d97706' : bulkPhase === 'error' ? '#dc2626' : ac,
+                    }} />
+                </div>
+                <div className="flex items-center justify-between mt-1.5 text-xs text-[var(--tx-muted)]">
+                  <span>
+                    {bulkProgress.currentName && bulkPhase !== 'done' && (
+                      <span className="text-[var(--tx-heading)] font-medium">{bulkProgress.currentName}</span>
+                    )}
+                    {bulkProgress.currentAction && bulkProgress.currentAction !== 'skip' && (
+                      <span className="ml-1.5 text-[var(--tx-muted)]">
+                        ({bulkProgress.currentAction === 'full' ? 'clone ใหม่' : bulkProgress.currentAction === 'incremental' ? 'อัพเดท' : 'resume'})
+                      </span>
+                    )}
+                  </span>
+                  <span>
+                    {bulkProgress.estimatedSecondsLeft > 0 && `เหลือ ~${fmtEta(bulkProgress.estimatedSecondsLeft)}`}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Summary stats */}
+            {bulkProgress && (
+              <div className="flex flex-wrap gap-3 text-xs">
+                <span className="text-[var(--tx-muted)]">ทั้งหมด <span className="font-bold text-[var(--tx-heading)]">{bulkProgress.totalCustomers}</span></span>
+                {bulkProgress.skipCount > 0 && <span className="text-gray-500"><SkipForward size={11} className="inline mr-0.5" />{bulkProgress.skipCount} ข้าม</span>}
+                {bulkProgress.completedCount > 0 && <span className="text-emerald-400"><CheckCircle2 size={11} className="inline mr-0.5" />{bulkProgress.completedCount} สำเร็จ</span>}
+                {bulkProgress.incrementalCount > 0 && <span className="text-sky-400"><Zap size={11} className="inline mr-0.5" />{bulkProgress.incrementalCount} อัพเดท</span>}
+                {bulkProgress.failedCount > 0 && <span className="text-red-400"><AlertCircle size={11} className="inline mr-0.5" />{bulkProgress.failedCount} ผิดพลาด</span>}
+              </div>
+            )}
+
+            {/* Log */}
+            {bulkLog.length > 0 && (
+              <div className="max-h-48 overflow-y-auto rounded-lg bg-[var(--bg-elevated)] border border-[var(--bd)] p-2 space-y-0.5">
+                {bulkLog.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs py-0.5">
+                    {entry.status === 'ok' && entry.action === 'skip' ? (
+                      <SkipForward size={11} className="text-gray-500 shrink-0" />
+                    ) : entry.status === 'ok' ? (
+                      <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle size={11} className="text-red-400 shrink-0" />
+                    )}
+                    <span className="text-[var(--tx-secondary)] font-medium truncate">{entry.name || entry.id}</span>
+                    <span className="text-[var(--tx-muted)] truncate flex-1">{entry.message}</span>
+                    {entry.duration > 0 && <span className="text-[var(--tx-muted)] shrink-0">{entry.duration}s</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Search Error ── */}

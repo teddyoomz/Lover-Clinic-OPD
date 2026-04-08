@@ -1,7 +1,7 @@
 // ─── Customer API (consolidated) ─────────────────────────────────────────────
 // Actions: create, update, delete, search
 import { createSession, getSession, handleCors } from './_lib/session.js';
-import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch } from './_lib/scraper.js';
+import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, extractListPagination, findBestMatch } from './_lib/scraper.js';
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
@@ -280,6 +280,38 @@ async function handleFetchPatient(req, res) {
 
 // ─── Action: search ─────────────────────────────────────────────────────────
 
+// ── List all customers (paginated) ─────────────────────────────────────────
+async function handleList(req, res) {
+  const { page = 1 } = req.body || {};
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const url = page > 1 ? `${base}/admin/customer?page=${page}` : `${base}/admin/customer`;
+  const html = await session.fetchText(url);
+  const customers = extractSearchResults(html);
+  const { maxPage } = extractListPagination(html);
+
+  // Fill missing names (same as search — max 10 per page)
+  const needsDetail = customers.filter(c => !c.name).slice(0, 10);
+  if (needsDetail.length > 0) {
+    await Promise.all(needsDetail.map(async (c) => {
+      try {
+        const editHtml = await session.fetchText(`${base}/admin/customer/${c.id}/edit`);
+        const fields = extractFormFields(editHtml);
+        const firstName = fields.firstname || '';
+        const lastName = fields.lastname || '';
+        const prefix = fields.prefix || '';
+        const phone = fields.telephone_number || fields.phone || '';
+        const hnVal = extractHN(editHtml) || '';
+        if (firstName || lastName) c.name = [prefix, firstName, lastName].filter(Boolean).join(' ');
+        if (phone && !c.phone) c.phone = phone;
+        if (hnVal && !c.hn) c.hn = hnVal;
+      } catch {}
+    }));
+  }
+
+  return res.status(200).json({ success: true, customers, page: Number(page), maxPage });
+}
+
 async function handleSearch(req, res) {
   const { query, debug } = req.body || {};
   if (!query) {
@@ -330,6 +362,7 @@ export default async function handler(req, res) {
     if (action === 'create') return await handleCreate(req, res);
     if (action === 'update') return await handleUpdate(req, res);
     if (action === 'delete') return await handleDelete(req, res);
+    if (action === 'list') return await handleList(req, res);
     if (action === 'search') return await handleSearch(req, res);
     if (action === 'fetchPatient') return await handleFetchPatient(req, res);
     return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
