@@ -11,8 +11,8 @@ import ChartSection from './ChartSection.jsx';
 function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
   return (
     <div className="flex items-center flex-wrap gap-2 mb-3">
-      <Icon size={14} style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }} />
-      <h4 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: accent }}>{title}</h4>
+      <Icon size={15} style={{ color: accent }} />
+      <h4 className="text-xs font-bold tracking-wide" style={{ color: accent }}>{title}</h4>
       {children}
     </div>
   );
@@ -20,7 +20,7 @@ function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
 
 function FormSection({ isDark, children, className = '' }) {
   return (
-    <div className={`rounded-xl border p-4 ${isDark ? 'border-[#222] bg-[#0a0a0a]' : 'border-gray-200 bg-white'} ${className}`}>
+    <div className={`rounded-xl border p-5 ${isDark ? 'border-[#1a1a1a] bg-[#0a0a0a]' : 'border-gray-200 bg-white'} ${className}`}>
       {children}
     </div>
   );
@@ -53,7 +53,7 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
       {hasPrev && (
         <div className={`mb-1.5 rounded-lg border px-3 py-2 ${isDark ? 'bg-[#0d0d0d] border-[#2a2a2a]' : 'bg-amber-50/40 border-amber-200/50'}`}>
           <div className="flex items-center justify-between mb-1">
-            <span className={`text-[8px] font-bold uppercase tracking-widest ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>ครั้งก่อน</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>ครั้งก่อน</span>
             <button type="button" onClick={handleCopyAndFill}
               className={`text-[11px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 ${
                 copied
@@ -77,8 +77,8 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
 export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
-  const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
-  const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-1 block';
+  const inputCls = `w-full rounded-lg px-3 py-2.5 text-sm outline-none border transition-all ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
+  const labelCls = 'text-xs font-semibold text-gray-500 mb-1 block';
   const selectCls = inputCls;
 
   // ── Core state ──────────────────────────────────────────────────────────
@@ -1405,14 +1405,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-black tracking-tight flex items-center gap-2" style={{ color: accent }}>
-              {isEdit ? <Edit3 size={16} /> : <Stethoscope size={16} />}
+            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: accent }}>
+              {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
               {isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}
             </h2>
-            {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
+            {patientName && <p className="text-sm text-gray-500 truncate">{patientName}</p>}
           </div>
           <button onClick={handleSubmit} disabled={saving}
-            className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-all flex items-center gap-1.5">
+            className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-50 transition-all flex items-center gap-2 hover:opacity-90 active:scale-[0.98]"
+            style={{ backgroundColor: accent }}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             {saving ? 'กำลังบันทึก...' : isEdit ? 'บันทึก' : 'ยืนยันการรักษา'}
           </button>

@@ -95,7 +95,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   return (
     <div>
       {/* ── 3-Column Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_1fr_320px] gap-5 overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] lg:grid-cols-[300px_1fr_340px] gap-5 overflow-hidden">
 
         {/* ════════════════════ LEFT: Profile ════════════════════ */}
         <div className="space-y-3 min-w-0">
@@ -104,30 +104,30 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             {/* Avatar + Name header */}
             <div className="p-5 text-center border-b border-[var(--bd)]">
               {/* Avatar */}
-              <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center border-2"
-                style={{ borderColor: `rgba(${acRgb},0.4)`, backgroundColor: `rgba(${acRgb},0.1)` }}>
-                <span className="text-2xl font-bold text-[var(--tx-heading)]">
+              <div className="w-24 h-24 rounded-full mx-auto mb-3 flex items-center justify-center border-2"
+                style={{ borderColor: `rgba(${acRgb},0.4)`, backgroundColor: `rgba(${acRgb},0.08)` }}>
+                <span className="text-3xl font-bold text-[var(--tx-heading)]">
                   {(pd.firstName || '?')[0]}
                 </span>
               </div>
 
               {/* HN Badge */}
               {hn && (
-                <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-2">
+                <span className="inline-block px-3 py-1 rounded-lg text-sm font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-2">
                   {hn}
                 </span>
               )}
 
               {/* Name — NEVER red (Thai culture) */}
-              <h2 className="text-base font-bold text-[var(--tx-heading)]">{name}</h2>
+              <h2 className="text-lg font-bold text-[var(--tx-heading)]">{name}</h2>
 
               {/* Clone status */}
               {customer?.cloneStatus && (
-                <div className="mt-2 flex items-center justify-center gap-1.5 text-xs">
+                <div className="mt-2 flex items-center justify-center gap-2 text-xs">
                   {customer.cloneStatus === 'complete' ? (
-                    <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 size={10} /> Clone สมบูรณ์</span>
+                    <span className="text-emerald-500 flex items-center gap-1 font-medium"><CheckCircle2 size={12} /> Clone สมบูรณ์</span>
                   ) : customer.cloneStatus === 'partial_error' ? (
-                    <span className="text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Clone บางส่วน</span>
+                    <span className="text-amber-500 flex items-center gap-1 font-medium"><AlertCircle size={12} /> Clone บางส่วน</span>
                   ) : null}
                   <span className="text-[var(--tx-muted)]">| {relativeTime(customer.lastSyncedAt)}</span>
                 </div>
@@ -167,7 +167,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
                 <Calendar size={16} className="text-sky-400" />
-                <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">นัดหมาย</h3>
+                <h3 className="text-sm font-bold text-[var(--tx-heading)]">นัดหมาย</h3>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{appointments.length}</span>
               </div>
               <div className="divide-y divide-[var(--bd)]">
@@ -193,7 +193,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
               <Stethoscope size={16} style={{ color: ac }} />
-              <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">ประวัติการรักษา</h3>
+              <h3 className="text-sm font-bold text-[var(--tx-heading)]">ประวัติการรักษา</h3>
               <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                 style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
                 {customer?.treatmentCount || treatmentSummary.length}
@@ -288,7 +288,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
             <div className="flex border-b border-[var(--bd)]">
               <button onClick={() => setCourseTab('active')}
-                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   courseTab === 'active' ? 'text-teal-400 border-b-2 border-teal-400 bg-teal-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 <Package size={13} /> คอร์สของฉัน
@@ -297,7 +297,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 )}
               </button>
               <button onClick={() => setCourseTab('expired')}
-                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   courseTab === 'expired' ? 'text-red-400 border-b-2 border-red-400 bg-red-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 คอร์สหมดอายุ
@@ -306,7 +306,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 )}
               </button>
               <button onClick={() => setCourseTab('purchases')}
-                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   courseTab === 'purchases' ? 'text-rose-400 border-b-2 border-rose-400 bg-rose-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 ประวัติการซื้อ
@@ -388,16 +388,16 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 function InfoRow({ label, value, icon, className = '' }) {
   if (!value || value === '-') {
     return (
-      <div className="flex items-start py-1.5 border-b border-[var(--bd)]/50 last:border-0">
-        <span className="text-[11px] text-[var(--tx-muted)] w-24 flex-shrink-0 font-medium">{label}</span>
-        <span className="text-[11px] text-[var(--tx-muted)] flex items-center gap-1">-</span>
+      <div className="flex items-start py-2 border-b border-[var(--bd)]/50 last:border-0">
+        <span className="text-xs text-[var(--tx-muted)] w-28 flex-shrink-0">{label}</span>
+        <span className="text-xs text-[var(--tx-muted)]">-</span>
       </div>
     );
   }
   return (
-    <div className="flex items-start py-1.5 border-b border-[var(--bd)]/50 last:border-0">
-      <span className="text-[11px] text-[var(--tx-muted)] w-24 flex-shrink-0 font-medium">{label}</span>
-      <span className={`text-[11px] text-[var(--tx-secondary)] flex items-center gap-1 break-all ${className}`}>
+    <div className="flex items-start py-2 border-b border-[var(--bd)]/50 last:border-0">
+      <span className="text-xs text-[var(--tx-muted)] w-28 flex-shrink-0">{label}</span>
+      <span className={`text-xs text-[var(--tx-secondary)] flex items-center gap-1 break-all leading-relaxed ${className}`}>
         {icon} {value}
       </span>
     </div>
@@ -408,8 +408,8 @@ function DetailField({ label, value }) {
   if (!value) return null;
   return (
     <div>
-      <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider">{label}</span>
-      <p className="text-xs text-[var(--tx-secondary)] mt-0.5 whitespace-pre-wrap">{value}</p>
+      <span className="text-xs font-semibold text-[var(--tx-muted)]">{label}</span>
+      <p className="text-sm text-[var(--tx-secondary)] mt-0.5 whitespace-pre-wrap leading-relaxed">{value}</p>
     </div>
   );
 }
@@ -433,7 +433,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Vitals */}
       {(vitals.weight || vitals.height || vitals.temperature) && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <Activity size={10} /> สัญญาณชีพ
           </span>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
@@ -465,7 +465,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Medications */}
       {meds.length > 0 && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <Pill size={10} /> ยากลับบ้าน
           </span>
           <div className="mt-1 space-y-1">
@@ -482,7 +482,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Lab — enhanced with price + info */}
       {labItems.length > 0 && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <Droplets size={10} /> Lab
           </span>
           <div className="mt-1 space-y-1">
@@ -504,7 +504,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Doctor Fees */}
       {doctorFees.length > 0 && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <Stethoscope size={10} /> ค่ามือ
           </span>
           <div className="mt-1 space-y-1">
@@ -521,7 +521,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Medical Certificate */}
       {(medCert.isActuallyCome || medCert.isRest || medCert.isOther || d.medCertActuallyCome) && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <Shield size={10} /> ใบรับรองแพทย์
           </span>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
@@ -535,7 +535,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Before/After/Other Images */}
       {hasImages && (
         <div>
-          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
             <FileText size={10} /> รูปภาพ
           </span>
           <div className="mt-1 space-y-2">
@@ -554,7 +554,7 @@ function ItemList({ icon, label, items, nameKey = 'name', qtyKey = 'qty', unitKe
   if (!items || items.length === 0) return null;
   return (
     <div>
-      <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+      <span className="text-xs font-semibold text-[var(--tx-muted)] flex items-center gap-1">
         {icon} {label}
       </span>
       <div className="mt-1 space-y-1">
