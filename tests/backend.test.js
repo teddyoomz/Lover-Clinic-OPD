@@ -911,3 +911,143 @@ describe('OPD Create + Edit Roundtrip', () => {
     for (const id of tids) expect((await getDoc(txRef(id))).exists()).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. SALE CRUD + BILLING
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Sale CRUD + Billing', () => {
+  const sids = [];
+  const saleRef = (id) => doc(db, ...P, 'be_sales', id);
+  const counterRef = () => doc(db, ...P, 'be_sales_counter', 'counter');
+
+  afterAll(async () => {
+    for (const id of sids) try { await deleteDoc(saleRef(id)); } catch {}
+    try { await deleteDoc(counterRef()); } catch {}
+  });
+
+  it('generate invoice number format INV-YYYYMMDD-XXXX', async () => {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+    // Simulate generateInvoiceNumber
+    await setDoc(counterRef(), { date: dateStr, seq: 0, updatedAt: new Date().toISOString() });
+    const snap = await getDoc(counterRef());
+    const data = snap.data();
+    const seq = (data.date === dateStr ? (data.seq || 0) : 0) + 1;
+    const invNo = `INV-${dateStr}-${String(seq).padStart(4,'0')}`;
+    expect(invNo).toMatch(/^INV-\d{8}-\d{4}$/);
+    expect(invNo).toContain(dateStr);
+  });
+
+  it('create sale with items + billing + payment + sellers', async () => {
+    const id = `INV-TEST-${TS}`;
+    sids.push(id);
+    await setDoc(saleRef(id), clean({
+      saleId: id, customerId: 'CUST1', customerName: 'นุ่น อิอิ', customerHN: 'HN000229',
+      saleDate: '2026-04-08', saleNote: 'VIP customer',
+      items: {
+        promotions: [{ id: 33, name: 'Nov', qty: '1', unitPrice: '3900', itemType: 'promotion' }],
+        courses: [{ id: 'c1', name: 'Filler 3900', qty: '1', unitPrice: '3900', itemType: 'course' }],
+        products: [{ id: 'p1', name: 'ครีม', qty: '2', unitPrice: '500', itemType: 'product' }],
+        medications: [{ name: 'Paracetamol', dosage: '3x หลังอาหาร', qty: '30', unitPrice: '2', unit: 'เม็ด' }],
+      },
+      billing: { subtotal: 8360, billDiscount: 360, discountType: 'amount', netTotal: 8000 },
+      payment: {
+        status: 'paid',
+        channels: [{ enabled: true, method: 'เงินสด', amount: '5000' }, { enabled: true, method: 'โอนธนาคาร', amount: '3000' }],
+        date: '2026-04-08', time: '14:30', refNo: 'TRF-001',
+      },
+      sellers: [{ id: 's1', name: 'Staff A', percent: '60', total: '4800' }, { id: 's2', name: 'Staff B', percent: '40', total: '3200' }],
+      status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }));
+    const s = await getDoc(saleRef(id));
+    expect(s.exists()).toBe(true);
+    const d = s.data();
+    expect(d.saleId).toBe(id);
+    expect(d.items.promotions).toHaveLength(1);
+    expect(d.items.courses).toHaveLength(1);
+    expect(d.items.products).toHaveLength(1);
+    expect(d.items.medications).toHaveLength(1);
+    expect(d.billing.netTotal).toBe(8000);
+    expect(d.payment.status).toBe('paid');
+    expect(d.payment.channels).toHaveLength(2);
+    expect(d.sellers).toHaveLength(2);
+  });
+
+  it('read sale — verify all fields', async () => {
+    const d = (await getDoc(saleRef(sids[0]))).data();
+    expect(d.customerName).toBe('นุ่น อิอิ');
+    expect(d.saleDate).toBe('2026-04-08');
+    expect(d.saleNote).toBe('VIP customer');
+    expect(d.items.promotions[0].name).toBe('Nov');
+    expect(d.items.medications[0].dosage).toBe('3x หลังอาหาร');
+    expect(d.payment.refNo).toBe('TRF-001');
+    expect(d.sellers[0].percent).toBe('60');
+  });
+
+  it('billing calculation logic', () => {
+    const items = [
+      { unitPrice: '3900', qty: '1' },
+      { unitPrice: '3900', qty: '1' },
+      { unitPrice: '500', qty: '2' },
+    ];
+    const meds = [{ unitPrice: '2', qty: '30', name: 'Para' }];
+    let subtotal = 0;
+    items.forEach(p => { subtotal += (parseFloat(p.unitPrice) || 0) * (parseInt(p.qty) || 1); });
+    meds.forEach(m => { if (m.name) subtotal += (parseFloat(m.unitPrice) || 0) * (parseInt(m.qty) || 1); });
+    expect(subtotal).toBe(8860); // 3900+3900+1000+60
+
+    // Discount amount
+    const discAmt = 860;
+    expect(Math.max(0, subtotal - discAmt)).toBe(8000);
+
+    // Discount percent
+    const discPct = 10;
+    expect(Math.max(0, subtotal - subtotal * discPct / 100)).toBe(7974);
+  });
+
+  it('update sale — change payment status + add item', async () => {
+    const id = sids[0];
+    const orig = (await getDoc(saleRef(id))).data();
+    await updateDoc(saleRef(id), clean({
+      'payment.status': 'split',
+      'items.products': [...orig.items.products, { id: 'p2', name: 'เซรั่ม', qty: '1', unitPrice: '1500', itemType: 'product' }],
+      'billing.subtotal': 9860,
+      'billing.netTotal': 9500,
+      updatedAt: new Date().toISOString(),
+    }));
+    const d = (await getDoc(saleRef(id))).data();
+    expect(d.payment.status).toBe('split');
+    expect(d.items.products).toHaveLength(2);
+    expect(d.billing.netTotal).toBe(9500);
+    expect(d.items.promotions).toHaveLength(1); // intact
+  });
+
+  it('query sales by customer', async () => {
+    const id2 = `INV-TEST2-${TS}`;
+    sids.push(id2);
+    await setDoc(saleRef(id2), clean({
+      saleId: id2, customerId: 'CUST1', customerName: 'นุ่น อิอิ', saleDate: '2026-04-09',
+      items: { promotions: [], courses: [], products: [{ name: 'Test', qty: '1', unitPrice: '100' }], medications: [] },
+      billing: { subtotal: 100, netTotal: 100 }, payment: { status: 'paid' }, sellers: [], status: 'active',
+      createdAt: new Date().toISOString(),
+    }));
+    const q1 = query(collection(db, ...P, 'be_sales'), where('customerId', '==', 'CUST1'));
+    const snap = await getDocs(q1);
+    const found = snap.docs.filter(d => sids.includes(d.id));
+    expect(found.length).toBe(2);
+  });
+
+  it('list all sales sorted by date desc', async () => {
+    const snap = await getDocs(collection(db, ...P, 'be_sales'));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    all.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+    const testSales = all.filter(s => sids.includes(s.saleId || s.id));
+    expect(testSales.length).toBe(2);
+    expect(testSales[0].saleDate >= testSales[1].saleDate).toBe(true);
+  });
+
+  it('delete sale', async () => {
+    for (const id of sids) await deleteDoc(saleRef(id));
+    for (const id of sids) expect((await getDoc(saleRef(id))).exists()).toBe(false);
+  });
+});

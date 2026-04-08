@@ -195,6 +195,71 @@ export async function getAppointmentsByDate(dateStr) {
   return appts;
 }
 
+// ─── Sale CRUD ──────────────────────────────────────────────────────────────
+
+const salesCol = () => collection(db, ...basePath(), 'be_sales');
+const saleDoc = (id) => doc(db, ...basePath(), 'be_sales', String(id));
+const saleCounterDoc = () => doc(db, ...basePath(), 'be_sales_counter', 'counter');
+
+/** Generate invoice number: INV-YYYYMMDD-XXXX */
+export async function generateInvoiceNumber() {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  let seq = 1;
+  try {
+    const snap = await getDoc(saleCounterDoc());
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.date === dateStr) seq = (data.seq || 0) + 1;
+    }
+  } catch {}
+  await setDoc(saleCounterDoc(), { date: dateStr, seq, updatedAt: new Date().toISOString() });
+  return `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
+}
+
+/** Create a new sale */
+export async function createBackendSale(data) {
+  const saleId = await generateInvoiceNumber();
+  const now = new Date().toISOString();
+  await setDoc(saleDoc(saleId), {
+    saleId,
+    ...data,
+    status: data.status || 'active',
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { saleId, success: true };
+}
+
+/** Update an existing sale */
+export async function updateBackendSale(saleId, data) {
+  await updateDoc(saleDoc(saleId), { ...data, updatedAt: new Date().toISOString() });
+  return { success: true };
+}
+
+/** Delete a sale */
+export async function deleteBackendSale(saleId) {
+  await deleteDoc(saleDoc(saleId));
+  return { success: true };
+}
+
+/** Get all sales (sorted by date desc) */
+export async function getAllSales() {
+  const snap = await getDocs(salesCol());
+  const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  sales.sort((a, b) => (b.saleDate || b.createdAt || '').localeCompare(a.saleDate || a.createdAt || ''));
+  return sales;
+}
+
+/** Get all sales for a customer */
+export async function getCustomerSales(customerId) {
+  const q = query(salesCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  sales.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+  return sales;
+}
+
 // ─── Master Data Read + Sync ────────────────────────────────────────────────
 
 const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);
