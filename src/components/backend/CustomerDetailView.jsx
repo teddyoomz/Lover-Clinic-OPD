@@ -12,12 +12,26 @@ import { hexToRgb } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
 const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+function formatThaiDateFull(dateStr) {
+  if (!dateStr) return '-';
+  // Handle "2026-04-08" or Thai date strings
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return `${d} ${THAI_MONTHS_FULL[m - 1]} ${y + 543}`;
+  }
+  // Already Thai format — return as is
+  if (THAI_MONTHS_FULL.some(mn => dateStr.includes(mn))) return dateStr;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${d.getDate()} ${THAI_MONTHS_FULL[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
 
 function formatThaiDate(dateStr) {
   if (!dateStr) return '-';
-  // Handle "7 เมษายน 2026" or "2026-04-07" or "07/04/2026"
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr; // Return raw if can't parse
+  if (isNaN(d.getTime())) return dateStr;
   return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
 
@@ -204,7 +218,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                             style={{ borderColor: i === 0 ? ac : 'var(--bd-strong)', backgroundColor: i === 0 ? ac : 'transparent' }} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-[var(--tx-heading)]">{t.date || '-'}</span>
+                              <span className="text-sm font-bold text-[var(--tx-heading)]">{formatThaiDateFull(t.date) || '-'}</span>
                               {isExpanded ? <ChevronUp size={14} className="text-[var(--tx-muted)]" /> : <ChevronDown size={14} className="text-[var(--tx-muted)]" />}
                             </div>
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-[var(--tx-muted)]">

@@ -763,3 +763,151 @@ describe('Treatment Save — All Scenarios', () => {
     expect(d.createdBy).toBe('backend');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. FORMAT THAI DATE FULL
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Format Thai Date Full', () => {
+  const TH_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  function formatThaiDateFull(dateStr) {
+    if (!dateStr) return '-';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y,m,d] = dateStr.split('-').map(Number);
+      return `${d} ${TH_FULL[m-1]} ${y+543}`;
+    }
+    if (TH_FULL.some(mn => dateStr.includes(mn))) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return `${d.getDate()} ${TH_FULL[d.getMonth()]} ${d.getFullYear()+543}`;
+  }
+
+  it('2026-04-08 → 8 เมษายน 2569', () => expect(formatThaiDateFull('2026-04-08')).toBe('8 เมษายน 2569'));
+  it('2026-01-15 → 15 มกราคม 2569', () => expect(formatThaiDateFull('2026-01-15')).toBe('15 มกราคม 2569'));
+  it('2026-12-31 → 31 ธันวาคม 2569', () => expect(formatThaiDateFull('2026-12-31')).toBe('31 ธันวาคม 2569'));
+  it('already Thai → passthrough', () => expect(formatThaiDateFull('8 เมษายน 2569')).toBe('8 เมษายน 2569'));
+  it('null → dash', () => expect(formatThaiDateFull(null)).toBe('-'));
+  it('empty → dash', () => expect(formatThaiDateFull('')).toBe('-'));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. OPD CREATE + EDIT — FULL ROUNDTRIP
+// ═══════════════════════════════════════════════════════════════════════════
+describe('OPD Create + Edit Roundtrip', () => {
+  const CID = `RT-${TS}`;
+  const custRef = () => doc(db, ...P, 'be_customers', CID);
+  const tids = [];
+  const txRef = (id) => doc(db, ...P, 'be_treatments', id);
+
+  beforeAll(async () => {
+    await setDoc(custRef(), clean({
+      proClinicId: CID, proClinicHN: 'HN-RT',
+      patientData: { firstName: 'Roundtrip', lastName: 'Test' },
+      courses: [{ name: 'Botox 100U', product: 'Nabota', qty: '100 / 100 U' }],
+    }));
+  });
+  afterAll(async () => {
+    for (const id of tids) try { await deleteDoc(txRef(id)); } catch {}
+    try { await deleteDoc(custRef()); } catch {}
+  });
+
+  it('create OPD with meds only (no sale) — should save without seller', async () => {
+    const id = `BT-RT1-${TS}`; tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Pain', diagnosis: 'Chronic',
+        medications: [{ name: 'Para', dosage: '3x', qty: '10' }],
+        hasSale: false, // backend: meds alone don't force hasSale
+        createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.hasSale).toBe(false);
+    expect(d.medications).toHaveLength(1);
+    expect(d.sellers).toBeUndefined(); // no seller required
+  });
+
+  it('create OPD + buy course → hasSale=true + seller required', async () => {
+    const id = `BT-RT2-${TS}`; tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Botox', diagnosis: 'Cosmetic',
+        purchasedItems: [{ id: 'c1', name: 'Filler', qty: '1', unitPrice: '5000', itemType: 'course' }],
+        billing: { subtotal: 5000, netTotal: 5000 },
+        payment: { paymentStatus: '2', channels: [{ enabled: true, method: 'เงินสด', amount: '5000' }] },
+        sellers: [{ id: 's1', percent: '0', total: '0' }], // default 0%
+        hasSale: true,
+        createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.hasSale).toBe(true);
+    expect(d.sellers[0].percent).toBe('0'); // default 0% not 100%
+    expect(d.payment.channels[0].method).toBe('เงินสด');
+  });
+
+  it('edit OPD — change CC + add photo + change payment', async () => {
+    const id = tids[1]; // use the one with billing
+    const orig = (await getDoc(txRef(id))).data().detail;
+    const updated = clean({
+      ...orig,
+      symptoms: 'Botox (แก้ไข)',
+      beforeImages: [{ dataUrl: 'data:img/new', id: '' }],
+      payment: { ...orig.payment, paymentStatus: '4', channels: [
+        { enabled: true, method: 'เงินสด', amount: '3000' },
+        { enabled: true, method: 'โอนธนาคาร', amount: '2000' },
+      ]},
+      sellers: [{ id: 's1', percent: '60', total: '3000' }, { id: 's2', percent: '40', total: '2000' }],
+    });
+    await updateDoc(txRef(id), { detail: updated, updatedAt: new Date().toISOString() });
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.symptoms).toBe('Botox (แก้ไข)');
+    expect(d.beforeImages).toHaveLength(1);
+    expect(d.payment.paymentStatus).toBe('4');
+    expect(d.payment.channels).toHaveLength(2);
+    expect(d.sellers).toHaveLength(2);
+    expect(d.sellers[0].percent).toBe('60');
+    expect(d.purchasedItems).toHaveLength(1); // intact
+  });
+
+  it('edit OPD — add lab + chart + files', async () => {
+    const id = tids[1];
+    const orig = (await getDoc(txRef(id))).data().detail;
+    const updated = clean({
+      ...orig,
+      labItems: [{ productName: 'CBC', qty: '1', pdfBase64: 'LPDF' }],
+      charts: [{ dataUrl: 'data:chart', fabricJson: '{}', templateId: 'blank' }],
+      treatmentFiles: [{ slot: 1, pdfBase64: 'FPDF', fileName: 'consent.pdf' }],
+    });
+    await updateDoc(txRef(id), { detail: updated });
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.labItems[0].pdfBase64).toBe('LPDF');
+    expect(d.charts[0].fabricJson).toBe('{}');
+    expect(d.treatmentFiles[0].fileName).toBe('consent.pdf');
+    expect(d.symptoms).toBe('Botox (แก้ไข)'); // previous edit intact
+    expect(d.payment.channels).toHaveLength(2); // previous edit intact
+  });
+
+  it('edit OPD — remove photos + change meds', async () => {
+    const id = tids[1];
+    const orig = (await getDoc(txRef(id))).data().detail;
+    const updated = clean({
+      ...orig,
+      beforeImages: [], // removed
+      medications: [{ name: 'Ibuprofen', dosage: '2x', qty: '20' }], // changed
+    });
+    await updateDoc(txRef(id), { detail: updated });
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.beforeImages).toHaveLength(0);
+    expect(d.medications[0].name).toBe('Ibuprofen');
+    expect(d.labItems).toHaveLength(1); // intact
+  });
+
+  it('delete OPD', async () => {
+    for (const id of tids) await deleteDoc(txRef(id));
+    for (const id of tids) expect((await getDoc(txRef(id))).exists()).toBe(false);
+  });
+});

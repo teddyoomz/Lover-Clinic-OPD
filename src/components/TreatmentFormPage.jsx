@@ -255,11 +255,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Sellers (5 rows)
   const [pmSellers, setPmSellers] = useState([
-    { enabled: false, id: '', percent: '100', total: '' },
-    { enabled: false, id: '', percent: '100', total: '' },
-    { enabled: false, id: '', percent: '100', total: '' },
-    { enabled: false, id: '', percent: '100', total: '' },
-    { enabled: false, id: '', percent: '100', total: '' },
+    { enabled: false, id: '', percent: '0', total: '' },
+    { enabled: false, id: '', percent: '0', total: '' },
+    { enabled: false, id: '', percent: '0', total: '' },
+    { enabled: false, id: '', percent: '0', total: '' },
+    { enabled: false, id: '', percent: '0', total: '' },
   ]);
   const updatePmSeller = (idx, field, val) => setPmSellers(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
 
@@ -1157,8 +1157,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // ── Submit ──────────────────────────────────────────────────────────────
   const hasSale = purchasedItems.length > 0
-    || medications.length > 0  // ANY medication triggers billing (even free/0 baht) — matches ProClinic
-    || consumables.length > 0;
+    || (saveTarget !== 'backend' && (medications.length > 0 || consumables.length > 0)); // Backend: only purchasedItems trigger billing
 
   const handleSubmit = async () => {
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
