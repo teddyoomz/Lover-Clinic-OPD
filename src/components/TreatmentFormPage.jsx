@@ -356,7 +356,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             customerCourses: customerCoursesForForm,
             customerPromotions: customerPromotionsForForm,
             benefitTypes: [], insuranceCompanies: [],
-            paymentChannels: ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'],
+            paymentChannels: ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n })),
             wallets: [],
             sellers: [...allStaff, ...allDoctors.map(d => ({ id: d.id, name: d.name, position: d.position }))],
             medicationGroups: [], consumableGroups: [],
