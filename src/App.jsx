@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
 // DEBUG: expose auth for console API calls
 window.__auth = auth;
@@ -10,11 +10,21 @@ import { applyThemeColor, hexToRgb } from './utils.js';
 import { useTheme } from './hooks/useTheme.js';
 import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates.jsx';
 import AdminLogin from './pages/AdminLogin.jsx';
-import AdminDashboard from './pages/AdminDashboard.jsx';
 import PatientForm from './pages/PatientForm.jsx';
-import PatientDashboard from './pages/PatientDashboard.jsx';
-import ClinicSchedule from './pages/ClinicSchedule.jsx';
-import BackendDashboard from './pages/BackendDashboard.jsx';
+
+// Lazy load heavy pages (AdminDashboard=6.5K lines, BackendDashboard+tabs, PatientDashboard)
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
+const PatientDashboard = lazy(() => import('./pages/PatientDashboard.jsx'));
+const ClinicSchedule = lazy(() => import('./pages/ClinicSchedule.jsx'));
+const BackendDashboard = lazy(() => import('./pages/BackendDashboard.jsx'));
+
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-[var(--bg-base)]">
+      <Loader2 size={28} className="animate-spin text-[var(--tx-muted)]" />
+    </div>
+  );
+}
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -96,15 +106,17 @@ export default function App() {
   }
 
   if (scheduleFromUrl) {
-    return <ClinicSchedule token={scheduleFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />;
+    return <Suspense fallback={<LazyFallback />}><ClinicSchedule token={scheduleFromUrl} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} /></Suspense>;
   }
 
   if (patientFromUrl) {
     const isAdminView = params.get('admin') === '1';
     return (
-      <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
-        <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} clinicSettingsLoaded={clinicSettingsLoaded} theme={theme} setTheme={setTheme} isAdminView={isAdminView} />
-      </div>
+      <Suspense fallback={<LazyFallback />}>
+        <div className="min-h-screen bg-[#050505] font-sans text-gray-200">
+          <PatientDashboard token={patientFromUrl} clinicSettings={clinicSettings} clinicSettingsLoaded={clinicSettingsLoaded} theme={theme} setTheme={setTheme} isAdminView={isAdminView} />
+        </div>
+      </Suspense>
     );
   }
 
@@ -122,13 +134,14 @@ export default function App() {
 
   // Backend Dashboard — opens in a new browser tab
   if (backendMode === '1') {
-    return <BackendDashboard clinicSettings={clinicSettings} />;
+    return <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>;
   }
 
   return (
     <>
       <div className={`min-h-screen bg-[#050505] font-sans text-gray-200 ${printMode !== null ? 'hidden' : 'block print:hidden'}`}>
         {/* AdminDashboard stays mounted always — keeps Firestore listener alive for auto-sync */}
+        <Suspense fallback={<LazyFallback />}>
         <div className={adminView === 'simulation' ? 'hidden' : ''}>
           <AdminDashboard
             db={db} appId={appId} user={user} auth={auth}
@@ -147,6 +160,7 @@ export default function App() {
             theme={theme} setTheme={setTheme}
           />
         )}
+        </Suspense>
       </div>
 
       {printMode !== null && viewingSession && (

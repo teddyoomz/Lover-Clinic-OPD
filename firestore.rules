@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isClinicStaff() {
+      // Must be authenticated with email ending in @loverclinic.com
+      return isSignedIn() && request.auth.token.email.matches('.*@loverclinic[.]com$');
+    }
+
+    // ── Default deny all ──
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // ARTIFACTS — Main data path: artifacts/{appId}/public/data/...
+    // ════════════════════════════════════════════════════════════════
+    match /artifacts/{appId}/public/data/{document=**} {
+
+      // ── Clinic Settings (read: anyone for public settings, write: staff only) ──
+      match /clinic_settings/{settingId} {
+        allow read: if true;  // Public: theme, logo, clinic name
+        allow write: if isClinicStaff();
+      }
+
+      // ── OPD Sessions (patient form submissions) ──
+      match /opd_sessions/{sessionId} {
+        allow read: if isSignedIn();
+        allow create: if true;  // Patients can submit forms without login
+        allow update, delete: if isClinicStaff();
+      }
+
+      // ── Backend: Customers (cloned from ProClinic) ──
+      match /be_customers/{customerId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Backend: Treatments ──
+      match /be_treatments/{treatmentId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Backend: Appointments ──
+      match /be_appointments/{appointmentId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Backend: Sales + Counter ──
+      match /be_sales/{saleId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_sales_counter/{docId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Master Data (products, doctors, staff, courses, promotions) ──
+      match /master_data/{type} {
+        allow read: if isSignedIn();
+        allow write: if isClinicStaff();
+
+        match /items/{itemId} {
+          allow read: if isSignedIn();
+          allow write: if isClinicStaff();
+        }
+      }
+
+      // ── Treatment chart/image backups ──
+      match /treatments/{treatmentId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Chart templates ──
+      match /chart_templates/{docId} {
+        allow read: if isSignedIn();
+        allow write: if isClinicStaff();
+      }
+
+      // ── Clinic Schedules (booking) ──
+      match /clinic_schedules/{scheduleId} {
+        allow read: if true;  // Public: patients view available slots
+        allow write: if isSignedIn();
+      }
+
+      // ── Chat conversations ──
+      match /chat_conversations/{convId} {
+        allow read, write: if isClinicStaff();
+
+        match /messages/{messageId} {
+          allow read, write: if isClinicStaff();
+        }
+      }
+
+      // ── Chat history (archived) ──
+      match /chat_history/{histId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Chat config ──
+      match /chat_config/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if isClinicStaff();
+      }
+
+      // ── Presence (online status) ──
+      match /admin_presence/{tabId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+
+      // ── FCM tokens (push notification) ──
+      match /fcm_tokens/{tokenId} {
+        allow read, write: if isSignedIn();
+      }
+
+      // ── ProClinic cookie relay ──
+      match /proclinic_session/{docId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Broker jobs (automation relay) ──
+      match /broker_jobs/{jobId} {
+        allow read, write: if isClinicStaff();
+      }
+    }
+  }
+}

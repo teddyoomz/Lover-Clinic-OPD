@@ -65,24 +65,36 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
+  const [treatmentsError, setTreatmentsError] = useState('');
   const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired' | 'purchases'
   const [customerSales, setCustomerSales] = useState([]);
+  const [salesError, setSalesError] = useState('');
   const [expandedTreatment, setExpandedTreatment] = useState(null);
 
   // Load treatment details from be_treatments
   useEffect(() => {
     if (!customer?.proClinicId) return;
     setTreatmentsLoading(true);
+    setTreatmentsError('');
     getCustomerTreatments(customer.proClinicId)
       .then(data => setTreatments(data))
-      .catch(() => {})
+      .catch(err => {
+        console.error('[CustomerDetailView] treatments load failed:', err);
+        setTreatmentsError('โหลดประวัติการรักษาไม่สำเร็จ');
+      })
       .finally(() => setTreatmentsLoading(false));
   }, [customer?.proClinicId]);
 
   // Load customer sales for purchase history tab
   useEffect(() => {
     if (!customer?.proClinicId) return;
-    getCustomerSales(customer.proClinicId).then(setCustomerSales).catch(() => {});
+    setSalesError('');
+    getCustomerSales(customer.proClinicId)
+      .then(setCustomerSales)
+      .catch(err => {
+        console.error('[CustomerDetailView] sales load failed:', err);
+        setSalesError('โหลดประวัติการซื้อไม่สำเร็จ');
+      });
   }, [customer?.proClinicId]);
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
@@ -207,7 +219,12 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               )}
             </div>
 
-            {treatmentSummary.length === 0 ? (
+            {treatmentsError && (
+              <div className="px-4 py-3 text-xs text-amber-400 flex items-center gap-2 bg-amber-900/10 border-b border-[var(--bd)]">
+                <AlertCircle size={13} /> {treatmentsError}
+              </div>
+            )}
+            {treatmentSummary.length === 0 && !treatmentsError ? (
               <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการรักษา</div>
             ) : (
               <div className="divide-y divide-[var(--bd)]">
@@ -318,9 +335,14 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
             {/* Content by tab */}
             <div className="divide-y divide-[var(--bd)]">
+              {salesError && courseTab === 'purchases' && (
+                <div className="px-4 py-3 text-xs text-amber-400 flex items-center gap-2 bg-amber-900/10">
+                  <AlertCircle size={13} /> {salesError}
+                </div>
+              )}
               {courseTab === 'purchases' ? (
                 /* Purchase History */
-                customerSales.length === 0 ? (
+                customerSales.length === 0 && !salesError ? (
                   <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการซื้อ</div>
                 ) : (
                   customerSales.map((sale, i) => (
