@@ -2,7 +2,7 @@
 // Actions: list, get, create, update, delete
 // Manages treatment records in ProClinic via HTML scraping.
 
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import {
   extractCSRF, extractTreatmentList, extractTreatmentPagination,
   extractTreatmentDetail, extractTreatmentCreateOptions,
@@ -166,7 +166,7 @@ async function saveFormOptionsToFirestore(options) {
 
 async function handleGetMedicationGroups(req, res) {
   const { productType } = req.body || {};
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   const type = productType || 'ยากลับบ้าน';
@@ -210,7 +210,7 @@ async function handleGetMedicationGroups(req, res) {
 
 async function handleSearchProducts(req, res) {
   const { productType, serviceType, query, isTakeaway, perPage } = req.body || {};
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   const params = new URLSearchParams();
@@ -255,7 +255,7 @@ async function handleSearchProducts(req, res) {
 // ── List purchasable items (courses/promotions/retail products) ──────────────
 async function handleListItems(req, res) {
   const { itemType, query, page } = req.body || {};
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // itemType: 'course' | 'promotion' | 'product'
@@ -331,7 +331,7 @@ async function handleList(req, res) {
     return res.status(400).json({ success: false, error: 'Missing customerId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const url = `${base}/admin/customer/${customerId}${page > 1 ? `?treatment_page=${page}` : ''}`;
   const html = await session.fetchText(url);
@@ -384,7 +384,7 @@ async function handleGet(req, res) {
     return res.status(400).json({ success: false, error: 'Missing treatmentId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const html = await session.fetchText(`${base}/admin/treatment/${treatmentId}/edit`);
 
@@ -435,7 +435,7 @@ async function handleGetCreateForm(req, res) {
     return res.status(400).json({ success: false, error: 'Missing customerId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // Fetch treatment create page (for form options) AND inventory API (for courses) in parallel
@@ -522,7 +522,7 @@ async function handleCreate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing customerId or treatment data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET create page + treatment list IN PARALLEL (saves ~500-1500ms)
@@ -1107,7 +1107,7 @@ async function handleUpdate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing treatmentId or treatment data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET edit page for CSRF + existing values
@@ -1424,7 +1424,7 @@ async function handleDelete(req, res) {
     return res.status(400).json({ success: false, error: 'Missing treatmentId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET edit page for CSRF token
@@ -1480,7 +1480,7 @@ async function _handleUploadChart_DEPRECATED(req, res) {
     return res.status(400).json({ success: false, error: 'Image too large (max ~3MB)' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // Step 1: Discover Chart API by scraping the treatment edit page for JS/API URLs
@@ -1588,7 +1588,7 @@ async function _handleUploadChart_DEPRECATED(req, res) {
 // ─── Action: getChartTemplates — Fetch ProClinic chart templates ──────────
 
 async function handleGetChartTemplates(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   // Use any existing treatment to get the template list (they're global)
   const html = await session.fetchText(`${base}/admin/treatment/3259/edit`);
@@ -1631,7 +1631,7 @@ async function handleProxyImage(req, res) {
   if (!url || !url.includes('proclinicth.com')) {
     return res.status(400).json({ success: false, error: 'Invalid URL' });
   }
-  const session = await createSession();
+  const session = await getSession(req.body);
   const imgRes = await session.fetch(url, {
     headers: { 'Accept': 'image/*' },
     redirect: 'follow',

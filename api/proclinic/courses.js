@@ -1,5 +1,5 @@
 // POST /api/proclinic/courses — Get courses, expired courses, appointments + appointment sync
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCourses, extractPagination, extractAppointments, extractPatientName } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 
@@ -85,7 +85,11 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const { origin, email, password, proClinicId, action } = req.body || {};
+    const { origin, email, password, proClinicId, action, useTrialServer } = req.body || {};
+    // If useTrialServer, override origin/email/password with trial env vars
+    const _origin = useTrialServer ? (process.env.PROCLINIC_TRIAL_ORIGIN || origin) : origin;
+    const _email = useTrialServer ? (process.env.PROCLINIC_TRIAL_EMAIL || email) : email;
+    const _password = useTrialServer ? (process.env.PROCLINIC_TRIAL_PASSWORD || password) : password;
 
     // ─── Sync appointments for a month ────────────────────────────────
     if (action === 'sync-appointments') {
@@ -94,7 +98,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'Invalid month format (YYYY-MM)' });
       }
 
-      const session = await createSession(origin, email, password);
+      const session = await createSession(_origin, _email, _password);
       const base = session.origin;
       const allDates = getAllDatesForMonth(month);
 
@@ -158,7 +162,7 @@ export default async function handler(req, res) {
       const { year } = req.body || {};
       const y = year || new Date().getFullYear();
 
-      const session = await createSession(origin, email, password);
+      const session = await createSession(_origin, _email, _password);
       const base = session.origin;
 
       // Fetch 12 months in parallel
@@ -184,7 +188,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Missing proClinicId' });
     }
 
-    const session = await createSession(origin, email, password);
+    const session = await createSession(_origin, _email, _password);
     const base = session.origin;
     const customerUrl = `${base}/admin/customer/${proClinicId}`;
 

@@ -1,6 +1,6 @@
 // ─── Customer API (consolidated) ─────────────────────────────────────────────
 // Actions: create, update, delete, search
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, extractFormFields, extractSelectOptions, extractSearchResults, findBestMatch } from './_lib/scraper.js';
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
@@ -48,7 +48,7 @@ async function handleCreate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing patient data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET create page for CSRF
@@ -128,7 +128,7 @@ async function handleUpdate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing patient data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const targetId = await resolveCustomerId(session, base, proClinicId, proClinicHN, patient);
 
@@ -176,7 +176,7 @@ async function handleUpdate(req, res) {
 async function handleDelete(req, res) {
   const { proClinicId, proClinicHN, patient } = req.body || {};
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // Resolve customer ID
@@ -243,7 +243,7 @@ async function handleFetchPatient(req, res) {
     return res.status(400).json({ success: false, error: 'Missing proClinicId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const editHtml = await session.fetchText(`${base}/admin/customer/${proClinicId}/edit`);
 
@@ -286,7 +286,7 @@ async function handleSearch(req, res) {
     return res.status(400).json({ success: false, error: 'Missing query' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const html = await session.fetchText(`${base}/admin/customer?q=${encodeURIComponent(query)}`);
   const customers = extractSearchResults(html);

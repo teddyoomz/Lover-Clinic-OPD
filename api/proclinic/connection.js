@@ -1,6 +1,6 @@
 // ─── Connection API (consolidated) ───────────────────────────────────────────
 // Actions: login, credentials, clear
-import { createSession, handleCors, SessionExpiredError } from './_lib/session.js';
+import { createSession, getSession, handleCors, SessionExpiredError } from './_lib/session.js';
 import { verifyAuth } from './_lib/auth.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
@@ -63,9 +63,10 @@ async function handleLogin(req, res) {
 // ─── Action: credentials ────────────────────────────────────────────────────
 
 async function handleCredentials(req, res) {
-  const origin = process.env.PROCLINIC_ORIGIN || '';
-  const email = process.env.PROCLINIC_EMAIL || '';
-  const password = process.env.PROCLINIC_PASSWORD || '';
+  const useTrial = req.body?.useTrialServer;
+  const origin = useTrial ? (process.env.PROCLINIC_TRIAL_ORIGIN || '') : (process.env.PROCLINIC_ORIGIN || '');
+  const email = useTrial ? (process.env.PROCLINIC_TRIAL_EMAIL || '') : (process.env.PROCLINIC_EMAIL || '');
+  const password = useTrial ? (process.env.PROCLINIC_TRIAL_PASSWORD || '') : (process.env.PROCLINIC_PASSWORD || '');
 
   if (!origin || !email || !password) {
     return res.status(200).json({ success: false, error: 'ProClinic credentials not configured in Vercel' });

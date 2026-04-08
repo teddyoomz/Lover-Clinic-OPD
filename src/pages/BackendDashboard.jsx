@@ -17,6 +17,7 @@ import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
+import { setUseTrialServer } from '../lib/brokerClient.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
@@ -24,6 +25,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [viewingCustomer, setViewingCustomer] = useState(null); // selected customer for detail view
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // { mode, customerId, treatmentId?, patientName, patientData }
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
+
+  // Backend dashboard uses trial ProClinic server (separate from production frontend)
+  useEffect(() => {
+    setUseTrialServer(true);
+    return () => setUseTrialServer(false);
+  }, []);
 
   // Subscribe to clinic settings (same pattern as App.jsx)
   useEffect(() => {

@@ -1,6 +1,6 @@
 // ─── Appointment API ─────────────────────────────────────────────────────────
 // Actions: create, update, delete
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
@@ -13,7 +13,7 @@ async function handleCreate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing appointment data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET /admin/appointment → extract CSRF
@@ -138,7 +138,7 @@ async function handleUpdate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing appointmentId or appointment data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // 1. GET /admin/appointment for CSRF token
@@ -261,7 +261,7 @@ async function handleDelete(req, res) {
     return res.status(400).json({ success: false, error: 'Missing appointmentId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET /admin/appointment → extract CSRF
@@ -324,7 +324,7 @@ async function handleListByCustomer(req, res) {
   const { customerId } = req.body || {};
   if (!customerId) return res.status(400).json({ success: false, error: 'Missing customerId' });
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // Fetch customer page to get appointment modal + customer name

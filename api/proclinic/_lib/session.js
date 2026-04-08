@@ -18,6 +18,7 @@ export class SessionExpiredError extends Error {
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
+const SESSION_TRIAL_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session_trial`;
 
 // ─── Cookie helpers ─────────────────────────────────────────────────────────
 
@@ -52,9 +53,9 @@ function mergeCookies(existing, incoming) {
 
 // ─── Firestore cookie cache (via REST API — no firebase-admin needed) ─────
 
-async function loadCachedCookies(origin) {
+async function loadCachedCookies(origin, docPath = SESSION_DOC_PATH) {
   try {
-    const res = await fetch(`${FIRESTORE_BASE}/${SESSION_DOC_PATH}`);
+    const res = await fetch(`${FIRESTORE_BASE}/${docPath}`);
     if (!res.ok) return null;
     const doc = await res.json();
     if (!doc.fields) return null;
@@ -72,9 +73,9 @@ async function loadCachedCookies(origin) {
   }
 }
 
-async function saveCookies(origin, cookies) {
+async function saveCookies(origin, cookies, docPath = SESSION_DOC_PATH) {
   try {
-    await fetch(`${FIRESTORE_BASE}/${SESSION_DOC_PATH}`, {
+    await fetch(`${FIRESTORE_BASE}/${docPath}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -92,7 +93,7 @@ async function saveCookies(origin, cookies) {
 
 // ─── Login flow ──────────────────────────────────────────────────────────────
 
-export async function performLogin(origin, email, password) {
+export async function performLogin(origin, email, password, _sessionDocPath) {
   // Step 1: GET /login → CSRF + initial cookies
   const loginPageRes = await fetch(`${origin}/login`, {
     redirect: 'follow',
@@ -134,7 +135,7 @@ export async function performLogin(origin, email, password) {
   // Success: redirected to dashboard (not back to /login)
   if (status >= 300 && status < 400 && !location.includes('/login')) {
     console.log('[session] performLogin success — saving cookies');
-    await saveCookies(origin, cookies);
+    await saveCookies(origin, cookies, _sessionDocPath);
     return { success: true, cookies };
   }
 
@@ -164,22 +165,23 @@ export async function performLogin(origin, email, password) {
 
 // ─── Create session (login once, reuse for multiple requests) ────────────────
 
-export async function createSession(originArg, emailArg, passwordArg) {
-  // Vercel env vars take priority over request body
-  const origin   = process.env.PROCLINIC_ORIGIN   || originArg;
-  const email    = process.env.PROCLINIC_EMAIL     || emailArg;
-  const password = process.env.PROCLINIC_PASSWORD  || passwordArg;
+export async function createSession(originArg, emailArg, passwordArg, _sessionDocPath) {
+  // Vercel env vars take priority over request body (unless explicitly passed)
+  const origin   = originArg  || process.env.PROCLINIC_ORIGIN;
+  const email    = emailArg   || process.env.PROCLINIC_EMAIL;
+  const password = passwordArg || process.env.PROCLINIC_PASSWORD;
+  const docPath  = _sessionDocPath || SESSION_DOC_PATH;
   if (!origin || !email || !password) {
     throw new Error('ไม่พบ ProClinic credentials — ตั้งค่า PROCLINIC_ORIGIN/EMAIL/PASSWORD ใน Vercel Environment Variables');
   }
   // Load cached cookies from Firestore (single source of truth)
-  let cookies = await loadCachedCookies(origin);
+  let cookies = await loadCachedCookies(origin, docPath);
 
   if (!cookies) {
     // No cache → login once, then cache for all future requests
     console.log('[session] no cached cookies — performing login');
     try {
-      const result = await performLogin(origin, email, password);
+      const result = await performLogin(origin, email, password, docPath);
       cookies = result.cookies;
     } catch (e) {
       const err = new SessionExpiredError(`Login ล้มเหลว — ต้องการ Cookie Relay Extension (ProClinic มี reCAPTCHA)`);
@@ -193,7 +195,7 @@ export async function createSession(originArg, emailArg, passwordArg) {
 
   async function reLogin() {
     console.log('[session] mid-request re-login triggered');
-    const result = await performLogin(origin, email, password);
+    const result = await performLogin(origin, email, password, docPath);
     sessionState.cookies = result.cookies;
   }
 
@@ -303,6 +305,20 @@ export async function createSession(originArg, emailArg, passwordArg) {
       return res.json();
     },
   };
+}
+
+// ─── Trial session — uses separate credentials + separate cookie cache ──────
+
+/** Pick session based on request body flag */
+export function getSession(body) {
+  return body?.useTrialServer ? createTrialSession() : createSession();
+}
+
+export async function createTrialSession() {
+  const origin   = process.env.PROCLINIC_TRIAL_ORIGIN   || process.env.PROCLINIC_ORIGIN;
+  const email    = process.env.PROCLINIC_TRIAL_EMAIL     || process.env.PROCLINIC_EMAIL;
+  const password = process.env.PROCLINIC_TRIAL_PASSWORD  || process.env.PROCLINIC_PASSWORD;
+  return createSession(origin, email, password, SESSION_TRIAL_DOC_PATH);
 }
 
 // ─── CORS helper ────────────────────────────────────────────────────────────

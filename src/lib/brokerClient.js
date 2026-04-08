@@ -28,7 +28,7 @@ function sendMessageToExtension(type, extra = {}) {
 }
 
 function requestExtensionSync(forceLogin = false) {
-  return sendMessageToExtension('LC_SYNC_COOKIES', { forceLogin });
+  return sendMessageToExtension('LC_SYNC_COOKIES', { forceLogin, useTrial: _useTrialServer });
 }
 
 async function ensureExtensionHasCredentials() {
@@ -63,9 +63,17 @@ export async function getCachedIdToken() {
   return _cachedToken;
 }
 
+// ─── Trial server mode (backend dashboard uses trial, frontend uses production) ─
+let _useTrialServer = false;
+export function setUseTrialServer(enabled) { _useTrialServer = enabled; }
+
 // ─── API fetch with auto-retry via extension ─────────────────────────────────
 
 async function apiFetch(endpoint, body, _retried, _htmlRetried) {
+  // Inject trial flag if backend mode is active
+  if (_useTrialServer && body && !body.useTrialServer) {
+    body = { ...body, useTrialServer: true };
+  }
   // Get cached Firebase auth token
   const token = await getCachedIdToken();
   if (!token) {

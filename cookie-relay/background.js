@@ -5,60 +5,71 @@
 const APP_ID = 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
+const SESSION_TRIAL_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session_trial`;
 const PROCLINIC_DOMAIN = '.proclinicth.com';
 const RECAPTCHA_SITE_KEY = '6LeNCn8oAAAAAO1J2Gd4i3_z3JqsvIlVTpp1o53p';
 
-// ─── Sync cookies to Firestore ───────────────────────────────────────────────
+// ─── Sync cookies to Firestore (both production + trial) ────────────────────
+
+function cookieToString(c) {
+  let str = `${c.name}=${c.value}`;
+  if (c.path) str += `; path=${c.path}`;
+  if (c.secure) str += '; secure';
+  if (c.httpOnly) str += '; httponly';
+  if (c.sameSite && c.sameSite !== 'unspecified') str += `; samesite=${c.sameSite}`;
+  return str;
+}
+
+async function syncCookiesToDoc(origin, cookieStrings, docPath) {
+  const res = await fetch(`${FIRESTORE_BASE}/${docPath}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fields: {
+        origin: { stringValue: origin },
+        cookies: { arrayValue: { values: cookieStrings.map(s => ({ stringValue: s })) } },
+        updatedAt: { stringValue: new Date().toISOString() },
+        source: { stringValue: 'cookie-relay-extension' },
+      },
+    }),
+  });
+  return res.ok;
+}
 
 async function syncCookies() {
   try {
-    const cookies = await chrome.cookies.getAll({ domain: PROCLINIC_DOMAIN });
-    if (!cookies.length) {
+    const allCookies = await chrome.cookies.getAll({ domain: PROCLINIC_DOMAIN });
+    if (!allCookies.length) {
       console.log('[CookieRelay] No ProClinic cookies found');
       return { success: false, error: 'No ProClinic cookies', needsLogin: true };
     }
 
-    const sessionCookie = cookies.find(c => c.name === 'laravel_session');
-    if (!sessionCookie) {
-      console.log('[CookieRelay] No laravel_session cookie — not logged in');
-      return { success: false, error: 'Not logged in to ProClinic', needsLogin: true };
+    // Group cookies: trial domain vs production domain
+    const trialCookies = allCookies.filter(c => c.domain.includes('trial'));
+    const prodCookies = allCookies.filter(c => !c.domain.includes('trial'));
+
+    const stored = await chrome.storage.local.get(['proclinic_origin', 'proclinic_trial_origin']);
+    let synced = 0;
+
+    // Sync production cookies
+    if (prodCookies.some(c => c.name === 'laravel_session')) {
+      const origin = stored.proclinic_origin || 'https://proclinicth.com';
+      const ok = await syncCookiesToDoc(origin, prodCookies.map(cookieToString), SESSION_DOC_PATH);
+      if (ok) { synced++; console.log(`[CookieRelay] Synced ${prodCookies.length} PRODUCTION cookies`); }
     }
 
-    // Use stored origin from credentials (matches Vercel env var exactly)
-    // Fallback to cookie domain if credentials not set yet
-    const stored = await chrome.storage.local.get(['proclinic_origin']);
-    const origin = stored.proclinic_origin || `https://${sessionCookie.domain.replace(/^\./, '')}`;
-    console.log('[CookieRelay] Using origin:', origin);
-
-    // Convert to Set-Cookie-like strings (format expected by session.js)
-    const cookieStrings = cookies.map(c => {
-      let str = `${c.name}=${c.value}`;
-      if (c.path) str += `; path=${c.path}`;
-      if (c.secure) str += '; secure';
-      if (c.httpOnly) str += '; httponly';
-      if (c.sameSite && c.sameSite !== 'unspecified') str += `; samesite=${c.sameSite}`;
-      return str;
-    });
-
-    const res = await fetch(`${FIRESTORE_BASE}/${SESSION_DOC_PATH}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields: {
-          origin: { stringValue: origin },
-          cookies: { arrayValue: { values: cookieStrings.map(s => ({ stringValue: s })) } },
-          updatedAt: { stringValue: new Date().toISOString() },
-          source: { stringValue: 'cookie-relay-extension' },
-        },
-      }),
-    });
-
-    if (res.ok) {
-      console.log(`[CookieRelay] Synced ${cookieStrings.length} cookies to Firestore`);
-      return { success: true, count: cookieStrings.length };
-    } else {
-      return { success: false, error: 'Firestore save failed' };
+    // Sync trial cookies
+    if (trialCookies.some(c => c.name === 'laravel_session')) {
+      const origin = stored.proclinic_trial_origin || 'https://trial.proclinicth.com';
+      const ok = await syncCookiesToDoc(origin, trialCookies.map(cookieToString), SESSION_TRIAL_DOC_PATH);
+      if (ok) { synced++; console.log(`[CookieRelay] Synced ${trialCookies.length} TRIAL cookies`); }
     }
+
+    if (synced > 0) return { success: true, count: allCookies.length };
+
+    // No session cookies at all
+    console.log('[CookieRelay] No laravel_session cookie found');
+    return { success: false, error: 'Not logged in to ProClinic', needsLogin: true };
   } catch (e) {
     console.error('[CookieRelay] syncCookies error:', e);
     return { success: false, error: e.message };
@@ -69,13 +80,16 @@ async function syncCookies() {
 
 let loginInProgress = false;
 
-async function autoLogin() {
+async function autoLogin(useTrial = false) {
   if (loginInProgress) return { success: false, error: 'Login already in progress' };
 
-  const stored = await chrome.storage.local.get(['proclinic_origin', 'proclinic_email', 'proclinic_password']);
-  const origin = stored.proclinic_origin;
-  const email = stored.proclinic_email;
-  const password = stored.proclinic_password;
+  const keys = useTrial
+    ? ['proclinic_trial_origin', 'proclinic_trial_email', 'proclinic_trial_password']
+    : ['proclinic_origin', 'proclinic_email', 'proclinic_password'];
+  const stored = await chrome.storage.local.get(keys);
+  const origin = stored[keys[0]];
+  const email = stored[keys[1]];
+  const password = stored[keys[2]];
 
   if (!origin || !email || !password) {
     return { success: false, error: 'ยังไม่ได้ตั้ง credentials — เปิด popup ของ extension แล้วกรอก' };
@@ -304,16 +318,15 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'LC_SYNC_COOKIES') {
+    const useTrial = !!msg.useTrial;
     if (msg.forceLogin) {
-      // Server says cookies are stale — skip sync, force fresh login
-      console.log('[CookieRelay] Force login requested — auto-login first');
-      autoLogin().then(result => sendResponse(result));
+      console.log(`[CookieRelay] Force login requested (${useTrial ? 'trial' : 'production'})`);
+      autoLogin(useTrial).then(result => sendResponse(result));
     } else {
-      // Try sync first, if no cookies → auto-login
       syncCookies().then(async (result) => {
         if (result.needsLogin) {
-          console.log('[CookieRelay] No valid cookies — attempting auto-login');
-          const loginResult = await autoLogin();
+          console.log(`[CookieRelay] No valid cookies — attempting auto-login (${useTrial ? 'trial' : 'production'})`);
+          const loginResult = await autoLogin(useTrial);
           sendResponse(loginResult);
         } else {
           sendResponse(result);
@@ -324,18 +337,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'LC_AUTO_LOGIN') {
-    autoLogin().then(result => sendResponse(result));
+    autoLogin(!!msg.useTrial).then(result => sendResponse(result));
     return true;
   }
 
   // Auto-receive credentials from webapp (synced from Vercel env vars)
   if (msg.type === 'LC_SET_CREDENTIALS') {
-    chrome.storage.local.set({
-      proclinic_origin: msg.origin,
-      proclinic_email: msg.email,
-      proclinic_password: msg.password,
-    }, () => {
-      console.log('[CookieRelay] Credentials synced from webapp');
+    // Detect trial vs production by origin URL
+    const isTrial = msg.origin?.includes('trial');
+    const storageKey = isTrial
+      ? { proclinic_trial_origin: msg.origin, proclinic_trial_email: msg.email, proclinic_trial_password: msg.password }
+      : { proclinic_origin: msg.origin, proclinic_email: msg.email, proclinic_password: msg.password };
+    chrome.storage.local.set(storageKey, () => {
+      console.log(`[CookieRelay] Credentials synced from webapp (${isTrial ? 'trial' : 'production'})`);
       sendResponse({ success: true });
     });
     return true;

@@ -1,6 +1,6 @@
 // ─── Deposit API (consolidated) ──────────────────────────────────────────────
 // Actions: submit, update, cancel, options
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
@@ -23,7 +23,7 @@ function extractAllSelectOptions($, selectName) {
 // ─── Action: options ────────────────────────────────────────────────────────
 
 async function handleOptions(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   const html = await session.fetchText(`${base}/admin/deposit`);
@@ -92,7 +92,7 @@ async function handleSubmit(req, res) {
     return res.status(400).json({ success: false, error: 'Missing proClinicId or deposit data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET /admin/deposit to extract CSRF + ALL default form fields
@@ -252,7 +252,7 @@ async function handleUpdate(req, res) {
     return res.status(400).json({ success: false, error: 'Missing deposit data' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // GET deposit list page — find deposit ID + CSRF + current deposit amount
@@ -371,7 +371,7 @@ async function handleCancel(req, res) {
     return res.status(400).json({ success: false, error: 'Missing proClinicId' });
   }
 
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
 
   // Find deposit entry on list page

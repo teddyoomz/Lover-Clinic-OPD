@@ -2,7 +2,7 @@
 // Actions: syncProducts, syncDoctors, syncStaff, syncCourses
 // Scrapes ProClinic list pages and returns structured JSON for caching.
 
-import { createSession, handleCors } from './_lib/session.js';
+import { createSession, getSession, handleCors } from './_lib/session.js';
 import {
   extractProductList, extractDoctorList, extractStaffList, extractCourseList,
   extractListPagination
@@ -46,7 +46,7 @@ async function scrapePaginated(session, baseUrl, extractFn, maxPages = 50) {
 // ─── Action: syncProducts ───────────────────────────────────────────────────
 
 async function handleSyncProducts(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/product`, extractProductList
@@ -63,7 +63,7 @@ async function handleSyncProducts(req, res) {
 // ─── Action: syncDoctors ────────────────────────────────────────────────────
 
 async function handleSyncDoctors(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/doctor`, extractDoctorList
@@ -80,7 +80,7 @@ async function handleSyncDoctors(req, res) {
 // ─── Action: syncStaff ──────────────────────────────────────────────────────
 
 async function handleSyncStaff(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/user`, extractStaffList
@@ -97,7 +97,7 @@ async function handleSyncStaff(req, res) {
 // ─── Action: syncCourses ────────────────────────────────────────────────────
 
 async function handleSyncCourses(req, res) {
-  const session = await createSession();
+  const session = await getSession(req.body);
   const base = session.origin;
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/course`, extractCourseList
