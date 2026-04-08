@@ -2357,12 +2357,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {customerPromotionGroups.map(group => (
                         <div key={`promo-${group.promotionId}`}>
-                          <div className={`px-3 py-1 border-b text-[10px] font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-amber-400/80' : 'border-gray-100 bg-amber-50/50 text-amber-700'}`}>
+                          <div className={`px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-amber-900/40 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-100 text-amber-800'}`}>
                             {group.promotionName}
                           </div>
                           {group.courses.map(course => (
                             <div key={course.courseId}>
-                              <div className={`px-3 pl-5 py-0.5 border-b text-[10px] font-semibold ${isDark ? 'border-[#1a1a1a] bg-[#080808] text-amber-300/60' : 'border-gray-50 bg-amber-50/30 text-amber-600'}`}>
+                              <div className={`px-3 pl-5 py-0.5 border-b text-[10px] font-medium ${isDark ? 'border-[#1a1a1a] bg-[#0a0a0a] text-gray-400' : 'border-gray-100 bg-gray-50 text-gray-600'}`}>
                                 {course.courseName}
                               </div>
                               {course.products.map(product => {
@@ -2387,10 +2387,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       ))}
                       {purchasedByType.promotion.map((item, idx) => (
                         <div key={`pp-${idx}`}>
-                          <div className={`flex items-center justify-between px-3 py-1 border-b text-[10px] font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-amber-400/80' : 'border-gray-100 bg-amber-50/50 text-amber-700'}`}>
+                          <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-amber-900/40 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-100 text-amber-800'}`}>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{item.name}</span>
-                              <span className="text-[9px] text-amber-500 shrink-0">(ซื้อเพิ่ม)</span>
+                              <span className={`text-[9px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
                               <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                             </div>
                             <span className="text-gray-500 font-normal shrink-0 ml-2">{item.qty} โปรโมชัน</span>
