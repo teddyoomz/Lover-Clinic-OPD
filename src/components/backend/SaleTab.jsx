@@ -303,7 +303,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">{sale.customerName || '-'} <span className="text-[var(--tx-muted)] text-[10px]">{sale.customerHN}</span></td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">{fmtMoney(sale.billing?.netTotal)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">{fmtMoney(sale.billing?.netTotal)} ฿</td>
                       <td className="px-3 py-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
@@ -427,7 +427,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                   <span className="ml-auto font-mono text-red-400">-{fmtMoney(billing.discount)}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-[var(--bd)] font-bold text-sm">
-                  <span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(billing.netTotal)}</span>
+                  <span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(billing.netTotal)} บาท</span>
                 </div>
               </div>
             </div>
@@ -438,7 +438,10 @@ export default function SaleTab({ clinicSettings, theme }) {
               <div className="flex gap-3 mb-3 flex-wrap">
                 {[{v:'paid',l:'ชำระเต็ม'},{v:'split',l:'แบ่งชำระ'},{v:'unpaid',l:'ค้างชำระ'},{v:'draft',l:'แบบร่าง'}].map(s => (
                   <label key={s.v} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <input type="radio" name="payStatus" checked={paymentStatus===s.v} onChange={() => setPaymentStatus(s.v)} className="accent-rose-500" />{s.l}
+                    <input type="radio" name="payStatus" checked={paymentStatus===s.v} onChange={() => {
+                      setPaymentStatus(s.v);
+                      if (s.v === 'paid') setPmChannels(prev => prev.map((c, i) => i === 0 ? { ...c, enabled: true, amount: String(billing.netTotal || 0) } : c));
+                    }} className="accent-rose-500" />{s.l}
                   </label>
                 ))}
               </div>
@@ -455,6 +458,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                     {PAYMENT_CHANNELS.map(pc => <option key={pc.id} value={pc.name}>{pc.name}</option>)}
                   </select>
                   <input type="number" value={ch.amount} onChange={e => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: e.target.value} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} />
+                  <span className="text-[10px] text-gray-500 shrink-0">บาท</span>
                 </div>
               ))}
             </div>
