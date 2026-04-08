@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -68,24 +68,38 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs OR Breadcrumb */}
           <div className="flex items-center gap-1.5 flex-1 justify-center">
-            {tabs.map(tab => {
-              const isActive = activeTab === tab.id;
-              const colorMap = {
-                violet: { active: 'bg-violet-700 text-white shadow-[0_0_15px_rgba(139,92,246,0.4)]', hover: 'hover:text-violet-400 hover:border-violet-800/50' },
-                teal: { active: 'bg-teal-700 text-white shadow-[0_0_15px_rgba(20,184,166,0.4)]', hover: 'hover:text-teal-400 hover:border-teal-800/50' },
-              };
-              const cm = colorMap[tab.color];
-              return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2.5 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center gap-2 ${
-                    isActive ? cm.active : `bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] ${cm.hover}`
-                  }`}>
-                  {tab.icon} {tab.label}
+            {viewingCustomer ? (
+              /* Breadcrumb: ข้อมูลลูกค้า > ชื่อลูกค้า */
+              <div className="flex items-center gap-2 text-xs">
+                <button onClick={() => { setViewingCustomer(null); setActiveTab('customers'); }}
+                  className="text-[var(--tx-muted)] hover:text-teal-400 font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5">
+                  <Users size={14} /> ข้อมูลลูกค้า
                 </button>
-              );
-            })}
+                <ChevronRight size={14} className="text-[var(--tx-muted)]" />
+                <span className="font-bold text-[var(--tx-heading)] truncate max-w-[200px]">
+                  {`${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim() || viewingCustomer.proClinicHN || '-'}
+                </span>
+              </div>
+            ) : (
+              tabs.map(tab => {
+                const isActive = activeTab === tab.id;
+                const colorMap = {
+                  violet: { active: 'bg-violet-700 text-white shadow-[0_0_15px_rgba(139,92,246,0.4)]', hover: 'hover:text-violet-400 hover:border-violet-800/50' },
+                  teal: { active: 'bg-teal-700 text-white shadow-[0_0_15px_rgba(20,184,166,0.4)]', hover: 'hover:text-teal-400 hover:border-teal-800/50' },
+                };
+                const cm = colorMap[tab.color];
+                return (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2.5 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center gap-2 ${
+                      isActive ? cm.active : `bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] ${cm.hover}`
+                    }`}>
+                    {tab.icon} {tab.label}
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* Theme toggle */}

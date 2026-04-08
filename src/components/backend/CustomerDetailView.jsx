@@ -72,13 +72,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack }) {
   const treatmentSummary = customer?.treatmentSummary || [];
 
   return (
-    <div className="space-y-4">
-      {/* ── Back button ── */}
-      <button onClick={onBack}
-        className="flex items-center gap-2 text-sm text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-colors font-medium">
-        <ArrowLeft size={16} /> กลับไปรายชื่อลูกค้า
-      </button>
-
+    <div>
       {/* ── 3-Column Grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_360px] gap-4">
 
