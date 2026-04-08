@@ -1156,12 +1156,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   }, [paymentStatus, billing.netTotal]);
 
   // ── Submit ──────────────────────────────────────────────────────────────
-  const hasSale = purchasedItems.length > 0
-    || (saveTarget !== 'backend' && (medications.length > 0 || consumables.length > 0)); // Backend: only purchasedItems trigger billing
+  const hasSale = purchasedItems.length > 0 || medications.length > 0 || consumables.length > 0;
 
   const handleSubmit = async () => {
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
-    // assistantIds validation removed — ผู้ช่วยแพทย์ is optional
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
       if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
