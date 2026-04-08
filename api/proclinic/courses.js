@@ -85,11 +85,7 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const { origin, email, password, proClinicId, action, useTrialServer } = req.body || {};
-    // If useTrialServer, override origin/email/password with trial env vars
-    const _origin = useTrialServer ? (process.env.PROCLINIC_TRIAL_ORIGIN || origin) : origin;
-    const _email = useTrialServer ? (process.env.PROCLINIC_TRIAL_EMAIL || email) : email;
-    const _password = useTrialServer ? (process.env.PROCLINIC_TRIAL_PASSWORD || password) : password;
+    const { proClinicId, action } = req.body || {};
 
     // ─── Sync appointments for a month ────────────────────────────────
     if (action === 'sync-appointments') {
@@ -98,7 +94,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'Invalid month format (YYYY-MM)' });
       }
 
-      const session = await createSession(_origin, _email, _password);
+      const session = await getSession(req.body);
       const base = session.origin;
       const allDates = getAllDatesForMonth(month);
 
@@ -162,7 +158,7 @@ export default async function handler(req, res) {
       const { year } = req.body || {};
       const y = year || new Date().getFullYear();
 
-      const session = await createSession(_origin, _email, _password);
+      const session = await getSession(req.body);
       const base = session.origin;
 
       // Fetch 12 months in parallel
@@ -188,7 +184,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Missing proClinicId' });
     }
 
-    const session = await createSession(_origin, _email, _password);
+    const session = await getSession(req.body);
     const base = session.origin;
     const customerUrl = `${base}/admin/customer/${proClinicId}`;
 

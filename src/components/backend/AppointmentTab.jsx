@@ -24,7 +24,7 @@ const STATUSES = [
   { value: 'done', label: 'เสร็จแล้ว', bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
-const FALLBACK_ROOMS = ['ห้อง 1','ห้อง 2','ห้อง 3']; // fallback only if no data at all
+const FALLBACK_ROOMS = []; // no fallback — show only rooms that have appointments
 const SLOT_H = 36; // px per 30-min slot
 
 // Generate time slots 08:30 - 22:30 (30-min)
