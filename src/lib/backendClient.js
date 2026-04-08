@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -77,6 +77,54 @@ export async function getTreatment(treatmentId) {
   const snap = await getDoc(treatmentDoc(treatmentId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
+}
+
+/** Create a new backend-native treatment (not cloned from ProClinic) */
+export async function createBackendTreatment(customerId, detail) {
+  const treatmentId = `BT-${Date.now()}`;
+  const now = new Date().toISOString();
+  await setDoc(treatmentDoc(treatmentId), {
+    treatmentId,
+    customerId: String(customerId),
+    detail: { ...detail, createdBy: 'backend', createdAt: now },
+    createdBy: 'backend',
+    createdAt: now,
+  });
+  return { treatmentId, success: true };
+}
+
+/** Update an existing backend treatment */
+export async function updateBackendTreatment(treatmentId, detail) {
+  await updateDoc(treatmentDoc(treatmentId), {
+    detail,
+    updatedAt: new Date().toISOString(),
+  });
+  return { success: true };
+}
+
+/** Delete a backend treatment */
+export async function deleteBackendTreatment(treatmentId) {
+  await deleteDoc(treatmentDoc(treatmentId));
+  return { success: true };
+}
+
+/** Rebuild treatmentSummary on customer doc after create/update/delete */
+export async function rebuildTreatmentSummary(customerId) {
+  const treatments = await getCustomerTreatments(customerId);
+  const summary = treatments.map(t => ({
+    id: t.treatmentId || t.id,
+    date: t.detail?.treatmentDate || '',
+    doctor: t.detail?.doctorName || '',
+    assistants: (t.detail?.assistants || t.detail?.assistantIds || []).map(a => typeof a === 'string' ? a : a.name || ''),
+    branch: t.detail?.branch || '',
+    cc: t.detail?.symptoms || '',
+    dx: t.detail?.diagnosis || '',
+    createdBy: t.createdBy || 'cloned',
+  }));
+  await updateCustomer(customerId, {
+    treatmentSummary: summary,
+    treatmentCount: summary.length,
+  });
 }
 
 // ─── Master Data Read + Sync ────────────────────────────────────────────────

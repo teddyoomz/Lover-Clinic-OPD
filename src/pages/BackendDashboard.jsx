@@ -15,11 +15,14 @@ import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
+import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
+import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState('clone'); // 'clone' | 'customers'
+  const [activeTab, setActiveTab] = useState('clone'); // 'clone' | 'customers' | 'masterdata'
   const [viewingCustomer, setViewingCustomer] = useState(null); // selected customer for detail view
+  const [treatmentFormMode, setTreatmentFormMode] = useState(null); // { mode, customerId, treatmentId?, patientName, patientData }
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Subscribe to clinic settings (same pattern as App.jsx)
@@ -119,6 +122,26 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             customer={viewingCustomer}
             accentColor={ac}
             onBack={() => setViewingCustomer(null)}
+            onCreateTreatment={() => setTreatmentFormMode({
+              mode: 'create',
+              customerId: viewingCustomer.proClinicId,
+              patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
+              patientData: viewingCustomer.patientData,
+            })}
+            onEditTreatment={(treatmentId) => setTreatmentFormMode({
+              mode: 'edit',
+              customerId: viewingCustomer.proClinicId,
+              treatmentId,
+              patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
+              patientData: viewingCustomer.patientData,
+            })}
+            onDeleteTreatment={async (treatmentId) => {
+              if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
+              await deleteBackendTreatment(treatmentId);
+              await rebuildTreatmentSummary(viewingCustomer.proClinicId);
+              const refreshed = await getCustomer(viewingCustomer.proClinicId);
+              if (refreshed) setViewingCustomer(refreshed);
+            }}
           />
         ) : activeTab === 'clone' ? (
           <CloneTab clinicSettings={clinicSettings} theme={theme} />
@@ -132,6 +155,27 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
+
+      {/* ── Treatment Form Overlay ── */}
+      {treatmentFormMode && (
+        <TreatmentFormPage
+          mode={treatmentFormMode.mode}
+          customerId={treatmentFormMode.customerId}
+          treatmentId={treatmentFormMode.treatmentId}
+          patientName={treatmentFormMode.patientName}
+          patientData={treatmentFormMode.patientData}
+          isDark={isDark}
+          db={db}
+          appId={appId}
+          saveTarget="backend"
+          onClose={() => setTreatmentFormMode(null)}
+          onSaved={async () => {
+            setTreatmentFormMode(null);
+            const refreshed = await getCustomer(viewingCustomer?.proClinicId);
+            if (refreshed) setViewingCustomer(refreshed);
+          }}
+        />
+      )}
     </div>
   );
 }

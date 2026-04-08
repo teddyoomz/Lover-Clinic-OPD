@@ -74,7 +74,7 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
@@ -307,6 +307,59 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   useEffect(() => {
     (async () => {
       try {
+        // ── BACKEND MODE: load from master_data + be_treatments ──
+        if (saveTarget === 'backend') {
+          const { getAllMasterDataItems, getTreatment: getBackendTreatment } = await import('../lib/backendClient.js');
+          const [doctorItems, productItems, staffItems] = await Promise.all([
+            getAllMasterDataItems('doctors'),
+            getAllMasterDataItems('products'),
+            getAllMasterDataItems('staff'),
+          ]);
+          const backendOptions = {
+            doctors: doctorItems.filter(d => d.status !== 'พักใช้งาน').map(d => ({ id: d.id, name: d.name, position: d.position })),
+            assistants: doctorItems.filter(d => d.position?.includes('ผู้ช่วย')).map(d => ({ id: d.id, name: d.name })),
+            bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'],
+            products: productItems,
+            customerCourses: [], customerPromotions: [],
+            benefitTypes: [], insuranceCompanies: [],
+            paymentChannels: [], wallets: [], sellers: staffItems,
+            medicationGroups: [], consumableGroups: [],
+            healthInfo: {}, vitalsDefaults: {},
+          };
+          setOptions(backendOptions);
+          // Edit mode: load existing backend treatment
+          if (isEdit && treatmentId) {
+            const existing = await getBackendTreatment(treatmentId);
+            if (existing?.detail) {
+              const t = existing.detail;
+              if (t.doctorId) setDoctorId(t.doctorId);
+              if (t.assistants?.length) setAssistantIds(t.assistants.map(a => a.id || a).filter(Boolean));
+              if (t.treatmentDate) setTreatmentDate(t.treatmentDate);
+              if (t.healthInfo?.bloodType) setBloodType(t.healthInfo.bloodType);
+              if (t.healthInfo?.congenitalDisease) setCongenitalDisease(t.healthInfo.congenitalDisease);
+              if (t.healthInfo?.drugAllergy) setDrugAllergy(t.healthInfo.drugAllergy);
+              if (t.vitals) setVitals(v => ({ ...v, ...t.vitals }));
+              setOpd({ symptoms: t.symptoms || '', physicalExam: t.physicalExam || '', diagnosis: t.diagnosis || '', treatmentInfo: t.treatmentInfo || '', treatmentPlan: t.treatmentPlan || '', treatmentNote: t.treatmentNote || '', additionalNote: t.additionalNote || '' });
+              if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
+              if (t.afterImages?.length) setAfterImages(t.afterImages);
+              if (t.otherImages?.length) setOtherImages(t.otherImages);
+              if (t.labItems?.length) setLabItems(t.labItems);
+              if (t.medications?.length) setMedications(t.medications);
+              if (t.consumables?.length) setConsumables(t.consumables);
+              if (t.treatmentItems?.length) setTreatmentItems(t.treatmentItems.map((item, i) => ({ id: `existing-${i}`, name: item.name || '', qty: item.qty || '1', unit: item.unit || '', price: item.price || '' })));
+              if (t.doctorFees?.length) setDoctorFees(t.doctorFees);
+            }
+          }
+          // Pre-fill from patient data
+          if (patientData) {
+            if (patientData.bloodType && !isEdit) setBloodType(patientData.bloodType);
+            if (patientData.allergiesDetail && !isEdit) setDrugAllergy(patientData.allergiesDetail);
+          }
+          setLoading(false);
+          return;
+        }
+
+        // ── PROCLINIC MODE (default) ──
         // Edit mode: load form options + treatment detail IN PARALLEL
         if (isEdit && treatmentId) {
           const [formData, detail] = await Promise.all([
@@ -973,7 +1026,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
     // assistantIds validation removed — ผู้ช่วยแพทย์ is optional
     if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
-    if (hasSale) {
+    if (hasSale && saveTarget !== 'backend') {
       if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
         if (!pmChannels.some(c => c.enabled && c.method)) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
@@ -1065,6 +1118,44 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         } : {}),
       };
 
+      // ── BACKEND SAVE ──
+      if (saveTarget === 'backend') {
+        const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
+        const backendDetail = {
+          treatmentDate,
+          doctorId,
+          doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
+          assistants: assistantIds.map(aid => {
+            const a = [...(options?.doctors || []), ...(options?.assistants || [])].find(x => String(x.id) === String(aid));
+            return { id: aid, name: a?.name || '' };
+          }),
+          symptoms: opd.symptoms, physicalExam: opd.physicalExam, diagnosis: opd.diagnosis,
+          treatmentInfo: opd.treatmentInfo, treatmentPlan: opd.treatmentPlan,
+          treatmentNote: opd.treatmentNote, additionalNote: opd.additionalNote,
+          vitals: { ...vitals, bmi: bmi || '' },
+          healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
+          medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail,
+          beforeImages, afterImages, otherImages,
+          charts: charts.filter(c => c.dataUrl).map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson, templateId: c.templateId })),
+          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ name: t.name, qty: t.qty, unit: t.unit, price: t.price })),
+          medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
+          consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
+          labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
+          doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
+          treatmentFiles: treatmentFiles.filter(f => f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId })),
+        };
+        const result = isEdit
+          ? await updateBackendTreatment(treatmentId, backendDetail)
+          : await createBackendTreatment(customerId, backendDetail);
+        await rebuildTreatmentSummary(customerId);
+        setSuccess(true);
+        const savedId = result.treatmentId || treatmentId || '';
+        setTimeout(() => { if (onSaved) onSaved(savedId); }, 1200);
+        setSaving(false);
+        return;
+      }
+
+      // ── PROCLINIC SAVE (default) ──
       const data = isEdit
         ? await broker.updateTreatment(treatmentId, payload)
         : await broker.createTreatment(customerId, payload);
@@ -2011,7 +2102,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
 
           {/* ── ข้อมูลการใช้คอร์ส — matching ProClinic layout ──────────── */}
-          <FormSection isDark={isDark}>
+          {saveTarget !== 'backend' && <FormSection isDark={isDark}>
             <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
               {!isEdit && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
@@ -2350,7 +2441,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
               </div>
             )}
-          </FormSection>
+          </FormSection>}
 
           {/* ── Consumables (สินค้าสิ้นเปลือง) ────────────────────────────── */}
           <FormSection isDark={isDark}>
@@ -2532,7 +2623,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
 
           {/* ── Insurance (เบิกประกัน) — only when there's a sale ─────────── */}
-          {hasSale && (
+          {saveTarget !== 'backend' && hasSale && (
           <FormSection isDark={isDark}>
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -2556,7 +2647,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Expense Summary (สรุปค่าใช้จ่าย) ───────────────────────────── */}
-          {hasSale && (
+          {saveTarget !== 'backend' && hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="สรุปค่าใช้จ่าย" isDark={isDark} accent="#10b981" />
             <div className="space-y-1 text-xs">
@@ -2648,7 +2739,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Sale Note + Date — only when there's a sale ─────────────────── */}
-          {hasSale && (
+          {saveTarget !== 'backend' && hasSale && (
           <FormSection isDark={isDark}>
             <div className="space-y-3">
               <div>
@@ -2667,7 +2758,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Payment (การชำระเงิน) — only when there's a sale ────────────── */}
-          {hasSale && (
+          {saveTarget !== 'backend' && hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
 
@@ -2731,7 +2822,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           )}
 
           {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
-          {hasSale && (
+          {saveTarget !== 'backend' && hasSale && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
