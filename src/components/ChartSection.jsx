@@ -45,7 +45,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
         <h4 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: accent }}>Chart</h4>
         {charts.length < 2 && (
           <button onClick={() => setSelectorOpen(true)}
-            className={`ml-auto text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1`}
+            className={`ml-auto text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1`}
             style={{ color: accent, borderColor: `${accent}40`, background: `${accent}0a` }}>
             <Plus size={10} /> เพิ่ม Chart
           </button>
@@ -58,7 +58,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
           isDark ? 'border-[#333] hover:border-teal-500/40' : 'border-gray-300 hover:border-teal-400'
         }`} onClick={() => setSelectorOpen(true)}>
           <FileImage size={24} className="mx-auto mb-2 text-gray-500" />
-          <p className="text-[10px] text-gray-500">กด เพิ่ม Chart เพื่อเลือก template และวาดบันทึกการรักษา</p>
+          <p className="text-xs text-gray-500">กด เพิ่ม Chart เพื่อเลือก template และวาดบันทึกการรักษา</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
@@ -69,7 +69,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
                 <button onClick={() => handleEdit(idx)} className="p-2 bg-white/90 rounded-full text-blue-600 hover:bg-white shadow"><Edit3 size={14} /></button>
                 <button onClick={() => handleDelete(idx)} className="p-2 bg-white/90 rounded-full text-red-500 hover:bg-white shadow"><Trash2 size={14} /></button>
               </div>
-              <div className={`text-center py-1 text-[9px] font-bold ${isDark ? 'bg-[#111] text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
+              <div className={`text-center py-1 text-[11px] font-bold ${isDark ? 'bg-[#111] text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
                 Chart {idx + 1}
               </div>
             </div>

@@ -442,7 +442,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                   {/* Doctor emoji (top-right corner) */}
                   {!isClosed && isDoctor && !isDayDisabled && (
-                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-[10px] leading-none">🔥</span>
+                    <span className="absolute top-0.5 right-0.5 text-[8px] sm:text-xs leading-none">🔥</span>
                   )}
 
                   {/* Availability */}
@@ -471,7 +471,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
           </div>
 
           {/* Legend */}
-          <div className="flex items-center justify-center gap-4 py-2.5 text-[10px]"
+          <div className="flex items-center justify-center gap-4 py-2.5 text-xs"
             style={isDark
               ? { borderTop: '1px solid #4a1a0a', background: 'linear-gradient(135deg, #1a0800 0%, #0a0a0a 100%)', color: '#a08060' }
               : { borderTop: '1px solid rgba(236,72,153,0.12)', background: 'linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%)', color: '#9ca3af' }
@@ -575,7 +575,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                         </span>
                       </div>
                       {slot.doctorSlot && !slot.booked && (
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
                           slot.doctorBusy
                             ? (isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-600')
                             : (isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-pink-100 text-pink-600')

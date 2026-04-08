@@ -29,7 +29,7 @@ function FormSection({ isDark, children, className = '' }) {
 function ActionBtn({ children, color, isDark, onClick, className = '' }) {
   return (
     <button onClick={onClick}
-      className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 ${className}`}
+      className={`text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 ${className}`}
       style={{ color, borderColor: `${color}40`, background: `${color}0a` }}>
       {children}
     </button>
@@ -55,7 +55,7 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
           <div className="flex items-center justify-between mb-1">
             <span className={`text-[8px] font-bold uppercase tracking-widest ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>ครั้งก่อน</span>
             <button type="button" onClick={handleCopyAndFill}
-              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 ${
+              className={`text-[11px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 ${
                 copied
                   ? isDark ? 'bg-green-950/40 text-green-400 border-green-900/50' : 'bg-green-50 text-green-600 border-green-200'
                   : isDark ? 'bg-[#111] border-[#333] text-gray-400 hover:text-amber-400 hover:border-amber-500/30' : 'bg-white border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300'
@@ -78,7 +78,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
-  const labelCls = 'text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1 block';
+  const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-1 block';
   const selectCls = inputCls;
 
   // ── Core state ──────────────────────────────────────────────────────────
@@ -1409,7 +1409,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               {isEdit ? <Edit3 size={16} /> : <Stethoscope size={16} />}
               {isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}
             </h2>
-            {patientName && <p className="text-[10px] text-gray-500 truncate">{patientName}</p>}
+            {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
           </div>
           <button onClick={handleSubmit} disabled={saving}
             className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-all flex items-center gap-1.5">
@@ -1450,7 +1450,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       const sel = assistantIds.includes(a.id);
                       return (
                         <button key={a.id} onClick={() => toggleAssistant(a.id)}
-                          className={`text-[10px] px-2 py-1 rounded-lg border transition-all ${sel
+                          className={`text-xs px-2 py-1 rounded-lg border transition-all ${sel
                             ? 'bg-purple-600/20 border-purple-500/50 text-purple-400 font-bold'
                             : isDark ? 'border-[#333] text-gray-500 hover:border-[#555]' : 'border-gray-200 text-gray-500 hover:border-gray-400'
                           }`}>
@@ -1560,7 +1560,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <FormSection isDark={isDark}>
               <SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent}>
                 {prevTreatment && (
-                  <span className={`text-[9px] font-bold ${isDark ? 'text-amber-500/60' : 'text-amber-600/60'}`}>
+                  <span className={`text-[11px] font-bold ${isDark ? 'text-amber-500/60' : 'text-amber-600/60'}`}>
                     มีข้อมูลครั้งก่อน {prevTreatment.treatmentDate ? `(${prevTreatment.treatmentDate})` : ''}
                   </span>
                 )}
@@ -1602,9 +1602,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             ].map(({ label, images, setImages }, gi) => (
               <div key={gi} className={gi > 0 ? 'mt-4 pt-3 border-t ' + (isDark ? 'border-[#222]' : 'border-gray-200') : ''}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label} <span className="text-gray-600 normal-case">({images.length}/12)</span></span>
+                  <span className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label} <span className="text-gray-600 normal-case">({images.length}/12)</span></span>
                   {images.length < 12 && (
-                    <label className="text-[10px] font-bold text-amber-500 cursor-pointer flex items-center gap-1 hover:text-amber-400">
+                    <label className="text-xs font-bold text-amber-500 cursor-pointer flex items-center gap-1 hover:text-amber-400">
                       <Plus size={10} /> เพิ่มรูป
                       <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
                         const files = Array.from(e.target.files || []);
@@ -1640,7 +1640,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 {images.length === 0 ? (
                   <div className={`text-center py-4 rounded-lg border border-dashed ${isDark ? 'border-[#333] text-gray-600' : 'border-gray-300 text-gray-400'}`}>
                     <ImageIcon size={20} className="mx-auto mb-1 opacity-40" />
-                    <p className="text-[10px]">ไม่พบรูปภาพ</p>
+                    <p className="text-xs">ไม่พบรูปภาพ</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -1683,14 +1683,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </ActionBtn>
             </SectionHeader>
             {labItems.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-3">ยังไม่มี Lab — กด "เพิ่ม Lab" เพื่อเพิ่ม</p>
+              <p className="text-xs text-gray-500 text-center py-3">ยังไม่มี Lab — กด "เพิ่ม Lab" เพื่อเพิ่ม</p>
             ) : (
               <div className="space-y-3">
                 {labItems.map((lab, li) => (
                   <div key={li} className={`p-3 rounded-lg border ${isDark ? 'bg-[#111] border-[#333]' : 'bg-gray-50 border-gray-200'}`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-bold flex-1 truncate">{lab.productName}</span>
-                      <span className="text-[10px] text-gray-400">{lab.qty} {lab.unitName || ''} @ {lab.price}</span>
+                      <span className="text-xs text-gray-400">{lab.qty} {lab.unitName || ''} @ {lab.price}</span>
                       <button onClick={() => {
                         setEditingLabIndex(li);
                         setLabModalSelected({ id: lab.productId, name: lab.productName, unit: lab.unitName, price: lab.originalPrice || lab.price });
@@ -1711,9 +1711,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       rows={2} className={`w-full text-[11px] rounded-lg px-2 py-1.5 resize-none outline-none border mb-2 ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-300' : 'bg-white border-gray-200'}`} placeholder="รายละเอียด Lab" />
                     {/* Lab images (max 6) */}
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">รูปภาพ ({(lab.images||[]).length}/6)</span>
+                      <span className="text-[11px] text-gray-500 uppercase tracking-wider">รูปภาพ ({(lab.images||[]).length}/6)</span>
                       {(lab.images||[]).length < 6 && (
-                        <label className="text-[9px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
+                        <label className="text-[11px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
                           <Plus size={8} /> เพิ่มรูป
                           <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
                             const files = Array.from(e.target.files || []).slice(0, 6 - (lab.images||[]).length);
@@ -1753,15 +1753,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     )}
                     {/* Lab PDF attachment */}
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[9px] text-gray-500 uppercase tracking-wider">PDF</span>
+                      <span className="text-[11px] text-gray-500 uppercase tracking-wider">PDF</span>
                       {lab.pdfBase64 || lab.fileId ? (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
+                          <span className="text-xs text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
                           <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfFileName: '', fileId: '' } : l))}
                             className="text-red-400 hover:text-red-300"><X size={10} /></button>
                         </div>
                       ) : (
-                        <label className="text-[9px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
+                        <label className="text-[11px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
                           <Plus size={8} /> แนบ PDF
                           <input type="file" accept="application/pdf" className="hidden" onChange={e => {
                             const file = e.target.files?.[0];
@@ -1870,7 +1870,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           {/* ── Treatment Files (ไฟล์การรักษา — PDF, max 2) ────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={Paperclip} title="ไฟล์การรักษา" isDark={isDark} accent="#8b5cf6">
-              <span className="text-[9px] text-gray-500">PDF, ไม่เกิน 10MB/ไฟล์, สูงสุด 2 ไฟล์</span>
+              <span className="text-[11px] text-gray-500">PDF, ไม่เกิน 10MB/ไฟล์, สูงสุด 2 ไฟล์</span>
             </SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {treatmentFiles.map((tf, ti) => (
@@ -1886,14 +1886,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         {tf.pdfFileName || (tf.fileId ? `ไฟล์ #${tf.fileId}` : `ไฟล์ ${tf.slot}`)}
                       </span>
                       <button type="button" onClick={() => setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: '', pdfFileName: '', fileId: '' } : f))}
-                        className={`text-[10px] font-bold px-2 py-1 rounded border transition-all flex items-center gap-1 ${isDark ? 'border-red-900/50 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>
+                        className={`text-xs font-bold px-2 py-1 rounded border transition-all flex items-center gap-1 ${isDark ? 'border-red-900/50 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>
                         <X size={10} /> ลบไฟล์
                       </button>
                     </div>
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center gap-2 w-full">
                       <Paperclip size={20} className="text-gray-500 opacity-40" />
-                      <span className={`text-[10px] font-bold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>แนบไฟล์ (PDF, ไม่เกิน 10MB)</span>
+                      <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>แนบไฟล์ (PDF, ไม่เกิน 10MB)</span>
                       <input type="file" accept="application/pdf" className="hidden" onChange={e => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -1926,7 +1926,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </ActionBtn>
             </SectionHeader>
             {doctorFees.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-3">เลือกแพทย์และผู้ช่วยด้านบน → รายชื่อจะปรากฏที่นี่อัตโนมัติ</p>
+              <p className="text-xs text-gray-500 text-center py-3">เลือกแพทย์และผู้ช่วยด้านบน → รายชื่อจะปรากฏที่นี่อัตโนมัติ</p>
             ) : (
               <div className="space-y-1.5">
                 {doctorFees.map((df, i) => (
@@ -1934,11 +1934,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     <span className="text-xs font-bold flex-1 min-w-0 truncate">{df.name}</span>
                     {dfEditingIdx === i ? (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] text-gray-500">ค่ามือ</span>
+                        <span className="text-xs text-gray-500">ค่ามือ</span>
                         <input type="number" value={df.fee} onChange={e => setDoctorFees(prev => prev.map((f, idx) => idx === i ? { ...f, fee: e.target.value } : f))}
                           className={`${inputCls} !w-20 text-center !py-1`} min="0" step="0.01" autoFocus
                           onBlur={() => setDfEditingIdx(-1)} onKeyDown={e => e.key === 'Enter' && setDfEditingIdx(-1)} />
-                        <span className="text-[10px] text-gray-500">บาท</span>
+                        <span className="text-xs text-gray-500">บาท</span>
                       </div>
                     ) : (
                       <span className="text-xs text-gray-400 shrink-0">(ค่ามือ {parseFloat(df.fee || 0).toFixed(2)} บาท)</span>
@@ -1997,15 +1997,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           {medModalLoading ? (
                             <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-emerald-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
                           ) : medFilteredProducts.length === 0 ? (
-                            <p className="text-[10px] text-gray-500 text-center py-3">ไม่พบรายการ</p>
+                            <p className="text-xs text-gray-500 text-center py-3">ไม่พบรายการ</p>
                           ) : medFilteredProducts.map(p => (
                             <button key={p.id} onClick={() => selectMedProduct(p)}
                               className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
                               <div>
                                 <span className="font-bold">{p.name}</span>
-                                {p.category && <span className="text-[10px] text-gray-500 ml-2">[{p.category}]</span>}
+                                {p.category && <span className="text-xs text-gray-500 ml-2">[{p.category}]</span>}
                               </div>
-                              <span className="text-[10px] text-gray-500 whitespace-nowrap ml-2">฿{p.price} / {p.unit}</span>
+                              <span className="text-xs text-gray-500 whitespace-nowrap ml-2">฿{p.price} / {p.unit}</span>
                             </button>
                           ))}
                         </div>
@@ -2018,7 +2018,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         <div className="flex">
                           <input type="number" value={medModalQty} onChange={e => setMedModalQty(e.target.value)}
                             className={`${inputCls} rounded-r-none`} placeholder="กรอกจำนวน" />
-                          <span className={`flex items-center px-2 text-[10px] border border-l-0 rounded-r-lg ${isDark ? 'border-[#333] bg-[#1a1a1a] text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                          <span className={`flex items-center px-2 text-xs border border-l-0 rounded-r-lg ${isDark ? 'border-[#333] bg-[#1a1a1a] text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
                             {medModalSelected?.unit || 'หน่วย'}
                           </span>
                         </div>
@@ -2029,7 +2029,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           className={inputCls} placeholder="กรอกราคาต่อหน่วย" />
                       </div>
                       <div className="flex items-end pb-2">
-                        <label className="flex items-center gap-1.5 text-[10px] text-gray-400 cursor-pointer">
+                        <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
                           <input type="checkbox" checked={medModalPremium} onChange={e => setMedModalPremium(e.target.checked)}
                             className="w-3.5 h-3.5 rounded accent-emerald-500" />
                           สินค้าของแถม
@@ -2038,15 +2038,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     </div>
                     {/* Price summary */}
                     <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-gray-50'}`}>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">สรุปราคาต่อหน่วย</p>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">สรุปราคาต่อหน่วย</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500 w-24 shrink-0">ส่วนลดต่อหน่วย</span>
+                        <span className="text-xs text-gray-500 w-24 shrink-0">ส่วนลดต่อหน่วย</span>
                         <input type="number" value={medModalDiscount} onChange={e => setMedModalDiscount(e.target.value)}
                           className={`${inputCls} !w-24`} placeholder="0" />
-                        <label className="flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer">
+                        <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                           <input type="radio" name="medDiscType" checked={medModalDiscountType === 'amount'} onChange={() => setMedModalDiscountType('amount')} className="w-3 h-3" /> บาท
                         </label>
-                        <label className="flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer">
+                        <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                           <input type="radio" name="medDiscType" checked={medModalDiscountType === 'percent'} onChange={() => setMedModalDiscountType('percent')} className="w-3 h-3" /> %
                         </label>
                       </div>
@@ -2057,7 +2057,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         const vat = medModalVat ? afterDisc * 0.07 : 0;
                         const net = medModalPremium ? 0 : Math.max(0, afterDisc + vat);
                         return (
-                          <div className="space-y-1 text-[10px]">
+                          <div className="space-y-1 text-xs">
                             <div className="flex justify-between text-gray-500"><span>ราคาหลังหักส่วนลด</span><span>{afterDisc.toFixed(2)} บาท</span></div>
                             <div className="flex items-center justify-between text-gray-500">
                               <label className="flex items-center gap-1 cursor-pointer">
@@ -2076,19 +2076,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     {/* Label info (expandable) */}
                     <div>
                       <button onClick={() => setMedModalLabelOpen(!medModalLabelOpen)}
-                        className={`flex items-center gap-1.5 text-[10px] font-bold text-gray-500 hover:text-gray-400 transition-colors`}>
+                        className={`flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-400 transition-colors`}>
                         <span className={`transition-transform ${medModalLabelOpen ? 'rotate-90' : ''}`}>▶</span>
                         ข้อมูลฉลากยา
                       </button>
                       {medModalLabelOpen && medModalSelected?.label && (
                         <div className={`mt-2 rounded-lg border p-3 space-y-2 text-xs ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-gray-50'}`}>
-                          <div><span className="text-[10px] font-bold text-gray-500">ชื่อสามัญ:</span> <span className="text-gray-400">{medModalSelected.label.genericName || '-'}</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">ข้อบ่งใช้:</span> <span className="text-gray-400">{medModalSelected.label.indications || '-'}</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">รับประทานครั้งละ:</span> <span className="text-gray-400">{medModalSelected.label.dosageAmount || '-'} {medModalSelected.label.dosageUnit || ''}</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">วันละ:</span> <span className="text-gray-400">{medModalSelected.label.timesPerDay || '-'} ครั้ง</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">วิธีรับประทาน:</span> <span className="text-gray-400">{medModalSelected.label.administrationMethod || '-'}</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">ช่วงเวลา:</span> <span className="text-gray-400">{medModalSelected.label.administrationTimes || '-'}</span></div>
-                          <div><span className="text-[10px] font-bold text-gray-500">คำแนะนำ:</span> <span className="text-gray-400">{medModalSelected.label.instructions || '-'}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">ชื่อสามัญ:</span> <span className="text-gray-400">{medModalSelected.label.genericName || '-'}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">ข้อบ่งใช้:</span> <span className="text-gray-400">{medModalSelected.label.indications || '-'}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">รับประทานครั้งละ:</span> <span className="text-gray-400">{medModalSelected.label.dosageAmount || '-'} {medModalSelected.label.dosageUnit || ''}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">วันละ:</span> <span className="text-gray-400">{medModalSelected.label.timesPerDay || '-'} ครั้ง</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">วิธีรับประทาน:</span> <span className="text-gray-400">{medModalSelected.label.administrationMethod || '-'}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">ช่วงเวลา:</span> <span className="text-gray-400">{medModalSelected.label.administrationTimes || '-'}</span></div>
+                          <div><span className="text-xs font-bold text-gray-500">คำแนะนำ:</span> <span className="text-gray-400">{medModalSelected.label.instructions || '-'}</span></div>
                         </div>
                       )}
                     </div>
@@ -2135,7 +2135,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     ) : (
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          <tr className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             <th className="text-left py-1.5 pr-2 w-8"></th>
                             <th className="text-left py-1.5">รายการยากลับบ้าน ({selectedGroupProducts.length} รายการ)</th>
                             <th className="text-center py-1.5 w-16">จำนวน</th>
@@ -2163,10 +2163,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   {/* Selected items chips */}
                   {medGroupChecked.size > 0 && (
                     <div className={`px-5 py-2 border-t ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <p className="text-[10px] font-bold text-gray-500 mb-1.5">รายการที่เลือก ({medGroupChecked.size} รายการ)</p>
+                      <p className="text-xs font-bold text-gray-500 mb-1.5">รายการที่เลือก ({medGroupChecked.size} รายการ)</p>
                       <div className="flex flex-wrap gap-1.5">
                         {selectedGroupProducts.map((p, i) => medGroupChecked.has(i) && (
-                          <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                          <span key={i} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
                             {p.name} ({parseFloat(p.qty)} {p.unit})
                             <button onClick={() => toggleMedGroupCheck(i)} className="hover:text-red-400 ml-0.5">&times;</button>
                           </span>
@@ -2193,11 +2193,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {remedModalOpen && (
               <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-sky-900/30 bg-[#0a0c14]' : 'border-sky-200 bg-sky-50/30'}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <p className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">ประวัติการสั่งยา (Remed)</p>
+                  <p className="text-xs font-bold text-sky-400 uppercase tracking-widest">ประวัติการสั่งยา (Remed)</p>
                   <button onClick={() => setRemedModalOpen(false)} className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
                 </div>
                 {(options?.remedItems || []).length === 0 ? (
-                  <p className="text-[10px] text-gray-500 text-center py-4">ไม่พบประวัติการสั่งยาของผู้ป่วยรายนี้</p>
+                  <p className="text-xs text-gray-500 text-center py-4">ไม่พบประวัติการสั่งยาของผู้ป่วยรายนี้</p>
                 ) : (
                   <div className={`rounded-lg border max-h-48 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
                     {options.remedItems.map((item, idx) => (
@@ -2213,7 +2213,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       }}
                         className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
                         <span className="font-bold">{item.name}</span>
-                        <span className="text-[10px] text-gray-500">
+                        <span className="text-xs text-gray-500">
                           x{item.qty} {item.price !== '0' && item.price !== '0.00' ? `฿${item.price}` : ''}
                         </span>
                       </button>
@@ -2225,10 +2225,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Medication table */}
             {medications.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-4">{isEdit ? 'ไม่พบยากลับบ้าน' : 'ยังไม่มีรายการยากลับบ้าน — กด "ยากลับบ้าน" เพื่อค้นหาและเพิ่ม'}</p>
+              <p className="text-xs text-gray-500 text-center py-4">{isEdit ? 'ไม่พบยากลับบ้าน' : 'ยังไม่มีรายการยากลับบ้าน — กด "ยากลับบ้าน" เพื่อค้นหาและเพิ่ม'}</p>
             ) : (
               <div className="space-y-2">
-                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
+                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
                   <div className={isEdit ? 'col-span-4' : 'col-span-4'}>รายการ</div>
                   <div className={isEdit ? 'col-span-3' : 'col-span-3'}>วิธีรับประทาน</div>
                   <div className={isEdit ? 'col-span-3' : 'col-span-2'}>จำนวน</div>
@@ -2274,18 +2274,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {isEdit ? (
               /* ── Edit mode: read-only treatment items table (matching ProClinic) ── */
               <div>
-                <p className="text-[10px] font-bold text-gray-500 mb-2">รายการรักษา</p>
+                <p className="text-xs font-bold text-gray-500 mb-2">รายการรักษา</p>
                 <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                   <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                    <span className="text-[10px] font-bold" style={{ color: '#f97316' }}>รายการ</span>
-                    <span className="text-[10px] text-gray-500">จำนวน</span>
+                    <span className="text-xs font-bold" style={{ color: '#f97316' }}>รายการ</span>
+                    <span className="text-xs text-gray-500">จำนวน</span>
                   </div>
                   {treatmentItems.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 text-center py-4">ไม่พบรายการรักษา</p>
+                    <p className="text-xs text-gray-500 text-center py-4">ไม่พบรายการรักษา</p>
                   ) : treatmentItems.map(item => (
                     <div key={item.id} className={`flex items-center justify-between px-3 py-2 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
                       <span className="text-xs">{item.name}</span>
-                      <span className="text-[10px] text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
+                      <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                     </div>
                   ))}
                 </div>
@@ -2293,18 +2293,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             ) : (
               /* ── Create mode: interactive 3-column grid ── */
               <div>
-                <p className="text-[10px] text-gray-500 mb-3">คอร์ส/สินค้า/โปรโมชัน</p>
+                <p className="text-xs text-gray-500 mb-3">คอร์ส/สินค้า/โปรโมชัน</p>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                   {/* ── Column 1: คอร์ส ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-[10px] font-bold" style={{ color: '#14b8a6' }}>คอร์ส</span>
-                      <span className="text-[10px] text-gray-500">จำนวน</span>
+                      <span className="text-xs font-bold" style={{ color: '#14b8a6' }}>คอร์ส</span>
+                      <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {customerCourses.map(course => (
                         <div key={course.courseId}>
-                          <div className={`px-3 py-1 border-b text-[10px] font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
+                          <div className={`px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
                             {course.courseName}
                           </div>
                           {course.products.map(product => {
@@ -2319,7 +2319,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                     className="w-3.5 h-3.5 rounded accent-teal-500 shrink-0" />
                                   <span className={`text-xs truncate ${isSelected ? 'font-bold text-teal-400' : ''}`}>{product.name}</span>
                                 </div>
-                                <span className="text-[10px] text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
+                                <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
                               </label>
                             );
                           })}
@@ -2330,14 +2330,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           <div className="flex items-center gap-2 min-w-0">
                             <Check size={12} className="text-teal-500 shrink-0" />
                             <span className="text-xs font-medium truncate">{item.name}</span>
-                            <span className="text-[9px] text-teal-500 shrink-0">(ซื้อเพิ่ม)</span>
+                            <span className="text-[11px] text-teal-500 shrink-0">(ซื้อเพิ่ม)</span>
                             <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                           </div>
-                          <span className="text-[10px] text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
+                          <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                         </div>
                       ))}
                       {customerCourses.length === 0 && purchasedByType.course.length === 0 && (
-                        <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีคอร์ส</p>
+                        <p className="text-xs text-gray-500 text-center py-4">ไม่มีคอร์ส</p>
                       )}
                     </div>
                   </div>
@@ -2345,8 +2345,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   {/* ── Column 2: โปรโมชัน ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-[10px] font-bold" style={{ color: '#f59e0b' }}>โปรโมชัน</span>
-                      <span className="text-[10px] text-gray-500">จำนวน</span>
+                      <span className="text-xs font-bold" style={{ color: '#f59e0b' }}>โปรโมชัน</span>
+                      <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {customerPromotionGroups.map(group => (
@@ -2356,7 +2356,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           </div>
                           {group.courses.map(course => (
                             <div key={course.courseId}>
-                              <div className={`px-3 pl-5 py-0.5 border-b text-[10px] font-medium ${isDark ? 'border-[#1a1a1a] bg-[#0a0a0a] text-gray-400' : 'border-gray-100 bg-gray-50 text-gray-600'}`}>
+                              <div className={`px-3 pl-5 py-0.5 border-b text-xs font-medium ${isDark ? 'border-[#1a1a1a] bg-[#0a0a0a] text-gray-400' : 'border-gray-100 bg-gray-50 text-gray-600'}`}>
                                 {course.courseName}
                               </div>
                               {course.products.map(product => {
@@ -2371,7 +2371,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                         className="w-3.5 h-3.5 rounded accent-amber-500 shrink-0" />
                                       <span className={`text-xs truncate ${isSelected ? 'font-bold text-amber-400' : ''}`}>{product.name}</span>
                                     </div>
-                                    <span className="text-[10px] text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
+                                    <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
                                   </label>
                                 );
                               })}
@@ -2384,7 +2384,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-amber-900/40 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-100 text-amber-800'}`}>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{item.name}</span>
-                              <span className={`text-[9px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
+                              <span className={`text-[11px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
                               <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                             </div>
                             <span className="text-gray-500 font-normal shrink-0 ml-2">{item.qty} โปรโมชัน</span>
@@ -2392,7 +2392,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         </div>
                       ))}
                       {customerPromotionGroups.length === 0 && purchasedByType.promotion.length === 0 && (
-                        <p className="text-[10px] text-gray-500 text-center py-4">ไม่มีโปรโมชัน</p>
+                        <p className="text-xs text-gray-500 text-center py-4">ไม่มีโปรโมชัน</p>
                       )}
                     </div>
                   </div>
@@ -2400,23 +2400,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   {/* ── Column 3: รายการรักษา ── */}
                   <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                     <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <span className="text-[10px] font-bold" style={{ color: '#f97316' }}>รายการรักษา</span>
-                      <span className="text-[10px] text-gray-500">จำนวน</span>
+                      <span className="text-xs font-bold" style={{ color: '#f97316' }}>รายการรักษา</span>
+                      <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {treatmentItems.length === 0 ? (
-                        <p className="text-[10px] text-gray-500 text-center py-4">เลือกรายการจากคอร์ส/โปรโมชันด้านซ้าย</p>
+                        <p className="text-xs text-gray-500 text-center py-4">เลือกรายการจากคอร์ส/โปรโมชันด้านซ้าย</p>
                       ) : treatmentItems.map(item => (
                         <div key={item.id} className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
                           <div className="flex-1 min-w-0">
                             <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-amber-400' : ''}`}>
                               {item.name}
-                              {item.source === 'purchased' && <span className="text-[9px] text-amber-500 ml-1">(ซื้อเพิ่ม)</span>}
+                              {item.source === 'purchased' && <span className="text-[11px] text-amber-500 ml-1">(ซื้อเพิ่ม)</span>}
                             </span>
                           </div>
                           <input type="number" value={item.qty} onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
                             className={`${inputCls} !w-14 text-center !py-1 shrink-0`} min="0" />
-                          <span className="text-[10px] text-gray-500 shrink-0">{item.unit}</span>
+                          <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
                           <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
                         </div>
                       ))}
@@ -2430,8 +2430,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {purchasedByType.product.length > 0 && (
               <div className={`mt-3 rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                 <div className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                  <span className="text-[10px] font-bold" style={{ color: '#f97316' }}>สินค้าหน้าร้าน</span>
-                  <span className="text-[10px] text-gray-500">จำนวน</span>
+                  <span className="text-xs font-bold" style={{ color: '#f97316' }}>สินค้าหน้าร้าน</span>
+                  <span className="text-xs text-gray-500">จำนวน</span>
                 </div>
                 <div className="max-h-[150px] overflow-y-auto">
                   {purchasedByType.product.map((item, idx) => (
@@ -2439,10 +2439,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       <div className="flex items-center gap-2 min-w-0">
                         <Check size={12} className="text-orange-500 shrink-0" />
                         <span className="text-xs font-medium truncate">{item.name}</span>
-                        <span className="text-[9px] text-orange-500 shrink-0">(ซื้อเพิ่ม)</span>
+                        <span className="text-[11px] text-orange-500 shrink-0">(ซื้อเพิ่ม)</span>
                         <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                       </div>
-                      <span className="text-[10px] text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
+                      <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                     </div>
                   ))}
                 </div>
@@ -2486,7 +2486,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                 isActiveType ? 'text-teal-500' : isDark ? 'text-gray-400 border-[#1a1a1a]' : 'text-gray-600 border-gray-100'
                               } ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
                               {typeLabel}
-                              <span className="text-[10px]">{isActiveType ? '▼' : '▶'}</span>
+                              <span className="text-xs">{isActiveType ? '▼' : '▶'}</span>
                             </button>
                             {isActiveType && (
                               <div>
@@ -2519,7 +2519,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         ) : (
                           <table className="w-full text-xs">
                             <thead className="sticky top-0" style={{ background: isDark ? '#0e0e0e' : 'white' }}>
-                              <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                              <tr className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                 <th className="text-left py-2 px-2 w-8"></th>
                                 <th className="text-left py-2 px-2">รายการ ({buyFilteredItems.length} รายการ)</th>
                                 <th className="text-center py-2 px-2 w-16">จำนวน</th>
@@ -2550,14 +2550,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyQtyMap[item.id] || ''} min="0"
                                         onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                        className={`${inputCls} text-center !py-1 !text-[10px] !w-14`} />
+                                        className={`${inputCls} text-center !py-1 !text-xs !w-14`} />
                                     </td>
                                     <td className="py-2 px-2 text-center text-gray-500">{item.unit}</td>
                                     <td className="py-2 px-2 text-center">{parseFloat(item.price).toFixed(2)}</td>
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyDiscMap[item.id] || ''} min="0"
                                         onChange={e => setBuyDiscMap(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                        className={`${inputCls} text-center !py-1 !text-[10px] !w-14`} />
+                                        className={`${inputCls} text-center !py-1 !text-xs !w-14`} />
                                     </td>
                                     <td className="py-2 px-2 text-center">
                                       <input type="checkbox" checked={vat}
@@ -2573,7 +2573,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         )}
                       </div>
                       {/* Selected count */}
-                      <div className={`px-4 py-2 border-t text-[10px] text-gray-500 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                      <div className={`px-4 py-2 border-t text-xs text-gray-500 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
                         รายการที่เลือก ({buyChecked.size} รายการ)
                       </div>
                     </div>
@@ -2635,12 +2635,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           {consModalLoading ? (
                             <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
                           ) : consFilteredProducts.length === 0 ? (
-                            <p className="text-[10px] text-gray-500 text-center py-3">ไม่พบรายการ</p>
+                            <p className="text-xs text-gray-500 text-center py-3">ไม่พบรายการ</p>
                           ) : consFilteredProducts.map(p => (
                             <button key={p.id} onClick={() => { setConsModalSelected(p); setConsModalQty('1'); }}
                               className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[#1a1a1a] hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
                               <span className="font-bold">{p.name}</span>
-                              <span className="text-[10px] text-gray-500">{p.unit}</span>
+                              <span className="text-xs text-gray-500">{p.unit}</span>
                             </button>
                           ))}
                         </div>
@@ -2693,7 +2693,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     ) : (
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          <tr className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             <th className="text-left py-1.5 pr-2 w-8"></th>
                             <th className="text-left py-1.5">รายการ ({selectedConsGroupProducts.length} รายการ)</th>
                             <th className="text-center py-1.5 w-16">จำนวน</th>
@@ -2719,10 +2719,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   {/* Selected items chips */}
                   {consGroupChecked.size > 0 && (
                     <div className={`px-5 py-2 border-t ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-100 bg-gray-50'}`}>
-                      <p className="text-[10px] font-bold text-gray-500 mb-1.5">รายการที่เลือก ({consGroupChecked.size} รายการ)</p>
+                      <p className="text-xs font-bold text-gray-500 mb-1.5">รายการที่เลือก ({consGroupChecked.size} รายการ)</p>
                       <div className="flex flex-wrap gap-1.5">
                         {selectedConsGroupProducts.map((p, i) => consGroupChecked.has(i) && (
-                          <span key={i} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
+                          <span key={i} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
                             {p.name} ({parseFloat(p.qty)} {p.unit})
                             <button onClick={() => toggleConsGroupCheck(i)} className="hover:text-red-400 ml-0.5">&times;</button>
                           </span>
@@ -2747,10 +2747,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Consumable table */}
             {consumables.length === 0 ? (
-              <p className="text-[10px] text-gray-500 text-center py-4">{isEdit ? 'ไม่พบสินค้าสิ้นเปลือง' : 'ยังไม่มีรายการสินค้าสิ้นเปลือง — กด "สินค้าสิ้นเปลือง" เพื่อค้นหาและเพิ่ม'}</p>
+              <p className="text-xs text-gray-500 text-center py-4">{isEdit ? 'ไม่พบสินค้าสิ้นเปลือง' : 'ยังไม่มีรายการสินค้าสิ้นเปลือง — กด "สินค้าสิ้นเปลือง" เพื่อค้นหาและเพิ่ม'}</p>
             ) : (
               <div className="space-y-2">
-                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
+                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
                   <div className={isEdit ? 'col-span-5' : 'col-span-6'}>รายการ</div>
                   <div className={isEdit ? 'col-span-3' : 'col-span-3'}>จำนวน</div>
                   <div className={isEdit ? 'col-span-2' : 'col-span-2'}>หน่วย</div>
@@ -2764,7 +2764,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     ) : (
                       <input value={item.qty} onChange={e => updateConsumable(i, 'qty', e.target.value)} className={`${inputCls} col-span-3 text-center`} placeholder="1" />
                     )}
-                    <div className={`${isEdit ? 'col-span-2' : 'col-span-2'} text-[10px] text-gray-500 px-1`}>{item.unit}</div>
+                    <div className={`${isEdit ? 'col-span-2' : 'col-span-2'} text-xs text-gray-500 px-1`}>{item.unit}</div>
                     {!isEdit && (
                       <button onClick={() => removeConsumable(i)} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
                         <Trash2 size={12} />
@@ -2820,7 +2820,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ส่วนลดค่ายา ({billing.medDiscPct}%)</span>
                 <div className="flex items-center gap-1">
                   <input type="number" value={medDiscountOverride} onChange={e => setMedDiscountOverride(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder={billing.medDisc.toFixed(2)} min="0" step="0.01" />
-                  <span className="text-[10px]">บาท</span>
+                  <span className="text-xs">บาท</span>
                 </div>
               </div>
               {/* Coupon */}
@@ -2836,10 +2836,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <div className="flex items-center gap-1">
                   <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
                   <button onClick={() => setBillDiscountType(p => p === 'amount' ? 'percent' : 'amount')}
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isDark ? 'border-[#444] text-gray-300' : 'border-gray-300 text-gray-600'}`}>
+                    className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${isDark ? 'border-[#444] text-gray-300' : 'border-gray-300 text-gray-600'}`}>
                     {billDiscountType === 'percent' ? '%' : '฿'}
                   </button>
-                  <span className="text-[10px]">บาท</span>
+                  <span className="text-xs">บาท</span>
                 </div>
               </div>
               {/* After discount */}
@@ -2853,7 +2853,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ยอดเบิกประกัน</span>
                   <div className="flex items-center gap-1">
                     <input type="number" value={insuranceClaimAmount} onChange={e => setInsuranceClaimAmount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
-                    <span className="text-[10px]">บาท</span>
+                    <span className="text-xs">บาท</span>
                   </div>
                 </div>
               )}
@@ -2865,7 +2865,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <div className="flex items-center gap-1">
                   <input type="checkbox" checked={useDeposit} onChange={e => setUseDeposit(e.target.checked)} className="w-3 h-3 accent-purple-500" />
                   <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
-                  <span className="text-[10px]">บาท</span>
+                  <span className="text-xs">บาท</span>
                 </div>
               </div>
               {/* Wallet */}
@@ -2874,12 +2874,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>Wallet</span>
                   <div className="flex items-center gap-1">
                     <input type="checkbox" checked={useWallet} onChange={e => setUseWallet(e.target.checked)} className="w-3 h-3 accent-purple-500" />
-                    <select value={walletId} onChange={e => setWalletId(e.target.value)} disabled={!useWallet} className={`${selectCls} w-40 py-1 text-[10px] ${!useWallet ? 'opacity-40' : ''}`}>
+                    <select value={walletId} onChange={e => setWalletId(e.target.value)} disabled={!useWallet} className={`${selectCls} w-40 py-1 text-xs ${!useWallet ? 'opacity-40' : ''}`}>
                       <option value="">เลือกกระเป๋า</option>
                       {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                     <input type="number" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} disabled={!useWallet} className={`${inputCls} w-20 text-right py-1 ${!useWallet ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
-                    <span className="text-[10px]">บาท</span>
+                    <span className="text-xs">บาท</span>
                   </div>
                 </div>
               )}
@@ -2990,10 +2990,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   </select>
                   <input type="number" value={sl.percent} onChange={e => updatePmSeller(idx, 'percent', e.target.value)} disabled={!sl.enabled}
                     className={`${inputCls} !w-14 text-right shrink-0`} placeholder="%" min="0" max="100" step="0.01" />
-                  <span className="text-[10px] text-gray-500 shrink-0">%</span>
+                  <span className="text-xs text-gray-500 shrink-0">%</span>
                   <input type="text" value={sl.total ? formatBaht(sl.total) : ''} readOnly disabled={!sl.enabled}
                     className={`${inputCls} !w-24 text-right opacity-70 shrink-0`} placeholder="คอม" />
-                  <span className="text-[10px] text-gray-500 shrink-0">บาท</span>
+                  <span className="text-xs text-gray-500 shrink-0">บาท</span>
                 </div>
               ))}
             </div>

@@ -116,7 +116,7 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
           {c.name}
         </span>
         {c.status && (
-          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${
+          <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${
             expired  ? (isDark ? 'text-red-400' : 'text-red-500')
             : isActive ? (isDark ? 'text-emerald-300' : 'text-emerald-600')
             : (isDark ? 'text-gray-500' : 'text-gray-400')
@@ -148,7 +148,7 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
       {(expiryText || hasValue) && (
         <div className="flex flex-wrap gap-2 pt-0.5">
           {expiryText && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${
+            <span className={`text-xs font-mono px-2 py-0.5 rounded-lg ${
               expired ? (isDark ? 'text-red-500/80' : 'text-red-400')
               : (isDark ? 'text-orange-300/50' : 'text-gray-500')
             }`} style={isDark
@@ -157,7 +157,7 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
             }>{expiryText}</span>
           )}
           {hasValue && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+            <span className={`text-xs font-mono px-2 py-0.5 rounded-lg ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
               style={isDark ? { border: '1px solid #1a4a2a', background: '#001a0a' } : { border: '1px solid rgba(16,185,129,0.15)', background: 'rgba(16,185,129,0.04)' }}>
               {c.value}
             </span>
@@ -251,7 +251,7 @@ function AppointmentCard({ a, lang, isDark }) {
           : { background: 'linear-gradient(to bottom, #fce7f3 0%, #fbcfe8 50%, #fce7f3 100%)', borderRight: '1px solid rgba(236,72,153,0.15)' }
         }>
         <span className={`text-2xl font-black leading-none ${isDark ? 'text-orange-100' : 'text-pink-700'}`}>{day}</span>
-        <span className={`text-[9px] font-bold text-center leading-tight ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`}>{rest}</span>
+        <span className={`text-[11px] font-bold text-center leading-tight ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`}>{rest}</span>
       </div>
       {/* Details */}
       <div className="flex flex-col gap-1.5 px-4 py-3.5 flex-1 min-w-0">
@@ -286,12 +286,12 @@ function SectionHeader({ icon, label, count, accent, meta }) {
       <span style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }}>{icon}</span>
       <h3 className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: accent }}>{label}</h3>
       {count != null && (
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+        <span className="text-xs font-bold px-2 py-0.5 rounded-full border"
           style={{ color: accent, borderColor: `${accent}40`, background: `${accent}10`, boxShadow: `0 0 8px ${accent}15` }}>
           {count}
         </span>
       )}
-      {meta && <span className="ml-auto text-[10px] text-gray-600 font-mono">{meta}</span>}
+      {meta && <span className="ml-auto text-xs text-gray-600 font-mono">{meta}</span>}
     </div>
   );
 }
@@ -580,7 +580,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             center
             theme={theme}
           />
-          <p className={`text-[10px] font-black uppercase tracking-[0.12em] mt-1 ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
+          <p className={`text-xs font-black uppercase tracking-[0.12em] mt-1 ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
             {tx.headerSub}
           </p>
         </div>
@@ -682,7 +682,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
                     <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#06C755]">LINE</span>
-                    <span className={`text-[10px] transition-colors truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                    <span className={`text-xs transition-colors truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
                       {language === 'en' ? 'Contact Clinic' : 'ติดต่อคลินิก'}
                     </span>
                   </div>
@@ -724,7 +724,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                     <span className={`text-[11px] font-black ${isDark ? 'text-red-50' : 'text-gray-800'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
-                    <span className={`text-[10px] transition-colors tracking-wide truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                    <span className={`text-xs transition-colors tracking-wide truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
                       {clinicSettings.clinicPhone}
                     </span>
                   </div>
@@ -811,7 +811,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
           <div className={`rounded-2xl border p-10 flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
             <CalendarClock size={28} className={isDark ? 'text-gray-700' : 'text-pink-300'} />
             <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>{tx.noData}</p>
-            <p className={`text-[10px] text-center max-w-[220px] leading-relaxed mt-0.5 ${isDark ? 'text-gray-700' : 'text-pink-400/50'}`}>
+            <p className={`text-xs text-center max-w-[220px] leading-relaxed mt-0.5 ${isDark ? 'text-gray-700' : 'text-pink-400/50'}`}>
               {tx.noDataSub}
             </p>
           </div>
@@ -823,7 +823,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         )}
 
         {/* Footer */}
-        <p className={`text-center text-[10px] pt-2 ${isDark ? 'text-gray-700' : 'text-pink-300/50'}`}>
+        <p className={`text-center text-xs pt-2 ${isDark ? 'text-gray-700' : 'text-pink-300/50'}`}>
           {tx.poweredBy} {clinicSettings?.clinicName || 'คลินิก'}
         </p>
       </div>

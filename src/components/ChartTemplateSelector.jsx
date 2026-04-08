@@ -134,7 +134,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
             { id: 'upload', label: 'อัปโหลด', icon: Upload },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setSource(tab.id); if (tab.id === 'proclinic') loadPcTemplates(); }}
-              className={`text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-all ${
+              className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-all ${
                 source === tab.id ? 'bg-teal-500 text-white' : isDark ? 'bg-[#1a1a1a] text-gray-400 hover:bg-[#222]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}>
               <tab.icon size={11} /> {tab.label}
@@ -147,12 +147,12 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           <div className={`flex items-center gap-1 px-4 py-2 border-b overflow-x-auto ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
             {chartCategories.map(cat => (
               <button key={cat.id} onClick={() => setCategory(cat.id)}
-                className={`text-[9px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
                   category === cat.id ? 'bg-gray-600 text-white' : isDark ? 'bg-[#1a1a1a] text-gray-500' : 'bg-gray-50 text-gray-400'
                 }`}>{cat.name}</button>
             ))}
             <button onClick={() => fileRef.current?.click()}
-              className="ml-auto text-[9px] font-bold px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 flex items-center gap-1 shrink-0">
+              className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 flex items-center gap-1 shrink-0">
               <Plus size={10} /> เพิ่ม
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files?.[0]) addTemplate(e.target.files[0]); e.target.value = ''; }} />
@@ -178,16 +178,16 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
                           <div className="space-y-1" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
                               <input value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && renameTemplate(realIdx)}
-                                className={`text-[10px] font-bold bg-transparent border-b outline-none w-full text-center ${isDark ? 'border-teal-500 text-gray-200' : 'border-teal-500'}`} autoFocus />
+                                className={`text-xs font-bold bg-transparent border-b outline-none w-full text-center ${isDark ? 'border-teal-500 text-gray-200' : 'border-teal-500'}`} autoFocus />
                               <button onClick={() => renameTemplate(realIdx)} className="text-teal-500 shrink-0"><Check size={12} /></button>
                             </div>
                             <select value={editCategory} onChange={e => { setEditCategory(e.target.value); updateTemplates(templates.map((t, i) => i === realIdx ? { ...t, category: e.target.value } : t)); }}
-                              className={`text-[9px] w-full rounded px-1 py-0.5 ${isDark ? 'bg-[#222] text-gray-300 border-[#333]' : 'bg-gray-100'}`}>
+                              className={`text-[11px] w-full rounded px-1 py-0.5 ${isDark ? 'bg-[#222] text-gray-300 border-[#333]' : 'bg-gray-100'}`}>
                               {chartCategories.filter(c => c.id !== 'all').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           </div>
                         ) : (
-                          <span className="text-[10px] font-bold">{tmpl.name}</span>
+                          <span className="text-xs font-bold">{tmpl.name}</span>
                         )}
                       </div>
                     </button>
@@ -224,7 +224,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
                       {pcBlobUrls[tmpl.id] ? <img src={pcBlobUrls[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-gray-500" />}
                     </div>
                     <div className={`px-2 py-1.5 text-center border-t ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
-                      <span className="text-[10px] font-bold">{tmpl.name || 'ProClinic'}</span>
+                      <span className="text-xs font-bold">{tmpl.name || 'ProClinic'}</span>
                     </div>
                   </button>
                 ))}
@@ -239,7 +239,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
                 onClick={() => uploadRef.current?.click()}>
                 <Upload size={28} className="mx-auto mb-2 text-gray-500" />
                 <p className="text-xs text-gray-500">อัปโหลดรูปแล้ววาดทันที</p>
-                <p className="text-[9px] text-gray-600 mt-1">JPG, PNG</p>
+                <p className="text-[11px] text-gray-600 mt-1">JPG, PNG</p>
               </div>
               <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={e => {
                 if (e.target.files?.[0]) {

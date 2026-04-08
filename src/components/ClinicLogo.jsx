@@ -75,7 +75,7 @@ export default function ClinicLogo({ className = "py-4", showText = true, forceL
           </span>
         ))}
       </div>
-      {showText && cs.clinicSubtitle && <div className={`text-[10px] font-bold tracking-[0.4em] ${textColor} mt-1.5 uppercase opacity-70`}>{cs.clinicSubtitle}</div>}
+      {showText && cs.clinicSubtitle && <div className={`text-xs font-bold tracking-[0.4em] ${textColor} mt-1.5 uppercase opacity-70`}>{cs.clinicSubtitle}</div>}
     </div>
   );
 }

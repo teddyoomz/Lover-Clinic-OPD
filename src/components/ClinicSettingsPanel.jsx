@@ -278,7 +278,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
 
           {/* Preview */}
           <div className="mt-6 p-4 bg-[var(--bg-hover)] rounded-xl border border-[var(--bd)]">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3 font-bold">ตัวอย่าง (Preview)</p>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3 font-bold">ตัวอย่าง (Preview)</p>
             <div className="flex flex-wrap items-center gap-3">
               <button className="px-4 py-2 rounded-lg text-white font-bold text-sm" style={{backgroundColor: ac, color: '#fff'}}>ปุ่มหลัก</button>
               <button className="px-4 py-2 rounded-lg font-bold text-sm border" style={{borderColor: ac, color: ac, backgroundColor: `rgba(${acRgb},0.1)`}}>ปุ่มรอง</button>
@@ -307,7 +307,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               >
                 <Icon size={24} style={theme === value ? {color: ac} : {}} className={theme !== value ? 'text-gray-500' : ''} />
                 <span className={`text-xs font-black uppercase tracking-widest ${theme === value ? '' : 'text-gray-500'}`} style={theme === value ? {color: ac} : {}}>{label}</span>
-                <span className="text-[10px] text-gray-600 text-center leading-relaxed">
+                <span className="text-xs text-gray-600 text-center leading-relaxed">
                   {value === 'dark' && 'เข้ม (ค่าเริ่มต้น)'}
                   {value === 'light' && 'สว่าง สบายตา'}
                 </span>
@@ -393,7 +393,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </p>
           <div className="space-y-3" lang="en-GB">
             <div>
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
@@ -407,7 +407,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               </div>
             </div>
             <div>
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เปิด</span>
@@ -439,7 +439,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           {!settings.chatAlwaysOn && (
             <div className="space-y-3" lang="en-GB">
               <div>
-                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
                 <div className="flex items-center gap-3 mt-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">เปิด</span>
@@ -453,7 +453,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 </div>
               </div>
               <div>
-                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
                 <div className="flex items-center gap-3 mt-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">เปิด</span>
@@ -480,7 +480,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </p>
           <div className="space-y-3" lang="en-GB">
             <div>
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เริ่ม</span>
@@ -494,7 +494,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               </div>
             </div>
             <div>
-              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">เริ่ม</span>
@@ -567,7 +567,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               {practitioners.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
                   <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate">{p.name}</span>
-                  <span className="text-[10px] text-gray-500 font-mono shrink-0">#{p.id}</span>
+                  <span className="text-xs text-gray-500 font-mono shrink-0">#{p.id}</span>
                   <select
                     value={p.role}
                     onChange={e => {
@@ -585,7 +585,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                   </select>
                 </div>
               ))}
-              <p className="text-[10px] text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
+              <p className="text-xs text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
             </div>
           )}
         </div>
@@ -713,7 +713,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               ProClinic URL, Email, Password เก็บใน Vercel Environment Variables
               — ไม่อัพไป GitHub, ไม่เก็บใน Firestore
             </p>
-            <p className="text-[10px] text-gray-600 mt-1.5">
+            <p className="text-xs text-gray-600 mt-1.5">
               แก้ไขที่: Vercel Dashboard → Project Settings → Environment Variables
             </p>
           </div>
@@ -765,7 +765,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               </span>
             )}
           </div>
-          <p className="mt-2 text-[10px] text-gray-600">
+          <p className="mt-2 text-xs text-gray-600">
             เปลี่ยน URL/Email/Password ใน Vercel แล้วกด "โหลด Credentials ใหม่" — ไม่ต้อง redeploy
           </p>
         </div>

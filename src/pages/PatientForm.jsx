@@ -461,7 +461,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   <p className="text-sm font-black" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>
                     {language === 'en' ? 'Add LINE Official' : 'เพิ่มเพื่อน LINE Official'}
                   </p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#ea580c' }}>
+                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: isDark ? accentO : '#ea580c' }}>
                     {language === 'en' ? '🔔 Important Step' : '🔔 ขั้นตอนสำคัญ'}
                   </p>
                 </div>
@@ -706,7 +706,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     maxLength={language === 'en' ? 20 : 17}
                     className={inputClass}
                   />
-                  <p className="text-[10px] mt-1" style={{ color: 'var(--tx-muted)' }}>
+                  <p className="text-xs mt-1" style={{ color: 'var(--tx-muted)' }}>
                     {language === 'en' ? 'Passport number (5-20 characters)' : 'เลขบัตรประชาชน 13 หลัก (ระบบตรวจสอบหลักอัตโนมัติ)'}
                   </p>
                 </div>

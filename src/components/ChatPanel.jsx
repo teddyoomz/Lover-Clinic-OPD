@@ -34,8 +34,8 @@ function sendMessage(platform, odriverId, text, conversationId) {
 // ─── Platform badge ────────────────────────────────────────────────────────
 
 function PlatformBadge({ platform }) {
-  if (platform === 'line') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: LINE_COLOR + '22', color: LINE_COLOR }}>LINE</span>;
-  if (platform === 'facebook') return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: FB_COLOR + '22', color: FB_COLOR }}>FB</span>;
+  if (platform === 'line') return <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: LINE_COLOR + '22', color: LINE_COLOR }}>LINE</span>;
+  if (platform === 'facebook') return <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: FB_COLOR + '22', color: FB_COLOR }}>FB</span>;
   return null;
 }
 
@@ -167,7 +167,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
             <label className={labelCls}>Webhook URL (ใส่ใน LINE Developer Console)</label>
             <div className="flex items-center gap-2">
               <input readOnly value={`${webhookBase}/api/webhook/line`} className={`${inputCls} text-xs opacity-70`} />
-              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/line`)} className="text-[10px] font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
+              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/line`)} className="text-xs font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
             </div>
           </div>
         </div>
@@ -217,7 +217,7 @@ function ConnectionSettings({ db, appId, chatConfig, onBack }) {
             <label className={labelCls}>Webhook URL (ใส่ใน Facebook App Dashboard)</label>
             <div className="flex items-center gap-2">
               <input readOnly value={`${webhookBase}/api/webhook/facebook`} className={`${inputCls} text-xs opacity-70`} />
-              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/facebook`)} className="text-[10px] font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
+              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/facebook`)} className="text-xs font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
             </div>
           </div>
         </div>
@@ -360,7 +360,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
                 <img src={m.imageUrl} className="max-w-full rounded-lg mb-1" alt="attachment" />
               )}
               <p className="whitespace-pre-wrap break-words">{m.text}</p>
-              <p className={`text-[9px] mt-1 ${m.isFromCustomer ? 'text-[var(--tx-muted)]' : 'text-white/60'}`}>{formatTime(m.timestamp)}</p>
+              <p className={`text-[11px] mt-1 ${m.isFromCustomer ? 'text-[var(--tx-muted)]' : 'text-white/60'}`}>{formatTime(m.timestamp)}</p>
             </div>
           </div>
         ))}
@@ -386,7 +386,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
                     <button key={r.id} onClick={() => handleUseSavedReply(r)}
                       className="w-full text-left p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors">
                       <p className="text-xs font-bold text-[var(--tx-heading)] truncate">{r.title}</p>
-                      <p className="text-[10px] text-[var(--tx-muted)] line-clamp-2">{r.message}</p>
+                      <p className="text-xs text-[var(--tx-muted)] line-clamp-2">{r.message}</p>
                     </button>
                   )) : (
                     <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่มีข้อความสำเร็จรูป</p>
@@ -621,19 +621,19 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
           {/* Platform filter pills */}
           <div className="flex items-center gap-1">
             <button onClick={() => { setFilter('all'); setShowHistory(false); }}
-              className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'all' && !showHistory ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)]'}`}>
+              className={`text-xs font-bold px-2 py-1 rounded-full transition-all ${filter === 'all' && !showHistory ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)]'}`}>
               ทั้งหมด {lineUnread + fbUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{lineUnread + fbUnread}</span>}
             </button>
             {lineEnabled && (
               <button onClick={() => { setFilter('line'); setShowHistory(false); }}
-                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'line' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
+                className={`text-xs font-bold px-2 py-1 rounded-full transition-all ${filter === 'line' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
                 style={filter === 'line' && !showHistory ? { backgroundColor: LINE_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
                 LINE {lineUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{lineUnread}</span>}
               </button>
             )}
             {fbEnabled && (
               <button onClick={() => { setFilter('facebook'); setShowHistory(false); }}
-                className={`text-[10px] font-bold px-2 py-1 rounded-full transition-all ${filter === 'facebook' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
+                className={`text-xs font-bold px-2 py-1 rounded-full transition-all ${filter === 'facebook' && !showHistory ? 'text-white' : 'text-[var(--tx-muted)]'}`}
                 style={filter === 'facebook' && !showHistory ? { backgroundColor: FB_COLOR } : { backgroundColor: 'var(--bg-hover)' }}>
                 FB {fbUnread > 0 && <span className="ml-0.5 bg-red-500 text-white text-[8px] px-1 rounded-full">{fbUnread}</span>}
               </button>
@@ -674,23 +674,23 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                     className={`p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] ${h.convId ? 'cursor-pointer hover:border-[var(--accent)] transition-colors' : ''}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style={{ backgroundColor: pColor }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: pColor }}>
                           {(h.displayName || '?')[0]}
                         </div>
                         <span className="text-sm font-bold text-[var(--tx-heading)]">{h.displayName}</span>
                         <PlatformBadge platform={h.platform} />
                       </div>
-                      <span className="text-[9px] text-[var(--tx-muted)]">
+                      <span className="text-[11px] text-[var(--tx-muted)]">
                         {h.resolvedAt ? new Date(h.resolvedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
                     </div>
                     <p className="text-xs text-[var(--tx-muted)] truncate mt-1.5 ml-9">{h.lastMessage}</p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 ml-9 text-[10px] text-[var(--tx-muted)]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 ml-9 text-xs text-[var(--tx-muted)]">
                       <span>ทักครั้งแรก: {h.firstContactAt ? new Date(h.firstContactAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
                       <span>ข้อความสุดท้าย: {h.lastCustomerMessageAt ? new Date(h.lastCustomerMessageAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '-'}</span>
                       <span>ตอบโดย: {h.resolvedBy}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 ml-9 text-[10px]">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 ml-9 text-xs">
                       {h.offHours ? (
                         <span className="flex items-center gap-0.5 font-bold text-[var(--tx-muted)]">
                           <Clock size={10} /> ลูกค้าทักนอกเวลา
@@ -720,7 +720,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                     className="text-xs px-3 py-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] disabled:opacity-30 transition-colors">
                     ← ก่อนหน้า
                   </button>
-                  <span className="text-[10px] text-[var(--tx-muted)]">
+                  <span className="text-xs text-[var(--tx-muted)]">
                     {historyPage + 1} / {Math.ceil(history.length / HISTORY_PER_PAGE)}
                   </span>
                   <button onClick={() => setHistoryPage(p => Math.min(Math.ceil(history.length / HISTORY_PER_PAGE) - 1, p + 1))}
@@ -750,7 +750,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                 <div className="text-sm font-bold text-[var(--tx-heading)] truncate">{historyDetail.displayName}</div>
                 <div className="flex items-center gap-1.5">
                   <PlatformBadge platform={historyDetail.platform} />
-                  <span className="text-[9px] text-[var(--tx-muted)]">
+                  <span className="text-[11px] text-[var(--tx-muted)]">
                     ประวัติ — {historyDetail.resolvedAt ? new Date(historyDetail.resolvedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                   </span>
                 </div>
@@ -774,7 +774,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                         <img src={m.imageUrl} className="max-w-full rounded-lg mb-1" alt="attachment" />
                       )}
                       <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                      <p className={`text-[9px] mt-1 ${m.isFromCustomer ? 'text-[var(--tx-muted)]' : 'text-white/60'}`}>
+                      <p className={`text-[11px] mt-1 ${m.isFromCustomer ? 'text-[var(--tx-muted)]' : 'text-white/60'}`}>
                         {m.timestamp ? new Date(m.timestamp).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : ''}
                       </p>
                     </div>
@@ -840,19 +840,19 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                     <span className={`text-sm truncate ${hasUnread ? 'font-bold text-[var(--tx-heading)]' : 'text-[var(--tx-heading)]'}`}>{conv.displayName}</span>
                     <PlatformBadge platform={conv.platform} />
                     {hasUnread && (
-                      <span className="min-w-[18px] h-[18px] rounded-full text-white text-[9px] font-black flex items-center justify-center px-1" style={{ backgroundColor: pColor }}>
+                      <span className="min-w-[18px] h-[18px] rounded-full text-white text-[11px] font-black flex items-center justify-center px-1" style={{ backgroundColor: pColor }}>
                         {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                       </span>
                     )}
                   </div>
                   <p className={`text-xs truncate ${hasUnread ? 'font-semibold text-[var(--tx-heading)]' : 'text-[var(--tx-muted)]'}`}>{conv.lastMessage}</p>
-                  <p className="text-[9px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
+                  <p className="text-[11px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
                     <Clock size={9} /> ทักมาเมื่อ {formatContactTime(contactTime)}
                   </p>
                 </button>
                 {/* Resolve button */}
                 <button onClick={(e) => handleResolve(conv, e)} disabled={isResolving}
-                  className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
+                  className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs sm:text-xs font-bold bg-green-600 hover:bg-green-500 text-white transition-all flex items-center gap-1 disabled:opacity-50 whitespace-nowrap">
                   {isResolving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                   <span className="hidden sm:inline">ตอบเรียบร้อยแล้ว</span>
                   <span className="sm:hidden">เสร็จ</span>

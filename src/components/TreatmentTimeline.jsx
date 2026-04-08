@@ -5,7 +5,7 @@ import * as broker from '../lib/brokerClient.js';
 
 function VitalBadge({ label, value, isDark }) {
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-[#1a1a1a] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+    <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-[#1a1a1a] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
       <span className="font-bold">{label}</span> {value}
     </span>
   );
@@ -14,7 +14,7 @@ function VitalBadge({ label, value, isDark }) {
 function OPDField({ label, value, isDark }) {
   return (
     <div>
-      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-0.5">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-600 mb-0.5">{label}</p>
       <p className={`text-[11px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{value}</p>
     </div>
   );
@@ -137,19 +137,19 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
         <span style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }}><Stethoscope size={14} /></span>
         <h3 className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: accent }}>ประวัติการรักษา</h3>
         {!loading && treatments.length > 0 && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full border"
             style={{ color: accent, borderColor: `${accent}40`, background: `${accent}10` }}>
             หน้า {page}/{totalPages}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => { if (onOpenCreateForm) onOpenCreateForm(customerId); }}
-            className="text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1"
+            className="text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1"
             style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.05)' }}>
             <Plus size={10} /> สร้าง
           </button>
           <button onClick={() => fetchPage(page)} disabled={loading}
-            className="text-[10px] font-bold px-2 py-1 rounded-lg border transition-all disabled:opacity-50"
+            className="text-xs font-bold px-2 py-1 rounded-lg border transition-all disabled:opacity-50"
             style={{ color: accent, borderColor: `${accent}30`, background: `${accent}08` }}>
             {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={10} />}
           </button>
@@ -161,7 +161,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
       {loading && treatments.length === 0 ? (
         <div className={`rounded-2xl border p-8 flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-purple-100 bg-purple-50/30'}`}>
           <Loader2 size={20} className="animate-spin" style={{ color: accent }} />
-          <p className="text-[10px] font-bold text-gray-600">กำลังโหลดประวัติการรักษา...</p>
+          <p className="text-xs font-bold text-gray-600">กำลังโหลดประวัติการรักษา...</p>
         </div>
       ) : treatments.length === 0 && !loading ? (
         <div className={`rounded-2xl border p-8 text-center flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-purple-100 bg-purple-50/30'}`}>
@@ -185,11 +185,11 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-bold ${isDark ? 'text-[var(--tx-heading)]' : 'text-gray-800'}`}>{t.date}</span>
-                      {t.branch && <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-[#1a1a1a] text-gray-500' : 'bg-gray-100 text-gray-500'}`}>{t.branch}</span>}
+                      {t.branch && <span className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-[#1a1a1a] text-gray-500' : 'bg-gray-100 text-gray-500'}`}>{t.branch}</span>}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      {t.doctor && <span className={`text-[10px] font-bold ${isDark ? 'text-purple-400/80' : 'text-purple-600'}`}>{t.doctor}</span>}
-                      {t.assistants?.length > 0 && <span className="text-[10px] text-gray-600">+ {t.assistants.join(', ')}</span>}
+                      {t.doctor && <span className={`text-xs font-bold ${isDark ? 'text-purple-400/80' : 'text-purple-600'}`}>{t.doctor}</span>}
+                      {t.assistants?.length > 0 && <span className="text-xs text-gray-600">+ {t.assistants.join(', ')}</span>}
                     </div>
                   </div>
                   <ChevronRight size={14} className={`text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -198,8 +198,8 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                 {/* Summary line */}
                 {(t.cc || t.dx || t.treatmentInfo) && (
                   <div className={`px-3 pb-2 ${isExpanded ? '' : 'line-clamp-1'}`}>
-                    {t.cc && <span className="text-[10px] text-gray-500">อาการ: {t.cc.substring(0, 60)}{t.cc.length > 60 ? '...' : ''} </span>}
-                    {t.dx && <span className="text-[10px] text-gray-500">| DX: {t.dx.substring(0, 60)}{t.dx.length > 60 ? '...' : ''}</span>}
+                    {t.cc && <span className="text-xs text-gray-500">อาการ: {t.cc.substring(0, 60)}{t.cc.length > 60 ? '...' : ''} </span>}
+                    {t.dx && <span className="text-xs text-gray-500">| DX: {t.dx.substring(0, 60)}{t.dx.length > 60 ? '...' : ''}</span>}
                   </div>
                 )}
 
@@ -209,18 +209,18 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                     {isLoadingDetail ? (
                       <div className="flex items-center gap-2 py-4 justify-center">
                         <Loader2 size={14} className="animate-spin" style={{ color: accent }} />
-                        <span className="text-[10px] text-gray-600">กำลังโหลดรายละเอียด...</span>
+                        <span className="text-xs text-gray-600">กำลังโหลดรายละเอียด...</span>
                       </div>
                     ) : detail ? (
                       <div className="space-y-2.5">
                         {/* Action buttons */}
                         <div className="flex gap-2 mb-2">
                           <button onClick={() => { if (onOpenEditForm) onOpenEditForm(t.id, customerId); }}
-                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${isDark ? 'border-blue-900/50 text-blue-400 bg-blue-950/20 hover:bg-blue-950/40' : 'border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100'}`}>
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${isDark ? 'border-blue-900/50 text-blue-400 bg-blue-950/20 hover:bg-blue-950/40' : 'border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100'}`}>
                             <Edit3 size={10} /> แก้ไข
                           </button>
                           <button onClick={() => openCancelModal(t.id)} disabled={deletingId === t.id}
-                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all disabled:opacity-50 ${isDark ? 'border-red-900/50 text-red-400 bg-red-950/20 hover:bg-red-950/40' : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'}`}>
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:opacity-50 ${isDark ? 'border-red-900/50 text-red-400 bg-red-950/20 hover:bg-red-950/40' : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'}`}>
                             {deletingId === t.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
                             {deletingId === t.id ? 'กำลังลบ...' : 'ยกเลิก'}
                           </button>
@@ -229,7 +229,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                         {/* Vitals */}
                         {Object.values(detail.vitals || {}).some(v => v) && (
                           <div>
-                            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1">Vital Signs</p>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-600 mb-1">Vital Signs</p>
                             <div className="flex flex-wrap gap-2">
                               {detail.vitals.weight && <VitalBadge label="W" value={`${detail.vitals.weight} kg`} isDark={isDark} />}
                               {detail.vitals.height && <VitalBadge label="H" value={`${detail.vitals.height} cm`} isDark={isDark} />}
@@ -253,7 +253,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                         {/* Treatment items */}
                         {detail.treatmentItems?.length > 0 && (
                           <div>
-                            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1">รายการรักษา</p>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-600 mb-1">รายการรักษา</p>
                             {detail.treatmentItems.map((item, i) => (
                               <div key={i} className={`flex justify-between text-[11px] py-0.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                                 <span>{item.name}</span>
@@ -265,14 +265,14 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
 
                         {/* Health info */}
                         {(detail.healthInfo?.drugAllergy || detail.healthInfo?.congenitalDisease) && (
-                          <div className={`rounded-lg p-2 text-[10px] ${isDark ? 'bg-red-950/20 border border-red-900/30 text-red-400' : 'bg-red-50 border border-red-100 text-red-600'}`}>
+                          <div className={`rounded-lg p-2 text-xs ${isDark ? 'bg-red-950/20 border border-red-900/30 text-red-400' : 'bg-red-50 border border-red-100 text-red-600'}`}>
                             {detail.healthInfo.drugAllergy && <p>แพ้ยา: {detail.healthInfo.drugAllergy}</p>}
                             {detail.healthInfo.congenitalDisease && <p>โรคประจำตัว: {detail.healthInfo.congenitalDisease}</p>}
                           </div>
                         )}
                       </div>
                     ) : (
-                      <p className="text-[10px] text-gray-600 text-center py-2">ไม่พบรายละเอียด</p>
+                      <p className="text-xs text-gray-600 text-center py-2">ไม่พบรายละเอียด</p>
                     )}
                   </div>
                 )}
@@ -287,7 +287,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
                 className={`p-1.5 rounded-lg border transition-all disabled:opacity-30 ${isDark ? 'border-[#222] hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
                 <ChevronLeft size={14} className="text-gray-500" />
               </button>
-              <span className="text-[10px] font-bold text-gray-500">{page} / {totalPages}</span>
+              <span className="text-xs font-bold text-gray-500">{page} / {totalPages}</span>
               <button onClick={() => fetchPage(page + 1)} disabled={page >= totalPages || loading}
                 className={`p-1.5 rounded-lg border transition-all disabled:opacity-30 ${isDark ? 'border-[#222] hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
                 <ChevronRight size={14} className="text-gray-500" />
@@ -307,7 +307,7 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
             <h3 className="text-sm font-black" style={{ color: '#14b8a6' }}>ยกเลิกการรักษา</h3>
           </div>
           <div className="px-5 py-4 space-y-3">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block">รายละเอียดการยกเลิก</label>
+            <label className="text-xs font-bold uppercase tracking-widest text-gray-500 block">รายละเอียดการยกเลิก</label>
             <textarea value={cancelDetail} onChange={e => setCancelDetail(e.target.value)} rows={4}
               className={`w-full rounded-lg px-3 py-2 text-xs outline-none border resize-none transition-all ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-200 focus:border-teal-500' : 'bg-white border-gray-200 text-gray-800 focus:border-teal-400'}`}
               placeholder="กรอกรายละเอียดการยกเลิก (ถ้ามี)" autoFocus />

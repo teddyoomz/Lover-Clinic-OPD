@@ -235,7 +235,7 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-3 py-2 border-b bg-gray-50 flex-wrap">
         <span className="text-xs font-black text-teal-600 mr-2">Chart</span>
-        <span className="text-[9px] text-gray-400 mr-2">เครื่องมือ</span>
+        <span className="text-[11px] text-gray-400 mr-2">เครื่องมือ</span>
         <div className="flex items-center gap-0.5 border-r pr-2 mr-1 border-gray-300">
           <button onClick={() => setTool('select')} className={btnCls(tool === 'select')} title="เลือก/ย้าย"><MousePointer size={16} /></button>
           <button onClick={() => setTool('pen')} className={btnCls(tool === 'pen')} title="ปากกา"><Pencil size={16} /></button>
