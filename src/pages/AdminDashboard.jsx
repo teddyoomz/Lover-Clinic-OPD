@@ -94,7 +94,7 @@ function CourseCard({ c, expired }) {
       <div className="flex items-start justify-between gap-2">
         <span className={`font-bold text-sm leading-tight ${expired ? 'text-red-300' : 'text-white'}`}>{c.name}</span>
         {c.status && (
-          <span className={`text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
+          <span className={`text-xs font-black font-semibold px-2 py-0.5 rounded-lg shrink-0 ${
             expired ? 'bg-red-950/40 border border-red-900/50 text-red-400' :
             c.status === 'กำลังใช้งาน' ? 'bg-teal-950/40 border border-teal-900/50 text-teal-400' :
             'bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400'
@@ -2613,7 +2613,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {toastMsg && (
         <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] flex items-center gap-4 animate-in slide-in-from-bottom-5 z-[100] border border-blue-400">
           <div className="bg-white/20 p-2 rounded-full"><Bell size={24} className="animate-bounce" /></div>
-          <div><h4 className="font-black text-sm uppercase tracking-wider">มีการอัปเดตข้อมูล</h4><p className="text-xs opacity-90 font-medium">{toastMsg}</p></div>
+          <div><h4 className="font-black text-sm font-semibold">มีการอัปเดตข้อมูล</h4><p className="text-xs opacity-90 font-medium">{toastMsg}</p></div>
           <button onClick={() => setToastMsg(null)} className="ml-2 p-1 opacity-50 hover:opacity-100 transition-opacity bg-black/20 rounded-full"><X size={16}/></button>
         </div>
       )}
@@ -2643,7 +2643,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {showNotifSettings && (
                 <div className="absolute right-0 top-12 w-64 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-4 z-[200]">
                   <div className="flex items-center justify-between mb-4 border-b border-[var(--bd)] pb-2">
-                    <h3 className="text-white font-bold text-xs uppercase tracking-widest flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
+                    <h3 className="text-white font-bold text-xs font-semibold flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
                     <button onClick={() => setShowNotifSettings(false)} className="text-gray-500 hover:text-white"><X size={14}/></button>
                   </div>
                   <div className="space-y-4">
@@ -2652,17 +2652,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <input type="checkbox" checked={isNotifEnabled} onChange={(e) => setIsNotifEnabled(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500"/>
                     </label>
                     <div className={`space-y-2 transition-opacity ${isNotifEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                      <div className="flex items-center justify-between text-xs text-gray-500 font-bold uppercase tracking-wider">
+                      <div className="flex items-center justify-between text-xs text-gray-500 font-bold font-semibold">
                         <span>ระดับเสียง</span><span className="text-blue-500">{Math.round(notifVolume * 100)}%</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <Volume2 size={16} className="text-gray-400 shrink-0"/>
                         <input type="range" min="0" max="1" step="0.1" value={notifVolume} onChange={(e) => setNotifVolume(parseFloat(e.target.value))} className="w-full accent-blue-600"/>
                       </div>
-                      <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold uppercase tracking-widest transition-colors">ทดสอบเสียง</button>
+                      <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold font-semibold transition-colors">ทดสอบเสียง</button>
                     </div>
                     <div className="pt-3 border-t border-[var(--bd)]">
-                      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
+                      <p className="text-xs text-gray-500 font-bold font-semibold mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
                       {pushEnabled ? (
                         <button onClick={disablePushNotifications} className="w-full bg-green-950/30 border border-green-900/40 text-green-400 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5"><CheckCircle2 size={11}/> เปิดอยู่แล้ว — กดเพื่อปิด</button>
                       ) : (
@@ -2686,7 +2686,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
               {/* Tooltip on hover — show who's online */}
               <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
-                <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">แอดมินออนไลน์</p>
+                <p className="text-[11px] text-gray-500 font-bold font-semibold mb-2">แอดมินออนไลน์</p>
                 {onlineAdmins.map(a => (
                   <div key={a.id} className="flex items-center gap-2 py-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
@@ -2706,12 +2706,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
-            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
             { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-amber-700 text-white' },
-            { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', boxShadow: `0 0 12px rgba(${acRgb},0.25)`}, activeClass: '' },
+            { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
             { mode: '_backend', icon: <Database size={14} />, label: 'หลังบ้าน', activeClass: 'bg-violet-700 text-white', isExternal: true },
           ].map(tab => {
             if (tab.isExternal) {
@@ -2738,36 +2738,36 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         {/* ── Desktop: full button row ── */}
         <div className="hidden xl:flex items-center gap-2 z-10 flex-wrap">
-          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white shadow-[0_0_15px_rgba(29,78,216,0.4)]' : isChatActive && chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
+          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white' : isChatActive && chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
             <MessageCircle size={16} /> แชท
             {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
-          <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}}>
+          <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}}>
             <Activity size={16} /> หน้าคิว
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
-          <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white shadow-[0_0_15px_rgba(194,65,12,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
+          <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
             <UserPlus size={16} /> จองไม่มัดจำ
             {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{noDepositSessions.filter(s => s.isUnread).length}</span>}
           </button>
-          <button onClick={() => setAdminMode('deposit')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white shadow-[0_0_15px_rgba(5,150,105,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50'}`} title="ลูกค้าจองมัดจำ">
+          <button onClick={() => setAdminMode('deposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50'}`} title="ลูกค้าจองมัดจำ">
             <Banknote size={16} /> จองมัดจำ
             {depositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{depositSessions.filter(s => s.isUnread).length}</span>}
           </button>
-          <button onClick={() => setAdminMode('appointment')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'appointment' ? 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-900/50'}`} title="นัดหมาย ProClinic">
+          <button onClick={() => setAdminMode('appointment')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'appointment' ? 'bg-sky-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-900/50'}`} title="นัดหมาย ProClinic">
             <CalendarDays size={16} /> นัดหมาย
           </button>
-          <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white shadow-[0_0_15px_rgba(180,83,9,0.4)]' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
+          <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-amber-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-900/50'}`} title="ประวัติผู้ป่วย">
             <History size={16} /> ประวัติ
           </button>
-          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.3)`} : {}} title="ตั้งค่าระบบ">
+          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}} title="ตั้งค่าระบบ">
             <Palette size={16} /> ตั้งค่า
           </button>
-          <button onClick={() => window.open('?backend=1', '_blank')} className="px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]" title="ระบบหลังบ้าน (เปิด tab ใหม่)">
+          <button onClick={() => window.open('?backend=1', '_blank')} className="px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50 hover:opacity-90" title="ระบบหลังบ้าน (เปิด tab ใหม่)">
             <Database size={16} /> หลังบ้าน
           </button>
           <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
-          <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-white px-3 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
+          <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-white px-3 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
             <PlusCircle size={16} /> สร้างคิวใหม่
           </button>
           <div className="relative flex-none">
@@ -2777,7 +2777,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {showNotifSettings && (
               <div className="absolute right-0 top-14 w-64 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-4 z-[200] animate-in slide-in-from-top-2">
                 <div className="flex items-center justify-between mb-4 border-b border-[var(--bd)] pb-2">
-                  <h3 className="text-white font-bold text-xs uppercase tracking-widest flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
+                  <h3 className="text-white font-bold text-xs font-semibold flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
                   <button onClick={() => setShowNotifSettings(false)} className="text-gray-500 hover:text-white"><X size={14}/></button>
                 </div>
                 <div className="space-y-4">
@@ -2786,7 +2786,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <input type="checkbox" checked={isNotifEnabled} onChange={(e) => setIsNotifEnabled(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500"/>
                   </label>
                   <div className={`space-y-2 transition-opacity ${isNotifEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                    <div className="flex items-center justify-between text-xs text-gray-500 font-bold uppercase tracking-wider">
+                    <div className="flex items-center justify-between text-xs text-gray-500 font-bold font-semibold">
                       <span>ระดับเสียง</span>
                       <span className="text-blue-500">{Math.round(notifVolume * 100)}%</span>
                     </div>
@@ -2794,10 +2794,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <Volume2 size={16} className="text-gray-400 shrink-0"/>
                       <input type="range" min="0" max="1" step="0.1" value={notifVolume} onChange={(e) => setNotifVolume(parseFloat(e.target.value))} className="w-full accent-blue-600"/>
                     </div>
-                    <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold uppercase tracking-widest transition-colors">ทดสอบเสียง</button>
+                    <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold font-semibold transition-colors">ทดสอบเสียง</button>
                   </div>
                   <div className="pt-3 border-t border-[var(--bd)]">
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
+                    <p className="text-xs text-gray-500 font-bold font-semibold mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
                     {pushEnabled ? (
                       <button onClick={disablePushNotifications} className="w-full bg-green-950/30 border border-green-900/40 text-green-400 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5"><CheckCircle2 size={11}/> เปิดอยู่แล้ว — กดเพื่อปิด</button>
                     ) : (
@@ -2820,7 +2820,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <span className="text-xs font-bold text-green-500">{onlineAdmins.length}</span>
             </div>
             <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
-              <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">แอดมินออนไลน์</p>
+              <p className="text-[11px] text-gray-500 font-bold font-semibold mb-2">แอดมินออนไลน์</p>
               {onlineAdmins.map(a => (
                 <div key={a.id} className="flex items-center gap-2 py-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
@@ -2847,7 +2847,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
               <LayoutTemplate size={18} className="text-blue-500" />
-              <h3 className="text-sm font-bold tracking-widest uppercase text-blue-500">จัดการแบบฟอร์ม</h3>
+              <h3 className="text-sm font-bold font-semibold text-blue-500">จัดการแบบฟอร์ม</h3>
             </div>
             <button
               onClick={() => setAdminMode('formBuilder')}
@@ -2860,9 +2860,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
               <BellOff size={18} className="text-orange-500" />
-              <h3 className="text-sm font-bold tracking-widest uppercase text-orange-500">โหมดทดสอบ — การแจ้งเตือน</h3>
+              <h3 className="text-sm font-bold font-semibold text-orange-500">โหมดทดสอบ — การแจ้งเตือน</h3>
               {globalPushMuted && (
-                <span className="ml-auto text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-orange-950/40 border border-orange-800/50 text-orange-400">ปิดอยู่</span>
+                <span className="ml-auto text-xs font-black font-semibold px-2 py-1 rounded-lg bg-orange-950/40 border border-orange-800/50 text-orange-400">ปิดอยู่</span>
               )}
             </div>
             <button
@@ -2890,7 +2890,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <History size={20} className="text-amber-500" />
-              <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-amber-500">ประวัติผู้ป่วย (Archive)</h2>
+              <h2 className="text-base sm:text-lg font-bold font-semibold text-amber-500">ประวัติผู้ป่วย (Archive)</h2>
               <span className="text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
               <button onClick={() => { setShowImport(!showImport); setImportError(''); setImportSuccess(''); }}
                 className={`ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${showImport ? 'bg-teal-600 text-white border-teal-500' : 'bg-teal-950/30 text-teal-400 border-teal-800/50 hover:bg-teal-900/40'}`}>
@@ -2941,7 +2941,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 )}
                 {importPreview && (
                   <div className="bg-[var(--bg-card)] border border-teal-800/40 rounded-xl p-4 space-y-3">
-                    <h4 className="text-sm font-bold text-teal-400 tracking-wider uppercase">ตรวจสอบข้อมูลก่อนนำเข้า</h4>
+                    <h4 className="text-sm font-bold text-teal-400 font-bold">ตรวจสอบข้อมูลก่อนนำเข้า</h4>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div><span className="text-[var(--tx-muted)]">ชื่อ:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.prefix} {importPreview.patient.firstName} {importPreview.patient.lastName}</span></div>
                       <div><span className="text-[var(--tx-muted)]">HN:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.proClinicHN || '-'}</span></div>
@@ -3005,7 +3005,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {historyFiltered.length === 0 ? (
               <div className="p-16 text-center text-gray-600 flex flex-col items-center gap-4">
                 <History size={36} className="opacity-20 text-amber-600" />
-                <p className="text-xs tracking-wider uppercase font-bold">{historyQ ? 'ไม่พบรายการที่ตรงกัน' : 'ไม่มีประวัติในระบบ'}</p>
+                <p className="text-xs font-bold font-bold">{historyQ ? 'ไม่พบรายการที่ตรงกัน' : 'ไม่มีประวัติในระบบ'}</p>
               </div>
             ) : historyPageItems.map(session => {
               const d = session.patientData;
@@ -3115,7 +3115,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {isPerf && <Flame size={14} className="text-red-500 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]" />}
                         {isHrt && <Activity size={14} className="text-orange-500 drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]" />}
                       </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono uppercase tracking-wider">
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                         <span>อายุ: {d.age || '-'} ปี</span>
                         {d.phone && <span>โทร: {formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span>}
                         {d.idCard && <span className="flex items-center gap-1"><CreditCard size={10}/> {d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
@@ -3130,7 +3130,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                       )}
                       {d.hasAllergies === 'มี' && (
-                        <span className="text-xs text-red-400 flex items-center gap-1.5 font-bold uppercase tracking-wider border border-red-900/50 bg-red-950/20 px-2 py-1 rounded-lg w-fit">
+                        <span className="text-xs text-red-400 flex items-center gap-1.5 font-bold font-semibold border border-red-900/50 bg-red-950/20 px-2 py-1 rounded-lg w-fit">
                           <AlertCircle size={10}/> แพ้: {d.allergiesDetail}
                         </span>
                       )}
@@ -3144,7 +3144,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                       <ClipboardCheck size={13} className="text-[var(--opd-color)] shrink-0" />
                       <div className="flex flex-col min-w-0 gap-0.5">
-                        <span className="text-xs font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
+                        <span className="text-xs font-black font-semibold text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
                         <span className="text-[11px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
                           {formatBangkokTime(session.opdRecordedAt)}
                           {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
@@ -3199,7 +3199,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           {/* ── QR Panel (reuse same pattern as queue) ── */}
           <div className="xl:col-span-1" id="qr-panel-deposit">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
-              <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
+              <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} className="text-emerald-500" /> QR Code จอง
               </h2>
               {selectedQR && selectedQR.startsWith('DEP-') ? (() => {
@@ -3219,12 +3219,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     {/* Token */}
                     <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">รหัสคิว (Token)</p>
+                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
                       <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-emerald-400">{selectedQR}</p>
                     </div>
                     {/* Link */}
                     <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
                       <div className="flex items-center gap-2">
                         <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
                         <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
@@ -3239,7 +3239,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     <div className="w-full h-px bg-[var(--bd)] my-2"></div>
                     {/* Simulate button */}
-                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
                       <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
                     </button>
                   </div>
@@ -3296,7 +3296,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               className="bg-[var(--bg-input)] border border-emerald-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
                           ) : (
                             <>
-                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
                               <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-emerald-400 shrink-0"><Edit3 size={12}/></button>
                             </>
@@ -3474,7 +3474,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           {/* ── QR Panel (reuse same pattern as deposit) ── */}
           <div className="xl:col-span-1" id="qr-panel-nodeposit">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
-              <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
+              <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} className="text-orange-500" /> QR Code จอง
               </h2>
               {selectedQR && noDepositSessions.find(s => s.id === selectedQR) ? (() => {
@@ -3491,11 +3491,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{ndSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
                     </div>
                     <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">รหัสคิว (Token)</p>
+                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
                       <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-orange-400">{selectedQR}</p>
                     </div>
                     <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
                       <div className="flex items-center gap-2">
                         <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
                         <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
@@ -3509,7 +3509,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     </div>
                     <div className="w-full h-px bg-[var(--bd)] my-2"></div>
-                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
                       <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
                     </button>
                   </div>
@@ -3560,7 +3560,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               className="bg-[var(--bg-input)] border border-orange-500 text-[var(--tx-heading)] text-sm px-2 py-0.5 rounded w-32 outline-none" />
                           ) : (
                             <>
-                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
+                              {session.isUnread && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>}
                               <span className="font-black text-[var(--tx-heading)] text-sm truncate">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-orange-400 shrink-0"><Edit3 size={12}/></button>
                             </>
@@ -3834,7 +3834,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CalendarDays size={18} className="text-sky-400" />
-                    <h2 className="text-sm sm:text-lg font-bold tracking-widest uppercase text-sky-400">นัดหมาย</h2>
+                    <h2 className="text-sm sm:text-lg font-bold font-semibold text-sky-400">นัดหมาย</h2>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={prevMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
@@ -3910,7 +3910,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <RefreshCw size={28} className="text-amber-400 mb-3" />
                     <p className="text-amber-400 font-bold text-sm mb-1 text-center px-4">{staleText}</p>
                     <p className="text-gray-400 text-xs mb-4 text-center px-4">กด Sync เพื่ออัพเดทข้อมูลนัดหมาย</p>
-                    <button onClick={() => handleSyncAppointments(apptMonth)} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors shadow-lg">
+                    <button onClick={() => handleSyncAppointments(apptMonth)} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-xs font-semibold flex items-center gap-2 transition-colors shadow-lg">
                       <RefreshCw size={14} /> Sync ตอนนี้
                     </button>
                   </div>
@@ -3933,7 +3933,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 {/* Day headers */}
                 <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
                   {thaiDays.map((d, i) => (
-                    <div key={i} className={`text-center text-xs sm:text-xs font-bold uppercase tracking-wider py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
+                    <div key={i} className={`text-center text-xs sm:text-xs font-bold font-semibold py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
                   ))}
                 </div>
                 {/* Day cells */}
@@ -4064,7 +4064,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Add/Edit form */}
                   {apptFormMode && (
                     <div className="mb-4 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
-                      <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-3">
+                      <p className="text-xs font-bold font-semibold text-emerald-400 mb-3">
                         {apptFormMode.mode === 'create' ? 'เพิ่มนัดหมายใหม่' : 'แก้ไขนัดหมาย'}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
@@ -4589,7 +4589,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
                 <div className="p-4 sm:p-5 border-b border-[var(--bd)] flex items-center gap-2">
                   <Link size={16} className="text-green-400" />
-                  <h3 className="text-sm font-bold text-green-400 uppercase tracking-widest">ลิงก์ตาราง</h3>
+                  <h3 className="text-sm font-bold text-green-400 font-semibold">ลิงก์ตาราง</h3>
                   <span className="text-xs text-gray-500 font-bold ml-1">({schedList.length})</span>
                 </div>
                 <div className="p-3 sm:p-4 space-y-2">
@@ -4643,7 +4643,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1" id="qr-panel">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
-              <h2 className="text-sm sm:text-base font-bold tracking-widest uppercase mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
+              <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} style={{color: ac}} /> QR Code / ลิงก์
               </h2>
               {selectedQR ? (() => {
@@ -4658,7 +4658,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
                   {/* Mode toggle — show only when patient link token exists */}
                   {plToken && (
-                    <div className="flex w-full rounded-xl overflow-hidden border border-[var(--bd)] text-xs font-bold uppercase tracking-wider">
+                    <div className="flex w-full rounded-xl overflow-hidden border border-[var(--bd)] text-xs font-bold font-semibold">
                       <button onClick={() => setQrDisplayMode('session')} className={`flex-1 py-2 transition-colors ${qrDisplayMode === 'session' ? 'bg-[var(--bg-hover2)] text-[var(--tx-heading)]' : 'text-gray-600 hover:text-gray-400'}`}>QR คิว</button>
                       <button onClick={() => setQrDisplayMode('patientLink')} className={`flex-1 py-2 transition-colors flex items-center justify-center gap-1 ${qrDisplayMode === 'patientLink' ? 'bg-purple-950/40 text-purple-300' : 'text-gray-600 hover:text-purple-400'}`}>
                         <Link size={11}/> ลิงก์ดูข้อมูล
@@ -4671,17 +4671,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="w-full text-center">
                     <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{activeSessionInfo?.sessionName || 'ไม่มีชื่อคิว'}</h3>
                     {isPlMode && (
-                      <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                      <span className={`text-xs font-bold font-semibold px-2 py-0.5 rounded-full ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
                         {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                       </span>
                     )}
                   </div>
                   <div className="w-full text-left">
-                    <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">{tokenLabel}</p>
+                    <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">{tokenLabel}</p>
                     <p className="font-mono text-sm sm:text-base font-black tracking-widest bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all" style={{color: isPlMode ? '#a855f7' : ac}}>{tokenValue}</p>
                   </div>
                   <div className="w-full text-left">
-                    <p className="text-xs sm:text-xs text-[var(--tx-muted)] tracking-widest uppercase mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+                    <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
                     <div className="flex items-center gap-2">
                       <input readOnly value={linkUrl} className="flex-1 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
                       <button onClick={() => handleCopyToClipboard(linkUrl, true)} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
@@ -4692,7 +4692,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="w-full h-px bg-[var(--bd)] my-2"></div>
                   {isPlMode ? (
                     <div className="w-full flex gap-2">
-                      <button onClick={() => activeSessionInfo && handleTogglePatientLink(activeSessionInfo)} disabled={patientLinkLoading} className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border ${plEnabled ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-white' : 'bg-green-950/30 border-green-900/50 text-green-400 hover:bg-green-900/40'}`}>
+                      <button onClick={() => activeSessionInfo && handleTogglePatientLink(activeSessionInfo)} disabled={patientLinkLoading} className={`flex-1 py-3 rounded-xl text-xs font-bold font-semibold transition-all flex items-center justify-center gap-2 border ${plEnabled ? 'bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-white' : 'bg-green-950/30 border-green-900/50 text-green-400 hover:bg-green-900/40'}`}>
                         {plEnabled ? <><ToggleLeft size={15}/> ปิด</> : <><ToggleRight size={15}/> เปิด</>}
                       </button>
                       <button onClick={() => handleDeletePatientLink(selectedQR)} disabled={patientLinkLoading} className="p-3 rounded-xl border border-red-900/40 text-red-500 hover:bg-red-950/30 transition-colors" title="ลบลิงก์ดูข้อมูล">
@@ -4700,7 +4700,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </button>
                     </div>
                   ) : (
-                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
                       <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
                     </button>
                   )}
@@ -4709,7 +4709,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               })() : (
                 <div className="py-20 w-full text-gray-600 flex flex-col items-center bg-[var(--bg-elevated)] rounded-2xl border border-dashed border-[var(--bd)]">
                   <Flame size={48} className="mb-4 opacity-20 text-red-500" />
-                  <p className="text-xs sm:text-sm uppercase tracking-widest text-center px-4 leading-relaxed font-bold">กดสร้างคิวใหม่ด้านบน<br/>เพื่อแสดง QR Code และลิงก์</p>
+                  <p className="text-xs sm:text-sm font-semibold text-center px-4 leading-relaxed font-bold">กดสร้างคิวใหม่ด้านบน<br/>เพื่อแสดง QR Code และลิงก์</p>
                 </div>
               )}
             </div>
@@ -4719,14 +4719,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <div className="bg-[var(--bg-surface)] rounded-2xl sm:rounded-3xl shadow-[var(--shadow-panel)] border border-[var(--bd)] overflow-hidden h-full flex flex-col">
               <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex items-center gap-3 bg-[var(--bg-elevated)]">
                 <Activity size={20} style={{color: ac}} />
-                <h2 className="text-base sm:text-lg font-bold tracking-widest uppercase text-[var(--tx-heading)]">รายการคิวผู้ป่วย</h2>
+                <h2 className="text-base sm:text-lg font-bold font-semibold text-[var(--tx-heading)]">รายการคิวผู้ป่วย</h2>
               </div>
               {/* ── CARDS (all sizes) ── */}
               <div className="flex-1 divide-y divide-[var(--bd)]">
                 {sessions.length === 0 ? (
                   <div className="p-16 text-center text-gray-600 flex flex-col items-center gap-4">
                     <Activity size={36} className="opacity-20" />
-                    <p className="text-xs tracking-wider uppercase font-bold">ไม่มีรายการในขณะนี้</p>
+                    <p className="text-xs font-bold font-bold">ไม่มีรายการในขณะนี้</p>
                   </div>
                 ) : sessions.map(session => {
                   const data = session.patientData;
@@ -4752,7 +4752,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           ) : (
                             <div className="flex items-center gap-1.5 relative">
                               {session.isUnread && (
-                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-widest animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>
+                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black font-semibold animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)] shrink-0">New</span>
                               )}
                               <span className="font-bold text-[var(--tx-heading)] text-sm truncate max-w-[160px] sm:max-w-none">{session.sessionName || 'ไม่ระบุชื่อ'}</span>
                               <button onClick={() => handleEditName(session.id, session.sessionName)} className="text-gray-600 hover:text-blue-400 shrink-0"><Edit3 size={12} /></button>
@@ -4810,7 +4810,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                       {/* Row 2: time + QR timestamp */}
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className={`text-xs flex items-center gap-1 font-bold uppercase tracking-wider ${isLowTime ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
+                        <span className={`text-xs flex items-center gap-1 font-bold font-semibold ${isLowTime ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
                           {session.isPermanent ? <Link size={11} /> : <Clock size={11} />} {timeLeftStr}
                         </span>
                         {session.createdAt && (
@@ -4827,7 +4827,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             {isPerf && <Flame size={14} className="text-red-500 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]" />}
                             {isHrt && <Activity size={14} className="text-orange-500 drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]" />}
                           </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono uppercase tracking-wider">
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                             <span>อายุ: {data.age || '-'} ปี</span>
                             {!isFollowUp && !isCustom && <span>โทร: {formatPhoneNumberDisplay(data.phone, data.isInternationalPhone, data.phoneCountryCode)}</span>}
                             {(isFollowUp || isCustom) && <span className="text-orange-400">ประเมิน: {data.assessmentDate || '-'}</span>}
@@ -4860,7 +4860,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 </div>
                               )}
                               {data.hasAllergies === 'มี' && (
-                                <span className="text-xs text-red-400 flex items-center gap-1 font-bold uppercase tracking-wider border border-red-900/50 bg-red-950/20 px-2 py-0.5 rounded-lg w-fit">
+                                <span className="text-xs text-red-400 flex items-center gap-1 font-bold font-semibold border border-red-900/50 bg-red-950/20 px-2 py-0.5 rounded-lg w-fit">
                                   <AlertCircle size={10}/> แพ้: {data.allergiesDetail}
                                 </span>
                               )}
@@ -4868,18 +4868,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-600 text-xs italic uppercase tracking-wider">รอผู้ป่วยกรอกข้อมูล...</span>
+                        <span className="text-gray-600 text-xs italic font-semibold">รอผู้ป่วยกรอกข้อมูล...</span>
                       )}
                       {/* Row 4: status */}
                       <div className="flex flex-wrap items-center gap-2">
                         {session.status === 'completed' ? (
                           <>
                             {session.updatedAt ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-widest bg-blue-950/40 text-blue-400 border border-blue-900/50 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black font-semibold bg-blue-950/40 text-blue-400 border border-blue-900/50 whitespace-nowrap">
                                 <Edit3 size={11} /> มีการแก้ไข
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-widest bg-green-950/40 text-green-500 border border-green-900/50 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black font-semibold bg-green-950/40 text-green-500 border border-green-900/50 whitespace-nowrap">
                                 <CheckCircle2 size={11} /> รับข้อมูลแล้ว
                               </span>
                             )}
@@ -4895,7 +4895,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             )}
                           </>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-widest bg-orange-950/30 text-orange-500 border border-orange-900/50 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black font-semibold bg-orange-950/30 text-orange-500 border border-orange-900/50 whitespace-nowrap">
                             <Clock size={11} /> กำลังรอ
                           </span>
                         )}
@@ -4905,7 +4905,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--opd-bg)] border border-[var(--opd-bd)] w-full">
                           <ClipboardCheck size={14} className="text-[var(--opd-color)] shrink-0" />
                           <div className="flex flex-col min-w-0 gap-0.5">
-                            <span className="text-xs font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
+                            <span className="text-xs font-black font-semibold text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
                             <span className="text-[11px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
                               {formatBangkokTime(session.opdRecordedAt)}
                                 {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black tracking-wider">HN {session.brokerProClinicHN}</span>}
@@ -4971,7 +4971,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
                     }
                   }
-                }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-xs sm:text-xs font-black uppercase tracking-widest shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
+                }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-xs sm:text-xs font-black font-semibold shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
                   ✓ รับทราบ
                 </button>
               </div>
@@ -4984,7 +4984,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {isCustom ? <LayoutTemplate size={16}/> : isPerf ? <Flame size={16} /> : <FileText size={16} />}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-black text-white uppercase tracking-widest text-xs sm:text-sm leading-tight">
+                  <h3 className="font-black text-white font-semibold text-xs sm:text-sm leading-tight">
                     {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'ประวัติผู้ป่วย OPD'}
                   </h3>
                   <p className="text-[11px] text-red-500 font-mono tracking-widest mt-0.5">ID: {viewingSession.id}</p>
@@ -4995,7 +4995,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <div className="flex items-center gap-1.5 flex-wrap">
                 {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && (
                 <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
                   <Edit3 size={13} /> แก้ไขข้อมูล
                 </button>
                 )}
@@ -5006,7 +5006,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       onClick={() => handleResync(viewingSession)}
                       disabled={isPending}
                       title="บันทึกข้อมูลลง ProClinic อีกครั้ง (manual resync)"
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold uppercase tracking-widest whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
                         isPending
                           ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse cursor-not-allowed'
                           : 'bg-teal-950/20 hover:bg-teal-900/40 text-teal-400 border-teal-800/50'
@@ -5020,11 +5020,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 {viewingSession.patientData && !isCustom && (
                   <>
                     <button onClick={() => setPrintMode('dashboard')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded border border-[var(--bd-strong)] transition-colors text-xs font-bold uppercase tracking-widest whitespace-nowrap">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded border border-[var(--bd-strong)] transition-colors text-xs font-bold font-semibold whitespace-nowrap">
                       <Printer size={13} /> พิมพ์สรุป A4
                     </button>
                     <button onClick={() => setPrintMode('official')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold uppercase tracking-widest shadow-[0_0_10px_rgba(220,38,38,0.2)] whitespace-nowrap">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold font-semibold shadow-[0_0_10px_rgba(220,38,38,0.2)] whitespace-nowrap">
                       <Printer size={13} /> พิมพ์ฟอร์มมาตรฐาน
                     </button>
                   </>
@@ -5043,7 +5043,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || ''}` :
                         viewingSession.opdRecordedAt ? 'ส่งข้อมูลไป ProClinic' : 'ส่งข้อมูลไป ProClinic'
                       }
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold uppercase tracking-widest whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
                         isPending ? 'bg-amber-950/20 text-amber-400 border-amber-700/50 animate-pulse' :
                         isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] shadow-[0_0_8px_rgba(20,184,166,0.2)] cursor-not-allowed opacity-80' :
                         isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
@@ -5071,7 +5071,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
+                  <p className="text-[11px] font-black font-semibold text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
                   <p className="text-xs text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
                     บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
                     {viewingSession.brokerProClinicHN && (
@@ -5089,20 +5089,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {viewingSession.brokerProClinicId && (<>
                     <a href={getProClinicUrl(viewingSession.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
                       title={getProClinicUrl(viewingSession.brokerProClinicId)}>
                       ProClinic ↗
                     </a>
                     <button onClick={() => handleOpenPatientView(viewingSession)}
-                      className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
                       <Search size={9}/> คอร์สและนัดหมาย ↗
                     </button>
                     <button onClick={() => handleProClinicEdit(viewingSession)}
-                      className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
                       แก้ไขใน ProClinic
                     </button>
                     <button onClick={() => handleProClinicDelete(viewingSession)}
-                      className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
                       ลบจาก ProClinic
                     </button>
                   </>)}
@@ -5116,7 +5116,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
                   <button
                     onClick={() => handleOpdClick(viewingSession)}
-                    className="ml-auto text-[11px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
+                    className="ml-auto text-[11px] font-black font-semibold text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
                   >ลองใหม่</button>
                 </div>
                 {(viewingSession.brokerError || '').includes('Session หมดอายุ') && (
@@ -5137,7 +5137,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="space-y-6">
                   <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
-                    <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลส่วนตัว</h4>
+                    <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลส่วนตัว</h4>
                     <div className="space-y-3 text-sm">
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ชื่อ-สกุล:</span><span className="col-span-2 font-bold text-white break-words">{d.prefix !== 'ไม่ระบุ' ? d.prefix : ''} {d.firstName} {d.lastName}</span></div>
                       <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">เพศ:</span><span className="col-span-2 font-bold text-white">{d.gender || '-'}</span></div>
@@ -5162,7 +5162,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {!isFollowUp && !isCustom && (
                     <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-orange-900/30">
-                      <h4 className="text-xs font-black text-orange-600 uppercase tracking-widest border-b border-orange-900/30 pb-2 mb-4">ติดต่อฉุกเฉิน</h4>
+                      <h4 className="text-xs font-black text-orange-600 font-semibold border-b border-orange-900/30 pb-2 mb-4">ติดต่อฉุกเฉิน</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between"><span className="text-orange-500/50">ชื่อ-สกุล:</span><span className="font-bold text-orange-200">{d.emergencyName || '-'}</span></div>
                         <div className="flex justify-between"><span className="text-orange-500/50">ความสัมพันธ์:</span><span className="font-bold text-orange-200">{d.emergencyRelation || '-'}</span></div>
@@ -5176,10 +5176,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="space-y-6">
                     <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden h-full">
                       <div className="absolute top-0 left-0 w-1 h-full bg-gray-700"></div>
-                      <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลสุขภาพพื้นฐาน</h4>
+                      <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลสุขภาพพื้นฐาน</h4>
                       <div className="mb-5">
                         <span className="text-xs text-gray-500 block mb-2">สาเหตุที่มาพบแพทย์</span>
-                        <div className="flex flex-col gap-2 font-black text-white bg-[var(--bg-hover)] p-3 rounded border border-[var(--bd-strong)] uppercase tracking-wider text-sm border-l-2 border-l-red-600 mb-2">
+                        <div className="flex flex-col gap-2 font-black text-white bg-[var(--bg-hover)] p-3 rounded border border-[var(--bd-strong)] font-semibold text-sm border-l-2 border-l-red-600 mb-2">
                           {reasons.map(r => (
                             <div key={r} className="break-words">• {r === 'อื่นๆ' ? `อื่นๆ: ${d.visitReasonOther}` : r}</div>
                           ))}
@@ -5199,11 +5199,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                       <div className="space-y-3">
                         <div className={`p-3 rounded border ${d.hasAllergies === 'มี' ? 'bg-red-950/20 border-red-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                          <span className={`text-xs uppercase tracking-widest block mb-1 ${d.hasAllergies === 'มี' ? 'text-red-500' : 'text-gray-500'}`}>ประวัติแพ้ยา/อาหาร</span>
+                          <span className={`text-xs font-semibold block mb-1 ${d.hasAllergies === 'มี' ? 'text-red-500' : 'text-gray-500'}`}>ประวัติแพ้ยา/อาหาร</span>
                           <span className={`font-bold text-sm break-words ${d.hasAllergies === 'มี' ? 'text-red-400' : 'text-gray-300'}`}>{d.hasAllergies === 'มี' ? d.allergiesDetail : 'ไม่มี'}</span>
                         </div>
                         <div className={`p-3 rounded border ${d.hasUnderlying === 'มี' ? 'bg-orange-950/20 border-orange-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                          <span className={`text-xs uppercase tracking-widest block mb-1 ${d.hasUnderlying === 'มี' ? 'text-orange-500' : 'text-gray-500'}`}>โรคประจำตัว</span>
+                          <span className={`text-xs font-semibold block mb-1 ${d.hasUnderlying === 'มี' ? 'text-orange-500' : 'text-gray-500'}`}>โรคประจำตัว</span>
                           <span className={`font-bold text-sm leading-relaxed break-words ${d.hasUnderlying === 'มี' ? 'text-orange-300' : 'text-gray-300'}`}>
                             {d.hasUnderlying === 'มี' ? (
                               <ul className="list-disc pl-4 space-y-1">
@@ -5219,24 +5219,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </span>
                         </div>
                         <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ยาที่ใช้ประจำ</span>
+                          <span className="text-xs text-gray-500 font-semibold block mb-1">ยาที่ใช้ประจำ</span>
                           <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
                         </div>
                         {d.bloodType && d.bloodType !== 'ไม่ทราบ' && (
                           <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
-                            <span className="text-xs text-gray-500 uppercase tracking-widest block mb-1">กรุ๊ปเลือด</span>
+                            <span className="text-xs text-gray-500 font-semibold block mb-1">กรุ๊ปเลือด</span>
                             <span className="font-bold text-sm text-gray-300">{d.bloodType}</span>
                           </div>
                         )}
                         {d.pregnancy && d.pregnancy !== 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์' && (
                           <div className={`p-3 rounded border ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'bg-pink-950/20 border-pink-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                            <span className={`text-xs uppercase tracking-widest block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
+                            <span className={`text-xs font-semibold block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
                             <span className={`font-bold text-sm ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-300' : 'text-gray-300'}`}>{d.pregnancy}</span>
                           </div>
                         )}
                         {d.howFoundUs && d.howFoundUs.length > 0 && (
                           <div className="p-3 bg-[var(--bg-elevated)] rounded border border-blue-900/30">
-                            <span className="text-xs text-blue-500 uppercase tracking-widest block mb-2 flex items-center gap-1"><Globe size={10}/> รู้จักคลินิกจาก</span>
+                            <span className="text-xs text-blue-500 font-semibold block mb-2 flex items-center gap-1"><Globe size={10}/> รู้จักคลินิกจาก</span>
                             <div className="flex flex-wrap gap-1.5">
                               {d.howFoundUs.map(ch => (
                                 <span key={ch} className="text-xs font-bold text-blue-300 bg-blue-950/30 border border-blue-900/40 px-2.5 py-1 rounded-full">{ch}</span>
@@ -5254,7 +5254,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {isCustom && viewingSession.customTemplate && (
                 <div className="mt-6 bg-[var(--bg-elevated)] p-5 sm:p-8 rounded-2xl border border-cyan-900/40 relative overflow-hidden">
                   <div className="absolute top-0 right-0 bg-cyan-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs tracking-widest shadow-lg">CUSTOM</div>
-                  <h4 className="text-xs font-black text-cyan-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                  <h4 className="text-xs font-black text-cyan-500 font-semibold mb-6 flex items-center gap-2">
                     <LayoutTemplate size={12}/> แบบฟอร์ม: {viewingSession.customTemplate.title}
                   </h4>
                   <div className="space-y-4">
@@ -5280,7 +5280,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="mt-6 space-y-6">
                   {!isFollowUp && isPerf && (
                     <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
-                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                       <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 bg-red-600 rounded-full"></span> การประเมินส่วนที่ 1: อาการเบื้องต้น
                       </h4>
                       <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
@@ -5294,12 +5294,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const adamRes = calculateADAM(d);
                     return (
                       <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
                           <span className="w-2 h-2 bg-red-600 rounded-full"></span> {isFollowUp ? 'แบบประเมินติดตามอาการ' : `การประเมินส่วนที่ ${isPerf ? '2' : '1'}`}: พร่องฮอร์โมนเพศชาย (ADAM)
                         </h4>
                         <div className={`p-4 rounded-lg border mb-5 flex items-center justify-between ${adamRes.bg}`}>
                           <div className="flex-1 pr-2">
-                            <span className="text-xs uppercase tracking-widest text-gray-500 block">ผลการประเมิน</span>
+                            <span className="text-xs font-semibold text-gray-500 block">ผลการประเมิน</span>
                             <span className={`font-black text-sm sm:text-lg leading-tight ${adamRes.color} block`}>{adamRes.text}</span>
                           </div>
                           <div className="text-right shrink-0">
@@ -5334,17 +5334,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const mrsRes = calculateMRS(d);
                     return (
                       <div className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-pink-900/50 shadow-inner relative overflow-hidden">
-                         <h4 className="text-xs font-black text-pink-500 uppercase tracking-widest mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]">
+                         <h4 className="text-xs font-black text-pink-500 font-semibold mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]">
                           <Activity size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'การประเมินส่วนที่ 1'}: อาการวัยทอง (MRS)
                         </h4>
                         <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
                           <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
-                            <span className="text-xs font-bold text-gray-500 tracking-widest uppercase mb-2">คะแนนรวม</span>
+                            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
                             <div className="flex items-baseline gap-1 mb-3">
                               <span className={`text-5xl sm:text-6xl font-black ${mrsRes.color} leading-none`}>{mrsRes.score}</span>
                               <span className="text-lg font-bold text-[#333]">/ 44</span>
                             </div>
-                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs tracking-widest uppercase border text-center whitespace-nowrap ${mrsRes.bg} ${mrsRes.color}`}>
+                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center whitespace-nowrap ${mrsRes.bg} ${mrsRes.color}`}>
                               {mrsRes.text}
                             </div>
                           </div>
@@ -5374,17 +5374,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     return (
                       <div className="bg-gradient-to-br from-[#1a0505] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-red-900/50 shadow-[0_0_30px_rgba(220,38,38,0.05)] relative overflow-hidden">
                         <Flame className="absolute bottom-[-20px] right-[-20px] w-48 h-48 text-red-600 opacity-5 pointer-events-none" />
-                        <h4 className="text-xs font-black text-red-500 uppercase tracking-widest mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]">
+                        <h4 className="text-xs font-black text-red-500 font-semibold mb-6 flex items-center gap-2 drop-shadow-[0_0_5px_rgba(220,38,38,0.8)]">
                           <Flame size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'ส่วนที่ 3'}: ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)
                         </h4>
                         <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
                           <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
-                            <span className="text-xs font-bold text-gray-500 tracking-widest uppercase mb-2">คะแนนรวม</span>
+                            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
                             <div className="flex items-baseline gap-1 mb-3">
                               <span className={`text-5xl sm:text-6xl font-black ${interp.color} leading-none`}>{iiefScore}</span>
                               <span className="text-lg font-bold text-[#333]">/ 25</span>
                             </div>
-                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs tracking-widest uppercase border text-center ${interp.bg} ${interp.color}`}>
+                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center ${interp.bg} ${interp.color}`}>
                               {interp.text}
                             </div>
                           </div>
@@ -5422,22 +5422,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="mt-6 bg-[var(--bg-elevated)] p-4 sm:p-5 rounded-xl border border-emerald-900/40 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600"></div>
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                      <h4 className="text-xs font-black text-emerald-500 font-semibold flex items-center gap-2">
                         <ClipboardCheck size={12}/> ข้อมูลการจองมัดจำ
                       </h4>
                       <div className="flex gap-1.5">
                         {!isEditing ? (
                           !(viewingSession.isArchived && viewingSession.formType === 'deposit') && <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
-                            className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
+                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
                             <Edit3 size={10}/> แก้ไข
                           </button>
                         ) : (<>
                           <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
-                            className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors flex items-center gap-1">
+                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors flex items-center gap-1">
                             <CheckCircle2 size={10}/> บันทึก
                           </button>
                           <button onClick={() => setEditingDepositData(null)}
-                            className="text-[11px] font-black uppercase tracking-widest px-2 py-1 rounded border border-[var(--bd-strong)] text-gray-400 hover:text-white transition-colors">
+                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-[var(--bd-strong)] text-gray-400 hover:text-white transition-colors">
                             ยกเลิก
                           </button>
                         </>)}
@@ -5476,7 +5476,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </div>
                         )}
                         {dep.hasAppointment && (<>
-                          <div className="sm:col-span-2 mt-2 mb-1"><span className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
+                          <div className="sm:col-span-2 mt-2 mb-1"><span className="text-xs font-black text-amber-500 font-semibold flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
                           <div className="bg-[var(--bg-surface)] p-3 rounded border border-amber-900/30">
                             <span className="text-xs text-gray-500 uppercase block mb-1">วันนัด</span>
                             <span className="font-bold text-amber-300">{toThaiDate(dep.appointmentDate) || '-'}</span>
@@ -5600,12 +5600,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {viewingSession.patientData && (
               <div className="mt-8 pt-6 border-t border-[var(--bd)] relative">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <h4 className="text-xs font-black text-gray-400 font-semibold flex items-center gap-2">
                     <FileText size={14} className="text-blue-500 shrink-0" /> สรุปประวัติผู้ป่วย (Clinical Summary)
                   </h4>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     {/* Language toggle */}
-                    <div className="flex bg-[var(--bg-hover)] border border-[var(--bd-strong)] rounded overflow-hidden text-xs font-bold uppercase tracking-widest">
+                    <div className="flex bg-[var(--bg-hover)] border border-[var(--bd-strong)] rounded overflow-hidden text-xs font-bold font-semibold">
                       <button onClick={() => setSummaryLang('en')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'en' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>EN</button>
                       <button onClick={() => setSummaryLang('th')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'th' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>TH</button>
                     </div>
@@ -5672,8 +5672,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <p className="text-[11px] text-[var(--tx-muted)]">เลือกประเภทแบบฟอร์มที่ต้องการ</p>
                 {/* Tabs */}
                 <div className="flex mt-4 bg-[var(--bg-hover)] rounded-lg p-0.5 border border-[var(--bd)]">
-                  <button onClick={() => setSessionModalTab('standard')} className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${sessionModalTab === 'standard' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มมาตรฐาน</button>
-                  <button onClick={() => setSessionModalTab('custom')} className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${sessionModalTab === 'custom' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มสร้างเอง</button>
+                  <button onClick={() => setSessionModalTab('standard')} className={`flex-1 py-2 text-[11px] font-bold font-semibold rounded-md transition-all ${sessionModalTab === 'standard' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มมาตรฐาน</button>
+                  <button onClick={() => setSessionModalTab('custom')} className={`flex-1 py-2 text-[11px] font-bold font-semibold rounded-md transition-all ${sessionModalTab === 'custom' ? 'bg-[var(--bg-card)] text-[var(--tx-heading)] shadow-sm' : 'text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>ฟอร์มสร้างเอง</button>
                 </div>
               </div>
 
@@ -5707,7 +5707,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                      {/* Follow-up section */}
                      <div className={`mt-2 pt-3 border-t ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
-                       <h4 className="text-xs font-black text-[var(--tx-muted)] uppercase tracking-widest mb-2.5">Follow-up — ลิงก์ถาวร</h4>
+                       <h4 className="text-xs font-black text-[var(--tx-muted)] font-semibold mb-2.5">Follow-up — ลิงก์ถาวร</h4>
                        <div className="space-y-2">
                          {[
                            { formType: 'followup_ed', label: 'เสื่อมสมรรถภาพทางเพศ (ชาย)', sub: 'IIEF-5 Score' },
@@ -5773,13 +5773,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <>
                   {/* ชื่อคิว */}
                   <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ชื่อคิว / Note</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-1">ชื่อคิว / Note</label>
                     <input type="text" value={depositFormData.sessionName} onChange={e => setDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                   </div>
 
                   {/* ช่องทางชำระเงิน */}
                   <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ช่องทางชำระเงิน</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-1">ช่องทางชำระเงิน</label>
                     <select value={depositFormData.paymentChannel} onChange={e => setDepositFormData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600">
                       <option value="">-- เลือกช่องทาง --</option>
                       {(depositOptions?.paymentMethods || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -5788,25 +5788,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* ยอดชำระ */}
                   <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ยอดชำระ (บาท) <span className="text-red-500">*</span></label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-1">ยอดชำระ (บาท) <span className="text-red-500">*</span></label>
                     <input type="number" value={depositFormData.paymentAmount} onChange={e => setDepositFormData(p => ({...p, paymentAmount: e.target.value}))} placeholder="" className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                   </div>
 
                   {/* วันที่ + เวลา */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">วันที่จ่ายมัดจำ</label>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">วันที่จ่ายมัดจำ</label>
                       <DatePickerThai value={depositFormData.depositDate} onChange={v => setDepositFormData(p => ({...p, depositDate: v}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">เวลา</label>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">เวลา</label>
                       <input type="time" value={depositFormData.depositTime} onChange={e => setDepositFormData(p => ({...p, depositTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                     </div>
                   </div>
 
                   {/* พนักงานขาย */}
                   <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">พนักงานขาย</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-1">พนักงานขาย</label>
                     <select value={depositFormData.salesperson} onChange={e => setDepositFormData(p => ({...p, salesperson: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600">
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.sellers || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -5885,7 +5885,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* นัดมาเพื่อ — visit purpose */}
                   <div className="border-t border-[var(--bd)] pt-4">
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-2">นัดมาเพื่อ</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ</label>
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
@@ -5925,7 +5925,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <>
                   {/* ชื่อคิว */}
                   <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1">ชื่อคิว / Note</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-1">ชื่อคิว / Note</label>
                     <input type="text" value={noDepositFormData.sessionName} onChange={e => setNoDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
                   </div>
 
@@ -6000,7 +6000,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                   {/* นัดมาเพื่อ — visit purpose */}
                   <div className={`border-t pt-4 ${isDark ? 'border-[var(--bd)]' : 'border-pink-200'}`}>
-                    <label className="text-xs text-gray-500 uppercase tracking-widest block mb-2">นัดมาเพื่อ <span className="text-red-500">*</span></label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ <span className="text-red-500">*</span></label>
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
@@ -6028,14 +6028,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {showNamePrompt && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
           <div className="bg-[var(--bg-elevated)] rounded-xl w-full max-w-md p-6 text-center animate-in zoom-in-95" style={{boxShadow: `0 0 40px rgba(${acRgb},0.2)`, border: `1px solid rgba(${acRgb},0.3)`}}>
-            <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">ตั้งชื่อคิว / Note</h3>
-            <p className="text-gray-500 mb-4 text-xs uppercase tracking-widest leading-relaxed">
+            <h3 className="text-lg font-black text-white font-semibold mb-2">ตั้งชื่อคิว / Note</h3>
+            <p className="text-gray-500 mb-4 text-xs font-semibold leading-relaxed">
               กรุณาระบุชื่อหรือหมายเหตุ<br/>เพื่อให้ง่ายต่อการค้นหา
             </p>
             <input type="text" autoFocus value={sessionNameInput} onChange={(e) => setSessionNameInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirmCreateSession()} placeholder="เช่น คุณ A, เคส 001" className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-4 py-3 outline-none mb-6 text-sm" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = '#333'; }} />
             <div className="flex gap-3">
-              <button onClick={() => setShowNamePrompt(false)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs uppercase tracking-wider border border-[var(--bd-strong)]">ยกเลิก</button>
-              <button onClick={confirmCreateSession} disabled={isGenerating} className="flex-1 px-4 py-3 rounded font-bold text-xs uppercase tracking-wider disabled:opacity-70" style={{backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.4)`}}>
+              <button onClick={() => setShowNamePrompt(false)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs font-semibold border border-[var(--bd-strong)]">ยกเลิก</button>
+              <button onClick={confirmCreateSession} disabled={isGenerating} className="flex-1 px-4 py-3 rounded font-bold text-xs font-semibold disabled:opacity-70" style={{backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.4)`}}>
                 {isGenerating ? 'กำลังสร้าง...' : 'สร้างคิว'}
               </button>
             </div>
@@ -6057,7 +6057,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <Package size={16} className="text-teal-400" />
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-xs font-black uppercase tracking-widest text-teal-400">คอร์ส & บริการคงเหลือ</span>
+                <span className="text-xs font-black font-semibold text-teal-400">คอร์ส & บริการคงเหลือ</span>
                 <span className="text-sm font-bold text-white truncate">{coursesPanel.patientName || '—'}{coursesPanel.hn ? <span className="text-teal-500 ml-2 font-mono text-xs">HN {coursesPanel.hn}</span> : ''}</span>
               </div>
               <button onClick={() => setCoursesPanel(null)} className="ml-auto p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[var(--bg-hover)] transition-colors shrink-0"><X size={16}/></button>
@@ -6069,14 +6069,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {coursesPanel.status === 'loading' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-600">
                   <Loader2 size={28} className="animate-spin text-teal-600" />
-                  <p className="text-xs font-bold uppercase tracking-widest">กำลังดึงข้อมูลจาก ProClinic...</p>
+                  <p className="text-xs font-bold font-semibold">กำลังดึงข้อมูลจาก ProClinic...</p>
                 </div>
               )}
 
               {coursesPanel.status === 'error' && (
                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-red-600">
                   <PackageX size={28} />
-                  <p className="text-xs font-bold uppercase tracking-widest">{coursesPanel.error || 'เกิดข้อผิดพลาด'}</p>
+                  <p className="text-xs font-bold font-semibold">{coursesPanel.error || 'เกิดข้อผิดพลาด'}</p>
                 </div>
               )}
 
@@ -6085,7 +6085,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Package size={14} className="text-teal-500"/>
-                      <h4 className="text-xs font-black uppercase tracking-widest text-teal-500">คอร์สของฉัน</h4>
+                      <h4 className="text-xs font-black font-semibold text-teal-500">คอร์สของฉัน</h4>
                       <span className="text-xs font-bold text-teal-700 bg-teal-950/30 px-2 py-0.5 rounded-full border border-teal-900/30">{coursesPanel.courses.length}</span>
                     </div>
                     {coursesPanel.courses.length === 0
@@ -6097,7 +6097,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <PackageX size={14} className="text-red-500"/>
-                        <h4 className="text-xs font-black uppercase tracking-widest text-red-500">คอร์สหมดอายุ</h4>
+                        <h4 className="text-xs font-black font-semibold text-red-500">คอร์สหมดอายุ</h4>
                         <span className="text-xs font-bold text-red-700 bg-red-950/30 px-2 py-0.5 rounded-full border border-red-900/30">{coursesPanel.expiredCourses.length}</span>
                       </div>
                       <div className="flex flex-col gap-2">{coursesPanel.expiredCourses.map((c, i) => <CourseCard key={i} c={c} expired={true}/>)}</div>
@@ -6201,7 +6201,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <Link size={16} className="text-purple-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
+                  <p className="text-xs font-black font-semibold text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
                   <p className="text-sm font-bold text-white truncate">{plSession.sessionName || plSession.id}</p>
                 </div>
                 <button onClick={() => setPatientLinkModal(null)} className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[var(--bg-hover)] transition-colors"><X size={16}/></button>
@@ -6211,20 +6211,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 {!plToken ? (
                   <>
                     <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
-                    <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
+                    <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
                       {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ดูข้อมูล
                     </button>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">สถานะ</span>
-                      <span className={`text-xs font-black uppercase tracking-widest px-2 py-1 rounded-lg ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                      <span className="text-xs text-gray-500 font-semibold font-bold">สถานะ</span>
+                      <span className={`text-xs font-black font-semibold px-2 py-1 rounded-lg ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
                         {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                       </span>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <p className="text-xs text-gray-600 uppercase tracking-widest font-bold">ลิงก์</p>
+                      <p className="text-xs text-gray-600 font-semibold font-bold">ลิงก์</p>
                       <div className="flex items-center gap-2">
                         <input readOnly value={getPatientLinkUrl(plToken)} className="flex-1 bg-[var(--bg-card)] border border-[var(--bd)] text-gray-500 text-xs p-2.5 rounded-lg outline-none font-mono" />
                         <button onClick={() => handleCopyToClipboard(getPatientLinkUrl(plToken), true)} className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-white transition-colors shrink-0"><ClipboardList size={14}/></button>
@@ -6232,10 +6232,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <button onClick={() => { setSelectedQR(plSession.id); setQrDisplayMode('patientLink'); setPatientLinkModal(null); }} className="flex-1 py-2.5 rounded-xl border border-purple-900/50 text-purple-400 hover:bg-purple-950/30 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5">
+                      <button onClick={() => { setSelectedQR(plSession.id); setQrDisplayMode('patientLink'); setPatientLinkModal(null); }} className="flex-1 py-2.5 rounded-xl border border-purple-900/50 text-purple-400 hover:bg-purple-950/30 text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5">
                         <QrCode size={13}/> QR
                       </button>
-                      <button onClick={() => { handleTogglePatientLink(plSession); }} disabled={patientLinkLoading} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${plEnabled ? 'border-[var(--bd)] text-gray-400 hover:text-white hover:border-[#444]' : 'border-green-900/50 text-green-400 hover:bg-green-950/30'}`}>
+                      <button onClick={() => { handleTogglePatientLink(plSession); }} disabled={patientLinkLoading} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${plEnabled ? 'border-[var(--bd)] text-gray-400 hover:text-white hover:border-[#444]' : 'border-green-900/50 text-green-400 hover:bg-green-950/30'}`}>
                         {plEnabled ? <><ToggleLeft size={13}/> ปิด</> : <><ToggleRight size={13}/> เปิด</>}
                       </button>
                       <button onClick={() => { handleDeletePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="p-2.5 rounded-xl border border-red-900/30 text-red-500 hover:bg-red-950/30 transition-colors disabled:opacity-60" title="ลบลิงก์">
@@ -6254,7 +6254,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {patientViewUrl && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex flex-col" onClick={() => closePatientViewIframe()}>
           <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-elevated)]/90 border-b border-[var(--bd-strong)] shrink-0">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">ข้อมูลผู้ป่วย — Admin View</span>
+            <span className="text-xs font-bold text-gray-400 font-semibold">ข้อมูลผู้ป่วย — Admin View</span>
             <button onClick={() => closePatientViewIframe()} className="text-gray-500 hover:text-white text-xl font-bold px-2 transition-colors">&times;</button>
           </div>
           <div className="flex-1 p-2 sm:p-4" onClick={e => e.stopPropagation()}>
@@ -6357,7 +6357,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <div className="p-6 flex flex-col items-center gap-4">
                   <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
                   <div className="w-full">
-                    <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">URL</label>
+                    <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">URL</label>
                     <div className="flex gap-2">
                       <input readOnly value={schedGenResult.url} className="flex-1 text-xs bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-[var(--tx-body)] font-mono" />
                       <button onClick={() => { navigator.clipboard.writeText(schedGenResult.url); showToast('คัดลอกแล้ว', 2000); }}
@@ -6373,14 +6373,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Month + advance */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เดือนเริ่มต้น</label>
+                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เดือนเริ่มต้น</label>
                       <select value={schedStartMonth} onChange={e => setSchedStartMonth(e.target.value)}
                         className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงทั้งหมด</label>
+                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงทั้งหมด</label>
                       <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
                         className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} เดือน</option>)}
@@ -6391,7 +6391,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Slot interval + options */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">ช่วงเวลาละ</label>
+                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">ช่วงเวลาละ</label>
                       <select value={schedSlotDuration} onChange={e => setSchedSlotDuration(Number(e.target.value))}
                         className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         {[15,30,45,60,75,90,105,120].map(n => <option key={n} value={n}>{n >= 60 ? `${n/60} ชม.${n%60 ? ` ${n%60} นาที` : ''}` : `${n} นาที`}</option>)}
@@ -6409,7 +6409,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Doctor selector — only when พบแพทย์ */}
                   {!schedNoDoctorRequired && practitioners.filter(p => p.role === 'doctor').length > 0 && (
                     <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">เลือกแพทย์</label>
+                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เลือกแพทย์</label>
                       <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
                         className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                         <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
@@ -6423,7 +6423,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Show from option — only relevant if start month is current month */}
                   {(() => { const nowMo = new Date(); const curMo = `${nowMo.getFullYear()}-${String(nowMo.getMonth() + 1).padStart(2, '0')}`; return schedStartMonth === curMo; })() && (
                   <div>
-                    <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงคิวตั้งแต่</label>
+                    <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงคิวตั้งแต่</label>
                     <div className="flex gap-2">
                       {[['today', 'วันนี้เป็นต้นไป'], ['tomorrow', 'พรุ่งนี้เป็นต้นไป']].map(([val, label]) => (
                         <button key={val} onClick={() => setSchedShowFrom(val)}
@@ -6455,7 +6455,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const validDay = currentEndDay < minDay ? minDay : currentEndDay > dimLast ? dimLast : currentEndDay;
                     return (
                       <div>
-                        <label className="text-xs text-[var(--tx-muted)] font-bold uppercase tracking-wider mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
+                        <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
                         <select value={validDay} onChange={e => { const d = Number(e.target.value); setSchedEndDay(`${lastMoStr}-${String(d).padStart(2, '0')}`); }}
                           className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                           {dayOptions.map(d => <option key={d} value={d}>{d} {thaiMo[lastMo.getMonth()]} {lastMo.getFullYear() + 543}</option>)}
