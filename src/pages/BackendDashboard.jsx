@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -15,6 +15,7 @@ import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
+import AppointmentTab from '../components/backend/AppointmentTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -59,6 +60,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     { id: 'clone', icon: <Download size={16} />, label: 'Clone ลูกค้า', color: 'violet' },
     { id: 'customers', icon: <Users size={16} />, label: 'ข้อมูลลูกค้า', color: 'teal' },
     { id: 'masterdata', icon: <Database size={16} />, label: 'ข้อมูลพื้นฐาน', color: 'amber' },
+    { id: 'appointments', icon: <CalendarDays size={16} />, label: 'นัดหมาย', color: 'sky' },
   ];
 
   return (
@@ -101,6 +103,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                   violet: { active: 'bg-violet-700 text-white shadow-[0_0_15px_rgba(139,92,246,0.4)]', hover: 'hover:text-violet-400 hover:border-violet-800/50' },
                   teal: { active: 'bg-teal-700 text-white shadow-[0_0_15px_rgba(20,184,166,0.4)]', hover: 'hover:text-teal-400 hover:border-teal-800/50' },
                   amber: { active: 'bg-amber-700 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]', hover: 'hover:text-amber-400 hover:border-amber-800/50' },
+                  sky: { active: 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]', hover: 'hover:text-sky-400 hover:border-sky-900/50' },
                 };
                 const cm = colorMap[tab.color];
                 return (
@@ -160,6 +163,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'appointments' ? (
+          <AppointmentTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
 

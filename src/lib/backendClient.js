@@ -127,6 +127,65 @@ export async function rebuildTreatmentSummary(customerId) {
   });
 }
 
+// ─── Appointment CRUD ───────────────────────────────────────────────────────
+
+const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
+const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(id));
+
+/** Create a new backend appointment */
+export async function createBackendAppointment(data) {
+  const appointmentId = `BA-${Date.now()}`;
+  const now = new Date().toISOString();
+  await setDoc(appointmentDoc(appointmentId), {
+    appointmentId,
+    ...data,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { appointmentId, success: true };
+}
+
+/** Update an existing appointment */
+export async function updateBackendAppointment(appointmentId, data) {
+  await updateDoc(appointmentDoc(appointmentId), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+  return { success: true };
+}
+
+/** Delete an appointment */
+export async function deleteBackendAppointment(appointmentId) {
+  await deleteDoc(appointmentDoc(appointmentId));
+  return { success: true };
+}
+
+/** Get all appointments for a month (YYYY-MM) */
+export async function getAppointmentsByMonth(yearMonth) {
+  const snap = await getDocs(appointmentsCol());
+  const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Filter by month prefix (date field is "YYYY-MM-DD")
+  const filtered = all.filter(a => a.date && a.date.startsWith(yearMonth));
+  // Group by date
+  const grouped = {};
+  filtered.forEach(a => {
+    if (!grouped[a.date]) grouped[a.date] = [];
+    grouped[a.date].push(a);
+  });
+  // Sort each day by startTime
+  Object.values(grouped).forEach(arr => arr.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')));
+  return grouped;
+}
+
+/** Get all appointments for a customer */
+export async function getCustomerAppointments(customerId) {
+  const q = query(appointmentsCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  appts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return appts;
+}
+
 // ─── Master Data Read + Sync ────────────────────────────────────────────────
 
 const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);
