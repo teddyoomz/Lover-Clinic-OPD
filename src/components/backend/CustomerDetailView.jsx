@@ -74,10 +74,10 @@ export default function CustomerDetailView({ customer, accentColor, onBack }) {
   return (
     <div>
       {/* ── 3-Column Grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_360px] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-4 overflow-hidden">
 
         {/* ════════════════════ LEFT: Profile ════════════════════ */}
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {/* Profile Card */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
             {/* Avatar + Name header */}
@@ -139,7 +139,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack }) {
         </div>
 
         {/* ════════════════════ CENTER: Medical ════════════════════ */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
 
           {/* Appointments Card */}
           {appointments.length > 0 && (
@@ -238,7 +238,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack }) {
         </div>
 
         {/* ════════════════════ RIGHT: Courses ════════════════════ */}
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {/* Tabs */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
             <div className="flex border-b border-[var(--bd)]">
