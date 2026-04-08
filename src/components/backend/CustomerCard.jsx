@@ -2,7 +2,7 @@
 // Used in both CloneTab (search results) and CustomerListTab (cloned customers).
 // Follows Thai cultural rules: no red on names/HN, uses CSS variables for theme.
 
-import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download } from 'lucide-react';
+import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download, Eye } from 'lucide-react';
 import { hexToRgb } from '../../utils.js';
 
 export default function CustomerCard({
@@ -12,6 +12,7 @@ export default function CustomerCard({
   cloneStatus,        // 'idle' | 'cloning' | 'done' | 'error' | 'exists'
   cloneProgress,      // { step, label, percent, detail }
   onClone,            // callback when "ดูดข้อมูลทั้งหมด" clicked
+  onView,             // callback when card clicked in cloned mode → open detail view
 }) {
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -42,8 +43,13 @@ export default function CustomerCard({
     return `${days} วันที่แล้ว`;
   };
 
+  const handleCardClick = () => {
+    if (mode === 'cloned' && onView) onView(customer);
+  };
+
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group">
+    <div onClick={handleCardClick}
+      className={`bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''}`}>
 
       {/* Card Header — HN badge + avatar area */}
       <div className="flex items-start gap-3 p-4 pb-2">
@@ -118,7 +124,17 @@ export default function CustomerCard({
         )}
       </div>
 
-      {/* Card Footer — action buttons */}
+      {/* Card Footer — view button (cloned mode) */}
+      {mode === 'cloned' && onView && (
+        <div className="px-4 pb-4">
+          <button onClick={(e) => { e.stopPropagation(); onView(customer); }}
+            className="w-full py-2 rounded-lg text-xs font-bold bg-teal-900/20 border border-teal-700/40 text-teal-400 hover:bg-teal-900/30 transition-all flex items-center justify-center gap-2">
+            <Eye size={14} /> ดูรายละเอียด
+          </button>
+        </div>
+      )}
+
+      {/* Card Footer — clone button (search mode) */}
       {mode === 'search' && onClone && (
         <div className="px-4 pb-4">
           {cloneStatus === 'cloning' ? (

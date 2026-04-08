@@ -1,0 +1,462 @@
+// ─── CustomerDetailView — 3-column customer detail (mimics ProClinic layout) ─
+// Left: Profile card | Center: Appointments + Treatment timeline | Right: Courses tabs
+
+import { useState, useEffect, useMemo } from 'react';
+import {
+  ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
+  Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
+  ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield
+} from 'lucide-react';
+import { getCustomerTreatments } from '../../lib/backendClient.js';
+import { hexToRgb } from '../../utils.js';
+
+// ─── Helper: format Thai date ───────────────────────────────────────────────
+const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function formatThaiDate(dateStr) {
+  if (!dateStr) return '-';
+  // Handle "7 เมษายน 2026" or "2026-04-07" or "07/04/2026"
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr; // Return raw if can't parse
+  return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+function formatDob(pd) {
+  if (!pd) return '-';
+  const { dobDay, dobMonth, dobYear, age } = pd;
+  if (!dobDay && !dobMonth && !dobYear) return age ? `อายุ ${age} ปี` : '-';
+  const monthLabel = dobMonth ? (THAI_MONTHS_SHORT[parseInt(dobMonth) - 1] || dobMonth) : '';
+  const yearDisplay = dobYear ? (parseInt(dobYear) < 2400 ? parseInt(dobYear) + 543 : dobYear) : '';
+  const parts = [dobDay, monthLabel, yearDisplay].filter(Boolean).join(' ');
+  return age ? `${parts} (อายุ ${age} ปี)` : parts;
+}
+
+function relativeTime(isoStr) {
+  if (!isoStr) return '-';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'เมื่อสักครู่';
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} ชม.ที่แล้ว`;
+  const days = Math.floor(hrs / 24);
+  return `${days} วันที่แล้ว`;
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+export default function CustomerDetailView({ customer, accentColor, onBack }) {
+  const ac = accentColor || '#dc2626';
+  const acRgb = hexToRgb(ac);
+  const pd = customer?.patientData || {};
+
+  const [treatments, setTreatments] = useState([]);
+  const [treatmentsLoading, setTreatmentsLoading] = useState(false);
+  const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired'
+  const [expandedTreatment, setExpandedTreatment] = useState(null);
+
+  // Load treatment details from be_treatments
+  useEffect(() => {
+    if (!customer?.proClinicId) return;
+    setTreatmentsLoading(true);
+    getCustomerTreatments(customer.proClinicId)
+      .then(data => setTreatments(data))
+      .catch(() => {})
+      .finally(() => setTreatmentsLoading(false));
+  }, [customer?.proClinicId]);
+
+  const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
+  const hn = customer?.proClinicHN || '';
+  const activeCourses = customer?.courses || [];
+  const expiredCourses = customer?.expiredCourses || [];
+  const appointments = customer?.appointments || [];
+  const treatmentSummary = customer?.treatmentSummary || [];
+
+  return (
+    <div className="space-y-4">
+      {/* ── Back button ── */}
+      <button onClick={onBack}
+        className="flex items-center gap-2 text-sm text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-colors font-medium">
+        <ArrowLeft size={16} /> กลับไปรายชื่อลูกค้า
+      </button>
+
+      {/* ── 3-Column Grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_360px] gap-4">
+
+        {/* ════════════════════ LEFT: Profile ════════════════════ */}
+        <div className="space-y-3">
+          {/* Profile Card */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+            {/* Avatar + Name header */}
+            <div className="p-5 text-center border-b border-[var(--bd)]">
+              {/* Avatar */}
+              <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center border-2"
+                style={{ borderColor: `rgba(${acRgb},0.4)`, backgroundColor: `rgba(${acRgb},0.1)` }}>
+                <span className="text-2xl font-bold text-[var(--tx-heading)]">
+                  {(pd.firstName || '?')[0]}
+                </span>
+              </div>
+
+              {/* HN Badge */}
+              {hn && (
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-2">
+                  {hn}
+                </span>
+              )}
+
+              {/* Name — NEVER red (Thai culture) */}
+              <h2 className="text-base font-bold text-[var(--tx-heading)]">{name}</h2>
+
+              {/* Clone status */}
+              {customer?.cloneStatus && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px]">
+                  {customer.cloneStatus === 'complete' ? (
+                    <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 size={10} /> Clone สมบูรณ์</span>
+                  ) : customer.cloneStatus === 'partial_error' ? (
+                    <span className="text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Clone บางส่วน</span>
+                  ) : null}
+                  <span className="text-[var(--tx-muted)]">| {relativeTime(customer.lastSyncedAt)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Personal Info Table */}
+            <div className="p-4 space-y-0">
+              <InfoRow label="สัญชาติ" value={pd.nationality || '-'} />
+              <InfoRow label="เลขบัตรปชช." value={pd.idCard || '-'} />
+              <InfoRow label="เพศ" value={pd.gender || '-'} />
+              <InfoRow label="วันเกิด" value={formatDob(pd)} />
+              <InfoRow label="เบอร์โทร" value={pd.phone || '-'} icon={<Phone size={11} />} />
+              <InfoRow label="กรุ๊ปเลือด" value={pd.bloodType || '-'} />
+              <InfoRow label="ที่อยู่" value={formatAddress(pd)} icon={<MapPin size={11} />} />
+              {pd.allergiesDetail && (
+                <InfoRow label="แพ้ยา" value={pd.allergiesDetail} className="text-amber-400" />
+              )}
+              {pd.hasUnderlying === 'มี' && (
+                <InfoRow label="โรคประจำตัว" value={formatUnderlying(pd)} className="text-amber-400" />
+              )}
+              {pd.emergencyName && (
+                <InfoRow label="ผู้ติดต่อฉุกเฉิน" value={`${pd.emergencyName} (${pd.emergencyRelation || '-'}) ${pd.emergencyPhone || ''}`} />
+              )}
+              {pd.howFoundUs?.length > 0 && (
+                <InfoRow label="ที่มา" value={Array.isArray(pd.howFoundUs) ? pd.howFoundUs.join(', ') : pd.howFoundUs} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ════════════════════ CENTER: Medical ════════════════════ */}
+        <div className="space-y-4">
+
+          {/* Appointments Card */}
+          {appointments.length > 0 && (
+            <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
+                <Calendar size={16} className="text-sky-400" />
+                <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">นัดหมาย</h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{appointments.length}</span>
+              </div>
+              <div className="divide-y divide-[var(--bd)]">
+                {appointments.map((appt, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[var(--tx-heading)]">
+                      <Calendar size={13} className="text-sky-400" />
+                      {appt.date} {appt.time && `| ${appt.time}`}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--tx-muted)]">
+                      {appt.branch && <span>{appt.branch}</span>}
+                      {appt.doctor && <span>{appt.doctor}</span>}
+                      {appt.room && <span>{appt.room}</span>}
+                    </div>
+                    {appt.notes && <p className="mt-1 text-xs text-[var(--tx-muted)]">{appt.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Treatment Timeline */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
+              <Stethoscope size={16} style={{ color: ac }} />
+              <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">ประวัติการรักษา</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
+                {customer?.treatmentCount || treatmentSummary.length}
+              </span>
+            </div>
+
+            {treatmentSummary.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการรักษา</div>
+            ) : (
+              <div className="divide-y divide-[var(--bd)]">
+                {treatmentSummary.map((t, i) => {
+                  const isExpanded = expandedTreatment === t.id;
+                  const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
+                  return (
+                    <div key={t.id || i} className="group">
+                      {/* Summary row */}
+                      <button onClick={() => setExpandedTreatment(isExpanded ? null : t.id)}
+                        className="w-full px-4 py-3 text-left hover:bg-[var(--bg-hover)] transition-colors">
+                        <div className="flex items-start gap-3">
+                          {/* Timeline dot */}
+                          <div className="mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 border-2"
+                            style={{ borderColor: i === 0 ? ac : 'var(--bd-strong)', backgroundColor: i === 0 ? ac : 'transparent' }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-[var(--tx-heading)]">{t.date || '-'}</span>
+                              {isExpanded ? <ChevronUp size={14} className="text-[var(--tx-muted)]" /> : <ChevronDown size={14} className="text-[var(--tx-muted)]" />}
+                            </div>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-[var(--tx-muted)]">
+                              {t.branch && <span>{t.branch}</span>}
+                              {t.doctor && <span>{t.doctor}</span>}
+                              {t.assistants?.length > 0 && <span>{t.assistants.join(', ')}</span>}
+                            </div>
+                            {t.cc && <p className="mt-1 text-xs text-[var(--tx-secondary)] truncate">CC: {t.cc}</p>}
+                            {t.dx && <p className="text-xs text-[var(--tx-muted)] truncate">DX: {t.dx}</p>}
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Expanded detail */}
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pl-10">
+                          {treatmentsLoading && !detail ? (
+                            <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)] py-2">
+                              <Loader2 size={12} className="animate-spin" /> กำลังโหลด...
+                            </div>
+                          ) : detail?.detail ? (
+                            <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} />
+                          ) : (
+                            <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
+                              {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
+                              {t.dx && <DetailField label="วินิจฉัย (DX)" value={t.dx} />}
+                              <p className="text-[10px] text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ════════════════════ RIGHT: Courses ════════════════════ */}
+        <div className="space-y-3">
+          {/* Tabs */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+            <div className="flex border-b border-[var(--bd)]">
+              <button onClick={() => setCourseTab('active')}
+                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                  courseTab === 'active' ? 'text-teal-400 border-b-2 border-teal-400 bg-teal-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                }`}>
+                <Package size={13} /> คอร์สของฉัน
+                {activeCourses.length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-teal-900/30 text-teal-400">{activeCourses.length}</span>
+                )}
+              </button>
+              <button onClick={() => setCourseTab('expired')}
+                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                  courseTab === 'expired' ? 'text-red-400 border-b-2 border-red-400 bg-red-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                }`}>
+                คอร์สหมดอายุ
+                {expiredCourses.length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400">{expiredCourses.length}</span>
+                )}
+              </button>
+            </div>
+
+            {/* Course List */}
+            <div className="divide-y divide-[var(--bd)]">
+              {(courseTab === 'active' ? activeCourses : expiredCourses).length === 0 ? (
+                <div className="p-8 text-center text-sm text-[var(--tx-muted)]">
+                  {courseTab === 'active' ? 'ไม่มีคอร์ส' : 'ไม่มีคอร์สหมดอายุ'}
+                </div>
+              ) : (
+                (courseTab === 'active' ? activeCourses : expiredCourses).map((course, i) => (
+                  <div key={i} className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{course.name || '-'}</h4>
+                        {course.expiry && (
+                          <p className="text-[10px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
+                            <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {course.expiry}
+                          </p>
+                        )}
+                        {course.value && (
+                          <p className="text-[10px] text-[var(--tx-muted)]">มูลค่าคงเหลือ {course.value}</p>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        courseTab === 'active'
+                          ? 'bg-teal-900/30 text-teal-400 border border-teal-700/40'
+                          : 'bg-red-900/20 text-red-400 border border-red-700/40'
+                      }`}>
+                        {course.status || (courseTab === 'active' ? 'กำลังใช้งาน' : 'หมดอายุ')}
+                      </span>
+                    </div>
+                    {/* Course items */}
+                    {course.product && (
+                      <div className="mt-2 flex items-center justify-between text-xs text-[var(--tx-secondary)] bg-[var(--bg-elevated)] rounded-lg px-2.5 py-1.5">
+                        <span>{course.product}</span>
+                        <span className="font-mono font-bold">{course.qty || ''}</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function InfoRow({ label, value, icon, className = '' }) {
+  if (!value || value === '-') {
+    return (
+      <div className="flex items-start py-1.5 border-b border-[var(--bd)]/50 last:border-0">
+        <span className="text-[11px] text-[var(--tx-muted)] w-24 flex-shrink-0 font-medium">{label}</span>
+        <span className="text-[11px] text-[var(--tx-muted)] flex items-center gap-1">-</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start py-1.5 border-b border-[var(--bd)]/50 last:border-0">
+      <span className="text-[11px] text-[var(--tx-muted)] w-24 flex-shrink-0 font-medium">{label}</span>
+      <span className={`text-[11px] text-[var(--tx-secondary)] flex items-center gap-1 break-all ${className}`}>
+        {icon} {value}
+      </span>
+    </div>
+  );
+}
+
+function DetailField({ label, value }) {
+  if (!value) return null;
+  return (
+    <div>
+      <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider">{label}</span>
+      <p className="text-xs text-[var(--tx-secondary)] mt-0.5 whitespace-pre-wrap">{value}</p>
+    </div>
+  );
+}
+
+function TreatmentDetailExpanded({ detail, ac, acRgb }) {
+  const d = detail || {};
+  const vitals = d.vitals || {};
+  const meds = d.medications || d.takeHomeMeds || [];
+  const items = d.treatmentItems || [];
+  const labItems = d.labItems || [];
+
+  return (
+    <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-3">
+      {/* Vitals */}
+      {(vitals.weight || vitals.height || vitals.temperature) && (
+        <div>
+          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+            <Activity size={10} /> สัญญาณชีพ
+          </span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+            {vitals.weight && <VitalPill label="น้ำหนัก" value={`${vitals.weight} kg`} />}
+            {vitals.height && <VitalPill label="ส่วนสูง" value={`${vitals.height} cm`} />}
+            {vitals.temperature && <VitalPill label="BT" value={`${vitals.temperature} C`} />}
+            {vitals.pulseRate && <VitalPill label="PR" value={`${vitals.pulseRate}/min`} />}
+            {vitals.systolicBP && <VitalPill label="BP" value={`${vitals.systolicBP}/${vitals.diastolicBP || '?'}`} />}
+            {vitals.oxygenSaturation && <VitalPill label="O2" value={`${vitals.oxygenSaturation}%`} />}
+          </div>
+        </div>
+      )}
+
+      {/* OPD Card */}
+      <DetailField label="อาการ (CC)" value={d.symptoms} />
+      <DetailField label="ตรวจร่างกาย (PE)" value={d.physicalExam} />
+      <DetailField label="วินิจฉัย (DX)" value={d.diagnosis} />
+      <DetailField label="การรักษา (Tx)" value={d.treatmentInfo} />
+      <DetailField label="แผนการรักษา" value={d.treatmentPlan} />
+      <DetailField label="หมายเหตุ" value={d.treatmentNote} />
+
+      {/* Treatment items */}
+      {items.length > 0 && (
+        <div>
+          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+            <Pill size={10} /> รายการรักษา
+          </span>
+          <div className="mt-1 space-y-1">
+            {items.map((item, i) => (
+              <div key={i} className="flex items-center justify-between text-xs bg-[var(--bg-card)] rounded px-2 py-1">
+                <span className="text-[var(--tx-secondary)]">{item.name || item.productName || '-'}</span>
+                <span className="font-mono text-[var(--tx-muted)]">{item.qty || ''} {item.unit || ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Medications */}
+      {meds.length > 0 && (
+        <div>
+          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+            <Pill size={10} /> ยากลับบ้าน
+          </span>
+          <div className="mt-1 space-y-1">
+            {meds.map((med, i) => (
+              <div key={i} className="flex items-center justify-between text-xs bg-[var(--bg-card)] rounded px-2 py-1">
+                <span className="text-[var(--tx-secondary)]">{med.name || med.productName || '-'}</span>
+                <span className="font-mono text-[var(--tx-muted)]">{med.qty || ''} {med.dosage || ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lab */}
+      {labItems.length > 0 && (
+        <div>
+          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+            <Droplets size={10} /> Lab
+          </span>
+          <div className="mt-1 space-y-1">
+            {labItems.map((lab, i) => (
+              <div key={i} className="flex items-center justify-between text-xs bg-[var(--bg-card)] rounded px-2 py-1">
+                <span className="text-[var(--tx-secondary)]">{lab.productName || '-'}</span>
+                <span className="font-mono text-[var(--tx-muted)]">{lab.qty || ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VitalPill({ label, value }) {
+  return (
+    <span className="text-[10px] text-[var(--tx-secondary)]">
+      <span className="text-[var(--tx-muted)]">{label}:</span> {value}
+    </span>
+  );
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function formatAddress(pd) {
+  const parts = [pd.address, pd.subDistrict, pd.district, pd.province, pd.postalCode].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : '-';
+}
+
+function formatUnderlying(pd) {
+  const items = [];
+  if (pd.ud_hypertension) items.push('ความดันโลหิตสูง');
+  if (pd.ud_diabetes) items.push('เบาหวาน');
+  if (pd.ud_heart) items.push('โรคหัวใจ');
+  if (pd.ud_lung) items.push('โรคปอด');
+  if (pd.ud_kidney) items.push('โรคไต');
+  if (pd.ud_blood) items.push('โรคเลือด');
+  if (pd.ud_other && pd.ud_otherDetail) items.push(pd.ud_otherDetail);
+  return items.length > 0 ? items.join(', ') : pd.ud_otherDetail || '-';
+}

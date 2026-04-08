@@ -8,7 +8,7 @@ import { getAllCustomers } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
 
-export default function CustomerListTab({ clinicSettings, theme }) {
+export default function CustomerListTab({ clinicSettings, theme, onViewCustomer }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
@@ -116,6 +116,7 @@ export default function CustomerListTab({ clinicSettings, theme }) {
               customer={customer}
               accentColor={ac}
               mode="cloned"
+              onView={onViewCustomer}
             />
           ))}
         </div>

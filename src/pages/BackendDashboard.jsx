@@ -13,10 +13,12 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
+import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('clone'); // 'clone' | 'customers'
+  const [viewingCustomer, setViewingCustomer] = useState(null); // selected customer for detail view
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Subscribe to clinic settings (same pattern as App.jsx)
@@ -95,12 +97,21 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
 
       {/* ── Main Content ── */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {activeTab === 'clone' && (
+        {viewingCustomer ? (
+          <CustomerDetailView
+            customer={viewingCustomer}
+            accentColor={ac}
+            onBack={() => setViewingCustomer(null)}
+          />
+        ) : activeTab === 'clone' ? (
           <CloneTab clinicSettings={clinicSettings} theme={theme} />
-        )}
-        {activeTab === 'customers' && (
-          <CustomerListTab clinicSettings={clinicSettings} theme={theme} />
-        )}
+        ) : activeTab === 'customers' ? (
+          <CustomerListTab
+            clinicSettings={clinicSettings}
+            theme={theme}
+            onViewCustomer={(c) => { setViewingCustomer(c); }}
+          />
+        ) : null}
       </main>
     </div>
   );
