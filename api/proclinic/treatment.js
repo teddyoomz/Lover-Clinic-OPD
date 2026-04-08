@@ -292,6 +292,11 @@ async function handleListItems(req, res) {
         isVatIncluded: item.is_including_vat || 0,
         isDf: item.is_df || 0,
         itemType: 'course',
+        courseType: item.course_type_name || '',
+        products: (item.course_products || item.products || []).map(p => ({
+          id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '',
+        })),
+        _rawKeys: Object.keys(item),
       };
     } else if (type === 'promotion') {
       return {
