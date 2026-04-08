@@ -3,7 +3,7 @@
 // Client-side search filtering by name, HN, phone.
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Loader2, RefreshCw } from 'lucide-react';
+import { Users, Search, Loader2, RefreshCw, Download, Eye, Info } from 'lucide-react';
 import { getAllCustomers } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
@@ -53,33 +53,36 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
     <div className="space-y-4">
 
       {/* ── Header bar ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Search filter */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-          <input
-            type="text"
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder="ค้นหาลูกค้าในระบบ..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-2 transition-all"
-            style={{ '--tw-ring-color': `rgba(${acRgb},0.4)` }}
-          />
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: `rgba(${acRgb},0.5)` }} />
+            <input
+              type="text"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder="ค้นหาลูกค้าในระบบ... (ชื่อ, HN, เบอร์โทร)"
+              className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none transition-all"
+              style={{ boxShadow: `inset 0 2px 4px rgba(0,0,0,0.1)` }}
+            />
+          </div>
+          <button
+            onClick={() => setRefreshKey(k => k + 1)}
+            disabled={loading}
+            className="px-5 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+            style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.6))`, boxShadow: `0 4px 20px rgba(${acRgb},0.25)` }}
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> รีเฟรช
+          </button>
         </div>
-
-        {/* Refresh button */}
-        <button
-          onClick={() => setRefreshKey(k => k + 1)}
-          disabled={loading}
-          className="px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all text-xs font-bold flex items-center gap-1.5"
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> รีเฟรช
-        </button>
-
-        {/* Count */}
-        <span className="text-xs text-[var(--tx-muted)] font-medium">
-          {filtered.length} / {customers.length} รายการ
-        </span>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+            <Info size={12} /> ลูกค้าที่ Clone มาจาก ProClinic จะแสดงที่นี่
+          </p>
+          <span className="text-xs text-[var(--tx-muted)] font-bold">
+            {filtered.length} / {customers.length} รายการ
+          </span>
+        </div>
       </div>
 
       {/* ── Loading ── */}
@@ -92,10 +95,34 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
 
       {/* ── Empty state ── */}
       {!loading && customers.length === 0 && (
-        <div className="text-center py-20 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
-          <Users size={36} className="mx-auto text-[var(--tx-muted)] mb-3" />
-          <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-1">ยังไม่มีข้อมูลลูกค้า</h3>
-          <p className="text-xs text-[var(--tx-muted)]">ไปที่ "Clone ลูกค้า" เพื่อดูดข้อมูลจาก ProClinic มาเก็บไว้</p>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.2), rgba(${acRgb},0.05))`, border: `1.5px solid rgba(${acRgb},0.3)`, boxShadow: `0 0 40px rgba(${acRgb},0.15), 0 0 80px rgba(${acRgb},0.05)` }}>
+              <Users size={32} style={{ color: ac }} />
+            </div>
+            <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: `radial-gradient(circle, rgba(${acRgb},0.15) 0%, transparent 70%)` }} />
+          </div>
+          <h3 className="text-xl font-black text-[var(--tx-heading)] mb-2 tracking-tight">ข้อมูลลูกค้า</h3>
+          <p className="text-sm text-[var(--tx-muted)] max-w-lg mx-auto text-center leading-relaxed mb-8">
+            ดูรายชื่อลูกค้าทั้งหมดที่ Clone มาจาก ProClinic แล้ว พร้อมข้อมูลคอร์ส, นัดหมาย, และประวัติการรักษา
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
+            {[
+              { step: '1', icon: <Download size={16} />, title: 'Clone ก่อน', desc: 'ไปแท็บ "Clone ลูกค้า" เพื่อดูดข้อมูล' },
+              { step: '2', icon: <Eye size={16} />, title: 'ดูข้อมูล', desc: 'กดเข้าดูรายละเอียดแต่ละราย' },
+              { step: '3', icon: <Search size={16} />, title: 'ค้นหา', desc: 'กรองด้วยชื่อ, HN, หรือเบอร์โทร' },
+            ].map(s => (
+              <div key={s.step} className="flex items-start gap-3 p-4 rounded-xl bg-[var(--bg-surface)] border border-[var(--bd)]">
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
+                  style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>{s.step}</span>
+                <div>
+                  <p className="text-sm font-bold text-[var(--tx-heading)]">{s.title}</p>
+                  <p className="text-xs text-[var(--tx-muted)] mt-0.5">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search, Loader2, RefreshCw, Download, AlertCircle, CheckCircle2,
-  Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown
+  Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info
 } from 'lucide-react';
 import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync } from '../../lib/backendClient.js';
 import { syncProducts, syncDoctors, syncStaff, syncCourses, listItems } from '../../lib/brokerClient.js';
@@ -223,19 +223,20 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     <div className="space-y-4">
 
       {/* ═══ [A] Sync Section ═══ */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(245,158,11,0.15)` }}>
+        <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-bold text-[var(--tx-heading)] uppercase tracking-wider flex items-center gap-2">
             <Download size={14} className="text-amber-400" /> Sync ข้อมูลจาก ProClinic
           </h3>
           <button onClick={handleSyncAll} disabled={isSyncing}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all disabled:opacity-50 flex items-center gap-1.5">
-            {isSyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            className="px-5 py-2.5 rounded-xl font-black text-xs text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+            style={{ background: 'linear-gradient(135deg, #b45309, #d97706)', boxShadow: '0 4px 20px rgba(245,158,11,0.3)' }}>
+            {isSyncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
             Sync ทั้งหมด
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {SYNC_TYPES.map(st => {
             const cm = SYNC_COLOR_MAP[st.color];
             const status = syncStatus[st.key];
@@ -243,16 +244,16 @@ export default function MasterDataTab({ clinicSettings, theme }) {
             return (
               <button key={st.key} onClick={() => handleSync(st.key, st.fn)}
                 disabled={status === 'loading'}
-                className={`px-3 py-2.5 rounded-lg border text-xs font-bold transition-all flex flex-col items-start gap-1 disabled:opacity-60 ${cm.btn}`}>
+                className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-start gap-1.5 disabled:opacity-60 hover:shadow-lg active:scale-[0.98] ${cm.btn}`}>
                 <div className="flex items-center gap-1.5 w-full">
-                  <span>{st.icon}</span>
+                  <span className="text-base">{st.icon}</span>
                   <span className="truncate flex-1 text-left">{st.label}</span>
-                  {status === 'loading' && <Loader2 size={11} className="animate-spin flex-shrink-0" />}
-                  {status === 'done' && <CheckCircle2 size={11} className="text-emerald-400 flex-shrink-0" />}
-                  {status === 'error' && <AlertCircle size={11} className="text-red-400 flex-shrink-0" />}
+                  {status === 'loading' && <Loader2 size={12} className="animate-spin flex-shrink-0" />}
+                  {status === 'done' && <CheckCircle2 size={12} className="text-emerald-400 flex-shrink-0" />}
+                  {status === 'error' && <AlertCircle size={12} className="text-red-400 flex-shrink-0" />}
                 </div>
                 <div className="flex items-center gap-2 text-[11px] opacity-70">
-                  {m?.count != null && <span>{m.count} รายการ</span>}
+                  {m?.count != null && <span className="font-mono">{m.count} รายการ</span>}
                   {m?.syncedAt && <span>{relativeTime(m.syncedAt)}</span>}
                   {!m && <span>ยังไม่ได้ sync</span>}
                 </div>
@@ -261,10 +262,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           })}
         </div>
 
+        <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+          <Info size={12} /> Sync ข้อมูลพื้นฐานจาก ProClinic เพื่อใช้ในฟอร์มการรักษาและใบเสร็จ
+        </p>
+
         {/* Sync errors */}
         {Object.entries(syncError).filter(([, v]) => v).map(([key, err]) => (
-          <div key={key} className="mt-2 text-xs text-red-400 flex items-center gap-1">
-            <AlertCircle size={10} /> {key}: {err}
+          <div key={key} className="mt-2 bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2 text-xs text-red-400 flex items-center gap-1.5">
+            <AlertCircle size={12} /> <span className="font-bold">{key}:</span> {err}
           </div>
         ))}
       </div>
@@ -293,20 +298,20 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       </div>
 
       {/* ═══ [C] Filter Bar ═══ */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3 flex items-center gap-2 flex-wrap">
         {/* Search */}
         <div className="relative flex-1 min-w-[180px]">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
           <input type="text" value={filterQuery} onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="ค้นหา..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-amber-700/50" />
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-amber-700/50 transition-all" />
         </div>
 
         {/* Dropdown filters */}
         {(FILTER_CONFIG[activeSubTab] || []).map(f => (
           <select key={f.key} value={filters[f.key] || ''}
             onChange={(e) => setFilters(prev => ({ ...prev, [f.key]: e.target.value }))}
-            className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-amber-700/50">
+            className="px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-amber-700/50 transition-all">
             <option value="">ทุก{f.label}</option>
             {(filterOptions[f.key] || []).map(v => (
               <option key={v} value={v}>{v}</option>
@@ -315,7 +320,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         ))}
 
         {/* Count */}
-        <span className="text-xs text-[var(--tx-muted)] font-medium whitespace-nowrap">
+        <span className="text-xs text-[var(--tx-muted)] font-bold whitespace-nowrap">
           {filtered.length} / {items.length} รายการ
         </span>
       </div>
@@ -327,10 +332,18 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           <span className="ml-3 text-sm text-[var(--tx-muted)]">กำลังโหลด...</span>
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-16 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
-          <Database size={32} className="mx-auto text-[var(--tx-muted)] mb-3" />
-          <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-1">ยังไม่มีข้อมูล</h3>
-          <p className="text-xs text-[var(--tx-muted)]">กด Sync เพื่อดึงข้อมูลจาก ProClinic</p>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="relative mb-6">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.05))', border: '1.5px solid rgba(245,158,11,0.3)', boxShadow: '0 0 40px rgba(245,158,11,0.15)' }}>
+              <Database size={28} className="text-amber-400" />
+            </div>
+            <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%)' }} />
+          </div>
+          <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ยังไม่มีข้อมูล{SYNC_TYPES.find(s => s.key === activeSubTab)?.label || ''}</h3>
+          <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-6">
+            กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic มาเก็บไว้ในระบบ
+          </p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">

@@ -296,22 +296,30 @@ export default function SaleTab({ clinicSettings, theme }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <button onClick={openCreate} className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 transition-all flex items-center gap-1.5">
-          <Plus size={14} /> สร้างใบเสร็จ
-        </button>
-        <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
+        <div className="flex items-center gap-3">
           <div className="relative flex-1">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-            <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="ค้นหา..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none" />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-400/50" />
+            <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="ค้นหาใบเสร็จ... (เลขที่, ชื่อลูกค้า, HN)"
+              className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none transition-all"
+              style={{ boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }} />
           </div>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]">
+            className="px-3 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-xs font-bold text-[var(--tx-primary)] focus:outline-none transition-all">
             <option value="">ทุกสถานะ</option>
             {PAYMENT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <span className="text-xs text-[var(--tx-muted)] whitespace-nowrap">{filtered.length} รายการ</span>
+          <button onClick={openCreate}
+            className="px-6 py-3 rounded-xl font-black text-sm text-white transition-all flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider whitespace-nowrap"
+            style={{ background: 'linear-gradient(135deg, #be123c, #e11d48)', boxShadow: '0 4px 20px rgba(244,63,94,0.35)' }}>
+            <Plus size={16} /> สร้างใบเสร็จ
+          </button>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+            <ShoppingCart size={12} /> จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม
+          </p>
+          <span className="text-xs text-[var(--tx-muted)] font-bold">{filtered.length} รายการ</span>
         </div>
       </div>
 
@@ -319,10 +327,41 @@ export default function SaleTab({ clinicSettings, theme }) {
       {listLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 size={22} className="animate-spin text-[var(--tx-muted)]" /><span className="ml-3 text-sm text-[var(--tx-muted)]">กำลังโหลด...</span></div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
-          <ShoppingCart size={32} className="mx-auto text-[var(--tx-muted)] mb-3" />
-          <p className="text-sm text-[var(--tx-muted)]">{sales.length === 0 ? 'ยังไม่มีใบเสร็จ — กด "สร้างใบเสร็จ"' : 'ไม่พบรายการที่ตรงกับตัวกรอง'}</p>
-        </div>
+        sales.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, rgba(244,63,94,0.2), rgba(244,63,94,0.05))', border: '1.5px solid rgba(244,63,94,0.3)', boxShadow: '0 0 40px rgba(244,63,94,0.15), 0 0 80px rgba(244,63,94,0.05)' }}>
+                <ShoppingCart size={32} className="text-rose-400" />
+              </div>
+              <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(244,63,94,0.15) 0%, transparent 70%)' }} />
+            </div>
+            <h3 className="text-xl font-black text-[var(--tx-heading)] mb-2 tracking-tight">ขาย / ใบเสร็จ</h3>
+            <p className="text-sm text-[var(--tx-muted)] max-w-lg mx-auto text-center leading-relaxed mb-8">
+              สร้างใบเสร็จ ขายคอร์ส/โปรโมชัน/สินค้า พร้อมจัดการการชำระเงินและพนักงานขาย
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
+              {[
+                { step: '1', title: 'เลือกลูกค้า', desc: 'ค้นหาและเลือกจากรายชื่อที่ Clone มา' },
+                { step: '2', title: 'เพิ่มสินค้า', desc: 'เลือกคอร์ส โปรโมชัน หรือสินค้า' },
+                { step: '3', title: 'ชำระเงิน', desc: 'บันทึกช่องทางชำระและพนักงานขาย' },
+              ].map(s => (
+                <div key={s.step} className="flex items-start gap-3 p-4 rounded-xl bg-[var(--bg-surface)] border border-[var(--bd)]">
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0 bg-rose-900/20 text-rose-400">{s.step}</span>
+                  <div>
+                    <p className="text-sm font-bold text-[var(--tx-heading)]">{s.title}</p>
+                    <p className="text-xs text-[var(--tx-muted)] mt-0.5">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
+            <Search size={28} className="mx-auto text-[var(--tx-muted)] mb-2" />
+            <p className="text-sm text-[var(--tx-muted)]">ไม่พบรายการที่ตรงกับตัวกรอง</p>
+          </div>
+        )
       ) : (
         <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">

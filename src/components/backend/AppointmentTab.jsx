@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Edit3, Trash2,
   Search, Loader2, X, Clock, User, MapPin, Stethoscope,
-  CheckCircle2, AlertCircle
+  CheckCircle2, AlertCircle, CalendarDays
 } from 'lucide-react';
 import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
@@ -229,9 +229,9 @@ export default function AppointmentTab({ clinicSettings }) {
       <div className="w-64 flex-shrink-0 space-y-3">
 
         {/* Mini Calendar */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3">
+        <div className="bg-[var(--bg-surface)] rounded-xl p-3 shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.2)' }}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-[var(--tx-heading)]">{THAI_MONTHS[calMonth.month]} {calMonth.year+543}</span>
+            <span className="text-xs font-black text-[var(--tx-heading)] uppercase tracking-wider">{THAI_MONTHS[calMonth.month]} {calMonth.year+543}</span>
             <div className="flex gap-1">
               <button onClick={() => navCalMonth(-1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronLeft size={14}/></button>
               <button onClick={() => navCalMonth(1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronRight size={14}/></button>
@@ -259,8 +259,8 @@ export default function AppointmentTab({ clinicSettings }) {
         </div>
 
         {/* Doctor Schedule for Selected Day */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3">
-          <h4 className="text-xs font-bold text-[var(--tx-heading)] mb-1">{selThaiDate}</h4>
+        <div className="bg-[var(--bg-surface)] rounded-xl p-3 shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.15)' }}>
+          <h4 className="text-xs font-black text-[var(--tx-heading)] mb-1 tracking-tight">{selThaiDate}</h4>
           <p className="text-[11px] text-sky-400 font-bold mb-2">แพทย์เข้าตรวจ {dayDoctors.length} คน</p>
           {dayDoctors.length === 0 ? (
             <p className="text-[11px] text-[var(--tx-muted)]">ไม่มีแพทย์เข้าตรวจ</p>
@@ -286,7 +286,7 @@ export default function AppointmentTab({ clinicSettings }) {
       <div className="flex-1 min-w-0 space-y-3">
 
         {/* Week Navigation Strip */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+        <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.15)' }}>
           <div className="flex items-center">
             <button onClick={() => navWeek(-1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-r border-[var(--bd)]">
               <ChevronLeft size={16} />
@@ -322,13 +322,30 @@ export default function AppointmentTab({ clinicSettings }) {
             <span className="text-xs font-bold text-sky-400">| แพทย์เข้าตรวจ {dayDoctors.length} คน</span>
             {dayLoading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
           </div>
-          <button onClick={() => openCreate(selectedDate)} className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 transition-all flex items-center gap-1.5">
-            <Plus size={13} /> เพิ่มนัดหมาย
+          <button onClick={() => openCreate(selectedDate)}
+            className="px-4 py-2.5 rounded-xl text-xs font-black text-white transition-all flex items-center gap-1.5 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+            style={{ background: 'linear-gradient(135deg, #047857, #059669)', boxShadow: '0 4px 15px rgba(5,150,105,0.3)' }}>
+            <Plus size={14} /> เพิ่มนัดหมาย
           </button>
         </div>
 
         {/* Resource Time Grid */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+        {rooms.length === 0 && !dayLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-[var(--bg-surface)] rounded-xl" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
+            <div className="relative mb-6">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.2), rgba(14,165,233,0.05))', border: '1.5px solid rgba(14,165,233,0.3)', boxShadow: '0 0 40px rgba(14,165,233,0.15)' }}>
+                <CalendarDays size={28} className="text-sky-400" />
+              </div>
+              <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(14,165,233,0.15) 0%, transparent 70%)' }} />
+            </div>
+            <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ไม่มีนัดหมายวันนี้</h3>
+            <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-4">
+              เลือกวันจากปฏิทินด้านซ้าย หรือกดปุ่ม "เพิ่มนัดหมาย" เพื่อสร้างนัดหมายใหม่
+            </p>
+          </div>
+        ) : (
+        <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
           <div className="overflow-x-auto">
             <div style={{ minWidth: rooms.length * 160 + 60 }}>
               {/* Room header row */}
@@ -390,6 +407,7 @@ export default function AppointmentTab({ clinicSettings }) {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* ════════════ FORM MODAL ════════════ */}
