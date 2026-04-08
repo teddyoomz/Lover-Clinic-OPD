@@ -2,7 +2,7 @@
 // Used in both CloneTab (search results) and CustomerListTab (cloned customers).
 // Follows Thai cultural rules: no red on names/HN, uses CSS variables for theme.
 
-import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download } from 'lucide-react';
 import { hexToRgb } from '../../utils.js';
 
 export default function CustomerCard({
