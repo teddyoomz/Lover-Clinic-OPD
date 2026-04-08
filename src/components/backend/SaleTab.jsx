@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import {
   createBackendSale, updateBackendSale, deleteBackendSale,
-  getAllSales, getAllCustomers, getAllMasterDataItems
+  getAllSales, getAllCustomers, getAllMasterDataItems,
+  cancelBackendSale, updateSalePayment
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -54,6 +55,20 @@ export default function SaleTab({ clinicSettings, theme }) {
   const [filterQuery, setFilterQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
+  // ── Detail / Cancel / Payment modals ──
+  const [viewingSale, setViewingSale] = useState(null);
+  const [cancelModal, setCancelModal] = useState(null); // { sale }
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelRefundMethod, setCancelRefundMethod] = useState('เงินสด');
+  const [cancelRefundAmount, setCancelRefundAmount] = useState('');
+  const [cancelSaving, setCancelSaving] = useState(false);
+  const [payModal, setPayModal] = useState(null); // { sale }
+  const [payMethod, setPayMethod] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [payRefNo, setPayRefNo] = useState('');
+  const [paySaving, setPaySaving] = useState(false);
+
   // ── Form state ──
   const [formOpen, setFormOpen] = useState(false);
   const [editingSale, setEditingSale] = useState(null);
@@ -71,6 +86,7 @@ export default function SaleTab({ clinicSettings, theme }) {
   const [medications, setMedications] = useState([]);
   const [billDiscount, setBillDiscount] = useState('');
   const [billDiscountType, setBillDiscountType] = useState('amount');
+  const [couponCode, setCouponCode] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('paid');
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [paymentTime, setPaymentTime] = useState('');
@@ -330,8 +346,16 @@ export default function SaleTab({ clinicSettings, theme }) {
                       <td className="px-3 py-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
-                          <button onClick={() => openEdit(sale)} className="p-1 rounded hover:bg-sky-900/20 text-sky-400"><Edit3 size={13} /></button>
-                          <button onClick={() => handleDelete(sale)} className="p-1 rounded hover:bg-red-900/20 text-red-400"><Trash2 size={13} /></button>
+                          <button onClick={() => setViewingSale(sale)} className="p-1 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด"><Eye size={13} /></button>
+                          <button onClick={() => openEdit(sale)} className="p-1 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข"><Edit3 size={13} /></button>
+                          {(sale.payment?.status === 'unpaid' || sale.payment?.status === 'split') && (
+                            <button onClick={() => { setPayModal(sale); setPayMethod(''); setPayAmount(''); setPayDate(new Date().toISOString().split('T')[0]); setPayRefNo(''); }}
+                              className="p-1 rounded hover:bg-emerald-900/20 text-emerald-400" title="รับชำระเงิน"><DollarSign size={13} /></button>
+                          )}
+                          {sale.status !== 'cancelled' && (
+                            <button onClick={() => { setCancelModal(sale); setCancelReason(''); setCancelRefundMethod('เงินสด'); setCancelRefundAmount(String(sale.billing?.netTotal || 0)); }}
+                              className="p-1 rounded hover:bg-red-900/20 text-red-400" title="ยกเลิก"><X size={13} /></button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -339,6 +363,139 @@ export default function SaleTab({ clinicSettings, theme }) {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ DETAIL VIEW MODAL ═══ */}
+      {viewingSale && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setViewingSale(null)}>
+          <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+              <div>
+                <h3 className="text-sm font-bold text-rose-400">{viewingSale.saleId}</h3>
+                <p className="text-[10px] text-gray-500">{viewingSale.customerName} | {fmtDate(viewingSale.saleDate)}</p>
+              </div>
+              <button onClick={() => setViewingSale(null)} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4 text-xs">
+              {/* Items */}
+              <div>
+                <h4 className={labelCls}>รายการสินค้า</h4>
+                {[...(viewingSale.items?.promotions||[]),...(viewingSale.items?.courses||[]),...(viewingSale.items?.products||[])].map((item,i) => (
+                  <div key={i} className={`flex justify-between py-1 ${isDark ? 'border-b border-[#1a1a1a]' : 'border-b border-gray-100'}`}>
+                    <span>{item.name} <span className="text-gray-500">x{item.qty}</span></span>
+                    <span className="font-mono">{fmtMoney((parseFloat(item.unitPrice)||0)*(parseInt(item.qty)||1))} บาท</span>
+                  </div>
+                ))}
+                {(viewingSale.items?.medications||[]).map((m,i) => (
+                  <div key={`m${i}`} className={`flex justify-between py-1 ${isDark ? 'border-b border-[#1a1a1a]' : 'border-b border-gray-100'}`}>
+                    <span><Pill size={10} className="inline mr-1 text-purple-400" />{m.name} <span className="text-gray-500">{m.dosage} x{m.qty}</span></span>
+                    <span className="font-mono">{fmtMoney((parseFloat(m.unitPrice)||0)*(parseInt(m.qty)||1))} บาท</span>
+                  </div>
+                ))}
+              </div>
+              {/* Billing */}
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'}`}>
+                <div className="flex justify-between"><span className="text-gray-500">ยอดรวม</span><span className="font-mono">{fmtMoney(viewingSale.billing?.subtotal)} บาท</span></div>
+                {viewingSale.billing?.billDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">ส่วนลด</span><span className="font-mono text-red-400">-{fmtMoney(viewingSale.billing.billDiscount)} บาท</span></div>}
+                <div className="flex justify-between pt-1 border-t border-[var(--bd)] font-bold"><span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(viewingSale.billing?.netTotal)} บาท</span></div>
+              </div>
+              {/* Payment */}
+              <div>
+                <h4 className={labelCls}>การชำระเงิน — {(PAYMENT_STATUSES.find(s => s.value===viewingSale.payment?.status)||{}).label || viewingSale.payment?.status}</h4>
+                {(viewingSale.payment?.channels||[]).filter(c=>c.enabled).map((ch,i) => (
+                  <div key={i} className="flex justify-between py-0.5">
+                    <span>{ch.method || 'ไม่ระบุ'}</span><span className="font-mono">{fmtMoney(ch.amount)} บาท</span>
+                  </div>
+                ))}
+                {viewingSale.payment?.refNo && <p className="text-gray-500 mt-1">Ref: {viewingSale.payment.refNo}</p>}
+              </div>
+              {/* Sellers */}
+              {viewingSale.sellers?.length > 0 && (
+                <div>
+                  <h4 className={labelCls}>พนักงานขาย</h4>
+                  {viewingSale.sellers.map((s,i) => <div key={i} className="flex justify-between py-0.5"><span>{s.name||s.id}</span><span>{s.percent}%</span></div>)}
+                </div>
+              )}
+              {/* Cancelled info */}
+              {viewingSale.status === 'cancelled' && viewingSale.cancelled && (
+                <div className={`p-3 rounded-lg border ${isDark ? 'bg-red-950/20 border-red-900/40' : 'bg-red-50 border-red-200'}`}>
+                  <h4 className="text-[10px] font-bold text-red-400 mb-1">ยกเลิกแล้ว</h4>
+                  <p className="text-[10px] text-gray-400">เหตุผล: {viewingSale.cancelled.reason || '-'}</p>
+                  <p className="text-[10px] text-gray-400">คืนเงิน: {viewingSale.cancelled.refundMethod} {fmtMoney(viewingSale.cancelled.refundAmount)} บาท</p>
+                </div>
+              )}
+              {viewingSale.saleNote && <p className="text-gray-500">หมายเหตุ: {viewingSale.saleNote}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ CANCEL MODAL ═══ */}
+      {cancelModal && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" onClick={() => setCancelModal(null)}>
+          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+              <h3 className="text-sm font-bold text-red-400">ยกเลิกใบเสร็จ {cancelModal.saleId}</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <div><label className={labelCls}>เหตุผลการยกเลิก</label><textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="ระบุเหตุผล..." /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelCls}>วิธีคืนเงิน</label>
+                  <select value={cancelRefundMethod} onChange={e => setCancelRefundMethod(e.target.value)} className={inputCls}>
+                    <option value="เงินสด">เงินสด</option><option value="โอนธนาคาร">โอนธนาคาร</option><option value="Wallet">Wallet</option><option value="ไม่คืนเงิน">ไม่คืนเงิน</option>
+                  </select>
+                </div>
+                <div><label className={labelCls}>จำนวนคืน (บาท)</label><input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} /></div>
+              </div>
+            </div>
+            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+              <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
+              <button onClick={async () => {
+                setCancelSaving(true);
+                await cancelBackendSale(cancelModal.saleId || cancelModal.id, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0);
+                setCancelSaving(false); setCancelModal(null); loadSales();
+              }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50">
+                {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : 'ยืนยันยกเลิก'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ PAYMENT UPDATE MODAL ═══ */}
+      {payModal && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" onClick={() => setPayModal(null)}>
+          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+              <h3 className="text-sm font-bold text-emerald-400">รับชำระเงิน {payModal.saleId}</h3>
+              <p className="text-[10px] text-gray-500">ยอดค้าง: {fmtMoney(Math.max(0, (payModal.billing?.netTotal||0) - (payModal.payment?.channels||[]).reduce((s,c) => s + (parseFloat(c.amount)||0), 0)))} บาท</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <div><label className={labelCls}>ช่องทาง</label>
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className={inputCls}>
+                  <option value="">เลือกช่องทาง</option>
+                  {PAYMENT_CHANNELS.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelCls}>จำนวน (บาท)</label><input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inputCls} placeholder="0.00" /></div>
+                <div><label className={labelCls}>วันที่</label><DatePickerField value={payDate} onChange={setPayDate} /></div>
+              </div>
+              <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={payRefNo} onChange={e => setPayRefNo(e.target.value)} className={inputCls} placeholder="REF-..." /></div>
+            </div>
+            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+              <button onClick={() => setPayModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
+              <button onClick={async () => {
+                if (!payMethod || !payAmount) return;
+                setPaySaving(true);
+                await updateSalePayment(payModal.saleId || payModal.id, { method: payMethod, amount: payAmount, date: payDate, refNo: payRefNo });
+                setPaySaving(false); setPayModal(null); loadSales();
+              }} disabled={paySaving || !payMethod || !payAmount} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-50">
+                {paySaving ? <Loader2 size={12} className="animate-spin" /> : 'บันทึกการชำระ'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -408,6 +565,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                   <button onClick={() => openBuyModal('course')} className="text-[10px] font-bold px-2 py-1 rounded bg-teal-900/20 border border-teal-700/40 text-teal-400 hover:bg-teal-900/30"><Plus size={10} /> ซื้อคอร์ส</button>
                   <button onClick={() => openBuyModal('product')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30"><Plus size={10} /> สินค้า</button>
                   <button onClick={() => openBuyModal('promotion')} className="text-[10px] font-bold px-2 py-1 rounded bg-sky-900/20 border border-sky-700/40 text-sky-400 hover:bg-sky-900/30"><Plus size={10} /> โปรโมชัน</button>
+                  <button onClick={() => setMedications(prev => [...prev, { name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด' }])} className="text-[10px] font-bold px-2 py-1 rounded bg-purple-900/20 border border-purple-700/40 text-purple-400 hover:bg-purple-900/30"><Plus size={10} /> ยากลับบ้าน</button>
                 </div>
               </div>
               {purchasedItems.length === 0 && medications.length === 0 ? (
@@ -440,7 +598,11 @@ export default function SaleTab({ clinicSettings, theme }) {
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 mb-3"><DollarSign size={12} /> สรุปค่าใช้จ่าย</h3>
               <div className="space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-gray-500">ยอดรวม</span><span className="font-mono">{fmtMoney(billing.subtotal)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">ยอดรวม</span><span className="font-mono">{fmtMoney(billing.subtotal)} บาท</span></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 shrink-0">คูปอง</span>
+                  <input type="text" value={couponCode} onChange={e => setCouponCode(e.target.value)} className={`${inputCls} !w-32 !py-1`} placeholder="รหัสคูปอง" />
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500">ส่วนลด</span>
                   <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} !w-20 !py-1 text-center`} placeholder="0" />

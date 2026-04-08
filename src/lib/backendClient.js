@@ -260,6 +260,35 @@ export async function getCustomerSales(customerId) {
   return sales;
 }
 
+/** Cancel a sale with reason + refund tracking */
+export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount) {
+  await updateDoc(saleDoc(saleId), {
+    status: 'cancelled',
+    cancelled: { at: new Date().toISOString(), reason: reason || '', refundMethod: refundMethod || '', refundAmount: refundAmount || 0 },
+    'payment.status': 'cancelled',
+    updatedAt: new Date().toISOString(),
+  });
+  return { success: true };
+}
+
+/** Add a payment channel to an existing sale + auto-update payment status */
+export async function updateSalePayment(saleId, newChannel) {
+  const snap = await getDoc(saleDoc(saleId));
+  if (!snap.exists()) return { success: false, error: 'Sale not found' };
+  const sale = snap.data();
+  const existingChannels = sale.payment?.channels || [];
+  const updatedChannels = [...existingChannels, { ...newChannel, enabled: true }];
+  const totalPaid = updatedChannels.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+  const netTotal = sale.billing?.netTotal || 0;
+  const newStatus = totalPaid >= netTotal ? 'paid' : 'split';
+  await updateDoc(saleDoc(saleId), {
+    'payment.channels': updatedChannels,
+    'payment.status': newStatus,
+    updatedAt: new Date().toISOString(),
+  });
+  return { success: true, newStatus, totalPaid };
+}
+
 // ─── Master Data Read + Sync ────────────────────────────────────────────────
 
 const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);

@@ -1051,3 +1051,121 @@ describe('Sale CRUD + Billing', () => {
     for (const id of sids) expect((await getDoc(saleRef(id))).exists()).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13. SALE MANAGEMENT — CANCEL + PAYMENT UPDATE + PURCHASE HISTORY
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Sale Management (5C)', () => {
+  const sids = [];
+  const saleRef = (id) => doc(db, ...P, 'be_sales', id);
+
+  afterAll(async () => {
+    for (const id of sids) try { await deleteDoc(saleRef(id)); } catch {}
+  });
+
+  it('create test sale for management', async () => {
+    const id = `INV-5C-${TS}`;
+    sids.push(id);
+    await setDoc(saleRef(id), clean({
+      saleId: id, customerId: 'CUST-5C', customerName: 'Test 5C', customerHN: 'HN-5C',
+      saleDate: '2026-04-10',
+      items: { promotions: [], courses: [{ name: 'Course A', qty: '1', unitPrice: '5000' }], products: [], medications: [{ name: 'Para', dosage: '3x', qty: '10', unitPrice: '5' }] },
+      billing: { subtotal: 5050, billDiscount: 50, discountType: 'amount', netTotal: 5000 },
+      payment: { status: 'unpaid', channels: [] },
+      sellers: [{ id: 's1', name: 'Staff A', percent: '100' }],
+      status: 'active', createdAt: new Date().toISOString(),
+    }));
+    expect((await getDoc(saleRef(id))).exists()).toBe(true);
+  });
+
+  it('cancel sale with reason + refund tracking', async () => {
+    const id = sids[0];
+    await updateDoc(saleRef(id), clean({
+      status: 'cancelled',
+      cancelled: { at: new Date().toISOString(), reason: 'ลูกค้าเปลี่ยนใจ', refundMethod: 'เงินสด', refundAmount: 5000 },
+      'payment.status': 'cancelled',
+    }));
+    const d = (await getDoc(saleRef(id))).data();
+    expect(d.status).toBe('cancelled');
+    expect(d.cancelled.reason).toBe('ลูกค้าเปลี่ยนใจ');
+    expect(d.cancelled.refundMethod).toBe('เงินสด');
+    expect(d.cancelled.refundAmount).toBe(5000);
+    expect(d.payment.status).toBe('cancelled');
+  });
+
+  it('create another sale for payment tests', async () => {
+    const id = `INV-5C2-${TS}`;
+    sids.push(id);
+    await setDoc(saleRef(id), clean({
+      saleId: id, customerId: 'CUST-5C', customerName: 'Test 5C', customerHN: 'HN-5C',
+      saleDate: '2026-04-11',
+      items: { promotions: [], courses: [], products: [{ name: 'Product B', qty: '1', unitPrice: '10000' }], medications: [] },
+      billing: { subtotal: 10000, netTotal: 10000 },
+      payment: { status: 'unpaid', channels: [] },
+      sellers: [{ id: 's1', name: 'Staff A', percent: '100' }],
+      status: 'active', createdAt: new Date().toISOString(),
+    }));
+    expect((await getDoc(saleRef(id))).exists()).toBe(true);
+  });
+
+  it('add first payment → status becomes split', async () => {
+    const id = sids[1];
+    const snap = await getDoc(saleRef(id));
+    const sale = snap.data();
+    const newChannels = [...(sale.payment?.channels || []), { enabled: true, method: 'เงินสด', amount: '6000', date: '2026-04-11' }];
+    const totalPaid = newChannels.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const newStatus = totalPaid >= (sale.billing?.netTotal || 0) ? 'paid' : 'split';
+    await updateDoc(saleRef(id), { 'payment.channels': newChannels, 'payment.status': newStatus });
+    const d = (await getDoc(saleRef(id))).data();
+    expect(d.payment.status).toBe('split');
+    expect(d.payment.channels).toHaveLength(1);
+    expect(d.payment.channels[0].amount).toBe('6000');
+  });
+
+  it('add second payment → total >= netTotal → status becomes paid', async () => {
+    const id = sids[1];
+    const snap = await getDoc(saleRef(id));
+    const sale = snap.data();
+    const newChannels = [...sale.payment.channels, { enabled: true, method: 'โอนธนาคาร', amount: '4000', date: '2026-04-12' }];
+    const totalPaid = newChannels.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const newStatus = totalPaid >= (sale.billing?.netTotal || 0) ? 'paid' : 'split';
+    await updateDoc(saleRef(id), { 'payment.channels': newChannels, 'payment.status': newStatus });
+    const d = (await getDoc(saleRef(id))).data();
+    expect(d.payment.status).toBe('paid'); // 6000+4000=10000 >= 10000
+    expect(d.payment.channels).toHaveLength(2);
+  });
+
+  it('query purchase history by customer', async () => {
+    const q1 = query(collection(db, ...P, 'be_sales'), where('customerId', '==', 'CUST-5C'));
+    const snap = await getDocs(q1);
+    const found = snap.docs.filter(d => sids.includes(d.id));
+    expect(found.length).toBe(2);
+    // Check one is cancelled, one is paid
+    const statuses = found.map(d => d.data().status || d.data().payment?.status);
+    expect(statuses).toContain('cancelled');
+  });
+
+  it('sale with medications included in billing', async () => {
+    const id = `INV-5C3-${TS}`;
+    sids.push(id);
+    await setDoc(saleRef(id), clean({
+      saleId: id, customerId: 'CUST-5C', customerName: 'Test 5C',
+      saleDate: '2026-04-12',
+      items: {
+        promotions: [], courses: [], products: [],
+        medications: [
+          { name: 'Paracetamol', dosage: '3x หลังอาหาร', qty: '30', unitPrice: '2', unit: 'เม็ด' },
+          { name: 'Ibuprofen', dosage: '2x', qty: '20', unitPrice: '5', unit: 'เม็ด' },
+        ],
+      },
+      billing: { subtotal: 160, netTotal: 160 }, // 2*30 + 5*20
+      payment: { status: 'paid', channels: [{ enabled: true, method: 'เงินสด', amount: '160' }] },
+      sellers: [{ id: 's1', name: 'Staff', percent: '0' }],
+      status: 'active', createdAt: new Date().toISOString(),
+    }));
+    const d = (await getDoc(saleRef(id))).data();
+    expect(d.items.medications).toHaveLength(2);
+    expect(d.items.medications[0].dosage).toBe('3x หลังอาหาร');
+    expect(d.billing.netTotal).toBe(160);
+  });
+});

@@ -7,7 +7,7 @@ import {
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2
 } from 'lucide-react';
-import { getCustomerTreatments } from '../../lib/backendClient.js';
+import { getCustomerTreatments, getCustomerSales } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
@@ -65,7 +65,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
-  const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired'
+  const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired' | 'purchases'
+  const [customerSales, setCustomerSales] = useState([]);
   const [expandedTreatment, setExpandedTreatment] = useState(null);
 
   // Load treatment details from be_treatments
@@ -76,6 +77,12 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
       .then(data => setTreatments(data))
       .catch(() => {})
       .finally(() => setTreatmentsLoading(false));
+  }, [customer?.proClinicId]);
+
+  // Load customer sales for purchase history tab
+  useEffect(() => {
+    if (!customer?.proClinicId) return;
+    getCustomerSales(customer.proClinicId).then(setCustomerSales).catch(() => {});
   }, [customer?.proClinicId]);
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
@@ -298,11 +305,40 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400">{expiredCourses.length}</span>
                 )}
               </button>
+              <button onClick={() => setCourseTab('purchases')}
+                className={`flex-1 py-2.5 text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 ${
+                  courseTab === 'purchases' ? 'text-rose-400 border-b-2 border-rose-400 bg-rose-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                }`}>
+                ประวัติการซื้อ
+                {customerSales.length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-900/30 text-rose-400">{customerSales.length}</span>
+                )}
+              </button>
             </div>
 
-            {/* Course List */}
+            {/* Content by tab */}
             <div className="divide-y divide-[var(--bd)]">
-              {(courseTab === 'active' ? activeCourses : expiredCourses).length === 0 ? (
+              {courseTab === 'purchases' ? (
+                /* Purchase History */
+                customerSales.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการซื้อ</div>
+                ) : (
+                  customerSales.map((sale, i) => (
+                    <div key={i} className="p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          sale.payment?.status === 'paid' ? 'bg-emerald-900/30 text-emerald-400' :
+                          sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? 'bg-red-900/30 text-red-400' :
+                          'bg-amber-900/30 text-amber-400'
+                        }`}>{sale.payment?.status === 'paid' ? 'ชำระแล้ว' : sale.status === 'cancelled' ? 'ยกเลิก' : 'ค้างชำระ'}</span>
+                      </div>
+                      <p className="text-xs text-[var(--tx-secondary)] mt-0.5">{formatThaiDateFull(sale.saleDate)}</p>
+                      <p className="text-sm font-bold text-[var(--tx-heading)] font-mono">{sale.billing?.netTotal != null ? Number(sale.billing.netTotal).toLocaleString() : '0'} บาท</p>
+                    </div>
+                  ))
+                )
+              ) : (courseTab === 'active' ? activeCourses : expiredCourses).length === 0 ? (
                 <div className="p-8 text-center text-sm text-[var(--tx-muted)]">
                   {courseTab === 'active' ? 'ไม่มีคอร์ส' : 'ไม่มีคอร์สหมดอายุ'}
                 </div>
