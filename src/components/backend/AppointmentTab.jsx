@@ -1,142 +1,173 @@
-// ─── AppointmentTab — Backend appointment calendar ──────────────────────────
-// Monthly calendar grid + day view + create/edit form modal
+// ─── AppointmentTab — Resource Time Grid (replicate ProClinic layout) ────────
+// 3-panel: Left sidebar (mini calendar + doctor list) | Main (week nav + time grid with room columns)
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Edit3, Trash2,
-  Search, Loader2, X, Clock, User, MapPin, Phone, Stethoscope,
+  Search, Loader2, X, Clock, User, MapPin, Stethoscope,
   CheckCircle2, AlertCircle
 } from 'lucide-react';
 import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
-  getAppointmentsByMonth, getAllCustomers, getAllMasterDataItems
+  getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-const DAY_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
+const THAI_DAYS_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+const THAI_DAYS_FULL = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+const CAL_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 const CHANNELS = ['เคาน์เตอร์','โทรศัพท์','Walk-in','Facebook','Instagram','TikTok','Line','อื่นๆ'];
 const STATUSES = [
-  { value: 'pending', label: 'รอยืนยัน', color: 'amber' },
-  { value: 'confirmed', label: 'ยืนยันแล้ว', color: 'sky' },
-  { value: 'done', label: 'เสร็จแล้ว', color: 'emerald' },
-  { value: 'cancelled', label: 'ยกเลิก', color: 'red' },
+  { value: 'pending', label: 'รอยืนยัน', bg: 'bg-amber-500/20', text: 'text-amber-400', dot: 'bg-amber-400' },
+  { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20', text: 'text-sky-400', dot: 'bg-sky-400' },
+  { value: 'done', label: 'เสร็จแล้ว', bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
+const DEFAULT_ROOMS = ['ห้อง 1','ห้อง 2','ห้อง 3','ห้อง 4'];
+const SLOT_H = 36; // px per 30-min slot
 
 // Generate time slots 08:30 - 22:30 (30-min)
 const TIME_SLOTS = [];
 for (let h = 8; h <= 22; h++) {
   for (let m = 0; m < 60; m += 30) {
-    if (h === 8 && m === 0) continue; // start at 08:30
-    const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-    TIME_SLOTS.push(t);
+    if (h === 8 && m === 0) continue;
+    TIME_SLOTS.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
   }
 }
 
-function getMonthStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-function getDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
-export default function AppointmentTab({ clinicSettings, theme }) {
+export default function AppointmentTab({ clinicSettings }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
-  // Calendar state
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
-  const [selectedDate, setSelectedDate] = useState(null); // 'YYYY-MM-DD'
-  const [appointments, setAppointments] = useState({}); // { 'YYYY-MM-DD': [...] }
-  const [loading, setLoading] = useState(false);
+  // ── State ──
+  const [selectedDate, setSelectedDate] = useState(() => dateStr(new Date()));
+  const [calMonth, setCalMonth] = useState(() => { const n=new Date(); return {year:n.getFullYear(),month:n.getMonth()}; });
+  const [monthAppts, setMonthAppts] = useState({}); // for mini calendar dots
+  const [dayAppts, setDayAppts] = useState([]); // appointments for selectedDate
+  const [dayLoading, setDayLoading] = useState(false);
 
-  // Form state
-  const [formMode, setFormMode] = useState(null); // null | { mode: 'create'|'edit', appt? }
+  // Form
+  const [formMode, setFormMode] = useState(null);
   const [formData, setFormData] = useState({});
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState('');
-
-  // Options for form
   const [customers, setCustomers] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
 
-  const monthStr = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}`;
-  const thaiYear = currentMonth.year + 543;
+  const today = dateStr(new Date());
+  const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
 
-  // Load appointments for current month
+  // ── Load month appointment counts (for mini calendar) ──
   useEffect(() => {
-    setLoading(true);
-    getAppointmentsByMonth(monthStr)
-      .then(data => setAppointments(data))
-      .catch(() => setAppointments({}))
-      .finally(() => setLoading(false));
+    getAppointmentsByMonth(monthStr).then(setMonthAppts).catch(() => setMonthAppts({}));
   }, [monthStr]);
 
-  // Load customers + doctors for form (lazy — on first form open)
-  const loadFormOptions = useCallback(async () => {
-    if (customers.length && doctors.length) return;
-    const [c, d] = await Promise.all([
-      getAllCustomers(),
-      getAllMasterDataItems('doctors'),
-    ]);
-    setCustomers(c);
-    setDoctors(d.filter(doc => doc.status !== 'พักใช้งาน'));
-  }, [customers.length, doctors.length]);
+  // ── Load day appointments (for time grid) ──
+  const loadDay = useCallback(async (d) => {
+    setDayLoading(true);
+    try {
+      const appts = await getAppointmentsByDate(d);
+      setDayAppts(appts);
+    } catch { setDayAppts([]); }
+    finally { setDayLoading(false); }
+  }, []);
 
-  // Calendar grid computation
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(currentMonth.year, currentMonth.month, 1);
-    const lastDay = new Date(currentMonth.year, currentMonth.month + 1, 0);
-    let startDow = firstDay.getDay(); // 0=Sun
-    startDow = startDow === 0 ? 6 : startDow - 1; // Convert to Mon=0
+  useEffect(() => { if (selectedDate) loadDay(selectedDate); }, [selectedDate, loadDay]);
 
+  // ── Derived: rooms, doctors for the day ──
+  const rooms = useMemo(() => {
+    const fromAppts = [...new Set(dayAppts.map(a => a.roomName).filter(Boolean))];
+    if (fromAppts.length >= 2) return fromAppts;
+    const merged = [...new Set([...fromAppts, ...DEFAULT_ROOMS])];
+    return merged;
+  }, [dayAppts]);
+
+  const dayDoctors = useMemo(() => {
+    const map = {};
+    dayAppts.forEach(a => {
+      if (!a.doctorName) return;
+      if (!map[a.doctorName]) map[a.doctorName] = { name: a.doctorName, min: a.startTime, max: a.endTime };
+      else {
+        if (a.startTime < map[a.doctorName].min) map[a.doctorName].min = a.startTime;
+        if (a.endTime > map[a.doctorName].max) map[a.doctorName].max = a.endTime;
+      }
+    });
+    return Object.values(map);
+  }, [dayAppts]);
+
+  // ── Week strip (7 days centered on selectedDate) ──
+  const weekDays = useMemo(() => {
+    const sel = parseDate(selectedDate);
+    const dow = sel.getDay(); // 0=Sun
+    const monday = new Date(sel);
+    monday.setDate(sel.getDate() - (dow === 0 ? 6 : dow - 1));
     const days = [];
-    // Padding before
-    for (let i = 0; i < startDow; i++) days.push(null);
-    // Actual days
-    for (let d = 1; d <= lastDay.getDate(); d++) {
-      const dateStr = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      days.push({ day: d, dateStr });
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      days.push({ date: dateStr(d), dayNum: d.getDate(), monthNum: d.getMonth()+1, dow: d.getDay(), label: THAI_DAYS_SHORT[d.getDay()] });
     }
     return days;
-  }, [currentMonth]);
+  }, [selectedDate]);
 
-  const today = getDateStr(new Date());
+  // ── Mini calendar ──
+  const calDays = useMemo(() => {
+    const first = new Date(calMonth.year, calMonth.month, 1);
+    const last = new Date(calMonth.year, calMonth.month+1, 0);
+    let startDow = first.getDay();
+    startDow = startDow === 0 ? 6 : startDow - 1;
+    const days = [];
+    for (let i = 0; i < startDow; i++) days.push(null);
+    for (let d = 1; d <= last.getDate(); d++) {
+      const ds = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      days.push({ day: d, dateStr: ds });
+    }
+    return days;
+  }, [calMonth]);
 
-  // Handlers
-  const navMonth = (delta) => {
-    setCurrentMonth(prev => {
-      let m = prev.month + delta;
-      let y = prev.year;
-      if (m < 0) { m = 11; y--; }
-      if (m > 11) { m = 0; y++; }
+  const navCalMonth = (delta) => {
+    setCalMonth(p => {
+      let m = p.month + delta, y = p.year;
+      if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
       return { year: y, month: m };
     });
-    setSelectedDate(null);
   };
 
-  const openCreateForm = (date) => {
+  const navWeek = (delta) => {
+    const d = parseDate(selectedDate);
+    d.setDate(d.getDate() + delta * 7);
+    setSelectedDate(dateStr(d));
+    setCalMonth({ year: d.getFullYear(), month: d.getMonth() });
+  };
+
+  // ── Form handlers ──
+  const loadFormOptions = useCallback(async () => {
+    if (customers.length && doctors.length) return;
+    const [c, d] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors')]);
+    setCustomers(c);
+    setDoctors(d.filter(x => x.status !== 'พักใช้งาน'));
+  }, [customers.length, doctors.length]);
+
+  const openCreate = (date, time, room) => {
     loadFormOptions();
-    setFormData({
-      date: date || selectedDate || today,
-      startTime: '10:00', endTime: '10:30',
-      customerId: '', customerName: '', customerHN: '',
-      doctorId: '', doctorName: '', roomName: '',
-      channel: '', appointmentTo: '', notes: '', status: 'pending',
-    });
+    setFormData({ date: date||selectedDate, startTime: time||'10:00', endTime: time ? TIME_SLOTS[TIME_SLOTS.indexOf(time)+1]||time : '10:30',
+      customerId:'', customerName:'', customerHN:'', doctorId:'', doctorName:'', roomName: room||'',
+      channel:'', appointmentTo:'', notes:'', status:'pending' });
     setFormMode({ mode: 'create' });
     setFormError('');
   };
 
-  const openEditForm = (appt) => {
+  const openEdit = (appt) => {
     loadFormOptions();
-    setFormData({
-      date: appt.date || '', startTime: appt.startTime || '', endTime: appt.endTime || '',
-      customerId: appt.customerId || '', customerName: appt.customerName || '', customerHN: appt.customerHN || '',
-      doctorId: appt.doctorId || '', doctorName: appt.doctorName || '', roomName: appt.roomName || '',
-      channel: appt.channel || '', appointmentTo: appt.appointmentTo || '', notes: appt.notes || '',
-      status: appt.status || 'pending',
-    });
+    setFormData({ date:appt.date||'', startTime:appt.startTime||'', endTime:appt.endTime||'',
+      customerId:appt.customerId||'', customerName:appt.customerName||'', customerHN:appt.customerHN||'',
+      doctorId:appt.doctorId||'', doctorName:appt.doctorName||'', roomName:appt.roomName||'',
+      channel:appt.channel||'', appointmentTo:appt.appointmentTo||'', notes:appt.notes||'', status:appt.status||'pending' });
     setFormMode({ mode: 'edit', appt });
     setFormError('');
   };
@@ -144,53 +175,31 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const handleDelete = async (appt) => {
     if (!confirm('ต้องการลบนัดหมายนี้?')) return;
     await deleteBackendAppointment(appt.appointmentId || appt.id);
-    const data = await getAppointmentsByMonth(monthStr);
-    setAppointments(data);
+    loadDay(selectedDate);
+    getAppointmentsByMonth(monthStr).then(setMonthAppts);
   };
 
   const handleSave = async () => {
     if (!formData.customerId) { setFormError('กรุณาเลือกลูกค้า'); return; }
     if (!formData.date) { setFormError('กรุณาเลือกวันที่'); return; }
     if (!formData.startTime) { setFormError('กรุณาเลือกเวลาเริ่ม'); return; }
-
-    setFormSaving(true);
-    setFormError('');
+    setFormSaving(true); setFormError('');
     try {
-      const saveData = {
-        customerId: formData.customerId,
-        customerName: formData.customerName,
-        customerHN: formData.customerHN,
-        date: formData.date,
-        startTime: formData.startTime,
-        endTime: formData.endTime || formData.startTime,
-        doctorId: formData.doctorId,
-        doctorName: formData.doctorName,
-        roomName: formData.roomName,
-        channel: formData.channel,
-        appointmentTo: formData.appointmentTo,
-        notes: formData.notes,
-        status: formData.status || 'pending',
-      };
-      // Strip undefined
-      const clean = JSON.parse(JSON.stringify(saveData));
-
-      if (formMode.mode === 'edit') {
-        await updateBackendAppointment(formMode.appt.appointmentId || formMode.appt.id, clean);
-      } else {
-        await createBackendAppointment(clean);
-      }
+      const clean = JSON.parse(JSON.stringify({
+        customerId:formData.customerId, customerName:formData.customerName, customerHN:formData.customerHN,
+        date:formData.date, startTime:formData.startTime, endTime:formData.endTime||formData.startTime,
+        doctorId:formData.doctorId, doctorName:formData.doctorName, roomName:formData.roomName,
+        channel:formData.channel, appointmentTo:formData.appointmentTo, notes:formData.notes, status:formData.status||'pending',
+      }));
+      if (formMode.mode === 'edit') await updateBackendAppointment(formMode.appt.appointmentId||formMode.appt.id, clean);
+      else await createBackendAppointment(clean);
       setFormMode(null);
-      // Reload appointments
-      const data = await getAppointmentsByMonth(monthStr);
-      setAppointments(data);
-    } catch (err) {
-      setFormError(err.message);
-    } finally {
-      setFormSaving(false);
-    }
+      loadDay(selectedDate);
+      getAppointmentsByMonth(monthStr).then(setMonthAppts);
+    } catch (err) { setFormError(err.message); }
+    finally { setFormSaving(false); }
   };
 
-  // Filtered customers for search
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers.slice(0, 20);
     const q = customerSearch.toLowerCase();
@@ -200,127 +209,182 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     }).slice(0, 20);
   }, [customers, customerSearch]);
 
-  const selectedAppts = selectedDate ? (appointments[selectedDate] || []) : [];
+  // Selected date info
+  const selD = parseDate(selectedDate);
+  const selDow = selD.getDay();
+  const selThaiDate = `วัน${THAI_DAYS_FULL[selDow]}ที่ ${selD.getDate()} ${THAI_MONTHS[selD.getMonth()]} ${selD.getFullYear()+543}`;
 
   return (
-    <div className="space-y-4">
+    <div className="flex gap-4 min-h-[600px]">
 
-      {/* ═══ Calendar Header ═══ */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={() => navMonth(-1)} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">
-            <ChevronLeft size={16} />
-          </button>
-          <h2 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider min-w-[180px] text-center">
-            {THAI_MONTHS[currentMonth.month]} {thaiYear}
-          </h2>
-          <button onClick={() => navMonth(1)} className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">
-            <ChevronRight size={16} />
-          </button>
-          {loading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
-        </div>
-        <button onClick={() => openCreateForm(selectedDate || today)}
-          className="px-3 py-2 rounded-lg text-xs font-bold bg-sky-900/20 border border-sky-700/40 text-sky-400 hover:bg-sky-900/30 transition-all flex items-center gap-1.5">
-          <Plus size={13} /> สร้างนัดหมาย
-        </button>
-      </div>
+      {/* ════════════ LEFT SIDEBAR ════════════ */}
+      <div className="w-64 flex-shrink-0 space-y-3">
 
-      {/* ═══ Calendar Grid ═══ */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-        {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-[var(--bd)]">
-          {DAY_HEADERS.map((d, i) => (
-            <div key={d} className={`py-2 text-center text-[10px] font-bold uppercase tracking-wider ${i >= 5 ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>
-              {d}
+        {/* Mini Calendar */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-[var(--tx-heading)]">{THAI_MONTHS[calMonth.month]} {calMonth.year+543}</span>
+            <div className="flex gap-1">
+              <button onClick={() => navCalMonth(-1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronLeft size={14}/></button>
+              <button onClick={() => navCalMonth(1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronRight size={14}/></button>
             </div>
-          ))}
-        </div>
-        {/* Day cells */}
-        <div className="grid grid-cols-7">
-          {calendarDays.map((cell, i) => {
-            if (!cell) return <div key={`empty-${i}`} className="min-h-[70px] border-b border-r border-[var(--bd)]/30 bg-[var(--bg-card)]/30" />;
-            const { day, dateStr } = cell;
-            const count = (appointments[dateStr] || []).length;
-            const isToday = dateStr === today;
-            const isSelected = dateStr === selectedDate;
-            const dow = (i % 7);
-            const isWeekend = dow >= 5;
-            return (
-              <button key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                className={`min-h-[70px] p-1.5 border-b border-r border-[var(--bd)]/30 text-left transition-all hover:bg-[var(--bg-hover)] relative ${
-                  isSelected ? 'ring-2 ring-sky-500 bg-sky-900/10 z-10' : ''
-                } ${isToday ? 'bg-[var(--bg-elevated)]' : ''}`}>
-                <span className={`text-xs font-bold ${isWeekend ? 'text-red-400' : 'text-[var(--tx-secondary)]'} ${isToday ? 'bg-sky-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : ''}`}>
-                  {day}
-                </span>
-                {count > 0 && (
-                  <div className="mt-1">
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">
-                      {count} นัด
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ═══ Day View (when date selected) ═══ */}
-      {selectedDate && (
-        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-sky-400" />
-              <h3 className="text-sm font-bold text-[var(--tx-heading)]">{selectedDate}</h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{selectedAppts.length} นัด</span>
-            </div>
-            <button onClick={() => openCreateForm(selectedDate)}
-              className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all flex items-center gap-1">
-              <Plus size={11} /> เพิ่มนัด
-            </button>
           </div>
+          <div className="grid grid-cols-7 gap-0">
+            {CAL_HEADERS.map((d,i) => <div key={d} className={`text-center text-[9px] font-bold py-1 ${i>=5?'text-red-400':'text-[var(--tx-muted)]'}`}>{d}</div>)}
+            {calDays.map((cell,i) => {
+              if (!cell) return <div key={`e${i}`} className="h-7" />;
+              const isToday = cell.dateStr === today;
+              const isSel = cell.dateStr === selectedDate;
+              const hasAppt = (monthAppts[cell.dateStr]||[]).length > 0;
+              const dow = ((i % 7) + 1) % 7; // Mon=1..Sun=0 mapped
+              const isWe = (i % 7) >= 5;
+              return (
+                <button key={cell.dateStr} onClick={() => { setSelectedDate(cell.dateStr); }}
+                  className={`h-7 w-7 mx-auto flex flex-col items-center justify-center rounded-full text-[10px] font-bold transition-all relative
+                    ${isSel ? 'bg-sky-600 text-white' : isToday ? 'bg-emerald-600 text-white' : isWe ? 'text-red-400 hover:bg-[var(--bg-hover)]' : 'text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)]'}`}>
+                  {cell.day}
+                  {hasAppt && !isSel && !isToday && <span className="absolute bottom-0 w-1 h-1 rounded-full bg-sky-400" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          {selectedAppts.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีนัดหมายในวันนี้</div>
+        {/* Doctor Schedule for Selected Day */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3">
+          <h4 className="text-[10px] font-bold text-[var(--tx-heading)] mb-1">{selThaiDate}</h4>
+          <p className="text-[9px] text-sky-400 font-bold mb-2">แพทย์เข้าตรวจ {dayDoctors.length} คน</p>
+          {dayDoctors.length === 0 ? (
+            <p className="text-[9px] text-[var(--tx-muted)]">ไม่มีแพทย์เข้าตรวจ</p>
           ) : (
-            <div className="divide-y divide-[var(--bd)]">
-              {selectedAppts.map(appt => {
-                const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
-                return (
-                  <div key={appt.appointmentId || appt.id} className="px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-[var(--tx-heading)]">
-                            {appt.startTime}{appt.endTime ? `-${appt.endTime}` : ''}
-                          </span>
-                          <span className="text-sm text-[var(--tx-secondary)] truncate">{appt.customerName || '-'}</span>
-                          {appt.customerHN && <span className="text-[10px] font-mono text-[var(--tx-muted)]">({appt.customerHN})</span>}
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-[var(--tx-muted)]">
-                          {appt.doctorName && <span className="flex items-center gap-0.5"><Stethoscope size={9} />{appt.doctorName}</span>}
-                          {appt.roomName && <span className="flex items-center gap-0.5"><MapPin size={9} />{appt.roomName}</span>}
-                          {appt.channel && <span>{appt.channel}</span>}
-                          {appt.appointmentTo && <span>{appt.appointmentTo}</span>}
-                        </div>
-                        {appt.notes && <p className="mt-0.5 text-[10px] text-[var(--tx-muted)] truncate">{appt.notes}</p>}
-                      </div>
-                      <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span>
-                        <button onClick={() => openEditForm(appt)} className="p-1 rounded hover:bg-sky-900/20 text-sky-400"><Edit3 size={12} /></button>
-                        <button onClick={() => handleDelete(appt)} className="p-1 rounded hover:bg-red-900/20 text-red-400"><Trash2 size={12} /></button>
-                      </div>
-                    </div>
+            <div className="space-y-1.5">
+              {dayDoctors.map(doc => (
+                <div key={doc.name} className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-sky-900/30 flex items-center justify-center flex-shrink-0">
+                    <User size={11} className="text-sky-400" />
                   </div>
-                );
-              })}
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[var(--tx-secondary)] font-medium truncate">{doc.name}</p>
+                    <p className="text-[9px] text-[var(--tx-muted)]">{doc.min} - {doc.max}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      {/* ═══ Form Modal ═══ */}
+      {/* ════════════ MAIN AREA ════════════ */}
+      <div className="flex-1 min-w-0 space-y-3">
+
+        {/* Week Navigation Strip */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+          <div className="flex items-center">
+            <button onClick={() => navWeek(-1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-r border-[var(--bd)]">
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex-1 grid grid-cols-7">
+              {weekDays.map(wd => {
+                const isSel = wd.date === selectedDate;
+                const isToday = wd.date === today;
+                const count = (monthAppts[wd.date]||[]).length;
+                const isWe = wd.dow === 0 || wd.dow === 6;
+                return (
+                  <button key={wd.date} onClick={() => { setSelectedDate(wd.date); setCalMonth({year:parseDate(wd.date).getFullYear(), month:parseDate(wd.date).getMonth()}); }}
+                    className={`py-2.5 text-center transition-all relative ${isSel ? 'bg-sky-700 text-white' : isToday ? 'bg-[var(--bg-elevated)]' : 'hover:bg-[var(--bg-hover)]'}`}>
+                    <div className={`text-[10px] font-bold ${isSel ? 'text-sky-200' : isWe ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>{wd.label}</div>
+                    <div className={`text-sm font-bold ${isSel ? 'text-white' : isToday ? 'text-sky-400' : isWe ? 'text-red-400' : 'text-[var(--tx-heading)]'}`}>{wd.dayNum}/{wd.monthNum}</div>
+                    {count > 0 && (
+                      <span className={`absolute top-1 right-1 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${isSel ? 'bg-white text-sky-700' : 'bg-sky-500 text-white'}`}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => navWeek(1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-l border-[var(--bd)]">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Day Header + Add Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-bold text-[var(--tx-heading)]">{selThaiDate}</h3>
+            <span className="text-[10px] font-bold text-sky-400">| แพทย์เข้าตรวจ {dayDoctors.length} คน</span>
+            {dayLoading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
+          </div>
+          <button onClick={() => openCreate(selectedDate)} className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 transition-all flex items-center gap-1.5">
+            <Plus size={13} /> เพิ่มนัดหมาย
+          </button>
+        </div>
+
+        {/* Resource Time Grid */}
+        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <div style={{ minWidth: rooms.length * 160 + 60 }}>
+              {/* Room header row */}
+              <div className="flex border-b border-[var(--bd)] sticky top-0 z-10 bg-[var(--bg-elevated)]">
+                <div className="w-[60px] flex-shrink-0 py-2 px-1 text-center text-[9px] font-bold text-[var(--tx-muted)]">เวลา</div>
+                {rooms.map(room => (
+                  <div key={room} className="flex-1 min-w-[140px] py-2 px-2 text-center text-[10px] font-bold text-sky-400 border-l border-[var(--bd)]">
+                    {room}
+                  </div>
+                ))}
+              </div>
+
+              {/* Time rows */}
+              <div className="relative">
+                {TIME_SLOTS.map((time, ti) => (
+                  <div key={time} className="flex border-b border-[var(--bd)]/30" style={{ height: SLOT_H }}>
+                    <div className="w-[60px] flex-shrink-0 text-[10px] text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
+                    {rooms.map(room => {
+                      // Find appointments starting at this time in this room
+                      const appt = dayAppts.find(a => a.startTime === time && a.roomName === room);
+                      if (appt) {
+                        const startIdx = TIME_SLOTS.indexOf(appt.startTime);
+                        const endIdx = appt.endTime ? TIME_SLOTS.indexOf(appt.endTime) : startIdx + 1;
+                        const span = Math.max(1, endIdx - startIdx);
+                        const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
+                        return (
+                          <div key={room} className="flex-1 min-w-[140px] border-l border-[var(--bd)]/30 px-0.5 relative" style={{ height: SLOT_H }}>
+                            <button onClick={() => openEdit(appt)}
+                              className={`absolute left-0.5 right-0.5 top-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden transition-all hover:ring-1 hover:ring-sky-400 z-[5] ${st.bg} border border-[var(--bd)]/50`}
+                              style={{ height: span * SLOT_H - 4 }}>
+                              <div className="flex items-center gap-1">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
+                                <span className="text-[10px] font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
+                              </div>
+                              {span > 1 && (
+                                <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
+                                  {appt.doctorName && `${appt.doctorName}`}{appt.appointmentTo && ` · ${appt.appointmentTo}`}
+                                </p>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+                      // Check if this slot is occupied by a multi-slot appointment (skip rendering)
+                      const occupied = dayAppts.some(a => {
+                        if (a.roomName !== room || !a.startTime || !a.endTime) return false;
+                        return time > a.startTime && time < a.endTime;
+                      });
+                      return (
+                        <div key={room}
+                          onClick={() => !occupied && openCreate(selectedDate, time, room)}
+                          className={`flex-1 min-w-[140px] border-l border-[var(--bd)]/30 ${occupied ? '' : 'cursor-pointer hover:bg-sky-900/5'}`}
+                          style={{ height: SLOT_H }} />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ════════════ FORM MODAL ════════════ */}
       {formMode && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setFormMode(null)}>
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -337,7 +401,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                 {formData.customerName ? (
                   <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-sky-900/10 border border-sky-700/30">
                     <span className="text-xs text-[var(--tx-heading)] font-bold">{formData.customerName} <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span></span>
-                    <button onClick={() => setFormData(p => ({ ...p, customerId:'', customerName:'', customerHN:'' }))} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14} /></button>
+                    <button onClick={() => setFormData(p => ({...p, customerId:'', customerName:'', customerHN:''}))} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14}/></button>
                   </div>
                 ) : (
                   <div>
@@ -348,10 +412,10 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                         {filteredCustomers.map(c => {
                           const name = `${c.patientData?.prefix||''} ${c.patientData?.firstName||''} ${c.patientData?.lastName||''}`.trim();
                           return (
-                            <button key={c.id} onClick={() => { setFormData(p => ({ ...p, customerId: c.proClinicId || c.id, customerName: name, customerHN: c.proClinicHN || '' })); setCustomerSearch(''); }}
+                            <button key={c.id} onClick={() => { setFormData(p => ({...p, customerId:c.proClinicId||c.id, customerName:name, customerHN:c.proClinicHN||''})); setCustomerSearch(''); }}
                               className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
                               <span className="text-[var(--tx-secondary)]">{name}</span>
-                              <span className="text-[10px] font-mono text-[var(--tx-muted)]">{c.proClinicHN || ''}</span>
+                              <span className="text-[10px] font-mono text-[var(--tx-muted)]">{c.proClinicHN||''}</span>
                             </button>
                           );
                         })}
@@ -360,54 +424,52 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                   </div>
                 )}
               </div>
-
               {/* Date + Time */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData(p => ({ ...p, date: e.target.value }))}
+                  <input type="date" value={formData.date} onChange={e => setFormData(p => ({...p, date:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
-                  <select value={formData.startTime} onChange={e => setFormData(p => ({ ...p, startTime: e.target.value }))}
+                  <select value={formData.startTime} onChange={e => setFormData(p => ({...p, startTime:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สิ้นสุด</label>
-                  <select value={formData.endTime} onChange={e => setFormData(p => ({ ...p, endTime: e.target.value }))}
+                  <select value={formData.endTime} onChange={e => setFormData(p => ({...p, endTime:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
-
               {/* Doctor + Room */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
-                  <select value={formData.doctorId} onChange={e => {
-                    const doc = doctors.find(d => String(d.id) === e.target.value);
-                    setFormData(p => ({ ...p, doctorId: e.target.value, doctorName: doc?.name || '' }));
-                  }} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+                  <select value={formData.doctorId} onChange={e => { const d=doctors.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,doctorId:e.target.value,doctorName:d?.name||''})); }}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
                     {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ห้องตรวจ</label>
-                  <input type="text" value={formData.roomName} onChange={e => setFormData(p => ({ ...p, roomName: e.target.value }))} placeholder="ห้อง 1"
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                  <select value={formData.roomName} onChange={e => setFormData(p => ({...p, roomName:e.target.value}))}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <option value="">ไม่ระบุ</option>
+                    {[...new Set([...rooms, ...DEFAULT_ROOMS])].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
                 </div>
               </div>
-
               {/* Channel + Purpose + Status */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทาง</label>
-                  <select value={formData.channel} onChange={e => setFormData(p => ({ ...p, channel: e.target.value }))}
+                  <select value={formData.channel} onChange={e => setFormData(p => ({...p, channel:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
                     {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -415,39 +477,30 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
-                  <input type="text" value={formData.appointmentTo} onChange={e => setFormData(p => ({ ...p, appointmentTo: e.target.value }))} placeholder="botox, filler..."
+                  <input type="text" value={formData.appointmentTo} onChange={e => setFormData(p => ({...p, appointmentTo:e.target.value}))} placeholder="botox, filler..."
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>
-                  <select value={formData.status} onChange={e => setFormData(p => ({ ...p, status: e.target.value }))}
+                  <select value={formData.status} onChange={e => setFormData(p => ({...p, status:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
               </div>
-
               {/* Notes */}
               <div>
                 <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ</label>
-                <textarea value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))} rows={2}
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                <textarea value={formData.notes} onChange={e => setFormData(p => ({...p, notes:e.target.value}))} rows={2}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
               </div>
-
-              {/* Error */}
-              {formError && (
-                <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12} />{formError}</div>
-              )}
+              {formError && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12}/>{formError}</div>}
             </div>
-
-            {/* Footer */}
             <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
-              <button onClick={() => setFormMode(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">
-                ยกเลิก
-              </button>
+              <button onClick={() => setFormMode(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">ยกเลิก</button>
               <button onClick={handleSave} disabled={formSaving}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
-                {formSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                {formSaving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
                 {formMode.mode === 'edit' ? 'บันทึก' : 'สร้างนัดหมาย'}
               </button>
             </div>

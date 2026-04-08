@@ -186,6 +186,15 @@ export async function getCustomerAppointments(customerId) {
   return appts;
 }
 
+/** Get all appointments for a specific date (YYYY-MM-DD) */
+export async function getAppointmentsByDate(dateStr) {
+  const q = query(appointmentsCol(), where('date', '==', dateStr));
+  const snap = await getDocs(q);
+  const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+  return appts;
+}
+
 // ─── Master Data Read + Sync ────────────────────────────────────────────────
 
 const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);
