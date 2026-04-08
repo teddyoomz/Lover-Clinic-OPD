@@ -120,25 +120,25 @@ export default function CloneTab({ clinicSettings, theme }) {
     <div className="space-y-6">
 
       {/* ── Search Bar ── */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-4 shadow-sm">
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: `rgba(${acRgb},0.5)` }} />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="ค้นหา HN (3-4 ตัวท้าย), ชื่อ, นามสกุล, หรือเลขบัตรประชาชน..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-2 transition-all"
-              style={{ '--tw-ring-color': `rgba(${acRgb},0.4)` }}
+              className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none transition-all"
+              style={{ boxShadow: `inset 0 2px 4px rgba(0,0,0,0.1)` }}
             />
           </div>
           <button
             onClick={handleSearch}
             disabled={searching || !searchQuery.trim()}
-            className="px-5 py-2.5 rounded-lg font-bold text-sm text-white transition-all disabled:opacity-50 flex items-center gap-2 hover:shadow-lg active:scale-[0.97]"
-            style={{ backgroundColor: ac, boxShadow: `0 0 12px rgba(${acRgb},0.25)` }}
+            className="px-6 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+            style={{ background: `linear-gradient(135deg, ${ac}, rgba(${acRgb},0.8))`, boxShadow: `0 4px 20px rgba(${acRgb},0.35)` }}
           >
             {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             ค้นหา
@@ -146,8 +146,8 @@ export default function CloneTab({ clinicSettings, theme }) {
         </div>
 
         {/* Hint */}
-        <p className="mt-2 text-xs text-[var(--tx-muted)] flex items-center gap-1">
-          <Info size={10} /> ค้นหาจาก ProClinic โดยตรง — ต้อง login ProClinic ก่อน (ผ่าน Cookie Relay Extension)
+        <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+          <Info size={12} /> ค้นหาจาก ProClinic โดยตรง — ต้อง login ProClinic ก่อน (ผ่าน Cookie Relay Extension)
         </p>
       </div>
 
@@ -203,15 +203,36 @@ export default function CloneTab({ clinicSettings, theme }) {
 
       {/* ── Empty State (before search) ── */}
       {searchResults === null && !searching && (
-        <div className="text-center py-20">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-            style={{ backgroundColor: `rgba(${acRgb},0.1)`, border: `1px solid rgba(${acRgb},0.2)` }}>
-            <Download size={28} style={{ color: ac }} />
+        <div className="flex flex-col items-center justify-center py-16">
+          {/* Hero icon with fire glow */}
+          <div className="relative mb-6">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.2), rgba(${acRgb},0.05))`, border: `1.5px solid rgba(${acRgb},0.3)`, boxShadow: `0 0 40px rgba(${acRgb},0.15), 0 0 80px rgba(${acRgb},0.05)` }}>
+              <Download size={32} style={{ color: ac }} />
+            </div>
+            <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: `radial-gradient(circle, rgba(${acRgb},0.15) 0%, transparent 70%)` }} />
           </div>
-          <h3 className="text-lg font-bold text-[var(--tx-heading)] mb-2">Clone ข้อมูลลูกค้า</h3>
-          <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto">
+          <h3 className="text-xl font-black text-[var(--tx-heading)] mb-2 tracking-tight">Clone ข้อมูลลูกค้า</h3>
+          <p className="text-sm text-[var(--tx-muted)] max-w-lg mx-auto text-center leading-relaxed mb-8">
             ค้นหาลูกค้าจาก ProClinic แล้วดูดข้อมูลทั้งหมด (ข้อมูลส่วนตัว, คอร์ส, นัดหมาย, ประวัติการรักษา) มาเก็บไว้ในระบบหลังบ้านของเรา
           </p>
+          {/* Quick start guide */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
+            {[
+              { step: '1', title: 'ค้นหา', desc: 'พิมพ์ HN, ชื่อ, หรือเบอร์โทร' },
+              { step: '2', title: 'เลือก', desc: 'เลือกลูกค้าที่ต้องการ clone' },
+              { step: '3', title: 'ดูดข้อมูล', desc: 'กดปุ่มเพื่อดูดข้อมูลทั้งหมด' },
+            ].map(s => (
+              <div key={s.step} className="flex items-start gap-3 p-4 rounded-xl bg-[var(--bg-surface)] border border-[var(--bd)]">
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
+                  style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>{s.step}</span>
+                <div>
+                  <p className="text-sm font-bold text-[var(--tx-heading)]">{s.title}</p>
+                  <p className="text-xs text-[var(--tx-muted)] mt-0.5">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
