@@ -95,7 +95,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   return (
     <div>
       {/* ── 3-Column Grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-4 overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_1fr_320px] gap-5 overflow-hidden">
 
         {/* ════════════════════ LEFT: Profile ════════════════════ */}
         <div className="space-y-3 min-w-0">
@@ -123,7 +123,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
               {/* Clone status */}
               {customer?.cloneStatus && (
-                <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px]">
+                <div className="mt-2 flex items-center justify-center gap-1.5 text-xs">
                   {customer.cloneStatus === 'complete' ? (
                     <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 size={10} /> Clone สมบูรณ์</span>
                   ) : customer.cloneStatus === 'partial_error' ? (
@@ -168,7 +168,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
                 <Calendar size={16} className="text-sky-400" />
                 <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">นัดหมาย</h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{appointments.length}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{appointments.length}</span>
               </div>
               <div className="divide-y divide-[var(--bd)]">
                 {appointments.map((appt, i) => (
@@ -194,13 +194,13 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
               <Stethoscope size={16} style={{ color: ac }} />
               <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">ประวัติการรักษา</h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                 style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
               {onCreateTreatment && (
                 <button onClick={onCreateTreatment}
-                  className="ml-auto text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                  className="ml-auto text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
                   style={{ color: ac, borderColor: `rgba(${acRgb},0.3)`, backgroundColor: `rgba(${acRgb},0.08)` }}>
                   <Plus size={11} /> สร้างการรักษา
                 </button>
@@ -247,13 +247,13 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                             <div className="flex gap-1.5 mb-2">
                               {onEditTreatment && (
                                 <button onClick={() => onEditTreatment(t.id)}
-                                  className="text-[10px] font-bold px-2 py-1 rounded border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all flex items-center gap-1">
+                                  className="text-xs font-bold px-2 py-1 rounded border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all flex items-center gap-1">
                                   <Edit3 size={10} /> แก้ไข
                                 </button>
                               )}
                               {onDeleteTreatment && (
                                 <button onClick={() => onDeleteTreatment(t.id)}
-                                  className="text-[10px] font-bold px-2 py-1 rounded border border-red-700/40 text-red-400 bg-red-900/10 hover:bg-red-900/20 transition-all flex items-center gap-1">
+                                  className="text-xs font-bold px-2 py-1 rounded border border-red-700/40 text-red-400 bg-red-900/10 hover:bg-red-900/20 transition-all flex items-center gap-1">
                                   <Trash2 size={10} /> ลบ
                                 </button>
                               )}
@@ -269,7 +269,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                             <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
                               {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
                               {t.dx && <DetailField label="วินิจฉัย (DX)" value={t.dx} />}
-                              <p className="text-[10px] text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
+                              <p className="text-xs text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
                             </div>
                           )}
                         </div>
@@ -293,7 +293,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 }`}>
                 <Package size={13} /> คอร์สของฉัน
                 {activeCourses.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-teal-900/30 text-teal-400">{activeCourses.length}</span>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-teal-900/30 text-teal-400">{activeCourses.length}</span>
                 )}
               </button>
               <button onClick={() => setCourseTab('expired')}
@@ -302,7 +302,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 }`}>
                 คอร์สหมดอายุ
                 {expiredCourses.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400">{expiredCourses.length}</span>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400">{expiredCourses.length}</span>
                 )}
               </button>
               <button onClick={() => setCourseTab('purchases')}
@@ -311,7 +311,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 }`}>
                 ประวัติการซื้อ
                 {customerSales.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-900/30 text-rose-400">{customerSales.length}</span>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-rose-900/30 text-rose-400">{customerSales.length}</span>
                 )}
               </button>
             </div>
@@ -326,8 +326,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                   customerSales.map((sale, i) => (
                     <div key={i} className="p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        <span className="text-xs font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
                           sale.payment?.status === 'paid' ? 'bg-emerald-900/30 text-emerald-400' :
                           sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? 'bg-red-900/30 text-red-400' :
                           'bg-amber-900/30 text-amber-400'
@@ -349,15 +349,15 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{course.name || '-'}</h4>
                         {course.expiry && (
-                          <p className="text-[10px] text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
+                          <p className="text-xs text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
                             <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {course.expiry}
                           </p>
                         )}
                         {course.value && (
-                          <p className="text-[10px] text-[var(--tx-muted)]">มูลค่าคงเหลือ {course.value}</p>
+                          <p className="text-xs text-[var(--tx-muted)]">มูลค่าคงเหลือ {course.value}</p>
                         )}
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
                         courseTab === 'active'
                           ? 'bg-teal-900/30 text-teal-400 border border-teal-700/40'
                           : 'bg-red-900/20 text-red-400 border border-red-700/40'
@@ -408,7 +408,7 @@ function DetailField({ label, value }) {
   if (!value) return null;
   return (
     <div>
-      <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider">{label}</span>
+      <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider">{label}</span>
       <p className="text-xs text-[var(--tx-secondary)] mt-0.5 whitespace-pre-wrap">{value}</p>
     </div>
   );
@@ -433,7 +433,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Vitals */}
       {(vitals.weight || vitals.height || vitals.temperature) && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <Activity size={10} /> สัญญาณชีพ
           </span>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
@@ -465,7 +465,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Medications */}
       {meds.length > 0 && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <Pill size={10} /> ยากลับบ้าน
           </span>
           <div className="mt-1 space-y-1">
@@ -482,7 +482,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Lab — enhanced with price + info */}
       {labItems.length > 0 && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <Droplets size={10} /> Lab
           </span>
           <div className="mt-1 space-y-1">
@@ -494,7 +494,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
                     {lab.qty || ''}{lab.price ? ` | ${Number(lab.price).toLocaleString()} ฿` : ''}
                   </span>
                 </div>
-                {lab.information && <p className="text-[10px] text-[var(--tx-muted)] mt-0.5">{lab.information}</p>}
+                {lab.information && <p className="text-xs text-[var(--tx-muted)] mt-0.5">{lab.information}</p>}
               </div>
             ))}
           </div>
@@ -504,7 +504,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Doctor Fees */}
       {doctorFees.length > 0 && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <Stethoscope size={10} /> ค่ามือ
           </span>
           <div className="mt-1 space-y-1">
@@ -521,10 +521,10 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Medical Certificate */}
       {(medCert.isActuallyCome || medCert.isRest || medCert.isOther || d.medCertActuallyCome) && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <Shield size={10} /> ใบรับรองแพทย์
           </span>
-          <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
+          <div className="mt-1 flex flex-wrap gap-2 text-xs">
             {(medCert.isActuallyCome || d.medCertActuallyCome) && <span className="px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-400">มาตรวจจริง</span>}
             {(medCert.isRest || d.medCertIsRest) && <span className="px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">พักงาน {medCert.period || d.medCertPeriod || ''}</span>}
             {(medCert.isOther || d.medCertIsOther) && <span className="px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">{medCert.otherDetail || d.medCertOtherDetail || 'อื่นๆ'}</span>}
@@ -535,7 +535,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
       {/* Before/After/Other Images */}
       {hasImages && (
         <div>
-          <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+          <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
             <FileText size={10} /> รูปภาพ
           </span>
           <div className="mt-1 space-y-2">
@@ -554,7 +554,7 @@ function ItemList({ icon, label, items, nameKey = 'name', qtyKey = 'qty', unitKe
   if (!items || items.length === 0) return null;
   return (
     <div>
-      <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
+      <span className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider flex items-center gap-1">
         {icon} {label}
       </span>
       <div className="mt-1 space-y-1">
@@ -574,7 +574,7 @@ function ImageRow({ label, images }) {
   if (!images || images.length === 0) return null;
   return (
     <div>
-      <span className="text-[9px] text-[var(--tx-muted)] font-medium">{label} ({images.length})</span>
+      <span className="text-[11px] text-[var(--tx-muted)] font-medium">{label} ({images.length})</span>
       <div className="flex flex-wrap gap-1.5 mt-0.5">
         {images.map((img, i) => {
           const src = typeof img === 'string' ? img : img?.dataUrl || '';
@@ -593,7 +593,7 @@ function ImageRow({ label, images }) {
 
 function VitalPill({ label, value }) {
   return (
-    <span className="text-[10px] text-[var(--tx-secondary)]">
+    <span className="text-xs text-[var(--tx-secondary)]">
       <span className="text-[var(--tx-muted)]">{label}:</span> {value}
     </span>
   );

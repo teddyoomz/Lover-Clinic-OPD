@@ -109,7 +109,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
 
       {/* ── Customer Grid ── */}
       {!loading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filtered.map(customer => (
             <CustomerCard
               key={customer.id}

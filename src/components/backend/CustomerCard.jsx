@@ -61,7 +61,7 @@ export default function CustomerCard({
         <div className="flex-1 min-w-0">
           {/* HN Badge */}
           {hn && (
-            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-1">
+            <span className="inline-block px-2 py-0.5 rounded text-xs font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-1">
               {hn}
             </span>
           )}
@@ -101,22 +101,22 @@ export default function CustomerCard({
         {mode === 'cloned' && status && (
           <div className="flex items-center gap-2 pt-1">
             {status === 'complete' && (
-              <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-medium">
+              <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
                 <CheckCircle2 size={11} /> Clone สมบูรณ์
               </span>
             )}
             {status === 'partial_error' && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-500 font-medium">
+              <span className="flex items-center gap-1 text-xs text-amber-500 font-medium">
                 <AlertCircle size={11} /> Clone บางส่วน
               </span>
             )}
             {status === 'in_progress' && (
-              <span className="flex items-center gap-1 text-[10px] text-blue-400 font-medium">
+              <span className="flex items-center gap-1 text-xs text-blue-400 font-medium">
                 <Loader2 size={11} className="animate-spin" /> กำลัง Clone...
               </span>
             )}
             {syncedAt && (
-              <span className="flex items-center gap-1 text-[10px] text-[var(--tx-muted)]">
+              <span className="flex items-center gap-1 text-xs text-[var(--tx-muted)]">
                 <Clock size={10} /> {relativeTime(syncedAt)}
               </span>
             )}
@@ -147,7 +147,7 @@ export default function CustomerCard({
                     background: `linear-gradient(90deg, rgba(${acRgb},0.8), rgba(${acRgb},1))`,
                   }} />
               </div>
-              <p className="text-[10px] text-[var(--tx-muted)] truncate">{cloneProgress?.label || 'กำลังดำเนินการ...'}</p>
+              <p className="text-xs text-[var(--tx-muted)] truncate">{cloneProgress?.label || 'กำลังดำเนินการ...'}</p>
             </div>
           ) : cloneStatus === 'done' ? (
             <button disabled className="w-full py-2 rounded-lg text-xs font-bold bg-emerald-900/30 border border-emerald-700/40 text-emerald-400 flex items-center justify-center gap-2">

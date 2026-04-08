@@ -229,13 +229,13 @@ export default function MasterDataTab({ clinicSettings, theme }) {
             <Download size={14} className="text-amber-400" /> Sync ข้อมูลจาก ProClinic
           </h3>
           <button onClick={handleSyncAll} disabled={isSyncing}
-            className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all disabled:opacity-50 flex items-center gap-1.5">
+            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all disabled:opacity-50 flex items-center gap-1.5">
             {isSyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
             Sync ทั้งหมด
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {SYNC_TYPES.map(st => {
             const cm = SYNC_COLOR_MAP[st.color];
             const status = syncStatus[st.key];
@@ -251,7 +251,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                   {status === 'done' && <CheckCircle2 size={11} className="text-emerald-400 flex-shrink-0" />}
                   {status === 'error' && <AlertCircle size={11} className="text-red-400 flex-shrink-0" />}
                 </div>
-                <div className="flex items-center gap-2 text-[9px] opacity-70">
+                <div className="flex items-center gap-2 text-[11px] opacity-70">
                   {m?.count != null && <span>{m.count} รายการ</span>}
                   {m?.syncedAt && <span>{relativeTime(m.syncedAt)}</span>}
                   {!m && <span>ยังไม่ได้ sync</span>}
@@ -263,14 +263,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
         {/* Sync errors */}
         {Object.entries(syncError).filter(([, v]) => v).map(([key, err]) => (
-          <div key={key} className="mt-2 text-[10px] text-red-400 flex items-center gap-1">
+          <div key={key} className="mt-2 text-xs text-red-400 flex items-center gap-1">
             <AlertCircle size={10} /> {key}: {err}
           </div>
         ))}
       </div>
 
       {/* ═══ [B] Sub-Tab Navigation ═══ */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {SYNC_TYPES.map(st => {
           const isActive = activeSubTab === st.key;
           const m = meta[st.key];
@@ -283,7 +283,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
               }`}>
               <span>{st.icon}</span> {st.label.split(' / ')[0]}
               {m?.count != null && (
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-amber-600/50' : 'bg-[var(--bg-elevated)]'}`}>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-amber-600/50' : 'bg-[var(--bg-elevated)]'}`}>
                   {m.count}
                 </span>
               )}
@@ -315,7 +315,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         ))}
 
         {/* Count */}
-        <span className="text-[10px] text-[var(--tx-muted)] font-medium whitespace-nowrap">
+        <span className="text-xs text-[var(--tx-muted)] font-medium whitespace-nowrap">
           {filtered.length} / {items.length} รายการ
         </span>
       </div>
@@ -345,7 +345,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                 <tr className="border-b border-[var(--bd)]">
                   {(COLUMNS[activeSubTab] || []).map(col => (
                     <th key={col.key}
-                      className={`px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-[10px] bg-[var(--bg-elevated)] ${col.w || ''} ${col.align || ''} ${col.sticky ? 'sticky left-0 z-10 bg-[var(--bg-elevated)]' : ''}`}>
+                      className={`px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs bg-[var(--bg-elevated)] ${col.w || ''} ${col.align || ''} ${col.sticky ? 'sticky left-0 z-10 bg-[var(--bg-elevated)]' : ''}`}>
                       {col.label}
                     </th>
                   ))}
@@ -383,7 +383,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 function StatusBadge({ value }) {
   const isActive = !value || value === 'ใช้งาน';
   return (
-    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
+    <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold ${
       isActive ? 'bg-emerald-900/30 text-emerald-400' : 'bg-gray-800/50 text-gray-500'
     }`}>
       {isActive ? 'ใช้งาน' : value}

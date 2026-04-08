@@ -69,18 +69,18 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--tx-primary)] font-sans">
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 bg-[var(--bg-surface)] border-b border-[var(--bd)] shadow-lg backdrop-blur-sm">
+      <header className="sticky top-0 z-50 bg-[var(--bg-surface)] shadow-lg backdrop-blur-sm" style={{ borderBottom: `1px solid rgba(${acRgb},0.2)` }}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
 
           {/* Logo + Title */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `rgba(${acRgb},0.15)`, border: `1px solid rgba(${acRgb},0.3)` }}>
-              <Database size={18} style={{ color: ac }} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.25), rgba(${acRgb},0.1))`, border: `1px solid rgba(${acRgb},0.35)`, boxShadow: `0 0 20px rgba(${acRgb},0.15)` }}>
+              <Database size={20} style={{ color: ac }} />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-[var(--tx-heading)] tracking-wider uppercase">ระบบหลังบ้าน</h1>
-              <p className="text-[10px] text-[var(--tx-muted)] tracking-wide">{clinicSettings.clinicName}</p>
+              <h1 className="text-base font-black tracking-wider uppercase" style={{ color: ac }}>ระบบหลังบ้าน</h1>
+              <p className="text-xs text-[var(--tx-muted)] tracking-wide">{clinicSettings.clinicName}</p>
             </div>
           </div>
 

@@ -32,9 +32,9 @@ function DatePickerField({ value, onChange, className = '' }) {
     <div className={`relative ${className}`}>
       <input type="date" value={value} onChange={e => onChange(e.target.value)}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-      <div className={`w-full rounded-lg px-3 py-2 text-xs border bg-[#111] border-[#333] text-gray-200 flex items-center justify-between`}>
+      <div className={`w-full rounded-lg px-3 py-2 text-xs border bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] flex items-center justify-between`}>
         <span>{fmtDateDisplay(value)}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--tx-muted)]"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       </div>
     </div>
   );
@@ -46,8 +46,8 @@ export default function SaleTab({ clinicSettings, theme }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[#111] border-[#333] text-gray-200 focus:border-rose-500' : 'bg-white border-gray-200 text-gray-800 focus:border-rose-400'}`;
-  const labelCls = 'text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1 block';
+  const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-rose-500' : 'bg-white border-gray-200 text-gray-800 focus:border-rose-400'}`;
+  const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
 
   // ── List state ──
   const [sales, setSales] = useState([]);
@@ -311,7 +311,7 @@ export default function SaleTab({ clinicSettings, theme }) {
             <option value="">ทุกสถานะ</option>
             {PAYMENT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <span className="text-[10px] text-[var(--tx-muted)] whitespace-nowrap">{filtered.length} รายการ</span>
+          <span className="text-xs text-[var(--tx-muted)] whitespace-nowrap">{filtered.length} รายการ</span>
         </div>
       </div>
 
@@ -330,7 +330,7 @@ export default function SaleTab({ clinicSettings, theme }) {
               <thead>
                 <tr className="border-b border-[var(--bd)] bg-[var(--bg-elevated)]">
                   {['เลขที่','ลูกค้า','วันที่','ยอดรวม','สถานะ','จัดการ'].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-[10px]">{h}</th>
+                    <th key={h} className="px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -340,10 +340,10 @@ export default function SaleTab({ clinicSettings, theme }) {
                   return (
                     <tr key={sale.saleId || sale.id || i} className={`border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}>
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">{sale.customerName || '-'} <span className="text-[var(--tx-muted)] text-[10px]">{sale.customerHN}</span></td>
+                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">{sale.customerName || '-'} <span className="text-[var(--tx-muted)] text-xs">{sale.customerHN}</span></td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
                       <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">{fmtMoney(sale.billing?.netTotal)} ฿</td>
-                      <td className="px-3 py-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
+                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
                           <button onClick={() => setViewingSale(sale)} className="p-1 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด"><Eye size={13} /></button>
@@ -370,35 +370,35 @@ export default function SaleTab({ clinicSettings, theme }) {
       {/* ═══ DETAIL VIEW MODAL ═══ */}
       {viewingSale && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setViewingSale(null)}>
-          <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+          <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
               <div>
                 <h3 className="text-sm font-bold text-rose-400">{viewingSale.saleId}</h3>
-                <p className="text-[10px] text-gray-500">{viewingSale.customerName} | {fmtDate(viewingSale.saleDate)}</p>
+                <p className="text-xs text-[var(--tx-muted)]">{viewingSale.customerName} | {fmtDate(viewingSale.saleDate)}</p>
               </div>
-              <button onClick={() => setViewingSale(null)} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+              <button onClick={() => setViewingSale(null)} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4 text-xs">
               {/* Items */}
               <div>
                 <h4 className={labelCls}>รายการสินค้า</h4>
                 {[...(viewingSale.items?.promotions||[]),...(viewingSale.items?.courses||[]),...(viewingSale.items?.products||[])].map((item,i) => (
-                  <div key={i} className={`flex justify-between py-1 ${isDark ? 'border-b border-[#1a1a1a]' : 'border-b border-gray-100'}`}>
-                    <span>{item.name} <span className="text-gray-500">x{item.qty}</span></span>
+                  <div key={i} className={`flex justify-between py-1 ${isDark ? 'border-b border-[var(--bd)]/50' : 'border-b border-gray-100'}`}>
+                    <span>{item.name} <span className="text-[var(--tx-muted)]">x{item.qty}</span></span>
                     <span className="font-mono">{fmtMoney((parseFloat(item.unitPrice)||0)*(parseInt(item.qty)||1))} บาท</span>
                   </div>
                 ))}
                 {(viewingSale.items?.medications||[]).map((m,i) => (
-                  <div key={`m${i}`} className={`flex justify-between py-1 ${isDark ? 'border-b border-[#1a1a1a]' : 'border-b border-gray-100'}`}>
-                    <span><Pill size={10} className="inline mr-1 text-purple-400" />{m.name} <span className="text-gray-500">{m.dosage} x{m.qty}</span></span>
+                  <div key={`m${i}`} className={`flex justify-between py-1 ${isDark ? 'border-b border-[var(--bd)]/50' : 'border-b border-gray-100'}`}>
+                    <span><Pill size={10} className="inline mr-1 text-purple-400" />{m.name} <span className="text-[var(--tx-muted)]">{m.dosage} x{m.qty}</span></span>
                     <span className="font-mono">{fmtMoney((parseFloat(m.unitPrice)||0)*(parseInt(m.qty)||1))} บาท</span>
                   </div>
                 ))}
               </div>
               {/* Billing */}
-              <div className={`p-3 rounded-lg ${isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'}`}>
-                <div className="flex justify-between"><span className="text-gray-500">ยอดรวม</span><span className="font-mono">{fmtMoney(viewingSale.billing?.subtotal)} บาท</span></div>
-                {viewingSale.billing?.billDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">ส่วนลด</span><span className="font-mono text-red-400">-{fmtMoney(viewingSale.billing.billDiscount)} บาท</span></div>}
+              <div className={`p-3 rounded-lg ${isDark ? 'bg-[var(--bg-elevated)]' : 'bg-gray-50'}`}>
+                <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ยอดรวม</span><span className="font-mono">{fmtMoney(viewingSale.billing?.subtotal)} บาท</span></div>
+                {viewingSale.billing?.billDiscount > 0 && <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ส่วนลด</span><span className="font-mono text-red-400">-{fmtMoney(viewingSale.billing.billDiscount)} บาท</span></div>}
                 <div className="flex justify-between pt-1 border-t border-[var(--bd)] font-bold"><span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(viewingSale.billing?.netTotal)} บาท</span></div>
               </div>
               {/* Payment */}
@@ -409,7 +409,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                     <span>{ch.method || 'ไม่ระบุ'}</span><span className="font-mono">{fmtMoney(ch.amount)} บาท</span>
                   </div>
                 ))}
-                {viewingSale.payment?.refNo && <p className="text-gray-500 mt-1">Ref: {viewingSale.payment.refNo}</p>}
+                {viewingSale.payment?.refNo && <p className="text-[var(--tx-muted)] mt-1">Ref: {viewingSale.payment.refNo}</p>}
               </div>
               {/* Sellers */}
               {viewingSale.sellers?.length > 0 && (
@@ -421,12 +421,12 @@ export default function SaleTab({ clinicSettings, theme }) {
               {/* Cancelled info */}
               {viewingSale.status === 'cancelled' && viewingSale.cancelled && (
                 <div className={`p-3 rounded-lg border ${isDark ? 'bg-red-950/20 border-red-900/40' : 'bg-red-50 border-red-200'}`}>
-                  <h4 className="text-[10px] font-bold text-red-400 mb-1">ยกเลิกแล้ว</h4>
-                  <p className="text-[10px] text-gray-400">เหตุผล: {viewingSale.cancelled.reason || '-'}</p>
-                  <p className="text-[10px] text-gray-400">คืนเงิน: {viewingSale.cancelled.refundMethod} {fmtMoney(viewingSale.cancelled.refundAmount)} บาท</p>
+                  <h4 className="text-xs font-bold text-red-400 mb-1">ยกเลิกแล้ว</h4>
+                  <p className="text-xs text-[var(--tx-secondary)]">เหตุผล: {viewingSale.cancelled.reason || '-'}</p>
+                  <p className="text-xs text-[var(--tx-secondary)]">คืนเงิน: {viewingSale.cancelled.refundMethod} {fmtMoney(viewingSale.cancelled.refundAmount)} บาท</p>
                 </div>
               )}
-              {viewingSale.saleNote && <p className="text-gray-500">หมายเหตุ: {viewingSale.saleNote}</p>}
+              {viewingSale.saleNote && <p className="text-[var(--tx-muted)]">หมายเหตุ: {viewingSale.saleNote}</p>}
             </div>
           </div>
         </div>
@@ -435,8 +435,8 @@ export default function SaleTab({ clinicSettings, theme }) {
       {/* ═══ CANCEL MODAL ═══ */}
       {cancelModal && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" onClick={() => setCancelModal(null)}>
-          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <h3 className="text-sm font-bold text-red-400">ยกเลิกใบเสร็จ {cancelModal.saleId}</h3>
             </div>
             <div className="p-5 space-y-3">
@@ -450,8 +450,8 @@ export default function SaleTab({ clinicSettings, theme }) {
                 <div><label className={labelCls}>จำนวนคืน (บาท)</label><input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} /></div>
               </div>
             </div>
-            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-              <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
+            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+              <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
               <button onClick={async () => {
                 setCancelSaving(true);
                 await cancelBackendSale(cancelModal.saleId || cancelModal.id, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0);
@@ -467,10 +467,10 @@ export default function SaleTab({ clinicSettings, theme }) {
       {/* ═══ PAYMENT UPDATE MODAL ═══ */}
       {payModal && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" onClick={() => setPayModal(null)}>
-          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <h3 className="text-sm font-bold text-emerald-400">รับชำระเงิน {payModal.saleId}</h3>
-              <p className="text-[10px] text-gray-500">ยอดค้าง: {fmtMoney(Math.max(0, (payModal.billing?.netTotal||0) - (payModal.payment?.channels||[]).reduce((s,c) => s + (parseFloat(c.amount)||0), 0)))} บาท</p>
+              <p className="text-xs text-[var(--tx-muted)]">ยอดค้าง: {fmtMoney(Math.max(0, (payModal.billing?.netTotal||0) - (payModal.payment?.channels||[]).reduce((s,c) => s + (parseFloat(c.amount)||0), 0)))} บาท</p>
             </div>
             <div className="p-5 space-y-3">
               <div><label className={labelCls}>ช่องทาง</label>
@@ -485,8 +485,8 @@ export default function SaleTab({ clinicSettings, theme }) {
               </div>
               <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={payRefNo} onChange={e => setPayRefNo(e.target.value)} className={inputCls} placeholder="REF-..." /></div>
             </div>
-            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-              <button onClick={() => setPayModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
+            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+              <button onClick={() => setPayModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
               <button onClick={async () => {
                 if (!payMethod || !payAmount) return;
                 setPaySaving(true);
@@ -505,15 +505,15 @@ export default function SaleTab({ clinicSettings, theme }) {
   // ════════════════════ FORM OVERLAY ════════════════════
   function renderForm() {
     return (
-      <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[#0a0a0a] text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
+      <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[var(--bg-elevated)] text-[var(--tx-primary)]' : 'bg-gray-50 text-gray-800'}`}>
         {/* Header */}
-        <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}>
+        <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[var(--bg-elevated)]/95 border-[var(--bd)]' : 'bg-white/95 border-gray-200'}`}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><ArrowLeft size={16} /></button>
             <h2 className="text-sm font-black tracking-tight text-rose-400 flex items-center gap-2">
               <ShoppingCart size={16} /> {editingSale ? 'แก้ไขใบเสร็จ' : 'สร้างใบเสร็จใหม่'}
             </h2>
-            {customerName && <span className="text-[10px] text-gray-500">| {customerName}</span>}
+            {customerName && <span className="text-xs text-[var(--tx-muted)]">| {customerName}</span>}
           </div>
         </div>
 
@@ -525,25 +525,25 @@ export default function SaleTab({ clinicSettings, theme }) {
           <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
 
             {/* Customer picker */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
               <label className={labelCls}>ลูกค้า *</label>
               {customerName ? (
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-rose-900/10 border border-rose-700/30">
-                  <span className="text-xs font-bold">{customerName} <span className="font-mono text-gray-500">{customerHN}</span></span>
-                  <button onClick={() => { setCustomerId(''); setCustomerName(''); setCustomerHN(''); }} className="text-gray-500 hover:text-red-400"><X size={14} /></button>
+                  <span className="text-xs font-bold">{customerName} <span className="font-mono text-[var(--tx-muted)]">{customerHN}</span></span>
+                  <button onClick={() => { setCustomerId(''); setCustomerName(''); setCustomerHN(''); }} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14} /></button>
                 </div>
               ) : (
                 <div>
                   <input type="text" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="ค้นหาชื่อ / HN..."
                     className={inputCls} />
                   {filteredCustomers.length > 0 && customerSearch && (
-                    <div className={`mt-1 max-h-32 overflow-y-auto border rounded-lg ${isDark ? 'border-[#333] bg-[#111]' : 'border-gray-200 bg-white'}`}>
+                    <div className={`mt-1 max-h-32 overflow-y-auto border rounded-lg ${isDark ? 'border-[var(--bd-strong)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
                       {filteredCustomers.map(c => {
                         const nm = `${c.patientData?.prefix||''} ${c.patientData?.firstName||''} ${c.patientData?.lastName||''}`.trim();
                         return (
                           <button key={c.id} onClick={() => { setCustomerId(c.proClinicId||c.id); setCustomerName(nm); setCustomerHN(c.proClinicHN||''); setCustomerSearch(''); }}
                             className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] flex justify-between">
-                            <span>{nm}</span><span className="text-[10px] font-mono text-gray-500">{c.proClinicHN||''}</span>
+                            <span>{nm}</span><span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN||''}</span>
                           </button>
                         );
                       })}
@@ -558,23 +558,23 @@ export default function SaleTab({ clinicSettings, theme }) {
             </div>
 
             {/* Buy items section */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-rose-400 flex items-center gap-1.5"><ShoppingCart size={12} /> รายการสินค้า</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-rose-400 flex items-center gap-1.5"><ShoppingCart size={12} /> รายการสินค้า</h3>
                 <div className="flex gap-1.5">
-                  <button onClick={() => openBuyModal('course')} className="text-[10px] font-bold px-2 py-1 rounded bg-teal-900/20 border border-teal-700/40 text-teal-400 hover:bg-teal-900/30"><Plus size={10} /> ซื้อคอร์ส</button>
-                  <button onClick={() => openBuyModal('product')} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30"><Plus size={10} /> สินค้า</button>
-                  <button onClick={() => openBuyModal('promotion')} className="text-[10px] font-bold px-2 py-1 rounded bg-sky-900/20 border border-sky-700/40 text-sky-400 hover:bg-sky-900/30"><Plus size={10} /> โปรโมชัน</button>
-                  <button onClick={() => setMedications(prev => [...prev, { name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด' }])} className="text-[10px] font-bold px-2 py-1 rounded bg-purple-900/20 border border-purple-700/40 text-purple-400 hover:bg-purple-900/30"><Plus size={10} /> ยากลับบ้าน</button>
+                  <button onClick={() => openBuyModal('course')} className="text-xs font-bold px-2 py-1 rounded bg-teal-900/20 border border-teal-700/40 text-teal-400 hover:bg-teal-900/30"><Plus size={10} /> ซื้อคอร์ส</button>
+                  <button onClick={() => openBuyModal('product')} className="text-xs font-bold px-2 py-1 rounded bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30"><Plus size={10} /> สินค้า</button>
+                  <button onClick={() => openBuyModal('promotion')} className="text-xs font-bold px-2 py-1 rounded bg-sky-900/20 border border-sky-700/40 text-sky-400 hover:bg-sky-900/30"><Plus size={10} /> โปรโมชัน</button>
+                  <button onClick={() => setMedications(prev => [...prev, { name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด' }])} className="text-xs font-bold px-2 py-1 rounded bg-purple-900/20 border border-purple-700/40 text-purple-400 hover:bg-purple-900/30"><Plus size={10} /> ยากลับบ้าน</button>
                 </div>
               </div>
               {purchasedItems.length === 0 && medications.length === 0 ? (
-                <p className="text-[10px] text-gray-500 text-center py-6">ยังไม่มีรายการ — กดปุ่มด้านบนเพื่อเพิ่ม</p>
+                <p className="text-xs text-[var(--tx-muted)] text-center py-6">ยังไม่มีรายการ — กดปุ่มด้านบนเพื่อเพิ่ม</p>
               ) : (
                 <div className="space-y-1">
                   {purchasedItems.map((item, i) => (
-                    <div key={i} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
-                      <span className="text-xs">{item.name} <span className="text-gray-500">x{item.qty}</span></span>
+                    <div key={i} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isDark ? 'bg-[var(--bg-surface)]' : 'bg-gray-50'}`}>
+                      <span className="text-xs">{item.name} <span className="text-[var(--tx-muted)]">x{item.qty}</span></span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono">{fmtMoney((parseFloat(item.unitPrice)||0) * (parseInt(item.qty)||1))}</span>
                         <button onClick={() => setPurchasedItems(prev => prev.filter((_,j) => j !== i))} className="text-red-400"><Trash2 size={11} /></button>
@@ -582,8 +582,8 @@ export default function SaleTab({ clinicSettings, theme }) {
                     </div>
                   ))}
                   {medications.map((med, i) => (
-                    <div key={`m${i}`} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
-                      <span className="text-xs"><Pill size={10} className="inline mr-1 text-purple-400" />{med.name} <span className="text-gray-500">{med.dosage} x{med.qty}</span></span>
+                    <div key={`m${i}`} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isDark ? 'bg-[var(--bg-surface)]' : 'bg-gray-50'}`}>
+                      <span className="text-xs"><Pill size={10} className="inline mr-1 text-purple-400" />{med.name} <span className="text-[var(--tx-muted)]">{med.dosage} x{med.qty}</span></span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono">{fmtMoney((parseFloat(med.unitPrice)||0) * (parseInt(med.qty)||1))}</span>
                         <button onClick={() => setMedications(prev => prev.filter((_,j) => j !== i))} className="text-red-400"><Trash2 size={11} /></button>
@@ -595,16 +595,16 @@ export default function SaleTab({ clinicSettings, theme }) {
             </div>
 
             {/* Billing summary */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 mb-3"><DollarSign size={12} /> สรุปค่าใช้จ่าย</h3>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 mb-3"><DollarSign size={12} /> สรุปค่าใช้จ่าย</h3>
               <div className="space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-gray-500">ยอดรวม</span><span className="font-mono">{fmtMoney(billing.subtotal)} บาท</span></div>
+                <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ยอดรวม</span><span className="font-mono">{fmtMoney(billing.subtotal)} บาท</span></div>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 shrink-0">คูปอง</span>
+                  <span className="text-[var(--tx-muted)] shrink-0">คูปอง</span>
                   <input type="text" value={couponCode} onChange={e => setCouponCode(e.target.value)} className={`${inputCls} !w-32 !py-1`} placeholder="รหัสคูปอง" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500">ส่วนลด</span>
+                  <span className="text-[var(--tx-muted)]">ส่วนลด</span>
                   <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} !w-20 !py-1 text-center`} placeholder="0" />
                   <select value={billDiscountType} onChange={e => setBillDiscountType(e.target.value)} className={`${inputCls} !w-16 !py-1`}>
                     <option value="amount">฿</option><option value="percent">%</option>
@@ -618,8 +618,8 @@ export default function SaleTab({ clinicSettings, theme }) {
             </div>
 
             {/* Payment */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-pink-400 flex items-center gap-1.5 mb-3"><CreditCard size={12} /> การชำระเงิน</h3>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-pink-400 flex items-center gap-1.5 mb-3"><CreditCard size={12} /> การชำระเงิน</h3>
               <div className="flex gap-3 mb-3 flex-wrap">
                 {[{v:'paid',l:'ชำระเต็ม'},{v:'split',l:'แบ่งชำระ'},{v:'unpaid',l:'ค้างชำระ'},{v:'draft',l:'แบบร่าง'}].map(s => (
                   <label key={s.v} className="flex items-center gap-1.5 cursor-pointer text-xs">
@@ -643,14 +643,14 @@ export default function SaleTab({ clinicSettings, theme }) {
                     {PAYMENT_CHANNELS.map(pc => <option key={pc.id} value={pc.name}>{pc.name}</option>)}
                   </select>
                   <input type="number" value={ch.amount} onChange={e => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: e.target.value} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} />
-                  <span className="text-[10px] text-gray-500 shrink-0">บาท</span>
+                  <span className="text-xs text-[var(--tx-muted)] shrink-0">บาท</span>
                 </div>
               ))}
             </div>
 
             {/* Sellers */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-3"><UsersIcon size={12} /> พนักงานขาย</h3>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-3"><UsersIcon size={12} /> พนักงานขาย</h3>
               {pmSellers.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 mb-1.5">
                   <input type="checkbox" checked={s.enabled} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, enabled: e.target.checked} : x))} className="accent-amber-500" />
@@ -659,13 +659,13 @@ export default function SaleTab({ clinicSettings, theme }) {
                     {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
                   </select>
                   <input type="number" value={s.percent} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, percent: e.target.value} : x))} className={`${inputCls} !w-16 text-center`} placeholder="%" disabled={!s.enabled} />
-                  <span className="text-[10px] text-gray-500">%</span>
+                  <span className="text-xs text-[var(--tx-muted)]">%</span>
                 </div>
               ))}
             </div>
 
             {/* Note */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[#0f0f0f] border-[#222]' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
               <label className={labelCls}>หมายเหตุ</label>
               <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
             </div>
@@ -673,7 +673,7 @@ export default function SaleTab({ clinicSettings, theme }) {
             {/* Error + Submit */}
             {error && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12} />{error}</div>}
             <div className="flex justify-end gap-2 pb-8">
-              <button onClick={() => setFormOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
+              <button onClick={() => setFormOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
               <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                 {editingSale ? 'บันทึก' : 'สร้างใบเสร็จ'}
@@ -685,17 +685,17 @@ export default function SaleTab({ clinicSettings, theme }) {
         {/* Buy modal */}
         {buyModalOpen && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setBuyModalOpen(false)}>
-            <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[70vh] flex flex-col ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-              <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+            <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[70vh] flex flex-col ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+              <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
                 <div className="flex gap-2">
                   {['course','product','promotion'].map(t => (
                     <button key={t} onClick={() => { setBuyModalType(t); setBuySelectedCat(''); if (!buyItems[t]?.length) openBuyModal(t); }}
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ${buyModalType===t ? 'bg-rose-700 text-white' : isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg ${buyModalType===t ? 'bg-rose-700 text-white' : isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>
                       {t==='course' ? 'คอร์ส' : t==='product' ? 'สินค้า' : 'โปรโมชัน'}
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setBuyModalOpen(false)} className="text-gray-500"><X size={16} /></button>
+                <button onClick={() => setBuyModalOpen(false)} className="text-[var(--tx-muted)]"><X size={16} /></button>
               </div>
               <div className="px-4 py-2 flex gap-2">
                 <input type="text" value={buyQuery} onChange={e => setBuyQuery(e.target.value)} placeholder="ค้นหา..." className={`${inputCls} !py-1.5`} />
@@ -707,12 +707,12 @@ export default function SaleTab({ clinicSettings, theme }) {
                 )}
               </div>
               <div className="flex-1 overflow-y-auto px-4 pb-2">
-                {buyLoading ? <div className="text-center py-8"><Loader2 size={18} className="animate-spin mx-auto text-gray-500" /></div>
-                : buyFilteredItems.length === 0 ? <p className="text-[10px] text-gray-500 text-center py-8">ไม่พบรายการ</p>
+                {buyLoading ? <div className="text-center py-8"><Loader2 size={18} className="animate-spin mx-auto text-[var(--tx-muted)]" /></div>
+                : buyFilteredItems.length === 0 ? <p className="text-xs text-[var(--tx-muted)] text-center py-8">ไม่พบรายการ</p>
                 : buyFilteredItems.map(item => {
                   const checked = buyChecked.has(item.id);
                   return (
-                    <label key={item.id} className={`flex items-center justify-between py-2 px-2 rounded-lg mb-1 cursor-pointer ${checked ? isDark ? 'bg-rose-500/10' : 'bg-rose-50' : isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-50'}`}>
+                    <label key={item.id} className={`flex items-center justify-between py-2 px-2 rounded-lg mb-1 cursor-pointer ${checked ? isDark ? 'bg-rose-500/10' : 'bg-rose-50' : isDark ? 'hover:bg-[var(--bg-hover)]' : 'hover:bg-gray-50'}`}>
                       <div className="flex items-center gap-2 min-w-0">
                         <input type="checkbox" checked={checked} onChange={() => {
                           setBuyChecked(prev => { const n = new Set(prev); checked ? n.delete(item.id) : n.add(item.id); return n; });
@@ -722,14 +722,14 @@ export default function SaleTab({ clinicSettings, theme }) {
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         {checked && <input type="number" value={buyQtyMap[item.id]||'1'} onChange={e => setBuyQtyMap(prev => ({...prev, [item.id]: e.target.value}))} min="1" className={`${inputCls} !w-14 !py-0.5 text-center`} />}
-                        <span className="text-[10px] text-gray-500">{item.price ? fmtMoney(item.price) : ''}</span>
+                        <span className="text-xs text-[var(--tx-muted)]">{item.price ? fmtMoney(item.price) : ''}</span>
                       </div>
                     </label>
                   );
                 })}
               </div>
-              <div className={`px-4 py-3 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                <button onClick={() => setBuyModalOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
+              <div className={`px-4 py-3 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+                <button onClick={() => setBuyModalOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
                 <button onClick={confirmBuy} disabled={buyChecked.size===0} className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-40">
                   เพิ่ม {buyChecked.size} รายการ
                 </button>

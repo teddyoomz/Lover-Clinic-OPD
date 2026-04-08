@@ -146,7 +146,7 @@ export default function CloneTab({ clinicSettings, theme }) {
         </div>
 
         {/* Hint */}
-        <p className="mt-2 text-[10px] text-[var(--tx-muted)] flex items-center gap-1">
+        <p className="mt-2 text-xs text-[var(--tx-muted)] flex items-center gap-1">
           <Info size={10} /> ค้นหาจาก ProClinic โดยตรง — ต้อง login ProClinic ก่อน (ผ่าน Cookie Relay Extension)
         </p>
       </div>
@@ -181,7 +181,7 @@ export default function CloneTab({ clinicSettings, theme }) {
               <p className="text-xs text-[var(--tx-muted)] mt-1">ลองค้นหาด้วย HN, ชื่อ, หรือเบอร์โทร</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {searchResults.map((customer) => {
                 const state = cloneStates[customer.id] || { status: 'idle' };
                 return (

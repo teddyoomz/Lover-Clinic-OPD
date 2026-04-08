@@ -238,7 +238,7 @@ export default function AppointmentTab({ clinicSettings }) {
             </div>
           </div>
           <div className="grid grid-cols-7 gap-0">
-            {CAL_HEADERS.map((d,i) => <div key={d} className={`text-center text-[9px] font-bold py-1 ${i>=5?'text-red-400':'text-[var(--tx-muted)]'}`}>{d}</div>)}
+            {CAL_HEADERS.map((d,i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i>=5?'text-red-400':'text-[var(--tx-muted)]'}`}>{d}</div>)}
             {calDays.map((cell,i) => {
               if (!cell) return <div key={`e${i}`} className="h-7" />;
               const isToday = cell.dateStr === today;
@@ -248,7 +248,7 @@ export default function AppointmentTab({ clinicSettings }) {
               const isWe = (i % 7) >= 5;
               return (
                 <button key={cell.dateStr} onClick={() => { setSelectedDate(cell.dateStr); }}
-                  className={`h-7 w-7 mx-auto flex flex-col items-center justify-center rounded-full text-[10px] font-bold transition-all relative
+                  className={`h-7 w-7 mx-auto flex flex-col items-center justify-center rounded-full text-xs font-bold transition-all relative
                     ${isSel ? 'bg-sky-600 text-white' : isToday ? 'bg-emerald-600 text-white' : isWe ? 'text-red-400 hover:bg-[var(--bg-hover)]' : 'text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)]'}`}>
                   {cell.day}
                   {hasAppt && !isSel && !isToday && <span className="absolute bottom-0 w-1 h-1 rounded-full bg-sky-400" />}
@@ -260,10 +260,10 @@ export default function AppointmentTab({ clinicSettings }) {
 
         {/* Doctor Schedule for Selected Day */}
         <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-3">
-          <h4 className="text-[10px] font-bold text-[var(--tx-heading)] mb-1">{selThaiDate}</h4>
-          <p className="text-[9px] text-sky-400 font-bold mb-2">แพทย์เข้าตรวจ {dayDoctors.length} คน</p>
+          <h4 className="text-xs font-bold text-[var(--tx-heading)] mb-1">{selThaiDate}</h4>
+          <p className="text-[11px] text-sky-400 font-bold mb-2">แพทย์เข้าตรวจ {dayDoctors.length} คน</p>
           {dayDoctors.length === 0 ? (
-            <p className="text-[9px] text-[var(--tx-muted)]">ไม่มีแพทย์เข้าตรวจ</p>
+            <p className="text-[11px] text-[var(--tx-muted)]">ไม่มีแพทย์เข้าตรวจ</p>
           ) : (
             <div className="space-y-1.5">
               {dayDoctors.map(doc => (
@@ -272,8 +272,8 @@ export default function AppointmentTab({ clinicSettings }) {
                     <User size={11} className="text-sky-400" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] text-[var(--tx-secondary)] font-medium truncate">{doc.name}</p>
-                    <p className="text-[9px] text-[var(--tx-muted)]">{doc.min} - {doc.max}</p>
+                    <p className="text-xs text-[var(--tx-secondary)] font-medium truncate">{doc.name}</p>
+                    <p className="text-[11px] text-[var(--tx-muted)]">{doc.min} - {doc.max}</p>
                   </div>
                 </div>
               ))}
@@ -300,7 +300,7 @@ export default function AppointmentTab({ clinicSettings }) {
                 return (
                   <button key={wd.date} onClick={() => { setSelectedDate(wd.date); setCalMonth({year:parseDate(wd.date).getFullYear(), month:parseDate(wd.date).getMonth()}); }}
                     className={`py-2.5 text-center transition-all relative ${isSel ? 'bg-sky-700 text-white' : isToday ? 'bg-[var(--bg-elevated)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-                    <div className={`text-[10px] font-bold ${isSel ? 'text-sky-200' : isWe ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>{wd.label}</div>
+                    <div className={`text-xs font-bold ${isSel ? 'text-sky-200' : isWe ? 'text-red-400' : 'text-[var(--tx-muted)]'}`}>{wd.label}</div>
                     <div className={`text-sm font-bold ${isSel ? 'text-white' : isToday ? 'text-sky-400' : isWe ? 'text-red-400' : 'text-[var(--tx-heading)]'}`}>{wd.dayNum}/{wd.monthNum}</div>
                     {count > 0 && (
                       <span className={`absolute top-1 right-1 text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${isSel ? 'bg-white text-sky-700' : 'bg-sky-500 text-white'}`}>{count}</span>
@@ -319,7 +319,7 @@ export default function AppointmentTab({ clinicSettings }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-bold text-[var(--tx-heading)]">{selThaiDate}</h3>
-            <span className="text-[10px] font-bold text-sky-400">| แพทย์เข้าตรวจ {dayDoctors.length} คน</span>
+            <span className="text-xs font-bold text-sky-400">| แพทย์เข้าตรวจ {dayDoctors.length} คน</span>
             {dayLoading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
           </div>
           <button onClick={() => openCreate(selectedDate)} className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 transition-all flex items-center gap-1.5">
@@ -333,9 +333,9 @@ export default function AppointmentTab({ clinicSettings }) {
             <div style={{ minWidth: rooms.length * 160 + 60 }}>
               {/* Room header row */}
               <div className="flex border-b border-[var(--bd)] sticky top-0 z-10 bg-[var(--bg-elevated)]">
-                <div className="w-[60px] flex-shrink-0 py-2 px-1 text-center text-[9px] font-bold text-[var(--tx-muted)]">เวลา</div>
+                <div className="w-[60px] flex-shrink-0 py-2 px-1 text-center text-[11px] font-bold text-[var(--tx-muted)]">เวลา</div>
                 {rooms.map(room => (
-                  <div key={room} className="flex-1 min-w-[140px] py-2 px-2 text-center text-[10px] font-bold text-sky-400 border-l border-[var(--bd)]">
+                  <div key={room} className="flex-1 min-w-[140px] py-2 px-2 text-center text-xs font-bold text-sky-400 border-l border-[var(--bd)]">
                     {room}
                   </div>
                 ))}
@@ -345,7 +345,7 @@ export default function AppointmentTab({ clinicSettings }) {
               <div className="relative">
                 {TIME_SLOTS.map((time, ti) => (
                   <div key={time} className="flex border-b border-[var(--bd)]/30" style={{ height: SLOT_H }}>
-                    <div className="w-[60px] flex-shrink-0 text-[10px] text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
+                    <div className="w-[60px] flex-shrink-0 text-xs text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
                     {rooms.map(room => {
                       // Find appointments starting at this time in this room
                       const appt = dayAppts.find(a => a.startTime === time && a.roomName === room);
@@ -361,7 +361,7 @@ export default function AppointmentTab({ clinicSettings }) {
                               style={{ height: span * SLOT_H - 4 }}>
                               <div className="flex items-center gap-1">
                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
-                                <span className="text-[10px] font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
+                                <span className="text-xs font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
                               </div>
                               {span > 1 && (
                                 <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
@@ -405,7 +405,7 @@ export default function AppointmentTab({ clinicSettings }) {
             <div className="p-5 space-y-4">
               {/* Customer picker */}
               <div>
-                <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
+                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
                 {formData.customerName ? (
                   <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-sky-900/10 border border-sky-700/30">
                     <span className="text-xs text-[var(--tx-heading)] font-bold">{formData.customerName} <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span></span>
@@ -423,7 +423,7 @@ export default function AppointmentTab({ clinicSettings }) {
                             <button key={c.id} onClick={() => { setFormData(p => ({...p, customerId:c.proClinicId||c.id, customerName:name, customerHN:c.proClinicHN||''})); setCustomerSearch(''); }}
                               className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
                               <span className="text-[var(--tx-secondary)]">{name}</span>
-                              <span className="text-[10px] font-mono text-[var(--tx-muted)]">{c.proClinicHN||''}</span>
+                              <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN||''}</span>
                             </button>
                           );
                         })}
@@ -435,19 +435,19 @@ export default function AppointmentTab({ clinicSettings }) {
               {/* Date + Time */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
                   <input type="date" value={formData.date} onChange={e => setFormData(p => ({...p, date:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
                   <select value={formData.startTime} onChange={e => setFormData(p => ({...p, startTime:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สิ้นสุด</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สิ้นสุด</label>
                   <select value={formData.endTime} onChange={e => setFormData(p => ({...p, endTime:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -457,7 +457,7 @@ export default function AppointmentTab({ clinicSettings }) {
               {/* Doctor + Room */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
                   <select value={formData.doctorId} onChange={e => { const d=doctors.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,doctorId:e.target.value,doctorName:d?.name||''})); }}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
@@ -465,7 +465,7 @@ export default function AppointmentTab({ clinicSettings }) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ห้องตรวจ</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ห้องตรวจ</label>
                   <select value={formData.roomName} onChange={e => setFormData(p => ({...p, roomName:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
@@ -476,7 +476,7 @@ export default function AppointmentTab({ clinicSettings }) {
               {/* Channel + Purpose + Status */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทาง</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทาง</label>
                   <select value={formData.channel} onChange={e => setFormData(p => ({...p, channel:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
@@ -484,12 +484,12 @@ export default function AppointmentTab({ clinicSettings }) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
                   <input type="text" value={formData.appointmentTo} onChange={e => setFormData(p => ({...p, appointmentTo:e.target.value}))} placeholder="botox, filler..."
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>
                   <select value={formData.status} onChange={e => setFormData(p => ({...p, status:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -498,7 +498,7 @@ export default function AppointmentTab({ clinicSettings }) {
               </div>
               {/* Notes */}
               <div>
-                <label className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ</label>
+                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ</label>
                 <textarea value={formData.notes} onChange={e => setFormData(p => ({...p, notes:e.target.value}))} rows={2}
                   className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
               </div>
