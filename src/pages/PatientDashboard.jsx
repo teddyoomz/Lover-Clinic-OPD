@@ -112,14 +112,14 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
     <div className="rounded-2xl p-4 flex flex-col gap-2.5" style={cardStyle}>
       {/* Name + status */}
       <div className="flex items-start justify-between gap-2">
-        <span className={`font-bold text-sm leading-snug ${expired ? (isDark ? 'text-red-300/80' : 'text-red-500/80') : (isDark ? 'text-orange-100' : 'text-gray-800')}`}>
+        <span className={`font-bold text-sm leading-snug ${expired ? (isDark ? 'text-red-300/80' : 'text-red-500/80') : (isDark ? 'text-orange-100' : 'text-[var(--tx-secondary)]')}`}>
           {c.name}
         </span>
         {c.status && (
           <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0 ${
             expired  ? (isDark ? 'text-red-400' : 'text-red-500')
             : isActive ? (isDark ? 'text-emerald-300' : 'text-emerald-600')
-            : (isDark ? 'text-gray-500' : 'text-gray-400')
+            : (isDark ? 'text-[var(--tx-muted)]' : 'text-[var(--tx-secondary)]')
           }`} style={isDark
             ? (expired ? { background: 'rgba(127,29,29,0.3)', border: '1px solid #5a1a1a' }
               : isActive ? { background: 'rgba(5,150,105,0.15)', border: '1px solid #1a4a2a' }
@@ -133,10 +133,10 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
 
       {/* Product + qty */}
       {c.product && (
-        <p className={`text-[11px] flex items-center gap-1.5 leading-relaxed ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>
+        <p className={`text-[11px] flex items-center gap-1.5 leading-relaxed ${isDark ? 'text-orange-300/50' : 'text-[var(--tx-muted)]'}`}>
           <span>{c.product}</span>
           {qtyText && qtyText !== c.product && (
-            <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${isDark ? 'text-orange-200/80' : 'text-gray-700'}`}
+            <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md ${isDark ? 'text-orange-200/80' : 'text-[var(--tx-muted)]'}`}
               style={{ background: isDark ? '#1a0a00' : 'rgba(244,114,182,0.06)' }}>
               {qtyText}
             </span>
@@ -150,7 +150,7 @@ function CourseCard({ c, expired, accentRgb, tx, lang, isDark }) {
           {expiryText && (
             <span className={`text-xs font-mono px-2 py-0.5 rounded-lg ${
               expired ? (isDark ? 'text-red-500/80' : 'text-red-400')
-              : (isDark ? 'text-orange-300/50' : 'text-gray-500')
+              : (isDark ? 'text-orange-300/50' : 'text-[var(--tx-muted)]')
             }`} style={isDark
               ? (expired ? { border: '1px solid #3a1010', background: '#1a0808' } : { border: '1px solid #3a1a0a', background: '#0a0500' })
               : (expired ? { border: '1px solid rgba(239,68,68,0.12)', background: 'rgba(239,68,68,0.03)' } : { border: '1px solid rgba(244,114,182,0.12)', background: 'rgba(244,114,182,0.03)' })
@@ -175,7 +175,7 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
   if (syncStatus === 'requesting' || syncStatus === 'syncing') {
     const isReq = syncStatus === 'requesting';
     return (
-      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isReq ? 'text-gray-400 border-gray-700/60 bg-gray-900/40' : 'text-teal-300 border-teal-800/60 bg-teal-950/40'}`}>
+      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${isReq ? 'text-[var(--tx-secondary)] border-gray-700/60 bg-gray-900/40' : 'text-teal-300 border-teal-800/60 bg-teal-950/40'}`}>
         {isReq
           ? <RefreshCw size={11} className="animate-spin shrink-0" />
           : <Loader2   size={11} className="animate-spin shrink-0" />}
@@ -224,7 +224,7 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
           ? 'cursor-pointer text-yellow-300 border-yellow-600/40 bg-yellow-950/30 hover:bg-yellow-950/50 active:scale-95'
           : isDone
           ? 'cursor-default'
-          : 'cursor-default text-gray-500 border-gray-700/30 bg-gray-900/20'
+          : 'cursor-default text-[var(--tx-muted)] border-gray-700/30 bg-gray-900/20'
       }`}
       {...(isDone && !isReady ? { style: { color: '#059669', borderColor: 'rgba(5,150,105,0.5)', background: 'rgba(5,150,105,0.08)' } } : {})}
     >
@@ -258,19 +258,19 @@ function AppointmentCard({ a, lang, isDark }) {
         {a.time && (
           <div className="flex items-center gap-1.5">
             <Clock size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
-            <span className={`text-sm font-bold ${isDark ? 'text-orange-100' : 'text-gray-800'}`}>{a.time}</span>
+            <span className={`text-sm font-bold ${isDark ? 'text-orange-100' : 'text-[var(--tx-secondary)]'}`}>{a.time}</span>
           </div>
         )}
         {a.doctor && (
           <div className="flex items-center gap-1.5">
             <Stethoscope size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-400'}`} />
-            <span className={`text-xs ${isDark ? 'text-orange-200/70' : 'text-gray-600'}`}>{a.doctor}</span>
+            <span className={`text-xs ${isDark ? 'text-orange-200/70' : 'text-[var(--tx-muted)]'}`}>{a.doctor}</span>
           </div>
         )}
         {(a.branch || a.room) && (
           <div className="flex items-center gap-1.5">
             <MapPin size={11} className={`shrink-0 ${isDark ? 'text-orange-400/70' : 'text-pink-300'}`} />
-            <span className={`text-xs ${isDark ? 'text-orange-300/50' : 'text-gray-500'}`}>{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
+            <span className={`text-xs ${isDark ? 'text-orange-300/50' : 'text-[var(--tx-muted)]'}`}>{[a.branch, a.room].filter(Boolean).join(' · ')}</span>
           </div>
         )}
       </div>
@@ -291,7 +291,7 @@ function SectionHeader({ icon, label, count, accent, meta }) {
           {count}
         </span>
       )}
-      {meta && <span className="ml-auto text-xs text-gray-600 font-mono">{meta}</span>}
+      {meta && <span className="ml-auto text-xs text-[var(--tx-muted)] font-mono">{meta}</span>}
     </div>
   );
 }
@@ -471,7 +471,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       {isAdminView && (
         <button
           onClick={() => { if (window.parent !== window) window.parent.postMessage({ type: 'close-patient-view' }, '*'); else window.history.back(); }}
-          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm text-xs font-bold text-gray-300 hover:text-white transition-colors"
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black/40 border border-white/10 backdrop-blur-sm text-xs font-bold text-[var(--tx-primary)] hover:text-white transition-colors"
         >
           ← Admin
         </button>
@@ -480,10 +480,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
         <div className={`flex rounded-lg overflow-hidden backdrop-blur-sm ${isDark ? 'bg-black/40 border border-white/10' : 'bg-white/60 border border-pink-200/60'}`}>
           <button onClick={() => setLanguage('th')}
-            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : (isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-pink-600')}`}
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : (isDark ? 'text-[var(--tx-muted)] hover:text-white' : 'text-[var(--tx-secondary)] hover:text-pink-600')}`}
             style={language === 'th' ? { backgroundColor: isDark ? ac : '#ec4899' } : {}}>TH</button>
           <button onClick={() => setLanguage('en')}
-            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : (isDark ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-pink-600')}`}
+            className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : (isDark ? 'text-[var(--tx-muted)] hover:text-white' : 'text-[var(--tx-secondary)] hover:text-pink-600')}`}
             style={language === 'en' ? { backgroundColor: isDark ? ac : '#ec4899' } : {}}>EN</button>
         </div>
       </div>
@@ -492,10 +492,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
   if (status === 'loading') {
     return (
-      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-4 ${isDark ? 'bg-[#050505]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
+      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-4 ${isDark ? 'bg-[var(--bg-base)]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
         <Controls />
         <Loader2 size={28} className="animate-spin" style={{ color: ac }} />
-        <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-600">{tx.loading}</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.25em] text-[var(--tx-muted)]">{tx.loading}</p>
       </div>
     );
   }
@@ -503,16 +503,16 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   // ── Error / disabled ───────────────────────────────────────────────────────
   if (status === 'notfound' || status === 'disabled') {
     return (
-      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-5 px-8 text-center ${isDark ? 'bg-[#050505]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
+      <div className={`relative flex flex-col items-center justify-center min-h-screen gap-5 px-8 text-center ${isDark ? 'bg-[var(--bg-base)]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50'}`}>
         <Controls />
         <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
-          <AlertCircle size={28} className="text-gray-600" />
+          <AlertCircle size={28} className="text-[var(--tx-muted)]" />
         </div>
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-black uppercase tracking-widest text-gray-400">
+          <p className="text-sm font-black uppercase tracking-widest text-[var(--tx-secondary)]">
             {status === 'disabled' ? tx.disabled : tx.notfound}
           </p>
-          <p className="text-xs text-gray-600 max-w-[260px] leading-relaxed">
+          <p className="text-xs text-[var(--tx-muted)] max-w-[260px] leading-relaxed">
             {status === 'disabled' ? tx.disabledSub : tx.notfoundSub}
           </p>
         </div>
@@ -554,7 +554,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
   const cooldownMins = Math.min(Math.ceil(cooldownRemainingMs / 60_000), configuredMins);
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-[#050505] text-gray-200' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50/30 text-gray-800'}`}>
+    <div className={`min-h-screen ${isDark ? 'bg-[var(--bg-base)] text-[var(--tx-primary)]' : 'bg-gradient-to-b from-pink-50 via-white to-pink-50/30 text-[var(--tx-secondary)]'}`}>
 
       {/* ── Hero header ─────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden">
@@ -580,7 +580,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             center
             theme={theme}
           />
-          <p className={`text-xs font-black uppercase tracking-[0.12em] mt-1 ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
+          <p className={`text-xs font-black uppercase tracking-[0.12em] mt-1 ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>
             {tx.headerSub}
           </p>
         </div>
@@ -613,7 +613,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
             {/* Info */}
             <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              <p className={`text-xl font-black leading-snug ${isDark ? 'text-red-50' : 'text-gray-800'}`}>{patientName || tx.unknown}</p>
+              <p className={`text-xl font-black leading-snug ${isDark ? 'text-red-50' : 'text-[var(--tx-secondary)]'}`}>{patientName || tx.unknown}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"
@@ -682,14 +682,14 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
                     <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#06C755]">LINE</span>
-                    <span className={`text-xs transition-colors truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                    <span className={`text-xs transition-colors truncate ${isDark ? 'text-[var(--tx-muted)] group-hover:text-[var(--tx-secondary)]' : 'text-[var(--tx-secondary)] group-hover:text-[var(--tx-muted)]'}`}>
                       {language === 'en' ? 'Contact Clinic' : 'ติดต่อคลินิก'}
                     </span>
                   </div>
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-gray-700 group-hover:text-[#06C755]/60' : 'text-gray-300 group-hover:text-[#06C755]/60'}`}>
+                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-[var(--tx-muted)] group-hover:text-[#06C755]/60' : 'text-[var(--tx-primary)] group-hover:text-[#06C755]/60'}`}>
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -721,17 +721,17 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
                   {/* Text */}
                   <div className="relative flex flex-col gap-0.5 min-w-0">
-                    <span className={`text-[11px] font-black ${isDark ? 'text-red-50' : 'text-gray-800'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
+                    <span className={`text-[11px] font-black ${isDark ? 'text-red-50' : 'text-[var(--tx-secondary)]'} ${language === 'en' ? 'uppercase tracking-[0.12em]' : 'tracking-normal'}`}>
                       {language === 'en' ? 'Call' : 'โทรหาคลินิก'}
                     </span>
-                    <span className={`text-xs transition-colors tracking-wide truncate ${isDark ? 'text-gray-500 group-hover:text-gray-400' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                    <span className={`text-xs transition-colors tracking-wide truncate ${isDark ? 'text-[var(--tx-muted)] group-hover:text-[var(--tx-secondary)]' : 'text-[var(--tx-secondary)] group-hover:text-[var(--tx-muted)]'}`}>
                       {clinicSettings.clinicPhone}
                     </span>
                   </div>
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-gray-700 group-hover:text-gray-400' : 'text-gray-300 group-hover:text-gray-500'}`}>
+                    className={`ml-auto shrink-0 group-hover:translate-x-0.5 transition-all duration-300 ${isDark ? 'text-[var(--tx-muted)] group-hover:text-[var(--tx-secondary)]' : 'text-[var(--tx-primary)] group-hover:text-[var(--tx-muted)]'}`}>
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </a>
@@ -780,9 +780,9 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             )}
 
             {courses.length === 0 && (
-              <div className={`rounded-2xl border p-8 text-center flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
-                <Package size={28} className={isDark ? 'text-gray-700' : 'text-pink-300'} />
-                <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>{tx.noCourses}</p>
+              <div className={`rounded-2xl border p-8 text-center flex flex-col items-center gap-2 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-card)]' : 'border-pink-100 bg-pink-50/30'}`}>
+                <Package size={28} className={isDark ? 'text-[var(--tx-muted)]' : 'text-pink-300'} />
+                <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>{tx.noCourses}</p>
               </div>
             )}
 
@@ -801,17 +801,17 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             )}
           </>
         ) : (syncStatus === 'requesting' || syncStatus === 'syncing') ? (
-          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-3 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
-            <Loader2 size={24} className={`animate-spin ${isDark ? 'text-gray-600' : 'text-pink-400'}`} />
-            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>
+          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-3 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-card)]' : 'border-pink-100 bg-pink-50/30'}`}>
+            <Loader2 size={24} className={`animate-spin ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400'}`} />
+            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>
               {syncStatus === 'syncing' ? tx.syncingCourses : tx.requesting}
             </p>
           </div>
         ) : (
-          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-2 ${isDark ? 'border-[#1a1a1a] bg-[#0f0f0f]' : 'border-pink-100 bg-pink-50/30'}`}>
-            <CalendarClock size={28} className={isDark ? 'text-gray-700' : 'text-pink-300'} />
-            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-gray-600' : 'text-pink-400/60'}`}>{tx.noData}</p>
-            <p className={`text-xs text-center max-w-[220px] leading-relaxed mt-0.5 ${isDark ? 'text-gray-700' : 'text-pink-400/50'}`}>
+          <div className={`rounded-2xl border p-10 flex flex-col items-center gap-2 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-card)]' : 'border-pink-100 bg-pink-50/30'}`}>
+            <CalendarClock size={28} className={isDark ? 'text-[var(--tx-muted)]' : 'text-pink-300'} />
+            <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>{tx.noData}</p>
+            <p className={`text-xs text-center max-w-[220px] leading-relaxed mt-0.5 ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/50'}`}>
               {tx.noDataSub}
             </p>
           </div>
@@ -823,7 +823,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         )}
 
         {/* Footer */}
-        <p className={`text-center text-xs pt-2 ${isDark ? 'text-gray-700' : 'text-pink-300/50'}`}>
+        <p className={`text-center text-xs pt-2 ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-300/50'}`}>
           {tx.poweredBy} {clinicSettings?.clinicName || 'คลินิก'}
         </p>
       </div>

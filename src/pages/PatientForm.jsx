@@ -780,11 +780,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                     <label className={labelClass}>{language === 'en' ? 'Nationality' : 'สัญชาติ'}</label>
                     <div className="flex gap-3 mb-2">
                       <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'var(--tx-normal)' }}>
-                        <input type="radio" name="nationality" value="ไทย" checked={formData.nationality !== 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[#444]" />
+                        <input type="radio" name="nationality" value="ไทย" checked={formData.nationality !== 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[var(--bd-stronger)]" />
                         {language === 'en' ? 'Thai' : 'ไทย'}
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'var(--tx-normal)' }}>
-                        <input type="radio" name="nationality" value="ต่างชาติ" checked={formData.nationality === 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[#444]" />
+                        <input type="radio" name="nationality" value="ต่างชาติ" checked={formData.nationality === 'ต่างชาติ'} onChange={handleInputChange} className="w-4 h-4 text-red-600 bg-black border-[var(--bd-stronger)]" />
                         {language === 'en' ? 'Foreigner' : 'ต่างชาติ'}
                       </label>
                     </div>
@@ -800,18 +800,18 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                         </button>
                         {countryDropdownOpen && (
                           <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60" onClick={() => setCountryDropdownOpen(false)}>
-                            <div className="w-full sm:w-[90%] sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-[#333] shadow-2xl flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)', maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
-                              <div className="p-3 border-b border-[#333] flex items-center gap-2">
+                            <div className="w-full sm:w-[90%] sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-[var(--bd-strong)] shadow-2xl flex flex-col" style={{ background: 'var(--bg-card, #1a1a1a)', maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
+                              <div className="p-3 border-b border-[var(--bd-strong)] flex items-center gap-2">
                                 <input type="text" autoFocus value={countryFilter} onChange={e => setCountryFilter(e.target.value)}
                                   placeholder={language === 'en' ? 'Search country...' : 'ค้นหาประเทศ...'}
-                                  className="w-full px-3 py-2.5 rounded-lg border border-[#444] text-sm outline-none" style={{ background: 'var(--bg-input, #111)', color: 'var(--tx-normal, #fff)' }} />
-                                <button type="button" onClick={() => setCountryDropdownOpen(false)} className="text-gray-400 hover:text-white text-xl px-2">✕</button>
+                                  className="w-full px-3 py-2.5 rounded-lg border border-[var(--bd-stronger)] text-sm outline-none" style={{ background: 'var(--bg-input, #111)', color: 'var(--tx-normal, #fff)' }} />
+                                <button type="button" onClick={() => setCountryDropdownOpen(false)} className="text-[var(--tx-secondary)] hover:text-white text-xl px-2">✕</button>
                               </div>
                               <div className="overflow-y-auto flex-1 overscroll-contain">
                                 {NATIONALITY_COUNTRIES.filter(c => !countryFilter || c.toLowerCase().includes(countryFilter.toLowerCase())).map(c => (
                                   <button key={c} type="button"
                                     onClick={() => { setFormData(prev => ({ ...prev, nationalityCountry: c })); setCountryDropdownOpen(false); }}
-                                    className={`w-full text-left px-4 py-3 text-sm border-b border-[#222] hover:bg-red-900/30 transition-colors ${formData.nationalityCountry === c ? 'bg-red-900/40 font-semibold' : ''}`}
+                                    className={`w-full text-left px-4 py-3 text-sm border-b border-[var(--bd)] hover:bg-red-900/30 transition-colors ${formData.nationalityCountry === c ? 'bg-red-900/40 font-semibold' : ''}`}
                                     style={{ color: 'var(--tx-normal, #fff)' }}>
                                     {c}
                                   </button>
@@ -831,8 +831,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className={labelClass}>{language === 'en' ? 'Phone Number' : 'เบอร์โทรศัพท์'} <span className="text-red-600">*</span></label>
-                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-gray-400 hover:text-white transition-colors">
-                        <input type="checkbox" name="isInternationalPhone" checked={!!formData.isInternationalPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500" />
+                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-[var(--tx-secondary)] hover:text-white transition-colors">
+                        <input type="checkbox" name="isInternationalPhone" checked={!!formData.isInternationalPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-blue-600 bg-black border-[var(--bd-stronger)] focus:ring-blue-500" />
                         {language === 'en' ? 'Intl. Number' : 'เบอร์ชาวต่างชาติ'}
                       </label>
                     </div>
@@ -859,28 +859,28 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 <div>
                   <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Contact Name' : 'ชื่อผู้ติดต่อ'} <span className="text-red-600">*</span></label>
-                  <input type="text" name="emergencyName" value={formData.emergencyName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Full Name' : 'ชื่อ-สกุล'} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
+                  <input type="text" name="emergencyName" value={formData.emergencyName || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'Full Name' : 'ชื่อ-สกุล'} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="w-full sm:w-1/2">
                     <label className="block text-sm font-bold text-orange-500 tracking-wide mb-2">{language === 'en' ? 'Relationship' : 'ความสัมพันธ์'} <span className="text-red-600">*</span></label>
-                    <input type="text" name="emergencyRelation" value={formData.emergencyRelation || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'e.g., Father, Spouse' : 'เช่น บิดา, คู่สมรส'} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
+                    <input type="text" name="emergencyRelation" value={formData.emergencyRelation || ''} onChange={handleInputChange} required placeholder={language === 'en' ? 'e.g., Father, Spouse' : 'เช่น บิดา, คู่สมรส'} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50`}/>
                   </div>
                   <div className="w-full sm:w-1/2">
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-sm font-bold text-orange-500 tracking-wide">{language === 'en' ? 'Phone Number' : 'เบอร์โทร'} <span className="text-red-600">*</span></label>
                       <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-orange-600/50 hover:text-orange-400 transition-colors">
-                        <input type="checkbox" name="isInternationalEmergencyPhone" checked={!!formData.isInternationalEmergencyPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-orange-600 bg-black border-[#444] focus:ring-orange-500" />
+                        <input type="checkbox" name="isInternationalEmergencyPhone" checked={!!formData.isInternationalEmergencyPhone} onChange={handleInputChange} className="w-4 h-4 rounded text-orange-600 bg-black border-[var(--bd-stronger)] focus:ring-orange-500" />
                         {language === 'en' ? 'Intl.' : 'เบอร์ต่างชาติ'}
                       </label>
                     </div>
                     <div className="flex flex-col gap-2">
                       {formData.isInternationalEmergencyPhone && (
-                        <select name="emergencyPhoneCountryCode" value={formData.emergencyPhoneCountryCode || '+66'} onChange={handleInputChange} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 w-full px-3 py-3 sm:py-4 text-sm sm:text-base`}>
+                        <select name="emergencyPhoneCountryCode" value={formData.emergencyPhoneCountryCode || '+66'} onChange={handleInputChange} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 w-full px-3 py-3 sm:py-4 text-sm sm:text-base`}>
                           {COUNTRY_CODES.map(c => <option key={`e-${c.code}-${c.label}`} value={c.code}>{c.label} ({c.code})</option>)}
                         </select>
                       )}
-                      <input type="tel" name="emergencyPhone" value={formData.emergencyPhone || ''} onChange={handleInputChange} required placeholder={formData.isInternationalEmergencyPhone ? "Phone Number" : "เบอร์ติดต่อ 10 หลัก"} maxLength={formData.isInternationalEmergencyPhone ? "15" : "10"} className={`${inputClass} bg-[#1a0f0f] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50 w-full`}/>
+                      <input type="tel" name="emergencyPhone" value={formData.emergencyPhone || ''} onChange={handleInputChange} required placeholder={formData.isInternationalEmergencyPhone ? "Phone Number" : "เบอร์ติดต่อ 10 หลัก"} maxLength={formData.isInternationalEmergencyPhone ? "15" : "10"} className={`${inputClass} bg-[var(--bg-card)] border-orange-900/40 text-orange-100 focus:border-orange-600 placeholder-orange-900/50 w-full`}/>
                     </div>
                   </div>
                 </div>
@@ -896,7 +896,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
               </h3>
               {customTemplate.questions.map((q, idx) => (
                 <div key={q.id} className="p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.7)', border: `1px solid ${isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)'}` }}>
-                   <label className="block text-base sm:text-lg font-bold text-gray-200 mb-4 leading-relaxed">
+                   <label className="block text-base sm:text-lg font-bold text-[var(--tx-primary)] mb-4 leading-relaxed">
                      <span className="text-blue-500 mr-2">{idx+1}.</span>{q.label}
                    </label>
                    
@@ -912,8 +912,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                      <div className="space-y-3">
                        {q.options.map(opt => (
                          <label key={opt} className="flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors" style={{ background: formData[q.id] === opt ? (isDark ? 'rgba(37,99,235,0.08)' : 'rgba(59,130,246,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.5)'), borderColor: formData[q.id] === opt ? (isDark ? '#2563eb' : '#3b82f6') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
-                           <input type="radio" name={q.id} value={opt} checked={formData[q.id] === opt} onChange={handleInputChange} required={q.required} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] focus:ring-blue-600 shrink-0"/>
-                           <span className={`text-base font-medium break-words leading-tight ${formData[q.id] === opt ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
+                           <input type="radio" name={q.id} value={opt} checked={formData[q.id] === opt} onChange={handleInputChange} required={q.required} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[var(--bd-stronger)] focus:ring-blue-600 shrink-0"/>
+                           <span className={`text-base font-medium break-words leading-tight ${formData[q.id] === opt ? 'text-blue-400 font-bold' : 'text-[var(--tx-primary)]'}`}>{opt}</span>
                          </label>
                        ))}
                      </div>
@@ -925,8 +925,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                          const isSelected = Array.isArray(formData[q.id]) && formData[q.id].includes(opt);
                          return (
                            <label key={opt} className="flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors" style={{ background: isSelected ? (isDark ? 'rgba(37,99,235,0.08)' : 'rgba(59,130,246,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.5)'), borderColor: isSelected ? (isDark ? '#2563eb' : '#3b82f6') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
-                             <input type="checkbox" checked={isSelected} onChange={() => handleCustomCheckboxChange(q.id, opt)} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[#444] rounded focus:ring-blue-600 shrink-0"/>
-                             <span className={`text-base font-medium break-words leading-tight ${isSelected ? 'text-blue-400 font-bold' : 'text-gray-300'}`}>{opt}</span>
+                             <input type="checkbox" checked={isSelected} onChange={() => handleCustomCheckboxChange(q.id, opt)} className="mt-0.5 w-5 h-5 text-blue-600 bg-black border-[var(--bd-stronger)] rounded focus:ring-blue-600 shrink-0"/>
+                             <span className={`text-base font-medium break-words leading-tight ${isSelected ? 'text-blue-400 font-bold' : 'text-[var(--tx-primary)]'}`}>{opt}</span>
                            </label>
                          );
                        })}
@@ -985,14 +985,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                             </label>
                             
                             {goal.value === 'ฮอร์โมนเพื่อการข้ามเพศ' && isGoalSelected && (
-                               <div className="mt-3 ml-4 pl-4 sm:ml-5 sm:pl-5 border-l-2 border-[#333] space-y-3 animate-in fade-in">
+                               <div className="mt-3 ml-4 pl-4 sm:ml-5 sm:pl-5 border-l-2 border-[var(--bd-strong)] space-y-3 animate-in fade-in">
                                  <label className="flex items-center gap-3 cursor-pointer p-2">
-                                   <input type="radio" name="hrtTransType" value="ทรานส์เมน / เสริมฮอร์โมนเพศชาย" required checked={formData.hrtTransType === 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'} onChange={handleInputChange} className="w-5 h-5 text-blue-500 bg-black border-[#444] shrink-0" />
-                                   <span className="text-sm sm:text-base font-bold text-gray-300 break-words leading-tight">{language === 'en' ? 'Trans Man / Masculinizing HRT' : 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'}</span>
+                                   <input type="radio" name="hrtTransType" value="ทรานส์เมน / เสริมฮอร์โมนเพศชาย" required checked={formData.hrtTransType === 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'} onChange={handleInputChange} className="w-5 h-5 text-blue-500 bg-black border-[var(--bd-stronger)] shrink-0" />
+                                   <span className="text-sm sm:text-base font-bold text-[var(--tx-primary)] break-words leading-tight">{language === 'en' ? 'Trans Man / Masculinizing HRT' : 'ทรานส์เมน / เสริมฮอร์โมนเพศชาย'}</span>
                                  </label>
                                  <label className="flex items-center gap-3 cursor-pointer p-2">
-                                   <input type="radio" name="hrtTransType" value="ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง" required checked={formData.hrtTransType === 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'} onChange={handleInputChange} className="w-5 h-5 text-pink-500 bg-black border-[#444] shrink-0" />
-                                   <span className="text-sm sm:text-base font-bold text-gray-300 break-words leading-tight">{language === 'en' ? 'Trans Woman / Feminizing HRT' : 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'}</span>
+                                   <input type="radio" name="hrtTransType" value="ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง" required checked={formData.hrtTransType === 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'} onChange={handleInputChange} className="w-5 h-5 text-pink-500 bg-black border-[var(--bd-stronger)] shrink-0" />
+                                   <span className="text-sm sm:text-base font-bold text-[var(--tx-primary)] break-words leading-tight">{language === 'en' ? 'Trans Woman / Feminizing HRT' : 'ทรานส์วูแมน / เสริมฮอร์โมนเพศหญิง'}</span>
                                  </label>
                                </div>
                             )}
@@ -1057,13 +1057,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                           { n: 'ud_blood', th: 'โรคโลหิต', en: 'Blood Disease' }
                         ].map(ud => (
                           <label key={ud.n} className="flex items-center gap-3 cursor-pointer group">
-                            <input type="checkbox" name={ud.n} checked={!!formData[ud.n]} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[#111] border-[#333] focus:ring-orange-500 shrink-0"/>
-                            <span className="text-gray-300 font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? ud.en : ud.th}</span>
+                            <input type="checkbox" name={ud.n} checked={!!formData[ud.n]} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[var(--bg-surface)] border-[var(--bd-strong)] focus:ring-orange-500 shrink-0"/>
+                            <span className="text-[var(--tx-primary)] font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? ud.en : ud.th}</span>
                           </label>
                         ))}
                         <label className="flex items-center gap-3 cursor-pointer group col-span-1 sm:col-span-2 mt-2">
-                          <input type="checkbox" name="ud_other" checked={!!formData.ud_other} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[#111] border-[#333] focus:ring-orange-500 shrink-0"/>
-                          <span className="text-gray-300 font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? 'Other' : 'โรคอื่นๆ'}</span>
+                          <input type="checkbox" name="ud_other" checked={!!formData.ud_other} onChange={handleInputChange} className="w-5 h-5 rounded text-orange-500 bg-[var(--bg-surface)] border-[var(--bd-strong)] focus:ring-orange-500 shrink-0"/>
+                          <span className="text-[var(--tx-primary)] font-bold text-sm group-hover:text-white transition-colors">{language === 'en' ? 'Other' : 'โรคอื่นๆ'}</span>
                         </label>
                         {formData.ud_other && (
                           <input type="text" name="ud_otherDetail" value={formData.ud_otherDetail || ''} onChange={handleInputChange} required placeholder={language === 'en' ? "Please specify" : "โปรดระบุชื่อโรค..."} className={`${inputClass} col-span-1 sm:col-span-2 mt-2 border-orange-900/50 py-3`}/>
@@ -1073,7 +1073,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-bold text-gray-300 tracking-wide mb-2 flex items-center gap-2"><Pill size={16}/> {language === 'en' ? 'Current Medications' : 'ยาที่ใช้ประจำในปัจจุบัน'}</label>
+                    <label className="block text-sm font-bold text-[var(--tx-primary)] tracking-wide mb-2 flex items-center gap-2"><Pill size={16}/> {language === 'en' ? 'Current Medications' : 'ยาที่ใช้ประจำในปัจจุบัน'}</label>
                     <textarea name="currentMedication" value={formData.currentMedication || ''} onChange={handleInputChange} rows="3" placeholder={language === 'en' ? "Please list all current medications, or leave blank if none" : "ระบุชื่อยาที่กำลังรับประทาน หรือ เว้นว่างไว้หากไม่มี"} className={inputClass + " resize-none"}></textarea>
                   </div>
                 </div>
@@ -1089,7 +1089,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                   <AlertCircle className="text-red-500 shrink-0 mt-1" size={28} />
                   <div>
                     <h4 className="text-red-500 font-black text-sm sm:text-base tracking-wide mb-2">{language === 'en' ? 'Patient Notice' : 'คำแนะนำสำหรับผู้ป่วย'}</h4>
-                    <p className="text-gray-300 text-sm sm:text-base leading-relaxed font-medium">
+                    <p className="text-[var(--tx-primary)] text-sm sm:text-base leading-relaxed font-medium">
                       {language === 'en' ? 'The following questionnaires are clinical screening tools to assist the physician.' : 'แบบทดสอบต่อไปนี้เป็น "เครื่องมือคัดกรองทางคลินิก" เพื่อช่วยแพทย์ในการประเมินเบื้องต้น'} <br className="hidden sm:block"/>
                       <span className="text-red-400 font-bold">{language === 'en' ? 'Results are not a definitive diagnosis.' : 'ผลคะแนนไม่ใช่การวินิจฉัยขั้นสุดท้าย'}</span> {language === 'en' ? 'The physician will make the final evaluation.' : 'แพทย์จะเป็นผู้พิจารณาและวินิจฉัยอีกครั้ง'}
                     </p>
@@ -1099,11 +1099,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
               {isPerfMode && isIntake && (
                 <section className="p-5 sm:p-6 rounded-2xl mb-6" style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.25)' : 'rgba(239,68,68,0.1)'}` }}>
-                  <div className="mb-4 border-b border-[#222] pb-4">
-                    <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-center gap-3"><span className="w-2 h-2 bg-red-600 rounded-full shrink-0"></span> {language === 'en' ? 'Part 1: Primary Symptoms' : 'ส่วนที่ 1: การประเมินอาการเบื้องต้น'}</h3>
+                  <div className="mb-4 border-b border-[var(--bd)] pb-4">
+                    <h3 className="text-base sm:text-lg font-black text-[var(--tx-primary)] tracking-wide flex items-center gap-3"><span className="w-2 h-2 bg-red-600 rounded-full shrink-0"></span> {language === 'en' ? 'Part 1: Primary Symptoms' : 'ส่วนที่ 1: การประเมินอาการเบื้องต้น'}</h3>
                   </div>
                   <label className="flex items-center gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors" style={{ background: formData.symp_pe ? (isDark ? 'rgba(220,38,38,0.06)' : 'rgba(239,68,68,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)'), borderColor: formData.symp_pe ? (isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
-                    <input type="checkbox" name="symp_pe" checked={!!formData.symp_pe} onChange={handleInputChange} className="w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
+                    <input type="checkbox" name="symp_pe" checked={!!formData.symp_pe} onChange={handleInputChange} className="w-6 h-6 rounded text-red-600 bg-black border-[var(--bd-stronger)] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
                     <span className="text-base sm:text-lg font-bold tracking-wide break-words leading-snug" style={{ color: formData.symp_pe ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#d1d5db' : '#374151') }}>{language === 'en' ? 'Experiencing Premature Ejaculation (PE)' : 'ข้าพเจ้ามีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย'}</span>
                   </label>
                 </section>
@@ -1111,12 +1111,12 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
               {showAdam && (
                 <section className="p-5 sm:p-6 rounded-2xl" style={{ background: isDark ? 'rgba(10,8,5,0.6)' : 'rgba(255,255,255,0.8)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.25)' : 'rgba(239,68,68,0.1)'}` }}>
-                  <div className="mb-5 border-b border-[#222] pb-4">
-                    <h3 className="text-base sm:text-lg font-black text-gray-200 tracking-wide flex items-start gap-3 leading-snug">
+                  <div className="mb-5 border-b border-[var(--bd)] pb-4">
+                    <h3 className="text-base sm:text-lg font-black text-[var(--tx-primary)] tracking-wide flex items-start gap-3 leading-snug">
                       <span className="w-2 h-2 bg-red-600 rounded-full shrink-0 mt-2"></span> 
                       <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? `Part ${isPerfMode ? '2' : '1'}` : `ส่วนที่ ${isPerfMode ? '2' : '1'}`)}: {language === 'en' ? 'Androgen Deficiency in Aging Males (ADAM)' : 'พร่องฮอร์โมนเพศชาย (ADAM)'}</span>
                     </h3>
-                    <p className="text-sm sm:text-base text-gray-400 mt-2 ml-5 font-medium">{language === 'en' ? 'Select all symptoms that you are experiencing' : 'กรุณาเลือกในทุกหัวข้อที่ท่านกำลังมีอาการ'}</p>
+                    <p className="text-sm sm:text-base text-[var(--tx-secondary)] mt-2 ml-5 font-medium">{language === 'en' ? 'Select all symptoms that you are experiencing' : 'กรุณาเลือกในทุกหัวข้อที่ท่านกำลังมีอาการ'}</p>
                   </div>
                   <div className="space-y-3">
                     {[
@@ -1132,7 +1132,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       { n: 'adam_10', th: 'ประสิทธิภาพการทำงานลดลง', en: 'Decreased work performance' }
                     ].map((item, idx) => (
                       <label key={item.n} className={`flex items-start gap-4 p-4 sm:p-5 rounded-xl border cursor-pointer transition-colors`} style={{ background: formData[item.n] ? (isDark ? 'rgba(220,38,38,0.06)' : 'rgba(239,68,68,0.04)') : (isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)'), borderColor: formData[item.n] ? (isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)') : (isDark ? 'rgba(74,26,10,0.2)' : 'rgba(0,0,0,0.06)') }}>
-                        <input type="checkbox" name={item.n} checked={!!formData[item.n]} onChange={handleInputChange} className="mt-0.5 w-6 h-6 rounded text-red-600 bg-black border-[#444] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
+                        <input type="checkbox" name={item.n} checked={!!formData[item.n]} onChange={handleInputChange} className="mt-0.5 w-6 h-6 rounded text-red-600 bg-black border-[var(--bd-stronger)] focus:ring-red-600 focus:ring-offset-black shrink-0"/>
                         <span className={`text-base sm:text-lg font-bold tracking-wide break-words leading-relaxed`} style={{ color: formData[item.n] ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#9ca3af' : '#6b7280') }}>{idx+1}. {language === 'en' ? item.en : item.th}</span>
                       </label>
                     ))}
@@ -1148,7 +1148,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       <Activity size={20} className="text-pink-500 shrink-0 mt-0.5"/> 
                       <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? 'Part 1' : 'ส่วนที่ 1')}: {language === 'en' ? 'Menopause Rating Scale (MRS)' : 'อาการวัยทอง (MRS)'}</span>
                     </h3>
-                    <p className="text-sm sm:text-base text-gray-300 mt-2 ml-8">{language === 'en' ? 'Please select the severity of the following symptoms' : 'กรุณาเลือกระดับความรุนแรงของอาการต่อไปนี้'}</p>
+                    <p className="text-sm sm:text-base text-[var(--tx-primary)] mt-2 ml-8">{language === 'en' ? 'Please select the severity of the following symptoms' : 'กรุณาเลือกระดับความรุนแรงของอาการต่อไปนี้'}</p>
                   </div>
                   
                   <div className="space-y-4 relative z-10">
@@ -1168,7 +1168,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       <div key={item.n} className="p-4 sm:p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)', border: `1px solid ${isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)'}` }}>
                         <label className="block text-base sm:text-lg font-bold mb-3 sm:mb-4 leading-snug" style={{ color: isDark ? '#e5e7eb' : '#1f2937' }}>{language === 'en' ? item.en : item.th}</label>
                         <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} text-pink-500 font-bold px-4 py-4 sm:py-4 focus:border-pink-600 focus:ring-pink-600 cursor-pointer`} style={{ borderColor: isDark ? 'rgba(236,72,153,0.2)' : 'rgba(236,72,153,0.15)' }}>
-                          <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Severity' : 'เลือกระดับความรุนแรง'} --</option>
+                          <option value="" disabled className="text-[var(--tx-muted)]">-- {language === 'en' ? 'Select Severity' : 'เลือกระดับความรุนแรง'} --</option>
                           <option value="0" className="text-white">{language === 'en' ? 'None (0)' : 'ไม่มีอาการ (0)'}</option>
                           <option value="1" className="text-white">{language === 'en' ? 'Mild (1)' : 'เล็กน้อย (1)'}</option>
                           <option value="2" className="text-white">{language === 'en' ? 'Moderate (2)' : 'ปานกลาง (2)'}</option>
@@ -1189,7 +1189,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       <Flame size={20} className="text-red-500 shrink-0 mt-0.5"/> 
                       <span>{isFollowUp ? (language === 'en' ? 'Follow-Up Assessment' : 'แบบประเมินติดตามอาการ') : (language === 'en' ? 'Part 3' : 'ส่วนที่ 3')}: {language === 'en' ? 'Erectile Dysfunction (IIEF-5)' : 'ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)'}</span>
                     </h3>
-                    <p className="text-sm sm:text-base text-gray-300 mt-2 ml-8 leading-relaxed">{language === 'en' ? 'Please select the answer that best describes your situation' : 'กรุณาเลือกคำตอบที่ตรงกับตัวท่านมากที่สุด'} <br className="hidden sm:block"/><span className="text-red-500 font-black">{language === 'en' ? '(over the past 4 weeks)' : '(ในช่วง 4 สัปดาห์ที่ผ่านมา)'}</span></p>
+                    <p className="text-sm sm:text-base text-[var(--tx-primary)] mt-2 ml-8 leading-relaxed">{language === 'en' ? 'Please select the answer that best describes your situation' : 'กรุณาเลือกคำตอบที่ตรงกับตัวท่านมากที่สุด'} <br className="hidden sm:block"/><span className="text-red-500 font-black">{language === 'en' ? '(over the past 4 weeks)' : '(ในช่วง 4 สัปดาห์ที่ผ่านมา)'}</span></p>
                   </div>
                   
                   <div className="space-y-5 relative z-10">
@@ -1233,7 +1233,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                       <div key={item.n} className="p-4 sm:p-5 rounded-xl" style={{ background: isDark ? 'rgba(10,8,5,0.5)' : 'rgba(255,255,255,0.6)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.12)' : 'rgba(239,68,68,0.08)'}` }}>
                         <label className="block text-base sm:text-lg font-bold mb-3 sm:mb-4 leading-relaxed" style={{ color: isDark ? '#e5e7eb' : '#1f2937' }}>{language === 'en' ? item.en : item.th}</label>
                         <select name={item.n} value={formData[item.n] || ''} onChange={handleInputChange} required className={`${inputClass} text-red-500 font-bold px-4 py-4 sm:py-4 focus:border-red-600 focus:ring-red-600 max-w-full break-words cursor-pointer`} style={{ borderColor: isDark ? 'rgba(220,38,38,0.2)' : 'rgba(239,68,68,0.15)' }}>
-                          <option value="" disabled className="text-gray-600">-- {language === 'en' ? 'Select Answer' : 'เลือกคำตอบ'} --</option>
+                          <option value="" disabled className="text-[var(--tx-muted)]">-- {language === 'en' ? 'Select Answer' : 'เลือกคำตอบ'} --</option>
                           {(language === 'en' ? item.oen : item.oth).map((opt, i) => <option key={i} value={i+1} className="text-white">{opt}</option>)}
                         </select>
                       </div>
