@@ -1140,9 +1140,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ name: t.name, qty: t.qty, unit: t.unit, price: t.price })),
           medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
-          labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
+          labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
           doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
-          treatmentFiles: treatmentFiles.filter(f => f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId })),
+          treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, fileName: f.fileName })),
         };
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
