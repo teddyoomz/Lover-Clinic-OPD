@@ -21,7 +21,23 @@ const PAYMENT_STATUSES = [
   { value: 'draft', label: 'แบบร่าง', color: 'gray' },
 ];
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function fmtDate(s) { if (!s) return '-'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${+d} ${THAI_MONTHS[(+m)-1]} ${(+y)+543}` : s; }
+function fmtDateDisplay(s) { if (!s) return 'เลือกวันที่'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${d}/${m}/${y}` : s; }
+
+/** Date picker: shows dd/mm/yyyy text + hidden native date input for calendar popup */
+function DatePickerField({ value, onChange, className = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      <input type="date" value={value} onChange={e => onChange(e.target.value)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+      <div className={`w-full rounded-lg px-3 py-2 text-xs border bg-[#111] border-[#333] text-gray-200 flex items-center justify-between`}>
+        <span>{fmtDateDisplay(value)}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      </div>
+    </div>
+  );
+}
 function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '0.00'; }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
@@ -105,6 +121,13 @@ export default function SaleTab({ clinicSettings, theme }) {
     const netTotal = Math.max(0, subtotal - disc);
     return { subtotal, discount: disc, netTotal };
   }, [purchasedItems, medications, billDiscount, billDiscountType]);
+
+  // ── Auto-fill payment amount when "ชำระเต็ม" + billing changes ──
+  useEffect(() => {
+    if (paymentStatus === 'paid' && billing.netTotal > 0) {
+      setPmChannels(prev => prev.map((c, i) => i === 0 ? { ...c, enabled: true, amount: String(billing.netTotal) } : c));
+    }
+  }, [billing.netTotal, paymentStatus]);
 
   // ── Filtered list ──
   const filtered = useMemo(() => {
@@ -373,7 +396,7 @@ export default function SaleTab({ clinicSettings, theme }) {
               )}
               <div className="mt-2">
                 <label className={labelCls}>วันที่ขาย *</label>
-                <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={`${inputCls} cursor-pointer max-w-[200px]`} />
+                <DatePickerField value={saleDate} onChange={setSaleDate} className="max-w-[200px]" />
               </div>
             </div>
 
@@ -446,7 +469,7 @@ export default function SaleTab({ clinicSettings, theme }) {
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div><label className={labelCls}>วันที่ชำระ</label><input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={`${inputCls} cursor-pointer`} /></div>
+                <div><label className={labelCls}>วันที่ชำระ</label><DatePickerField value={paymentDate} onChange={setPaymentDate} /></div>
                 <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="REF-001" /></div>
               </div>
               <label className={labelCls}>ช่องทางชำระเงิน</label>
