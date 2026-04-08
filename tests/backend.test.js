@@ -411,3 +411,355 @@ describe('Promotion Course Picker', () => {
     expect(items[0].courseName).toBe('Filler 3900');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. TREATMENT SAVE — ALL SCENARIOS
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Treatment Save — All Scenarios', () => {
+  const CID = `SCENARIO-${TS}`;
+  const tids = [];
+  const custRef = () => doc(db, ...P, 'be_customers', CID);
+  const txRef = (id) => doc(db, ...P, 'be_treatments', id);
+
+  beforeAll(async () => {
+    await setDoc(custRef(), clean({
+      proClinicId: CID, proClinicHN: 'HN-SC',
+      patientData: { firstName: 'Scenario', lastName: 'Test' },
+      courses: [
+        { name: 'Botox 100U', product: 'Nabota 200 U', qty: '100 / 100 U' },
+        { name: 'Acne Tx', product: 'Acne Tx', qty: '5 / 5 ครั้ง' },
+      ],
+      cloneStatus: 'complete',
+    }));
+  });
+
+  afterAll(async () => {
+    for (const id of tids) try { await deleteDoc(txRef(id)); } catch {}
+    try { await deleteDoc(custRef()); } catch {}
+  });
+
+  // ─── Case 1: OPD only (no sale, no photos, no files) ───
+  it('Case 1: OPD only — minimal treatment', async () => {
+    const id = `BT-SC1-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'ปวดหัว', diagnosis: 'Migraine',
+        vitals: { weight: '70', height: '175' },
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.symptoms).toBe('ปวดหัว');
+    expect(d.hasSale).toBe(false);
+    expect(d.purchasedItems).toBeUndefined();
+    expect(d.billing).toBeUndefined();
+  });
+
+  // ─── Case 2: OPD + Photos + Chart (no sale) ───
+  it('Case 2: OPD + photos + chart — no billing', async () => {
+    const id = `BT-SC2-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Acne', diagnosis: 'Acne vulgaris',
+        beforeImages: [{ dataUrl: 'data:img/before1', id: '' }, { dataUrl: 'data:img/before2', id: '' }],
+        afterImages: [{ dataUrl: 'data:img/after1', id: '' }],
+        otherImages: [],
+        charts: [{ dataUrl: 'data:chart/1', fabricJson: '{"obj":[]}', templateId: 'tmpl1' }],
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.beforeImages).toHaveLength(2);
+    expect(d.afterImages).toHaveLength(1);
+    expect(d.charts).toHaveLength(1);
+    expect(d.charts[0].fabricJson).toBe('{"obj":[]}');
+    expect(d.hasSale).toBe(false);
+  });
+
+  // ─── Case 3: OPD + Lab + Files (no sale) ───
+  it('Case 3: OPD + lab + PDF files — no billing', async () => {
+    const id = `BT-SC3-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.B',
+        symptoms: 'Check up', diagnosis: 'Normal',
+        labItems: [
+          { productName: 'CBC', qty: '1', price: '500', pdfBase64: 'LABPDF1', information: 'Normal range' },
+          { productName: 'LFT', qty: '1', price: '800', pdfBase64: 'LABPDF2', information: 'Elevated ALT' },
+        ],
+        treatmentFiles: [{ slot: 1, pdfBase64: 'CONSENT_PDF', fileName: 'consent.pdf' }],
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.labItems).toHaveLength(2);
+    expect(d.labItems[0].pdfBase64).toBe('LABPDF1');
+    expect(d.labItems[1].information).toBe('Elevated ALT');
+    expect(d.treatmentFiles).toHaveLength(1);
+    expect(d.treatmentFiles[0].fileName).toBe('consent.pdf');
+  });
+
+  // ─── Case 4: OPD + Tick existing courses (deduction) ───
+  it('Case 4: OPD + tick existing customer courses', async () => {
+    const id = `BT-SC4-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Botox', diagnosis: 'Cosmetic',
+        treatmentItems: [
+          { rowId: 'be-r-0', courseName: 'Botox 100U', productName: 'Nabota 200 U', qty: '1', unit: 'U' },
+          { rowId: 'be-r-1', courseName: 'Acne Tx', productName: 'Acne Tx', qty: '1', unit: 'ครั้ง' },
+        ],
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.treatmentItems).toHaveLength(2);
+    expect(d.treatmentItems[0].productName).toBe('Nabota 200 U');
+    expect(d.treatmentItems[1].courseName).toBe('Acne Tx');
+  });
+
+  // ─── Case 5: OPD + Buy course (ซื้อคอร์สเพิ่ม) + billing ───
+  it('Case 5: OPD + buy course + billing + payment', async () => {
+    const id = `BT-SC5-${TS}`;
+    tids.push(id);
+    const purchasedCourse = { id: 'c1003', name: 'Filler 3900', qty: '1', unitPrice: '3900', itemType: 'course' };
+    // Simulate: bought course adds to customerCourses with products
+    const courseEntry = {
+      courseId: 'purchased-course-c1003',
+      courseName: 'Filler 3900',
+      products: [{ rowId: 'purchased-c1003-row-self', name: 'Filler 3900', remaining: '1', total: '1', unit: 'คอร์ส' }],
+    };
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Filler', diagnosis: 'Cosmetic',
+        treatmentItems: [{ rowId: courseEntry.products[0].rowId, courseName: 'Filler 3900', productName: 'Filler 3900', qty: '1', unit: 'คอร์ส' }],
+        purchasedItems: [purchasedCourse],
+        billing: { subtotal: 3900, netTotal: 3900, medDisc: 0, billDiscAmt: 0 },
+        payment: { paymentStatus: '2', channels: [{ enabled: true, method: 'เงินสด', amount: '3900' }], paymentDate: '2026-04-08' },
+        sellers: [{ id: 's1', percent: '100', total: '3900' }],
+        hasSale: true, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.hasSale).toBe(true);
+    expect(d.purchasedItems).toHaveLength(1);
+    expect(d.purchasedItems[0].itemType).toBe('course');
+    expect(d.billing.netTotal).toBe(3900);
+    expect(d.payment.paymentStatus).toBe('2');
+    expect(d.sellers[0].percent).toBe('100');
+    expect(d.treatmentItems).toHaveLength(1);
+    expect(d.treatmentItems[0].productName).toBe('Filler 3900');
+  });
+
+  // ─── Case 6: OPD + Buy promotion (ซื้อโปรโมชัน) — sub-courses auto-populate ───
+  it('Case 6: OPD + buy promotion — sub-courses as bundle', async () => {
+    const id = `BT-SC6-${TS}`;
+    tids.push(id);
+    // Simulate: promotion "Nov" has courses: Filler 3900 (products: BA-ฟิลเลอร์ A) + Allergan กราม (products: Allergan 100 U)
+    const promoCourseEntries = [
+      { courseId: 'promo-33-course-1003', courseName: 'Filler 3900 แถมสลายแฟต', promotionId: 33,
+        products: [{ rowId: 'promo-33-row-1003-277', name: 'BA - ฟิลเลอร์ A', remaining: '1', total: '1', unit: 'ซีซี' }] },
+      { courseId: 'promo-33-course-775', courseName: 'Allergan กราม', promotionId: 33,
+        products: [{ rowId: 'promo-33-row-775-941', name: 'Allergan 100 U', remaining: '1', total: '1', unit: 'U' }] },
+    ];
+    // User ticked both products from promotion
+    const treatmentItems = [
+      { rowId: 'promo-33-row-1003-277', courseName: 'Filler 3900 แถมสลายแฟต', productName: 'BA - ฟิลเลอร์ A', qty: '1', unit: 'ซีซี' },
+      { rowId: 'promo-33-row-775-941', courseName: 'Allergan กราม', productName: 'Allergan 100 U', qty: '1', unit: 'U' },
+    ];
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Promotion', diagnosis: 'Cosmetic',
+        treatmentItems,
+        purchasedItems: [{ id: 33, name: 'Nov', qty: '1', unitPrice: '3900', itemType: 'promotion' }],
+        promotionCourses: promoCourseEntries,
+        billing: { subtotal: 3900, netTotal: 3900 },
+        payment: { paymentStatus: '2', channels: [{ enabled: true, method: 'โอนธนาคาร', amount: '3900' }] },
+        sellers: [{ id: 's1', percent: '100', total: '3900' }],
+        hasSale: true, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.purchasedItems[0].itemType).toBe('promotion');
+    expect(d.purchasedItems[0].name).toBe('Nov');
+    expect(d.treatmentItems).toHaveLength(2);
+    expect(d.treatmentItems[0].productName).toBe('BA - ฟิลเลอร์ A');
+    expect(d.treatmentItems[1].productName).toBe('Allergan 100 U');
+    expect(d.promotionCourses).toHaveLength(2);
+    expect(d.promotionCourses[0].promotionId).toBe(33);
+  });
+
+  // ─── Case 7: OPD + Medications + Consumables + Doctor Fees ───
+  it('Case 7: OPD + meds + consumables + doctor fees', async () => {
+    const id = `BT-SC7-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.C',
+        symptoms: 'Pain', diagnosis: 'Chronic pain',
+        medications: [
+          { name: 'Paracetamol 500mg', dosage: '3 เวลา หลังอาหาร', qty: '30', unitPrice: '2', unit: 'เม็ด' },
+          { name: 'Ibuprofen 400mg', dosage: '2 เวลา', qty: '20', unitPrice: '5', unit: 'เม็ด' },
+        ],
+        consumables: [
+          { name: 'ผ้าก๊อซ', qty: '10', unit: 'ชิ้น' },
+          { name: 'ถุงมือ', qty: '2', unit: 'คู่' },
+        ],
+        doctorFees: [
+          { doctorId: '1', name: 'Dr.C', fee: '5000' },
+          { doctorId: '2', name: 'Asst.D', fee: '1000' },
+        ],
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.medications).toHaveLength(2);
+    expect(d.medications[0].dosage).toBe('3 เวลา หลังอาหาร');
+    expect(d.consumables).toHaveLength(2);
+    expect(d.doctorFees).toHaveLength(2);
+    expect(d.doctorFees[0].fee).toBe('5000');
+  });
+
+  // ─── Case 8: OPD + Split payment (3 channels) + 2 sellers ───
+  it('Case 8: split payment (3 channels) + 2 sellers', async () => {
+    const id = `BT-SC8-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Full', diagnosis: 'Full treatment',
+        purchasedItems: [{ id: 'p1', name: 'Product A', qty: '1', unitPrice: '10000', itemType: 'product' }],
+        billing: { subtotal: 10000, netTotal: 10000 },
+        payment: {
+          paymentStatus: '4', // split
+          channels: [
+            { enabled: true, method: 'เงินสด', amount: '5000' },
+            { enabled: true, method: 'โอนธนาคาร', amount: '3000' },
+            { enabled: true, method: 'บัตรเครดิต', amount: '2000' },
+          ],
+          paymentDate: '2026-04-08', paymentTime: '14:30', refNo: 'REF-001',
+        },
+        sellers: [
+          { id: 's1', percent: '60', total: '6000' },
+          { id: 's2', percent: '40', total: '4000' },
+        ],
+        hasSale: true, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.payment.paymentStatus).toBe('4');
+    expect(d.payment.channels).toHaveLength(3);
+    expect(d.payment.channels[0].method).toBe('เงินสด');
+    expect(d.payment.channels[2].amount).toBe('2000');
+    expect(d.payment.refNo).toBe('REF-001');
+    expect(d.sellers).toHaveLength(2);
+    expect(Number(d.sellers[0].total) + Number(d.sellers[1].total)).toBe(10000);
+  });
+
+  // ─── Case 9: OPD + Medical Certificate ───
+  it('Case 9: OPD + medical certificate', async () => {
+    const id = `BT-SC9-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorName: 'Dr.A',
+        symptoms: 'Sick', diagnosis: 'Flu',
+        medCertActuallyCome: true, medCertIsRest: true, medCertPeriod: '3 วัน',
+        medCertIsOther: false,
+        hasSale: false, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    expect(d.medCertActuallyCome).toBe(true);
+    expect(d.medCertIsRest).toBe(true);
+    expect(d.medCertPeriod).toBe('3 วัน');
+  });
+
+  // ─── Case 10: FULL treatment (everything combined) ───
+  it('Case 10: FULL treatment — OPD + photos + chart + lab + files + courses + promotion + meds + billing + payment + sellers + medcert', async () => {
+    const id = `BT-SC10-${TS}`;
+    tids.push(id);
+    await setDoc(txRef(id), clean({
+      treatmentId: id, customerId: CID, createdBy: 'backend', createdAt: new Date().toISOString(),
+      detail: {
+        treatmentDate: '2026-04-08', doctorId: '1', doctorName: 'Dr.A',
+        assistants: [{ id: '2', name: 'Asst.B' }],
+        symptoms: 'CC full', physicalExam: 'PE full', diagnosis: 'DX full',
+        treatmentInfo: 'Tx full', treatmentPlan: 'Plan full', treatmentNote: 'Note full', additionalNote: 'Add note',
+        vitals: { weight: '70', height: '175', bmi: '22.9', temperature: '36.5', pulseRate: '72', systolicBP: '120', diastolicBP: '80', oxygenSaturation: '99' },
+        healthInfo: { bloodType: 'O', congenitalDisease: 'DM', drugAllergy: 'Pen', treatmentHistory: 'Surgery 2020' },
+        beforeImages: [{ dataUrl: 'data:img/b1', id: '' }],
+        afterImages: [{ dataUrl: 'data:img/a1', id: '' }],
+        otherImages: [{ dataUrl: 'data:img/o1', id: '' }],
+        charts: [{ dataUrl: 'data:chart1', fabricJson: '{}', templateId: 'blank' }],
+        labItems: [{ productName: 'CBC', qty: '1', price: '500', pdfBase64: 'LPDF', information: 'ok' }],
+        treatmentFiles: [{ slot: 1, pdfBase64: 'FPDF', fileName: 'consent.pdf' }],
+        treatmentItems: [
+          { rowId: 'r1', courseName: 'Botox', productName: 'Nabota', qty: '1', unit: 'U' },
+          { rowId: 'promo-33-row-1', courseName: 'Filler', productName: 'Filler A', qty: '1', unit: 'cc' },
+        ],
+        medications: [{ name: 'Med1', dosage: '3x', qty: '10', unitPrice: '5', unit: 'tab' }],
+        consumables: [{ name: 'Gauze', qty: '5', unit: 'pc' }],
+        doctorFees: [{ doctorId: '1', name: 'Dr.A', fee: '5000' }],
+        purchasedItems: [
+          { id: 'c1', name: 'Course A', qty: '1', unitPrice: '5000', itemType: 'course' },
+          { id: 33, name: 'Nov', qty: '1', unitPrice: '3900', itemType: 'promotion' },
+        ],
+        billing: { subtotal: 8900, medDisc: 0, billDiscAmt: 500, netTotal: 8400 },
+        payment: {
+          paymentStatus: '4',
+          channels: [{ enabled: true, method: 'เงินสด', amount: '5000' }, { enabled: true, method: 'โอนธนาคาร', amount: '3400' }],
+          paymentDate: '2026-04-08', paymentTime: '15:00', refNo: 'TRF-999', saleNote: 'VIP',
+        },
+        sellers: [{ id: 's1', percent: '70', total: '5880' }, { id: 's2', percent: '30', total: '2520' }],
+        medCertActuallyCome: true, medCertIsRest: true, medCertPeriod: '2 วัน',
+        hasSale: true, createdBy: 'backend',
+      },
+    }));
+    const d = (await getDoc(txRef(id))).data().detail;
+    // OPD
+    expect(d.symptoms).toBe('CC full');
+    expect(d.vitals.weight).toBe('70');
+    expect(d.healthInfo.drugAllergy).toBe('Pen');
+    // Media
+    expect(d.beforeImages).toHaveLength(1);
+    expect(d.charts[0].fabricJson).toBe('{}');
+    expect(d.labItems[0].pdfBase64).toBe('LPDF');
+    expect(d.treatmentFiles[0].fileName).toBe('consent.pdf');
+    // Courses + Promotion
+    expect(d.treatmentItems).toHaveLength(2);
+    expect(d.purchasedItems).toHaveLength(2);
+    expect(d.purchasedItems[1].itemType).toBe('promotion');
+    // Meds + Consumables + Fees
+    expect(d.medications).toHaveLength(1);
+    expect(d.consumables).toHaveLength(1);
+    expect(d.doctorFees[0].fee).toBe('5000');
+    // Billing + Payment
+    expect(d.billing.netTotal).toBe(8400);
+    expect(d.payment.channels).toHaveLength(2);
+    expect(d.payment.refNo).toBe('TRF-999');
+    expect(d.payment.saleNote).toBe('VIP');
+    expect(d.sellers).toHaveLength(2);
+    // MedCert
+    expect(d.medCertPeriod).toBe('2 วัน');
+    expect(d.createdBy).toBe('backend');
+  });
+});

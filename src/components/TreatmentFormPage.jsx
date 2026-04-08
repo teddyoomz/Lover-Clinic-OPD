@@ -980,11 +980,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         } else if (type === 'course') {
           const all = await getAllMasterDataItems('courses');
-          items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', courseType: c.courseType }));
+          items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', itemType: 'course', courseType: c.courseType, products: c.products || [] }));
           categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
         } else if (type === 'promotion') {
           const all = await getAllMasterDataItems('promotions');
-          items = all.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, type: 'promotion' }));
+          items = all.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, type: 'promotion', itemType: 'promotion', courses: p.courses || [], products: p.products || [] }));
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         }
         setBuyItems(prev => ({ ...prev, [type]: items }));
@@ -1049,15 +1049,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType || buyModalType, category: i.category, courses: i.courses, products: i.products };
     });
     setPurchasedItems(prev => [...prev, ...newItems]);
-    // Auto-add purchased courses to treatment items
+    // Auto-add purchased items to customerCourses (so checkboxes appear in course/promotion columns)
     newItems.forEach(item => {
       if (item.itemType === 'course') {
-        setTreatmentItems(prev => [...prev, {
-          id: `purchased-${item.id}-${Date.now()}`,
-          name: item.name, qty: String(item.qty || 1), unit: item.unit || '', source: 'purchased',
-        }]);
+        // Purchased course → add to customerCourses with product items for checkbox
+        const courseEntry = {
+          courseId: `purchased-course-${item.id}-${Date.now()}`,
+          courseName: item.name,
+          products: (item.products && item.products.length > 0)
+            ? item.products.map(p => ({
+                rowId: `purchased-${item.id}-row-${p.id || Math.random().toString(36).slice(2,6)}`,
+                name: p.name || item.name,
+                remaining: String(p.qty || item.qty || 1),
+                total: String(p.qty || item.qty || 1),
+                unit: p.unit || item.unit || 'ครั้ง',
+              }))
+            : [{ // Fallback: use course itself as the product
+                rowId: `purchased-${item.id}-row-self`,
+                name: item.name,
+                remaining: String(item.qty || 1),
+                total: String(item.qty || 1),
+                unit: item.unit || 'คอร์ส',
+              }],
+        };
+        setOptions(prev => ({
+          ...prev,
+          customerCourses: [...(prev?.customerCourses || []), courseEntry],
+        }));
       }
-      // Auto-populate promotion sub-courses into customerCourses (as a bundle — no manual picking)
+      // Purchased promotion → add sub-courses as bundle (no manual picking)
       if (item.itemType === 'promotion' && item.courses?.length) {
         const newCourseEntries = item.courses.map(c => ({
           courseId: `promo-${item.id}-course-${c.id}`,
