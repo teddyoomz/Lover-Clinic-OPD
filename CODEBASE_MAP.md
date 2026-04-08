@@ -32,10 +32,19 @@ src/
 │   ├── ChatPanel.jsx           — Chat FB/LINE: reply (FB only), echo, saved replies, history pagination
 │   ├── TreatmentTimeline.jsx   — Treatment records: paginated list, expandable detail, inline edit/delete (Phase 2)
 │   ├── TreatmentFormPage.jsx   — Full-page treatment create form: mirrors ProClinic layout (Phase 2)
-│   └── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
+│   ├── PrintTemplates.jsx      — OfficialOPDPrint + DashboardOPDPrint components
+│   └── backend/                — Backend Dashboard components (ระบบหลังบ้าน)
+│       ├── CloneTab.jsx        — Tab "Clone ลูกค้า": search ProClinic + clone progress UI
+│       ├── CustomerCard.jsx    — Reusable card: customer info display (search/cloned modes)
+│       └── CustomerListTab.jsx — Tab "ข้อมูลลูกค้า": card grid of cloned customers + filter
+├── lib/
+│   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
+│   ├── backendClient.js        — Firestore CRUD for be_customers, be_treatments collections
+│   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
-    ├── AdminDashboard.jsx      — Admin main page (queue, history, deposit, appointment, settings nav)
+    ├── AdminDashboard.jsx      — Admin main page (queue, history, deposit, appointment, settings, หลังบ้าน nav)
+    ├── BackendDashboard.jsx    — Backend admin page (/?backend=1, new tab) — Clone + Customer list
     ├── ClinicSchedule.jsx      — Public schedule page (/?schedule=<token>) — calendar + time slots
     └── PatientForm.jsx         — Patient intake/follow-up form (QR scan target)
 api/webhook/                    — Chat webhook endpoints (FB/LINE)
@@ -68,7 +77,9 @@ artifacts/{appId}/public/data/
 │             depositProClinicId, serviceCompleted, serviceCompletedAt,
 │             appointmentData, appointmentProClinicId, appointmentSyncStatus, appointmentSyncError
 ├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
-└── form_templates/{id}         — Custom form templates
+├── form_templates/{id}         — Custom form templates
+├── be_customers/{proClinicId}  — Backend: cloned customer data (patientData, courses, appointments, treatmentSummary)
+└── be_treatments/{treatmentId} — Backend: cloned treatment details (customerId, detail with vitals/OPD/meds/images)
 ```
 
 ### Chat Firestore path
