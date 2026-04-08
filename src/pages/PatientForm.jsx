@@ -379,25 +379,25 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
   if (!sessionId || !sessionExists) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
+      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
-        <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a)' : 'linear-gradient(135deg, #fdf2f8, #ffffff)', border: `1px solid ${isDark ? 'rgba(90,16,16,0.4)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#4a1a1a' : '#f9a8d4' }}><AlertCircle size={40} /></div>
-        <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
-        <p className="mb-8 text-base tracking-wider" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
-        {isSimulation && <button onClick={onBack} className="font-bold text-base uppercase tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#ec4899' }}><ArrowLeft size={20} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#aaa' }}><AlertCircle size={36} /></div>
+        <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
+        <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
+        {isSimulation && <button onClick={onBack} className="font-bold text-sm flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#ec4899' }}><ArrowLeft size={18} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
       </div>
     );
   }
 
   if (isClosed) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
+      <div className="w-full max-w-xl mx-auto p-6 pt-16 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
-        <div className="p-8 sm:p-10 rounded-3xl" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a, #200000)' : 'linear-gradient(135deg, #fff5f7, #ffffff, #fdf2f8)', border: `1px solid ${isDark ? 'rgba(90,16,16,0.3)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(220,38,38,0.05)' : '0 8px 32px rgba(236,72,153,0.08)' }}>
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(74,26,10,0.2)' : 'rgba(236,72,153,0.06)', border: `1px solid ${isDark ? 'rgba(74,26,10,0.4)' : 'rgba(236,72,153,0.15)'}`, color: isDark ? '#6b5050' : '#f9a8d4' }}><Lock size={32} /></div>
-          <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
-          <p className="mb-10 text-base leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
-          {isSimulation && <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        <div className="p-8 sm:p-10 rounded-2xl" style={{ background: isDark ? '#0a0a0a' : '#ffffff', border: `1px solid ${isDark ? '#1a1a1a' : '#e5e7eb'}` }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', color: isDark ? '#555' : '#aaa' }}><Lock size={28} /></div>
+          <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Closed' : 'คิวถูกปิดแล้ว'}</h2>
+          <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This session has been closed by the clinic. Please contact the clinic for a new QR Code.' : 'คลินิกได้ปิดคิวนี้แล้ว กรุณาติดต่อคลินิกเพื่อขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
         </div>
       </div>
     );
@@ -405,13 +405,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
   if (isExpired) {
     return (
-      <div className="w-full max-w-xl mx-auto p-6 pt-12 text-center relative" style={{ minHeight: '100vh', background: isDark ? 'linear-gradient(180deg, #1a0000 0%, #050505 50%, #0d0500 100%)' : 'linear-gradient(180deg, #fdf2f8 0%, #ffffff 50%, #fff5f7 100%)' }}>
+      <div className="w-full max-w-xl mx-auto p-6 pt-16 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
-        <div className="p-8 sm:p-10 rounded-3xl" style={{ background: isDark ? 'linear-gradient(135deg, #1a0000, #0a0a0a, #200000)' : 'linear-gradient(135deg, #fff5f7, #ffffff, #fdf2f8)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(236,72,153,0.15)'}`, boxShadow: isDark ? '0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(220,38,38,0.08)' : '0 8px 32px rgba(236,72,153,0.08)' }}>
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: isDark ? 'rgba(220,38,38,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.25)' : 'rgba(239,68,68,0.15)'}`, color: isDark ? '#ef4444' : '#dc2626', boxShadow: isDark ? '0 0 20px rgba(220,38,38,0.15)' : '0 0 20px rgba(239,68,68,0.08)' }}><TimerOff size={32} /></div>
-          <h2 className="text-2xl font-black uppercase tracking-widest mb-4" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Expired' : 'คิวหมดอายุ'}</h2>
-          <p className="mb-10 text-base leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'For security reasons, sessions expire after 2 hours.' : 'ระบบจำกัดเวลาของคิวไว้ที่ 2 ชั่วโมง กรุณาขอ QR Code ใหม่'}</p>
-          {isSimulation && <button onClick={onBack} className="text-sm uppercase font-bold tracking-widest flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
+        <div className="p-8 sm:p-10 rounded-2xl" style={{ background: isDark ? '#0a0a0a' : '#ffffff', border: `1px solid ${isDark ? '#1a1a1a' : '#e5e7eb'}` }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: isDark ? 'rgba(220,38,38,0.08)' : 'rgba(239,68,68,0.05)', color: isDark ? '#ef4444' : '#dc2626' }}><TimerOff size={28} /></div>
+          <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Session Expired' : 'คิวหมดอายุ'}</h2>
+          <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'For security reasons, sessions expire after 2 hours.' : 'ระบบจำกัดเวลาของคิวไว้ที่ 2 ชั่วโมง กรุณาขอ QR Code ใหม่'}</p>
+          {isSimulation && <button onClick={onBack} className="text-sm font-bold flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#9ca3af' : '#64748b' }}><ArrowLeft size={16} /> {language === 'en' ? 'Exit Simulation' : 'ออกจากการจำลอง'}</button>}
         </div>
       </div>
     );

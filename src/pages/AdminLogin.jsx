@@ -28,27 +28,27 @@ export default function AdminLogin({ auth, clinicSettings = {}, theme, setTheme 
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 relative" style={{background: `radial-gradient(ellipse at top, rgba(${acRgb},0.08), var(--bg-base,#050505) 70%)`}}>
+    <div className="min-h-screen bg-[var(--bg-base,#050505)] flex items-center justify-center p-4 relative">
       {/* Theme toggle — top right */}
       {theme && setTheme && (
         <div className="absolute top-4 right-4">
           <ThemeToggle theme={theme} setTheme={setTheme} />
         </div>
       )}
-      <div className="bg-[#0a0a0a] max-w-md w-full rounded-2xl border border-[#222] p-8" style={{boxShadow: `0 0 40px rgba(${acRgb},0.1)`}}>
+      <div className="bg-[var(--bg-surface,#0a0a0a)] max-w-md w-full rounded-2xl border border-[var(--bd,#222)] p-8">
         <div className="flex justify-center mb-4"><ClinicLogo center clinicSettings={cs} theme={theme} /></div>
-        <p className="text-center text-gray-500 mb-8 text-xs tracking-widest uppercase border-b border-[#222] pb-6">สำหรับเจ้าหน้าที่เท่านั้น</p>
+        <p className="text-center text-gray-500 mb-8 text-xs font-medium border-b border-[var(--bd,#222)] pb-6">สำหรับเจ้าหน้าที่เท่านั้น</p>
         {error && <div className="bg-red-950/30 text-red-500 p-3 rounded-lg text-sm font-medium mb-6 text-center border border-red-900/50">{error}</div>}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1 tracking-wider uppercase">อีเมลระบบ</label>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" style={{'--tw-ring-color': ac}} placeholder="admin@example.com" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = ''; }} />
+            <label className="block text-xs font-semibold text-gray-400 mb-1.5">อีเมลระบบ</label>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[var(--bg-input,#141414)] border border-[var(--bd,#333)] text-[var(--tx-primary,#fff)] rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px] focus:border-[color:var(--accent)]" placeholder="admin@example.com" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1 tracking-wider uppercase">รหัสผ่าน</label>
-            <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#141414] border border-[#333] text-white rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px]" placeholder="••••••••" onFocus={e => { e.target.style.borderColor = ac; }} onBlur={e => { e.target.style.borderColor = ''; }} />
+            <label className="block text-xs font-semibold text-gray-400 mb-1.5">รหัสผ่าน</label>
+            <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[var(--bg-input,#141414)] border border-[var(--bd,#333)] text-[var(--tx-primary,#fff)] rounded-lg px-4 py-3 outline-none transition-all placeholder-gray-700 text-[16px] focus:border-[color:var(--accent)]" placeholder="••••••••" />
           </div>
-          <button type="submit" disabled={isLoading} className="w-full text-white py-3.5 rounded-lg font-bold text-sm uppercase tracking-wider active:scale-95 transition-all disabled:opacity-70 mt-6 flex justify-center items-center gap-2" style={{backgroundColor: ac, color: '#fff', boxShadow: `0 0 15px rgba(${acRgb},0.4)`}}>
+          <button type="submit" disabled={isLoading} className="w-full text-white py-3.5 rounded-lg font-bold text-sm active:scale-[0.98] transition-all disabled:opacity-70 mt-6 flex justify-center items-center gap-2 hover:opacity-90" style={{backgroundColor: ac}}>
             {isLoading ? 'กำลังตรวจสอบ...' : <><Lock size={16} /> เข้าสู่ระบบ</>}
           </button>
         </form>
