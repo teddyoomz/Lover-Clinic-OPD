@@ -1036,13 +1036,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       return next;
     });
   };
-  // State for promotion course picker (show after buying promotion)
-  const [promoCoursePickerOpen, setPromoCoursePickerOpen] = useState(false);
-  const [promoCoursePickerPromoId, setPromoCoursePickerPromoId] = useState(null);
-  const [promoCoursePickerPromoName, setPromoCoursePickerPromoName] = useState('');
-  const [promoCoursePickerChecked, setPromoCoursePickerChecked] = useState(new Set());
-  const [promoCoursePickerQuery, setPromoCoursePickerQuery] = useState('');
-
   const confirmBuyModal = () => {
     const items = buyItems[buyModalType] || [];
     const newItems = items.filter(i => buyChecked.has(i.id)).map(i => {
@@ -1053,7 +1046,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       const afterDisc = price - disc;
       const vatAmt = vat ? afterDisc * 0.07 : 0;
       const net = Math.max(0, afterDisc + vatAmt);
-      return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType || buyModalType, category: i.category };
+      return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType || buyModalType, category: i.category, courses: i.courses, products: i.products };
     });
     setPurchasedItems(prev => [...prev, ...newItems]);
     // Auto-add purchased courses to treatment items
@@ -1064,44 +1057,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           name: item.name, qty: String(item.qty || 1), unit: item.unit || '', source: 'purchased',
         }]);
       }
+      // Auto-populate promotion sub-courses into customerCourses (as a bundle — no manual picking)
+      if (item.itemType === 'promotion' && item.courses?.length) {
+        const newCourseEntries = item.courses.map(c => ({
+          courseId: `promo-${item.id}-course-${c.id}`,
+          courseName: c.name,
+          promotionId: item.id,
+          products: (c.products || []).map(p => ({
+            rowId: `promo-${item.id}-row-${c.id}-${p.id}`,
+            name: p.name,
+            remaining: String(p.qty || 1),
+            total: String(p.qty || 1),
+            unit: p.unit || 'ครั้ง',
+          })),
+        }));
+        setOptions(prev => ({
+          ...prev,
+          customerCourses: [...(prev?.customerCourses || []), ...newCourseEntries],
+          customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name }],
+        }));
+      }
     });
     setBuyModalOpen(false);
-    // If bought promotion → open course picker to select sub-courses
-    const promoItems = newItems.filter(i => i.itemType === 'promotion');
-    if (promoItems.length > 0 && saveTarget === 'backend') {
-      const promo = promoItems[0];
-      setPromoCoursePickerPromoId(promo.id);
-      setPromoCoursePickerPromoName(promo.name);
-      setPromoCoursePickerChecked(new Set());
-      setPromoCoursePickerQuery('');
-      setPromoCoursePickerOpen(true);
-    }
-  };
-
-  // Confirm promotion course picker → add selected courses under the promotion in customerCourses
-  const confirmPromotionCourses = () => {
-    const allCourses = options?.customerCourses || [];
-    const masterCourses = buyItems['course'] || [];
-    const selectedCourses = masterCourses.filter(c => promoCoursePickerChecked.has(c.id));
-    const newEntries = selectedCourses.map((c, i) => ({
-      courseId: `promo-${promoCoursePickerPromoId}-course-${c.id}`,
-      courseName: c.name,
-      promotionId: promoCoursePickerPromoId,
-      products: [{
-        rowId: `promo-${promoCoursePickerPromoId}-row-${c.id}`,
-        name: c.name,
-        remaining: '1',
-        total: '1',
-        unit: c.unit || 'คอร์ส',
-      }],
-    }));
-    // Also add a promotion entry to customerPromotions
-    setOptions(prev => ({
-      ...prev,
-      customerCourses: [...(prev?.customerCourses || []), ...newEntries],
-      customerPromotions: [...(prev?.customerPromotions || []), { id: promoCoursePickerPromoId, promotionName: promoCoursePickerPromoName }],
-    }));
-    setPromoCoursePickerOpen(false);
   };
   const removePurchasedItem = (idx) => {
     setPurchasedItems(prev => prev.filter((_, i) => i !== idx));
@@ -2604,56 +2581,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             )}
           </FormSection>}
 
-          {/* ── Promotion Course Picker Modal ──────────────────────────── */}
-          {promoCoursePickerOpen && (
-            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50" onClick={() => setPromoCoursePickerOpen(false)}>
-              <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl max-h-[70vh] flex flex-col ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-                <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                  <div>
-                    <h3 className="text-sm font-bold" style={{ color: '#f59e0b' }}>เลือกคอร์สในโปรโมชัน</h3>
-                    <p className="text-[10px] text-gray-500">{promoCoursePickerPromoName} — เลือกคอร์สที่รวมอยู่ในโปรโมชันนี้</p>
-                  </div>
-                  <button onClick={() => setPromoCoursePickerOpen(false)} className="text-gray-500 hover:text-gray-300"><X size={16} /></button>
-                </div>
-                <div className="px-4 py-2">
-                  <input type="text" value={promoCoursePickerQuery} onChange={e => setPromoCoursePickerQuery(e.target.value)}
-                    placeholder="ค้นหาคอร์ส..." className={`w-full px-3 py-1.5 rounded-lg text-xs border outline-none ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-200' : 'bg-white border-gray-200'}`} />
-                </div>
-                <div className="flex-1 overflow-y-auto px-4 pb-2">
-                  {(buyItems['course'] || []).filter(c => !promoCoursePickerQuery || c.name.toLowerCase().includes(promoCoursePickerQuery.toLowerCase())).map(course => {
-                    const checked = promoCoursePickerChecked.has(course.id);
-                    return (
-                      <label key={course.id} className={`flex items-center justify-between py-2 px-2 rounded-lg mb-1 cursor-pointer transition-all ${
-                        checked ? isDark ? 'bg-amber-500/10' : 'bg-amber-50' : isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-50'
-                      }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <input type="checkbox" checked={checked} onChange={() => {
-                            setPromoCoursePickerChecked(prev => {
-                              const next = new Set(prev);
-                              checked ? next.delete(course.id) : next.add(course.id);
-                              return next;
-                            });
-                          }} className="w-3.5 h-3.5 accent-amber-500" />
-                          <span className={`text-xs truncate ${checked ? 'font-bold text-amber-400' : ''}`}>{course.name}</span>
-                        </div>
-                        <span className="text-[10px] text-gray-500 shrink-0 ml-2">{course.price ? Number(course.price).toLocaleString() + ' ฿' : ''}</span>
-                      </label>
-                    );
-                  })}
-                  {(buyItems['course'] || []).length === 0 && (
-                    <p className="text-[10px] text-gray-500 text-center py-4">ยังไม่มีข้อมูลคอร์ส — ไป Sync คอร์สในหน้าข้อมูลพื้นฐานก่อน</p>
-                  )}
-                </div>
-                <div className={`px-4 py-3 border-t flex justify-end gap-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                  <button onClick={() => setPromoCoursePickerOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[#222] text-gray-400' : 'bg-gray-100 text-gray-600'}`}>ข้าม</button>
-                  <button onClick={confirmPromotionCourses} disabled={promoCoursePickerChecked.size === 0}
-                    className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-40">
-                    เพิ่ม {promoCoursePickerChecked.size} คอร์ส
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Promotion course picker removed — sub-courses auto-populate from synced data */}
 
           {/* ── Consumables (สินค้าสิ้นเปลือง) ────────────────────────────── */}
           <FormSection isDark={isDark}>
