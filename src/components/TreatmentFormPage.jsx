@@ -948,25 +948,48 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (buyItems[type]?.length > 0) return;
     setBuyLoading(true);
     try {
-      const data = await broker.listItems(type);
-      if (data.success) {
-        setBuyItems(prev => ({ ...prev, [type]: data.items || [] }));
-        setBuyCategories(prev => ({ ...prev, [type]: data.categories || [] }));
-        // Firestore backup
-        if (db && appId && data.items?.length) {
-          try {
-            const items = data.items;
-            for (let i = 0; i < items.length; i += 400) {
-              const batch = writeBatch(db);
-              items.slice(i, i + 400).forEach(p => {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', `purchasable_${type}`, 'items', String(p.id));
-                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-              });
-              await batch.commit();
-            }
-          } catch (_e) { console.warn(`[TreatmentForm] Failed to backup ${type} items`, _e); }
+      // Backend mode: load from master_data (Firestore) — NEVER fetch ProClinic directly
+      if (saveTarget === 'backend') {
+        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        let items = [];
+        let categories = [];
+        if (type === 'product') {
+          const all = await getAllMasterDataItems('products');
+          items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, type: p.type }));
+          categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
+        } else if (type === 'course') {
+          const all = await getAllMasterDataItems('courses');
+          items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', courseType: c.courseType }));
+          categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
+        } else if (type === 'promotion') {
+          // Promotions not synced yet — show empty with message
+          items = [];
+          categories = [];
+        }
+        setBuyItems(prev => ({ ...prev, [type]: items }));
+        setBuyCategories(prev => ({ ...prev, [type]: categories }));
+      } else {
+        // ProClinic mode: fetch from API
+        const data = await broker.listItems(type);
+        if (data.success) {
+          setBuyItems(prev => ({ ...prev, [type]: data.items || [] }));
+          setBuyCategories(prev => ({ ...prev, [type]: data.categories || [] }));
+          // Firestore backup
+          if (db && appId && data.items?.length) {
+            try {
+              const items = data.items;
+              for (let i = 0; i < items.length; i += 400) {
+                const batch = writeBatch(db);
+                items.slice(i, i + 400).forEach(p => {
+                  const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', `purchasable_${type}`, 'items', String(p.id));
+                  batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
+                });
+                await batch.commit();
+              }
+            } catch (_e) { console.warn(`[TreatmentForm] Failed to backup ${type} items`, _e); }
         }
       }
+      } // close else (ProClinic mode)
     } catch (_) {}
     setBuyLoading(false);
   };
