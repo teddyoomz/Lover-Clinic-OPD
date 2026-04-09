@@ -1137,8 +1137,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     });
     setBuyModalOpen(false);
   };
-  const removePurchasedItem = (idx) => {
-    setPurchasedItems(prev => prev.filter((_, i) => i !== idx));
+  const removePurchasedItem = (item) => {
+    setPurchasedItems(prev => {
+      // Find by id + itemType for exact match (not by reference/index)
+      const idx = prev.findIndex(p => p.id === item.id && p.itemType === item.itemType);
+      if (idx === -1) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
   };
   // Group purchased items by type for display
   const purchasedByType = useMemo(() => {
@@ -2508,7 +2513,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             <Check size={12} className="text-teal-500 shrink-0" />
                             <span className="text-xs font-medium truncate">{item.name}</span>
                             <span className="text-[11px] text-teal-500 shrink-0">(ซื้อเพิ่ม)</span>
-                            <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                            <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                           </div>
                           <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                         </div>
@@ -2562,7 +2567,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{item.name}</span>
                               <span className={`text-[11px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
-                              <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                              <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                             </div>
                             <span className="text-gray-500 font-normal shrink-0 ml-2">{item.qty} โปรโมชัน</span>
                           </div>
@@ -2617,7 +2622,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         <Check size={12} className="text-orange-500 shrink-0" />
                         <span className="text-xs font-medium truncate">{item.name}</span>
                         <span className="text-[11px] text-orange-500 shrink-0">(ซื้อเพิ่ม)</span>
-                        <button onClick={() => removePurchasedItem(purchasedItems.indexOf(item))} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                        <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
                       </div>
                       <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                     </div>
