@@ -1196,14 +1196,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // ── Submit ──────────────────────────────────────────────────────────────
   const hasSale = purchasedItems.length > 0 || medications.length > 0 || consumables.length > 0;
 
+  const scrollToError = (fieldAttr, msg) => {
+    setError(msg);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-field="${fieldAttr}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
+      else { const errEl = document.querySelector('[data-error-banner]'); if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 50);
+  };
+
   const handleSubmit = async () => {
-    if (!doctorId) { setError('กรุณาเลือกแพทย์'); return; }
-    if (!treatmentDate) { setError('กรุณาเลือกวันที่รักษา'); return; }
+    if (!doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
+    if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
     if (hasSale) {
-      if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
+      if (!pmSellers.some(s => s.enabled && s.id)) { scrollToError('sellers', 'กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
-        if (!pmChannels.some(c => c.enabled && c.method)) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
-        if (!pmChannels.some(c => c.enabled && parseFloat(c.amount) > 0)) { setError('กรุณากรอกจำนวนเงินที่ชำระ'); return; }
+        if (!pmChannels.some(c => c.enabled && c.method)) { scrollToError('paymentChannels', 'กรุณาเลือกช่องทางชำระเงิน'); return; }
+        if (!pmChannels.some(c => c.enabled && parseFloat(c.amount) > 0)) { scrollToError('paymentChannels', 'กรุณากรอกจำนวนเงินที่ชำระ'); return; }
       }
     }
     setSaving(true);
@@ -1293,7 +1302,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
-        // Phase 6: Validate course deductions before save
+        // Phase 6: Validate ALL course deductions before save — collect all violations
+        const overDeductions = [];
         for (const rowId of selectedCourseItems) {
           for (const course of (options?.customerCourses || [])) {
             const product = course.products?.find(p => p.rowId === rowId);
@@ -1301,12 +1311,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               const rem = parseFloat(product.remaining) || 0;
               const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
               if (deductAmt > rem) {
-                setError(`"${product.name}" คงเหลือ ${rem} ${product.unit} — ไม่สามารถตัด ${deductAmt} ได้`);
-                setSaving(false);
-                return;
+                overDeductions.push(`• "${product.name}" คงเหลือ ${rem} ${product.unit} — ต้องการตัด ${deductAmt}`);
               }
             }
           }
+        }
+        if (overDeductions.length > 0) {
+          scrollToError('courseSection', `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`);
+          setSaving(false);
+          return;
         }
 
         const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
@@ -1516,8 +1529,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (
-        <div className="max-w-6xl mx-auto px-4 pt-3">
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 font-bold">{error}</div>
+        <div className="max-w-6xl mx-auto px-4 pt-3" data-error-banner>
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-500 font-bold whitespace-pre-wrap">{error}</div>
         </div>
       )}
 
@@ -1531,7 +1544,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <FormSection isDark={isDark}>
               <SectionHeader icon={Stethoscope} title="ข้อมูลการรักษา" isDark={isDark} accent={accent} />
               <div className="space-y-3">
-                <div>
+                <div data-field="doctor">
                   <label className={labelCls}>แพทย์ *</label>
                   <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={selectCls}>
                     <option value="">เลือกแพทย์</option>
@@ -1555,7 +1568,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     })}
                   </div>
                 </div>
-                <div>
+                <div data-field="treatmentDate">
                   <label className={labelCls}>วันที่รักษา *</label>
                   <ThaiDatePicker value={treatmentDate} onChange={setTreatmentDate} isDark={isDark} inputCls={inputCls} />
                 </div>
@@ -2349,7 +2362,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           </FormSection>
 
           {/* ── ข้อมูลการใช้คอร์ส — matching ProClinic layout ──────────── */}
-          {<FormSection isDark={isDark}>
+          {<div data-field="courseSection"><FormSection isDark={isDark}>
             <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
               {!isEdit && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
@@ -2688,7 +2701,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
               </div>
             )}
-          </FormSection>}
+          </FormSection></div>}
 
           {/* Promotion course picker removed — sub-courses auto-populate from synced data */}
 

@@ -249,13 +249,21 @@ export default function SaleTab({ clinicSettings, theme }) {
     setError(''); setSuccess(false); setFormOpen(true);
   };
 
+  const scrollToError = (fieldAttr, msg) => {
+    setError(msg);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-field="${fieldAttr}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
+    }, 50);
+  };
+
   // ── Save ──
   const handleSave = async () => {
-    if (!customerId) { setError('กรุณาเลือกลูกค้า'); return; }
-    if (!saleDate) { setError('กรุณาเลือกวันที่ขาย'); return; }
-    if (!pmSellers.some(s => s.enabled && s.id)) { setError('กรุณาเลือกพนักงานขาย'); return; }
+    if (!customerId) { scrollToError('saleCustomer', 'กรุณาเลือกลูกค้า'); return; }
+    if (!saleDate) { scrollToError('saleDate', 'กรุณาเลือกวันที่ขาย'); return; }
+    if (!pmSellers.some(s => s.enabled && s.id)) { scrollToError('saleSellers', 'กรุณาเลือกพนักงานขาย'); return; }
     if (paymentStatus === 'paid' || paymentStatus === 'split') {
-      if (!pmChannels.some(c => c.enabled && c.method)) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
+      if (!pmChannels.some(c => c.enabled && c.method)) { scrollToError('salePayment', 'กรุณาเลือกช่องทางชำระเงิน'); return; }
     }
     setSaving(true); setError('');
     try {

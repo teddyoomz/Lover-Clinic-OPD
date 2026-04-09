@@ -187,10 +187,18 @@ export default function AppointmentTab({ clinicSettings }) {
     getAppointmentsByMonth(monthStr).then(setMonthAppts);
   };
 
+  const scrollToFormError = (fieldAttr, msg) => {
+    setFormError(msg);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-field="${fieldAttr}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
+    }, 50);
+  };
+
   const handleSave = async () => {
-    if (!formData.customerId) { setFormError('กรุณาเลือกลูกค้า'); return; }
-    if (!formData.date) { setFormError('กรุณาเลือกวันที่'); return; }
-    if (!formData.startTime) { setFormError('กรุณาเลือกเวลาเริ่ม'); return; }
+    if (!formData.customerId) { scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า'); return; }
+    if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
+    if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
     setFormSaving(true); setFormError('');
     try {
       const clean = JSON.parse(JSON.stringify({
@@ -422,7 +430,7 @@ export default function AppointmentTab({ clinicSettings }) {
             </div>
             <div className="p-5 space-y-4">
               {/* Customer picker */}
-              <div>
+              <div data-field="apptCustomer">
                 <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
                 {formData.customerName ? (
                   <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-sky-900/10 border border-sky-700/30">
@@ -452,12 +460,12 @@ export default function AppointmentTab({ clinicSettings }) {
               </div>
               {/* Date + Time */}
               <div className="grid grid-cols-3 gap-3">
-                <div>
+                <div data-field="apptDate">
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
                   <input type="date" value={formData.date} onChange={e => setFormData(p => ({...p, date:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
-                <div>
+                <div data-field="apptStartTime">
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
                   <select value={formData.startTime} onChange={e => setFormData(p => ({...p, startTime:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">

@@ -233,6 +233,15 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     return sections;
   };
 
+  // Scroll to field on validation error
+  const scrollToField = (fieldName, msg) => {
+    alert(msg);
+    setTimeout(() => {
+      const el = document.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus?.(); el.classList?.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList?.remove('ring-2', 'ring-red-500'), 3000); }
+    }, 100);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!sessionId || isExpired) return;
@@ -242,74 +251,72 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     const engNameRegex = /^[a-zA-Z\s\-]+$/;
     if (language === 'th') {
       if (formData.firstName && !thaiNameRegex.test(formData.firstName)) {
-        alert('กรุณากรอกชื่อเป็นภาษาไทยเท่านั้น');
+        scrollToField('firstName', 'กรุณากรอกชื่อเป็นภาษาไทยเท่านั้น');
         return;
       }
       if (formData.lastName && !thaiNameRegex.test(formData.lastName)) {
-        alert('กรุณากรอกนามสกุลเป็นภาษาไทยเท่านั้น');
+        scrollToField('lastName', 'กรุณากรอกนามสกุลเป็นภาษาไทยเท่านั้น');
         return;
       }
     } else {
       if (formData.firstName && !engNameRegex.test(formData.firstName)) {
-        alert('Please enter first name in English only.');
+        scrollToField('firstName', 'Please enter first name in English only.');
         return;
       }
       if (formData.lastName && !engNameRegex.test(formData.lastName)) {
-        alert('Please enter last name in English only.');
+        scrollToField('lastName', 'Please enter last name in English only.');
         return;
       }
     }
 
     // Validate ID card / passport (required for intake/deposit)
     if (isIntake && !formData.idCard) {
-      alert(language === 'en' ? 'Please enter your passport number.' : 'กรุณากรอกเลขบัตรประชาชน');
+      scrollToField('idCard', language === 'en' ? 'Please enter your passport number.' : 'กรุณากรอกเลขบัตรประชาชน');
       return;
     }
     if (formData.idCard) {
       if (language === 'en') {
-        // Passport: 5-20 alphanumeric chars
         const passportRegex = /^[A-Za-z0-9]{5,20}$/;
         if (!passportRegex.test(formData.idCard)) {
-          alert('Please enter a valid passport number (5-20 alphanumeric characters).');
+          scrollToField('idCard', 'Please enter a valid passport number (5-20 alphanumeric characters).');
           return;
         }
       } else {
-        // Thai ID: exactly 13 digits + checksum
         const digits = formData.idCard.replace(/[\s-]/g, '');
         if (!/^\d{13}$/.test(digits)) {
-          alert('กรุณากรอกเลขบัตรประชาชน 13 หลักให้ถูกต้อง');
+          scrollToField('idCard', 'กรุณากรอกเลขบัตรประชาชน 13 หลักให้ถูกต้อง');
           return;
         }
         let sum = 0;
         for (let i = 0; i < 12; i++) sum += parseInt(digits[i]) * (13 - i);
         const checkDigit = (11 - (sum % 11)) % 10;
         if (checkDigit !== parseInt(digits[12])) {
-          alert('เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ผ่าน)');
+          scrollToField('idCard', 'เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ผ่าน)');
           return;
         }
       }
     }
 
     if (!formData.province) {
-      alert(language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
+      scrollToField('province', language === 'en' ? "Please select a province." : "กรุณาเลือกจังหวัด");
       return;
     }
     if (formData.nationality === 'ต่างชาติ' && !formData.nationalityCountry) {
-      alert(language === 'en' ? "Please select a country." : "กรุณาเลือกประเทศ");
+      scrollToField('nationalityCountry', language === 'en' ? "Please select a country." : "กรุณาเลือกประเทศ");
       return;
     }
 
     if (isIntake) {
       if (!formData.howFoundUs || formData.howFoundUs.length === 0) {
-        alert(language === 'en' ? "Please select how you found our clinic." : "กรุณาเลือกช่องทางที่ท่านรู้จักคลินิกอย่างน้อย 1 ช่องทาง");
+        scrollToField('howFoundUs', language === 'en' ? "Please select how you found our clinic." : "กรุณาเลือกช่องทางที่ท่านรู้จักคลินิกอย่างน้อย 1 ช่องทาง");
         return;
       }
       if (!formData.visitReasons || formData.visitReasons.length === 0) {
-        alert(language === 'en' ? "Please select at least one visit reason." : "กรุณาเลือกสาเหตุที่มาพบแพทย์อย่างน้อย 1 ข้อ");
+        scrollToField('visitReasons', language === 'en' ? "Please select at least one visit reason." : "กรุณาเลือกสาเหตุที่มาพบแพทย์อย่างน้อย 1 ข้อ");
         return;
       }
       if (formData.visitReasons.includes('เสริมฮอร์โมน') && formData.hrtGoals.length === 0) {
-        alert(language === 'en' ? "Please select at least one goal for HRT." : "กรุณาเลือกเป้าหมายของการเสริมฮอร์โมนอย่างน้อย 1 ข้อ");
+        scrollToField('hrtGoals', language === 'en' ? "Please select at least one goal for HRT." : "กรุณาเลือกเป้าหมายของการเสริมฮอร์โมนอย่างน้อย 1 ข้อ");
         return;
       }
     }
@@ -317,11 +324,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     const thaiPhoneRegex = /^0\d{9}$/;
     if (sessionType === 'intake' || sessionType === 'deposit') {
         if (!formData.isInternationalPhone && !thaiPhoneRegex.test(formData.phone)) {
-            alert(language === 'en' ? "Please enter a valid Thai 10-digit phone number starting with 0." : "กรุณากรอกเบอร์โทรศัพท์ของท่านให้ถูกต้อง (เบอร์ไทยต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0)");
+            scrollToField('phone', language === 'en' ? "Please enter a valid Thai 10-digit phone number starting with 0." : "กรุณากรอกเบอร์โทรศัพท์ของท่านให้ถูกต้อง (เบอร์ไทยต้องเป็นตัวเลข 10 หลัก และขึ้นต้นด้วย 0)");
             return;
         }
         if (!formData.isInternationalEmergencyPhone && formData.emergencyPhone && !thaiPhoneRegex.test(formData.emergencyPhone)) {
-            alert(language === 'en' ? "Please enter a valid Thai 10-digit emergency phone number." : "กรุณากรอกเบอร์โทรติดต่อฉุกเฉินให้ถูกต้อง");
+            scrollToField('emergencyPhone', language === 'en' ? "Please enter a valid Thai 10-digit emergency phone number." : "กรุณากรอกเบอร์โทรติดต่อฉุกเฉินให้ถูกต้อง");
             return;
         }
     }
