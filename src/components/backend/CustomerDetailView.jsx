@@ -437,18 +437,22 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                             <div className="h-full rounded-full transition-all"
                               style={{ width: `${pct}%`, backgroundColor: pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444' }} />
                           </div>
-                          {courseTab === 'active' && (<>
-                            <button onClick={() => { setAddQtyModal({ courseIndex: i, courseName: course.name }); setAddQtyValue(''); }}
-                              className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition-colors">
-                              <Plus size={10} /> เพิ่มคงเหลือ
-                            </button>
-                            <button onClick={async () => {
-                              setExchangeModal({ courseIndex: i, course }); setSelectedExchange(null); setExchangeSearch(''); setExchangeQty(''); setExchangeUnit(''); setExchangeReason('');
-                              if (exchangeProducts.length === 0) setExchangeProducts(await getAllMasterDataItems('products'));
-                            }} className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 transition-colors">
-                              <RefreshCw size={10} /> เปลี่ยนสินค้า
-                            </button>
-                          </>)}
+                          {courseTab === 'active' && (() => {
+                            // Find original index in allCourses (not filtered activeCourses)
+                            const origIdx = allCourses.indexOf(course);
+                            return (<>
+                              <button onClick={() => { setAddQtyModal({ courseIndex: origIdx, courseName: course.name }); setAddQtyValue(''); }}
+                                className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition-colors">
+                                <Plus size={10} /> เพิ่มคงเหลือ
+                              </button>
+                              <button onClick={async () => {
+                                setExchangeModal({ courseIndex: origIdx, course }); setSelectedExchange(null); setExchangeSearch(''); setExchangeQty(''); setExchangeUnit(''); setExchangeReason('');
+                                if (exchangeProducts.length === 0) setExchangeProducts(await getAllMasterDataItems('products'));
+                              }} className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 transition-colors">
+                                <RefreshCw size={10} /> เปลี่ยนสินค้า
+                              </button>
+                            </>);
+                          })()}
                         </div>
                       );
                     })()}
