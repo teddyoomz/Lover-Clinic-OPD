@@ -94,20 +94,47 @@ async function handleSyncStaff(req, res) {
   });
 }
 
-// ─── Action: syncCourses ────────────────────────────────────────────────────
+// ─── Action: syncCourses — uses API (not HTML scraper) to get product qty ───
 
 async function handleSyncCourses(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
-  const { items, totalPages } = await scrapePaginated(
-    session, `${base}/admin/course`, extractCourseList
-  );
+
+  // Use /admin/api/item/course endpoint (same as listItems in treatment.js)
+  // This returns product-level qty that HTML scraper misses
+  const allItems = [];
+  for (let p = 1; ; p++) {
+    const apiUrl = `${base}/admin/api/item/course?page=${p}`;
+    const resp = await session.fetch(apiUrl, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) throw new Error(`Course API error: ${resp.status}`);
+    const data = await resp.json();
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1) || p >= 30) break;
+  }
+
+  const normalized = allItems.map(item => ({
+    id: item.id,
+    code: item.course_code || '',
+    name: item.course_name || '',
+    price: item.sale_price || item.full_price || '0',
+    category: item.course_category_name || '',
+    courseType: item.course_type_name || '',
+    status: 'ใช้งาน',
+    products: (item.course_products || item.products || []).map(p => ({
+      id: p.id || p.product_id,
+      name: p.product_name || p.name,
+      qty: p.qty || p.pivot?.qty || p.amount || 1,
+      unit: p.unit_name || p.unit || '',
+    })),
+  }));
+
   return res.status(200).json({
     success: true,
     type: 'courses',
-    count: items.length,
-    totalPages,
-    items
+    count: normalized.length,
+    totalPages: 1,
+    items: normalized,
   });
 }
 
