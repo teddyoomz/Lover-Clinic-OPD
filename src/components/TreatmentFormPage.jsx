@@ -1426,29 +1426,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               linkedTreatmentId: result.treatmentId || treatmentId || '',
             }));
             // Auto-assign purchased courses + promotions to customer
+            // purchased qty multiplies master product qty
             for (const course of grouped.courses) {
               try {
-                await assignCourseToCustomer(customerId, {
-                  name: course.name,
-                  products: course.products?.length ? course.products : [{ name: course.name, qty: Number(course.qty) || 1, unit: course.unit || 'คอร์ส' }],
-                  price: course.unitPrice,
-                });
+                const pQty = Number(course.qty) || 1;
+                const prods = course.products?.length
+                  ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                  : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
+                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice });
               } catch {}
             }
             for (const promo of grouped.promotions) {
               try {
+                const pQty = Number(promo.qty) || 1;
                 if (promo.courses?.length) {
                   for (const sub of promo.courses) {
-                    await assignCourseToCustomer(customerId, {
-                      name: sub.name || promo.name,
-                      products: sub.products?.length ? sub.products : [{ name: sub.name || promo.name, qty: Number(sub.qty) || 1, unit: sub.unit || 'ครั้ง' }],
-                    });
+                    const subProds = sub.products?.length
+                      ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                      : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
+                    await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds });
                   }
                 } else {
-                  await assignCourseToCustomer(customerId, {
-                    name: promo.name,
-                    products: promo.products?.length ? promo.products : [{ name: promo.name, qty: Number(promo.qty) || 1, unit: 'โปรโมชัน' }],
-                  });
+                  const prods = promo.products?.length
+                    ? promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                    : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
+                  await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice });
                 }
               } catch {}
             }
