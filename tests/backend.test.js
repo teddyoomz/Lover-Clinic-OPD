@@ -348,6 +348,170 @@ describe('Course Deduction System', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4C. MASTER COURSE CRUD (Phase 6.3)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Master Course CRUD', () => {
+  const MCID = `MC-TEST-${TS}`;
+  const ref = () => doc(db, ...P, 'master_data', 'courses', 'items', MCID);
+
+  afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
+
+  it('create master course with products', async () => {
+    await setDoc(ref(), clean({
+      id: MCID, name: 'Botox Package', code: 'BTX-001',
+      category: 'Botox', courseType: 'fixed bundle', price: 15000, validityDays: 365,
+      products: [
+        { id: 'p1', name: 'Nabota 200 U', qty: 200, unit: 'U' },
+        { id: 'p2', name: 'Topical Anesthesia', qty: 1, unit: 'ครั้ง' },
+      ],
+      status: 'ใช้งาน', _createdBy: 'backend', _createdAt: new Date().toISOString(),
+    }));
+    const snap = await getDoc(ref());
+    expect(snap.exists()).toBe(true);
+    expect(snap.data().name).toBe('Botox Package');
+    expect(snap.data().products).toHaveLength(2);
+    expect(snap.data()._createdBy).toBe('backend');
+  });
+
+  it('update master course price + add product', async () => {
+    const d = (await getDoc(ref())).data();
+    await updateDoc(ref(), {
+      price: 18000,
+      products: [...d.products, { id: 'p3', name: 'Aftercare Cream', qty: 1, unit: 'หลอด' }],
+    });
+    const updated = (await getDoc(ref())).data();
+    expect(updated.price).toBe(18000);
+    expect(updated.products).toHaveLength(3);
+  });
+
+  it('delete master course', async () => {
+    await deleteDoc(ref());
+    expect((await getDoc(ref())).exists()).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4D. COURSE ASSIGNMENT TO CUSTOMER (Phase 6.3)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Course Assignment to Customer', () => {
+  const CID = `TEST-ASSIGN-${TS}`;
+  const ref = () => doc(db, ...P, 'be_customers', CID);
+  const { buildQtyString, parseQtyString } = require('../src/lib/courseUtils.js');
+
+  beforeAll(async () => {
+    await setDoc(ref(), clean({
+      proClinicId: CID, proClinicHN: 'HN-ASSIGN',
+      patientData: { firstName: 'ทดสอบ', lastName: 'คอร์ส' },
+      courses: [], treatmentSummary: [], treatmentCount: 0, cloneStatus: 'complete',
+    }));
+  });
+  afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
+
+  it('assign 2-product course → courses grows by 2', async () => {
+    const masterCourse = {
+      name: 'Botox Package',
+      products: [
+        { name: 'Nabota 200 U', qty: 200, unit: 'U' },
+        { name: 'Topical Cream', qty: 1, unit: 'ครั้ง' },
+      ],
+      validityDays: 365,
+      price: 15000,
+    };
+    const d = (await getDoc(ref())).data();
+    const newCourses = [...d.courses];
+    for (const p of masterCourse.products) {
+      newCourses.push({
+        name: masterCourse.name,
+        product: p.name,
+        qty: buildQtyString(p.qty, p.unit),
+        status: 'กำลังใช้งาน',
+      });
+    }
+    await updateDoc(ref(), { courses: newCourses });
+    const updated = (await getDoc(ref())).data();
+    expect(updated.courses).toHaveLength(2);
+    expect(updated.courses[0].product).toBe('Nabota 200 U');
+    expect(parseQtyString(updated.courses[0].qty)).toEqual({ remaining: 200, total: 200, unit: 'U' });
+  });
+
+  it('each entry has correct format', async () => {
+    const d = (await getDoc(ref())).data();
+    expect(d.courses[1].product).toBe('Topical Cream');
+    expect(d.courses[1].qty).toBe('1 / 1 ครั้ง');
+    expect(d.courses[0].status).toBe('กำลังใช้งาน');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4E. PRODUCT EXCHANGE (Phase 6.5)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Product Exchange', () => {
+  const CID = `TEST-EXCHANGE-${TS}`;
+  const ref = () => doc(db, ...P, 'be_customers', CID);
+  const { buildQtyString, parseQtyString } = require('../src/lib/courseUtils.js');
+
+  beforeAll(async () => {
+    await setDoc(ref(), clean({
+      proClinicId: CID, proClinicHN: 'HN-EX',
+      patientData: { firstName: 'เปลี่ยน', lastName: 'สินค้า' },
+      courses: [
+        { name: 'Botox', product: 'Nabota 200 U', qty: '200 / 200 U', status: 'กำลังใช้งาน' },
+        { name: 'Filler', product: 'Juvederm 1cc', qty: '3 / 3 cc', status: 'กำลังใช้งาน' },
+      ],
+      courseExchangeLog: [],
+      treatmentSummary: [], treatmentCount: 0, cloneStatus: 'complete',
+    }));
+  });
+  afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
+
+  it('exchange Nabota → Dysport', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = [...d.courses];
+    const newProduct = { name: 'Dysport 300 U', qty: 300, unit: 'U' };
+    const exchangeEntry = {
+      timestamp: new Date().toISOString(),
+      oldProduct: courses[0].product, oldQty: courses[0].qty,
+      newProduct: newProduct.name, newQty: buildQtyString(newProduct.qty, newProduct.unit),
+      reason: 'ลูกค้าต้องการเปลี่ยน',
+    };
+    courses[0] = { ...courses[0], product: newProduct.name, qty: buildQtyString(newProduct.qty, newProduct.unit) };
+    await updateDoc(ref(), { courses, courseExchangeLog: [...d.courseExchangeLog, exchangeEntry] });
+
+    const updated = (await getDoc(ref())).data();
+    expect(updated.courses[0].product).toBe('Dysport 300 U');
+    expect(parseQtyString(updated.courses[0].qty)).toEqual({ remaining: 300, total: 300, unit: 'U' });
+    expect(updated.courses[1].product).toBe('Juvederm 1cc'); // unchanged
+  });
+
+  it('exchange log has entry', async () => {
+    const d = (await getDoc(ref())).data();
+    expect(d.courseExchangeLog).toHaveLength(1);
+    expect(d.courseExchangeLog[0].oldProduct).toBe('Nabota 200 U');
+    expect(d.courseExchangeLog[0].newProduct).toBe('Dysport 300 U');
+    expect(d.courseExchangeLog[0].reason).toBe('ลูกค้าต้องการเปลี่ยน');
+  });
+
+  it('second exchange → log has 2 entries', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = [...d.courses];
+    const newProduct = { name: 'Botulax 200 U', qty: 200, unit: 'U' };
+    courses[0] = { ...courses[0], product: newProduct.name, qty: buildQtyString(newProduct.qty, newProduct.unit) };
+    await updateDoc(ref(), {
+      courses,
+      courseExchangeLog: [...d.courseExchangeLog, {
+        timestamp: new Date().toISOString(),
+        oldProduct: 'Dysport 300 U', oldQty: '300 / 300 U',
+        newProduct: newProduct.name, newQty: buildQtyString(newProduct.qty, newProduct.unit),
+        reason: 'เปลี่ยนอีกครั้ง',
+      }],
+    });
+    const updated = (await getDoc(ref())).data();
+    expect(updated.courseExchangeLog).toHaveLength(2);
+    expect(updated.courses[0].product).toBe('Botulax 200 U');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 5. MASTER DATA READ
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Master Data Read', () => {

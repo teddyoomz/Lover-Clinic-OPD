@@ -57,3 +57,11 @@ export function addRemaining(qtyStr, addAmount) {
   const { remaining, total, unit } = parseQtyString(qtyStr);
   return formatQtyString(remaining + addAmount, total + addAmount, unit);
 }
+
+/**
+ * Build a fresh qty string where remaining = total (new course assignment)
+ * buildQtyString(200, "U") → "200 / 200 U"
+ */
+export function buildQtyString(qty, unit) {
+  return formatQtyString(qty, qty, unit);
+}

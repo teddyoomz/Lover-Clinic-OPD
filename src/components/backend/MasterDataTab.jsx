@@ -5,9 +5,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search, Loader2, RefreshCw, Download, AlertCircle, CheckCircle2,
-  Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info
+  Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info,
+  Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
-import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync } from '../../lib/backendClient.js';
+import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse } from '../../lib/backendClient.js';
 import { syncProducts, syncDoctors, syncStaff, syncCourses, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -118,6 +119,22 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   const [loading, setLoading] = useState(false);
   const [meta, setMeta] = useState({}); // { products: { count, syncedAt }, ... }
 
+  // Course CRUD state (Phase 6.3)
+  const [courseFormOpen, setCourseFormOpen] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [courseSaving, setCourseSaving] = useState(false);
+  const [courseError, setCourseError] = useState('');
+  const [cfName, setCfName] = useState('');
+  const [cfCode, setCfCode] = useState('');
+  const [cfCategory, setCfCategory] = useState('');
+  const [cfCourseType, setCfCourseType] = useState('fixed bundle');
+  const [cfPrice, setCfPrice] = useState('');
+  const [cfValidity, setCfValidity] = useState('');
+  const [cfStatus, setCfStatus] = useState('ใช้งาน');
+  const [cfProducts, setCfProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [prodSearch, setProdSearch] = useState('');
+
   // Filter state
   const [filterQuery, setFilterQuery] = useState('');
   const [filters, setFilters] = useState({}); // { type: 'ยา', category: 'Botox' }
@@ -218,6 +235,142 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   }, [items, filterQuery, filters, activeSubTab]);
 
   const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
+
+  // ── Course CRUD handlers ──
+  const openCourseCreate = async () => {
+    setEditingCourse(null); setCfName(''); setCfCode(''); setCfCategory(''); setCfCourseType('fixed bundle');
+    setCfPrice(''); setCfValidity(''); setCfStatus('ใช้งาน'); setCfProducts([]); setCourseError('');
+    setCourseFormOpen(true);
+    if (allProducts.length === 0) {
+      const prods = await getAllMasterDataItems('products');
+      setAllProducts(prods);
+    }
+  };
+  const openCourseEdit = async (course) => {
+    setEditingCourse(course);
+    setCfName(course.name || ''); setCfCode(course.code || ''); setCfCategory(course.category || '');
+    setCfCourseType(course.courseType || 'fixed bundle'); setCfPrice(String(course.price || ''));
+    setCfValidity(String(course.validityDays || '')); setCfStatus(course.status || 'ใช้งาน');
+    setCfProducts((course.products || []).map(p => ({ id: p.id || '', name: p.name || '', qty: String(p.qty || ''), unit: p.unit || '' })));
+    setCourseError(''); setCourseFormOpen(true);
+    if (allProducts.length === 0) {
+      const prods = await getAllMasterDataItems('products');
+      setAllProducts(prods);
+    }
+  };
+  const handleCourseSave = async () => {
+    if (!cfName.trim()) { setCourseError('กรุณากรอกชื่อคอร์ส'); return; }
+    setCourseSaving(true); setCourseError('');
+    try {
+      const data = JSON.parse(JSON.stringify({
+        name: cfName, code: cfCode, category: cfCategory, courseType: cfCourseType,
+        price: parseFloat(cfPrice) || 0, validityDays: parseInt(cfValidity) || 0,
+        status: cfStatus, products: cfProducts.filter(p => p.name),
+      }));
+      if (editingCourse) {
+        await updateMasterCourse(editingCourse.id, data);
+      } else {
+        await createMasterCourse(data);
+      }
+      setCourseFormOpen(false);
+      const refreshed = await getAllMasterDataItems('courses');
+      setItems(refreshed);
+    } catch (e) { setCourseError(e.message); }
+    finally { setCourseSaving(false); }
+  };
+  const handleCourseDelete = async (course) => {
+    if (!confirm(`ต้องการลบคอร์ส "${course.name}"?`)) return;
+    try {
+      await deleteMasterCourse(course.id);
+      setItems(prev => prev.filter(i => i.id !== course.id));
+    } catch (e) { alert(e.message); }
+  };
+
+  const filteredProds = useMemo(() => {
+    if (!prodSearch.trim()) return allProducts.slice(0, 30);
+    const q = prodSearch.toLowerCase();
+    return allProducts.filter(p => (p.name || '').toLowerCase().includes(q)).slice(0, 30);
+  }, [allProducts, prodSearch]);
+
+  // ── Render Course Form Overlay ──
+  if (courseFormOpen) return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 mb-2">
+        <button onClick={() => setCourseFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ArrowLeft size={18} /></button>
+        <h2 className="text-sm font-bold text-amber-400">{editingCourse ? 'แก้ไขคอร์ส' : 'สร้างคอร์สใหม่'}</h2>
+      </div>
+      {courseError && <div className="bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2 text-xs text-red-400">{courseError}</div>}
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ชื่อคอร์ส *</label>
+            <input value={cfName} onChange={e => setCfName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="เช่น Botox Package" /></div>
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">รหัส</label>
+            <input value={cfCode} onChange={e => setCfCode(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="BTX-001" /></div>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">หมวด</label>
+            <input value={cfCategory} onChange={e => setCfCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="Botox" /></div>
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ประเภท</label>
+            <select value={cfCourseType} onChange={e => setCfCourseType(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+              <option value="fixed bundle">Fixed Bundle</option><option value="buffet">Buffet</option>
+              <option value="pay-per-actual">Pay Per Actual</option><option value="choose-per-actual">Choose Per Actual</option>
+            </select></div>
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">สถานะ</label>
+            <select value={cfStatus} onChange={e => setCfStatus(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+              <option value="ใช้งาน">ใช้งาน</option><option value="พักใช้งาน">พักใช้งาน</option>
+            </select></div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ราคา (บาท)</label>
+            <input type="number" value={cfPrice} onChange={e => setCfPrice(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="0" /></div>
+          <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">อายุ (วัน)</label>
+            <input type="number" value={cfValidity} onChange={e => setCfValidity(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="365" /></div>
+        </div>
+        {/* Products */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-[var(--tx-muted)]">สินค้าในคอร์ส ({cfProducts.length})</label>
+            <button onClick={() => setCfProducts(p => [...p, { id: '', name: '', qty: '1', unit: '' }])}
+              className="text-xs font-bold text-amber-400 flex items-center gap-1"><Plus size={12} /> เพิ่มสินค้า</button>
+          </div>
+          {cfProducts.length === 0 && <p className="text-xs text-[var(--tx-muted)] text-center py-3 bg-[var(--bg-elevated)] rounded-lg">ยังไม่มีสินค้า — กด "เพิ่มสินค้า"</p>}
+          {cfProducts.map((p, pi) => (
+            <div key={pi} className="flex items-center gap-2 mb-2">
+              <div className="relative flex-1">
+                <input value={p.name} onChange={e => {
+                  setProdSearch(e.target.value);
+                  setCfProducts(prev => prev.map((x, i) => i === pi ? { ...x, name: e.target.value, id: '' } : x));
+                }} className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="ค้นหาสินค้า" />
+                {prodSearch && pi === cfProducts.findIndex(x => !x.id) && (
+                  <div className="absolute z-20 mt-1 w-full max-h-32 overflow-y-auto bg-[var(--bg-card)] border border-[var(--bd)] rounded-lg shadow-xl">
+                    {filteredProds.map(fp => (
+                      <button key={fp.id} onClick={() => {
+                        setCfProducts(prev => prev.map((x, i) => i === pi ? { ...x, id: fp.id, name: fp.name, unit: fp.unit || '' } : x));
+                        setProdSearch('');
+                      }} className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] text-[var(--tx-secondary)] truncate">{fp.name}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input value={p.qty} onChange={e => setCfProducts(prev => prev.map((x, i) => i === pi ? { ...x, qty: e.target.value } : x))}
+                className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" placeholder="จำนวน" />
+              <input value={p.unit} onChange={e => setCfProducts(prev => prev.map((x, i) => i === pi ? { ...x, unit: e.target.value } : x))}
+                className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" placeholder="หน่วย" />
+              <button onClick={() => setCfProducts(prev => prev.filter((_, i) => i !== pi))} className="text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={() => setCourseFormOpen(false)} className="px-4 py-2.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+        <button onClick={handleCourseSave} disabled={courseSaving}
+          className="px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2 transition-all">
+          {courseSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+          {editingCourse ? 'บันทึก' : 'สร้างคอร์ส'}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -323,6 +476,13 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         <span className="text-xs text-[var(--tx-muted)] font-bold whitespace-nowrap">
           {filtered.length} / {items.length} รายการ
         </span>
+        {/* Create course button */}
+        {activeSubTab === 'courses' && (
+          <button onClick={openCourseCreate}
+            className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
+            <Plus size={13} /> สร้างคอร์ส
+          </button>
+        )}
       </div>
 
       {/* ═══ [D] Data Table ═══ */}
@@ -382,6 +542,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                         )}
                       </td>
                     ))}
+                    {activeSubTab === 'courses' && item._createdBy === 'backend' && (
+                      <td className="px-2 py-2 w-16">
+                        <div className="flex gap-1">
+                          <button onClick={() => openCourseEdit(item)} className="p-1 rounded hover:bg-sky-900/20 text-sky-400"><Edit3 size={13} /></button>
+                          <button onClick={() => handleCourseDelete(item)} className="p-1 rounded hover:bg-red-900/20 text-red-400"><Trash2 size={13} /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

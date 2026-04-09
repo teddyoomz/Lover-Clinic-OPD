@@ -174,6 +174,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               const refreshed = await getCustomer(viewingCustomer.proClinicId);
               if (refreshed) setViewingCustomer(refreshed);
             }}
+            onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}
           />
         ) : activeTab === 'clone' ? (
           <CloneTab clinicSettings={clinicSettings} theme={theme} />

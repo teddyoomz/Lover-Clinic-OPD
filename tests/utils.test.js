@@ -253,7 +253,7 @@ describe('clean() — JSON.parse(JSON.stringify) stripping', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 9. Course Utilities — parseQtyString, formatQtyString, deductQty, reverseQty, addRemaining
 // ═══════════════════════════════════════════════════════════════════════════
-import { parseQtyString, formatQtyString, deductQty, reverseQty, addRemaining } from '../src/lib/courseUtils.js';
+import { parseQtyString, formatQtyString, deductQty, reverseQty, addRemaining, buildQtyString } from '../src/lib/courseUtils.js';
 
 describe('parseQtyString', () => {
   it('parses "200 / 200 U"', () => {
@@ -336,5 +336,17 @@ describe('addRemaining', () => {
   });
   it('adds to zero remaining', () => {
     expect(addRemaining('0 / 100 ครั้ง', 10)).toBe('10 / 110 ครั้ง');
+  });
+});
+
+describe('buildQtyString', () => {
+  it('builds fresh qty "200 / 200 U"', () => {
+    expect(buildQtyString(200, 'U')).toBe('200 / 200 U');
+  });
+  it('builds without unit', () => {
+    expect(buildQtyString(5, '')).toBe('5 / 5');
+  });
+  it('builds ครั้ง unit', () => {
+    expect(buildQtyString(12, 'ครั้ง')).toBe('12 / 12 ครั้ง');
   });
 });

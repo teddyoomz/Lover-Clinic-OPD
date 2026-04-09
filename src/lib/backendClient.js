@@ -129,7 +129,7 @@ export async function rebuildTreatmentSummary(customerId) {
 
 // ─── Course Deduction ─────────────────────────────────────────────────────
 
-import { deductQty, reverseQty, addRemaining as addRemainingQty } from './courseUtils.js';
+import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString, formatQtyString } from './courseUtils.js';
 
 /**
  * Deduct course items after treatment save.
@@ -203,6 +203,106 @@ export async function addCourseRemainingQty(customerId, courseIndex, addQty) {
   courses[courseIndex] = { ...courses[courseIndex], qty: addRemainingQty(courses[courseIndex].qty, addQty) };
   await updateCustomer(customerId, { courses });
   return courses[courseIndex];
+}
+
+// ─── Master Course CRUD (Phase 6.3) ──────────────────────────────────────
+
+/** Create a new master course template */
+export async function createMasterCourse(data) {
+  const courseId = `MC-${Date.now()}`;
+  const now = new Date().toISOString();
+  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', courseId);
+  await setDoc(ref, {
+    ...data,
+    id: courseId,
+    _createdBy: 'backend',
+    _createdAt: now,
+    _syncedAt: now,
+  });
+  return { courseId, success: true };
+}
+
+/** Update an existing master course */
+export async function updateMasterCourse(courseId, data) {
+  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', String(courseId));
+  await updateDoc(ref, { ...data, _updatedAt: new Date().toISOString() });
+  return { success: true };
+}
+
+/** Delete a master course */
+export async function deleteMasterCourse(courseId) {
+  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', String(courseId));
+  await deleteDoc(ref);
+  return { success: true };
+}
+
+/** Assign a master course to a customer — creates entries in customer.courses[] */
+export async function assignCourseToCustomer(customerId, masterCourse) {
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+
+  const products = masterCourse.products || [];
+  const expiry = masterCourse.validityDays
+    ? new Date(Date.now() + masterCourse.validityDays * 86400000).toISOString().split('T')[0]
+    : '';
+
+  for (const p of products) {
+    courses.push({
+      name: masterCourse.name,
+      product: p.name,
+      qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
+      status: 'กำลังใช้งาน',
+      expiry,
+      value: masterCourse.price ? `${masterCourse.price} บาท` : '',
+    });
+  }
+
+  // If no products, create one entry with course name
+  if (products.length === 0) {
+    courses.push({
+      name: masterCourse.name,
+      product: masterCourse.name,
+      qty: buildQtyString(1, 'ครั้ง'),
+      status: 'กำลังใช้งาน',
+      expiry,
+      value: masterCourse.price ? `${masterCourse.price} บาท` : '',
+    });
+  }
+
+  await updateCustomer(customerId, { courses });
+  return { success: true, courses };
+}
+
+/** Exchange a product within a customer's course */
+export async function exchangeCourseProduct(customerId, courseIndex, newProduct, reason = '') {
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+  if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
+
+  const oldCourse = courses[courseIndex];
+  const exchangeEntry = {
+    timestamp: new Date().toISOString(),
+    oldProduct: oldCourse.product,
+    oldQty: oldCourse.qty,
+    newProduct: newProduct.name,
+    newQty: buildQtyString(Number(newProduct.qty) || 1, newProduct.unit || ''),
+    reason,
+  };
+
+  courses[courseIndex] = {
+    ...oldCourse,
+    product: newProduct.name,
+    qty: buildQtyString(Number(newProduct.qty) || 1, newProduct.unit || ''),
+  };
+
+  const existingLog = snap.data().courseExchangeLog || [];
+  await updateCustomer(customerId, {
+    courses,
+    courseExchangeLog: [...existingLog, exchangeEntry],
+  });
+  return { success: true, courses, exchangeLog: exchangeEntry };
 }
 
 // ─── Appointment CRUD ───────────────────────────────────────────────────────

@@ -5,9 +5,10 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
-  ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2
+  ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
+  Search, X
 } from 'lucide-react';
-import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer } from '../../lib/backendClient.js';
+import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, assignCourseToCustomer, exchangeCourseProduct, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -71,9 +72,24 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   const [customerSales, setCustomerSales] = useState([]);
   const [salesError, setSalesError] = useState('');
   const [expandedTreatment, setExpandedTreatment] = useState(null);
-  const [addQtyModal, setAddQtyModal] = useState(null); // { courseIndex, courseName }
+  const [addQtyModal, setAddQtyModal] = useState(null);
   const [addQtyValue, setAddQtyValue] = useState('');
   const [addQtySaving, setAddQtySaving] = useState(false);
+  // Assign course
+  const [assignModal, setAssignModal] = useState(false);
+  const [masterCourses, setMasterCourses] = useState([]);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [selectedAssign, setSelectedAssign] = useState(null);
+  const [assignSaving, setAssignSaving] = useState(false);
+  // Exchange product
+  const [exchangeModal, setExchangeModal] = useState(null); // { courseIndex, course }
+  const [exchangeProducts, setExchangeProducts] = useState([]);
+  const [exchangeSearch, setExchangeSearch] = useState('');
+  const [selectedExchange, setSelectedExchange] = useState(null);
+  const [exchangeQty, setExchangeQty] = useState('');
+  const [exchangeUnit, setExchangeUnit] = useState('');
+  const [exchangeReason, setExchangeReason] = useState('');
+  const [exchangeSaving, setExchangeSaving] = useState(false);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -316,7 +332,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
         <div className="space-y-3 min-w-0">
           {/* Tabs */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-            <div className="flex border-b border-[var(--bd)]">
+            <div className="flex items-center border-b border-[var(--bd)]">
               <button onClick={() => setCourseTab('active')}
                 className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   courseTab === 'active' ? 'text-teal-400 border-b-2 border-teal-400 bg-teal-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
@@ -343,6 +359,13 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 {customerSales.length > 0 && (
                   <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-rose-900/30 text-rose-400">{customerSales.length}</span>
                 )}
+              </button>
+              {/* Assign course button */}
+              <button onClick={async () => {
+                setAssignModal(true); setSelectedAssign(null); setAssignSearch('');
+                if (masterCourses.length === 0) setMasterCourses(await getAllMasterDataItems('courses'));
+              }} className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="เพิ่มคอร์สใหม่">
+                <Plus size={16} />
               </button>
             </div>
 
@@ -414,12 +437,18 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                             <div className="h-full rounded-full transition-all"
                               style={{ width: `${pct}%`, backgroundColor: pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444' }} />
                           </div>
-                          {courseTab === 'active' && (
+                          {courseTab === 'active' && (<>
                             <button onClick={() => { setAddQtyModal({ courseIndex: i, courseName: course.name }); setAddQtyValue(''); }}
                               className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition-colors">
                               <Plus size={10} /> เพิ่มคงเหลือ
                             </button>
-                          )}
+                            <button onClick={async () => {
+                              setExchangeModal({ courseIndex: i, course }); setSelectedExchange(null); setExchangeSearch(''); setExchangeQty(''); setExchangeUnit(''); setExchangeReason('');
+                              if (exchangeProducts.length === 0) setExchangeProducts(await getAllMasterDataItems('products'));
+                            }} className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 transition-colors">
+                              <RefreshCw size={10} /> เปลี่ยนสินค้า
+                            </button>
+                          </>)}
                         </div>
                       );
                     })()}
@@ -458,6 +487,128 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               </div>
             )}
           </div>
+
+          {/* ── Assign Course Modal ── */}
+          {assignModal && (
+            <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-4 mt-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-teal-400">เพิ่มคอร์สใหม่ให้ลูกค้า</h4>
+                <button onClick={() => setAssignModal(false)} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14} /></button>
+              </div>
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+                <input value={assignSearch} onChange={e => { setAssignSearch(e.target.value); setSelectedAssign(null); }}
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="ค้นหาคอร์ส..." />
+              </div>
+              {!selectedAssign ? (
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--bd)]">
+                  {masterCourses.filter(c => !assignSearch || (c.name || '').toLowerCase().includes(assignSearch.toLowerCase())).slice(0, 20).map(c => (
+                    <button key={c.id} onClick={() => setSelectedAssign(c)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
+                      <span className="text-[var(--tx-secondary)] font-medium truncate">{c.name}</span>
+                      <span className="text-[var(--tx-muted)] font-mono shrink-0">{c.price ? `${Number(c.price).toLocaleString()} ฿` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="bg-teal-900/10 border border-teal-700/30 rounded-lg px-3 py-2">
+                    <p className="text-xs font-bold text-teal-400">{selectedAssign.name}</p>
+                    <p className="text-[11px] text-[var(--tx-muted)]">{selectedAssign.category} | {selectedAssign.courseType} | {selectedAssign.price ? `${Number(selectedAssign.price).toLocaleString()} ฿` : '-'}</p>
+                  </div>
+                  {(selectedAssign.products || []).length > 0 && (
+                    <div className="text-xs space-y-1">
+                      <p className="text-[var(--tx-muted)] font-semibold">สินค้าที่จะได้:</p>
+                      {selectedAssign.products.map((p, i) => (
+                        <div key={i} className="flex justify-between px-2 py-1 bg-[var(--bg-elevated)] rounded">
+                          <span>{p.name}</span><span className="font-mono">{p.qty} {p.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      setAssignSaving(true);
+                      try {
+                        await assignCourseToCustomer(customer.proClinicId, selectedAssign);
+                        const refreshed = await getCustomer(customer.proClinicId);
+                        if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
+                        setAssignModal(false);
+                      } catch (e) { alert(e.message); }
+                      finally { setAssignSaving(false); }
+                    }} disabled={assignSaving} className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
+                      {assignSaving ? 'กำลังบันทึก...' : 'ยืนยันเพิ่มคอร์ส'}
+                    </button>
+                    <button onClick={() => setSelectedAssign(null)} className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">เลือกใหม่</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Exchange Product Modal ── */}
+          {exchangeModal && (
+            <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-4 mt-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h4>
+                <button onClick={() => setExchangeModal(null)} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14} /></button>
+              </div>
+              <div className="bg-sky-900/10 border border-sky-700/30 rounded-lg px-3 py-2 text-xs">
+                <span className="text-[var(--tx-muted)]">สินค้าปัจจุบัน: </span>
+                <span className="font-bold text-[var(--tx-heading)]">{exchangeModal.course.product}</span>
+                <span className="ml-2 text-[var(--tx-muted)]">({exchangeModal.course.qty})</span>
+              </div>
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+                <input value={selectedExchange ? selectedExchange.name : exchangeSearch}
+                  onChange={e => { setExchangeSearch(e.target.value); setSelectedExchange(null); }}
+                  onFocus={() => { if (selectedExchange) { setExchangeSearch(selectedExchange.name); setSelectedExchange(null); } }}
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="ค้นหาสินค้าใหม่..." />
+              </div>
+              {!selectedExchange && (
+                <div className="max-h-32 overflow-y-auto rounded-lg border border-[var(--bd)]">
+                  {exchangeProducts.filter(p => !exchangeSearch || (p.name || '').toLowerCase().includes(exchangeSearch.toLowerCase())).slice(0, 20).map(p => (
+                    <button key={p.id} onClick={() => { setSelectedExchange(p); setExchangeUnit(p.unit || ''); }}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50">
+                      <span className="text-[var(--tx-secondary)]">{p.name}</span>
+                      <span className="ml-2 text-[var(--tx-muted)]">{p.unit}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedExchange && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[11px] text-[var(--tx-muted)] block mb-1">จำนวนใหม่</label>
+                      <input type="number" min="1" value={exchangeQty} onChange={e => setExchangeQty(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="จำนวน" /></div>
+                    <div><label className="text-[11px] text-[var(--tx-muted)] block mb-1">หน่วย</label>
+                      <input value={exchangeUnit} onChange={e => setExchangeUnit(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="U, ครั้ง, ml" /></div>
+                  </div>
+                  <div><label className="text-[11px] text-[var(--tx-muted)] block mb-1">เหตุผล (ไม่บังคับ)</label>
+                    <input value={exchangeReason} onChange={e => setExchangeReason(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" placeholder="ลูกค้าต้องการเปลี่ยน..." /></div>
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      if (!exchangeQty) { alert('กรุณากรอกจำนวนใหม่'); return; }
+                      setExchangeSaving(true);
+                      try {
+                        await exchangeCourseProduct(customer.proClinicId, exchangeModal.courseIndex, { name: selectedExchange.name, qty: Number(exchangeQty), unit: exchangeUnit }, exchangeReason);
+                        const refreshed = await getCustomer(customer.proClinicId);
+                        if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
+                        setExchangeModal(null);
+                      } catch (e) { alert(e.message); }
+                      finally { setExchangeSaving(false); }
+                    }} disabled={exchangeSaving} className="px-3 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 disabled:opacity-40 transition-all">
+                      {exchangeSaving ? 'กำลังบันทึก...' : 'ยืนยันเปลี่ยนสินค้า'}
+                    </button>
+                    <button onClick={() => setExchangeModal(null)} className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
