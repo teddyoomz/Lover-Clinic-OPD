@@ -394,6 +394,9 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{course.name || '-'}</h4>
+                        {course.parentName && (
+                          <p className="text-[11px] text-amber-400/70 mt-0.5">{course.parentName}</p>
+                        )}
                         {course.expiry && (
                           <p className="text-xs text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
                             <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {course.expiry}
@@ -685,6 +688,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
                 await assignCourseToCustomer(customerId, {
                   name: selected.name,
                   products: [{ name: selected.name, qty: Number(newQty), unit: selected.unit || '' }],
+                  source: 'exchange', parentName: `เปลี่ยนจาก: ${course.name}`,
                 });
               }
               await onDone();
@@ -807,6 +811,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onC
               await assignCourseToCustomer(toId, {
                 name: course.name,
                 products: [{ name: course.product, qty: Number(shareQty), unit: currentParsed.unit }],
+                source: 'share', parentName: `แชร์จาก: ${fromCustomerName} (${course.name})`,
               });
               // 3. Create sale record (price=0)
               await createBackendSale(JSON.parse(JSON.stringify({

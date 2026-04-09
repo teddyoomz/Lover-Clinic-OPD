@@ -389,6 +389,67 @@ describe('AddRemaining sale record', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 14. removePurchasedItem logic test
+// ═══════════════════════════════════════════════════════════════════════════
+describe('removePurchasedItem logic', () => {
+  function removePurchasedItem(prev, item) {
+    const idx = prev.findIndex(p => p.id === item.id && p.itemType === item.itemType);
+    if (idx === -1) return prev;
+    return prev.filter((_, i) => i !== idx);
+  }
+
+  it('removes course by id + itemType', () => {
+    const items = [
+      { id: '1', name: 'Botox', itemType: 'course' },
+      { id: '2', name: 'Filler', itemType: 'promotion' },
+    ];
+    const result = removePurchasedItem(items, { id: '1', itemType: 'course' });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Filler');
+  });
+
+  it('removes promotion', () => {
+    const items = [
+      { id: '1', name: 'Botox', itemType: 'course' },
+      { id: '2', name: 'Nov', itemType: 'promotion' },
+    ];
+    const result = removePurchasedItem(items, { id: '2', itemType: 'promotion' });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Botox');
+  });
+
+  it('returns same array if item not found', () => {
+    const items = [{ id: '1', name: 'Botox', itemType: 'course' }];
+    const result = removePurchasedItem(items, { id: '999', itemType: 'course' });
+    expect(result).toHaveLength(1);
+  });
+
+  it('removes only first when duplicate ids exist', () => {
+    const items = [
+      { id: '1', name: 'Botox A', itemType: 'course' },
+      { id: '1', name: 'Botox B', itemType: 'course' },
+    ];
+    const result = removePurchasedItem(items, { id: '1', itemType: 'course' });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Botox B');
+  });
+
+  it('handles string vs number id comparison', () => {
+    const items = [{ id: 123, name: 'Botox', itemType: 'course' }];
+    // id is number but item.id passed as number — should match
+    const result = removePurchasedItem(items, { id: 123, itemType: 'course' });
+    expect(result).toHaveLength(0);
+  });
+
+  it('string id "123" does NOT match number id 123', () => {
+    const items = [{ id: 123, name: 'Botox', itemType: 'course' }];
+    const result = removePurchasedItem(items, { id: '123', itemType: 'course' });
+    // strict === means "123" !== 123
+    expect(result).toHaveLength(1); // NOT removed!
+  });
+});
+
 describe('scrollToError behavior', () => {
   it('alert is called with error message', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});

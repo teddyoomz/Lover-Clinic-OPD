@@ -246,6 +246,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   const expiry = masterCourse.validityDays
     ? new Date(Date.now() + masterCourse.validityDays * 86400000).toISOString().split('T')[0]
     : '';
+  // Track where this course came from (parent course/promotion name)
+  const parentName = masterCourse.parentName || '';
+  const source = masterCourse.source || ''; // 'sale', 'treatment', 'exchange', 'share'
 
   for (const p of products) {
     courses.push({
@@ -255,6 +258,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       status: 'กำลังใช้งาน',
       expiry,
       value: masterCourse.price ? `${masterCourse.price} บาท` : '',
+      parentName,
+      source,
+      assignedAt: new Date().toISOString(),
     });
   }
 
@@ -267,6 +273,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       status: 'กำลังใช้งาน',
       expiry,
       value: masterCourse.price ? `${masterCourse.price} บาท` : '',
+      parentName,
+      source,
+      assignedAt: new Date().toISOString(),
     });
   }
 

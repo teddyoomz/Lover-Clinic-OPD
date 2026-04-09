@@ -1139,8 +1139,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   };
   const removePurchasedItem = (item) => {
     setPurchasedItems(prev => {
-      // Find by id + itemType for exact match (not by reference/index)
-      const idx = prev.findIndex(p => p.id === item.id && p.itemType === item.itemType);
+      // Find by id + itemType — coerce to string for safe comparison
+      const idx = prev.findIndex(p => String(p.id) === String(item.id) && p.itemType === item.itemType);
       if (idx === -1) return prev;
       return prev.filter((_, i) => i !== idx);
     });
@@ -1438,7 +1438,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 const prods = course.products?.length
                   ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                   : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice });
+                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}` });
               } catch {}
             }
             for (const promo of grouped.promotions) {
@@ -1449,13 +1449,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     const subProds = sub.products?.length
                       ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                       : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
-                    await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds });
+                    await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}` });
                   }
                 } else {
                   const prods = promo.products?.length
                     ? promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                     : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
-                  await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice });
+                  await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}` });
                 }
               } catch {}
             }
@@ -2513,7 +2513,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             <Check size={12} className="text-teal-500 shrink-0" />
                             <span className="text-xs font-medium truncate">{item.name}</span>
                             <span className="text-[11px] text-teal-500 shrink-0">(ซื้อเพิ่ม)</span>
-                            <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
                           </div>
                           <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                         </div>
@@ -2567,7 +2567,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{item.name}</span>
                               <span className={`text-[11px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
-                              <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
                             </div>
                             <span className="text-gray-500 font-normal shrink-0 ml-2">{item.qty} โปรโมชัน</span>
                           </div>
@@ -2622,7 +2622,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         <Check size={12} className="text-orange-500 shrink-0" />
                         <span className="text-xs font-medium truncate">{item.name}</span>
                         <span className="text-[11px] text-orange-500 shrink-0">(ซื้อเพิ่ม)</span>
-                        <button onClick={() => removePurchasedItem(item)} className="text-red-400 hover:text-red-300 shrink-0"><Trash2 size={10} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
                       </div>
                       <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                     </div>

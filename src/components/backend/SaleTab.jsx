@@ -315,7 +315,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               const prods = course.products?.length
                 ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
                 : [{ name: course.name, qty: purchasedQty, unit: course.unit || 'ครั้ง' }];
-              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice });
+              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}` });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
           }
           for (const promo of grouped.promotions) {
@@ -326,13 +326,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   const subProds = sub.products?.length
                     ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
                     : [{ name: sub.name || promo.name, qty: purchasedQty, unit: sub.unit || 'ครั้ง' }];
-                  await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds });
+                  await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
                 }
               } else if (promo.products?.length) {
                 const prods = promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }));
-                await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice });
+                await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
               } else {
-                await assignCourseToCustomer(customerId, { name: promo.name, products: [{ name: promo.name, qty: purchasedQty, unit: 'โปรโมชัน' }], price: promo.unitPrice });
+                await assignCourseToCustomer(customerId, { name: promo.name, products: [{ name: promo.name, qty: purchasedQty, unit: 'โปรโมชัน' }], price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
               }
             } catch (e) { console.warn('[SaleTab] assign promotion failed:', e); }
           }
