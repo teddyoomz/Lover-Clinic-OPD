@@ -1515,6 +1515,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
         }
 
+        // Deduct purchased courses that were USED in this treatment (after assign)
+        const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+        if (purchasedDeductions.length > 0) {
+          try {
+            const { deductCourseItems } = await import('../lib/backendClient.js');
+            await deductCourseItems(customerId, purchasedDeductions);
+          } catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }
+        }
+
         setSuccess(true);
         const savedId = result.treatmentId || treatmentId || '';
         // Clean up form state before closing
