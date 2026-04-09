@@ -1197,6 +1197,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const hasSale = purchasedItems.length > 0 || medications.length > 0 || consumables.length > 0;
 
   const scrollToError = (fieldAttr, msg) => {
+    alert(msg);
     setError(msg);
     setTimeout(() => {
       const el = document.querySelector(`[data-field="${fieldAttr}"]`);
@@ -1325,7 +1326,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               }
             }
             if (overDeductions.length > 0) {
-              scrollToError('courseSection', `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`);
+              const msg = `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`;
+              scrollToError('courseSection', msg);
               setSaving(false);
               return;
             }
@@ -1402,7 +1404,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             await deductCourseItems(customerId, backendDetail.courseItems);
           } catch (e) {
             console.warn('[TreatmentForm] deduction failed:', e);
-            setError(`บันทึกสำเร็จ แต่ตัดคอร์สไม่ได้: ${e.message}`);
+            const msg = `บันทึกสำเร็จ แต่ตัดคอร์สไม่ได้: ${e.message}`;
+            alert(msg);
+            setError(msg);
           }
         } else if (isEdit && existingCourseItems?.length > 0) {
           // Editing: removed all course items → reverse old deductions
