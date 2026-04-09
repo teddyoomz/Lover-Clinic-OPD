@@ -664,15 +664,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // ── Course item toggle — also update treatment items ──
   const toggleCourseItem = (product) => {
+    // Block if remaining ≤ 0
+    const rem = parseFloat(product.remaining);
+    if (!selectedCourseItems.has(product.rowId) && (isNaN(rem) || rem <= 0)) {
+      alert(`"${product.name}" คงเหลือ 0 — ไม่สามารถเลือกได้`);
+      return;
+    }
     setSelectedCourseItems(prev => {
       const next = new Set(prev);
       if (next.has(product.rowId)) {
         next.delete(product.rowId);
-        // Remove from treatment items
         setTreatmentItems(ti => ti.filter(t => t.id !== product.rowId));
       } else {
         next.add(product.rowId);
-        // Add to treatment items
         setTreatmentItems(ti => [...ti, {
           id: product.rowId,
           name: product.name,
@@ -1149,7 +1153,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const customerPromotionGroups = useMemo(() => {
     const allCourses = options?.customerCourses || [];
     const promos = options?.customerPromotions || [];
-    const promoCourses = allCourses.filter(c => c.promotionId);
+    // Filter out promotion courses with 0 remaining
+    const promoCourses = allCourses.filter(c => c.promotionId && (c.products || []).some(p => parseFloat(p.remaining) > 0));
     const groups = {};
     promoCourses.forEach(c => {
       const pid = c.promotionId;
@@ -1288,6 +1293,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
+        // Phase 6: Validate course deductions before save
+        for (const rowId of selectedCourseItems) {
+          for (const course of (options?.customerCourses || [])) {
+            const product = course.products?.find(p => p.rowId === rowId);
+            if (product) {
+              const rem = parseFloat(product.remaining) || 0;
+              const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
+              if (deductAmt > rem) {
+                setError(`"${product.name}" คงเหลือ ${rem} ${product.unit} — ไม่สามารถตัด ${deductAmt} ได้`);
+                setSaving(false);
+                return;
+              }
+            }
+          }
+        }
+
         const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
         // Strip undefined values — Firestore rejects any field with value undefined
         const clean = (obj) => JSON.parse(JSON.stringify(obj));
@@ -1451,7 +1472,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   const doctors = options?.doctors || [];
   const assistants = options?.assistants || [];
   const allCustomerCourses = options?.customerCourses || [];
-  const customerCourses = allCustomerCourses.filter(c => !c.promotionId);
+  // Filter out courses with 0 remaining (หมดแล้ว — ไม่ต้องแสดง)
+  const customerCourses = allCustomerCourses.filter(c => {
+    if (c.promotionId) return false;
+    // Check if ALL products in this course are 0 remaining
+    const allZero = (c.products || []).every(p => parseFloat(p.remaining) <= 0);
+    return !allZero;
+  });
   const customerPromotions = options?.customerPromotions || [];
 
   const bloodTypeOptions = options?.bloodTypeOptions || [];

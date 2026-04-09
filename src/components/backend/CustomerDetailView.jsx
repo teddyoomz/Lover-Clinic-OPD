@@ -103,8 +103,17 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
   const hn = customer?.proClinicHN || '';
-  const activeCourses = customer?.courses || [];
-  const expiredCourses = customer?.expiredCourses || [];
+  // Filter out courses with 0 remaining from active (they're effectively "used up")
+  const allCourses = customer?.courses || [];
+  const activeCourses = allCourses.filter(c => {
+    const { remaining } = parseQtyString(c.qty);
+    return remaining > 0;
+  });
+  const usedUpCourses = allCourses.filter(c => {
+    const { remaining } = parseQtyString(c.qty);
+    return remaining <= 0;
+  });
+  const expiredCourses = [...(customer?.expiredCourses || []), ...usedUpCourses];
   const appointments = customer?.appointments || [];
   const treatmentSummary = customer?.treatmentSummary || [];
 
