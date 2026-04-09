@@ -349,23 +349,34 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               // Transform scraped course format → TreatmentFormPage format
               // From: { name, product, qty: "200 / 200 U", value, status, expiry }
               // To: { courseId, courseName, promotionId?, products: [{ rowId, name, remaining, unit, total }] }
-              customerCoursesForForm = rawCourses.map((c, i) => {
+              // Group duplicate courses by name+product and merge remaining qty
+              const courseMap = new Map();
+              rawCourses.forEach((c) => {
+                const key = `${c.name}|${c.product || c.name}`;
                 const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
                 const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
                 const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
                 const unit = qtyMatch ? qtyMatch[3].trim() : '';
-                return {
-                  courseId: `be-course-${i}`,
-                  courseName: c.name || '',
-                  products: [{
-                    rowId: `be-row-${i}`,
-                    name: c.product || c.name || '',
-                    remaining: remaining > 0 ? `${remaining}` : '0',
-                    total: `${total}`,
-                    unit: unit || 'ครั้ง',
-                  }],
-                };
-              }).filter(c => c.courseName);
+                if (courseMap.has(key)) {
+                  const existing = courseMap.get(key);
+                  existing.remaining += remaining;
+                  existing.total += total;
+                } else {
+                  courseMap.set(key, { name: c.name || '', product: c.product || c.name || '', remaining, total, unit: unit || 'ครั้ง' });
+                }
+              });
+              let courseIdx = 0;
+              customerCoursesForForm = [...courseMap.values()].filter(c => c.name).map(c => ({
+                courseId: `be-course-${courseIdx}`,
+                courseName: c.name,
+                products: [{
+                  rowId: `be-row-${courseIdx++}`,
+                  name: c.product,
+                  remaining: c.remaining > 0 ? `${c.remaining}` : '0',
+                  total: `${c.total}`,
+                  unit: c.unit,
+                }],
+              }));
             } catch {}
           }
 
@@ -677,13 +688,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         setTreatmentItems(ti => ti.filter(t => t.id !== product.rowId));
       } else {
         next.add(product.rowId);
-        setTreatmentItems(ti => [...ti, {
-          id: product.rowId,
-          name: product.name,
-          qty: '1',
-          unit: product.unit || '',
-          price: '',
-        }]);
+        // Only add to treatment items if not already there (prevent duplicates from multiple course entries)
+        setTreatmentItems(ti => {
+          if (ti.some(t => t.id === product.rowId)) return ti;
+          return [...ti, {
+            id: product.rowId,
+            name: product.name,
+            qty: '1',
+            unit: product.unit || '',
+            price: '',
+          }];
+        });
       }
       return next;
     });
