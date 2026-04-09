@@ -1404,6 +1404,40 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
 
+        // Auto-create sale invoice when treatment has billing items (hasSale)
+        if (hasSale && !isEdit) {
+          try {
+            const { createBackendSale, assignCourseToCustomer } = await import('../lib/backendClient.js');
+            const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
+            purchasedItems.forEach(p => {
+              const t = p.itemType || 'product';
+              if (t === 'promotion') grouped.promotions.push(p);
+              else if (t === 'course') grouped.courses.push(p);
+              else grouped.products.push(p);
+            });
+            await createBackendSale(clean({
+              customerId, customerName: patientName, customerHN: '',
+              saleDate: treatmentDate, saleNote: '',
+              items: grouped,
+              billing: { subtotal: billing.subtotal, billDiscount: billing.billDiscAmt, netTotal: billing.netTotal },
+              payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
+              sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
+              source: 'treatment',
+              linkedTreatmentId: result.treatmentId || treatmentId || '',
+            }));
+            // Auto-assign purchased courses to customer
+            for (const course of grouped.courses) {
+              try {
+                await assignCourseToCustomer(customerId, {
+                  name: course.name,
+                  products: course.products?.length ? course.products : [{ name: course.name, qty: Number(course.qty) || 1, unit: course.unit || 'คอร์ส' }],
+                  price: course.unitPrice,
+                });
+              } catch {}
+            }
+          } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
+        }
+
         setSuccess(true);
         const savedId = result.treatmentId || treatmentId || '';
         // Clean up form state before closing

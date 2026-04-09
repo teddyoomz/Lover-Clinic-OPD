@@ -10,7 +10,7 @@ import {
 import {
   createBackendSale, updateBackendSale, deleteBackendSale,
   getAllSales, getAllCustomers, getAllMasterDataItems,
-  cancelBackendSale, updateSalePayment
+  cancelBackendSale, updateSalePayment, assignCourseToCustomer
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -42,7 +42,7 @@ function DatePickerField({ value, onChange, className = '' }) {
 function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '0.00'; }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
-export default function SaleTab({ clinicSettings, theme }) {
+export default function SaleTab({ clinicSettings, theme, initialCustomer, onCustomerUsed }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -127,6 +127,25 @@ export default function SaleTab({ clinicSettings, theme }) {
     finally { setListLoading(false); }
   }, []);
   useEffect(() => { loadSales(); }, [loadSales]);
+
+  // Auto-open form when initialCustomer is provided (from CustomerDetailView)
+  useEffect(() => {
+    if (initialCustomer) {
+      loadOptions();
+      setEditingSale(null);
+      setCustomerId(initialCustomer.proClinicId || initialCustomer.id || '');
+      setCustomerName(`${initialCustomer.patientData?.prefix || ''} ${initialCustomer.patientData?.firstName || ''} ${initialCustomer.patientData?.lastName || ''}`.trim());
+      setCustomerHN(initialCustomer.proClinicHN || '');
+      setSaleDate(new Date().toISOString().split('T')[0]);
+      setSaleNote(''); setPurchasedItems([]); setMedications([]);
+      setBillDiscount(''); setBillDiscountType('amount');
+      setPaymentStatus('paid'); setPaymentDate(new Date().toISOString().split('T')[0]); setPaymentTime(''); setRefNo('');
+      setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
+      setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
+      setError(''); setSuccess(false); setFormOpen(true);
+      if (onCustomerUsed) onCustomerUsed();
+    }
+  }, [initialCustomer]);
 
   // ── Billing calc ──
   const billing = useMemo(() => {
@@ -285,6 +304,18 @@ export default function SaleTab({ clinicSettings, theme }) {
         await updateBackendSale(editingSale.saleId || editingSale.id, data);
       } else {
         await createBackendSale(data);
+        // Auto-assign purchased courses to customer
+        if (customerId && grouped.courses.length > 0) {
+          for (const course of grouped.courses) {
+            try {
+              await assignCourseToCustomer(customerId, {
+                name: course.name,
+                products: course.products?.length ? course.products : [{ name: course.name, qty: Number(course.qty) || 1, unit: course.unit || 'คอร์ส' }],
+                price: course.unitPrice,
+              });
+            } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
+          }
+        }
       }
       setSuccess(true);
       setTimeout(() => { setFormOpen(false); setSuccess(false); loadSales(); }, 800);
@@ -320,7 +351,7 @@ export default function SaleTab({ clinicSettings, theme }) {
           <button onClick={openCreate}
             className="px-6 py-3 rounded-xl font-black text-sm text-white transition-all flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider whitespace-nowrap"
             style={{ background: 'linear-gradient(135deg, #be123c, #e11d48)', boxShadow: '0 4px 20px rgba(244,63,94,0.35)' }}>
-            <Plus size={16} /> สร้างใบเสร็จ
+            <Plus size={16} /> ขาย
           </button>
         </div>
         <div className="mt-3 flex items-center justify-between">
@@ -346,7 +377,7 @@ export default function SaleTab({ clinicSettings, theme }) {
             </div>
             <h3 className="text-xl font-black text-[var(--tx-heading)] mb-2 tracking-tight">ขาย / ใบเสร็จ</h3>
             <p className="text-sm text-[var(--tx-muted)] max-w-lg mx-auto text-center leading-relaxed mb-8">
-              สร้างใบเสร็จ ขายคอร์ส/โปรโมชัน/สินค้า พร้อมจัดการการชำระเงินและพนักงานขาย
+              ขาย ขายคอร์ส/โปรโมชัน/สินค้า พร้อมจัดการการชำระเงินและพนักงานขาย
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
               {[
@@ -558,7 +589,7 @@ export default function SaleTab({ clinicSettings, theme }) {
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><ArrowLeft size={16} /></button>
             <h2 className="text-sm font-black tracking-tight text-rose-400 flex items-center gap-2">
-              <ShoppingCart size={16} /> {editingSale ? 'แก้ไขใบเสร็จ' : 'สร้างใบเสร็จใหม่'}
+              <ShoppingCart size={16} /> {editingSale ? 'แก้ไขใบเสร็จ' : 'ขายใหม่'}
             </h2>
             {customerName && <span className="text-xs text-[var(--tx-muted)]">| {customerName}</span>}
           </div>
@@ -566,7 +597,7 @@ export default function SaleTab({ clinicSettings, theme }) {
 
         {success ? (
           <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="text-center"><CheckCircle2 size={48} className="mx-auto text-emerald-400 mb-3" /><p className="text-sm font-bold text-emerald-400">{editingSale ? 'บันทึกสำเร็จ' : 'สร้างใบเสร็จสำเร็จ'}</p></div>
+            <div className="text-center"><CheckCircle2 size={48} className="mx-auto text-emerald-400 mb-3" /><p className="text-sm font-bold text-emerald-400">{editingSale ? 'บันทึกสำเร็จ' : 'ขายสำเร็จ'}</p></div>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
@@ -723,7 +754,7 @@ export default function SaleTab({ clinicSettings, theme }) {
               <button onClick={() => setFormOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
               <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-                {editingSale ? 'บันทึก' : 'สร้างใบเสร็จ'}
+                {editingSale ? 'บันทึก' : 'ขาย'}
               </button>
             </div>
           </div>

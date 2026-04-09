@@ -8,7 +8,7 @@ import {
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
   Search, X
 } from 'lucide-react';
-import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, assignCourseToCustomer, exchangeCourseProduct, getAllMasterDataItems } from '../../lib/backendClient.js';
+import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, exchangeCourseProduct, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -60,7 +60,7 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated }) {
+export default function CustomerDetailView({ customer, accentColor, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale }) {
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const pd = customer?.patientData || {};
@@ -75,12 +75,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   const [addQtyModal, setAddQtyModal] = useState(null);
   const [addQtyValue, setAddQtyValue] = useState('');
   const [addQtySaving, setAddQtySaving] = useState(false);
-  // Assign course
-  const [assignModal, setAssignModal] = useState(false);
-  const [masterCourses, setMasterCourses] = useState([]);
-  const [assignSearch, setAssignSearch] = useState('');
-  const [selectedAssign, setSelectedAssign] = useState(null);
-  const [assignSaving, setAssignSaving] = useState(false);
+  // (assignModal removed — "เพิ่มคอร์สใหม่" now opens SaleTab via onCreateSale)
   // Exchange product
   const [exchangeModal, setExchangeModal] = useState(null); // { courseIndex, course }
 
@@ -354,10 +349,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                 )}
               </button>
               {/* Assign course button */}
-              <button onClick={async () => {
-                setAssignModal(true); setSelectedAssign(null); setAssignSearch('');
-                if (masterCourses.length === 0) setMasterCourses(await getAllMasterDataItems('courses'));
-              }} className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="เพิ่มคอร์สใหม่">
+              <button onClick={() => onCreateSale?.(customer)}
+                className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="ขายคอร์สใหม่ให้ลูกค้า">
                 <Plus size={16} />
               </button>
             </div>
@@ -458,75 +451,6 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               </div>
             )}
           </div>
-
-          {/* ── Assign Course Popup ── */}
-          {assignModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAssignModal(false)}>
-              <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
-                  <h3 className="text-sm font-bold text-teal-400">เพิ่มคอร์สใหม่ให้ลูกค้า</h3>
-                  <button onClick={() => setAssignModal(false)} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
-                </div>
-                <div className="p-5 space-y-3">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-                    <input value={assignSearch} onChange={e => { setAssignSearch(e.target.value); setSelectedAssign(null); }}
-                      className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="ค้นหาคอร์ส... (หรือเลื่อนดูด้านล่าง)" />
-                  </div>
-                  {!selectedAssign ? (
-                    <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--bd)]">
-                      {masterCourses.filter(c => !assignSearch || (c.name || '').toLowerCase().includes(assignSearch.toLowerCase())).map(c => (
-                        <button key={c.id} onClick={() => setSelectedAssign(c)}
-                          className="w-full text-left px-3 py-2.5 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
-                          <div className="min-w-0">
-                            <span className="text-[var(--tx-heading)] font-medium block truncate">{c.name}</span>
-                            <span className="text-[11px] text-[var(--tx-muted)]">{c.category || ''} {c.courseType ? `| ${c.courseType}` : ''}</span>
-                          </div>
-                          <span className="text-[var(--tx-muted)] font-mono shrink-0 ml-2">{c.price ? `${Number(c.price).toLocaleString()} ฿` : ''}</span>
-                        </button>
-                      ))}
-                      {masterCourses.length === 0 && <p className="text-xs text-[var(--tx-muted)] text-center py-4">ไม่มีคอร์ส — sync ข้อมูลพื้นฐานก่อน</p>}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="bg-teal-900/10 border border-teal-700/30 rounded-lg px-4 py-3">
-                        <p className="text-sm font-bold text-teal-400">{selectedAssign.name}</p>
-                        <p className="text-xs text-[var(--tx-muted)] mt-1">{selectedAssign.category} | {selectedAssign.courseType} | {selectedAssign.price ? `${Number(selectedAssign.price).toLocaleString()} ฿` : '-'}</p>
-                      </div>
-                      {(selectedAssign.products || []).length > 0 && (
-                        <div className="text-xs space-y-1">
-                          <p className="text-[var(--tx-muted)] font-semibold">สินค้าที่จะได้:</p>
-                          {selectedAssign.products.map((p, i) => (
-                            <div key={i} className="flex justify-between px-3 py-1.5 bg-[var(--bg-elevated)] rounded">
-                              <span>{p.name}</span><span className="font-mono">{p.qty} {p.unit}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2 sticky bottom-0 bg-[var(--bg-surface)]">
-                  {selectedAssign && <button onClick={() => setSelectedAssign(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">เลือกใหม่</button>}
-                  <button onClick={() => setAssignModal(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
-                  {selectedAssign && (
-                    <button onClick={async () => {
-                      setAssignSaving(true);
-                      try {
-                        await assignCourseToCustomer(customer.proClinicId, selectedAssign);
-                        const refreshed = await getCustomer(customer.proClinicId);
-                        if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
-                        setAssignModal(false);
-                      } catch (e) { alert(e.message); }
-                      finally { setAssignSaving(false); }
-                    }} disabled={assignSaving} className="px-5 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
-                      {assignSaving ? 'กำลังบันทึก...' : 'ยืนยันเพิ่มคอร์ส'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ── Exchange Product Popup ── */}
           {exchangeModal && <ExchangeModal

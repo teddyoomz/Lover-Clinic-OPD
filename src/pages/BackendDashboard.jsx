@@ -27,6 +27,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [viewingCustomer, setViewingCustomer] = useState(null); // selected customer for detail view
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // { mode, customerId, treatmentId?, patientName, patientData }
   const [linkCopied, setLinkCopied] = useState(false);
+  const [saleInitialCustomer, setSaleInitialCustomer] = useState(null);
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Backend dashboard uses trial ProClinic server (separate from production frontend)
@@ -175,6 +176,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               if (refreshed) setViewingCustomer(refreshed);
             }}
             onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}
+            onCreateSale={(cust) => {
+              setSaleInitialCustomer(cust);
+              setViewingCustomer(null);
+              setActiveTab('sales');
+            }}
           />
         ) : activeTab === 'clone' ? (
           <CloneTab clinicSettings={clinicSettings} theme={theme} />
@@ -193,7 +199,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'appointments' ? (
           <AppointmentTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'sales' ? (
-          <SaleTab clinicSettings={clinicSettings} theme={theme} />
+          <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)} />
         ) : null}
       </main>
 
