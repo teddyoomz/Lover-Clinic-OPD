@@ -19,21 +19,17 @@ async function buyFromModal(page, buttonName) {
   const modal = page.locator('.fixed');
   // Wait for items to load
   await modal.getByRole('button', { name: 'ยกเลิก' }).first().waitFor({ timeout: 10000 });
-  // Check first item — find any checkbox inside the modal
+  // Check first item — click the checkbox via JS
   const cb = modal.locator('input[type="checkbox"]').nth(1);
   if (!(await cb.isVisible({ timeout: 5000 }).catch(() => false))) return false;
-  await cb.click({ force: true });
-  await page.waitForTimeout(500);
-  const qtyInput = modal.locator('input[type="number"]').first();
-  if (await qtyInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await qtyInput.click({ force: true, clickCount: 3 });
-    await page.keyboard.type('1');
-  }
+  await cb.evaluate(el => el.click());
+  await page.waitForTimeout(800);
+  // Verify: confirm button should become enabled (bg-teal)
+  const confirmBtn = modal.locator('button.bg-teal-500, button:has-text("ยืนยัน"):not(:has-text("ยืนยันการรักษา"))').first();
   await page.waitForTimeout(300);
-  // Confirm
-  const confirmBtn = modal.getByRole('button', { name: 'ยืนยัน' });
-  if (await confirmBtn.isDisabled()) return false;
-  await confirmBtn.click();
+  const isDisabled = await confirmBtn.evaluate(el => el.disabled).catch(() => true);
+  if (isDisabled) return false;
+  await confirmBtn.click({ force: true });
   await page.waitForTimeout(1000);
   return true;
 }

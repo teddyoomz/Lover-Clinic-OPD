@@ -40,7 +40,7 @@ test.describe('Backend Dashboard — Tab Navigation', () => {
   test('click ขาย → shows sale section', async ({ page }) => {
     await page.getByRole('button', { name: /ขาย/ }).click();
     await page.waitForTimeout(1000);
-    await expect(page.getByRole('button', { name: 'สร้างใบเสร็จ' })).toBeVisible();
+    await expect(page.getByPlaceholder(/ค้นหาใบเสร็จ/)).toBeVisible();
   });
 
   test('deep link ?customer=2853 → shows customer detail', async ({ page }) => {

@@ -71,3 +71,24 @@ export async function goToCustomer(page, customerId) {
   // Wait for customer data to load (profile section visible)
   await page.waitForSelector('text=เบอร์โทร', { timeout: 20000 });
 }
+
+/**
+ * Navigate to backend and switch to a specific tab.
+ * @param {import('@playwright/test').Page} page
+ * @param {'clone'|'customers'|'masterdata'|'appointments'|'sales'} tab
+ */
+export async function goToTab(page, tab) {
+  await goToBackend(page);
+  const tabMap = {
+    clone: null, // default tab — no click needed
+    customers: 'ข้อมูลลูกค้า',
+    masterdata: 'ข้อมูลพื้นฐาน',
+    appointments: 'นัดหมาย',
+    sales: /ขาย/,
+  };
+  const name = tabMap[tab];
+  if (name) {
+    await page.getByRole('button', { name }).click();
+    await page.waitForTimeout(1500);
+  }
+}

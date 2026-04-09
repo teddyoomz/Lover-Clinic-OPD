@@ -35,19 +35,16 @@ test.describe('Course Action Modals', () => {
     await expect(page.getByText('พนักงานผู้ดำเนินการ')).toBeVisible();
   });
 
-  test('exchange modal validates required fields', async ({ page }) => {
+  test('exchange modal: ปุ่มยืนยัน disabled เมื่อไม่กรอกข้อมูล', async ({ page }) => {
     await page.getByText('เปลี่ยนสินค้า').first().click();
     await expect(page.getByText('เปลี่ยนสินค้าในคอร์ส')).toBeVisible({ timeout: 3000 });
-    // Click confirm without filling
-    page.on('dialog', d => d.accept());
-    await page.getByText('ยืนยันเปลี่ยนสินค้า').click();
-    // Should show alert (handled by dialog listener)
+    // Confirm button should be disabled without filling required fields
+    await expect(page.getByText('ยืนยันเปลี่ยนสินค้า')).toBeDisabled();
   });
 
-  test('share modal validates required fields', async ({ page }) => {
+  test('share modal: ปุ่มยืนยัน disabled เมื่อไม่กรอกข้อมูล', async ({ page }) => {
     await page.getByText('แชร์คอร์ส').first().click();
     await expect(page.getByText('แชร์คอร์สให้ลูกค้าอื่น')).toBeVisible({ timeout: 3000 });
-    page.on('dialog', d => d.accept());
-    await page.getByText('ยืนยันแชร์คอร์ส').click();
+    await expect(page.getByText('ยืนยันแชร์คอร์ส')).toBeDisabled();
   });
 });

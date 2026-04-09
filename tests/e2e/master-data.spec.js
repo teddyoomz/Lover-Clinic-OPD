@@ -1,33 +1,49 @@
-// ─── E2E: Master Data Tab — Sync + Course CRUD ──────────────────────────────
+// ─── E2E: Master Data Tab — Sync + Sub-tabs + Course CRUD ────────────────────
 import { test, expect } from '@playwright/test';
-import { goToBackend } from './helpers.js';
+import { goToTab } from './helpers.js';
 
 test.describe('Master Data Tab', () => {
   test.beforeEach(async ({ page }) => {
-    await goToBackend(page);
-    await page.getByRole('button', { name: 'ข้อมูลพื้นฐาน' }).click();
-    await page.waitForTimeout(1500);
+    await goToTab(page, 'masterdata');
   });
 
-  test('shows sync section', async ({ page }) => {
+  // ── Sync Section ──
+  test('แสดง sync section heading', async ({ page }) => {
     await expect(page.getByText('Sync ข้อมูลจาก ProClinic')).toBeVisible();
+  });
+
+  test('แสดงปุ่ม "Sync ทั้งหมด"', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Sync ทั้งหมด' })).toBeVisible();
   });
 
-  test('shows sub-tab buttons including courses', async ({ page }) => {
-    // Sub-tab buttons are in a flex row — find the one that contains "คอร์ส" exactly
-    const courseSubTab = page.locator('button', { hasText: '📋' }).first();
-    await expect(courseSubTab).toBeVisible();
+  // ── Sub-tabs ──
+  test('แสดง sub-tab buttons 5 ตัว (💊🩺👤📋🏷️)', async ({ page }) => {
+    await expect(page.locator('button', { hasText: '💊' }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: '🩺' }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: '👤' }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: '📋' }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: '🏷️' }).first()).toBeVisible();
   });
 
-  test('click คอร์ส sub-tab → shows "สร้างคอร์ส" button', async ({ page }) => {
-    // Click the sub-tab (not sync) button — sub-tabs are smaller, in a different row
+  test('sub-tab 💊 Products: แสดง search bar', async ({ page }) => {
+    await expect(page.getByPlaceholder('ค้นหา...')).toBeVisible();
+  });
+
+  test('sub-tab 🩺 Doctors: คลิก → แสดง content', async ({ page }) => {
+    await page.locator('button', { hasText: '🩺' }).first().click();
+    await page.waitForTimeout(500);
+    // Should show doctor list or empty state
+    await expect(page.getByPlaceholder('ค้นหา...')).toBeVisible();
+  });
+
+  test('sub-tab 📋 Courses: คลิก → แสดง "สร้างคอร์ส"', async ({ page }) => {
     await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('button', { name: 'สร้างคอร์ส' })).toBeVisible();
   });
 
-  test('"สร้างคอร์ส" → form overlay opens', async ({ page }) => {
+  // ── Course Form ──
+  test('"สร้างคอร์ส" → เปิดฟอร์มสร้างคอร์ส', async ({ page }) => {
     await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
@@ -35,7 +51,18 @@ test.describe('Master Data Tab', () => {
     await expect(page.getByPlaceholder('เช่น Botox Package')).toBeVisible({ timeout: 3000 });
   });
 
-  test('course form has "เพิ่มสินค้า" button', async ({ page }) => {
+  test('course form: แสดง fields (ชื่อ, รหัส, หมวด, ประเภท, ราคา, สถานะ)', async ({ page }) => {
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
+    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
+    await page.waitForTimeout(500);
+    await expect(page.getByPlaceholder('เช่น Botox Package')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByPlaceholder('BTX-001')).toBeVisible();
+    await expect(page.getByText('ราคา').first()).toBeVisible();
+    await expect(page.getByText('สถานะ').first()).toBeVisible();
+  });
+
+  test('course form: มีปุ่ม "เพิ่มสินค้า"', async ({ page }) => {
     await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
@@ -43,7 +70,19 @@ test.describe('Master Data Tab', () => {
     await expect(page.getByRole('button', { name: 'เพิ่มสินค้า' })).toBeVisible();
   });
 
-  test('"ยกเลิก" closes form → sync section visible', async ({ page }) => {
+  test('course form: คลิก "เพิ่มสินค้า" → เพิ่ม row ใหม่', async ({ page }) => {
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
+    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
+    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: 'เพิ่มสินค้า' }).click();
+    await page.waitForTimeout(300);
+    // Should show a product search input row
+    const prodInputs = page.getByPlaceholder(/ค้นหาสินค้า|พิมพ์ชื่อสินค้า/);
+    await expect(prodInputs.first()).toBeVisible({ timeout: 3000 });
+  });
+
+  test('course form: "ยกเลิก" → ปิดฟอร์ม → เห็น sync section', async ({ page }) => {
     await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
@@ -51,9 +90,5 @@ test.describe('Master Data Tab', () => {
     await page.getByRole('button', { name: 'ยกเลิก' }).click();
     await page.waitForTimeout(500);
     await expect(page.getByText('Sync ข้อมูลจาก ProClinic')).toBeVisible();
-  });
-
-  test('search/filter bar visible', async ({ page }) => {
-    await expect(page.getByPlaceholder('ค้นหา...')).toBeVisible();
   });
 });

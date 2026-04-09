@@ -35,7 +35,7 @@ test.describe('Customer Detail — Course Buttons', () => {
     await exchangeBtn.click();
     // Exchange modal must show current product info
     await expect(page.getByText('สินค้าปัจจุบัน')).toBeVisible({ timeout: 3000 });
-    await expect(page.getByPlaceholder('ค้นหาสินค้าใหม่')).toBeVisible();
+    await expect(page.getByPlaceholder(/ค้นหาสินค้า/)).toBeVisible();
   });
 
   test('"เพิ่มคงเหลือ" modal cancel button works', async ({ page }) => {
@@ -81,7 +81,8 @@ test.describe('Customer Detail — Course Buttons', () => {
   });
 
   test('progress bars are rendered for courses', async ({ page }) => {
-    // Progress bars have a specific width style set dynamically
+    // Wait for courses to fully load
+    await page.waitForTimeout(2000);
     const bars = page.locator('.h-1\\.5.rounded-full');
     const count = await bars.count();
     expect(count).toBeGreaterThan(0);
