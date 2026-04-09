@@ -2639,7 +2639,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             </span>
                           </div>
                           <input type="number" value={item.qty} onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
-                            className={`${inputCls} !w-14 text-center !py-1 shrink-0`} min="0" />
+                            className={`${inputCls} !w-24 text-center !py-1 shrink-0`} min="0" />
                           <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
                           <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
                         </div>
@@ -2774,14 +2774,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyQtyMap[item.id] || ''} min="0"
                                         onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                        className={`${inputCls} text-center !py-1 !text-xs !w-14`} />
+                                        className={`${inputCls} text-center !py-1 !text-xs !w-20`} />
                                     </td>
                                     <td className="py-2 px-2 text-center text-gray-500">{item.unit}</td>
                                     <td className="py-2 px-2 text-center">{parseFloat(item.price).toFixed(2)}</td>
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyDiscMap[item.id] || ''} min="0"
                                         onChange={e => setBuyDiscMap(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                        className={`${inputCls} text-center !py-1 !text-xs !w-14`} />
+                                        className={`${inputCls} text-center !py-1 !text-xs !w-20`} />
                                     </td>
                                     <td className="py-2 px-2 text-center">
                                       <input type="checkbox" checked={vat}
