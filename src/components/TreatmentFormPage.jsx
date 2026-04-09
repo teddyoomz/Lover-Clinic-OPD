@@ -1013,6 +1013,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     setBuyModalType(type);
     setBuyQuery('');
     setBuySelectedCat('');
+    setBuyShowLimit(50);
     setBuyChecked(new Set());
     setBuyQtyMap({});
     setBuyDiscMap({});
@@ -1066,6 +1067,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     } catch (_) {}
     setBuyLoading(false);
   };
+  const [buyShowLimit, setBuyShowLimit] = useState(50);
   const buyFilteredItems = useMemo(() => {
     let items = buyItems[buyModalType] || [];
     if (buySelectedCat) items = items.filter(i => i.category === buySelectedCat);
@@ -1075,6 +1077,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     }
     return items;
   }, [buyItems, buyModalType, buySelectedCat, buyQuery]);
+  const buyVisibleItems = buyFilteredItems.slice(0, buyShowLimit);
   const toggleBuyCheck = (id) => {
     setBuyChecked(prev => {
       const next = new Set(prev);
@@ -2752,7 +2755,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                               </tr>
                             </thead>
                             <tbody>
-                              {buyFilteredItems.map(item => {
+                              {buyVisibleItems.map(item => {
                                 const checked = buyChecked.has(item.id);
                                 const qty = parseInt(buyQtyMap[item.id]) || 0;
                                 const disc = parseFloat(buyDiscMap[item.id]) || 0;
@@ -2793,9 +2796,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           </table>
                         )}
                       </div>
-                      {/* Selected count */}
-                      <div className={`px-4 py-2 border-t text-xs text-gray-500 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                        รายการที่เลือก ({buyChecked.size} รายการ)
+                      {/* Load more + Selected count */}
+                      <div className={`px-4 py-2 border-t text-xs text-gray-500 flex items-center justify-between ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                        <span>รายการที่เลือก ({buyChecked.size} รายการ) | แสดง {buyVisibleItems.length}/{buyFilteredItems.length}</span>
+                        {buyShowLimit < buyFilteredItems.length && (
+                          <button onClick={() => setBuyShowLimit(p => p + 50)} className="text-teal-400 hover:text-teal-300 font-bold">โหลดเพิ่ม +50</button>
+                        )}
                       </div>
                     </div>
                   </div>
