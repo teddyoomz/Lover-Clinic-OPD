@@ -141,20 +141,25 @@ export async function deductCourseItems(customerId, deductions) {
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
+  const { parseQtyString } = await import('./courseUtils.js');
 
   for (const d of deductions) {
-    // Find by index first, verify by name for safety
-    let idx = d.courseIndex;
-    if (idx >= 0 && idx < courses.length) {
-      if (d.courseName && courses[idx].name !== d.courseName) {
-        // Index mismatch — search by name
-        idx = courses.findIndex(c => c.name === d.courseName);
-      }
-    } else if (d.courseName) {
-      idx = courses.findIndex(c => c.name === d.courseName);
+    let remaining = d.deductQty || 1;
+    // Find ALL matching course entries by name+product and deduct across them
+    for (let i = 0; i < courses.length && remaining > 0; i++) {
+      const c = courses[i];
+      const nameMatch = d.courseName ? c.name === d.courseName : true;
+      const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
+      if (!nameMatch || !productMatch) continue;
+      const parsed = parseQtyString(c.qty);
+      if (parsed.remaining <= 0) continue;
+      const toDeduct = Math.min(remaining, parsed.remaining);
+      courses[i] = { ...c, qty: deductQty(c.qty, toDeduct) };
+      remaining -= toDeduct;
     }
-    if (idx < 0 || idx >= courses.length) continue;
-    courses[idx] = { ...courses[idx], qty: deductQty(courses[idx].qty, d.deductQty || 1) };
+    if (remaining > 0) {
+      throw new Error(`คอร์สคงเหลือไม่พอ: ${d.productName || d.courseName} ต้องการตัด ${d.deductQty} เหลือตัดไม่ได้อีก ${remaining}`);
+    }
   }
 
   await updateCustomer(customerId, { courses });
@@ -173,13 +178,13 @@ export async function reverseCourseDeduction(customerId, deductions) {
   const courses = [...(snap.data().courses || [])];
 
   for (const d of deductions) {
-    let idx = d.courseIndex;
-    if (idx >= 0 && idx < courses.length) {
-      if (d.courseName && courses[idx].name !== d.courseName) {
-        idx = courses.findIndex(c => c.name === d.courseName);
-      }
-    } else if (d.courseName) {
-      idx = courses.findIndex(c => c.name === d.courseName);
+    // Find by name+product (not index — form deduplicates courses)
+    let idx = -1;
+    if (d.courseName) {
+      idx = courses.findIndex(c => c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName));
+    }
+    if (idx < 0 && d.courseIndex >= 0 && d.courseIndex < courses.length) {
+      idx = d.courseIndex; // fallback to index for backward compat
     }
     if (idx < 0 || idx >= courses.length) continue;
     courses[idx] = { ...courses[idx], qty: reverseQty(courses[idx].qty, d.deductQty || 1) };

@@ -1350,21 +1350,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
-        // Phase 6: Validate course deductions against LIVE Firestore data (not stale form cache)
+        // Phase 6: Validate course deductions against LIVE Firestore data
+        // Use name+product lookup (not index) because form deduplicates courses
         if (selectedCourseItems.size > 0) {
           try {
             const { getCustomer: fetchLiveCustomer } = await import('../lib/backendClient.js');
             const { parseQtyString } = await import('../lib/courseUtils.js');
             const liveCustomer = await fetchLiveCustomer(customerId);
             const liveCourses = liveCustomer?.courses || [];
+            // Sum remaining by name+product from ALL live course entries (matching dedup logic)
+            const liveQtyMap = new Map();
+            liveCourses.forEach(c => {
+              const key = `${c.name}|${c.product || c.name}`;
+              const { remaining } = parseQtyString(c.qty);
+              liveQtyMap.set(key, (liveQtyMap.get(key) || 0) + remaining);
+            });
             const overDeductions = [];
             for (const rowId of selectedCourseItems) {
               for (const course of (options?.customerCourses || [])) {
                 const product = course.products?.find(p => p.rowId === rowId);
                 if (product) {
-                  const courseIndex = parseInt((course.courseId || '').replace('be-course-', '')) || 0;
-                  const liveCourse = liveCourses[courseIndex];
-                  const liveRemaining = liveCourse ? parseQtyString(liveCourse.qty).remaining : 0;
+                  const key = `${course.courseName}|${product.name}`;
+                  const liveRemaining = liveQtyMap.get(key) || 0;
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
                   if (deductAmt > liveRemaining) {
                     overDeductions.push(`• "${product.name}" คงเหลือจริง ${liveRemaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
@@ -1420,9 +1427,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             for (const course of (options?.customerCourses || [])) {
               const product = course.products?.find(p => p.rowId === rowId);
               if (product) {
-                const courseIndex = parseInt((course.courseId || '').replace('be-course-', '')) || 0;
                 return {
-                  courseIndex,
                   courseName: course.courseName,
                   productName: product.name,
                   rowId: product.rowId,
@@ -3165,7 +3170,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Payment channels (3 rows) — visible when status is 2 or 4 */}
             {(paymentStatus === '2' || paymentStatus === '4') && (
-              <div className="space-y-2 mb-3">
+              <div className="space-y-2 mb-3" data-field="paymentChannels">
                 <label className={labelCls}>ช่องทางชำระเงิน</label>
                 {pmChannels.map((ch, idx) => (
                   <div key={idx} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
@@ -3198,7 +3203,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
           {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
           {hasSale && (
-          <FormSection isDark={isDark}>
+          <div data-field="sellers"><FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
               {pmSellers.map((sl, idx) => (
@@ -3218,7 +3223,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
               ))}
             </div>
-          </FormSection>
+          </FormSection></div>
           )}
 
           {/* Submit (bottom) */}
