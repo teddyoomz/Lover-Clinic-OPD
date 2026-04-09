@@ -425,7 +425,8 @@ export async function deleteBackendSale(saleId) {
 export async function getAllSales() {
   const snap = await getDocs(salesCol());
   const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  sales.sort((a, b) => (b.saleDate || b.createdAt || '').localeCompare(a.saleDate || a.createdAt || ''));
+  // Sort by createdAt (has time) desc — latest first
+  sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
   return sales;
 }
 
@@ -434,7 +435,7 @@ export async function getCustomerSales(customerId) {
   const q = query(salesCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
   const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  sales.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+  sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
   return sales;
 }
 
