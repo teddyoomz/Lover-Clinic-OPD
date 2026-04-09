@@ -36,6 +36,26 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
   );
 }
 
+function ThaiDatePicker({ value, onChange, isDark, inputCls }) {
+  // Display dd/mm/yyyy (พ.ศ.) but use native date picker
+  const display = (() => {
+    if (!value) return 'เลือกวันที่';
+    const [y, m, d] = value.split('-');
+    if (!d || !m) return value;
+    return `${d}/${m}/${Number(y) + 543}`;
+  })();
+  return (
+    <div className="relative">
+      <input type="date" value={value} onChange={e => onChange(e.target.value)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+      <div className={`${inputCls} flex items-center justify-between cursor-pointer`}>
+        <span>{display}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={isDark ? 'text-gray-500' : 'text-gray-400'}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      </div>
+    </div>
+  );
+}
+
 function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inputCls, labelCls }) {
   const [copied, setCopied] = useState(false);
   const hasPrev = !!(prevValue && prevValue.trim());
@@ -1510,7 +1530,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
                 <div>
                   <label className={labelCls}>วันที่รักษา *</label>
-                  <input type="date" value={treatmentDate} onChange={e => setTreatmentDate(e.target.value)} className={`${inputCls} cursor-pointer`} />
+                  <ThaiDatePicker value={treatmentDate} onChange={setTreatmentDate} isDark={isDark} inputCls={inputCls} />
                 </div>
               </div>
             </FormSection>
@@ -2950,10 +2970,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
               <div className="w-48">
                 <label className={labelCls}>วันที่ขาย *</label>
-                <div className="relative">
-                  <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
-                  <div className={inputCls}>{saleDate ? saleDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
-                </div>
+                <ThaiDatePicker value={saleDate} onChange={setSaleDate} isDark={isDark} inputCls={inputCls} />
               </div>
             </div>
           </FormSection>
@@ -2979,10 +2996,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className={labelCls}>วันที่ชำระเงิน *</label>
-                <div className="relative">
-                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={`${inputCls} opacity-0 absolute inset-0 z-10 cursor-pointer`} />
-                  <div className={inputCls}>{paymentDate ? paymentDate.split('-').reverse().join('/') : 'เลือกวันที่'}</div>
-                </div>
+                <ThaiDatePicker value={paymentDate} onChange={setPaymentDate} isDark={isDark} inputCls={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>เวลา</label>
