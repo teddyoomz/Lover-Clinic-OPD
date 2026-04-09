@@ -83,13 +83,6 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   const [assignSaving, setAssignSaving] = useState(false);
   // Exchange product
   const [exchangeModal, setExchangeModal] = useState(null); // { courseIndex, course }
-  const [exchangeProducts, setExchangeProducts] = useState([]);
-  const [exchangeSearch, setExchangeSearch] = useState('');
-  const [selectedExchange, setSelectedExchange] = useState(null);
-  const [exchangeQty, setExchangeQty] = useState('');
-  const [exchangeUnit, setExchangeUnit] = useState('');
-  const [exchangeReason, setExchangeReason] = useState('');
-  const [exchangeSaving, setExchangeSaving] = useState(false);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -426,9 +419,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                     {/* Course items — with progress bar */}
                     {course.product && <CourseItemBar course={course} courseTab={courseTab} allCourses={allCourses}
                       onAddQty={(idx) => { setAddQtyModal({ courseIndex: idx, courseName: course.name }); setAddQtyValue(''); }}
-                      onExchange={async (idx) => {
-                        setExchangeModal({ courseIndex: idx, course }); setSelectedExchange(null); setExchangeSearch(''); setExchangeQty(''); setExchangeUnit(''); setExchangeReason('');
-                        if (exchangeProducts.length === 0) setExchangeProducts(await getAllMasterDataItems('products'));
+                      onExchange={(idx) => {
+                        setExchangeModal({ courseIndex: idx, course });
                       }}
                     />}
                   </div>
@@ -537,99 +529,17 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
           )}
 
           {/* ── Exchange Product Popup ── */}
-          {exchangeModal && (() => {
-            const currentParsed = parseQtyString(exchangeModal.course.qty);
-            return (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setExchangeModal(null)}>
-                <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-                  <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
-                    <h3 className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
-                    <button onClick={() => setExchangeModal(null)} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
-                  </div>
-                  <div className="p-5 space-y-4">
-                    {/* Current product info */}
-                    <div className="bg-sky-900/10 border border-sky-700/30 rounded-lg px-4 py-3">
-                      <p className="text-xs text-[var(--tx-muted)]">สินค้าปัจจุบัน</p>
-                      <p className="text-sm font-bold text-[var(--tx-heading)]">{exchangeModal.course.product}</p>
-                      <p className="text-xs text-[var(--tx-muted)] mt-1">คงเหลือ: <span className="font-mono font-bold text-sky-400">{currentParsed.remaining} / {currentParsed.total} {currentParsed.unit}</span></p>
-                    </div>
-
-                    {/* Qty to exchange from current course */}
-                    <div>
-                      <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนที่จะเปลี่ยน (จากคอร์สเดิม)</label>
-                      <input type="number" min="1" max={currentParsed.remaining} value={exchangeQty} onChange={e => setExchangeQty(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
-                        placeholder={`1 - ${currentParsed.remaining} ${currentParsed.unit}`} />
-                    </div>
-
-                    {/* New product search */}
-                    <div>
-                      <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เลือกสินค้าใหม่</label>
-                      <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-                        <input value={selectedExchange ? selectedExchange.name : exchangeSearch}
-                          onChange={e => { setExchangeSearch(e.target.value); setSelectedExchange(null); }}
-                          onFocus={() => { if (selectedExchange) { setExchangeSearch(selectedExchange.name); setSelectedExchange(null); } }}
-                          className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
-                          placeholder="ค้นหาสินค้า... (หรือเลื่อนดูด้านล่าง)" />
-                      </div>
-                      {!selectedExchange && (
-                        <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--bd)] mt-1">
-                          {exchangeProducts.filter(p => !exchangeSearch || (p.name || '').toLowerCase().includes(exchangeSearch.toLowerCase())).map(p => (
-                            <button key={p.id} onClick={() => { setSelectedExchange(p); setExchangeUnit(p.unit || ''); }}
-                              className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
-                              <span className="text-[var(--tx-secondary)]">{p.name}</span>
-                              <span className="text-[var(--tx-muted)]">{p.unit || ''} {p.price ? `| ${Number(p.price).toLocaleString()} ฿` : ''}</span>
-                            </button>
-                          ))}
-                          {exchangeProducts.length === 0 && <p className="text-xs text-[var(--tx-muted)] text-center py-3">กำลังโหลดสินค้า...</p>}
-                        </div>
-                      )}
-                      {selectedExchange && (
-                        <div className="mt-2 bg-sky-900/10 border border-sky-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
-                          <span className="text-xs font-bold text-sky-400">{selectedExchange.name}</span>
-                          <button onClick={() => setSelectedExchange(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* New unit */}
-                    {selectedExchange && (
-                      <div>
-                        <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">หน่วยใหม่</label>
-                        <input value={exchangeUnit} onChange={e => setExchangeUnit(e.target.value)}
-                          className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="U, ครั้ง, ml" />
-                      </div>
-                    )}
-
-                    {/* Reason */}
-                    <div>
-                      <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เหตุผล (ไม่บังคับ)</label>
-                      <input value={exchangeReason} onChange={e => setExchangeReason(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="ลูกค้าต้องการเปลี่ยน..." />
-                    </div>
-                  </div>
-                  <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2 sticky bottom-0 bg-[var(--bg-surface)]">
-                    <button onClick={() => setExchangeModal(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
-                    <button onClick={async () => {
-                      if (!exchangeQty) { alert('กรุณากรอกจำนวนที่จะเปลี่ยน'); return; }
-                      if (!selectedExchange) { alert('กรุณาเลือกสินค้าใหม่'); return; }
-                      setExchangeSaving(true);
-                      try {
-                        await exchangeCourseProduct(customer.proClinicId, exchangeModal.courseIndex, { name: selectedExchange.name, qty: Number(exchangeQty), unit: exchangeUnit }, exchangeReason);
-                        const refreshed = await getCustomer(customer.proClinicId);
-                        if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
-                        setExchangeModal(null);
-                      } catch (e) { alert(e.message); }
-                      finally { setExchangeSaving(false); }
-                    }} disabled={exchangeSaving || !selectedExchange} className="px-5 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 disabled:opacity-40 transition-all">
-                      {exchangeSaving ? 'กำลังบันทึก...' : 'ยืนยันเปลี่ยนสินค้า'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {exchangeModal && <ExchangeModal
+            course={exchangeModal.course}
+            courseIndex={exchangeModal.courseIndex}
+            customerId={customer.proClinicId}
+            onClose={() => setExchangeModal(null)}
+            onDone={async () => {
+              const refreshed = await getCustomer(customer.proClinicId);
+              if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
+              setExchangeModal(null);
+            }}
+          />}
         </div>
       </div>
     </div>
@@ -637,6 +547,104 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
+
+function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [qty, setQty] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const currentParsed = parseQtyString(course.qty);
+
+  // Load products on mount
+  useEffect(() => {
+    getAllMasterDataItems('products').then(p => { setProducts(p); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const filtered = products.filter(p => !search || (p.name || '').toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
+          <h3 className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-sky-900/10 border border-sky-700/30 rounded-lg px-4 py-3">
+            <p className="text-xs text-[var(--tx-muted)]">สินค้าปัจจุบัน</p>
+            <p className="text-sm font-bold text-[var(--tx-heading)]">{course.product}</p>
+            <p className="text-xs text-[var(--tx-muted)] mt-1">คงเหลือ: <span className="font-mono font-bold text-sky-400">{currentParsed.remaining} / {currentParsed.total} {currentParsed.unit}</span></p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนที่จะเปลี่ยน (จากคอร์สเดิม)</label>
+            <input type="number" min="1" max={currentParsed.remaining} value={qty} onChange={e => setQty(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
+              placeholder={`1 - ${currentParsed.remaining} ${currentParsed.unit}`} />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เลือกสินค้าใหม่</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+              <input value={selected ? selected.name : search}
+                onChange={e => { setSearch(e.target.value); setSelected(null); }}
+                onFocus={() => { if (selected) { setSearch(selected.name); setSelected(null); } }}
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
+                placeholder="ค้นหาสินค้า... (หรือเลื่อนดูด้านล่าง)" />
+            </div>
+            {!selected && (
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--bd)] mt-1">
+                {loading ? (
+                  <p className="text-xs text-[var(--tx-muted)] text-center py-4 flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> กำลังโหลดสินค้า...</p>
+                ) : filtered.length === 0 ? (
+                  <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่พบสินค้า</p>
+                ) : filtered.map(p => (
+                  <button key={p.id} onClick={() => setSelected(p)}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
+                    <span className="text-[var(--tx-secondary)]">{p.name}</span>
+                    <span className="text-[var(--tx-muted)]">{p.unit || ''} {p.price ? `| ${Number(p.price).toLocaleString()} ฿` : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selected && (
+              <div className="mt-2 bg-sky-900/10 border border-sky-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-sky-400">{selected.name} <span className="text-[var(--tx-muted)] font-normal">({selected.unit || '-'})</span></span>
+                <button onClick={() => setSelected(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เหตุผล (ไม่บังคับ)</label>
+            <input value={reason} onChange={e => setReason(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="ลูกค้าต้องการเปลี่ยน..." />
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2 sticky bottom-0 bg-[var(--bg-surface)]">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+          <button onClick={async () => {
+            if (!qty) { alert('กรุณากรอกจำนวนที่จะเปลี่ยน'); return; }
+            if (!selected) { alert('กรุณาเลือกสินค้าใหม่'); return; }
+            setSaving(true);
+            try {
+              await exchangeCourseProduct(customerId, courseIndex, { name: selected.name, qty: Number(qty), unit: selected.unit || '' }, reason);
+              await onDone();
+            } catch (e) { alert(e.message); }
+            finally { setSaving(false); }
+          }} disabled={saving || !selected} className="px-5 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 disabled:opacity-40 transition-all">
+            {saving ? 'กำลังบันทึก...' : 'ยืนยันเปลี่ยนสินค้า'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange }) {
   const parsed = parseQtyString(course.qty);
