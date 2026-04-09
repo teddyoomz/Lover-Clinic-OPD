@@ -42,7 +42,7 @@ function DatePickerField({ value, onChange, className = '' }) {
 function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '0.00'; }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
-export default function SaleTab({ clinicSettings, theme, initialCustomer, onCustomerUsed }) {
+export default function SaleTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, onFormClose }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -420,7 +420,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">{sale.customerName || '-'} <span className="text-[var(--tx-muted)] text-xs">{sale.customerHN}</span></td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">{fmtMoney(sale.billing?.netTotal)} ฿</td>
+                      <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">
+                        {sale.source === 'exchange' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-400">เปลี่ยนสินค้า</span>
+                        : sale.source === 'share' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">แชร์คอร์ส</span>
+                        : sale.source === 'treatment' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">จาก OPD</span>
+                        : `${fmtMoney(sale.billing?.netTotal)} ฿`}
+                      </td>
                       <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
@@ -587,7 +592,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         {/* Header */}
         <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[var(--bg-elevated)]/95 border-[var(--bd)]' : 'bg-white/95 border-gray-200'}`}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-            <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><ArrowLeft size={16} /></button>
+            <button onClick={() => { setFormOpen(false); if (onFormClose) onFormClose(); }} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><ArrowLeft size={16} /></button>
             <h2 className="text-sm font-black tracking-tight text-rose-400 flex items-center gap-2">
               <ShoppingCart size={16} /> {editingSale ? 'แก้ไขใบเสร็จ' : 'ขายใหม่'}
             </h2>
@@ -751,7 +756,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             {/* Error + Submit */}
             {error && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12} />{error}</div>}
             <div className="flex justify-end gap-2 pb-8">
-              <button onClick={() => setFormOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
+              <button onClick={() => { setFormOpen(false); if (onFormClose) onFormClose(); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
               <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                 {editingSale ? 'บันทึก' : 'ขาย'}

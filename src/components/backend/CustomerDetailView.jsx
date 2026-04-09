@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X
+  Search, X, Users
 } from 'lucide-react';
 import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, exchangeCourseProduct, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
@@ -78,6 +78,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   // (assignModal removed — "เพิ่มคอร์สใหม่" now opens SaleTab via onCreateSale)
   // Exchange product
   const [exchangeModal, setExchangeModal] = useState(null); // { courseIndex, course }
+  // Share course
+  const [shareModal, setShareModal] = useState(null); // { courseIndex, course }
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -412,9 +414,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                     {/* Course items — with progress bar */}
                     {course.product && <CourseItemBar course={course} courseTab={courseTab} allCourses={allCourses}
                       onAddQty={(idx) => { setAddQtyModal({ courseIndex: idx, courseName: course.name }); setAddQtyValue(''); }}
-                      onExchange={(idx) => {
-                        setExchangeModal({ courseIndex: idx, course });
-                      }}
+                      onExchange={(idx) => { setExchangeModal({ courseIndex: idx, course }); }}
+                      onShare={(idx) => { setShareModal({ courseIndex: idx, course }); }}
                     />}
                   </div>
                 ))
@@ -457,11 +458,26 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             course={exchangeModal.course}
             courseIndex={exchangeModal.courseIndex}
             customerId={customer.proClinicId}
+            customerName={name}
             onClose={() => setExchangeModal(null)}
             onDone={async () => {
               const refreshed = await getCustomer(customer.proClinicId);
               if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
               setExchangeModal(null);
+            }}
+          />}
+
+          {/* ── Share Course Popup ── */}
+          {shareModal && <ShareModal
+            course={shareModal.course}
+            courseIndex={shareModal.courseIndex}
+            fromCustomerId={customer.proClinicId}
+            fromCustomerName={name}
+            onClose={() => setShareModal(null)}
+            onDone={async () => {
+              const refreshed = await getCustomer(customer.proClinicId);
+              if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
+              setShareModal(null);
             }}
           />}
         </div>
@@ -472,23 +488,28 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
+function ExchangeModal({ course, courseIndex, customerId, customerName, onClose, onDone }) {
   const [products, setProducts] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState('');
+  const [newQty, setNewQty] = useState('');
+  const [staffId, setStaffId] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
   const currentParsed = parseQtyString(course.qty);
 
-  // Load products on mount
   useEffect(() => {
-    getAllMasterDataItems('products').then(p => { setProducts(p); setLoading(false); }).catch(() => setLoading(false));
+    Promise.all([getAllMasterDataItems('products'), getAllMasterDataItems('staff')])
+      .then(([p, s]) => { setProducts(p); setStaff(s); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   const filtered = products.filter(p => !search || (p.name || '').toLowerCase().includes(search.toLowerCase()));
+  const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -524,9 +545,7 @@ function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
             {!selected && (
               <div className="max-h-48 overflow-y-auto rounded-lg border border-[var(--bd)] mt-1">
                 {loading ? (
-                  <p className="text-xs text-[var(--tx-muted)] text-center py-4 flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> กำลังโหลดสินค้า...</p>
-                ) : filtered.length === 0 ? (
-                  <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่พบสินค้า</p>
+                  <p className="text-xs text-[var(--tx-muted)] text-center py-4 flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> กำลังโหลด...</p>
                 ) : filtered.map(p => (
                   <button key={p.id} onClick={() => setSelected(p)}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
@@ -538,10 +557,30 @@ function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
             )}
             {selected && (
               <div className="mt-2 bg-sky-900/10 border border-sky-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-sky-400">{selected.name} <span className="text-[var(--tx-muted)] font-normal">({selected.unit || '-'})</span></span>
+                <span className="text-xs font-bold text-sky-400">{selected.name} ({selected.unit || '-'})</span>
                 <button onClick={() => setSelected(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
               </div>
             )}
+          </div>
+
+          {/* New product qty */}
+          {selected && (
+            <div>
+              <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนสินค้าใหม่ ({selected.unit || '-'})</label>
+              <input type="number" min="1" value={newQty} onChange={e => setNewQty(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
+                placeholder={`จำนวน ${selected.unit || ''}`} />
+            </div>
+          )}
+
+          {/* Staff selector */}
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">พนักงานผู้ดำเนินการ *</label>
+            <select value={staffId} onChange={e => setStaffId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+              <option value="">เลือกพนักงาน</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           </div>
 
           <div>
@@ -555,13 +594,33 @@ function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
           <button onClick={async () => {
             if (!qty) { alert('กรุณากรอกจำนวนที่จะเปลี่ยน'); return; }
             if (!selected) { alert('กรุณาเลือกสินค้าใหม่'); return; }
+            if (!newQty) { alert('กรุณากรอกจำนวนสินค้าใหม่'); return; }
+            if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
             setSaving(true);
             try {
-              await exchangeCourseProduct(customerId, courseIndex, { name: selected.name, qty: Number(qty), unit: selected.unit || '' }, reason);
+              // 1. Exchange course product
+              await exchangeCourseProduct(customerId, courseIndex, { name: selected.name, qty: Number(newQty), unit: selected.unit || '' }, reason);
+              // 2. Create sale record (price=0) for audit trail
+              const { createBackendSale, assignCourseToCustomer } = await import('../../lib/backendClient.js');
+              await createBackendSale(JSON.parse(JSON.stringify({
+                customerId, customerName: customerName || '', customerHN: '',
+                saleDate: new Date().toISOString().split('T')[0],
+                saleNote: `เปลี่ยนสินค้า: ${qty}${currentParsed.unit} ${course.product} → ${newQty}${selected.unit || ''} ${selected.name}${reason ? ` | ${reason}` : ''}`,
+                items: { promotions: [], courses: [{ name: `เปลี่ยนสินค้า: ${course.product} → ${selected.name}`, qty: '1', unitPrice: '0', itemType: 'exchange' }], products: [], medications: [] },
+                billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
+                payment: { status: 'paid', channels: [] },
+                sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
+                source: 'exchange',
+              })));
+              // 3. Assign new product as course to customer
+              await assignCourseToCustomer(customerId, {
+                name: course.name,
+                products: [{ name: selected.name, qty: Number(newQty), unit: selected.unit || '' }],
+              });
               await onDone();
             } catch (e) { alert(e.message); }
             finally { setSaving(false); }
-          }} disabled={saving || !selected} className="px-5 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 disabled:opacity-40 transition-all">
+          }} disabled={saving || !selected || !staffId} className="px-5 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 disabled:opacity-40 transition-all">
             {saving ? 'กำลังบันทึก...' : 'ยืนยันเปลี่ยนสินค้า'}
           </button>
         </div>
@@ -570,7 +629,140 @@ function ExchangeModal({ course, courseIndex, customerId, onClose, onDone }) {
   );
 }
 
-function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange }) {
+function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onClose, onDone }) {
+  const [customers, setCustomers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [custSearch, setCustSearch] = useState('');
+  const [selectedCust, setSelectedCust] = useState(null);
+  const [shareQty, setShareQty] = useState('');
+  const [staffId, setStaffId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const currentParsed = parseQtyString(course.qty);
+
+  useEffect(() => {
+    Promise.all([
+      import('../../lib/backendClient.js').then(m => m.getAllCustomers()),
+      getAllMasterDataItems('staff'),
+    ]).then(([c, s]) => { setCustomers(c.filter(c => c.proClinicId !== fromCustomerId)); setStaff(s); setLoading(false); }).catch(() => setLoading(false));
+  }, [fromCustomerId]);
+
+  const filteredCust = customers.filter(c => {
+    if (!custSearch) return true;
+    const n = `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.toLowerCase();
+    return n.includes(custSearch.toLowerCase()) || (c.proClinicHN || '').toLowerCase().includes(custSearch.toLowerCase());
+  });
+  const selectedStaff = staff.find(s => String(s.id) === staffId);
+  const toName = selectedCust ? `${selectedCust.patientData?.prefix || ''} ${selectedCust.patientData?.firstName || ''} ${selectedCust.patientData?.lastName || ''}`.trim() : '';
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
+          <h3 className="text-sm font-bold text-purple-400">แชร์คอร์สให้ลูกค้าอื่น</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-purple-900/10 border border-purple-700/30 rounded-lg px-4 py-3">
+            <p className="text-xs text-[var(--tx-muted)]">คอร์สที่จะแชร์</p>
+            <p className="text-sm font-bold text-[var(--tx-heading)]">{course.name} — {course.product}</p>
+            <p className="text-xs text-[var(--tx-muted)] mt-1">จาก: <span className="text-purple-400">{fromCustomerName}</span> | คงเหลือ: <span className="font-mono font-bold text-purple-400">{currentParsed.remaining} {currentParsed.unit}</span></p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนที่จะแชร์</label>
+            <input type="number" min="1" max={currentParsed.remaining} value={shareQty} onChange={e => setShareQty(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
+              placeholder={`1 - ${currentParsed.remaining} ${currentParsed.unit}`} />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เลือกลูกค้าปลายทาง</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+              <input value={selectedCust ? toName : custSearch}
+                onChange={e => { setCustSearch(e.target.value); setSelectedCust(null); }}
+                onFocus={() => { if (selectedCust) { setCustSearch(toName); setSelectedCust(null); } }}
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]"
+                placeholder="ค้นหาลูกค้า... (ชื่อ / HN)" />
+            </div>
+            {!selectedCust && (
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--bd)] mt-1">
+                {loading ? (
+                  <p className="text-xs text-[var(--tx-muted)] text-center py-4 flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> กำลังโหลด...</p>
+                ) : filteredCust.slice(0, 30).map(c => {
+                  const cName = `${c.patientData?.prefix || ''} ${c.patientData?.firstName || ''} ${c.patientData?.lastName || ''}`.trim();
+                  return (
+                    <button key={c.id || c.proClinicId} onClick={() => setSelectedCust(c)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)]/50 flex items-center justify-between">
+                      <span className="text-[var(--tx-secondary)]">{cName}</span>
+                      <span className="text-[var(--tx-muted)] font-mono">{c.proClinicHN || ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {selectedCust && (
+              <div className="mt-2 bg-purple-900/10 border border-purple-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-400">{toName} <span className="font-mono text-[var(--tx-muted)]">{selectedCust.proClinicHN || ''}</span></span>
+                <button onClick={() => setSelectedCust(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">พนักงานผู้ดำเนินการ *</label>
+            <select value={staffId} onChange={e => setStaffId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+              <option value="">เลือกพนักงาน</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2 sticky bottom-0 bg-[var(--bg-surface)]">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+          <button onClick={async () => {
+            if (!shareQty || Number(shareQty) <= 0) { alert('กรุณากรอกจำนวน'); return; }
+            if (!selectedCust) { alert('กรุณาเลือกลูกค้าปลายทาง'); return; }
+            if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
+            if (Number(shareQty) > currentParsed.remaining) { alert(`คงเหลือไม่พอ: มี ${currentParsed.remaining} ต้องการ ${shareQty}`); return; }
+            setSaving(true);
+            try {
+              const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/backendClient.js');
+              const toId = selectedCust.proClinicId || selectedCust.id;
+              // 1. Deduct from source customer
+              await deductCourseItems(fromCustomerId, [{ courseIndex, deductQty: Number(shareQty), courseName: course.name }]);
+              // 2. Assign to target customer
+              await assignCourseToCustomer(toId, {
+                name: course.name,
+                products: [{ name: course.product, qty: Number(shareQty), unit: currentParsed.unit }],
+              });
+              // 3. Create sale record (price=0)
+              await createBackendSale(JSON.parse(JSON.stringify({
+                customerId: fromCustomerId, customerName: fromCustomerName, customerHN: '',
+                saleDate: new Date().toISOString().split('T')[0],
+                saleNote: `แชร์คอร์ส: ${shareQty} ${currentParsed.unit} ${course.product} → ${toName}`,
+                items: { promotions: [], courses: [{ name: `แชร์คอร์ส: ${course.product} → ${toName}`, qty: '1', unitPrice: '0', itemType: 'share' }], products: [], medications: [] },
+                billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
+                payment: { status: 'paid', channels: [] },
+                sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
+                source: 'share',
+                shareDetail: { fromCustomerId, fromCustomerName, toCustomerId: toId, toCustomerName: toName, courseName: course.name, product: course.product, qty: Number(shareQty), unit: currentParsed.unit },
+              })));
+              await onDone();
+            } catch (e) { alert(e.message); }
+            finally { setSaving(false); }
+          }} disabled={saving || !selectedCust || !staffId} className="px-5 py-2 rounded-lg text-xs font-bold bg-purple-700 text-white hover:bg-purple-600 disabled:opacity-40 transition-all">
+            {saving ? 'กำลังบันทึก...' : 'ยืนยันแชร์คอร์ส'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, onShare }) {
   const parsed = parseQtyString(course.qty);
   const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
   const origIdx = allCourses.indexOf(course);
@@ -593,6 +785,10 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange }) 
           <button onClick={() => onExchange(origIdx)}
             className="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1 transition-colors">
             <RefreshCw size={10} /> เปลี่ยนสินค้า
+          </button>
+          <button onClick={() => onShare(origIdx)}
+            className="text-[11px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 transition-colors">
+            <Users size={10} /> แชร์คอร์ส
           </button>
         </div>
       )}

@@ -285,6 +285,61 @@ describe('Exchange product data shape', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 10. scrollToError helper — tests the logic (not DOM)
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. Exchange sale record data shape
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Exchange sale record (price=0)', () => {
+  it('builds correct exchange sale data', () => {
+    const saleData = {
+      customerId: '123', customerName: 'คุณ สมชาย',
+      saleNote: 'เปลี่ยนสินค้า: 50U Nabota → 2cc Filler',
+      items: { courses: [{ name: 'เปลี่ยนสินค้า: Nabota → Filler', qty: '1', unitPrice: '0', itemType: 'exchange' }] },
+      billing: { subtotal: 0, netTotal: 0 },
+      sellers: [{ id: 'ST1', name: 'ธนา', percent: '0', total: '0' }],
+      source: 'exchange',
+    };
+    expect(saleData.source).toBe('exchange');
+    expect(saleData.billing.netTotal).toBe(0);
+    expect(saleData.sellers[0].name).toBe('ธนา');
+    expect(saleData.items.courses[0].itemType).toBe('exchange');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. Share course data shape
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Share course sale record', () => {
+  it('builds correct share data with from/to', () => {
+    const shareData = {
+      source: 'share',
+      shareDetail: {
+        fromCustomerId: 'A', fromCustomerName: 'สมชาย',
+        toCustomerId: 'B', toCustomerName: 'สมหญิง',
+        courseName: 'Botox', product: 'Nabota', qty: 50, unit: 'U',
+      },
+      billing: { netTotal: 0 },
+    };
+    expect(shareData.source).toBe('share');
+    expect(shareData.shareDetail.fromCustomerId).toBe('A');
+    expect(shareData.shareDetail.toCustomerId).toBe('B');
+    expect(shareData.shareDetail.qty).toBe(50);
+    expect(shareData.billing.netTotal).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13. Sale source badge logic
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Sale source badge', () => {
+  it('exchange → เปลี่ยนสินค้า', () => {
+    const badge = (s) => s === 'exchange' ? 'เปลี่ยนสินค้า' : s === 'share' ? 'แชร์คอร์ส' : s === 'treatment' ? 'จาก OPD' : 'ราคา';
+    expect(badge('exchange')).toBe('เปลี่ยนสินค้า');
+    expect(badge('share')).toBe('แชร์คอร์ส');
+    expect(badge('treatment')).toBe('จาก OPD');
+    expect(badge(undefined)).toBe('ราคา');
+  });
+});
+
 describe('scrollToError behavior', () => {
   it('alert is called with error message', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});

@@ -178,7 +178,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}
             onCreateSale={(cust) => {
               setSaleInitialCustomer(cust);
-              setViewingCustomer(null);
+              // Don't clear viewingCustomer — keep for back navigation
               setActiveTab('sales');
             }}
           />
@@ -199,7 +199,13 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'appointments' ? (
           <AppointmentTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'sales' ? (
-          <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)} />
+          <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)}
+            onFormClose={() => {
+              // If came from customer detail, go back there
+              if (viewingCustomer) { setActiveTab('customers'); }
+              setSaleInitialCustomer(null);
+            }}
+          />
         ) : null}
       </main>
 
