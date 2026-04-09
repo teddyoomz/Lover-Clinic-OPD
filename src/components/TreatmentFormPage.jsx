@@ -1370,11 +1370,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               for (const course of (options?.customerCourses || [])) {
                 const product = course.products?.find(p => p.rowId === rowId);
                 if (product) {
-                  const key = `${course.courseName}|${product.name}`;
-                  const liveRemaining = liveQtyMap.get(key) || 0;
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
-                  if (deductAmt > liveRemaining) {
-                    overDeductions.push(`• "${product.name}" คงเหลือจริง ${liveRemaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
+                  const isPurchased = rowId.startsWith('purchased-') || rowId.startsWith('promo-');
+                  // Purchased-in-session: validate against form remaining (not Firestore)
+                  // Existing: validate against LIVE Firestore remaining
+                  const remaining = isPurchased
+                    ? (parseFloat(product.remaining) || 0)
+                    : (liveQtyMap.get(`${course.courseName}|${product.name}`) || 0);
+                  if (deductAmt > remaining) {
+                    overDeductions.push(`• "${product.name}" คงเหลือ${isPurchased ? '' : 'จริง'} ${remaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
                   }
                 }
               }
@@ -1439,13 +1443,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             return null;
           }).filter(Boolean),
         });
-        // Phase 6: Course deduction BEFORE save — so if deduction fails, treatment is not saved
-        if (backendDetail.courseItems?.length > 0) {
+        // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session)
+        const existingDeductions = (backendDetail.courseItems || []).filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+        if (existingDeductions.length > 0) {
           const { deductCourseItems, reverseCourseDeduction } = await import('../lib/backendClient.js');
           if (isEdit && existingCourseItems?.length > 0) {
             await reverseCourseDeduction(customerId, existingCourseItems);
           }
-          await deductCourseItems(customerId, backendDetail.courseItems);
+          await deductCourseItems(customerId, existingDeductions);
         } else if (isEdit && existingCourseItems?.length > 0) {
           const { reverseCourseDeduction } = await import('../lib/backendClient.js');
           await reverseCourseDeduction(customerId, existingCourseItems);
@@ -1467,12 +1472,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               else if (t === 'course') grouped.courses.push(p);
               else grouped.products.push(p);
             });
+            const pmStatusMap = { '2': 'paid', '4': 'split', '0': 'unpaid' };
             await createBackendSale(clean({
               customerId, customerName: patientName, customerHN: '',
               saleDate: treatmentDate, saleNote: '',
               items: grouped,
               billing: { subtotal: billing.subtotal, billDiscount: billing.billDiscAmt, netTotal: billing.netTotal },
-              payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
+              payment: { status: pmStatusMap[paymentStatus] || 'paid', channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
               sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
               source: 'treatment',
               linkedTreatmentId: result.treatmentId || treatmentId || '',
