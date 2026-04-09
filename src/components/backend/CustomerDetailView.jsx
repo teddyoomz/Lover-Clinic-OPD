@@ -369,8 +369,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               </button>
             </div>
 
-            {/* Content by tab */}
-            <div className="divide-y divide-[var(--bd)]">
+            {/* Content by tab — scrollable for large course lists */}
+            <div className="divide-y divide-[var(--bd)] max-h-[600px] overflow-y-auto">
               {salesError && courseTab === 'purchases' && (
                 <div className="px-4 py-3 text-xs text-amber-400 flex items-center gap-2 bg-amber-900/10">
                   <AlertCircle size={13} /> {salesError}
