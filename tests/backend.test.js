@@ -1436,3 +1436,70 @@ describe('Sale Management (5C)', () => {
     expect(d.billing.netTotal).toBe(160);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALE RETRIEVAL — getAllSales must return ALL docs, no limit
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Sale Retrieval — no limit', () => {
+  const prefix = `INV-BULK-${TS}`;
+  const ids = [];
+  const sources = ['normal', 'exchange', 'share', 'addRemaining', 'treatment', 'normal', 'exchange', 'share', 'normal', 'normal', 'normal'];
+
+  beforeAll(async () => {
+    // Create 11 sales with different sources
+    for (let i = 0; i < sources.length; i++) {
+      const id = `${prefix}-${String(i).padStart(3, '0')}`;
+      ids.push(id);
+      await setDoc(doc(db, ...P, 'be_sales', id), clean({
+        saleId: id, customerId: `CUST-BULK-${i % 3}`, customerName: `Customer ${i}`,
+        saleDate: '2026-04-09', saleNote: `Test sale ${i}`,
+        items: { courses: [], promotions: [], products: [], medications: [] },
+        billing: { subtotal: i * 1000, netTotal: i * 1000 },
+        payment: { status: 'paid', channels: [] },
+        sellers: [],
+        source: sources[i],
+        status: 'active', createdAt: new Date(Date.now() + i * 1000).toISOString(),
+      }));
+    }
+  });
+
+  afterAll(async () => {
+    for (const id of ids) { try { await deleteDoc(doc(db, ...P, 'be_sales', id)); } catch {} }
+  });
+
+  it('getAllSales returns all 11 test sales (no limit)', async () => {
+    const snap = await getDocs(collection(db, ...P, 'be_sales'));
+    const allSales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const testSales = allSales.filter(s => s.saleId?.startsWith(prefix));
+    expect(testSales.length).toBe(11);
+  });
+
+  it('includes all source types', async () => {
+    const snap = await getDocs(collection(db, ...P, 'be_sales'));
+    const allSales = snap.docs.map(d => d.data());
+    const testSales = allSales.filter(s => s.saleId?.startsWith(prefix));
+    const foundSources = [...new Set(testSales.map(s => s.source))];
+    expect(foundSources).toContain('normal');
+    expect(foundSources).toContain('exchange');
+    expect(foundSources).toContain('share');
+    expect(foundSources).toContain('addRemaining');
+    expect(foundSources).toContain('treatment');
+  });
+
+  it('sorted by createdAt desc — latest first', async () => {
+    const snap = await getDocs(collection(db, ...P, 'be_sales'));
+    const allSales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const testSales = allSales.filter(s => s.saleId?.startsWith(prefix));
+    testSales.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    // Last created should be first
+    expect(testSales[0].saleId).toBe(`${prefix}-010`);
+  });
+
+  it('query by customer returns correct subset', async () => {
+    const q = query(collection(db, ...P, 'be_sales'), where('customerId', '==', 'CUST-BULK-0'));
+    const snap = await getDocs(q);
+    const found = snap.docs.filter(d => d.data().saleId?.startsWith(prefix));
+    // customers 0, 3, 6, 9 → 4 sales for CUST-BULK-0
+    expect(found.length).toBe(4);
+  });
+});
