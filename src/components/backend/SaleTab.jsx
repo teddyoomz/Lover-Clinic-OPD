@@ -418,7 +418,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   return (
                     <tr key={sale.saleId || sale.id || i} className={`border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}>
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">{sale.customerName || '-'} <span className="text-[var(--tx-muted)] text-xs">{sale.customerHN}</span></td>
+                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
+                        {sale.customerId ? (
+                          <a href={`/?backend=1&customer=${sale.customerId}`} target="_blank" rel="noopener noreferrer"
+                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors">{sale.customerName || '-'}</a>
+                        ) : (sale.customerName || '-')}
+                        {sale.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{sale.customerHN}</span>}
+                      </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
                       <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">
                         {sale.source === 'exchange' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-400">เปลี่ยนสินค้า</span>
