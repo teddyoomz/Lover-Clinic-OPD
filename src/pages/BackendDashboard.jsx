@@ -28,6 +28,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // { mode, customerId, treatmentId?, patientName, patientData }
   const [linkCopied, setLinkCopied] = useState(false);
   const [saleInitialCustomer, setSaleInitialCustomer] = useState(null);
+  const [saleMode, setSaleMode] = useState(false); // true = show SaleTab overlay (from customer detail)
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Backend dashboard uses trial ProClinic server (separate from production frontend)
@@ -150,7 +151,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
 
       {/* ── Main Content ── */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {viewingCustomer ? (
+        {saleMode ? (
+          <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer}
+            onCustomerUsed={() => setSaleInitialCustomer(null)}
+            onFormClose={() => { setSaleMode(false); setSaleInitialCustomer(null); }}
+          />
+        ) : viewingCustomer ? (
           <CustomerDetailView
             customer={viewingCustomer}
             accentColor={ac}
@@ -178,8 +184,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}
             onCreateSale={(cust) => {
               setSaleInitialCustomer(cust);
-              // Don't clear viewingCustomer — keep for back navigation
-              setActiveTab('sales');
+              setSaleMode(true); // Overlay SaleTab without clearing customer
             }}
           />
         ) : activeTab === 'clone' ? (

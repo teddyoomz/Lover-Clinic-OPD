@@ -424,6 +424,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         {sale.source === 'exchange' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-400">เปลี่ยนสินค้า</span>
                         : sale.source === 'share' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">แชร์คอร์ส</span>
                         : sale.source === 'treatment' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">จาก OPD</span>
+                        : sale.source === 'addRemaining' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-teal-900/30 text-teal-400">เพิ่มคงเหลือ</span>
                         : `${fmtMoney(sale.billing?.netTotal)} ฿`}
                       </td>
                       <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>

@@ -8,7 +8,7 @@ import {
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
   Search, X, Users
 } from 'lucide-react';
-import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, exchangeCourseProduct, getAllMasterDataItems } from '../../lib/backendClient.js';
+import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -422,36 +422,23 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               )}
             </div>
 
-            {/* Add Remaining Modal */}
-            {addQtyModal && (
-              <div className="p-3 border-t border-[var(--bd)]">
-                <p className="text-xs font-bold text-[var(--tx-heading)] mb-2">เพิ่มคงเหลือ: {addQtyModal.courseName}</p>
-                <div className="flex items-center gap-2">
-                  <input type="number" min="1" value={addQtyValue} onChange={e => setAddQtyValue(e.target.value)}
-                    placeholder="จำนวน" className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none" />
-                  <button onClick={async () => {
-                    if (!addQtyValue || Number(addQtyValue) <= 0) return;
-                    setAddQtySaving(true);
-                    try {
-                      await addCourseRemainingQty(customer.proClinicId, addQtyModal.courseIndex, Number(addQtyValue));
-                      if (onCustomerUpdated) {
-                        const refreshed = await getCustomer(customer.proClinicId);
-                        if (refreshed) onCustomerUpdated(refreshed);
-                      }
-                      setAddQtyModal(null);
-                    } catch (e) { alert(e.message); }
-                    finally { setAddQtySaving(false); }
-                  }} disabled={addQtySaving || !addQtyValue}
-                    className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
-                    {addQtySaving ? 'กำลังบันทึก...' : 'ยืนยัน'}
-                  </button>
-                  <button onClick={() => setAddQtyModal(null)} className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">
-                    ยกเลิก
-                  </button>
-                </div>
-              </div>
-            )}
+          {/* AddQtyModal rendered as fixed popup below */}
           </div>
+
+          {/* ── Add Qty Popup ── */}
+          {addQtyModal && <AddQtyModal
+            course={allCourses[addQtyModal.courseIndex]}
+            courseIndex={addQtyModal.courseIndex}
+            courseName={addQtyModal.courseName}
+            customerId={customer.proClinicId}
+            customerName={name}
+            onClose={() => setAddQtyModal(null)}
+            onDone={async () => {
+              const refreshed = await getCustomer(customer.proClinicId);
+              if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
+              setAddQtyModal(null);
+            }}
+          />}
 
           {/* ── Exchange Product Popup ── */}
           {exchangeModal && <ExchangeModal
@@ -488,11 +475,81 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+function AddQtyModal({ course, courseIndex, courseName, customerId, customerName, onClose, onDone }) {
+  const [addQty, setAddQty] = useState('');
+  const [staff, setStaff] = useState([]);
+  const [staffId, setStaffId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAllMasterDataItems('staff').then(s => { setStaff(s); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const selectedStaff = staff.find(s => String(s.id) === staffId);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
+          <h3 className="text-sm font-bold text-teal-400">เพิ่มคงเหลือ: {courseName}</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">จำนวนที่จะเพิ่ม</label>
+            <input type="number" min="1" value={addQty} onChange={e => setAddQty(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="จำนวน" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">พนักงานผู้ดำเนินการ *</label>
+            {loading ? <p className="text-xs text-[var(--tx-muted)]">กำลังโหลด...</p> : (
+              <select value={staffId} onChange={e => setStaffId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+                <option value="">เลือกพนักงาน</option>
+                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+          <button onClick={async () => {
+            if (!addQty || Number(addQty) <= 0) { alert('กรุณากรอกจำนวน'); return; }
+            if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
+            setSaving(true);
+            try {
+              await addCourseRemainingQty(customerId, courseIndex, Number(addQty));
+              // Create sale record for audit
+              const { createBackendSale } = await import('../../lib/backendClient.js');
+              await createBackendSale(JSON.parse(JSON.stringify({
+                customerId, customerName: customerName || '', customerHN: '',
+                saleDate: new Date().toISOString().split('T')[0],
+                saleNote: `เพิ่มคงเหลือ: ${courseName} +${addQty}`,
+                items: { promotions: [], courses: [{ name: `เพิ่มคงเหลือ: ${courseName} +${addQty}`, qty: '1', unitPrice: '0', itemType: 'addRemaining' }], products: [], medications: [] },
+                billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
+                payment: { status: 'paid', channels: [] },
+                sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
+                source: 'addRemaining',
+              })));
+              await onDone();
+            } catch (e) { alert(e.message); }
+            finally { setSaving(false); }
+          }} disabled={saving || !staffId} className="px-5 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
+            {saving ? 'กำลังบันทึก...' : 'ยืนยันเพิ่มคงเหลือ'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExchangeModal({ course, courseIndex, customerId, customerName, onClose, onDone }) {
   const [products, setProducts] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [prodCategory, setProdCategory] = useState('course'); // 'course' | 'retail'
   const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState('');
   const [newQty, setNewQty] = useState('');
@@ -508,11 +565,16 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
       .catch(() => setLoading(false));
   }, []);
 
-  const filtered = products.filter(p => !search || (p.name || '').toLowerCase().includes(search.toLowerCase()));
+  const filtered = products.filter(p => {
+    const matchSearch = !search || (p.name || '').toLowerCase().includes(search.toLowerCase());
+    const isRetail = p.type === 'สินค้าหน้าร้าน';
+    const matchCategory = prodCategory === 'retail' ? isRetail : !isRetail;
+    return matchSearch && matchCategory;
+  });
   const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <h3 className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
@@ -534,6 +596,10 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
 
           <div>
             <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เลือกสินค้าใหม่</label>
+            <div className="flex gap-2 mb-2">
+              <button onClick={() => { setProdCategory('course'); setSelected(null); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${prodCategory === 'course' ? 'bg-sky-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>คอร์ส</button>
+              <button onClick={() => { setProdCategory('retail'); setSelected(null); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${prodCategory === 'retail' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}>สินค้าหน้าร้าน</button>
+            </div>
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
               <input value={selected ? selected.name : search}
@@ -593,30 +659,34 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
           <button onClick={async () => {
             if (!qty) { alert('กรุณากรอกจำนวนที่จะเปลี่ยน'); return; }
+            if (Number(qty) > currentParsed.remaining) { alert(`คงเหลือไม่พอ: มี ${currentParsed.remaining} ${currentParsed.unit} ต้องการ ${qty}`); return; }
             if (!selected) { alert('กรุณาเลือกสินค้าใหม่'); return; }
             if (!newQty) { alert('กรุณากรอกจำนวนสินค้าใหม่'); return; }
             if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
             setSaving(true);
             try {
-              // 1. Exchange course product
-              await exchangeCourseProduct(customerId, courseIndex, { name: selected.name, qty: Number(newQty), unit: selected.unit || '' }, reason);
+              const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/backendClient.js');
+              const isRetail = selected.type === 'สินค้าหน้าร้าน';
+              // 1. Deduct from source course
+              await deductCourseItems(customerId, [{ courseIndex, deductQty: Number(qty), courseName: course.name }]);
               // 2. Create sale record (price=0) for audit trail
-              const { createBackendSale, assignCourseToCustomer } = await import('../../lib/backendClient.js');
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId, customerName: customerName || '', customerHN: '',
                 saleDate: new Date().toISOString().split('T')[0],
-                saleNote: `เปลี่ยนสินค้า: ${qty}${currentParsed.unit} ${course.product} → ${newQty}${selected.unit || ''} ${selected.name}${reason ? ` | ${reason}` : ''}`,
+                saleNote: `เปลี่ยนสินค้า: ${qty}${currentParsed.unit} ${course.product} → ${newQty}${selected.unit || ''} ${selected.name}${isRetail ? ' (สินค้าหน้าร้าน - นำกลับบ้าน)' : ''}${reason ? ` | ${reason}` : ''}`,
                 items: { promotions: [], courses: [{ name: `เปลี่ยนสินค้า: ${course.product} → ${selected.name}`, qty: '1', unitPrice: '0', itemType: 'exchange' }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
                 payment: { status: 'paid', channels: [] },
                 sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
                 source: 'exchange',
               })));
-              // 3. Assign new product as course to customer
-              await assignCourseToCustomer(customerId, {
-                name: course.name,
-                products: [{ name: selected.name, qty: Number(newQty), unit: selected.unit || '' }],
-              });
+              // 3. Create new course ONLY if not retail (retail = take home, no new course)
+              if (!isRetail) {
+                await assignCourseToCustomer(customerId, {
+                  name: selected.name,
+                  products: [{ name: selected.name, qty: Number(newQty), unit: selected.unit || '' }],
+                });
+              }
               await onDone();
             } catch (e) { alert(e.message); }
             finally { setSaving(false); }
@@ -657,7 +727,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onC
   const toName = selectedCust ? `${selectedCust.patientData?.prefix || ''} ${selectedCust.patientData?.firstName || ''} ${selectedCust.patientData?.lastName || ''}`.trim() : '';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
           <h3 className="text-sm font-bold text-purple-400">แชร์คอร์สให้ลูกค้าอื่น</h3>

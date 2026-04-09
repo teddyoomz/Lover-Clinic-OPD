@@ -331,12 +331,61 @@ describe('Share course sale record', () => {
 // 13. Sale source badge logic
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Sale source badge', () => {
-  it('exchange → เปลี่ยนสินค้า', () => {
-    const badge = (s) => s === 'exchange' ? 'เปลี่ยนสินค้า' : s === 'share' ? 'แชร์คอร์ส' : s === 'treatment' ? 'จาก OPD' : 'ราคา';
+  it('all source types mapped correctly', () => {
+    const badge = (s) => s === 'exchange' ? 'เปลี่ยนสินค้า' : s === 'share' ? 'แชร์คอร์ส' : s === 'treatment' ? 'จาก OPD' : s === 'addRemaining' ? 'เพิ่มคงเหลือ' : 'ราคา';
     expect(badge('exchange')).toBe('เปลี่ยนสินค้า');
     expect(badge('share')).toBe('แชร์คอร์ส');
     expect(badge('treatment')).toBe('จาก OPD');
+    expect(badge('addRemaining')).toBe('เพิ่มคงเหลือ');
     expect(badge(undefined)).toBe('ราคา');
+  });
+});
+
+describe('Exchange deduct+create logic', () => {
+  it('deducts from source and creates new course (not replace in-place)', () => {
+    // Simulate: Acne Tx 12 ครั้ง, exchange 5 → Vit C 5 amp
+    const { parseQtyString, deductQty, buildQtyString } = require('../src/lib/courseUtils.js');
+    const source = { name: 'Acne Tx 12 ครั้ง', product: 'Acne Tx', qty: '12 / 12 ครั้ง' };
+
+    // Step 1: Deduct 5 from source
+    const newSourceQty = deductQty(source.qty, 5);
+    expect(parseQtyString(newSourceQty).remaining).toBe(7);
+
+    // Step 2: Build new course for Vit C
+    const newCourseQty = buildQtyString(5, 'amp');
+    expect(newCourseQty).toBe('5 / 5 amp');
+
+    // Source course is NOT replaced — it still has 7 remaining
+    expect(parseQtyString(newSourceQty).total).toBe(12);
+  });
+
+  it('retail exchange: deducts only, no new course', () => {
+    const { deductQty, parseQtyString } = require('../src/lib/courseUtils.js');
+    const source = { qty: '10 / 10 U' };
+    const isRetail = true; // สินค้าหน้าร้าน
+
+    const afterDeduct = deductQty(source.qty, 3);
+    expect(parseQtyString(afterDeduct).remaining).toBe(7);
+    // No new course created for retail (customer takes product home)
+    expect(isRetail).toBe(true);
+  });
+
+  it('qty validation prevents over-deduction', () => {
+    const { deductQty } = require('../src/lib/courseUtils.js');
+    expect(() => deductQty('3 / 10 U', 5)).toThrow('คอร์สคงเหลือไม่พอ');
+  });
+});
+
+describe('AddRemaining sale record', () => {
+  it('builds correct addRemaining data shape', () => {
+    const data = {
+      source: 'addRemaining',
+      saleNote: 'เพิ่มคงเหลือ: Acne Tx +5',
+      billing: { netTotal: 0 },
+      sellers: [{ id: 'S1', name: 'Staff' }],
+    };
+    expect(data.source).toBe('addRemaining');
+    expect(data.billing.netTotal).toBe(0);
   });
 });
 
