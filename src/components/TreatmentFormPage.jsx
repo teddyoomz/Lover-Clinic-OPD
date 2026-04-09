@@ -1302,24 +1302,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
-        // Phase 6: Validate ALL course deductions before save — collect all violations
-        const overDeductions = [];
-        for (const rowId of selectedCourseItems) {
-          for (const course of (options?.customerCourses || [])) {
-            const product = course.products?.find(p => p.rowId === rowId);
-            if (product) {
-              const rem = parseFloat(product.remaining) || 0;
-              const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
-              if (deductAmt > rem) {
-                overDeductions.push(`• "${product.name}" คงเหลือ ${rem} ${product.unit} — ต้องการตัด ${deductAmt}`);
+        // Phase 6: Validate course deductions against LIVE Firestore data (not stale form cache)
+        if (selectedCourseItems.size > 0) {
+          try {
+            const { getCustomer: fetchLiveCustomer } = await import('../lib/backendClient.js');
+            const { parseQtyString } = await import('../lib/courseUtils.js');
+            const liveCustomer = await fetchLiveCustomer(customerId);
+            const liveCourses = liveCustomer?.courses || [];
+            const overDeductions = [];
+            for (const rowId of selectedCourseItems) {
+              for (const course of (options?.customerCourses || [])) {
+                const product = course.products?.find(p => p.rowId === rowId);
+                if (product) {
+                  const courseIndex = parseInt((course.courseId || '').replace('be-course-', '')) || 0;
+                  const liveCourse = liveCourses[courseIndex];
+                  const liveRemaining = liveCourse ? parseQtyString(liveCourse.qty).remaining : 0;
+                  const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
+                  if (deductAmt > liveRemaining) {
+                    overDeductions.push(`• "${product.name}" คงเหลือจริง ${liveRemaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
+                  }
+                }
               }
             }
+            if (overDeductions.length > 0) {
+              scrollToError('courseSection', `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`);
+              setSaving(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('[TreatmentForm] course validation check failed:', e);
+            // Don't block save if validation check itself fails — let deduction handle it
           }
-        }
-        if (overDeductions.length > 0) {
-          scrollToError('courseSection', `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`);
-          setSaving(false);
-          return;
         }
 
         const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
@@ -1385,7 +1398,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             try { await reverseCourseDeduction(customerId, existingCourseItems); } catch (e) { console.warn('[TreatmentForm] reverse deduction failed:', e); }
           }
           // Apply new deductions
-          try { await deductCourseItems(customerId, backendDetail.courseItems); } catch (e) { console.warn('[TreatmentForm] deduction failed:', e); }
+          try {
+            await deductCourseItems(customerId, backendDetail.courseItems);
+          } catch (e) {
+            console.warn('[TreatmentForm] deduction failed:', e);
+            setError(`บันทึกสำเร็จ แต่ตัดคอร์สไม่ได้: ${e.message}`);
+          }
         } else if (isEdit && existingCourseItems?.length > 0) {
           // Editing: removed all course items → reverse old deductions
           const { reverseCourseDeduction } = await import('../lib/backendClient.js');
