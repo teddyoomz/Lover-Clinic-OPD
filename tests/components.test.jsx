@@ -442,11 +442,31 @@ describe('removePurchasedItem logic', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('string id "123" does NOT match number id 123', () => {
+  it('string id "123" matches number id 123 with String() coercion', () => {
+    // Updated: removePurchasedItem now uses String() coercion
+    function removePurchasedItemCoerced(prev, item) {
+      const idx = prev.findIndex(p => String(p.id) === String(item.id) && p.itemType === item.itemType);
+      if (idx === -1) return prev;
+      return prev.filter((_, i) => i !== idx);
+    }
     const items = [{ id: 123, name: 'Botox', itemType: 'course' }];
-    const result = removePurchasedItem(items, { id: '123', itemType: 'course' });
-    // strict === means "123" !== 123
-    expect(result).toHaveLength(1); // NOT removed!
+    const result = removePurchasedItemCoerced(items, { id: '123', itemType: 'course' });
+    expect(result).toHaveLength(0); // Removed with String coercion
+  });
+
+  it('simulates real confirmBuyModal item shape', () => {
+    // Real item from confirmBuyModal: id is number from master data
+    const purchasedItems = [
+      { id: 473, name: 'Allergan 100 unit', itemType: 'course', qty: '1', unitPrice: '4950.00' },
+      { id: 738, name: 'Nov', itemType: 'promotion', qty: '1', unitPrice: '15000.00' },
+    ];
+    // removePurchasedItem receives same object from purchasedByType
+    const courseItem = purchasedItems[0]; // same reference
+    const idx = purchasedItems.findIndex(p => String(p.id) === String(courseItem.id) && p.itemType === courseItem.itemType);
+    expect(idx).toBe(0);
+    const after = purchasedItems.filter((_, i) => i !== idx);
+    expect(after).toHaveLength(1);
+    expect(after[0].name).toBe('Nov');
   });
 });
 

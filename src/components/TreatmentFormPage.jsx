@@ -1154,11 +1154,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   };
   const removePurchasedItem = (item) => {
     setPurchasedItems(prev => {
-      // Find by id + itemType — coerce to string for safe comparison
       const idx = prev.findIndex(p => String(p.id) === String(item.id) && p.itemType === item.itemType);
       if (idx === -1) return prev;
       return prev.filter((_, i) => i !== idx);
     });
+    // Also remove from customerCourses (added by confirmBuyModal)
+    if (item.itemType === 'course' || item.itemType === 'promotion') {
+      setOptions(prev => {
+        if (!prev?.customerCourses) return prev;
+        const filtered = prev.customerCourses.filter(c => {
+          // Remove entries that were added for this purchased item
+          if (item.itemType === 'course') return !c.courseId?.startsWith(`purchased-course-${item.id}-`);
+          if (item.itemType === 'promotion') return !c.courseId?.startsWith(`promo-${item.id}-`);
+          return true;
+        });
+        return { ...prev, customerCourses: filtered };
+      });
+      // Also remove any selected course items that belonged to this purchase
+      setSelectedCourseItems(prev => {
+        const next = new Set(prev);
+        const prefix = item.itemType === 'course' ? `purchased-${item.id}-row-` : `promo-${item.id}-row-`;
+        for (const rowId of prev) {
+          if (rowId.startsWith(prefix)) {
+            next.delete(rowId);
+            setTreatmentItems(ti => ti.filter(t => t.id !== rowId));
+          }
+        }
+        return next;
+      });
+    }
   };
   // Group purchased items by type for display
   const purchasedByType = useMemo(() => {
