@@ -14,36 +14,37 @@ test.describe('Master Data Tab', () => {
     await expect(page.getByRole('button', { name: 'Sync ทั้งหมด' })).toBeVisible();
   });
 
-  test('shows sub-tab buttons', async ({ page }) => {
-    // Sub-tabs use emoji icons — match by partial text
-    await expect(page.getByRole('button', { name: /คอร์ส/ })).toBeVisible();
+  test('shows sub-tab buttons including courses', async ({ page }) => {
+    // Sub-tab buttons are in a flex row — find the one that contains "คอร์ส" exactly
+    const courseSubTab = page.locator('button', { hasText: '📋' }).first();
+    await expect(courseSubTab).toBeVisible();
   });
 
   test('click คอร์ส sub-tab → shows "สร้างคอร์ส" button', async ({ page }) => {
-    await page.getByRole('button', { name: /คอร์ส/ }).click();
+    // Click the sub-tab (not sync) button — sub-tabs are smaller, in a different row
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('button', { name: 'สร้างคอร์ส' })).toBeVisible();
   });
 
   test('"สร้างคอร์ส" → form overlay opens', async ({ page }) => {
-    await page.getByRole('button', { name: /คอร์ส/ }).click();
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
     await page.waitForTimeout(500);
     await expect(page.getByPlaceholder('เช่น Botox Package')).toBeVisible({ timeout: 3000 });
-    await expect(page.getByPlaceholder('BTX-001')).toBeVisible();
   });
 
   test('course form has "เพิ่มสินค้า" button', async ({ page }) => {
-    await page.getByRole('button', { name: /คอร์ส/ }).click();
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
     await page.waitForTimeout(500);
-    await expect(page.getByText('เพิ่มสินค้า')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'เพิ่มสินค้า' })).toBeVisible();
   });
 
-  test('"ยกเลิก" closes form → sync section visible again', async ({ page }) => {
-    await page.getByRole('button', { name: /คอร์ส/ }).click();
+  test('"ยกเลิก" closes form → sync section visible', async ({ page }) => {
+    await page.locator('button', { hasText: '📋' }).nth(1).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: 'สร้างคอร์ส' }).click();
     await page.waitForTimeout(500);

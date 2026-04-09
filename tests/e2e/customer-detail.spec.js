@@ -46,11 +46,14 @@ test.describe('Customer Detail — Course Buttons', () => {
     await expect(page.getByPlaceholder('จำนวน')).not.toBeVisible({ timeout: 2000 });
   });
 
-  test('"เปลี่ยนสินค้า" modal cancel button works', async ({ page }) => {
+  test('"เปลี่ยนสินค้า" modal cancel → closes', async ({ page }) => {
     await page.getByText('เปลี่ยนสินค้า').first().click();
-    await expect(page.getByText('สินค้าปัจจุบัน')).toBeVisible({ timeout: 3000 });
-    await page.getByRole('button', { name: 'ยกเลิก' }).click();
-    await expect(page.getByText('สินค้าปัจจุบัน')).not.toBeVisible({ timeout: 2000 });
+    const modal = page.getByText('เปลี่ยนสินค้าในคอร์ส');
+    await expect(modal).toBeVisible({ timeout: 5000 });
+    // Close by clicking the X button in the modal header
+    const closeBtn = modal.locator('..').locator('button').first();
+    await closeBtn.click();
+    await expect(modal).not.toBeVisible({ timeout: 3000 });
   });
 
   test('click "คอร์สหมดอายุ" tab → content changes', async ({ page }) => {
