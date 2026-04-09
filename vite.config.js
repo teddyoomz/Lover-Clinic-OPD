@@ -14,6 +14,11 @@ function versionPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), versionPlugin()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.js'],
+  },
   build: {
     rollupOptions: {
       output: {
