@@ -215,6 +215,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     const newItems = items.filter(i => buyChecked.has(i.id)).map(i => ({
       id: i.id, name: i.name, price: i.price, unitPrice: i.price, unit: i.unit || (buyModalType === 'course' ? 'คอร์ส' : buyModalType === 'promotion' ? 'โปรโมชัน' : ''),
       qty: String(buyQtyMap[i.id] || 1), itemType: i.itemType || buyModalType, category: i.category,
+      // Keep products/courses for auto-assign after sale
+      products: i.products || [], courses: i.courses || [],
     }));
     setPurchasedItems(prev => [...prev, ...newItems]);
     setBuyModalOpen(false);
@@ -304,8 +306,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         await updateBackendSale(editingSale.saleId || editingSale.id, data);
       } else {
         await createBackendSale(data);
-        // Auto-assign purchased courses to customer
-        if (customerId && grouped.courses.length > 0) {
+        // Auto-assign purchased courses + promotions to customer
+        if (customerId) {
+          // Courses: assign each course with its products
           for (const course of grouped.courses) {
             try {
               await assignCourseToCustomer(customerId, {
@@ -314,6 +317,35 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 price: course.unitPrice,
               });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
+          }
+          // Promotions: each promotion has sub-courses → assign each sub-course
+          for (const promo of grouped.promotions) {
+            try {
+              if (promo.courses?.length) {
+                // Promotion with sub-courses → assign each sub-course
+                for (const subCourse of promo.courses) {
+                  await assignCourseToCustomer(customerId, {
+                    name: subCourse.name || promo.name,
+                    products: subCourse.products?.length ? subCourse.products : [{ name: subCourse.name || promo.name, qty: Number(subCourse.qty) || 1, unit: subCourse.unit || 'ครั้ง' }],
+                    price: 0,
+                  });
+                }
+              } else if (promo.products?.length) {
+                // Promotion with direct products → assign as single course
+                await assignCourseToCustomer(customerId, {
+                  name: promo.name,
+                  products: promo.products,
+                  price: promo.unitPrice,
+                });
+              } else {
+                // Promotion with no sub-items → assign as single course entry
+                await assignCourseToCustomer(customerId, {
+                  name: promo.name,
+                  products: [{ name: promo.name, qty: Number(promo.qty) || 1, unit: promo.unit || 'โปรโมชัน' }],
+                  price: promo.unitPrice,
+                });
+              }
+            } catch (e) { console.warn('[SaleTab] assign promotion failed:', e); }
           }
         }
       }
