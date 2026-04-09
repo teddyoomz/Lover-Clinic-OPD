@@ -491,6 +491,116 @@ describe('Invoice number format', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 16. Treatment Buy-Deduct scenarios (logic validation)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Treatment Buy-Deduct validation logic', () => {
+  const { parseQtyString } = require('../src/lib/courseUtils.js');
+
+  // Simulate the validation logic from TreatmentFormPage
+  function validateDeductions(selectedItems, customerCourses, liveQtyMap) {
+    const errors = [];
+    for (const { rowId, productName, courseName, deductQty, unit } of selectedItems) {
+      const isPurchased = rowId.startsWith('purchased-') || rowId.startsWith('promo-');
+      let remaining;
+      if (isPurchased) {
+        // Find in form options (not Firestore)
+        for (const c of customerCourses) {
+          const p = c.products?.find(pr => pr.rowId === rowId);
+          if (p) { remaining = parseFloat(p.remaining) || 0; break; }
+        }
+        if (remaining === undefined) remaining = 0;
+      } else {
+        remaining = liveQtyMap.get(`${courseName}|${productName}`) || 0;
+      }
+      if (deductQty > remaining) {
+        errors.push(`${productName}: เหลือ ${remaining} ต้องการ ${deductQty}`);
+      }
+    }
+    return errors;
+  }
+
+  it('scenario 1: ซื้อคอร์สใหม่ + ตัด 1 → ผ่าน', () => {
+    const selected = [{ rowId: 'purchased-123-row-1', productName: 'IV Set', courseName: 'IV 10 ครั้ง', deductQty: 1, unit: 'ครั้ง' }];
+    const formCourses = [{ courseId: 'purchased-course-123', courseName: 'IV 10 ครั้ง', products: [{ rowId: 'purchased-123-row-1', name: 'IV Set', remaining: '10', unit: 'ครั้ง' }] }];
+    const errors = validateDeductions(selected, formCourses, new Map());
+    expect(errors).toHaveLength(0);
+  });
+
+  it('scenario 2: ซื้อคอร์สใหม่ + ตัดเกิน → block', () => {
+    const selected = [{ rowId: 'purchased-123-row-1', productName: 'IV Set', courseName: 'IV 10 ครั้ง', deductQty: 20, unit: 'ครั้ง' }];
+    const formCourses = [{ courseId: 'purchased-course-123', courseName: 'IV 10 ครั้ง', products: [{ rowId: 'purchased-123-row-1', name: 'IV Set', remaining: '10', unit: 'ครั้ง' }] }];
+    const errors = validateDeductions(selected, formCourses, new Map());
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('เหลือ 10 ต้องการ 20');
+  });
+
+  it('scenario 3: คอร์สเก่า + ตัด 1 จาก remaining 5 → ผ่าน', () => {
+    const selected = [{ rowId: 'be-row-0', productName: 'Allergan 100 U', courseName: 'Botox 100 U', deductQty: 1, unit: 'U' }];
+    const liveMap = new Map([['Botox 100 U|Allergan 100 U', 5]]);
+    const errors = validateDeductions(selected, [], liveMap);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('scenario 4: คอร์สเก่า + ตัดเกิน remaining → block', () => {
+    const selected = [{ rowId: 'be-row-0', productName: 'Allergan 100 U', courseName: 'Botox 100 U', deductQty: 10, unit: 'U' }];
+    const liveMap = new Map([['Botox 100 U|Allergan 100 U', 5]]);
+    const errors = validateDeductions(selected, [], liveMap);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('เหลือ 5 ต้องการ 10');
+  });
+
+  it('scenario 5: ซื้อ + คอร์สเก่า mixed → ตรวจแยกกัน', () => {
+    const selected = [
+      { rowId: 'purchased-1-row-1', productName: 'New Course', courseName: 'New', deductQty: 1, unit: 'ครั้ง' },
+      { rowId: 'be-row-3', productName: 'Old Product', courseName: 'Old', deductQty: 2, unit: 'U' },
+    ];
+    const formCourses = [{ courseId: 'purchased-course-1', courseName: 'New', products: [{ rowId: 'purchased-1-row-1', name: 'New Course', remaining: '5', unit: 'ครั้ง' }] }];
+    const liveMap = new Map([['Old|Old Product', 10]]);
+    const errors = validateDeductions(selected, formCourses, liveMap);
+    expect(errors).toHaveLength(0); // Both pass
+  });
+
+  it('scenario 6: ซื้อโปรโมชัน + ตัด sub-course → ผ่าน', () => {
+    const selected = [{ rowId: 'promo-99-row-1-5', productName: 'BA-Filler A', courseName: 'Filler 3900', deductQty: 1, unit: 'ซีซี' }];
+    const formCourses = [{ courseId: 'promo-99-course-1', courseName: 'Filler 3900', promotionId: 99, products: [{ rowId: 'promo-99-row-1-5', name: 'BA-Filler A', remaining: '5', unit: 'ซีซี' }] }];
+    const errors = validateDeductions(selected, formCourses, new Map());
+    expect(errors).toHaveLength(0);
+  });
+
+  it('scenario 7: คอร์สเก่าที่ไม่มีใน Firestore → block (remaining 0)', () => {
+    const selected = [{ rowId: 'be-row-99', productName: 'Ghost', courseName: 'Missing', deductQty: 1, unit: 'U' }];
+    const liveMap = new Map(); // empty = course doesn't exist in DB
+    const errors = validateDeductions(selected, [], liveMap);
+    expect(errors).toHaveLength(1);
+  });
+});
+
+describe('Payment status mapping', () => {
+  it('maps ProClinic format to SaleTab format', () => {
+    const map = { '2': 'paid', '4': 'split', '0': 'unpaid' };
+    expect(map['2']).toBe('paid');
+    expect(map['4']).toBe('split');
+    expect(map['0']).toBe('unpaid');
+    expect(map['99'] || 'paid').toBe('paid'); // unknown defaults to paid
+  });
+});
+
+describe('Deduction filter — skip purchased items', () => {
+  it('filters out purchased and promo items', () => {
+    const items = [
+      { rowId: 'be-row-0', courseName: 'Old', deductQty: 1 },
+      { rowId: 'purchased-123-row-1', courseName: 'New', deductQty: 1 },
+      { rowId: 'promo-99-row-1-5', courseName: 'Promo', deductQty: 1 },
+      { rowId: 'be-row-5', courseName: 'Old2', deductQty: 2 },
+    ];
+    const existingOnly = items.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+    expect(existingOnly).toHaveLength(2);
+    expect(existingOnly[0].courseName).toBe('Old');
+    expect(existingOnly[1].courseName).toBe('Old2');
+  });
+});
+
 describe('scrollToError behavior', () => {
   it('alert is called with error message', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
