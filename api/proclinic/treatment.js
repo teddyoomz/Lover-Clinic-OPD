@@ -294,9 +294,12 @@ async function handleListItems(req, res) {
         itemType: 'course',
         courseType: item.course_type_name || '',
         products: (item.course_products || item.products || []).map(p => ({
-          id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '',
+          id: p.id || p.product_id, name: p.product_name || p.name,
+          qty: p.qty || p.pivot?.qty || p.amount || p.quantity || p.pivot?.amount || 1,
+          unit: p.unit_name || p.unit || '',
         })),
         _rawKeys: Object.keys(item),
+        _rawProductSample: (item.course_products || item.products || []).slice(0, 2),
       };
     } else if (type === 'promotion') {
       return {
@@ -309,15 +312,18 @@ async function handleListItems(req, res) {
         itemType: 'promotion',
         // Include sub-items from ProClinic promotion data
         courses: (item.courses || []).map(c => ({
-          id: c.id, name: c.course_name || c.name, qty: c.qty || 1,
+          id: c.id, name: c.course_name || c.name, qty: c.qty || c.pivot?.qty || 1,
           products: (c.products || c.course_products || []).map(p => ({
-            id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '',
+            id: p.id || p.product_id, name: p.product_name || p.name,
+            qty: p.qty || p.pivot?.qty || p.amount || 1, unit: p.unit_name || p.unit || '',
           })),
         })),
         products: (item.products || []).map(p => ({
-          id: p.id || p.product_id, name: p.product_name || p.name, qty: p.qty || 1, unit: p.unit_name || p.unit || '', price: p.price || '0',
+          id: p.id || p.product_id, name: p.product_name || p.name,
+          qty: p.qty || p.pivot?.qty || p.amount || 1, unit: p.unit_name || p.unit || '', price: p.price || '0',
         })),
         _rawKeys: Object.keys(item),
+        _rawCourseSample: (item.courses || []).slice(0, 1),
       };
     } else {
       return {
