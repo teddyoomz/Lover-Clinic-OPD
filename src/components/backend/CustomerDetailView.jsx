@@ -103,7 +103,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
         setTreatmentsError('โหลดประวัติการรักษาไม่สำเร็จ');
       })
       .finally(() => setTreatmentsLoading(false));
-  }, [customer?.proClinicId]);
+  }, [customer?.proClinicId, customer?.treatmentCount]);
 
   // Load customer sales for purchase history tab
   useEffect(() => {

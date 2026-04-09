@@ -1387,35 +1387,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             return null;
           }).filter(Boolean),
         });
+        // Phase 6: Course deduction BEFORE save — so if deduction fails, treatment is not saved
+        if (backendDetail.courseItems?.length > 0) {
+          const { deductCourseItems, reverseCourseDeduction } = await import('../lib/backendClient.js');
+          if (isEdit && existingCourseItems?.length > 0) {
+            await reverseCourseDeduction(customerId, existingCourseItems);
+          }
+          await deductCourseItems(customerId, backendDetail.courseItems);
+        } else if (isEdit && existingCourseItems?.length > 0) {
+          const { reverseCourseDeduction } = await import('../lib/backendClient.js');
+          await reverseCourseDeduction(customerId, existingCourseItems);
+        }
+
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
 
-        // Phase 6: Course deduction
-        if (backendDetail.courseItems?.length > 0) {
-          const { deductCourseItems, reverseCourseDeduction } = await import('../lib/backendClient.js');
-          // If editing, reverse old deductions first
-          if (isEdit && existingCourseItems?.length > 0) {
-            try { await reverseCourseDeduction(customerId, existingCourseItems); } catch (e) { console.warn('[TreatmentForm] reverse deduction failed:', e); }
-          }
-          // Apply new deductions
-          try {
-            await deductCourseItems(customerId, backendDetail.courseItems);
-          } catch (e) {
-            console.warn('[TreatmentForm] deduction failed:', e);
-            const msg = `บันทึกสำเร็จ แต่ตัดคอร์สไม่ได้: ${e.message}`;
-            alert(msg);
-            setError(msg);
-          }
-        } else if (isEdit && existingCourseItems?.length > 0) {
-          // Editing: removed all course items → reverse old deductions
-          const { reverseCourseDeduction } = await import('../lib/backendClient.js');
-          try { await reverseCourseDeduction(customerId, existingCourseItems); } catch (e) { console.warn('[TreatmentForm] reverse deduction failed:', e); }
-        }
-
         setSuccess(true);
         const savedId = result.treatmentId || treatmentId || '';
+        // Clean up form state before closing
+        setSelectedCourseItems(new Set());
+        setExistingCourseItems([]);
+        setTreatmentItems([]);
         setTimeout(() => { if (onSaved) onSaved(savedId); }, 1200);
         setSaving(false);
         return;

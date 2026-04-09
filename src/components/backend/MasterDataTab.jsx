@@ -247,6 +247,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     }
   };
   const openCourseEdit = async (course) => {
+    if (course._createdBy !== 'backend') { alert('ไม่สามารถแก้ไขคอร์สที่ sync มาจาก ProClinic'); return; }
     setEditingCourse(course);
     setCfName(course.name || ''); setCfCode(course.code || ''); setCfCategory(course.category || '');
     setCfCourseType(course.courseType || 'fixed bundle'); setCfPrice(String(course.price || ''));
