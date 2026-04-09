@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -26,12 +26,24 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [activeTab, setActiveTab] = useState('clone'); // 'clone' | 'customers' | 'masterdata'
   const [viewingCustomer, setViewingCustomer] = useState(null); // selected customer for detail view
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // { mode, customerId, treatmentId?, patientName, patientData }
+  const [linkCopied, setLinkCopied] = useState(false);
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Backend dashboard uses trial ProClinic server (separate from production frontend)
   useEffect(() => {
     setUseTrialServer(true);
     return () => setUseTrialServer(false);
+  }, []);
+
+  // Deep link: ?backend=1&customer=ID → auto-load customer detail
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const customerId = params.get('customer');
+    if (customerId) {
+      getCustomer(customerId).then(c => {
+        if (c) { setViewingCustomer(c); setActiveTab('customers'); }
+      }).catch(() => {});
+    }
   }, []);
 
   // Subscribe to clinic settings (same pattern as App.jsx)
@@ -97,6 +109,13 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                 <span className="font-bold text-[var(--tx-heading)] truncate max-w-[200px]">
                   {`${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim() || viewingCustomer.proClinicHN || '-'}
                 </span>
+                <button onClick={() => {
+                  const url = `${window.location.origin}?backend=1&customer=${viewingCustomer.proClinicId || viewingCustomer.id}`;
+                  navigator.clipboard.writeText(url).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); });
+                }} className="ml-2 px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 transition-all bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-teal-400 hover:border-teal-700/40"
+                  title="คัดลอกลิงก์ประวัติลูกค้า">
+                  {linkCopied ? <><Check size={10} className="text-emerald-400" /> คัดลอกแล้ว</> : <><Link2 size={10} /> คัดลอกลิงก์</>}
+                </button>
               </div>
             ) : (
               tabs.map(tab => {
@@ -162,7 +181,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <CustomerListTab
             clinicSettings={clinicSettings}
             theme={theme}
-            onViewCustomer={(c) => { setViewingCustomer(c); }}
+            onViewCustomer={(c) => {
+              // Open customer detail in new tab (shareable URL)
+              const url = `${window.location.origin}?backend=1&customer=${c.proClinicId || c.id}`;
+              window.open(url, '_blank');
+            }}
           />
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
