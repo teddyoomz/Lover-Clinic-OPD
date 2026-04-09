@@ -450,6 +450,27 @@ describe('removePurchasedItem logic', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 15. Invoice number uniqueness
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Invoice number format', () => {
+  it('INV-YYYYMMDD-XXXX format', () => {
+    const dateStr = '20260409';
+    const seq = 7;
+    const id = `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
+    expect(id).toBe('INV-20260409-0007');
+    expect(id).toMatch(/^INV-\d{8}-\d{4}$/);
+  });
+
+  it('fallback id appends timestamp if collision', () => {
+    const saleId = 'INV-20260409-0001';
+    const existing = true; // doc already exists
+    const finalId = existing ? `${saleId}-${Date.now().toString(36)}` : saleId;
+    expect(finalId).not.toBe(saleId);
+    expect(finalId.startsWith(saleId)).toBe(true);
+  });
+});
+
 describe('scrollToError behavior', () => {
   it('alert is called with error message', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});

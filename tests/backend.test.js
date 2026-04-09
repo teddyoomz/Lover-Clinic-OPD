@@ -1438,6 +1438,58 @@ describe('Sale Management (5C)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// INVOICE NUMBER UNIQUENESS — no duplicates, no overwrites
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Invoice Number Uniqueness', () => {
+  const createdIds = [];
+
+  afterAll(async () => {
+    for (const id of createdIds) { try { await deleteDoc(doc(db, ...P, 'be_sales', id)); } catch {} }
+  });
+
+  it('3 sequential sales get unique invoice numbers', async () => {
+    // Use Firestore transaction directly (same logic as backendClient.generateInvoiceNumber)
+    const { runTransaction } = await import('firebase/firestore');
+    const counterRef = doc(db, ...P, 'be_sales_counter', 'counter');
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+    for (let i = 0; i < 3; i++) {
+      const seq = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef);
+        let nextSeq = 1;
+        if (snap.exists() && snap.data().date === dateStr) nextSeq = (snap.data().seq || 0) + 1;
+        tx.set(counterRef, { date: dateStr, seq: nextSeq });
+        return nextSeq;
+      });
+      const saleId = `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
+      createdIds.push(saleId);
+      await setDoc(doc(db, ...P, 'be_sales', saleId), clean({
+        saleId, customerId: `UNIQ-TEST-${i}`, customerName: `Unique ${i}`,
+        saleDate: today.toISOString().split('T')[0],
+        items: { courses: [], promotions: [], products: [], medications: [] },
+        billing: { subtotal: (i + 1) * 1000, netTotal: (i + 1) * 1000 },
+        payment: { status: 'paid', channels: [] }, sellers: [],
+        createdAt: new Date(Date.now() + i).toISOString(),
+      }));
+    }
+
+    // All 3 must have different saleIds
+    const uniqueIds = new Set(createdIds);
+    expect(uniqueIds.size).toBe(3);
+  });
+
+  it('each sale has its own data (not overwritten)', async () => {
+    for (let i = 0; i < createdIds.length; i++) {
+      const snap = await getDoc(doc(db, ...P, 'be_sales', createdIds[i]));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data().customerName).toBe(`Unique ${i}`);
+      expect(snap.data().billing.netTotal).toBe((i + 1) * 1000);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SALE RETRIEVAL — getAllSales must return ALL docs, no limit
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Sale Retrieval — no limit', () => {

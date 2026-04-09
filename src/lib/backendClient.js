@@ -388,28 +388,36 @@ const salesCol = () => collection(db, ...basePath(), 'be_sales');
 const saleDoc = (id) => doc(db, ...basePath(), 'be_sales', String(id));
 const saleCounterDoc = () => doc(db, ...basePath(), 'be_sales_counter', 'counter');
 
-/** Generate invoice number: INV-YYYYMMDD-XXXX */
+/** Generate invoice number: INV-YYYYMMDD-XXXX (atomic counter) */
 export async function generateInvoiceNumber() {
+  const { runTransaction } = await import('firebase/firestore');
   const today = new Date();
   const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-  let seq = 1;
-  try {
-    const snap = await getDoc(saleCounterDoc());
+
+  const seq = await runTransaction(db, async (transaction) => {
+    const counterRef = saleCounterDoc();
+    const snap = await transaction.get(counterRef);
+    let nextSeq = 1;
     if (snap.exists()) {
       const data = snap.data();
-      if (data.date === dateStr) seq = (data.seq || 0) + 1;
+      if (data.date === dateStr) nextSeq = (data.seq || 0) + 1;
     }
-  } catch {}
-  await setDoc(saleCounterDoc(), { date: dateStr, seq, updatedAt: new Date().toISOString() });
+    transaction.set(counterRef, { date: dateStr, seq: nextSeq, updatedAt: new Date().toISOString() });
+    return nextSeq;
+  });
+
   return `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
 }
 
-/** Create a new sale */
+/** Create a new sale — uses unique saleId, never overwrites existing */
 export async function createBackendSale(data) {
   const saleId = await generateInvoiceNumber();
   const now = new Date().toISOString();
-  await setDoc(saleDoc(saleId), {
-    saleId,
+  // Check if doc already exists (safety net against race conditions)
+  const existing = await getDoc(saleDoc(saleId));
+  const finalId = existing.exists() ? `${saleId}-${Date.now().toString(36)}` : saleId;
+  await setDoc(saleDoc(finalId), {
+    saleId: finalId,
     ...data,
     status: data.status || 'active',
     createdAt: now,
