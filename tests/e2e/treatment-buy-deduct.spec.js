@@ -22,7 +22,7 @@ async function buyFromModal(page, buttonName) {
   // Check first item — find any checkbox inside the modal
   const cb = modal.locator('input[type="checkbox"]').nth(1);
   if (!(await cb.isVisible({ timeout: 5000 }).catch(() => false))) return false;
-  await cb.check({ force: true });
+  await cb.click({ force: true });
   await page.waitForTimeout(500);
   const qtyInput = modal.locator('input[type="number"]').first();
   if (await qtyInput.isVisible({ timeout: 2000 }).catch(() => false)) {
