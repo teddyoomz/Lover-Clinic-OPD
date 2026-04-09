@@ -178,6 +178,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Course items — selected rowIds
   const [selectedCourseItems, setSelectedCourseItems] = useState(new Set());
+  const [existingCourseItems, setExistingCourseItems] = useState([]); // saved courseItems from edit mode
 
   // Treatment items — items shown in รายการรักษา panel (from courses or manual)
   const [treatmentItems, setTreatmentItems] = useState([]);
@@ -405,6 +406,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.payment?.channels?.length) setPmChannels(prev => prev.map((ch, i) => t.payment.channels[i] ? { ...ch, ...t.payment.channels[i], enabled: true } : ch));
               if (t.sellers?.length) setPmSellers(prev => prev.map((s, i) => t.sellers[i] ? { ...s, ...t.sellers[i], enabled: true } : s));
               if (t.payment?.saleNote) setSaleNote(t.payment.saleNote);
+              // Phase 6: Restore courseItems for deduction reversal + checkbox restore
+              if (t.courseItems?.length) {
+                setExistingCourseItems(t.courseItems);
+                setSelectedCourseItems(new Set(t.courseItems.map(ci => ci.rowId)));
+                setTreatmentItems(t.courseItems.map(ci => ({
+                  id: ci.rowId,
+                  name: ci.productName,
+                  qty: String(ci.deductQty || 1),
+                  unit: ci.unit || '',
+                  price: '',
+                })));
+              }
             }
           }
           // Pre-fill from patient data
@@ -1286,11 +1299,45 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note: note, saleNote },
           sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
           hasSale,
+          // Phase 6: Save course items used (for deduction tracking)
+          courseItems: Array.from(selectedCourseItems).map(rowId => {
+            for (const course of (options?.customerCourses || [])) {
+              const product = course.products?.find(p => p.rowId === rowId);
+              if (product) {
+                const courseIndex = parseInt((course.courseId || '').replace('be-course-', '')) || 0;
+                return {
+                  courseIndex,
+                  courseName: course.courseName,
+                  productName: product.name,
+                  rowId: product.rowId,
+                  deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
+                  unit: product.unit || '',
+                };
+              }
+            }
+            return null;
+          }).filter(Boolean),
         });
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
+
+        // Phase 6: Course deduction
+        if (backendDetail.courseItems?.length > 0) {
+          const { deductCourseItems, reverseCourseDeduction } = await import('../lib/backendClient.js');
+          // If editing, reverse old deductions first
+          if (isEdit && existingCourseItems?.length > 0) {
+            try { await reverseCourseDeduction(customerId, existingCourseItems); } catch (e) { console.warn('[TreatmentForm] reverse deduction failed:', e); }
+          }
+          // Apply new deductions
+          try { await deductCourseItems(customerId, backendDetail.courseItems); } catch (e) { console.warn('[TreatmentForm] deduction failed:', e); }
+        } else if (isEdit && existingCourseItems?.length > 0) {
+          // Editing: removed all course items → reverse old deductions
+          const { reverseCourseDeduction } = await import('../lib/backendClient.js');
+          try { await reverseCourseDeduction(customerId, existingCourseItems); } catch (e) { console.warn('[TreatmentForm] reverse deduction failed:', e); }
+        }
+
         setSuccess(true);
         const savedId = result.treatmentId || treatmentId || '';
         setTimeout(() => { if (onSaved) onSaved(savedId); }, 1200);

@@ -7,7 +7,8 @@ import {
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2
 } from 'lucide-react';
-import { getCustomerTreatments, getCustomerSales } from '../../lib/backendClient.js';
+import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer } from '../../lib/backendClient.js';
+import { parseQtyString } from '../../lib/courseUtils.js';
 import { hexToRgb } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
@@ -58,7 +59,7 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment }) {
+export default function CustomerDetailView({ customer, accentColor, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated }) {
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const pd = customer?.patientData || {};
@@ -70,6 +71,9 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   const [customerSales, setCustomerSales] = useState([]);
   const [salesError, setSalesError] = useState('');
   const [expandedTreatment, setExpandedTreatment] = useState(null);
+  const [addQtyModal, setAddQtyModal] = useState(null); // { courseIndex, courseName }
+  const [addQtyValue, setAddQtyValue] = useState('');
+  const [addQtySaving, setAddQtySaving] = useState(false);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -387,17 +391,63 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                         {course.status || (courseTab === 'active' ? 'กำลังใช้งาน' : 'หมดอายุ')}
                       </span>
                     </div>
-                    {/* Course items */}
-                    {course.product && (
-                      <div className="mt-2 flex items-center justify-between text-xs text-[var(--tx-secondary)] bg-[var(--bg-elevated)] rounded-lg px-2.5 py-1.5">
-                        <span>{course.product}</span>
-                        <span className="font-mono font-bold">{course.qty || ''}</span>
-                      </div>
-                    )}
+                    {/* Course items — with progress bar */}
+                    {course.product && (() => {
+                      const parsed = parseQtyString(course.qty);
+                      const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
+                      return (
+                        <div className="mt-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[var(--tx-secondary)]">{course.product}</span>
+                            <span className="font-mono font-bold text-[var(--tx-heading)]">{parsed.remaining} / {parsed.total} {parsed.unit}</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden">
+                            <div className="h-full rounded-full transition-all"
+                              style={{ width: `${pct}%`, backgroundColor: pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444' }} />
+                          </div>
+                          {courseTab === 'active' && (
+                            <button onClick={() => { setAddQtyModal({ courseIndex: i, courseName: course.name }); setAddQtyValue(''); }}
+                              className="text-[11px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-1 transition-colors">
+                              <Plus size={10} /> เพิ่มคงเหลือ
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))
               )}
             </div>
+
+            {/* Add Remaining Modal */}
+            {addQtyModal && (
+              <div className="p-3 border-t border-[var(--bd)]">
+                <p className="text-xs font-bold text-[var(--tx-heading)] mb-2">เพิ่มคงเหลือ: {addQtyModal.courseName}</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" min="1" value={addQtyValue} onChange={e => setAddQtyValue(e.target.value)}
+                    placeholder="จำนวน" className="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none" />
+                  <button onClick={async () => {
+                    if (!addQtyValue || Number(addQtyValue) <= 0) return;
+                    setAddQtySaving(true);
+                    try {
+                      await addCourseRemainingQty(customer.proClinicId, addQtyModal.courseIndex, Number(addQtyValue));
+                      if (onCustomerUpdated) {
+                        const refreshed = await getCustomer(customer.proClinicId);
+                        if (refreshed) onCustomerUpdated(refreshed);
+                      }
+                      setAddQtyModal(null);
+                    } catch (e) { alert(e.message); }
+                    finally { setAddQtySaving(false); }
+                  }} disabled={addQtySaving || !addQtyValue}
+                    className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-700 text-white hover:bg-teal-600 disabled:opacity-40 transition-all">
+                    {addQtySaving ? 'กำลังบันทึก...' : 'ยืนยัน'}
+                  </button>
+                  <button onClick={() => setAddQtyModal(null)} className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

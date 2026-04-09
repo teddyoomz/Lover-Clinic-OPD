@@ -245,6 +245,109 @@ describe('Course Transform + Deduction', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4B. COURSE DEDUCTION SYSTEM (Phase 6)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Course Deduction System', () => {
+  const CID = `TEST-COURSE-DEDUCT-${TS}`;
+  const ref = () => doc(db, ...P, 'be_customers', CID);
+  const { deductQty, reverseQty, addRemaining, parseQtyString } = require('../src/lib/courseUtils.js');
+
+  beforeAll(async () => {
+    await setDoc(ref(), clean({
+      proClinicId: CID, proClinicHN: 'HN-CD',
+      patientData: { firstName: 'ตัดคอร์ส', lastName: 'ทดสอบ' },
+      courses: [
+        { name: 'Botox 100U', product: 'Nabota 200 U', qty: '200 / 200 U', status: 'กำลังใช้งาน' },
+        { name: 'Acne Tx', product: 'Acne Treatment', qty: '12 / 12 ครั้ง', status: 'กำลังใช้งาน' },
+        { name: 'Pico Laser', product: 'Pico', qty: '3 / 3 ครั้ง', status: 'กำลังใช้งาน' },
+      ],
+      treatmentSummary: [], treatmentCount: 0, cloneStatus: 'complete',
+    }));
+  });
+
+  afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
+
+  it('deduct single course', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = d.courses.map((c, i) => {
+      if (i === 0) return { ...c, qty: deductQty(c.qty, 1) };
+      return c;
+    });
+    await updateDoc(ref(), { courses });
+    const updated = (await getDoc(ref())).data();
+    expect(parseQtyString(updated.courses[0].qty).remaining).toBe(199);
+    expect(parseQtyString(updated.courses[1].qty).remaining).toBe(12); // unchanged
+  });
+
+  it('deduct multiple courses in one operation', async () => {
+    const d = (await getDoc(ref())).data();
+    const deductions = [{ courseIndex: 0, deductQty: 5 }, { courseIndex: 1, deductQty: 2 }];
+    const courses = d.courses.map((c, i) => {
+      const ded = deductions.find(d => d.courseIndex === i);
+      if (ded) return { ...c, qty: deductQty(c.qty, ded.deductQty) };
+      return c;
+    });
+    await updateDoc(ref(), { courses });
+    const updated = (await getDoc(ref())).data();
+    expect(parseQtyString(updated.courses[0].qty).remaining).toBe(194); // 199-5
+    expect(parseQtyString(updated.courses[1].qty).remaining).toBe(10); // 12-2
+  });
+
+  it('reverse deduction', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = d.courses.map((c, i) => {
+      if (i === 0) return { ...c, qty: reverseQty(c.qty, 6) }; // restore 6 (should cap at 200)
+      return c;
+    });
+    await updateDoc(ref(), { courses });
+    const updated = (await getDoc(ref())).data();
+    expect(parseQtyString(updated.courses[0].qty).remaining).toBe(200); // capped at total
+  });
+
+  it('deduct to zero', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = d.courses.map((c, i) => {
+      if (i === 2) return { ...c, qty: deductQty(c.qty, 3) }; // Pico: 3-3=0
+      return c;
+    });
+    await updateDoc(ref(), { courses });
+    const updated = (await getDoc(ref())).data();
+    expect(parseQtyString(updated.courses[2].qty).remaining).toBe(0);
+  });
+
+  it('throws on over-deduction', () => {
+    expect(() => deductQty('0 / 3 ครั้ง', 1)).toThrow('คอร์สคงเหลือไม่พอ');
+  });
+
+  it('add remaining increases both remaining and total', async () => {
+    const d = (await getDoc(ref())).data();
+    const courses = d.courses.map((c, i) => {
+      if (i === 2) return { ...c, qty: addRemaining(c.qty, 5) }; // Pico: 0/3 + 5 = 5/8
+      return c;
+    });
+    await updateDoc(ref(), { courses });
+    const updated = (await getDoc(ref())).data();
+    const pico = parseQtyString(updated.courses[2].qty);
+    expect(pico.remaining).toBe(5);
+    expect(pico.total).toBe(8);
+  });
+
+  it('full cycle: deduct → reverse → verify', async () => {
+    // Reset Acne to 10/12
+    const d1 = (await getDoc(ref())).data();
+    const c1 = d1.courses.map((c, i) => i === 1 ? { ...c, qty: deductQty(c.qty, 3) } : c); // 10-3=7
+    await updateDoc(ref(), { courses: c1 });
+    expect(parseQtyString((await getDoc(ref())).data().courses[1].qty).remaining).toBe(7);
+
+    // Reverse 3
+    const d2 = (await getDoc(ref())).data();
+    const c2 = d2.courses.map((c, i) => i === 1 ? { ...c, qty: reverseQty(c.qty, 3) } : c); // 7+3=10
+    await updateDoc(ref(), { courses: c2 });
+    expect(parseQtyString((await getDoc(ref())).data().courses[1].qty).remaining).toBe(10);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 5. MASTER DATA READ
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Master Data Read', () => {

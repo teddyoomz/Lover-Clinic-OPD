@@ -127,6 +127,84 @@ export async function rebuildTreatmentSummary(customerId) {
   });
 }
 
+// ─── Course Deduction ─────────────────────────────────────────────────────
+
+import { deductQty, reverseQty, addRemaining as addRemainingQty } from './courseUtils.js';
+
+/**
+ * Deduct course items after treatment save.
+ * @param {string} customerId - proClinicId
+ * @param {Array<{courseIndex: number, deductQty: number, courseName?: string}>} deductions
+ */
+export async function deductCourseItems(customerId, deductions) {
+  if (!deductions?.length) return [];
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+
+  for (const d of deductions) {
+    // Find by index first, verify by name for safety
+    let idx = d.courseIndex;
+    if (idx >= 0 && idx < courses.length) {
+      if (d.courseName && courses[idx].name !== d.courseName) {
+        // Index mismatch — search by name
+        idx = courses.findIndex(c => c.name === d.courseName);
+      }
+    } else if (d.courseName) {
+      idx = courses.findIndex(c => c.name === d.courseName);
+    }
+    if (idx < 0 || idx >= courses.length) continue;
+    courses[idx] = { ...courses[idx], qty: deductQty(courses[idx].qty, d.deductQty || 1) };
+  }
+
+  await updateCustomer(customerId, { courses });
+  return courses;
+}
+
+/**
+ * Reverse course deduction (on edit/delete treatment).
+ * @param {string} customerId
+ * @param {Array<{courseIndex: number, deductQty: number, courseName?: string}>} deductions
+ */
+export async function reverseCourseDeduction(customerId, deductions) {
+  if (!deductions?.length) return [];
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+
+  for (const d of deductions) {
+    let idx = d.courseIndex;
+    if (idx >= 0 && idx < courses.length) {
+      if (d.courseName && courses[idx].name !== d.courseName) {
+        idx = courses.findIndex(c => c.name === d.courseName);
+      }
+    } else if (d.courseName) {
+      idx = courses.findIndex(c => c.name === d.courseName);
+    }
+    if (idx < 0 || idx >= courses.length) continue;
+    courses[idx] = { ...courses[idx], qty: reverseQty(courses[idx].qty, d.deductQty || 1) };
+  }
+
+  await updateCustomer(customerId, { courses });
+  return courses;
+}
+
+/**
+ * Admin: add remaining qty to a course (increases both remaining AND total).
+ * @param {string} customerId
+ * @param {number} courseIndex
+ * @param {number} addQty
+ */
+export async function addCourseRemainingQty(customerId, courseIndex, addQty) {
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+  if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
+  courses[courseIndex] = { ...courses[courseIndex], qty: addRemainingQty(courses[courseIndex].qty, addQty) };
+  await updateCustomer(customerId, { courses });
+  return courses[courseIndex];
+}
+
 // ─── Appointment CRUD ───────────────────────────────────────────────────────
 
 const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');

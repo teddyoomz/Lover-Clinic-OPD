@@ -249,3 +249,92 @@ describe('clean() — JSON.parse(JSON.stringify) stripping', () => {
     expect(result.items).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. Course Utilities — parseQtyString, formatQtyString, deductQty, reverseQty, addRemaining
+// ═══════════════════════════════════════════════════════════════════════════
+import { parseQtyString, formatQtyString, deductQty, reverseQty, addRemaining } from '../src/lib/courseUtils.js';
+
+describe('parseQtyString', () => {
+  it('parses "200 / 200 U"', () => {
+    expect(parseQtyString('200 / 200 U')).toEqual({ remaining: 200, total: 200, unit: 'U' });
+  });
+  it('parses "12 / 12 ครั้ง"', () => {
+    expect(parseQtyString('12 / 12 ครั้ง')).toEqual({ remaining: 12, total: 12, unit: 'ครั้ง' });
+  });
+  it('parses "1,200 / 2,000 ml"', () => {
+    expect(parseQtyString('1,200 / 2,000 ml')).toEqual({ remaining: 1200, total: 2000, unit: 'ml' });
+  });
+  it('parses "0 / 200 U"', () => {
+    expect(parseQtyString('0 / 200 U')).toEqual({ remaining: 0, total: 200, unit: 'U' });
+  });
+  it('parses qty without unit', () => {
+    expect(parseQtyString('5 / 10')).toEqual({ remaining: 5, total: 10, unit: '' });
+  });
+  it('returns zeros for empty string', () => {
+    expect(parseQtyString('')).toEqual({ remaining: 0, total: 0, unit: '' });
+  });
+  it('returns zeros for null', () => {
+    expect(parseQtyString(null)).toEqual({ remaining: 0, total: 0, unit: '' });
+  });
+  it('returns zeros for unparseable string', () => {
+    expect(parseQtyString('abc')).toEqual({ remaining: 0, total: 0, unit: '' });
+  });
+});
+
+describe('formatQtyString', () => {
+  it('formats integers', () => {
+    expect(formatQtyString(199, 200, 'U')).toBe('199 / 200 U');
+  });
+  it('formats decimals', () => {
+    expect(formatQtyString(1.5, 3.0, 'ml')).toBe('1.5 / 3 ml');
+  });
+  it('formats without unit', () => {
+    expect(formatQtyString(5, 10, '')).toBe('5 / 10');
+  });
+  it('formats zero remaining', () => {
+    expect(formatQtyString(0, 200, 'U')).toBe('0 / 200 U');
+  });
+});
+
+describe('deductQty', () => {
+  it('deducts 1 from "200 / 200 U"', () => {
+    expect(deductQty('200 / 200 U', 1)).toBe('199 / 200 U');
+  });
+  it('deducts 5 from "12 / 12 ครั้ง"', () => {
+    expect(deductQty('12 / 12 ครั้ง', 5)).toBe('7 / 12 ครั้ง');
+  });
+  it('deducts to zero', () => {
+    expect(deductQty('1 / 10 U', 1)).toBe('0 / 10 U');
+  });
+  it('throws when remaining insufficient', () => {
+    expect(() => deductQty('0 / 200 U', 1)).toThrow('คอร์สคงเหลือไม่พอ');
+  });
+  it('throws when deducting more than remaining', () => {
+    expect(() => deductQty('3 / 200 U', 5)).toThrow('คอร์สคงเหลือไม่พอ');
+  });
+  it('defaults to deduct 1', () => {
+    expect(deductQty('10 / 10 U')).toBe('9 / 10 U');
+  });
+});
+
+describe('reverseQty', () => {
+  it('reverses 1 on "199 / 200 U"', () => {
+    expect(reverseQty('199 / 200 U', 1)).toBe('200 / 200 U');
+  });
+  it('caps at total (never exceeds)', () => {
+    expect(reverseQty('199 / 200 U', 5)).toBe('200 / 200 U');
+  });
+  it('reverses from zero', () => {
+    expect(reverseQty('0 / 10 ครั้ง', 3)).toBe('3 / 10 ครั้ง');
+  });
+});
+
+describe('addRemaining', () => {
+  it('adds 20 to "180 / 200 U"', () => {
+    expect(addRemaining('180 / 200 U', 20)).toBe('200 / 220 U');
+  });
+  it('adds to zero remaining', () => {
+    expect(addRemaining('0 / 100 ครั้ง', 10)).toBe('10 / 110 ครั้ง');
+  });
+});
