@@ -1,6 +1,7 @@
 # LoverClinic App — Claude Master Index
 
-> อัพเดท: 2026-04-03 | Stack: React 19 + Vite + Firebase + Tailwind | Deploy: Vercel
+> อัพเดท: 2026-04-09 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
+> Tests: Vitest 214+ | Playwright E2E 40+ | RTL 40+ | Phase: 6/12 DONE
 
 ---
 
@@ -13,7 +14,9 @@ vercel --prod
 ```
 **ห้าม deploy โดยไม่ commit ก่อน**
 **ทุกครั้งที่แก้โค้ดเสร็จ → commit + deploy ให้อัตโนมัติเลย ไม่ต้องรอให้ user สั่ง**
-> ยกเว้น broker-extension/ อย่างเดียว → commit เฉยๆ ไม่ต้อง vercel --prod (เป็น Chrome Extension ไม่ใช่ web app)
+> ยกเว้น:
+> - `broker-extension/` → commit เฉยๆ ไม่ต้อง vercel --prod (เป็น Chrome Extension)
+> - **หน้า Backend (`src/components/backend/`, `src/pages/BackendDashboard.jsx`)** → **commit อย่างเดียว ไม่ต้อง deploy** (ประหยัด Vercel cost, ทดสอบ local แทน)
 
 ## 🌿 Branch
 - Production: `master`
@@ -130,8 +133,9 @@ api/webhook/                 — Chat webhook endpoints
 ├── facebook.js (webhook handler + echo), line.js, send.js (ส่งข้อความ FB/LINE)
 └── saved-replies.js (proxy FB saved_message_responses)
 api/proclinic/               — Vercel Serverless Functions — 5 consolidated endpoints (ดู docs/API.md)
-├── customer.js (create/update/delete/search/fetchPatient), deposit.js (submit/update/cancel/options)
+├── customer.js (create/update/delete/search/fetchPatient/list), deposit.js (submit/update/cancel/options)
 ├── connection.js (login/credentials/clear), appointment.js (create/update/delete), courses.js
+├── treatment.js (list/get/create/update/delete/listItems), master.js (syncProducts/Doctors/Staff/Courses)
 └── _lib/ (session.js, scraper.js, fields.js, auth.js)
 cookie-relay/                — Cookie Relay Extension MV3 (ดู docs/EXTENSION.md)
 ├── background.js, content-loverclinic.js, manifest.json, popup.*
@@ -160,3 +164,65 @@ functions/
 - Light theme: CSS var mapping (`--bg-card`, `--tx-heading` etc.) ใน index.css
 - Contact buttons: LINE (green #06C755) + Call (red accent) separated by divider
 - Sync success button: สีเขียว เข้มพอมองเห็นทั้ง dark/light
+
+---
+
+## 🧪 Testing Infrastructure
+- **Vitest 4.1.3**: 214+ unit/integration tests (`npm test`)
+  - Firestore CRUD, billing calc, course deduction, Thai date, clean()
+  - RTL component tests (CustomerCard, course index, remove item, badges)
+- **Playwright**: 40+ E2E tests (`npm run test:e2e`)
+  - Real browser: tab nav, modal open/close, form validation, buy-deduct
+  - Auth: Firebase REST API → token inject via addInitScript
+- **Config**: vite.config.js `test.include: ['tests/*.test.js', 'tests/*.test.jsx']`
+- **E2E dir**: `tests/e2e/` (excluded from Vitest)
+
+---
+
+## 📦 Backend Files (Phase 1-6)
+```
+src/lib/
+├── backendClient.js     — Firestore CRUD for be_* collections + course deduction
+├── brokerClient.js      — API client for /api/proclinic/* + listAllCustomers
+├── cloneOrchestrator.js — Smart clone (detect changes + incremental + bulk)
+└── courseUtils.js        — Pure functions: parseQty, deductQty, reverseQty, buildQty
+
+src/components/backend/
+├── CloneTab.jsx          — Search + clone + bulk clone all customers
+├── CustomerListTab.jsx   — Card grid of cloned customers
+├── CustomerCard.jsx      — Reusable card (search/cloned modes)
+├── CustomerDetailView.jsx — 3-column detail + ExchangeModal + ShareModal + AddQtyModal
+├── MasterDataTab.jsx     — Sync + display + course CRUD
+├── AppointmentTab.jsx    — Resource time grid + CRUD
+└── SaleTab.jsx           — Sale CRUD + buy modal + auto-assign courses
+
+src/pages/
+└── BackendDashboard.jsx  — Container: 5 tabs + saleMode + deep link
+```
+
+---
+
+## 🐛 Major Bugs Fixed (2026-04-09)
+1. **Invoice race condition** — 2 sales same second → same INV number → overwrite. Fix: atomic runTransaction
+2. **Course index mismatch** — Form dedup 156→unique but validation used raw Firestore index. Fix: name+product lookup
+3. **Purchased course not deducted** — Buy in form → assign full qty → forgot to deduct used. Fix: deduct AFTER assign
+4. **Payment status mismatch** — Treatment sends '2' but SaleTab expects 'paid'. Fix: statusMap
+5. **IIFE click handlers** — Nested (() => {})() blocked button clicks. Fix: extract to proper component
+6. **overflow-hidden** — 128 courses clipped by card overflow. Fix: max-h + overflow-y-auto
+7. **removePurchasedItem** — number id vs string id. Fix: String() coercion
+8. **scrollToError** — Missing data-field attributes. Fix: added to seller/payment sections
+9. **syncCourses** — HTML scraper lost product qty. Fix: switched to JSON API endpoint
+
+---
+
+## 📋 Onboarding สำหรับ Claude แชทใหม่
+
+เมื่อเริ่มแชทใหม่ ให้อ่าน memory files เหล่านี้ตามลำดับเพื่อเข้าใจโปรเจ็คทันที:
+1. **ไฟล์นี้** (`CLAUDE.md`) — กฎเหล็ก + stack + deploy workflow
+2. **Memory: `project_current_state.md`** — สถานะโปรเจ็ค Phase 6/12 DONE + ไฟล์สำคัญ + bugs + กฎ
+3. **Memory: `project_features_completed.md`** — features ทั้งหมดที่ทำเสร็จแล้ว
+4. **Memory: `project_backend_roadmap.md`** — roadmap Phase 7-12 + data ที่ต้อง pre-clone
+5. **`CODEBASE_MAP.md`** — แผนที่โค้ด (อ่านเฉพาะ section ที่เกี่ยวกับงาน)
+
+> Memory files อยู่ที่: `~/.claude/projects/F--LoverClinic-app/memory/`
+> ดู index ทั้งหมด: `MEMORY.md` ใน memory folder
