@@ -127,6 +127,15 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [sellers, setSellers] = useState([]);
+  const [medProducts, setMedProducts] = useState([]);
+  const [medModalOpen, setMedModalOpen] = useState(false);
+  const [medModalQuery, setMedModalQuery] = useState('');
+  const [medModalSelected, setMedModalSelected] = useState(null);
+  const [medModalQty, setMedModalQty] = useState('1');
+  const [medModalDosage, setMedModalDosage] = useState('');
+  const [medModalUnit, setMedModalUnit] = useState('เม็ด');
+  const [medEditIdx, setMedEditIdx] = useState(-1);
+  const [medModalPremium, setMedModalPremium] = useState(false);
 
   // ── Load sales list ──
   const loadSales = useCallback(async () => {
@@ -186,9 +195,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // ── Load form options ──
   const loadOptions = useCallback(async () => {
     if (customers.length && sellers.length) return;
-    const [c, d, s] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors'), getAllMasterDataItems('staff')]);
+    const [c, d, s, p] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors'), getAllMasterDataItems('staff'), getAllMasterDataItems('products')]);
     setCustomers(c);
     setSellers([...s.map(x => ({ id: x.id, name: x.name })), ...d.map(x => ({ id: x.id, name: x.name }))]);
+    setMedProducts(p.map(x => ({ id: x.id, name: x.name, price: x.price, unit: x.unit, category: x.category, type: x.type })));
   }, [customers.length, sellers.length]);
 
   // ── Open buy modal ──
@@ -696,7 +706,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <button onClick={() => openBuyModal('course')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-teal-900/20 border-teal-700/40 text-teal-400 hover:bg-teal-900/30' : 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'}`}><Plus size={10} /> ซื้อคอร์ส</button>
                   <button onClick={() => openBuyModal('product')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}><Plus size={10} /> สินค้า</button>
                   <button onClick={() => openBuyModal('promotion')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-sky-900/20 border-sky-700/40 text-sky-400 hover:bg-sky-900/30' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'}`}><Plus size={10} /> โปรโมชัน</button>
-                  <button onClick={() => setMedications(prev => [...prev, { name: '', generic_name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด', indications: '', dosage_amount: '', dosage_unit: 'เม็ด', times_per_day: '', administration_method: '', administration_times: [], instructions: '', storage_instructions: '' }])} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}><Plus size={10} /> ยากลับบ้าน</button>
+                  <button onClick={() => { setMedModalOpen(true); setMedModalQuery(''); setMedModalSelected(null); setMedModalQty('1'); setMedModalDosage(''); setMedModalUnit('เม็ด'); setMedEditIdx(-1); setMedModalPremium(false); }}
+                    className={`text-xs font-bold px-2 py-1 rounded border flex items-center gap-1 ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}><Plus size={10} /> ยากลับบ้าน</button>
                 </div>
               </div>
               {purchasedItems.length === 0 && medications.length === 0 ? (
@@ -713,11 +724,19 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     </div>
                   ))}
                   {medications.map((med, i) => (
-                    <div key={`m${i}`} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isDark ? 'bg-[var(--bg-surface)]' : 'bg-gray-50'}`}>
-                      <span className="text-xs"><Pill size={10} className="inline mr-1 text-purple-400" />{med.name} <span className="text-[var(--tx-muted)]">{med.dosage} x{med.qty}</span></span>
-                      <div className="flex items-center gap-2">
+                    <div key={`m${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg ${isDark ? 'bg-[var(--bg-surface)]' : 'bg-gray-50'}`}>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold flex items-center gap-1">
+                          <Pill size={10} className="text-purple-400 shrink-0" />{med.name || 'ไม่ระบุชื่อยา'}
+                          {med.is_premium && <span className={`text-[9px] px-1 py-0.5 rounded ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>ของแถม</span>}
+                        </span>
+                        <span className="text-[10px] text-[var(--tx-muted)] block">{med.dosage || '-'} | {med.qty} {med.unit} | ฿{med.unitPrice || '0'}/{med.unit}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="text-xs font-mono">{fmtMoney((parseFloat(med.unitPrice)||0) * (parseInt(med.qty)||1))}</span>
-                        <button onClick={() => setMedications(prev => prev.filter((_,j) => j !== i))} className="text-red-400" aria-label="ลบรายการ"><Trash2 size={11} /></button>
+                        <button onClick={() => { setMedEditIdx(i); setMedModalSelected({ name: med.name, price: med.is_premium ? '0' : med.unitPrice, unit: med.unit, id: med.id }); setMedModalQty(String(med.qty)); setMedModalDosage(med.dosage || ''); setMedModalUnit(med.unit || 'เม็ด'); setMedModalQuery(med.name || ''); setMedModalPremium(!!med.is_premium); setMedModalOpen(true); }}
+                          className="text-sky-400 hover:text-sky-300" aria-label="แก้ไข"><Edit3 size={11} /></button>
+                        <button onClick={() => setMedications(prev => prev.filter((_,j) => j !== i))} className="text-red-400 hover:text-red-300" aria-label="ลบรายการ"><Trash2 size={11} /></button>
                       </div>
                     </div>
                   ))}
@@ -878,6 +897,88 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 <button onClick={() => setBuyModalOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
                 <button onClick={confirmBuy} disabled={buyChecked.size===0} className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-40">
                   เพิ่ม {buyChecked.size} รายการ
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Med modal — เพิ่ม/แก้ไขยากลับบ้าน */}
+        {medModalOpen && (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-sale" onClick={() => setMedModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
+            <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+              <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+                <h3 id="modal-title-med-sale" className="text-sm font-bold text-purple-400">{medEditIdx >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
+                <button onClick={() => setMedModalOpen(false)} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]" aria-label="ปิด"><X size={18} /></button>
+              </div>
+              <div className="p-5 space-y-3">
+                {/* Product search */}
+                <div>
+                  <label className={labelCls}>ยากลับบ้าน *</label>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 z-10" />
+                    <input value={medModalSelected ? medModalSelected.name : medModalQuery}
+                      onChange={e => { setMedModalQuery(e.target.value); setMedModalSelected(null); }}
+                      onFocus={() => { if (medModalSelected) { setMedModalQuery(medModalSelected.name); setMedModalSelected(null); } }}
+                      className={`${inputCls} !pl-8`} placeholder="ค้นหายากลับบ้าน..." autoFocus />
+                  </div>
+                  {!medModalSelected && medModalQuery.length > 0 && (
+                    <div className={`rounded-lg border mt-1 max-h-40 overflow-y-auto ${isDark ? 'border-[var(--bd)] bg-[var(--bg-elevated)]' : 'border-gray-200 bg-white'}`}>
+                      {medProducts.filter(p => p.name?.toLowerCase().includes(medModalQuery.toLowerCase())).slice(0, 30).length === 0 ? (
+                        <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่พบรายการ</p>
+                      ) : medProducts.filter(p => p.name?.toLowerCase().includes(medModalQuery.toLowerCase())).slice(0, 30).map(p => (
+                        <button key={p.id} onClick={() => { setMedModalSelected(p); setMedModalUnit(p.unit || 'เม็ด'); }}
+                          className={`w-full text-left px-3 py-2 text-xs border-b transition-all flex justify-between items-center ${isDark ? 'border-[var(--bd)]/50 hover:bg-[var(--bg-hover)]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                          <span className="font-bold text-[var(--tx-primary)]">{p.name}</span>
+                          <span className="text-[var(--tx-muted)] whitespace-nowrap ml-2">฿{p.price || 0} / {p.unit || '-'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Qty + Unit + Dosage */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className={labelCls}>จำนวน</label>
+                    <input type="number" value={medModalQty} onChange={e => setMedModalQty(e.target.value)} min="1" className={`${inputCls} text-center`} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>หน่วย</label>
+                    <select value={medModalUnit} onChange={e => setMedModalUnit(e.target.value)} className={inputCls}>
+                      <option value="เม็ด">เม็ด</option><option value="ซีซี">ซีซี</option><option value="ช้อนชา">ช้อนชา</option>
+                      <option value="แคปซูล">แคปซูล</option><option value="ซอง">ซอง</option><option value="หลอด">หลอด</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>ราคา/หน่วย</label>
+                    <input type="number" value={medModalPremium ? '0' : (medModalSelected?.price || '')} readOnly className={`${inputCls} text-right ${medModalPremium ? 'line-through opacity-40' : 'opacity-60'}`} />
+                  </div>
+                </div>
+                <label className={`flex items-center gap-2 text-xs cursor-pointer py-1 ${medModalPremium ? 'text-emerald-400 font-bold' : 'text-[var(--tx-muted)]'}`}>
+                  <input type="checkbox" checked={medModalPremium} onChange={e => setMedModalPremium(e.target.checked)} className="accent-emerald-500" />
+                  สินค้าของแถม (ราคา 0 บาท)
+                </label>
+                <div>
+                  <label className={labelCls}>วิธีรับประทาน</label>
+                  <input type="text" value={medModalDosage} onChange={e => setMedModalDosage(e.target.value)} className={inputCls} placeholder="เช่น ครั้งละ 1 เม็ด วันละ 3 ครั้ง หลังอาหาร" />
+                </div>
+              </div>
+              <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+                <button onClick={() => setMedModalOpen(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ยกเลิก</button>
+                <button disabled={!medModalSelected} onClick={() => {
+                  const med = {
+                    id: medModalSelected.id, name: medModalSelected.name,
+                    qty: medModalQty || '1', unitPrice: medModalPremium ? '0' : String(medModalSelected.price || ''),
+                    unit: medModalUnit, dosage: medModalDosage, is_premium: medModalPremium,
+                    generic_name: '', indications: '', dosage_amount: '', dosage_unit: medModalUnit,
+                    times_per_day: '', administration_method: '', administration_times: [],
+                    instructions: '', storage_instructions: '',
+                  };
+                  if (medEditIdx >= 0) setMedications(prev => prev.map((m, j) => j === medEditIdx ? med : m));
+                  else setMedications(prev => [...prev, med]);
+                  setMedModalOpen(false);
+                }} className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-40">
+                  {medEditIdx >= 0 ? 'บันทึก' : 'เพิ่ม'}
                 </button>
               </div>
             </div>
