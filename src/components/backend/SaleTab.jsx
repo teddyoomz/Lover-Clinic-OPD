@@ -13,6 +13,7 @@ import {
   cancelBackendSale, updateSalePayment, assignCourseToCustomer
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
+import FileUploadField from './FileUploadField.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n }));
 const PAYMENT_STATUSES = [
@@ -62,6 +63,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [cancelReason, setCancelReason] = useState('');
   const [cancelRefundMethod, setCancelRefundMethod] = useState('เงินสด');
   const [cancelRefundAmount, setCancelRefundAmount] = useState('');
+  const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
+  const [cancelEvidencePath, setCancelEvidencePath] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
   const [payModal, setPayModal] = useState(null); // { sale }
   const [payMethod, setPayMethod] = useState('');
@@ -85,6 +88,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [saleNote, setSaleNote] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [appointmentId, setAppointmentId] = useState('');
+  const [paymentEvidenceUrl, setPaymentEvidenceUrl] = useState('');
+  const [paymentEvidencePath, setPaymentEvidencePath] = useState('');
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [medications, setMedications] = useState([]);
   const [billDiscount, setBillDiscount] = useState('');
@@ -262,6 +267,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     setCustomerId(sale.customerId || ''); setCustomerName(sale.customerName || ''); setCustomerHN(sale.customerHN || '');
     setSaleDate(sale.saleDate || ''); setSaleNote(sale.saleNote || '');
     setPaymentNote(sale.payment?.note || ''); setCouponCode(sale.couponCode || ''); setAppointmentId(sale.appointmentId || '');
+    setPaymentEvidenceUrl(sale.payment?.evidenceUrl || ''); setPaymentEvidencePath(sale.payment?.evidencePath || '');
     setPurchasedItems(sale.items ? [...(sale.items.promotions||[]), ...(sale.items.courses||[]), ...(sale.items.products||[])] : []);
     setMedications(sale.items?.medications || []);
     setBillDiscount(String(sale.billing?.billDiscount || '')); setBillDiscountType(sale.billing?.discountType || 'amount');
@@ -305,7 +311,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         appointmentId: appointmentId || null,
         items: grouped,
         billing: { subtotal: billing.subtotal, billDiscount: billing.discount, discountType: billDiscountType, netTotal: billing.netTotal },
-        payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo, note: paymentNote || '' },
+        payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo, note: paymentNote || '', evidenceUrl: paymentEvidenceUrl || null, evidencePath: paymentEvidencePath || null },
         sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, name: s.name, percent: s.percent, total: s.total })),
       });
       if (editingSale) {
@@ -566,13 +572,21 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </div>
                 <div><label className={labelCls}>จำนวนคืน (บาท)</label><input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} /></div>
               </div>
+              <FileUploadField
+                storagePath={`uploads/be_sales/${cancelModal.saleId}`}
+                fieldName="cancelEvidence"
+                label="แนบหลักฐานการยกเลิก"
+                isDark={isDark}
+                onUploadComplete={({ url, storagePath }) => { setCancelEvidenceUrl(url); setCancelEvidencePath(storagePath); }}
+                onDelete={() => { setCancelEvidenceUrl(''); setCancelEvidencePath(''); }}
+              />
             </div>
             <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
               <button onClick={async () => {
                 setCancelSaving(true);
-                await cancelBackendSale(cancelModal.saleId || cancelModal.id, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0);
-                setCancelSaving(false); setCancelModal(null); loadSales();
+                await cancelBackendSale(cancelModal.saleId || cancelModal.id, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
+                setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
               }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50">
                 {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : 'ยืนยันยกเลิก'}
               </button>
@@ -764,6 +778,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <span className="text-xs text-[var(--tx-muted)] shrink-0">บาท</span>
                 </div>
               ))}
+              <div className="mt-3">
+                <FileUploadField
+                  storagePath={`uploads/be_sales/${editingSale?.saleId || `_pending_${Date.now()}`}`}
+                  fieldName="paymentEvidence"
+                  label="แนบหลักฐานชำระเงิน"
+                  isDark={isDark}
+                  value={paymentEvidenceUrl}
+                  onUploadComplete={({ url, storagePath }) => { setPaymentEvidenceUrl(url); setPaymentEvidencePath(storagePath); }}
+                  onDelete={() => { setPaymentEvidenceUrl(''); setPaymentEvidencePath(''); }}
+                />
+              </div>
             </div>
 
             {/* Sellers */}

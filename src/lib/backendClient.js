@@ -462,10 +462,10 @@ export async function getCustomerSales(customerId) {
 }
 
 /** Cancel a sale with reason + refund tracking */
-export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount) {
+export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount, evidenceUrl) {
   await updateDoc(saleDoc(saleId), {
     status: 'cancelled',
-    cancelled: { at: new Date().toISOString(), reason: reason || '', refundMethod: refundMethod || '', refundAmount: refundAmount || 0 },
+    cancelled: { at: new Date().toISOString(), reason: reason || '', refundMethod: refundMethod || '', refundAmount: refundAmount || 0, evidenceUrl: evidenceUrl || null },
     'payment.status': 'cancelled',
     updatedAt: new Date().toISOString(),
   });
