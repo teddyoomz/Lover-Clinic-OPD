@@ -11,6 +11,7 @@ import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
 
 export default function CloneTab({ clinicSettings, theme }) {
+  const isDark = theme !== 'light';
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
@@ -224,27 +225,27 @@ export default function CloneTab({ clinicSettings, theme }) {
               <div className="flex items-center gap-2">
                 {(bulkPhase === 'cloning' || bulkPhase === 'listing' || bulkPhase === 'checking') && (
                   <>
-                    <button onClick={handlePauseBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all flex items-center gap-1">
+                    <button onClick={handlePauseBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
                       <Pause size={12} /> หยุด
                     </button>
-                    <button onClick={handleCancelBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 transition-all flex items-center gap-1">
+                    <button onClick={handleCancelBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>
                       <X size={12} /> ยกเลิก
                     </button>
                   </>
                 )}
                 {bulkPhase === 'paused' && (
                   <>
-                    <button onClick={handleResumeBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-900/20 border border-emerald-700/40 text-emerald-400 hover:bg-emerald-900/30 transition-all flex items-center gap-1">
+                    <button onClick={handleResumeBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-400 hover:bg-emerald-900/30' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}>
                       <Play size={12} /> เดินต่อ
                     </button>
-                    <button onClick={handleCancelBulk} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 transition-all flex items-center gap-1">
+                    <button onClick={handleCancelBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>
                       <X size={12} /> ยกเลิก
                     </button>
                   </>
                 )}
                 {(bulkPhase === 'done' || bulkPhase === 'cancelled' || bulkPhase === 'error') && (
                   <button onClick={() => { setBulkPhase('idle'); setBulkProgress(null); setBulkLog([]); }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all flex items-center gap-1">
+                    className="px-3 py-2.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all flex items-center gap-1">
                     <RefreshCw size={12} /> Clone ใหม่
                   </button>
                 )}
@@ -254,7 +255,7 @@ export default function CloneTab({ clinicSettings, theme }) {
             {/* Progress bar */}
             {bulkProgress && (
               <div>
-                <div className="w-full h-2 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-[var(--bg-elevated)] rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(bulkProgress.percent || 0)} aria-valuemin={0} aria-valuemax={100}>
                   <div className="h-full rounded-full transition-all duration-300"
                     style={{
                       width: `${bulkProgress.percent || 0}%`,
@@ -284,9 +285,9 @@ export default function CloneTab({ clinicSettings, theme }) {
               <div className="flex flex-wrap gap-3 text-xs">
                 <span className="text-[var(--tx-muted)]">ทั้งหมด <span className="font-bold text-[var(--tx-heading)]">{bulkProgress.totalCustomers}</span></span>
                 {bulkProgress.skipCount > 0 && <span className="text-gray-500"><SkipForward size={11} className="inline mr-0.5" />{bulkProgress.skipCount} ข้าม</span>}
-                {bulkProgress.completedCount > 0 && <span className="text-emerald-400"><CheckCircle2 size={11} className="inline mr-0.5" />{bulkProgress.completedCount} สำเร็จ</span>}
-                {bulkProgress.incrementalCount > 0 && <span className="text-sky-400"><Zap size={11} className="inline mr-0.5" />{bulkProgress.incrementalCount} อัพเดท</span>}
-                {bulkProgress.failedCount > 0 && <span className="text-red-400"><AlertCircle size={11} className="inline mr-0.5" />{bulkProgress.failedCount} ผิดพลาด</span>}
+                {bulkProgress.completedCount > 0 && <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}><CheckCircle2 size={11} className="inline mr-0.5" />{bulkProgress.completedCount} สำเร็จ</span>}
+                {bulkProgress.incrementalCount > 0 && <span className={isDark ? 'text-sky-400' : 'text-sky-700'}><Zap size={11} className="inline mr-0.5" />{bulkProgress.incrementalCount} อัพเดท</span>}
+                {bulkProgress.failedCount > 0 && <span className={isDark ? 'text-red-400' : 'text-red-700'}><AlertCircle size={11} className="inline mr-0.5" />{bulkProgress.failedCount} ผิดพลาด</span>}
               </div>
             )}
 
@@ -315,11 +316,11 @@ export default function CloneTab({ clinicSettings, theme }) {
 
       {/* ── Search Error ── */}
       {searchError && (
-        <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 flex items-start gap-3">
-          <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+        <div className={`${isDark ? 'bg-red-900/20 border-red-700/40' : 'bg-red-50 border-red-200'} border rounded-xl p-4 flex items-start gap-3`}>
+          <AlertCircle size={18} className={`${isDark ? 'text-red-400' : 'text-red-600'} flex-shrink-0 mt-0.5`} />
           <div>
-            <p className="text-sm font-bold text-red-400">ค้นหาไม่สำเร็จ</p>
-            <p className="text-xs text-red-400/70 mt-1">{searchError}</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-red-400' : 'text-red-700'}`}>ค้นหาไม่สำเร็จ</p>
+            <p className={`text-xs mt-1 ${isDark ? 'text-red-400/70' : 'text-red-600/70'}`}>{searchError}</p>
           </div>
         </div>
       )}
@@ -351,6 +352,7 @@ export default function CloneTab({ clinicSettings, theme }) {
                     key={customer.id}
                     customer={customer}
                     accentColor={ac}
+                    theme={theme}
                     mode="search"
                     cloneStatus={state.status}
                     cloneProgress={state.progress}

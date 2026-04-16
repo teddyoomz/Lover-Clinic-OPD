@@ -8,6 +8,7 @@ import { hexToRgb } from '../../utils.js';
 export default function CustomerCard({
   customer,           // { proClinicId/id, proClinicHN/hn, name, phone, patientData, ... }
   accentColor,        // clinic accent color
+  theme,              // 'dark' | 'light' | 'auto'
   mode = 'search',    // 'search' | 'cloned'
   cloneStatus,        // 'idle' | 'cloning' | 'done' | 'error' | 'exists'
   cloneProgress,      // { step, label, percent, detail }
@@ -16,6 +17,7 @@ export default function CustomerCard({
 }) {
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
+  const isDark = theme !== 'light';
 
   // Normalize fields across search results and cloned data
   const hn = customer.proClinicHN || customer.hn || '';
@@ -131,7 +133,7 @@ export default function CustomerCard({
       {mode === 'cloned' && onView && (
         <div className="px-4 pb-4">
           <button onClick={(e) => { e.stopPropagation(); onView(customer); }}
-            className="w-full py-2 rounded-lg text-xs font-bold bg-teal-900/20 border border-teal-700/40 text-teal-400 hover:bg-teal-900/30 transition-all flex items-center justify-center gap-2">
+            className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-teal-900/20 border-teal-700/40 text-teal-400 hover:bg-teal-900/30' : 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'}`}>
             <Eye size={14} /> ดูรายละเอียด
           </button>
         </div>
@@ -143,7 +145,7 @@ export default function CustomerCard({
           {cloneStatus === 'cloning' ? (
             <div className="space-y-2">
               {/* Progress bar */}
-              <div className="w-full h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(cloneProgress?.percent || 0)} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full rounded-full transition-all duration-300"
                   style={{
                     width: `${cloneProgress?.percent || 0}%`,
@@ -153,20 +155,20 @@ export default function CustomerCard({
               <p className="text-xs text-[var(--tx-muted)] truncate">{cloneProgress?.label || 'กำลังดำเนินการ...'}</p>
             </div>
           ) : cloneStatus === 'done' ? (
-            <button disabled className="w-full py-2 rounded-lg text-xs font-bold bg-emerald-900/30 border border-emerald-700/40 text-emerald-400 flex items-center justify-center gap-2">
+            <button disabled className={`w-full py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 ${isDark ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
               <CheckCircle2 size={14} /> Clone สำเร็จ
             </button>
           ) : cloneStatus === 'error' ? (
-            <button onClick={() => onClone(id)} className="w-full py-2 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center gap-2">
+            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>
               <AlertCircle size={14} /> ลองอีกครั้ง
             </button>
           ) : cloneStatus === 'exists' ? (
-            <button onClick={() => onClone(id)} className="w-full py-2 rounded-lg text-xs font-bold bg-amber-900/20 border border-amber-700/40 text-amber-400 hover:bg-amber-900/30 transition-all flex items-center justify-center gap-2">
+            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
               <Clock size={14} /> อัพเดทข้อมูล
             </button>
           ) : (
             <button onClick={() => onClone(id)}
-              className="w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 hover:shadow-lg active:scale-[0.98]"
+              className="w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 hover:shadow-lg active:scale-[0.98]"
               style={{
                 backgroundColor: `rgba(${acRgb},0.15)`,
                 border: `1px solid rgba(${acRgb},0.4)`,

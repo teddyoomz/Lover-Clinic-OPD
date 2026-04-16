@@ -409,7 +409,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   unit: c.unit,
                 }],
               }));
-            } catch {}
+            } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
           const backendOptions = {
@@ -1524,7 +1524,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                   : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
                 await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}` });
-              } catch {}
+              } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
             }
             for (const promo of grouped.promotions) {
               try {
@@ -1542,7 +1542,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
                   await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}` });
                 }
-              } catch {}
+              } catch (e) { console.error('[TreatmentForm] promo assign error:', e); }
             }
           } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
         }
@@ -1951,7 +1951,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
                       if (r.success) setLabProducts(r.products || []);
                     }
-                  } catch {}
+                  } catch (e) { console.error('[TreatmentForm] lab search error:', e); }
                   setLabModalLoading(false);
                 }
               }}>
@@ -2061,9 +2061,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
           {/* Lab Modal */}
           {labModalOpen && (
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" onClick={() => setLabModalOpen(false)}>
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-lab" onClick={() => setLabModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setLabModalOpen(false); }}>
               <div className={`w-full max-w-md rounded-2xl p-5 mx-4 ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white'}`} onClick={e => e.stopPropagation()}>
-                <h4 className="text-sm font-bold text-cyan-500 mb-4">{editingLabIndex >= 0 ? 'แก้ไข Lab' : 'เพิ่ม Lab'}</h4>
+                <h4 id="modal-title-lab" className="text-sm font-bold text-cyan-500 mb-4">{editingLabIndex >= 0 ? 'แก้ไข Lab' : 'เพิ่ม Lab'}</h4>
                 {labModalLoading ? <div className="text-center py-6"><Loader2 size={20} className="animate-spin mx-auto text-gray-500" /></div> : (
                   <div className="space-y-3">
                     <div>
@@ -2245,11 +2245,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* เพิ่มยากลับบ้าน modal — matching ProClinic */}
             {medModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedModalOpen(false)}>
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med" onClick={() => setMedModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
                 <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>{editingMedIndex >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
+                    <h3 id="modal-title-med" className="text-sm font-black" style={{ color: '#10b981' }}>{editingMedIndex >= 0 ? 'แก้ไขยากลับบ้าน' : 'เพิ่มยากลับบ้าน'}</h3>
                   </div>
                   <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     {/* Product select with search */}
@@ -2360,12 +2360,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Medication group modal — full overlay matching ProClinic */}
             {medGroupModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setMedGroupModalOpen(false)}>
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-group" onClick={() => setMedGroupModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setMedGroupModalOpen(false); }}>
                 <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
+                    <h3 id="modal-title-med-group" className="text-sm font-black" style={{ color: '#10b981' }}>เพิ่มยากลับบ้าน</h3>
                     <select value={medGroupSelectedId}
                       onChange={e => {
                         setMedGroupSelectedId(e.target.value);
@@ -2701,12 +2701,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Buy modal — ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน */}
             {buyModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setBuyModalOpen(false)}>
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-treat-buy" onClick={() => setBuyModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
                 <div className={`w-full max-w-5xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#14b8a6' }}>ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน</h3>
+                    <h3 id="modal-title-treat-buy" className="text-sm font-black" style={{ color: '#14b8a6' }}>ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน</h3>
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -2867,11 +2867,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* เพิ่มสินค้าสิ้นเปลือง modal — matching ProClinic */}
             {consModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsModalOpen(false)}>
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons" onClick={() => setConsModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setConsModalOpen(false); }}>
                 <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
+                    <h3 id="modal-title-cons" className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                   </div>
                   <div className="px-5 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
                     <div>
@@ -2921,12 +2921,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
             {/* Consumable group modal — full overlay matching ProClinic */}
             {consGroupModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setConsGroupModalOpen(false)}>
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-group" onClick={() => setConsGroupModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setConsGroupModalOpen(false); }}>
                 <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
                   <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                    <h3 className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
+                    <h3 id="modal-title-cons-group" className="text-sm font-black" style={{ color: '#eab308' }}>เพิ่มสินค้าสิ้นเปลือง</h3>
                     <select value={consGroupSelectedId}
                       onChange={e => {
                         setConsGroupSelectedId(e.target.value);

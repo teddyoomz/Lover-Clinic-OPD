@@ -11,7 +11,7 @@ import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
   getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems
 } from '../../lib/backendClient.js';
-import { hexToRgb } from '../../utils.js';
+
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const THAI_DAYS_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส'];
@@ -39,9 +39,8 @@ for (let h = 8; h <= 22; h++) {
 function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
-export default function AppointmentTab({ clinicSettings }) {
-  const ac = clinicSettings?.accentColor || '#dc2626';
-  const acRgb = hexToRgb(ac);
+export default function AppointmentTab({ clinicSettings, theme }) {
+  const isDark = theme !== 'light';
 
   // ── State ──
   const [selectedDate, setSelectedDate] = useState(() => dateStr(new Date()));
@@ -94,6 +93,13 @@ export default function AppointmentTab({ clinicSettings }) {
     if (allKnownRooms.length > 0) return allKnownRooms;
     return FALLBACK_ROOMS;
   }, [allKnownRooms]);
+
+  // Pre-compute appointment lookup map for O(1) access in time grid
+  const apptMap = useMemo(() => {
+    const map = {};
+    dayAppts.forEach(a => { if (a.startTime && a.roomName) map[`${a.startTime}|${a.roomName}`] = a; });
+    return map;
+  }, [dayAppts]);
 
   const dayDoctors = useMemo(() => {
     const map = {};
@@ -241,8 +247,8 @@ export default function AppointmentTab({ clinicSettings }) {
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-black text-[var(--tx-heading)] uppercase tracking-wider">{THAI_MONTHS[calMonth.month]} {calMonth.year+543}</span>
             <div className="flex gap-1">
-              <button onClick={() => navCalMonth(-1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronLeft size={14}/></button>
-              <button onClick={() => navCalMonth(1)} className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ChevronRight size={14}/></button>
+              <button onClick={() => navCalMonth(-1)} className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]" aria-label="เดือนก่อน"><ChevronLeft size={14}/></button>
+              <button onClick={() => navCalMonth(1)} className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]" aria-label="เดือนถัดไป"><ChevronRight size={14}/></button>
             </div>
           </div>
           <div className="grid grid-cols-7 gap-0">
@@ -256,7 +262,7 @@ export default function AppointmentTab({ clinicSettings }) {
               const isWe = (i % 7) >= 5;
               return (
                 <button key={cell.dateStr} onClick={() => { setSelectedDate(cell.dateStr); }}
-                  className={`h-7 w-7 mx-auto flex flex-col items-center justify-center rounded-full text-xs font-bold transition-all relative
+                  className={`h-10 w-10 mx-auto flex flex-col items-center justify-center rounded-full text-xs font-bold transition-all relative
                     ${isSel ? 'bg-sky-600 text-white' : isToday ? 'bg-emerald-600 text-white' : isWe ? 'text-red-400 hover:bg-[var(--bg-hover)]' : 'text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)]'}`}>
                   {cell.day}
                   {hasAppt && !isSel && !isToday && <span className="absolute bottom-0 w-1 h-1 rounded-full bg-sky-400" />}
@@ -276,8 +282,8 @@ export default function AppointmentTab({ clinicSettings }) {
             <div className="space-y-1.5">
               {dayDoctors.map(doc => (
                 <div key={doc.name} className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-sky-900/30 flex items-center justify-center flex-shrink-0">
-                    <User size={11} className="text-sky-400" />
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-sky-900/30' : 'bg-sky-50'}`}>
+                    <User size={11} className={isDark ? 'text-sky-400' : 'text-sky-600'} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-[var(--tx-secondary)] font-medium truncate">{doc.name}</p>
@@ -296,7 +302,7 @@ export default function AppointmentTab({ clinicSettings }) {
         {/* Week Navigation Strip */}
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.15)' }}>
           <div className="flex items-center">
-            <button onClick={() => navWeek(-1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-r border-[var(--bd)]">
+            <button onClick={() => navWeek(-1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-r border-[var(--bd)]" aria-label="สัปดาห์ก่อน">
               <ChevronLeft size={16} />
             </button>
             <div className="flex-1 grid grid-cols-7">
@@ -317,7 +323,7 @@ export default function AppointmentTab({ clinicSettings }) {
                 );
               })}
             </div>
-            <button onClick={() => navWeek(1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-l border-[var(--bd)]">
+            <button onClick={() => navWeek(1)} className="px-3 py-3 hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] transition-all border-l border-[var(--bd)]" aria-label="สัปดาห์ถัดไป">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -372,8 +378,8 @@ export default function AppointmentTab({ clinicSettings }) {
                   <div key={time} className="flex border-b border-[var(--bd)]/30" style={{ height: SLOT_H }}>
                     <div className="w-[60px] flex-shrink-0 text-xs text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
                     {rooms.map(room => {
-                      // Find appointments starting at this time in this room
-                      const appt = dayAppts.find(a => a.startTime === time && a.roomName === room);
+                      // O(1) lookup via pre-computed map
+                      const appt = apptMap[`${time}|${room}`];
                       if (appt) {
                         const startIdx = TIME_SLOTS.indexOf(appt.startTime);
                         const endIdx = appt.endTime ? TIME_SLOTS.indexOf(appt.endTime) : startIdx + 1;
@@ -420,22 +426,22 @@ export default function AppointmentTab({ clinicSettings }) {
 
       {/* ════════════ FORM MODAL ════════════ */}
       {formMode && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setFormMode(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-appointment" onClick={() => setFormMode(null)} onKeyDown={e => { if (e.key === 'Escape') setFormMode(null); }}>
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">
+              <h3 id="modal-title-appointment" className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">
                 {formMode.mode === 'edit' ? 'แก้ไขนัดหมาย' : 'สร้างนัดหมาย'}
               </h3>
-              <button onClick={() => setFormMode(null)} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]"><X size={18} /></button>
+              <button onClick={() => setFormMode(null)} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]" aria-label="ปิด"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               {/* Customer picker */}
               <div data-field="apptCustomer">
                 <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
                 {formData.customerName ? (
-                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-sky-900/10 border border-sky-700/30">
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
                     <span className="text-xs text-[var(--tx-heading)] font-bold">{formData.customerName} <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span></span>
-                    <button onClick={() => setFormData(p => ({...p, customerId:'', customerName:'', customerHN:''}))} className="text-[var(--tx-muted)] hover:text-red-400"><X size={14}/></button>
+                    <button onClick={() => setFormData(p => ({...p, customerId:'', customerName:'', customerHN:''}))} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ล้าง"><X size={14}/></button>
                   </div>
                 ) : (
                   <div>

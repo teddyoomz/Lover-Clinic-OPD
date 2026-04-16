@@ -27,12 +27,19 @@ const SYNC_TYPES = [
   { key: 'promotions', label: 'โปรโมชัน', fn: syncPromotions, icon: '🏷️', color: 'rose' },
 ];
 
-const SYNC_COLOR_MAP = {
+const SYNC_COLOR_MAP_DARK = {
   emerald: { btn: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40', badge: 'bg-emerald-900/40 text-emerald-400' },
   sky: { btn: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40', badge: 'bg-sky-900/40 text-sky-400' },
   purple: { btn: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40', badge: 'bg-purple-900/40 text-purple-400' },
   amber: { btn: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40', badge: 'bg-amber-900/40 text-amber-400' },
   rose: { btn: 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40', badge: 'bg-rose-900/40 text-rose-400' },
+};
+const SYNC_COLOR_MAP_LIGHT = {
+  emerald: { btn: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100', badge: 'bg-emerald-50 text-emerald-700' },
+  sky: { btn: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100', badge: 'bg-sky-50 text-sky-700' },
+  purple: { btn: 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100', badge: 'bg-purple-50 text-purple-700' },
+  amber: { btn: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100', badge: 'bg-amber-50 text-amber-700' },
+  rose: { btn: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100', badge: 'bg-rose-50 text-rose-700' },
 };
 
 // Table column definitions per sub-tab
@@ -108,6 +115,7 @@ function relativeTime(isoStr) {
 }
 
 export default function MasterDataTab({ clinicSettings, theme }) {
+  const isDark = theme !== 'light';
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
@@ -297,10 +305,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   if (courseFormOpen) return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-2">
-        <button onClick={() => setCourseFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]"><ArrowLeft size={18} /></button>
+        <button onClick={() => setCourseFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]" aria-label="กลับ"><ArrowLeft size={18} /></button>
         <h2 className="text-sm font-bold text-amber-400">{editingCourse ? 'แก้ไขคอร์ส' : 'สร้างคอร์สใหม่'}</h2>
       </div>
-      {courseError && <div className="bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2 text-xs text-red-400">{courseError}</div>}
+      {courseError && <div className={`${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} border rounded-lg px-3 py-2 text-xs`}>{courseError}</div>}
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div><label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ชื่อคอร์ส *</label>
@@ -357,7 +365,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                 className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" placeholder="จำนวน" />
               <input value={p.unit} onChange={e => setCfProducts(prev => prev.map((x, i) => i === pi ? { ...x, unit: e.target.value } : x))}
                 className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" placeholder="หน่วย" />
-              <button onClick={() => setCfProducts(prev => prev.filter((_, i) => i !== pi))} className="text-red-400 hover:text-red-300"><Trash2 size={14} /></button>
+              <button onClick={() => setCfProducts(prev => prev.filter((_, i) => i !== pi))} className="text-red-400 hover:text-red-300" aria-label="ลบสินค้า"><Trash2 size={14} /></button>
             </div>
           ))}
         </div>
@@ -392,7 +400,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {SYNC_TYPES.map(st => {
-            const cm = SYNC_COLOR_MAP[st.color];
+            const cm = (isDark ? SYNC_COLOR_MAP_DARK : SYNC_COLOR_MAP_LIGHT)[st.color];
             const status = syncStatus[st.key];
             const m = meta[st.key];
             return (
@@ -422,7 +430,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
         {/* Sync errors */}
         {Object.entries(syncError).filter(([, v]) => v).map(([key, err]) => (
-          <div key={key} className="mt-2 bg-red-900/20 border border-red-700/40 rounded-lg px-3 py-2 text-xs text-red-400 flex items-center gap-1.5">
+          <div key={key} className={`mt-2 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} border rounded-lg px-3 py-2 text-xs flex items-center gap-1.5`}>
             <AlertCircle size={12} /> <span className="font-bold">{key}:</span> {err}
           </div>
         ))}
@@ -535,7 +543,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                       <td key={col.key}
                         className={`px-3 py-2 ${col.w || ''} ${col.align || ''} ${col.sticky ? 'sticky left-0 z-10 bg-inherit' : ''}`}>
                         {col.key === 'status' ? (
-                          <StatusBadge value={item[col.key]} />
+                          <StatusBadge value={item[col.key]} isDark={isDark} />
                         ) : col.key === 'color' && item[col.key] ? (
                           <div className="w-4 h-4 rounded-full border border-[var(--bd)]" style={{ backgroundColor: item[col.key] }} />
                         ) : col.key === 'price' ? (
@@ -549,8 +557,8 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                       <td className="px-2 py-2 w-16">
                         {item._createdBy === 'backend' && (
                           <div className="flex gap-1">
-                            <button onClick={() => openCourseEdit(item)} className="p-1.5 rounded hover:bg-sky-900/20 text-sky-400" aria-label="แก้ไขคอร์ส"><Edit3 size={13} /></button>
-                            <button onClick={() => handleCourseDelete(item)} className="p-1.5 rounded hover:bg-red-900/20 text-red-400" aria-label="ลบคอร์ส"><Trash2 size={13} /></button>
+                            <button onClick={() => openCourseEdit(item)} className={`p-1.5 rounded ${isDark ? 'hover:bg-sky-900/20 text-sky-400' : 'hover:bg-sky-50 text-sky-700'}`} aria-label="แก้ไขคอร์ส"><Edit3 size={13} /></button>
+                            <button onClick={() => handleCourseDelete(item)} className={`p-1.5 rounded ${isDark ? 'hover:bg-red-900/20 text-red-400' : 'hover:bg-red-50 text-red-700'}`} aria-label="ลบคอร์ส"><Trash2 size={13} /></button>
                           </div>
                         )}
                       </td>
@@ -566,11 +574,13 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   );
 }
 
-function StatusBadge({ value }) {
+function StatusBadge({ value, isDark }) {
   const isActive = !value || value === 'ใช้งาน';
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold ${
-      isActive ? 'bg-emerald-900/30 text-emerald-400' : 'bg-gray-800/50 text-gray-500'
+      isActive
+        ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
+        : (isDark ? 'bg-gray-800/50 text-gray-500' : 'bg-gray-100 text-gray-600')
     }`}>
       {isActive ? 'ใช้งาน' : value}
     </span>

@@ -3,7 +3,7 @@
 // Client-side search filtering by name, HN, phone.
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Loader2, RefreshCw, Download, Eye, Info } from 'lucide-react';
+import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle } from 'lucide-react';
 import { getAllCustomers } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
@@ -11,16 +11,19 @@ import CustomerCard from './CustomerCard.jsx';
 export default function CustomerListTab({ clinicSettings, theme, onViewCustomer }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
+  const isDark = theme !== 'light';
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterQuery, setFilterQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loadError, setLoadError] = useState(null);
 
   // Fetch all cloned customers
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadError(null);
 
     getAllCustomers()
       .then(data => {
@@ -28,6 +31,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
       })
       .catch(err => {
         console.error('[CustomerListTab] Failed to load customers:', err);
+        if (!cancelled) setLoadError(err.message || 'โหลดข้อมูลลูกค้าไม่สำเร็จ');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -93,8 +97,20 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
         </div>
       )}
 
+      {/* ── Error state ── */}
+      {!loading && loadError && (
+        <div className={`rounded-xl border p-6 text-center ${isDark ? 'bg-red-900/20 border-red-700/40' : 'bg-red-50 border-red-200'}`}>
+          <AlertCircle size={24} className={`mx-auto mb-2 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+          <p className={`text-sm font-bold ${isDark ? 'text-red-400' : 'text-red-700'}`}>โหลดข้อมูลไม่สำเร็จ</p>
+          <p className={`text-xs mt-1 ${isDark ? 'text-red-400/70' : 'text-red-600/70'}`}>{loadError}</p>
+          <button onClick={() => setRefreshKey(k => k + 1)} className={`mt-3 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>
+            ลองอีกครั้ง
+          </button>
+        </div>
+      )}
+
       {/* ── Empty state ── */}
-      {!loading && customers.length === 0 && (
+      {!loading && !loadError && customers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16">
           <div className="relative mb-6">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
@@ -142,6 +158,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
               key={customer.id}
               customer={customer}
               accentColor={ac}
+              theme={theme}
               mode="cloned"
               onView={onViewCustomer}
             />

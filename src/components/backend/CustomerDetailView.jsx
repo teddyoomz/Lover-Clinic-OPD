@@ -60,7 +60,8 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale }) {
+export default function CustomerDetailView({ customer, accentColor, theme, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale }) {
+  const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const pd = customer?.patientData || {};
@@ -111,15 +112,15 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
   const hn = customer?.proClinicHN || '';
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
-  const activeCourses = allCourses.filter(c => {
+  const activeCourses = useMemo(() => allCourses.filter(c => {
     const { remaining } = parseQtyString(c.qty);
     return remaining > 0;
-  });
-  const usedUpCourses = allCourses.filter(c => {
+  }), [allCourses]);
+  const usedUpCourses = useMemo(() => allCourses.filter(c => {
     const { remaining } = parseQtyString(c.qty);
     return remaining <= 0;
-  });
-  const expiredCourses = [...(customer?.expiredCourses || []), ...usedUpCourses];
+  }), [allCourses]);
+  const expiredCourses = useMemo(() => [...(customer?.expiredCourses || []), ...usedUpCourses], [customer?.expiredCourses, usedUpCourses]);
   const appointments = customer?.appointments || [];
   const treatmentSummary = customer?.treatmentSummary || [];
 
@@ -199,7 +200,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
               <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
                 <Calendar size={16} className="text-sky-400" />
                 <h3 className="text-sm font-bold text-[var(--tx-heading)]">นัดหมาย</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-900/30 text-sky-400 font-bold">{appointments.length}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>{appointments.length}</span>
               </div>
               <div className="divide-y divide-[var(--bd)]">
                 {appointments.map((appt, i) => (
@@ -239,7 +240,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             </div>
 
             {treatmentsError && (
-              <div className="px-4 py-3 text-xs text-amber-400 flex items-center gap-2 bg-amber-900/10 border-b border-[var(--bd)]">
+              <div className={`px-4 py-3 text-xs flex items-center gap-2 border-b border-[var(--bd)] ${isDark ? 'text-amber-400 bg-amber-900/10' : 'text-amber-700 bg-amber-50'}`}>
                 <AlertCircle size={13} /> {treatmentsError}
               </div>
             )}
@@ -300,7 +301,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                               <Loader2 size={12} className="animate-spin" /> กำลังโหลด...
                             </div>
                           ) : detail?.detail ? (
-                            <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} />
+                            <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} isDark={isDark} />
                           ) : (
                             <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
                               {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
@@ -322,37 +323,37 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
         <div className="space-y-3 min-w-0">
           {/* Tabs */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-            <div className="flex items-center border-b border-[var(--bd)]">
-              <button onClick={() => setCourseTab('active')}
+            <div className="flex items-center border-b border-[var(--bd)]" role="tablist">
+              <button onClick={() => setCourseTab('active')} role="tab" aria-selected={courseTab === 'active'}
                 className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  courseTab === 'active' ? 'text-teal-400 border-b-2 border-teal-400 bg-teal-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                  courseTab === 'active' ? `text-teal-400 border-b-2 border-teal-400 ${isDark ? 'bg-teal-900/10' : 'bg-teal-50'}` : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 <Package size={13} /> คอร์สของฉัน
                 {activeCourses.length > 0 && (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-teal-900/30 text-teal-400">{activeCourses.length}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'}`}>{activeCourses.length}</span>
                 )}
               </button>
-              <button onClick={() => setCourseTab('expired')}
+              <button onClick={() => setCourseTab('expired')} role="tab" aria-selected={courseTab === 'expired'}
                 className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  courseTab === 'expired' ? 'text-red-400 border-b-2 border-red-400 bg-red-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                  courseTab === 'expired' ? `text-red-400 border-b-2 border-red-400 ${isDark ? 'bg-red-900/10' : 'bg-red-50'}` : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 คอร์สหมดอายุ
                 {expiredCourses.length > 0 && (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400">{expiredCourses.length}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700'}`}>{expiredCourses.length}</span>
                 )}
               </button>
-              <button onClick={() => setCourseTab('purchases')}
+              <button onClick={() => setCourseTab('purchases')} role="tab" aria-selected={courseTab === 'purchases'}
                 className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  courseTab === 'purchases' ? 'text-rose-400 border-b-2 border-rose-400 bg-rose-900/10' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                  courseTab === 'purchases' ? `text-rose-400 border-b-2 border-rose-400 ${isDark ? 'bg-rose-900/10' : 'bg-rose-50'}` : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 ประวัติการซื้อ
                 {customerSales.length > 0 && (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-rose-900/30 text-rose-400">{customerSales.length}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-rose-900/30 text-rose-400' : 'bg-rose-50 text-rose-700'}`}>{customerSales.length}</span>
                 )}
               </button>
               {/* Assign course button */}
               <button onClick={() => onCreateSale?.(customer)}
-                className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="ขายคอร์สใหม่ให้ลูกค้า">
+                className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="ขายคอร์สใหม่ให้ลูกค้า" aria-label="ขายคอร์สใหม่">
                 <Plus size={16} />
               </button>
             </div>
@@ -360,7 +361,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             {/* Content by tab — scrollable for large course lists */}
             <div className="divide-y divide-[var(--bd)] max-h-[600px] overflow-y-auto">
               {salesError && courseTab === 'purchases' && (
-                <div className="px-4 py-3 text-xs text-amber-400 flex items-center gap-2 bg-amber-900/10">
+                <div className={`px-4 py-3 text-xs flex items-center gap-2 ${isDark ? 'text-amber-400 bg-amber-900/10' : 'text-amber-700 bg-amber-50'}`}>
                   <AlertCircle size={13} /> {salesError}
                 </div>
               )}
@@ -374,9 +375,9 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
                         <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
-                          sale.payment?.status === 'paid' ? 'bg-emerald-900/30 text-emerald-400' :
-                          sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? 'bg-red-900/30 text-red-400' :
-                          'bg-amber-900/30 text-amber-400'
+                          sale.payment?.status === 'paid' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') :
+                          sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') :
+                          (isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700')
                         }`}>{sale.payment?.status === 'paid' ? 'ชำระแล้ว' : sale.status === 'cancelled' ? 'ยกเลิก' : 'ค้างชำระ'}</span>
                       </div>
                       <p className="text-xs text-[var(--tx-secondary)] mt-0.5">{formatThaiDateFull(sale.saleDate)}</p>
@@ -408,8 +409,8 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
                       </div>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
                         courseTab === 'active'
-                          ? 'bg-teal-900/30 text-teal-400 border border-teal-700/40'
-                          : 'bg-red-900/20 text-red-400 border border-red-700/40'
+                          ? (isDark ? 'bg-teal-900/30 text-teal-400 border border-teal-700/40' : 'bg-teal-50 text-teal-700 border border-teal-200')
+                          : (isDark ? 'bg-red-900/20 text-red-400 border border-red-700/40' : 'bg-red-50 text-red-700 border border-red-200')
                       }`}>
                         {course.status || (courseTab === 'active' ? 'กำลังใช้งาน' : 'หมดอายุ')}
                       </span>
@@ -449,6 +450,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             courseIndex={exchangeModal.courseIndex}
             customerId={customer.proClinicId}
             customerName={name}
+            isDark={isDark}
             onClose={() => setExchangeModal(null)}
             onDone={async () => {
               const refreshed = await getCustomer(customer.proClinicId);
@@ -463,6 +465,7 @@ export default function CustomerDetailView({ customer, accentColor, onBack, onCr
             courseIndex={shareModal.courseIndex}
             fromCustomerId={customer.proClinicId}
             fromCustomerName={name}
+            isDark={isDark}
             onClose={() => setShareModal(null)}
             onDone={async () => {
               const refreshed = await getCustomer(customer.proClinicId);
@@ -492,11 +495,11 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
   const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-add-qty" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
-          <h3 className="text-sm font-bold text-teal-400">เพิ่มคงเหลือ: {courseName}</h3>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+          <h3 id="modal-title-add-qty" className="text-sm font-bold text-teal-400">เพิ่มคงเหลือ: {courseName}</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -547,7 +550,7 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
   );
 }
 
-function ExchangeModal({ course, courseIndex, customerId, customerName, onClose, onDone }) {
+function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, onClose, onDone }) {
   const [products, setProducts] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -577,17 +580,17 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
   const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-exchange" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
-          <h3 className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+          <h3 id="modal-title-exchange" className="text-sm font-bold text-sky-400">เปลี่ยนสินค้าในคอร์ส</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="bg-sky-900/10 border border-sky-700/30 rounded-lg px-4 py-3">
+          <div className={`rounded-lg px-4 py-3 border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
             <p className="text-xs text-[var(--tx-muted)]">สินค้าปัจจุบัน</p>
             <p className="text-sm font-bold text-[var(--tx-heading)]">{course.product}</p>
-            <p className="text-xs text-[var(--tx-muted)] mt-1">คงเหลือ: <span className="font-mono font-bold text-sky-400">{currentParsed.remaining} / {currentParsed.total} {currentParsed.unit}</span></p>
+            <p className="text-xs text-[var(--tx-muted)] mt-1">คงเหลือ: <span className={`font-mono font-bold ${isDark ? 'text-sky-400' : 'text-sky-700'}`}>{currentParsed.remaining} / {currentParsed.total} {currentParsed.unit}</span></p>
           </div>
 
           <div>
@@ -625,8 +628,8 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
               </div>
             )}
             {selected && (
-              <div className="mt-2 bg-sky-900/10 border border-sky-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-sky-400">{selected.name} ({selected.unit || '-'})</span>
+              <div className={`mt-2 rounded-lg px-3 py-2 flex items-center justify-between border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
+                <span className={`text-xs font-bold ${isDark ? 'text-sky-400' : 'text-sky-700'}`}>{selected.name} ({selected.unit || '-'})</span>
                 <button onClick={() => setSelected(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
               </div>
             )}
@@ -703,7 +706,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, onClose,
   );
 }
 
-function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onClose, onDone }) {
+function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isDark, onClose, onDone }) {
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -731,17 +734,17 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onC
   const toName = selectedCust ? `${selectedCust.patientData?.prefix || ''} ${selectedCust.patientData?.firstName || ''} ${selectedCust.patientData?.lastName || ''}`.trim() : '';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-share" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
-          <h3 className="text-sm font-bold text-purple-400">แชร์คอร์สให้ลูกค้าอื่น</h3>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400"><X size={18} /></button>
+          <h3 id="modal-title-share" className="text-sm font-bold text-purple-400">แชร์คอร์สให้ลูกค้าอื่น</h3>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="bg-purple-900/10 border border-purple-700/30 rounded-lg px-4 py-3">
+          <div className={`rounded-lg px-4 py-3 border ${isDark ? 'bg-purple-900/10 border-purple-700/30' : 'bg-purple-50 border-purple-200'}`}>
             <p className="text-xs text-[var(--tx-muted)]">คอร์สที่จะแชร์</p>
             <p className="text-sm font-bold text-[var(--tx-heading)]">{course.name} — {course.product}</p>
-            <p className="text-xs text-[var(--tx-muted)] mt-1">จาก: <span className="text-purple-400">{fromCustomerName}</span> | คงเหลือ: <span className="font-mono font-bold text-purple-400">{currentParsed.remaining} {currentParsed.unit}</span></p>
+            <p className="text-xs text-[var(--tx-muted)] mt-1">จาก: <span className={isDark ? 'text-purple-400' : 'text-purple-700'}>{fromCustomerName}</span> | คงเหลือ: <span className={`font-mono font-bold ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>{currentParsed.remaining} {currentParsed.unit}</span></p>
           </div>
 
           <div>
@@ -778,8 +781,8 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onC
               </div>
             )}
             {selectedCust && (
-              <div className="mt-2 bg-purple-900/10 border border-purple-700/30 rounded-lg px-3 py-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-400">{toName} <span className="font-mono text-[var(--tx-muted)]">{selectedCust.proClinicHN || ''}</span></span>
+              <div className={`mt-2 rounded-lg px-3 py-2 flex items-center justify-between border ${isDark ? 'bg-purple-900/10 border-purple-700/30' : 'bg-purple-50 border-purple-200'}`}>
+                <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-700'}`}>{toName} <span className="font-mono text-[var(--tx-muted)]">{selectedCust.proClinicHN || ''}</span></span>
                 <button onClick={() => setSelectedCust(null)} className="text-xs text-[var(--tx-muted)] hover:text-red-400">เปลี่ยน</button>
               </div>
             )}
@@ -900,7 +903,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function TreatmentDetailExpanded({ detail, ac, acRgb }) {
+function TreatmentDetailExpanded({ detail, ac, acRgb, isDark }) {
   const d = detail || {};
   const vitals = d.vitals || {};
   const meds = d.medications || d.takeHomeMeds || [];
@@ -1011,9 +1014,9 @@ function TreatmentDetailExpanded({ detail, ac, acRgb }) {
             <Shield size={10} /> ใบรับรองแพทย์
           </span>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
-            {(medCert.isActuallyCome || d.medCertActuallyCome) && <span className="px-1.5 py-0.5 rounded bg-sky-900/30 text-sky-400">มาตรวจจริง</span>}
-            {(medCert.isRest || d.medCertIsRest) && <span className="px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">พักงาน {medCert.period || d.medCertPeriod || ''}</span>}
-            {(medCert.isOther || d.medCertIsOther) && <span className="px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">{medCert.otherDetail || d.medCertOtherDetail || 'อื่นๆ'}</span>}
+            {(medCert.isActuallyCome || d.medCertActuallyCome) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>มาตรวจจริง</span>}
+            {(medCert.isRest || d.medCertIsRest) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700'}`}>พักงาน {medCert.period || d.medCertPeriod || ''}</span>}
+            {(medCert.isOther || d.medCertIsOther) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700'}`}>{medCert.otherDetail || d.medCertOtherDetail || 'อื่นๆ'}</span>}
           </div>
         </div>
       )}
