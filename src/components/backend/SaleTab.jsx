@@ -19,6 +19,7 @@ const PAYMENT_STATUSES = [
   { value: 'paid', label: 'ชำระแล้ว', color: 'emerald' },
   { value: 'split', label: 'แบ่งชำระ', color: 'sky' },
   { value: 'unpaid', label: 'ค้างชำระ', color: 'amber' },
+  { value: 'deferred', label: 'ชำระภายหลัง', color: 'purple' },
   { value: 'draft', label: 'แบบร่าง', color: 'gray' },
 ];
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -82,6 +83,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [customerHN, setCustomerHN] = useState('');
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [saleNote, setSaleNote] = useState('');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [appointmentId, setAppointmentId] = useState('');
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [medications, setMedications] = useState([]);
   const [billDiscount, setBillDiscount] = useState('');
@@ -258,6 +261,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     setEditingSale(sale);
     setCustomerId(sale.customerId || ''); setCustomerName(sale.customerName || ''); setCustomerHN(sale.customerHN || '');
     setSaleDate(sale.saleDate || ''); setSaleNote(sale.saleNote || '');
+    setPaymentNote(sale.payment?.note || ''); setCouponCode(sale.couponCode || ''); setAppointmentId(sale.appointmentId || '');
     setPurchasedItems(sale.items ? [...(sale.items.promotions||[]), ...(sale.items.courses||[]), ...(sale.items.products||[])] : []);
     setMedications(sale.items?.medications || []);
     setBillDiscount(String(sale.billing?.billDiscount || '')); setBillDiscountType(sale.billing?.discountType || 'amount');
@@ -297,9 +301,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       });
       const data = clean({
         customerId, customerName, customerHN, saleDate, saleNote,
+        couponCode: couponCode || null,
+        appointmentId: appointmentId || null,
         items: grouped,
         billing: { subtotal: billing.subtotal, billDiscount: billing.discount, discountType: billDiscountType, netTotal: billing.netTotal },
-        payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
+        payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo, note: paymentNote || '' },
         sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, name: s.name, percent: s.percent, total: s.total })),
       });
       if (editingSale) {
@@ -454,7 +460,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         : sale.source === 'addRemaining' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
                         : `${fmtMoney(sale.billing?.netTotal)} ฿`}
                       </td>
-                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
+                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
                           <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
@@ -676,7 +682,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <button onClick={() => openBuyModal('course')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-teal-900/20 border-teal-700/40 text-teal-400 hover:bg-teal-900/30' : 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'}`}><Plus size={10} /> ซื้อคอร์ส</button>
                   <button onClick={() => openBuyModal('product')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}><Plus size={10} /> สินค้า</button>
                   <button onClick={() => openBuyModal('promotion')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-sky-900/20 border-sky-700/40 text-sky-400 hover:bg-sky-900/30' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'}`}><Plus size={10} /> โปรโมชัน</button>
-                  <button onClick={() => setMedications(prev => [...prev, { name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด' }])} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}><Plus size={10} /> ยากลับบ้าน</button>
+                  <button onClick={() => setMedications(prev => [...prev, { name: '', generic_name: '', dosage: '', qty: '1', unitPrice: '', unit: 'เม็ด', indications: '', dosage_amount: '', dosage_unit: 'เม็ด', times_per_day: '', administration_method: '', administration_times: [], instructions: '', storage_instructions: '' }])} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}><Plus size={10} /> ยากลับบ้าน</button>
                 </div>
               </div>
               {purchasedItems.length === 0 && medications.length === 0 ? (
@@ -732,7 +738,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
               <h3 className="text-xs font-bold uppercase tracking-widest text-pink-400 flex items-center gap-1.5 mb-3"><CreditCard size={12} /> การชำระเงิน</h3>
               <div className="flex gap-3 mb-3 flex-wrap">
-                {[{v:'paid',l:'ชำระเต็ม'},{v:'split',l:'แบ่งชำระ'},{v:'unpaid',l:'ค้างชำระ'},{v:'draft',l:'แบบร่าง'}].map(s => (
+                {[{v:'paid',l:'ชำระเต็ม'},{v:'split',l:'แบ่งชำระ'},{v:'deferred',l:'ชำระภายหลัง'},{v:'unpaid',l:'ค้างชำระ'},{v:'draft',l:'แบบร่าง'}].map(s => (
                   <label key={s.v} className="flex items-center gap-1.5 cursor-pointer text-xs">
                     <input type="radio" name="payStatus" checked={paymentStatus===s.v} onChange={() => {
                       setPaymentStatus(s.v);
@@ -741,8 +747,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   </label>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-3 gap-2 mb-3">
                 <div><label className={labelCls}>วันที่ชำระ</label><DatePickerField value={paymentDate} onChange={setPaymentDate} /></div>
+                <div><label className={labelCls}>เวลา</label><input type="time" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="REF-001" /></div>
               </div>
               <label className={labelCls}>ช่องทางชำระเงิน</label>
@@ -775,10 +782,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               ))}
             </div>
 
-            {/* Note */}
+            {/* Notes */}
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
-              <label className={labelCls}>หมายเหตุ</label>
-              <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
+              <label className={labelCls}>หมายเหตุการขาย</label>
+              <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none mb-2`} placeholder="หมายเหตุเกี่ยวกับรายการขาย" />
+              <label className={labelCls}>หมายเหตุการชำระเงิน</label>
+              <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุเกี่ยวกับการชำระ" />
             </div>
 
             {/* Error + Submit */}

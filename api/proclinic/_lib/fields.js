@@ -102,6 +102,39 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}, countryOp
   if (patient.emergencyRelation) params.set('contact_1_lastname', patient.emergencyRelation);
   if (patient.emergencyPhone) params.set('contact_1_telephone_number', patient.emergencyPhone);
 
+  // Personal details
+  if (patient.nickname) params.set('nickname', patient.nickname);
+  if (patient.weight) params.set('weight', patient.weight);
+  if (patient.height) params.set('height', patient.height);
+  if (patient.citizenId) params.set('citizen_id', patient.citizenId);
+  if (patient.passportId) params.set('passport_id', patient.passportId);
+  if (patient.email) params.set('email', patient.email);
+  if (patient.lineId) params.set('line_id', patient.lineId);
+  if (patient.facebookLink) params.set('facebook_link', patient.facebookLink);
+  if (patient.occupation) params.set('occupation', patient.occupation);
+  if (patient.income) params.set('income', patient.income);
+
+  // Preferences
+  if (patient.likeNote) params.set('like_note', patient.likeNote);
+  if (patient.dislikeNote) params.set('dislike_note', patient.dislikeNote);
+
+  // Medical
+  if (patient.bloodType) params.set('blood_type', patient.bloodType);
+  if (patient.isPregnant !== undefined) params.set('pregnanted', patient.isPregnant ? 'มี' : 'ไม่มี');
+  if (patient.foodAllergy) params.set('history_of_food_allergy', patient.foodAllergy);
+  if (patient.beforeTreatment) params.set('before_treatment', patient.beforeTreatment);
+
+  // Assignment
+  if (patient.personalDoctorId) params.set('doctor_id', patient.personalDoctorId);
+
+  // Emergency contact #2
+  if (patient.emergencyName2) {
+    const parts = patient.emergencyName2.split(' ');
+    params.set('contact_2_firstname', parts[0] || '');
+    params.set('contact_2_lastname', parts.slice(1).join(' ') || '');
+  }
+  if (patient.emergencyPhone2) params.set('contact_2_telephone_number', patient.emergencyPhone2);
+
   // Customer type: Thai vs Foreigner — radio values เป็น text ไม่ใช่ตัวเลข
   if (patient.nationality === 'ต่างชาติ') {
     params.set('customer_type', 'ชาวต่างชาติ');
@@ -113,7 +146,7 @@ export function buildCreateFormData(patient, csrf, defaultFields = {}, countryOp
     params.set('customer_type', 'คนไทย');
     params.set('country', 'ไทย (Thailand)');
   }
-  params.set('customer_type_2', 'ลูกค้าทั่วไป');
+  params.set('customer_type_2', patient.customerType2 || 'ลูกค้าทั่วไป');
 
   return params;
 }
@@ -226,6 +259,42 @@ export function reverseMapPatient(formFields) {
   const idCard = f.id_card_number || f.citizen_id || f.card_no || f.id_number || '';
   if (idCard) patient.idCard = idCard;
 
+  // Citizen ID (separate field for citizen_id specifically)
+  if (f.citizen_id) patient.citizenId = f.citizen_id;
+  if (f.passport_id) patient.passportId = f.passport_id;
+
+  // Personal details
+  if (f.nickname) patient.nickname = f.nickname;
+  if (f.weight) patient.weight = f.weight;
+  if (f.height) patient.height = f.height;
+  if (f.email) patient.email = f.email;
+  if (f.line_id) patient.lineId = f.line_id;
+  if (f.facebook_link) patient.facebookLink = f.facebook_link;
+  if (f.occupation) patient.occupation = f.occupation;
+  if (f.income) patient.income = f.income;
+
+  // Preferences
+  if (f.like_note) patient.likeNote = f.like_note;
+  if (f.dislike_note) patient.dislikeNote = f.dislike_note;
+
+  // Medical
+  if (f.blood_type) patient.bloodType = f.blood_type;
+  if (f.pregnanted) patient.isPregnant = f.pregnanted === 'มี';
+  if (f.history_of_food_allergy) patient.foodAllergy = f.history_of_food_allergy;
+  if (f.before_treatment) patient.beforeTreatment = f.before_treatment;
+
+  // Assignment
+  if (f.doctor_id) patient.personalDoctorId = f.doctor_id;
+
+  // Emergency contact #2
+  if (f.contact_2_firstname || f.contact_2_lastname) {
+    patient.emergencyName2 = [f.contact_2_firstname, f.contact_2_lastname].filter(Boolean).join(' ');
+  }
+  if (f.contact_2_telephone_number) patient.emergencyPhone2 = f.contact_2_telephone_number;
+
+  // Classification
+  if (f.customer_type_2) patient.customerType2 = f.customer_type_2;
+
   return patient;
 }
 
@@ -276,6 +345,39 @@ export function buildUpdateFormData(patient, existingFields, csrf, countryOption
   if (patient.emergencyRelation) params.set('contact_1_lastname', patient.emergencyRelation);
   if (patient.emergencyPhone) params.set('contact_1_telephone_number', patient.emergencyPhone);
 
+  // Personal details
+  if (patient.nickname) params.set('nickname', patient.nickname);
+  if (patient.weight) params.set('weight', patient.weight);
+  if (patient.height) params.set('height', patient.height);
+  if (patient.citizenId) params.set('citizen_id', patient.citizenId);
+  if (patient.passportId) params.set('passport_id', patient.passportId);
+  if (patient.email) params.set('email', patient.email);
+  if (patient.lineId) params.set('line_id', patient.lineId);
+  if (patient.facebookLink) params.set('facebook_link', patient.facebookLink);
+  if (patient.occupation) params.set('occupation', patient.occupation);
+  if (patient.income) params.set('income', patient.income);
+
+  // Preferences
+  if (patient.likeNote) params.set('like_note', patient.likeNote);
+  if (patient.dislikeNote) params.set('dislike_note', patient.dislikeNote);
+
+  // Medical
+  if (patient.bloodType) params.set('blood_type', patient.bloodType);
+  if (patient.isPregnant !== undefined) params.set('pregnanted', patient.isPregnant ? 'มี' : 'ไม่มี');
+  if (patient.foodAllergy) params.set('history_of_food_allergy', patient.foodAllergy);
+  if (patient.beforeTreatment) params.set('before_treatment', patient.beforeTreatment);
+
+  // Assignment
+  if (patient.personalDoctorId) params.set('doctor_id', patient.personalDoctorId);
+
+  // Emergency contact #2
+  if (patient.emergencyName2) {
+    const parts = patient.emergencyName2.split(' ');
+    params.set('contact_2_firstname', parts[0] || '');
+    params.set('contact_2_lastname', parts.slice(1).join(' ') || '');
+  }
+  if (patient.emergencyPhone2) params.set('contact_2_telephone_number', patient.emergencyPhone2);
+
   // Customer type: Thai vs Foreigner
   if (patient.nationality === 'ต่างชาติ') {
     params.set('customer_type', 'ชาวต่างชาติ');
@@ -287,6 +389,7 @@ export function buildUpdateFormData(patient, existingFields, csrf, countryOption
     params.set('customer_type', 'คนไทย');
     params.set('country', 'ไทย (Thailand)');
   }
+  if (patient.customerType2) params.set('customer_type_2', patient.customerType2);
 
   return params;
 }

@@ -18,6 +18,8 @@ const THAI_DAYS_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 const THAI_DAYS_FULL = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 const CAL_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 const CHANNELS = ['เคาน์เตอร์','โทรศัพท์','Walk-in','Facebook','Instagram','TikTok','Line','อื่นๆ'];
+const APPT_TYPES = [{ value: 'sales', label: 'ขาย' }, { value: 'followup', label: 'ติดตาม' }];
+const APPT_COLORS = ['ใช้สีเริ่มต้น','เหลืองอ่อน','เขียวอ่อน','ส้มอ่อน','แดงอ่อน','น้ำตาลอ่อน','ชมพูอ่อน','ม่วงอ่อน','น้ำเงินอ่อน'];
 const STATUSES = [
   { value: 'pending', label: 'รอยืนยัน', bg: 'bg-amber-500/20', text: 'text-amber-400', dot: 'bg-amber-400' },
   { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20', text: 'text-sky-400', dot: 'bg-sky-400' },
@@ -56,6 +58,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const [formError, setFormError] = useState('');
   const [customers, setCustomers] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
 
   const today = dateStr(new Date());
@@ -161,27 +164,52 @@ export default function AppointmentTab({ clinicSettings, theme }) {
 
   // ── Form handlers ──
   const loadFormOptions = useCallback(async () => {
-    if (customers.length && doctors.length) return;
-    const [c, d] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors')]);
+    if (customers.length && doctors.length && staff.length) return;
+    const [c, d, s] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors'), getAllMasterDataItems('staff')]);
     setCustomers(c);
     setDoctors(d.filter(x => x.status !== 'พักใช้งาน'));
-  }, [customers.length, doctors.length]);
+    setStaff(s.filter(x => x.status !== 'พักใช้งาน'));
+  }, [customers.length, doctors.length, staff.length]);
+
+  const defaultFormData = (overrides = {}) => ({
+    date: selectedDate, startTime: '10:00', endTime: '10:30',
+    customerId: '', customerName: '', customerHN: '',
+    appointmentType: 'sales', advisorId: '', advisorName: '',
+    doctorId: '', doctorName: '', assistantIds: [], roomName: '',
+    channel: '', appointmentTo: '', location: '',
+    expectedSales: '', preparation: '', customerNote: '', notes: '',
+    appointmentColor: '', lineNotify: false,
+    recurringOption: 'once', recurringInterval: '', recurringUnit: 'วัน', recurringTimes: '',
+    status: 'pending',
+    ...overrides,
+  });
 
   const openCreate = (date, time, room) => {
     loadFormOptions();
-    setFormData({ date: date||selectedDate, startTime: time||'10:00', endTime: time ? TIME_SLOTS[TIME_SLOTS.indexOf(time)+1]||time : '10:30',
-      customerId:'', customerName:'', customerHN:'', doctorId:'', doctorName:'', roomName: room||'',
-      channel:'', appointmentTo:'', notes:'', status:'pending' });
+    setFormData(defaultFormData({
+      date: date || selectedDate,
+      startTime: time || '10:00',
+      endTime: time ? TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time : '10:30',
+      roomName: room || '',
+    }));
     setFormMode({ mode: 'create' });
     setFormError('');
   };
 
   const openEdit = (appt) => {
     loadFormOptions();
-    setFormData({ date:appt.date||'', startTime:appt.startTime||'', endTime:appt.endTime||'',
-      customerId:appt.customerId||'', customerName:appt.customerName||'', customerHN:appt.customerHN||'',
-      doctorId:appt.doctorId||'', doctorName:appt.doctorName||'', roomName:appt.roomName||'',
-      channel:appt.channel||'', appointmentTo:appt.appointmentTo||'', notes:appt.notes||'', status:appt.status||'pending' });
+    setFormData(defaultFormData({
+      date: appt.date, startTime: appt.startTime, endTime: appt.endTime || appt.startTime,
+      customerId: appt.customerId, customerName: appt.customerName, customerHN: appt.customerHN,
+      appointmentType: appt.appointmentType || 'sales',
+      advisorId: appt.advisorId || '', advisorName: appt.advisorName || '',
+      doctorId: appt.doctorId, doctorName: appt.doctorName, assistantIds: appt.assistantIds || [],
+      roomName: appt.roomName, channel: appt.channel, appointmentTo: appt.appointmentTo,
+      location: appt.location || '', expectedSales: appt.expectedSales || '',
+      preparation: appt.preparation || '', customerNote: appt.customerNote || '',
+      notes: appt.notes, appointmentColor: appt.appointmentColor || '',
+      lineNotify: appt.lineNotify || false, status: appt.status || 'pending',
+    }));
     setFormMode({ mode: 'edit', appt });
     setFormError('');
   };
@@ -210,8 +238,15 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       const clean = JSON.parse(JSON.stringify({
         customerId:formData.customerId, customerName:formData.customerName, customerHN:formData.customerHN,
         date:formData.date, startTime:formData.startTime, endTime:formData.endTime||formData.startTime,
-        doctorId:formData.doctorId, doctorName:formData.doctorName, roomName:formData.roomName,
-        channel:formData.channel, appointmentTo:formData.appointmentTo, notes:formData.notes, status:formData.status||'pending',
+        appointmentType:formData.appointmentType||'sales',
+        advisorId:formData.advisorId||'', advisorName:formData.advisorName||'',
+        doctorId:formData.doctorId, doctorName:formData.doctorName,
+        assistantIds:formData.assistantIds||[], roomName:formData.roomName,
+        channel:formData.channel, appointmentTo:formData.appointmentTo, location:formData.location||'',
+        expectedSales:formData.expectedSales||'', preparation:formData.preparation||'',
+        customerNote:formData.customerNote||'', notes:formData.notes,
+        appointmentColor:formData.appointmentColor||'', lineNotify:!!formData.lineNotify,
+        status:formData.status||'pending',
       }));
       if (formMode.mode === 'edit') await updateBackendAppointment(formMode.appt.appointmentId||formMode.appt.id, clean);
       else await createBackendAppointment(clean);
@@ -486,8 +521,27 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                   </select>
                 </div>
               </div>
-              {/* Doctor + Room */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Appointment Type */}
+              <div>
+                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ประเภทนัดหมาย</label>
+                <div className="flex gap-3">
+                  {APPT_TYPES.map(t => (
+                    <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                      <input type="radio" checked={formData.appointmentType === t.value} onChange={() => setFormData(p => ({...p, appointmentType: t.value}))} className="accent-sky-500" />{t.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {/* Advisor + Doctor + Room */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ที่ปรึกษา</label>
+                  <select value={formData.advisorId} onChange={e => { const s=staff.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,advisorId:e.target.value,advisorName:s?.name||''})); }}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <option value="">ไม่ระบุ</option>
+                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
                 <div>
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
                   <select value={formData.doctorId} onChange={e => { const d=doctors.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,doctorId:e.target.value,doctorName:d?.name||''})); }}
@@ -505,20 +559,38 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                   </select>
                 </div>
               </div>
-              {/* Channel + Purpose + Status */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Assistants (multi-select) */}
+              <div>
+                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {doctors.map(d => (
+                    <label key={d.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg cursor-pointer border transition-all ${
+                      formData.assistantIds?.includes(String(d.id))
+                        ? (isDark ? 'bg-sky-900/30 border-sky-700/40 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-700')
+                        : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'
+                    }`}>
+                      <input type="checkbox" checked={formData.assistantIds?.includes(String(d.id)) || false}
+                        onChange={e => {
+                          const id = String(d.id);
+                          setFormData(p => ({...p, assistantIds: e.target.checked
+                            ? [...(p.assistantIds||[]), id].slice(0, 5)
+                            : (p.assistantIds||[]).filter(x => x !== id)
+                          }));
+                        }} className="accent-sky-500 w-3 h-3" />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {/* Channel + Purpose + Status + Color */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทาง</label>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทางนัดหมาย</label>
                   <select value={formData.channel} onChange={e => setFormData(p => ({...p, channel:e.target.value}))}
                     className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
                     <option value="">ไม่ระบุ</option>
                     {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
-                  <input type="text" value={formData.appointmentTo} onChange={e => setFormData(p => ({...p, appointmentTo:e.target.value}))} placeholder="botox, filler..."
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>
@@ -528,12 +600,87 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                   </select>
                 </div>
               </div>
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ</label>
-                <textarea value={formData.notes} onChange={e => setFormData(p => ({...p, notes:e.target.value}))} rows={2}
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
+                  <textarea value={formData.appointmentTo} onChange={e => setFormData(p => ({...p, appointmentTo:e.target.value}))} rows={2} placeholder="botox, filler..."
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สีนัดหมาย</label>
+                  <select value={formData.appointmentColor} onChange={e => setFormData(p => ({...p, appointmentColor:e.target.value}))}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <option value="">ไม่ระบุ</option>
+                    {APPT_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
+              {/* Extra fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานที่นัด</label>
+                  <input type="text" value={formData.location} onChange={e => setFormData(p => ({...p, location:e.target.value}))} placeholder="คลินิก สาขา..."
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ยอดขายที่คาดหวัง</label>
+                  <input type="number" value={formData.expectedSales} onChange={e => setFormData(p => ({...p, expectedSales:e.target.value}))} placeholder="0"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                </div>
+              </div>
+              {/* Recurring */}
+              {formMode?.mode === 'create' && (
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ตัวเลือกนัดหมาย</label>
+                  <div className="flex gap-3 mb-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                      <input type="radio" checked={formData.recurringOption === 'once'} onChange={() => setFormData(p => ({...p, recurringOption:'once'}))} className="accent-sky-500" />นัดครั้งเดียว
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                      <input type="radio" checked={formData.recurringOption === 'multiple'} onChange={() => setFormData(p => ({...p, recurringOption:'multiple'}))} className="accent-sky-500" />นัดหลายครั้ง
+                    </label>
+                  </div>
+                  {formData.recurringOption === 'multiple' && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[var(--tx-muted)]">ทุก</span>
+                      <input type="number" value={formData.recurringInterval} onChange={e => setFormData(p => ({...p, recurringInterval:e.target.value}))} min="1"
+                        className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" />
+                      <select value={formData.recurringUnit} onChange={e => setFormData(p => ({...p, recurringUnit:e.target.value}))}
+                        className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]">
+                        <option value="วัน">วัน</option><option value="เดือน">เดือน</option>
+                      </select>
+                      <span className="text-[var(--tx-muted)]">จำนวน</span>
+                      <input type="number" value={formData.recurringTimes} onChange={e => setFormData(p => ({...p, recurringTimes:e.target.value}))} min="1"
+                        className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" />
+                      <span className="text-[var(--tx-muted)]">ครั้ง</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Preparation */}
+              <div>
+                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">การเตรียมตัว</label>
+                <textarea value={formData.preparation} onChange={e => setFormData(p => ({...p, preparation:e.target.value}))} rows={2} placeholder="งดทาครีม, งดกินแอสไพริน..."
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+              </div>
+              {/* Notes (2 types) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ (แจ้งลูกค้า)</label>
+                  <textarea value={formData.customerNote} onChange={e => setFormData(p => ({...p, customerNote:e.target.value}))} rows={2}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">โน้ต (สำหรับคลินิก)</label>
+                  <textarea value={formData.notes} onChange={e => setFormData(p => ({...p, notes:e.target.value}))} rows={2}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                </div>
+              </div>
+              {/* LINE notify */}
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={formData.lineNotify || false} onChange={e => setFormData(p => ({...p, lineNotify:e.target.checked}))} className="accent-emerald-500" />
+                แจ้งเตือนนัดหมายทาง LINE
+              </label>
               {formError && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12}/>{formError}</div>}
             </div>
             <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
