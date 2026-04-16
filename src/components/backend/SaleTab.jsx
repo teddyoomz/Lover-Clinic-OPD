@@ -454,7 +454,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         : sale.source === 'addRemaining' ? <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-teal-900/30 text-teal-400">เพิ่มคงเหลือ</span>
                         : `${fmtMoney(sale.billing?.netTotal)} ฿`}
                       </td>
-                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded bg-${st.color}-900/30 text-${st.color}-400`}>{st.label}</span></td>
+                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? 'bg-emerald-900/30 text-emerald-400' : st.color === 'amber' ? 'bg-amber-900/30 text-amber-400' : st.color === 'red' ? 'bg-red-900/30 text-red-400' : st.color === 'gray' ? 'bg-gray-900/30 text-gray-400' : 'bg-sky-900/30 text-sky-400'}`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
                           <button onClick={() => setViewingSale(sale)} className="p-1 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด"><Eye size={13} /></button>

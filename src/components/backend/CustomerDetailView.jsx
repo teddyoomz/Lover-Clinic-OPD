@@ -840,7 +840,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, onC
 function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, onShare }) {
   const parsed = parseQtyString(course.qty);
   const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
-  const origIdx = allCourses.indexOf(course);
+  const origIdx = allCourses.findIndex(c => c.name === course.name && c.product === course.product && c.qty === course.qty);
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center justify-between text-xs">

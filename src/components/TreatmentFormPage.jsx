@@ -56,6 +56,38 @@ function ThaiDatePicker({ value, onChange, isDark, inputCls }) {
   );
 }
 
+function LabPriceSummary({ price, discount, discountType, vat, isDark }) {
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const afterDisc = discountType === 'percent' ? p * (1 - d / 100) : p - d;
+  const vatAmt = vat ? afterDisc * 0.07 : 0;
+  const total = afterDisc + vatAmt;
+  return <div className={`text-xs font-bold text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ราคาสุทธิ: {total.toFixed(2)} บาท</div>;
+}
+
+function MedPriceSummary({ price, discount, discountType, vat, onVatChange, premium, isDark }) {
+  const p = parseFloat(price) || 0;
+  const d = parseFloat(discount) || 0;
+  const afterDisc = discountType === 'percent' ? p * (1 - d / 100) : p - d;
+  const vatAmt = vat ? afterDisc * 0.07 : 0;
+  const net = premium ? 0 : Math.max(0, afterDisc + vatAmt);
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="flex justify-between text-gray-500"><span>ราคาหลังหักส่วนลด</span><span>{afterDisc.toFixed(2)} บาท</span></div>
+      <div className="flex items-center justify-between text-gray-500">
+        <label className="flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" checked={vat} onChange={e => onVatChange(e.target.checked)} className="w-3 h-3 rounded accent-emerald-500" />
+          คำนวนค่าสินค้าเพิ่ม (VAT 7%)
+        </label>
+        <span>{vatAmt.toFixed(2)} บาท</span>
+      </div>
+      <div className="flex justify-between font-bold text-gray-300 pt-1 border-t border-dashed" style={{ borderColor: isDark ? '#333' : '#ddd' }}>
+        <span>ราคาสุทธิ์ต่อหน่วย</span><span>{net.toFixed(2)} บาท</span>
+      </div>
+    </div>
+  );
+}
+
 function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inputCls, labelCls }) {
   const [copied, setCopied] = useState(false);
   const hasPrev = !!(prevValue && prevValue.trim());
@@ -2070,14 +2102,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     <label className="flex items-center gap-2 text-xs text-gray-400">
                       <input type="checkbox" checked={labModalVat} onChange={e => setLabModalVat(e.target.checked)} /> VAT 7%
                     </label>
-                    {(() => {
-                      const p = parseFloat(labModalPrice) || 0;
-                      const d = parseFloat(labModalDiscount) || 0;
-                      const afterDisc = labModalDiscountType === 'percent' ? p * (1 - d/100) : p - d;
-                      const vat = labModalVat ? afterDisc * 0.07 : 0;
-                      const total = afterDisc + vat;
-                      return <div className={`text-xs font-bold text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ราคาสุทธิ: {total.toFixed(2)} บาท</div>;
-                    })()}
+                    {/* Lab price summary — pre-computed (no IIFE, Vite OXC safe) */}
+                    <LabPriceSummary price={labModalPrice} discount={labModalDiscount} discountType={labModalDiscountType} vat={labModalVat} isDark={isDark} />
                     <div className="flex gap-2 pt-2">
                       <button onClick={() => setLabModalOpen(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${isDark ? 'border-[#333] text-gray-400' : 'border-gray-300 text-gray-500'}`}>ยกเลิก</button>
                       <button disabled={!labModalSelected} onClick={() => {
@@ -2294,28 +2320,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           <input type="radio" name="medDiscType" checked={medModalDiscountType === 'percent'} onChange={() => setMedModalDiscountType('percent')} className="w-3 h-3" /> %
                         </label>
                       </div>
-                      {(() => {
-                        const price = parseFloat(medModalPrice) || 0;
-                        const disc = parseFloat(medModalDiscount) || 0;
-                        const afterDisc = medModalDiscountType === 'percent' ? price * (1 - disc / 100) : price - disc;
-                        const vat = medModalVat ? afterDisc * 0.07 : 0;
-                        const net = medModalPremium ? 0 : Math.max(0, afterDisc + vat);
-                        return (
-                          <div className="space-y-1 text-xs">
-                            <div className="flex justify-between text-gray-500"><span>ราคาหลังหักส่วนลด</span><span>{afterDisc.toFixed(2)} บาท</span></div>
-                            <div className="flex items-center justify-between text-gray-500">
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input type="checkbox" checked={medModalVat} onChange={e => setMedModalVat(e.target.checked)} className="w-3 h-3 rounded accent-emerald-500" />
-                                คำนวนค่าสินค้าเพิ่ม (VAT 7%)
-                              </label>
-                              <span>{vat.toFixed(2)} บาท</span>
-                            </div>
-                            <div className="flex justify-between font-bold text-gray-300 pt-1 border-t border-dashed" style={{ borderColor: isDark ? '#333' : '#ddd' }}>
-                              <span>ราคาสุทธิ์ต่อหน่วย</span><span>{net.toFixed(2)} บาท</span>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      {/* Med price summary — extracted from IIFE (Vite OXC safe) */}
+                      <MedPriceSummary price={medModalPrice} discount={medModalDiscount} discountType={medModalDiscountType} vat={medModalVat} onVatChange={setMedModalVat} premium={medModalPremium} isDark={isDark} />
                     </div>
                     {/* Label info (expandable) */}
                     <div>

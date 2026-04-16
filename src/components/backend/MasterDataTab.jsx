@@ -519,10 +519,12 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                 <tr className="border-b border-[var(--bd)]">
                   {(COLUMNS[activeSubTab] || []).map(col => (
                     <th key={col.key}
+                      scope="col"
                       className={`px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs bg-[var(--bg-elevated)] ${col.w || ''} ${col.align || ''} ${col.sticky ? 'sticky left-0 z-10 bg-[var(--bg-elevated)]' : ''}`}>
                       {col.label}
                     </th>
                   ))}
+                  {activeSubTab === 'courses' && <th scope="col" className="px-2 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs bg-[var(--bg-elevated)] w-16">จัดการ</th>}
                 </tr>
               </thead>
               <tbody>
@@ -543,12 +545,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                         )}
                       </td>
                     ))}
-                    {activeSubTab === 'courses' && item._createdBy === 'backend' && (
+                    {activeSubTab === 'courses' && (
                       <td className="px-2 py-2 w-16">
-                        <div className="flex gap-1">
-                          <button onClick={() => openCourseEdit(item)} className="p-1 rounded hover:bg-sky-900/20 text-sky-400"><Edit3 size={13} /></button>
-                          <button onClick={() => handleCourseDelete(item)} className="p-1 rounded hover:bg-red-900/20 text-red-400"><Trash2 size={13} /></button>
-                        </div>
+                        {item._createdBy === 'backend' && (
+                          <div className="flex gap-1">
+                            <button onClick={() => openCourseEdit(item)} className="p-1.5 rounded hover:bg-sky-900/20 text-sky-400" aria-label="แก้ไขคอร์ส"><Edit3 size={13} /></button>
+                            <button onClick={() => handleCourseDelete(item)} className="p-1.5 rounded hover:bg-red-900/20 text-red-400" aria-label="ลบคอร์ส"><Trash2 size={13} /></button>
+                          </div>
+                        )}
                       </td>
                     )}
                   </tr>

@@ -49,6 +49,9 @@ export default function CustomerCard({
 
   return (
     <div onClick={handleCardClick}
+      onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && mode === 'cloned' && onView) { e.preventDefault(); handleCardClick(); } }}
+      role={mode === 'cloned' && onView ? 'button' : undefined}
+      tabIndex={mode === 'cloned' && onView ? 0 : undefined}
       className={`bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''}`}>
 
       {/* Card Header — HN badge + avatar area */}
