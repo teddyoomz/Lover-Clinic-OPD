@@ -1,10 +1,48 @@
 {
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
+  "showThinkingSummaries": true,
+  "autoCompactThreshold": 80,
+  "outputStyle": "explanatory",
+  "respectGitignore": true,
+  "enableAllProjectMcpServers": true,
   "permissions": {
     "allow": [
-      "Bash(wc -l src/pages/*.jsx src/components/*.jsx)",
-      "mcp__Claude_Preview__preview_start",
-      "Bash(xargs grep:*)",
-      "Bash(vercel --prod)"
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit(*)",
+      "Write(*)",
+      "Bash(git *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npx vitest *)",
+      "Bash(npx playwright *)",
+      "Bash(vercel --prod)",
+      "Bash(node *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(mkdir *)",
+      "Bash(cd *)",
+      "Bash(echo *)",
+      "Bash(pwd)",
+      "Bash(which *)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__Claude_Preview__*",
+      "mcp__Claude_in_Chrome__*"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(rmdir *)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
+      "Bash(dd *)",
+      "Bash(mkfs *)",
+      "Bash(kill -9 *)"
     ]
   }
 }
