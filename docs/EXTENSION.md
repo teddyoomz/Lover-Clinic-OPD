@@ -60,7 +60,7 @@ syncCookies():
   1. chrome.cookies.getAll({ domain: '.proclinicth.com' })
   2. หา laravel_session cookie → ถ้าไม่มี → needsLogin: true
   3. ใช้ origin จาก chrome.storage.local (ตรงกับ Vercel env var)
-     ⚠️ ห้ามใช้ cookie domain — `.proclinicth.com` → `proclinicth.com` ≠ `trial.proclinicth.com`
+     ⚠️ ห้ามใช้ cookie domain — `.proclinicth.com` → `proclinicth.com` ≠ `proclinicth.com`
   4. Convert cookies เป็น Set-Cookie-like strings
   5. PATCH Firestore: artifacts/{APP_ID}/public/data/clinic_settings/proclinic_session
 ```
@@ -153,7 +153,7 @@ announce() → window.postMessage('LC_COOKIE_RELAY_READY')
 ```
 Path: artifacts/{APP_ID}/public/data/clinic_settings/proclinic_session
 Fields:
-  origin: "https://trial.proclinicth.com"  ← ต้องตรงกับ PROCLINIC_ORIGIN env var
+  origin: "https://proclinicth.com"  ← ต้องตรงกับ PROCLINIC_ORIGIN env var
   cookies: ["laravel_session=xxx; path=/; secure; httponly", ...]
   updatedAt: ISO string
   source: "cookie-relay-extension"

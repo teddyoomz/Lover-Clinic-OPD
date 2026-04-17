@@ -60,7 +60,7 @@ async function syncCookies() {
 
     // Sync trial cookies
     if (trialCookies.some(c => c.name === 'laravel_session')) {
-      const origin = stored.proclinic_trial_origin || 'https://trial.proclinicth.com';
+      const origin = stored.proclinic_trial_origin || 'https://proclinicth.com';
       const ok = await syncCookiesToDoc(origin, trialCookies.map(cookieToString), SESSION_TRIAL_DOC_PATH);
       if (ok) { synced++; console.log(`[CookieRelay] Synced ${trialCookies.length} TRIAL cookies`); }
     }

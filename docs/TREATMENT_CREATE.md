@@ -1,6 +1,6 @@
 # ProClinic Treatment Create — Complete Field Map
 
-> Updated: 2026-04-07 | Source: Reverse-engineered from `trial.proclinicth.com/admin/treatment/create`
+> Updated: 2026-04-07 | Source: Reverse-engineered from `proclinicth.com/admin/treatment/create`
 > ใช้เป็น reference ทุกครั้งที่แก้ treatment.js หรือ TreatmentFormPage.jsx
 
 ---

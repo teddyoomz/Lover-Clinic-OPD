@@ -1,7 +1,7 @@
 // ─── Lover Clinic → ProClinic Broker : Background Service Worker ───────────
 
 // Default URL (trial) — เปลี่ยนได้ผ่าน popup settings → จะเก็บใน chrome.storage.local (pc_url)
-const PROCLINIC_DEFAULT_ORIGIN = 'https://trial.proclinicth.com';
+const PROCLINIC_DEFAULT_ORIGIN = 'https://proclinicth.com';
 
 let _proclinicOrigin = PROCLINIC_DEFAULT_ORIGIN;
 function PROCLINIC_ORIGIN()     { return _proclinicOrigin; }

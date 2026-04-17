@@ -9,7 +9,7 @@ export const DEFAULT_CLINIC_SETTINGS = {
   lineOfficialUrl: '',
   clinicPhone: '',
   patientSyncCooldownMins: 0, // 0 = ไม่จำกัด, 1-99999 = นาที
-  proClinicOrigin: 'https://trial.proclinicth.com',
+  proClinicOrigin: 'https://proclinicth.com',
   clinicOpenTime: '10:00',
   clinicCloseTime: '19:00',
   clinicOpenTimeWeekend: '10:00',

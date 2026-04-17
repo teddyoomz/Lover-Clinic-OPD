@@ -144,7 +144,7 @@ brokerClient.js → fetch /api/proclinic/{action} → Vercel Serverless Function
 | logo.jpg | เก็บที่ `/public/logo.jpg` |
 | Chrome Extension reload | แก้ background.js/manifest.json/content script → reload ที่ chrome://extensions เสมอ |
 | ProClinic button type | `type="button"` ไม่ใช่ `type="submit"` → click ปุ่มแทน form.submit() |
-| Cookie origin mismatch | cookie domain `.proclinicth.com` ≠ `trial.proclinicth.com` → ใช้ origin จาก credentials |
+| Cookie origin mismatch | cookie domain `.proclinicth.com` ≠ `proclinicth.com` → ใช้ origin จาก credentials |
 | Chrome minimized window | `state:'minimized'` ใน windows.create ไม่ work ทุกที → สร้างแล้ว update minimize |
 | API extensionNeeded | เมื่อ server login ล้มเหลว → extension auto-login + sync cookies → retry |
 

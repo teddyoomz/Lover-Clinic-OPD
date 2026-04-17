@@ -10,7 +10,7 @@ argument-hint: "[url path e.g. /admin/deposit or page name]"
 Use Claude in Chrome (browser automation) to explore ProClinic pages and extract UI/field information for backend replication.
 
 ## Login credentials (trial):
-- URL: https://trial.proclinicth.com/login
+- URL: https://proclinicth.com/login
 - Email: demo12@proclinic.com
 - Password: qqqqqq
 

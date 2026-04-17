@@ -88,7 +88,8 @@ export async function goToTab(page, tab) {
   };
   const name = tabMap[tab];
   if (name) {
-    await page.getByRole('button', { name }).click();
+    // Backend tabs now use role="tab" (added in audit fix b15109b)
+    await page.getByRole('tab', { name }).click();
     await page.waitForTimeout(1500);
   }
 }

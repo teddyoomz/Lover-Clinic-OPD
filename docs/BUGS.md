@@ -69,7 +69,7 @@
 |-----|-----------|-----|
 | "Invalid value for state" | `state:'minimized'` ใน `chrome.windows.create` ไม่ support ทุก Chrome version | สร้าง window ก่อน → `chrome.windows.update({state:'minimized'})` ทีหลัง |
 | "Invalid value for bounds" | `left:-9999, top:-9999` ถูก Chrome reject (ต้อง 50% ภายในจอ) | ใช้ create + minimize แทน off-screen |
-| Cookies synced แต่ server ใช้ไม่ได้ | Origin mismatch: cookie domain `.proclinicth.com` → `proclinicth.com` ≠ `trial.proclinicth.com` (Vercel env var) | ใช้ `proclinic_origin` จาก credentials แทน cookie domain |
+| Cookies synced แต่ server ใช้ไม่ได้ | Origin mismatch: cookie domain `.proclinicth.com` → `proclinicth.com` ≠ `proclinicth.com` (Vercel env var) | ใช้ `proclinic_origin` จาก credentials แทน cookie domain |
 | Login สำเร็จแต่ webapp timeout | brokerClient timeout 20s < auto-login flow time (~15-25s) | เพิ่มเป็น 30s |
 | `form.submit()` ไม่ trigger login | ProClinic ใช้ `#form-submit` button `type="button"` มี JS click handler | click `#form-submit` button แทน `form.submit()` |
 | "Extension context invalidated" | Extension reload แต่หน้าเว็บไม่ refresh → content script เก่า crash | try-catch wrapper `sendToBackground()` ใน content-loverclinic.js |

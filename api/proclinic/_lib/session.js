@@ -167,9 +167,10 @@ export async function performLogin(origin, email, password, _sessionDocPath) {
 
 export async function createSession(originArg, emailArg, passwordArg, _sessionDocPath) {
   // Vercel env vars take priority over request body (unless explicitly passed)
-  const origin   = originArg  || process.env.PROCLINIC_ORIGIN;
-  const email    = emailArg   || process.env.PROCLINIC_EMAIL;
-  const password = passwordArg || process.env.PROCLINIC_PASSWORD;
+  // Trim trailing whitespace — prevents "https://proclinicth.com /admin/..." Headers.append errors
+  const origin   = (originArg  || process.env.PROCLINIC_ORIGIN   || '').trim().replace(/\/+$/, '');
+  const email    = (emailArg   || process.env.PROCLINIC_EMAIL    || '').trim();
+  const password = (passwordArg || process.env.PROCLINIC_PASSWORD || '').trim();
   const docPath  = _sessionDocPath || SESSION_DOC_PATH;
   if (!origin || !email || !password) {
     throw new Error('ไม่พบ ProClinic credentials — ตั้งค่า PROCLINIC_ORIGIN/EMAIL/PASSWORD ใน Vercel Environment Variables');
@@ -315,9 +316,9 @@ export function getSession(body) {
 }
 
 export async function createTrialSession() {
-  const origin   = process.env.PROCLINIC_TRIAL_ORIGIN   || process.env.PROCLINIC_ORIGIN;
-  const email    = process.env.PROCLINIC_TRIAL_EMAIL     || process.env.PROCLINIC_EMAIL;
-  const password = process.env.PROCLINIC_TRIAL_PASSWORD  || process.env.PROCLINIC_PASSWORD;
+  const origin   = (process.env.PROCLINIC_TRIAL_ORIGIN   || process.env.PROCLINIC_ORIGIN   || '').trim().replace(/\/+$/, '');
+  const email    = (process.env.PROCLINIC_TRIAL_EMAIL     || process.env.PROCLINIC_EMAIL    || '').trim();
+  const password = (process.env.PROCLINIC_TRIAL_PASSWORD  || process.env.PROCLINIC_PASSWORD || '').trim();
   return createSession(origin, email, password, SESSION_TRIAL_DOC_PATH);
 }
 

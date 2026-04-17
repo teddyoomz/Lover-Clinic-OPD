@@ -3,9 +3,9 @@
 
 import * as cheerio from 'cheerio';
 
-const TRIAL_ORIGIN = 'https://trial.proclinicth.com';
-const TRIAL_EMAIL = 'demo12@proclinic.com';
-const TRIAL_PASSWORD = 'qqqqqq';
+const TRIAL_ORIGIN = (process.env.PROCLINIC_ORIGIN || 'https://proclinicth.com').trim().replace(/\/+$/, '');
+const TRIAL_EMAIL = process.env.PROCLINIC_EMAIL || '';
+const TRIAL_PASSWORD = process.env.PROCLINIC_PASSWORD || '';
 
 let sessionCookies = [];
 

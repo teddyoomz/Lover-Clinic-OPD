@@ -3,7 +3,7 @@ const status = (msg, ok) => { $('status').textContent = msg; $('status').classNa
 
 // Load saved credentials
 chrome.storage.local.get(['proclinic_origin', 'proclinic_email', 'proclinic_password'], (data) => {
-  $('origin').value = data.proclinic_origin || 'https://trial.proclinicth.com';
+  $('origin').value = data.proclinic_origin || 'https://proclinicth.com';
   $('email').value = data.proclinic_email || '';
   $('password').value = data.proclinic_password || '';
 });

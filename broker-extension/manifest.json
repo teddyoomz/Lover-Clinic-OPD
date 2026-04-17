@@ -6,7 +6,7 @@
   "permissions": ["tabs", "scripting", "storage", "activeTab", "alarms", "cookies"],
   "host_permissions": [
     "https://lover-clinic-app.vercel.app/*",
-    "https://trial.proclinicth.com/*",
+    "https://proclinicth.com/*",
     "https://*.proclinicth.com/*"
   ],
   "background": {

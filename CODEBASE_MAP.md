@@ -863,7 +863,7 @@ autoLogin():
 
 ### ProClinic URL
 ```
-const PROCLINIC_ORIGIN     = 'https://trial.proclinicth.com'
+const PROCLINIC_ORIGIN     = 'https://proclinicth.com'
 const PROCLINIC_CREATE_URL = ORIGIN + '/admin/customer/create'
 const PROCLINIC_LIST_URL   = ORIGIN + '/admin/customer'
 ```

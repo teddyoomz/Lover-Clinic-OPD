@@ -2452,7 +2452,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
   const unreadCount = sessions.filter(s => s.isUnread).length;
-  const PROCLINIC_ORIGIN = 'https://trial.proclinicth.com';
+  // Use clinicSettings.proClinicOrigin (admin-configurable) with trim to prevent space bugs
+  const PROCLINIC_ORIGIN = (clinicSettings?.proClinicOrigin || 'https://proclinicth.com').trim().replace(/\/+$/, '');
   const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
 
   // ── Import from ProClinic handlers ──────────────────────────────────────────
@@ -4304,7 +4305,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: appt.eventColor || appt.appointmentColor || '#4FC3F7' }} />
                               {appt.customerId && clinicSettings.proClinicOrigin && (
                                 <a
-                                  href={`${clinicSettings.proClinicOrigin}/admin/customer/${appt.customerId}`}
+                                  href={`${PROCLINIC_ORIGIN}/admin/customer/${appt.customerId}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-sky-500 hover:text-sky-300 transition-colors"
