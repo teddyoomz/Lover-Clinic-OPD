@@ -195,6 +195,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const chatPrevCountRef = useRef(0);
   const chatConvCountRef = useRef(0);
   const isChatActiveRef = useRef(isChatActive);
+  // Track in-flight deposit syncs locally (so stuck Firestore 'pending' state doesn't block retry)
+  const depositSyncingRef = useRef(new Set());
+  const [, forceRerender] = useState(0);
   chatConvCountRef.current = chatConvCount;
   isChatActiveRef.current = isChatActive;
 
@@ -2083,6 +2086,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const d = session.patientData;
     if (!d) return;
     const sessionId = session.id;
+    // Local in-flight dedupe: prevents double-click during active sync
+    // Does NOT rely on Firestore `depositSyncStatus === 'pending'` (which can be stuck on crash)
+    if (depositSyncingRef.current.has(sessionId)) return;
+    depositSyncingRef.current.add(sessionId);
+    forceRerender(n => n + 1);
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
     const reasons = getReasons(d);
     const pmh = [];
@@ -2183,6 +2191,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncError: e.message,
       }).catch(console.error);
       showToast(`ผิดพลาด: ${e.message}`);
+    } finally {
+      depositSyncingRef.current.delete(sessionId);
+      forceRerender(n => n + 1);
     }
   };
 
@@ -3282,7 +3293,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const hasDeposit = session.depositSyncStatus === 'done';
                 const dataUpdated = hasOPD && hasDeposit && session.isUnread;
                 const needsSync = isCompleted && (!hasOPD || !hasDeposit || dataUpdated);
-                const isSyncing = session.brokerStatus === 'pending' || session.depositSyncStatus === 'pending';
+                // Only show spinner during ACTIVE local sync (not stale Firestore 'pending' from crashed previous run)
+                const isSyncing = depositSyncingRef.current.has(session.id);
                 return (
                   <div key={session.id} className={`bg-[var(--bg-surface)] rounded-xl border transition-all ${session.isUnread ? 'border-red-600/60 bg-red-950/10' : 'border-[var(--bd)]'}`}>
                     <div className="p-4">

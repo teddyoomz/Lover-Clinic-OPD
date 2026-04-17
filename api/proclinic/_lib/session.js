@@ -60,8 +60,20 @@ async function loadCachedCookies(origin, docPath = SESSION_DOC_PATH) {
     const doc = await res.json();
     if (!doc.fields) return null;
 
-    const docOrigin = doc.fields.origin?.stringValue;
-    if (docOrigin !== origin) return null;
+    // Compare by base hostname, not full URL — allows trial.proclinicth.com ↔ proclinicth.com
+    // Doc path (SESSION_DOC_PATH vs SESSION_TRIAL_DOC_PATH) is already the discriminator
+    const docOrigin = doc.fields.origin?.stringValue || '';
+    try {
+      const docHost = new URL(docOrigin).hostname.replace(/^(www\.|trial\.)/, '');
+      const curHost = new URL(origin).hostname.replace(/^(www\.|trial\.)/, '');
+      if (docHost !== curHost) {
+        console.log('[session] cookie domain mismatch, invalidating:', docHost, 'vs', curHost);
+        return null;
+      }
+    } catch {
+      // URL parse failed → fallback to exact match
+      if (docOrigin !== origin) return null;
+    }
 
     // Extract cookie strings from Firestore array format
     const cookieValues = doc.fields.cookies?.arrayValue?.values;
