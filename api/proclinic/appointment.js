@@ -124,8 +124,10 @@ async function handleCreate(req, res) {
   }
 
   const $ = cheerio.load(bodyHtml);
-  const laravelMsg = $('.exception-message, .exception_message, h1').first().text().trim();
-  const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 500);
+  const laravelMsg = $('.exception-message, .exception_message, .exception-summary h1, .breadcrumbs, #main-message h1, h1').first().text().trim();
+  const bodyText = bodyHtml.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const errorDetail = (laravelMsg && laravelMsg !== '500' && laravelMsg.length > 3) ? laravelMsg : bodyText.substring(0, 500);
+  console.error('[appointment.create] ' + status + ' body:', bodyText.substring(0, 3000));
 
   throw new Error(`สร้างนัดหมายไม่สำเร็จ (${status}): ${errorDetail || 'Unknown'}`);
 }
