@@ -235,12 +235,19 @@ async function handleSubmit(req, res) {
   }
 
   const $err = cheerio.load(bodyHtml);
-  const laravelMsg = $err('.exception-message, .exception_message, h1').first().text().trim();
-  const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
+  // Try many Laravel/ProClinic error selectors (skip if msg is just "500")
+  const laravelMsg = $err('.exception-message, .exception_message, .exception-summary h1, .breadcrumbs, #main-message h1, h1').first().text().trim();
+  const bodyText = bodyHtml.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const errorDetail = (laravelMsg && laravelMsg !== '500' && laravelMsg.length > 3)
+    ? laravelMsg
+    : bodyText.substring(0, 500);
+  console.error('[deposit] 500 body:', bodyText.substring(0, 3000));
+  console.error('[deposit] params sent:', params.toString().substring(0, 2000));
 
   return res.status(200).json({
     success: false,
     error: `ProClinic error (${status}): ${errorDetail || 'Unknown'}`,
+    debug: { bodyLength: bodyHtml.length, firstChars: bodyText.substring(0, 500) },
   });
 }
 
@@ -354,12 +361,19 @@ async function handleUpdate(req, res) {
   }
 
   const $err = cheerio.load(bodyHtml);
-  const laravelMsg = $err('.exception-message, .exception_message, h1').first().text().trim();
-  const errorDetail = laravelMsg || bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, 300);
+  // Try many Laravel/ProClinic error selectors (skip if msg is just "500")
+  const laravelMsg = $err('.exception-message, .exception_message, .exception-summary h1, .breadcrumbs, #main-message h1, h1').first().text().trim();
+  const bodyText = bodyHtml.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const errorDetail = (laravelMsg && laravelMsg !== '500' && laravelMsg.length > 3)
+    ? laravelMsg
+    : bodyText.substring(0, 500);
+  console.error('[deposit] 500 body:', bodyText.substring(0, 3000));
+  console.error('[deposit] params sent:', params.toString().substring(0, 2000));
 
   return res.status(200).json({
     success: false,
     error: `ProClinic error (${status}): ${errorDetail || 'Unknown'}`,
+    debug: { bodyLength: bodyHtml.length, firstChars: bodyText.substring(0, 500) },
   });
 }
 
