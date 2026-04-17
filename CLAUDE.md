@@ -217,12 +217,36 @@ src/pages/
 
 ## 📋 Onboarding สำหรับ Claude แชทใหม่
 
-เมื่อเริ่มแชทใหม่ ให้อ่าน memory files เหล่านี้ตามลำดับเพื่อเข้าใจโปรเจ็คทันที:
-1. **ไฟล์นี้** (`CLAUDE.md`) — กฎเหล็ก + stack + deploy workflow
-2. **Memory: `project_current_state.md`** — สถานะโปรเจ็ค Phase 6/12 DONE + ไฟล์สำคัญ + bugs + กฎ
-3. **Memory: `project_features_completed.md`** — features ทั้งหมดที่ทำเสร็จแล้ว
-4. **Memory: `project_backend_roadmap.md`** — roadmap Phase 7-12 + data ที่ต้อง pre-clone
+**⭐ ต่องานจากแชทก่อน → อ่าน `SESSION_HANDOFF.md` เป็นอันดับแรก (มี next action ชัดเจน)**
+
+ลำดับการอ่าน memory:
+1. **Memory: `SESSION_HANDOFF.md`** ⭐ — สถานะล่าสุด + commits + next action
+2. **ไฟล์นี้** (`CLAUDE.md`) — กฎเหล็ก + stack + deploy workflow
+3. **Memory: `project_phase7_plan.md`** — Phase 7 detail plan (สำหรับ implement Phase 7)
+4. **Memory: `project_phase7to12_replan_v2.md`** — Phase 7-12 God-level (API endpoints + validation)
 5. **`CODEBASE_MAP.md`** — แผนที่โค้ด (อ่านเฉพาะ section ที่เกี่ยวกับงาน)
 
 > Memory files อยู่ที่: `~/.claude/projects/F--LoverClinic-app/memory/`
 > ดู index ทั้งหมด: `MEMORY.md` ใน memory folder
+
+## OPD System Inspector
+
+<important if="ต้องการดูระบบต้นฉบับ ProClinic OPD">
+คุณมีเครื่องมือ opd.js เข้าดูระบบ OPD ต้นฉบับได้ทุกเมื่อ
+ใช้มันก่อนสร้างทุกหน้า ทุก API ทุก form เพื่อให้ตรงกับต้นฉบับ 100%
+
+คำสั่งหลัก:
+- `node F:\replicated\scraper\opd.js intel /admin/xxx` — **GOD MODE** ได้ทุกอย่างในคำสั่งเดียว
+- `node F:\replicated\scraper\opd.js look /admin/xxx` — ถ่ายหน้าจออัจฉริยะ (แล้ว Read รูปได้)
+- `node F:\replicated\scraper\opd.js routes` — ดู menu ทั้งระบบ
+- `node F:\replicated\scraper\opd.js forms /admin/xxx` — ดู form fields + validation
+- `node F:\replicated\scraper\opd.js api GET /admin/api/xxx` — ยิง API ตรง ดู response จริง
+- `node F:\replicated\scraper\opd.js network /admin/xxx` — ดักจับ API เบื้องหลัง
+- `node F:\replicated\scraper\opd.js map /admin/xxx` — ดูความเชื่อมโยงข้าม module
+- `node F:\replicated\scraper\opd.js dump /admin/xxx` — ดึง master data จาก dropdowns
+- `node F:\replicated\scraper\opd.js trace /admin/A /admin/B` — ทำ action ที่ A ดู B เปลี่ยนไหม
+- `node F:\replicated\scraper\opd.js fill /admin/xxx` — กรอก + submit + จับ API + validation
+- `node F:\replicated\scraper\opd.js click /admin/xxx "ปุ่ม"` — กดปุ่ม ดูผล
+
+ทุกคำสั่ง output JSON | ดูรูป: Read screenshots path | session หมดอายุ → `node F:\\replicated\\scraper\\quick-login.js`
+</important>
