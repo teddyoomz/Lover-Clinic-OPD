@@ -13,6 +13,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
   const [pcTemplates, setPcTemplates] = useState([]);
   const [pcBlobUrls, setPcBlobUrls] = useState({});
   const [pcLoading, setPcLoading] = useState(false);
+
+  // Cleanup blob URLs on unmount to prevent memory leak
+  useEffect(() => () => {
+    Object.values(pcBlobUrls).forEach(url => { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); });
+  }, [pcBlobUrls]);
   const [editingIdx, setEditingIdx] = useState(-1);
   const [nameInput, setNameInput] = useState('');
   const [editCategory, setEditCategory] = useState('');

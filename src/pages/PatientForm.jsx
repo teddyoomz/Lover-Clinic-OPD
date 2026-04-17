@@ -91,9 +91,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         if (!originalDataRef.current && !isEditing) originalDataRef.current = { ...pd };
         if (!isEditing) setIsSuccess(true);
       }
+    }, (error) => {
+      // Prevent silent hang: if Firestore errors, surface it
+      console.error('[PatientForm] onSnapshot error:', error);
+      setSessionExists(false);
     });
     return () => unsubscribe();
-  }, [db, appId, user, sessionId, isEditing]);
+  }, [db, appId, user, sessionId, isEditing, language]);
 
   // Close country dropdown on click outside
   useEffect(() => {

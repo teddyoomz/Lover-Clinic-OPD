@@ -550,7 +550,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await new Promise(r => setTimeout(r, 3000));
       }
       // Update active schedules after sync
-      try { await updateActiveSchedules(); } catch {}
+      try { await updateActiveSchedules(); } catch (e) { console.warn('[auto-sync 21:00] updateActiveSchedules failed:', e.message); }
       console.log('[auto-sync 21:00] complete');
     };
     const interval = setInterval(check, 60000); // check every minute
@@ -607,6 +607,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleApptFormSubmit = async () => {
     if (!apptFormData.date || !apptFormData.startTime || !apptFormData.endTime) {
       showToast('กรุณากรอกวันที่และเวลา', 3000); return;
+    }
+    if (!apptSelectedCustomer) {
+      showToast('กรุณาเลือกลูกค้าก่อน', 3000); return;
     }
     setApptFormSaving(true);
     try {
@@ -721,9 +724,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             });
           }
         }
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), { bookedSlots }).catch(() => {});
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), { bookedSlots }).catch(e => console.warn('[updateActiveSchedules] write failed:', e.message));
       }
-    } catch { /* silent */ }
+    } catch (e) { console.warn('[updateActiveSchedules] failed:', e.message); }
   };
 
   const handleSyncAppointments = async (month) => {
@@ -6434,7 +6437,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   )}
 
                   {/* Show from option — only relevant if start month is current month */}
-                  {(() => { const nowMo = new Date(); const curMo = `${nowMo.getFullYear()}-${String(nowMo.getMonth() + 1).padStart(2, '0')}`; return schedStartMonth === curMo; })() && (
+                  {schedStartMonth === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` && (
                   <div>
                     <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงคิวตั้งแต่</label>
                     <div className="flex gap-2">

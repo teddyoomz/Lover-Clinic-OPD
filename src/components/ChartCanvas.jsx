@@ -32,6 +32,7 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
 
   useEffect(() => {
     let cancelled = false;
+    let createdBlobUrl = null; // track for cleanup — prevents memory leak
     (async () => {
       const fabric = await import('fabric');
       if (cancelled || !canvasElRef.current) return;
@@ -103,6 +104,7 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
             if (proxyRes.ok) {
               const blob = await proxyRes.blob();
               imgSrc = URL.createObjectURL(blob);
+              createdBlobUrl = imgSrc; // track for cleanup
             }
           } catch (e) { console.warn('[ChartCanvas] proxy failed:', e); }
         }
@@ -162,7 +164,11 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       canvas.on('path:created', pushHistory);
       canvas.on('object:modified', pushHistory);
     })();
-    return () => { cancelled = true; if (fabricRef.current) { fabricRef.current.dispose(); fabricRef.current = null; } };
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl); // prevent memory leak
+      if (fabricRef.current) { fabricRef.current.dispose(); fabricRef.current = null; }
+    };
   }, []); // eslint-disable-line
 
   useEffect(() => {
