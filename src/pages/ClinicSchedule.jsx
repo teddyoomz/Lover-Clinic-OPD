@@ -129,6 +129,9 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const bookedSlots = [...(data.bookedSlots || []), ...(data.manualBlockedSlots || [])];
   const doctorBookedSlots = data.doctorBookedSlots || [];
   const noDoctorRequired = data.noDoctorRequired || false;
+  // Admin-controlled flag — whether to render the "หมอว่าง / หมอไม่ว่าง"
+  // badge on each slot in ไม่พบแพทย์ mode. Default: hide (explicit true only).
+  const showDoctorStatus = data.showDoctorStatus === true;
   const customDoctorHours = data.customDoctorHours || {};
 
   const weekdaySlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
@@ -195,8 +198,8 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     .map(s => ({
       ...s,
       booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end, data),
-      doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
-      doctorBusy: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end) && isSlotBooked(selectedDate, s.start, s.end, doctorBookedSlots),
+      doctorSlot: showDoctorStatus && noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
+      doctorBusy: showDoctorStatus && noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end) && isSlotBooked(selectedDate, s.start, s.end, doctorBookedSlots),
     })) : [];
 
   const freeCount = selectedSlots.filter(s => !s.booked).length;

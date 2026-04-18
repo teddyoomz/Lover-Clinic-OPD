@@ -323,6 +323,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
   const [schedSelectedDoctor, setSchedSelectedDoctor] = useState(null); // practitioner id for per-doctor schedule
   const [schedSelectedRoom, setSchedSelectedRoom] = useState(null); // room id (string) — filters bookedSlots by roomId
+  // Only relevant for ไม่พบแพทย์ links — whether to render "หมอว่าง / หมอไม่ว่าง"
+  // info badge on each slot. Default OFF per user 2026-04-19.
+  const [schedShowDoctorStatus, setSchedShowDoctorStatus] = useState(false);
   const [schedShowFrom, setSchedShowFrom] = useState('today'); // 'today' | 'tomorrow'
   const [schedEndDay, setSchedEndDay] = useState(''); // 'YYYY-MM-DD' or '' for last day of month
   const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
@@ -1130,6 +1133,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         selectedRoomName: selectedRoomStr
           ? ((clinicSettings.rooms || []).find(r => String(r.id) === selectedRoomStr)?.name || null)
           : null,
+        // ไม่พบแพทย์ only — whether the customer sees "หมอว่าง/ไม่ว่าง" hint.
+        showDoctorStatus: schedNoDoctorRequired ? !!schedShowDoctorStatus : false,
       });
 
       // 5b. Prefs are already saved on every toggle — no need to save again
@@ -3893,7 +3898,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[11px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedSelectedRoom(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedSelectedRoom(null); setSchedShowDoctorStatus(false); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
                     disabled={apptSyncing}
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'opacity-50 cursor-not-allowed ' : ''}${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
@@ -4660,6 +4665,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               {s.selectedRoomName && (
                                 <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold bg-cyan-950/30 border border-cyan-800/40 text-cyan-300" title="ห้องที่เลือก">
                                   {isDoctor ? '🏥' : '🛏️'} {s.selectedRoomName}
+                                </span>
+                              )}
+                              {!isDoctor && (
+                                <span
+                                  className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.showDoctorStatus ? 'bg-emerald-950/30 border border-emerald-800/40 text-emerald-300' : 'bg-gray-800/40 border border-gray-700/50 text-gray-500'}`}
+                                  title={s.showDoctorStatus ? 'ลูกค้าเห็นสถานะหมอว่าง/ไม่ว่าง' : 'ไม่แสดงสถานะหมอให้ลูกค้า'}
+                                >
+                                  สถานะหมอ: {s.showDoctorStatus ? 'แสดง' : 'ซ่อน'}
                                 </span>
                               )}
                               <span className={`text-[11px] font-bold ${isExpired ? 'text-red-400' : remainHrs < 6 ? 'text-orange-400' : 'text-green-400'}`}>{remainText}</span>
@@ -6491,6 +6504,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                     );
                   })()}
+                  {/* Show doctor status toggle — ไม่พบแพทย์ mode only.
+                      Default off — admin opts in if they want the customer
+                      to see when the doctor is (un)available alongside the
+                      assistant slot. */}
+                  {schedNoDoctorRequired && (
+                    <label className="flex items-center gap-2 cursor-pointer select-none bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
+                      <input type="checkbox" checked={schedShowDoctorStatus} onChange={e => setSchedShowDoctorStatus(e.target.checked)}
+                        className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
+                      <span className="text-xs text-[var(--tx-body)]">แสดงสถานะ "หมอว่าง/ไม่ว่าง" ให้ลูกค้าเห็น</span>
+                    </label>
+                  )}
 
                   {/* Show from option — only relevant if start month is current month */}
                   {schedStartMonth === thaiYearMonth() && (
