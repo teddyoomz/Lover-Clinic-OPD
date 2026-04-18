@@ -27,7 +27,7 @@ import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 import AppointmentTab from '../components/backend/AppointmentTab.jsx';
 import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
-import OrderPanel from '../components/backend/OrderPanel.jsx';
+import StockTab from '../components/backend/StockTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -332,7 +332,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCustomerUsed={() => { setFinanceInitialCustomer(null); setFinanceSubTab(null); }}
           />
         ) : activeTab === 'stock' ? (
-          <OrderPanel clinicSettings={clinicSettings} theme={theme} />
+          <StockTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
 

@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8d OrderPanel + opt-in default — seed batches via UI, unconfigured products skip silently)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8e+8i StockTab sub-tabs: Balance / Orders / Adjust / MovementLog — complete single-branch stock management UI)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -140,6 +140,34 @@ artifacts/{appId}/public/data/
 
 ### BackendDashboard.jsx hooks (Phase 8c UI)
 - `onDeleteTreatment` (:230+): after reversing deposits/wallet/points/courses → `reverseStockForSale(linkedSaleId)` (if linkedSale exists) THEN `reverseStockForTreatment(treatmentId)`. Hard errors alert+abort the delete.
+
+### StockTab container (Phase 8e+8i) — `src/components/backend/StockTab.jsx`
+- Sub-tab nav: Balance (default) / Orders / Adjust / Movement Log
+- Rose color accent, rounded pill buttons with glow-on-active
+- Each sub-tab renders its own panel, independent state
+
+### StockBalancePanel (Phase 8i) — `src/components/backend/StockBalancePanel.jsx`
+- Reads active batches via `listStockBatches({branchId, status:'active'})`
+- Groups by productId → totalRemaining, totalCapacity, valueCost (=remaining × originalCost), nextExpiry, expired qty
+- FEFO ordering within each product (expiresAt ASC, null last)
+- Filters: search, "ใกล้หมดอายุ ≤30 วัน", "สต็อกน้อย ≤5"
+- Row tooltip: full batch list with IDs + expiry
+
+### StockAdjustPanel (Phase 8e) — `src/components/backend/StockAdjustPanel.jsx`
+- List view: all be_stock_adjustments for branch, sorted by createdAt DESC
+- Create form: product dropdown → batch dropdown (shows "…suffix — คงเหลือ X/Y unit (หมด date)") → radio add/reduce → qty → note
+- Auto-picks first active batch when product selected
+- Shows selected batch detail card (คงเหลือ / ทั้งหมด / ต้นทุน / หมดอายุ)
+- Inline warning when reduce qty > remaining
+- Calls `createStockAdjustment(...)` → movement type=3 (add) or type=4 (reduce)
+
+### MovementLogPanel (Phase 8e) — `src/components/backend/MovementLogPanel.jsx`
+- Read-only audit log of all be_stock_movements
+- Filters: product, type-group (ProClinic enum: import/cancel-import/sale/adjust/treatment/export/receive/withdrawal), date-from, date-to, free-text search
+- Checkbox "แสดง movement ที่ถูก reverse แล้ว" to include reversed pairs
+- Summary chips show count per group
+- Table: date/time / type badge / product+batch / signed qty / before / after / link (sale/treatment/order/adjust/transfer/withdrawal) + note
+- REV / SKIP / ฟรี mini-badges for reverse-entries / skipped trackStock-false / isPremium
 
 ### OrderPanel (Phase 8d) — `src/components/backend/OrderPanel.jsx`
 - List view: table of be_stock_orders filtered by branchId='main', sorted newest-first by importedDate. Columns: ORD-id / vendor / date / item count / ยอดรวม / status / cancel action.
