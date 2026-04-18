@@ -16,7 +16,7 @@ import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
   formatPhoneNumberDisplay, renderDobFormat, playNotificationSound, formatBangkokTime,
-  bangkokNow as bangkokNowUtil, thaiTodayISO, thaiYearMonth
+  bangkokNow as bangkokNowUtil, thaiTodayISO, thaiYearMonth, genShortId
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
@@ -224,7 +224,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   // ── Admin presence tracking ──
   const [onlineAdmins, setOnlineAdmins] = useState([]);
-  const tabIdRef = useRef(`${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  const tabIdRef = useRef(`${Date.now()}_${genShortId(6)}`);
 
   // Heartbeat: write presence doc every 30s, delete on unmount
   useEffect(() => {
@@ -1551,7 +1551,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setIsGenerating(true);
     setShowDepositForm(false);
 
-    const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const shortId = genShortId(6);
     const sessionId = `DEP-${shortId}`;
 
     const sessionDoc = {
@@ -1602,7 +1602,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setIsGenerating(true);
     setShowNoDepositForm(false);
 
-    const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const shortId = genShortId(6);
     const sessionId = `ND-${shortId}`;
 
     const appointmentData = {
@@ -1763,7 +1763,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setShowNamePrompt(false); 
     
     const { isPermanent, formType, customTemplate } = pendingConfig;
-    const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const shortId = genShortId(6);
     
     const namePrefix = (cs.clinicName || 'LC').replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase() || 'LC';
     let prefix = `${namePrefix}-`;

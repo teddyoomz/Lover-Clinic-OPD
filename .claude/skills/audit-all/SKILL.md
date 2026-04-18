@@ -1,6 +1,6 @@
 ---
 name: audit-all
-description: "Run all 16 LoverClinic audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, PDPA privacy, plus frontend-specific timezone/links/forms audits."
+description: "Run all 17 LoverClinic audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, PDPA privacy, frontend-specific timezone/links/forms, and anti-vibe-code (duplication + security + schema hygiene)."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob, Skill"
@@ -12,7 +12,7 @@ Meta-runner that chains every `audit-*` skill and aggregates output.
 
 ## Execution flow
 
-Run these in order (16 total):
+Run these in order (17 total):
 
 **Tier 1 — backend integrity (money/stock/cascade, 45 invariants)**:
 1. `/audit-money-flow` (M1–M15)
@@ -37,10 +37,13 @@ Run these in order (16 total):
 14. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
 15. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
 
-**Tier 5 — legal/compliance (7 invariants)**:
-16. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+**Tier 5 — hygiene / anti-vibe-code (12 invariants — session 2026-04-19)**:
+16. `/audit-anti-vibe-code` (AV1–AV12) — Rule of 3 duplication, `Math.random` tokens, leaked uids in world-readable docs, open Firestore/Storage rules, orphan collections, over-normalized schema
 
-**Total: 163 invariants**. Do NOT write report to disk — chat output only.
+**Tier 6 — legal/compliance (7 invariants)**:
+17. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+
+**Total: 175 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 

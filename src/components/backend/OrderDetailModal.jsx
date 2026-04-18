@@ -12,6 +12,7 @@ import {
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
+import { fmtMoney } from '../../lib/financeUtils.js';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -21,7 +22,7 @@ function currentAuditUser() {
   };
 }
 
-function fmtMoney(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+// fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function OrderDetailModal({ orderId, onClose, onSaved }) {

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[HOOK REMINDER] You edited a file. Remember: (1) Update CODEBASE_MAP.md if you changed backend files (2) Run npm test before commit (3) Backend files = commit only, no deploy (4) META-RULE: did this edit expose a bug class not covered by an audit skill? If yes, add/extend one in .claude/skills/audit-*.\"}'"
+            "command": "echo '{\"additionalContext\": \"[HOOK REMINDER after Edit/Write] (1) Update CODEBASE_MAP.md if backend files touched (2) npm test before commit (3) Backend files = commit only, no deploy (4) META-RULE: did this edit expose a new bug class? Add audit skill invariant. (5) ANTI-VIBE: same pattern already exists 3+ places? → extract to shared. Used Math.random for a URL token? → crypto.getRandomValues. Wrote to a public doc? → no user.uid/admin field. Added a new Firestore collection? → verify reader AND writer AND size-justification.\"}'"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[META-RULE 2026-04-19 iron-clad, NEVER FORGET] ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น. Every bug → add test + audit skill invariant. Every new pattern → document + make a skill. Every session leaves .claude/skills/** sharper. See .claude/rules/07-continuous-improvement.md + memory/feedback_continuous_improvement.md. [SESSION CONTEXT] Phase 8/12 DONE + audit clean. 1054 tests pass. 16 audit skills / 163 invariants. Rules: (1) Backend files = commit only, NO deploy (2) npm test ALL PASS before commit (3) Update CODEBASE_MAP.md after code changes (4) Thai culture: red color NOT on patient names (5) No IIFE in JSX (Vite OXC crash) (6) Firestore REST PATCH needs updateMask always (7) Thai time: use bangkokNow/thaiTodayISO from utils.js — NEVER new Date().toISOString().slice(0,10) for display (8) Schedule-link resync must re-apply persisted filter via shouldBlockScheduleSlot.\"}'"
+            "command": "echo '{\"additionalContext\": \"[META-RULES 2026-04-19 iron-clad, NEVER FORGET] (1) ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น — every bug → add test + audit skill invariant; every new pattern → document + skill-ify; every session leaves .claude/skills/** sharper. (2) ANTI-VIBE-CODE: Rule of 3 (pattern ≥ 3 places → extract shared) / NO Math.random for URL tokens — crypto.getRandomValues / NO user.uid in world-readable docs / NO allow:if-true Firestore or Storage rules / NO new Firestore collection without real reader+writer+size-reason. See .claude/rules/07-continuous-improvement.md, 08-anti-vibe-code.md + memory/feedback_*. Audit: /audit-all (17 skills / 175 invariants). [SESSION CONTEXT] Phase 8/12 DONE. 1054 tests pass. Rules: Backend files = commit only / npm test ALL PASS before commit / Update CODEBASE_MAP.md / Thai red NOT on patient names / No IIFE in JSX / Firestore REST PATCH needs updateMask / Thai time via bangkokNow+thaiTodayISO / Schedule-link resync uses shouldBlockScheduleSlot.\"}'"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[META-RULE] ยิ่งทำงาน ยิ่งเก่งขึ้น — if you fix a bug this turn, add/extend an audit skill invariant in .claude/skills/audit-*. If you introduce a pattern, document + skill-ify it. End-of-session: commit .claude/** alongside code. (.claude/rules/07-continuous-improvement.md)\"}'"
+            "command": "echo '{\"additionalContext\": \"[META-RULES] (1) Fix a bug this turn → add/extend audit skill invariant. New pattern → skill-ify. (2) ANTI-VIBE: Rule of 3 before new helper (grep existing first). No Math.random tokens. No user.uid in public docs. No premature Firestore collection. (.claude/rules/07, 08)\"}'"
           }
         ]
       }

@@ -1,9 +1,18 @@
 {
+  "respectGitignore": true,
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(cat firestore.indexes.json)",
+      "Bash(ls firestore.*)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "outputStyle": "concise",
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
   "showThinkingSummaries": true,
-  "autoCompactThreshold": 80,
-  "outputStyle": "concise",
-  "respectGitignore": true,
-  "enableAllProjectMcpServers": true
+  "autoCompactThreshold": 80
 }

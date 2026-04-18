@@ -28,6 +28,14 @@ service cloud.firestore {
         allow write: if isClinicStaff();
       }
 
+      // ── Form Templates (custom intake/follow-up forms — staff-authored) ──
+      // Read: any signed-in user (admin + kiosk) needs to render forms.
+      // Write: clinic staff only.
+      match /form_templates/{templateId} {
+        allow read: if isSignedIn();
+        allow write: if isClinicStaff();
+      }
+
       // ── OPD Sessions (patient form submissions) ──
       match /opd_sessions/{sessionId} {
         allow read: if isSignedIn();

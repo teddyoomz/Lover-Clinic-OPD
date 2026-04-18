@@ -14,6 +14,7 @@ import {
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
+import { fmtMoney } from '../../lib/financeUtils.js';
 
 // S12: pull the logged-in admin's identity so every stock mutation leaves a
 // real actor on the movement log (MOPH audit).
@@ -30,7 +31,7 @@ import OrderDetailModal from './OrderDetailModal.jsx';
 
 const BRANCH_ID = 'main';
 
-function fmtMoney(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+// fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 function fmtDate(iso) {
   if (!iso) return '-';
   try {

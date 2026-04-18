@@ -48,6 +48,24 @@ export function thaiYearMonth() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Generate a short crypto-grade random ID (uppercase hex).
+ * Use for session IDs, short tokens, queue codes — anything that's a Firestore doc ID
+ * or part of a customer-facing URL. For full-length URL tokens (patient-link, schedule),
+ * prefer `crypto.getRandomValues(new Uint8Array(16))` inline for 128 bits.
+ *
+ * Rule of 3: three separate sites used `Math.random().toString(36).substring(2,8)` —
+ * weak PRNG; centralized here so future queue-code usage stays crypto-grade.
+ */
+export function genShortId(len = 6) {
+  const bytes = Math.ceil(len / 2);
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .substring(0, len)
+    .toUpperCase();
+}
+
 const currentYearCE = bangkokNow().getUTCFullYear();
 export const YEARS_BE = Array.from({ length: 120 }, (_, i) => (currentYearCE + 543) - i);
 export const YEARS_CE = Array.from({ length: 120 }, (_, i) => currentYearCE - i);

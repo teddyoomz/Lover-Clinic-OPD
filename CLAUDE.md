@@ -5,17 +5,28 @@
 
 ---
 
-## 🔥 META-RULE — NEVER FORGET (2026-04-19, iron-clad)
+## 🔥 META-RULES — NEVER FORGET (2026-04-19, iron-clad)
 
-**ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น.** Every session must sharpen the toolkit:
+**Rule 1: ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น.** Every session must sharpen the toolkit:
 - Bug found → fix + add adversarial test + add/update an audit skill invariant
 - New pattern/convention → document in CLAUDE.md or `.claude/rules/` + make a skill if greppable
 - Tool would've prevented it → propose + install low-risk cheap wins
 - End of session → verify new skills fire + commit `.claude/**` alongside code
 
-Full rule: `.claude/rules/07-continuous-improvement.md`.
+Full rule: `.claude/rules/07-continuous-improvement.md`
 Memory mirror: `~/.claude/projects/F--LoverClinic-app/memory/feedback_continuous_improvement.md`.
-Survives context compaction because it's at the TOP of both index files (always-loaded).
+
+**Rule 2: Anti-Vibe-Code — AI ฉลาด แต่คนใช้ต้อง "ฉลาดกว่า" AI.**
+Three failure modes that this project must never hit, now or ever:
+- **Hardcode/duplication** → Rule of 3. Pattern in ≥ 3 places = extract to shared. Before writing any new helper/component, grep for an existing one.
+- **Security slop** → no `Math.random` for URL tokens, no hardcoded credentials in `src/`, no `user.uid` in world-readable docs, no `allow read: if true` rules.
+- **Premature schema** → no new Firestore collection until it has a real reader AND writer AND the data doesn't fit on an existing doc. Denormalize > new collection.
+
+Full rule: `.claude/rules/08-anti-vibe-code.md`
+Memory mirror: `~/.claude/projects/F--LoverClinic-app/memory/feedback_anti_vibe_code.md`.
+Audit skill: `/audit-anti-vibe-code` (AV1–AV12, in `/audit-all`).
+
+Both rules survive context compaction because they're at the TOP of MEMORY.md + listed in the SessionStart hook (`.claude/settings.json`) + pinned in this CLAUDE.md header. Editing either rule? Edit both mirrors — never diverge.
 
 ---
 
