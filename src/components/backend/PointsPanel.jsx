@@ -20,7 +20,7 @@ function PtxTypeBadge({ type, isDark }) {
   const meta = {
     earn:               { label: 'สะสม',       cls: 'bg-emerald-900/30 text-emerald-400', lightCls: 'bg-emerald-50 text-emerald-700' },
     redeem:             { label: 'แลก',         cls: 'bg-sky-900/30 text-sky-400',          lightCls: 'bg-sky-50 text-sky-700' },
-    adjust:             { label: 'ปรับ',        cls: 'bg-amber-900/30 text-amber-400',      lightCls: 'bg-amber-50 text-amber-700' },
+    adjust:             { label: 'ปรับ',        cls: 'bg-orange-900/30 text-orange-400',      lightCls: 'bg-orange-50 text-orange-700' },
     membership_initial: { label: 'บัตรสมาชิก',   cls: 'bg-purple-900/30 text-purple-400',    lightCls: 'bg-purple-50 text-purple-700' },
     reverse:            { label: 'คืน',          cls: 'bg-gray-800/50 text-gray-400',        lightCls: 'bg-gray-100 text-gray-600' },
     expire:             { label: 'หมดอายุ',     cls: 'bg-red-900/30 text-red-400',          lightCls: 'bg-red-50 text-red-700' },
@@ -31,7 +31,7 @@ function PtxTypeBadge({ type, isDark }) {
 export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) {
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
-  const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-amber-500' : 'bg-white border-gray-200 text-gray-800 focus:border-amber-400'}`;
+  const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-orange-500' : 'bg-white border-gray-200 text-gray-800 focus:border-orange-400'}`;
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +88,7 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(245,158,11,0.15)' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-400/60" />
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400/60" />
             <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)}
               placeholder="ค้นหาลูกค้า... (ชื่อ / HN)"
               className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none transition-all" />
@@ -106,13 +106,13 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
             })}
           </select>
           <button onClick={loadCustomers}
-            className="p-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] hover:text-amber-400 text-[var(--tx-muted)] transition-all" aria-label="รีเฟรช">
+            className="p-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] hover:text-orange-400 text-[var(--tx-muted)] transition-all" aria-label="รีเฟรช">
             <RefreshCw size={14} />
           </button>
         </div>
         <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-4">
-          <span><Star size={12} className="inline text-amber-400 mr-1" />ลูกค้าที่มีคะแนน: {withPoints.length} คน</span>
-          <span>คะแนนรวม: <span className="font-bold text-amber-400">{fmtPoints(totalPoints)}</span></span>
+          <span><Star size={12} className="inline text-orange-400 mr-1" />ลูกค้าที่มีคะแนน: {withPoints.length} คน</span>
+          <span>คะแนนรวม: <span className="font-bold text-orange-400">{fmtPoints(totalPoints)}</span></span>
         </p>
       </div>
 
@@ -124,7 +124,7 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
             style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.05))', border: '1.5px solid rgba(245,158,11,0.3)' }}>
-            <Star size={32} className="text-amber-400" />
+            <Star size={32} className="text-orange-400" />
           </div>
           <h3 className="text-xl font-black text-[var(--tx-heading)] mb-2 tracking-tight">ยังไม่มีลูกค้าที่มีคะแนน</h3>
           <p className="text-sm text-[var(--tx-muted)] max-w-lg mx-auto">
@@ -148,11 +148,11 @@ export default function PointsPanel({ theme, initialCustomer, onCustomerUsed }) 
                     {mbr && <div className="text-[10px] text-purple-400 flex items-center gap-1 mt-0.5"><Crown size={9} /> {mbr}</div>}
                   </div>
                   <div className="flex gap-0.5">
-                    <button onClick={() => setAdjustModal(c)} className="p-1.5 rounded hover:bg-amber-900/20 text-amber-400" aria-label="ปรับคะแนน" title="ปรับคะแนน"><Plus size={11} /></button>
+                    <button onClick={() => setAdjustModal(c)} className="p-1.5 rounded hover:bg-orange-900/20 text-orange-400" aria-label="ปรับคะแนน" title="ปรับคะแนน"><Plus size={11} /></button>
                     <button onClick={() => setHistoryModal(c)} className="p-1.5 rounded hover:bg-violet-900/20 text-violet-400" aria-label="ประวัติ" title="ประวัติ"><History size={11} /></button>
                   </div>
                 </div>
-                <div className="text-2xl font-black text-amber-400 flex items-center gap-1">
+                <div className="text-2xl font-black text-orange-400 flex items-center gap-1">
                   <Star size={18} fill="currentColor" />
                   {fmtPoints(pts)}
                   <span className="text-xs font-normal text-[var(--tx-muted)] ml-1">คะแนน</span>
@@ -230,13 +230,13 @@ function AdjustModal({ customer, isDark, inputCls, labelCls, onClose, onDone }) 
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
-          <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5">
+          <h3 className="text-sm font-bold text-orange-400 flex items-center gap-1.5">
             <Star size={13} /> ปรับคะแนนสะสม
           </h3>
           <p className="text-xs text-[var(--tx-muted)] mt-1">
             {nm} {customer.proClinicHN && `· ${customer.proClinicHN}`}
           </p>
-          <p className="text-xs text-amber-400 mt-1">คะแนนปัจจุบัน: {fmtPoints(curPoints)} คะแนน</p>
+          <p className="text-xs text-orange-400 mt-1">คะแนนปัจจุบัน: {fmtPoints(curPoints)} คะแนน</p>
         </div>
         <div className="p-5 space-y-3">
           <div className="flex gap-4">
@@ -259,7 +259,7 @@ function AdjustModal({ customer, isDark, inputCls, labelCls, onClose, onDone }) 
           </div>
           {amount && (
             <div className="text-xs text-[var(--tx-muted)]">
-              คะแนนหลังปรับ: <span className="font-bold text-amber-400">{fmtPoints(preview)}</span>
+              คะแนนหลังปรับ: <span className="font-bold text-orange-400">{fmtPoints(preview)}</span>
               {bahtPerPoint > 0 && <span className="text-[10px] ml-2">· มูลค่าประมาณ {fmtMoney(preview * bahtPerPoint)} บาท</span>}
             </div>
           )}
@@ -267,7 +267,7 @@ function AdjustModal({ customer, isDark, inputCls, labelCls, onClose, onDone }) 
         </div>
         <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
           <button onClick={onClose} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-700 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
             บันทึก
           </button>

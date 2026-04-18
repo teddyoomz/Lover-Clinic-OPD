@@ -214,7 +214,7 @@ export const calculateIIEFScore = (d) => {
 export const getIIEFInterpretation = (score) => {
   if (score === 0) return { text: 'ข้อมูลไม่ครบถ้วน', color: 'text-gray-500', bg: 'bg-[#222] border-[#333]' };
   if (score >= 22) return { text: 'ปกติ (ไม่มีภาวะเสื่อม)', color: 'text-green-500', bg: 'bg-green-950/30 border-green-900/50' };
-  if (score >= 17) return { text: 'เสื่อมระดับเล็กน้อย', color: 'text-yellow-500', bg: 'bg-yellow-950/30 border-yellow-900/50' };
+  if (score >= 17) return { text: 'เสื่อมระดับเล็กน้อย', color: 'text-orange-500', bg: 'bg-orange-950/30 border-orange-900/50' };
   if (score >= 12) return { text: 'เสื่อมระดับเล็กน้อยถึงปานกลาง', color: 'text-orange-500', bg: 'bg-orange-950/30 border-orange-900/50' };
   if (score >= 8) return { text: 'เสื่อมระดับปานกลาง', color: 'text-red-500', bg: 'bg-red-950/30 border-red-900/50' };
   return { text: 'เสื่อมระดับรุนแรง', color: 'text-red-600 font-bold', bg: 'bg-red-950/50 border-red-600/50 shadow-[0_0_10px_rgba(220,38,38,0.3)]' };
@@ -224,7 +224,7 @@ export const calculateMRS = (d) => {
   let score = 0;
   for(let i=1; i<=11; i++) score += parseInt(d[`mrs_${i}`] || 0);
   if (score <= 4) return { score, text: 'ไม่มีอาการ / เล็กน้อยมาก', color: 'text-green-500', bg: 'bg-green-950/30 border-green-900/50' };
-  if (score <= 8) return { score, text: 'ระดับเล็กน้อย', color: 'text-yellow-500', bg: 'bg-yellow-950/30 border-yellow-900/50' };
+  if (score <= 8) return { score, text: 'ระดับเล็กน้อย', color: 'text-orange-500', bg: 'bg-orange-950/30 border-orange-900/50' };
   if (score <= 15) return { score, text: 'ระดับปานกลาง', color: 'text-orange-500', bg: 'bg-orange-950/30 border-orange-900/50' };
   return { score, text: 'ระดับรุนแรง', color: 'text-red-600 font-bold', bg: 'bg-red-950/50 border-red-600/50 shadow-[0_0_10px_rgba(220,38,38,0.3)]' };
 };

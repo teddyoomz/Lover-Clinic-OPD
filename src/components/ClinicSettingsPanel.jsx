@@ -251,12 +251,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           {logoTabLight === 'upload' ? (
             <div>
               <input ref={fileInputRefLight} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={handleLogoFileLight} className="hidden" />
-              <button onClick={() => fileInputRefLight.current?.click()} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-base)] border-2 border-dashed border-[var(--bd-strong)] hover:border-yellow-600 text-[var(--tx-muted)] hover:text-[var(--tx-heading)] py-8 rounded-xl transition-all flex flex-col items-center gap-2">
+              <button onClick={() => fileInputRefLight.current?.click()} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-base)] border-2 border-dashed border-[var(--bd-strong)] hover:border-orange-600 text-[var(--tx-muted)] hover:text-[var(--tx-heading)] py-8 rounded-xl transition-all flex flex-col items-center gap-2">
                 <Upload size={24}/><span className="text-xs font-bold uppercase tracking-wider">คลิกเพื่อเลือกไฟล์ (PNG, JPG, SVG, max 500KB)</span>
               </button>
             </div>
           ) : (
-            <input type="text" value={(settings.logoUrlLight || '').startsWith('data:') ? '' : (settings.logoUrlLight || '')} onChange={e => handleLogoUrlLightChange(e.target.value)} placeholder="https://example.com/logo-light.png" className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-yellow-600 transition-all text-sm font-mono" />
+            <input type="text" value={(settings.logoUrlLight || '').startsWith('data:') ? '' : (settings.logoUrlLight || '')} onChange={e => handleLogoUrlLightChange(e.target.value)} placeholder="https://example.com/logo-light.png" className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-orange-600 transition-all text-sm font-mono" />
           )}
           {logoPreviewLight && (
             <div className="mt-4 flex items-center gap-4">
@@ -372,7 +372,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             จำกัดให้ลูกค้า sync ข้อมูลคอร์สได้กี่ครั้งต่อชั่วโมง —&nbsp;
             <span className="text-[var(--tx-heading)] font-bold">0 = ไม่จำกัด</span>,&nbsp;
             1–99999 = นาทีต่อครั้ง (เช่น 60 = ชั่วโมงละครั้ง)<br/>
-            <span className="text-yellow-600">การเปลี่ยนค่านี้จะรีเซ็ต cooldown ของทุก session ทันที</span>
+            <span className="text-orange-600">การเปลี่ยนค่านี้จะรีเซ็ต cooldown ของทุก session ทันที</span>
           </p>
           <div className="flex items-center gap-3">
             <input
@@ -689,7 +689,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
               emerald: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40',
               sky: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40',
               purple: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40',
-              amber: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40',
+              amber: 'bg-orange-950/30 border-orange-800 text-orange-400 hover:bg-orange-900/40',
             };
             const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
 
@@ -836,7 +836,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 }
               }}
               disabled={clearingSession}
-              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-amber-950/30 border border-amber-800 text-amber-400 hover:bg-amber-900/40 disabled:opacity-50"
+              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-orange-950/30 border border-orange-800 text-orange-400 hover:bg-orange-900/40 disabled:opacity-50"
             >
               {clearingSession ? <><RefreshCw size={14} className="animate-spin"/> กำลังล้าง...</> : <><RefreshCw size={14}/> โหลด Credentials ใหม่</>}
             </button>

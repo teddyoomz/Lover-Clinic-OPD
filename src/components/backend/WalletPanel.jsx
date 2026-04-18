@@ -28,7 +28,7 @@ function TxTypeBadge({ type, isDark }) {
     topup:              { label: 'เติมเงิน',  cls: 'bg-emerald-900/30 text-emerald-400', lightCls: 'bg-emerald-50 text-emerald-700' },
     deduct:             { label: 'หักจากขาย', cls: 'bg-sky-900/30 text-sky-400',          lightCls: 'bg-sky-50 text-sky-700' },
     refund:             { label: 'คืนเงิน',    cls: 'bg-purple-900/30 text-purple-400',    lightCls: 'bg-purple-50 text-purple-700' },
-    adjust:             { label: 'ปรับยอด',   cls: 'bg-amber-900/30 text-amber-400',      lightCls: 'bg-amber-50 text-amber-700' },
+    adjust:             { label: 'ปรับยอด',   cls: 'bg-orange-900/30 text-orange-400',      lightCls: 'bg-orange-50 text-orange-700' },
     membership_credit:  { label: 'บัตรสมาชิก', cls: 'bg-purple-900/30 text-purple-400',    lightCls: 'bg-purple-50 text-purple-700' },
   }[type] || { label: type, cls: 'bg-gray-800/50 text-gray-400', lightCls: 'bg-gray-100 text-gray-600' };
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isDark ? meta.cls : meta.lightCls}`}>{meta.label}</span>;
@@ -155,7 +155,7 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
         <p className="mt-3 text-xs text-[var(--tx-muted)]">
           💼 กระเป๋าเงิน {walletTypes.length} ประเภท · ลูกค้าที่มีกระเป๋าเงิน {Object.keys(walletsByCustomer).length} คน
           {walletTypes.length === 0 && (
-            <span className="ml-2 text-amber-400">(ยังไม่มีประเภทกระเป๋าเงิน — ไปสร้างที่ "ข้อมูลพื้นฐาน")</span>
+            <span className="ml-2 text-orange-400">(ยังไม่มีประเภทกระเป๋าเงิน — ไปสร้างที่ "ข้อมูลพื้นฐาน")</span>
           )}
         </p>
       </div>
@@ -206,7 +206,7 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
                           <span className="text-xs font-bold text-sky-400 truncate">{w.walletTypeName || w.walletTypeId}</span>
                           <div className="flex gap-0.5">
                             <button onClick={() => handleOpenTopup(customer, w)} className="p-1 rounded hover:bg-emerald-900/20 text-emerald-400" aria-label="เติมเงิน" title="เติมเงิน"><Plus size={11} /></button>
-                            <button onClick={() => handleOpenAdjust(customer, w)} className="p-1 rounded hover:bg-amber-900/20 text-amber-400" aria-label="ปรับยอด" title="ปรับยอด">±</button>
+                            <button onClick={() => handleOpenAdjust(customer, w)} className="p-1 rounded hover:bg-orange-900/20 text-orange-400" aria-label="ปรับยอด" title="ปรับยอด">±</button>
                             <button onClick={() => handleOpenHistory(customer, w)} className="p-1 rounded hover:bg-violet-900/20 text-violet-400" aria-label="ประวัติ" title="ประวัติ"><History size={11} /></button>
                           </div>
                         </div>
@@ -413,7 +413,7 @@ function AdjustModal({ modal, isDark, inputCls, labelCls, onClose, onDone }) {
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
-          <h3 className="text-sm font-bold text-amber-400">ปรับยอดกระเป๋าเงิน</h3>
+          <h3 className="text-sm font-bold text-orange-400">ปรับยอดกระเป๋าเงิน</h3>
           <p className="text-xs text-[var(--tx-muted)] mt-1">
             {wallet.walletTypeName} · ยอดปัจจุบัน ฿{fmtMoney(wallet.balance)}
           </p>
@@ -439,14 +439,14 @@ function AdjustModal({ modal, isDark, inputCls, labelCls, onClose, onDone }) {
           </div>
           {amount && (
             <div className="text-xs text-[var(--tx-muted)]">
-              ยอดหลังปรับ: <span className={`font-mono font-bold ${isIncrease ? 'text-emerald-400' : 'text-amber-400'}`}>฿{fmtMoney(preview)}</span>
+              ยอดหลังปรับ: <span className={`font-mono font-bold ${isIncrease ? 'text-emerald-400' : 'text-orange-400'}`}>฿{fmtMoney(preview)}</span>
             </div>
           )}
           {error && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12} />{error}</div>}
         </div>
         <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
           <button onClick={onClose} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-700 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1.5">
             {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
             บันทึก
           </button>

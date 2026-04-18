@@ -111,7 +111,7 @@ export default function CustomerCard({
               </span>
             )}
             {status === 'partial_error' && (
-              <span className="flex items-center gap-1 text-xs text-amber-500 font-medium">
+              <span className="flex items-center gap-1 text-xs text-orange-500 font-medium">
                 <AlertCircle size={11} /> Clone บางส่วน
               </span>
             )}
@@ -163,7 +163,7 @@ export default function CustomerCard({
               <AlertCircle size={14} /> ลองอีกครั้ง
             </button>
           ) : cloneStatus === 'exists' ? (
-            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
+            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'}`}>
               <Clock size={14} /> อัพเดทข้อมูล
             </button>
           ) : (

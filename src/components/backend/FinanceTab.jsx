@@ -19,13 +19,13 @@ const COLOR_ACTIVE = {
   emerald: 'bg-emerald-700 text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]',
   sky:     'bg-sky-700 text-white shadow-[0_0_12px_rgba(14,165,233,0.35)]',
   purple:  'bg-purple-700 text-white shadow-[0_0_12px_rgba(168,85,247,0.35)]',
-  amber:   'bg-amber-700 text-white shadow-[0_0_12px_rgba(245,158,11,0.35)]',
+  amber:   'bg-orange-700 text-white shadow-[0_0_12px_rgba(245,158,11,0.35)]',
 };
 const COLOR_HOVER = {
   emerald: 'hover:text-emerald-400 hover:border-emerald-800/50',
   sky:     'hover:text-sky-400 hover:border-sky-800/50',
   purple:  'hover:text-purple-400 hover:border-purple-800/50',
-  amber:   'hover:text-amber-400 hover:border-amber-800/50',
+  amber:   'hover:text-orange-400 hover:border-orange-800/50',
 };
 
 export default function FinanceTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, initialSubTab }) {

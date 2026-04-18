@@ -29,11 +29,11 @@ function todayStr() { return thaiTodayISO(); }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
 const COLOR_MAP = {
-  gold:     { bg: 'from-amber-600 to-yellow-500',  text: 'text-amber-900' },
+  gold:     { bg: 'from-orange-600 to-orange-500',  text: 'text-orange-900' },
   opal:     { bg: 'from-sky-400 to-cyan-300',       text: 'text-sky-900' },
   silver:   { bg: 'from-gray-400 to-gray-300',      text: 'text-gray-900' },
   diamond:  { bg: 'from-cyan-300 to-indigo-400',    text: 'text-indigo-900' },
-  citrine:  { bg: 'from-yellow-400 to-orange-400',  text: 'text-orange-900' },
+  citrine:  { bg: 'from-orange-400 to-orange-400',  text: 'text-orange-900' },
   platinum: { bg: 'from-gray-500 to-slate-300',     text: 'text-gray-900' },
   emerald:  { bg: 'from-emerald-500 to-teal-400',   text: 'text-emerald-900' },
   ruby:     { bg: 'from-rose-600 to-rose-400',      text: 'text-white' },
@@ -44,11 +44,11 @@ const COLOR_MAP = {
 // Text-only colors for use on neutral backgrounds (e.g. customer-detail membership tile).
 // Uses brighter -400 shades so labels pop on both light and dark surfaces.
 export const CARD_TEXT_COLOR = {
-  gold:     'text-amber-400',
+  gold:     'text-orange-400',
   opal:     'text-sky-400',
   silver:   'text-gray-300',
   diamond:  'text-indigo-300',
-  citrine:  'text-yellow-400',
+  citrine:  'text-orange-400',
   platinum: 'text-slate-300',
   emerald:  'text-emerald-400',
   ruby:     'text-rose-400',
@@ -230,7 +230,7 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
           </button>
         </div>
         {cardTypes.length === 0 && (
-          <p className="mt-3 text-xs text-amber-400 flex items-center gap-1.5">
+          <p className="mt-3 text-xs text-orange-400 flex items-center gap-1.5">
             <AlertCircle size={12} /> ยังไม่มีประเภทบัตรสมาชิก — ไปเพิ่มที่ "ข้อมูลพื้นฐาน → บัตรสมาชิก"
           </p>
         )}
@@ -338,7 +338,7 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
 function StatusBadge({ status, isDark }) {
   const meta = {
     active:    { label: 'ใช้งาน',  cls: 'bg-emerald-900/30 text-emerald-400', lightCls: 'bg-emerald-50 text-emerald-700' },
-    expired:   { label: 'หมดอายุ', cls: 'bg-amber-900/30 text-amber-400',     lightCls: 'bg-amber-50 text-amber-700' },
+    expired:   { label: 'หมดอายุ', cls: 'bg-orange-900/30 text-orange-400',     lightCls: 'bg-orange-50 text-orange-700' },
     cancelled: { label: 'ยกเลิก',  cls: 'bg-red-900/30 text-red-400',         lightCls: 'bg-red-50 text-red-700' },
   }[status] || { label: status, cls: 'bg-gray-800/50 text-gray-400', lightCls: 'bg-gray-100 text-gray-600' };
   return <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${isDark ? meta.cls : meta.lightCls}`}>{meta.label}</span>;
@@ -585,10 +585,10 @@ function SellMembershipForm({ initialCustomer, customers, cardTypes, isDark, inp
 
           {/* Sellers */}
           <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-3">พนักงานขาย (5 ช่อง)</h3>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-3">พนักงานขาย (5 ช่อง)</h3>
             {sellers.map((s, i) => (
               <div key={i} className="flex items-center gap-2 mb-1.5">
-                <input type="checkbox" checked={s.enabled} onChange={e => setSellers(prev => prev.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x))} className="accent-amber-500" />
+                <input type="checkbox" checked={s.enabled} onChange={e => setSellers(prev => prev.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x))} className="accent-orange-500" />
                 <select value={s.id} onChange={e => {
                   const sel = sellerList.find(x => String(x.id) === e.target.value);
                   setSellers(prev => prev.map((x, j) => j === i ? { ...x, id: e.target.value, name: sel?.name || '' } : x));
@@ -715,7 +715,7 @@ function CancelModal({ m, isDark, inputCls, labelCls, onClose, onDone }) {
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
           <h3 className="text-sm font-bold text-red-400">ยกเลิกบัตรสมาชิก {m.membershipId}</h3>
           <p className="text-xs text-[var(--tx-muted)] mt-1">{m.customerName} · {m.cardTypeName}</p>
-          <p className="text-[11px] text-amber-400 mt-1">⚠️ การยกเลิกจะไม่คืนเครดิต wallet + คะแนนที่เคยเติม</p>
+          <p className="text-[11px] text-orange-400 mt-1">⚠️ การยกเลิกจะไม่คืนเครดิต wallet + คะแนนที่เคยเติม</p>
         </div>
         <div className="p-5 space-y-3">
           <div>

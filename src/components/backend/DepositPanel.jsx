@@ -28,7 +28,7 @@ const STATUS_META = {
   used:      { label: 'ใช้หมด',     cls: 'bg-gray-800/50 text-gray-400 border-gray-700/40',         lightCls: 'bg-gray-100 text-gray-600 border-gray-200' },
   cancelled: { label: 'ยกเลิก',     cls: 'bg-red-900/30 text-red-400 border-red-700/40',            lightCls: 'bg-red-50 text-red-700 border-red-200' },
   refunded:  { label: 'คืนเงิน',    cls: 'bg-purple-900/30 text-purple-400 border-purple-700/40',   lightCls: 'bg-purple-50 text-purple-700 border-purple-200' },
-  expired:   { label: 'หมดอายุ',    cls: 'bg-amber-900/30 text-amber-400 border-amber-700/40',      lightCls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  expired:   { label: 'หมดอายุ',    cls: 'bg-orange-900/30 text-orange-400 border-orange-700/40',      lightCls: 'bg-orange-50 text-orange-700 border-orange-200' },
 };
 
 const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -696,7 +696,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
             {/* Sellers (create only — edit form hides per §20.1) */}
             {!editingDeposit && (
               <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-orange-400 flex items-center gap-1.5 mb-3">
                   <UsersIcon size={12} /> พนักงานขาย (5 ช่อง)
                 </h3>
                 <div className="space-y-1.5">
@@ -704,7 +704,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                     <div key={i} className="flex items-center gap-2">
                       <input type="checkbox" checked={s.enabled}
                         onChange={e => setSellers(prev => prev.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x))}
-                        className="accent-amber-500" aria-label={`เปิดพนักงานขายช่อง ${i + 1}`} />
+                        className="accent-orange-500" aria-label={`เปิดพนักงานขายช่อง ${i + 1}`} />
                       <select value={s.id} onChange={e => {
                         const sel = staffOptions.find(x => String(x.id) === e.target.value);
                         setSellers(prev => prev.map((x, j) => j === i ? { ...x, id: e.target.value, name: sel?.name || '' } : x));

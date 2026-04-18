@@ -22,7 +22,7 @@ const CHANNELS = ['เคาน์เตอร์','โทรศัพท์','W
 const APPT_TYPES = [{ value: 'sales', label: 'ขาย' }, { value: 'followup', label: 'ติดตาม' }];
 const APPT_COLORS = ['ใช้สีเริ่มต้น','เหลืองอ่อน','เขียวอ่อน','ส้มอ่อน','แดงอ่อน','น้ำตาลอ่อน','ชมพูอ่อน','ม่วงอ่อน','น้ำเงินอ่อน'];
 const STATUSES = [
-  { value: 'pending', label: 'รอยืนยัน', bg: 'bg-amber-500/20', text: 'text-amber-400', dot: 'bg-amber-400' },
+  { value: 'pending', label: 'รอยืนยัน', bg: 'bg-orange-500/20', text: 'text-orange-400', dot: 'bg-orange-400' },
   { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20', text: 'text-sky-400', dot: 'bg-sky-400' },
   { value: 'done', label: 'เสร็จแล้ว', bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },

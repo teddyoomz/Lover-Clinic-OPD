@@ -14,7 +14,7 @@ const BRANCH_ID = 'main';
 const BADGE_CLASSES = {
   emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
   rose:    'bg-rose-900/30 text-rose-400 border-rose-800',
-  amber:   'bg-amber-900/30 text-amber-400 border-amber-800',
+  amber:   'bg-orange-900/30 text-orange-400 border-orange-800',
   sky:     'bg-sky-900/30 text-sky-400 border-sky-800',
   violet:  'bg-violet-900/30 text-violet-400 border-violet-800',
   purple:  'bg-purple-900/30 text-purple-400 border-purple-800',
@@ -246,7 +246,7 @@ export default function MovementLogPanel({ clinicSettings, theme }) {
                       </span>
                       {isReverse && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)]">REV</span>}
                       {m.skipped && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)]">SKIP</span>}
-                      {m.isPremium && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-amber-900/30 text-amber-400 border border-amber-800">ฟรี</span>}
+                      {m.isPremium && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800">ฟรี</span>}
                     </td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {m.productName || '-'}

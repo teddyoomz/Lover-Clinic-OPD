@@ -164,7 +164,7 @@ export default function WalletPicker({
           title="ใช้สูงสุด">max</button>
       </div>
       {selectedWalletTypeId && currentAmount > 0 && initialApplied > 0 && (
-        <div className={`px-3 pb-2 text-[10px] ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+        <div className={`px-3 pb-2 text-[10px] ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
           (ใช้บิลนี้ ฿{fmtMoney(initialApplied)} — ปรับใหม่แล้วจะ reverse + reapply อัตโนมัติ)
         </div>
       )}

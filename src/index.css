@@ -267,8 +267,8 @@ html.theme-transitioning *::after {
 [data-theme="auto"] .bg-orange-950\/30 { background-color: rgba(255,237,213,0.85) !important; }
 
 /* Yellow tints */
-[data-theme="light"] .bg-yellow-950\/30,
-[data-theme="auto"] .bg-yellow-950\/30 { background-color: rgba(254,252,232,0.8) !important; }
+[data-theme="light"] .bg-orange-950\/30,
+[data-theme="auto"] .bg-orange-950\/30 { background-color: rgba(254,252,232,0.8) !important; }
 
 /* =====================================================
    BADGE / TAG BACKGROUNDS — dark variant → light variant
@@ -343,8 +343,8 @@ html.theme-transitioning *::after {
 [data-theme="light"] .border-cyan-900\/50,
 [data-theme="auto"] .border-cyan-900\/50   { border-color: rgba(103,232,249,0.8) !important; }
 
-[data-theme="light"] .border-yellow-900\/50,
-[data-theme="auto"] .border-yellow-900\/50 { border-color: rgba(253,224,71,0.7) !important; }
+[data-theme="light"] .border-orange-900\/50,
+[data-theme="auto"] .border-orange-900\/50 { border-color: rgba(253,224,71,0.7) !important; }
 
 [data-theme="light"] .border-dashed.border-\[\#333\],
 [data-theme="auto"] .border-dashed.border-\[\#333\]  { border-color: var(--bd-strong) !important; }
@@ -447,9 +447,9 @@ html.theme-transitioning *::after {
 [data-theme="light"] .text-blue-500,
 [data-theme="auto"] .text-blue-500    { color: #1d4ed8 !important; } /* blue-700    */
 
-/* Yellow: 500 (#eab308) ratio ~2.1:1 on white — very low */
-[data-theme="light"] .text-yellow-500,
-[data-theme="auto"] .text-yellow-500  { color: #a16207 !important; } /* yellow-700  */
+/* (Legacy yellow-500 darkening rule removed — all yellow-500 classes were
+   swapped to orange-500 during the 2026-04-19 palette unification, and the
+   earlier .text-orange-500 rule above already supplies correct AA contrast.) */
 
 /* Orange: 300 (#fdba74) ratio ~2.0:1 on white — too light */
 [data-theme="light"] .text-orange-300,
@@ -642,17 +642,17 @@ html.theme-transitioning *::after {
 /* =====================================================
    YELLOW — PatientDashboard SyncButton ready state
    ===================================================== */
-[data-theme="light"] .text-yellow-300,
-[data-theme="auto"] .text-yellow-300           { color: #a16207 !important; }
+[data-theme="light"] .text-orange-300,
+[data-theme="auto"] .text-orange-300           { color: #a16207 !important; }
 
-[data-theme="light"] .bg-yellow-950\/50,
-[data-theme="auto"] .bg-yellow-950\/50         { background-color: rgba(254,249,195,0.85) !important; }
+[data-theme="light"] .bg-orange-950\/50,
+[data-theme="auto"] .bg-orange-950\/50         { background-color: rgba(254,249,195,0.85) !important; }
 
-[data-theme="light"] .border-yellow-600\/40,
-[data-theme="auto"] .border-yellow-600\/40     { border-color: rgba(161,98,7,0.3) !important; }
+[data-theme="light"] .border-orange-600\/40,
+[data-theme="auto"] .border-orange-600\/40     { border-color: rgba(161,98,7,0.3) !important; }
 
-[data-theme="light"] .hover\:bg-yellow-950\/50:hover,
-[data-theme="auto"] .hover\:bg-yellow-950\/50:hover { background-color: rgba(254,240,138,0.6) !important; }
+[data-theme="light"] .hover\:bg-orange-950\/50:hover,
+[data-theme="auto"] .hover\:bg-orange-950\/50:hover { background-color: rgba(254,240,138,0.6) !important; }
 
 /* =====================================================
    RED — PatientDashboard CourseCard expired (missing variants)

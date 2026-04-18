@@ -667,7 +667,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
                 const responseMin = h.responseTimeMs ? Math.round(h.responseTimeMs / 60000) : null;
                 const gapMin = h.maxCustomerGapMs ? Math.round(h.maxCustomerGapMs / 60000) : null;
                 const pColor = h.platform === 'line' ? LINE_COLOR : FB_COLOR;
-                const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-yellow-500' : 'text-red-500';
+                const colorFor = (min) => min <= 5 ? 'text-green-500' : min <= 10 ? 'text-orange-500' : 'text-red-500';
                 const fmtMin = (min) => min < 1 ? '< 1 นาที' : min < 60 ? `${min} นาที` : `${Math.floor(min / 60)} ชม. ${min % 60} นาที`;
                 return (
                   <div key={h.id} onClick={() => h.convId && openHistoryDetail(h)}

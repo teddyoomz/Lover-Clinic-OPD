@@ -204,7 +204,7 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                   {customer.cloneStatus === 'complete' ? (
                     <span className="text-emerald-500 flex items-center gap-1 font-medium"><CheckCircle2 size={12} /> Clone สมบูรณ์</span>
                   ) : customer.cloneStatus === 'partial_error' ? (
-                    <span className="text-amber-500 flex items-center gap-1 font-medium"><AlertCircle size={12} /> Clone บางส่วน</span>
+                    <span className="text-orange-500 flex items-center gap-1 font-medium"><AlertCircle size={12} /> Clone บางส่วน</span>
                   ) : null}
                   <span className="text-[var(--tx-muted)]">| {relativeTime(customer.lastSyncedAt)}</span>
                 </div>
@@ -221,10 +221,10 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
               <InfoRow label="กรุ๊ปเลือด" value={pd.bloodType || '-'} />
               <InfoRow label="ที่อยู่" value={formatAddress(pd)} icon={<MapPin size={11} />} />
               {pd.allergiesDetail && (
-                <InfoRow label="แพ้ยา" value={pd.allergiesDetail} className="text-amber-400" />
+                <InfoRow label="แพ้ยา" value={pd.allergiesDetail} className="text-orange-400" />
               )}
               {pd.hasUnderlying === 'มี' && (
-                <InfoRow label="โรคประจำตัว" value={formatUnderlying(pd)} className="text-amber-400" />
+                <InfoRow label="โรคประจำตัว" value={formatUnderlying(pd)} className="text-orange-400" />
               )}
               {pd.emergencyName && (
                 <InfoRow label="ผู้ติดต่อฉุกเฉิน" value={`${pd.emergencyName} (${pd.emergencyRelation || '-'}) ${pd.emergencyPhone || ''}`} />
@@ -272,13 +272,13 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
               </button>
               {/* Points */}
               <button onClick={() => onOpenFinance?.('points', customer)}
-                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-amber-700/50' : 'bg-gray-50 border-gray-200 hover:border-amber-300'}`}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-orange-700/50' : 'bg-gray-50 border-gray-200 hover:border-orange-300'}`}
                 title="คะแนนสะสม">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Star size={11} className="text-amber-400" fill="currentColor" />
+                  <Star size={11} className="text-orange-400" fill="currentColor" />
                   <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">คะแนน</span>
                 </div>
-                <div className="text-sm font-black text-amber-400 font-mono">
+                <div className="text-sm font-black text-orange-400 font-mono">
                   {fmtPoints(finSummary?.points || 0)}
                 </div>
               </button>
@@ -371,7 +371,7 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
             </div>
 
             {treatmentsError && (
-              <div className={`px-4 py-3 text-xs flex items-center gap-2 border-b border-[var(--bd)] ${isDark ? 'text-amber-400 bg-amber-900/10' : 'text-amber-700 bg-amber-50'}`}>
+              <div className={`px-4 py-3 text-xs flex items-center gap-2 border-b border-[var(--bd)] ${isDark ? 'text-orange-400 bg-orange-900/10' : 'text-orange-700 bg-orange-50'}`}>
                 <AlertCircle size={13} /> {treatmentsError}
               </div>
             )}
@@ -492,7 +492,7 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
             {/* Content by tab — scrollable for large course lists */}
             <div className="divide-y divide-[var(--bd)] max-h-[600px] overflow-y-auto">
               {salesError && courseTab === 'purchases' && (
-                <div className={`px-4 py-3 text-xs flex items-center gap-2 ${isDark ? 'text-amber-400 bg-amber-900/10' : 'text-amber-700 bg-amber-50'}`}>
+                <div className={`px-4 py-3 text-xs flex items-center gap-2 ${isDark ? 'text-orange-400 bg-orange-900/10' : 'text-orange-700 bg-orange-50'}`}>
                   <AlertCircle size={13} /> {salesError}
                 </div>
               )}
@@ -508,7 +508,7 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                         <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
                           sale.payment?.status === 'paid' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') :
                           sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') :
-                          (isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700')
+                          (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700')
                         }`}>{sale.payment?.status === 'paid' ? 'ชำระแล้ว' : sale.status === 'cancelled' ? 'ยกเลิก' : 'ค้างชำระ'}</span>
                       </div>
                       <p className="text-xs text-[var(--tx-secondary)] mt-0.5">{formatThaiDateFull(sale.saleDate)}</p>
@@ -527,7 +527,7 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{course.name || '-'}</h4>
                         {course.parentName && (
-                          <p className="text-[11px] text-amber-400/70 mt-0.5">{course.parentName}</p>
+                          <p className="text-[11px] text-orange-400/70 mt-0.5">{course.parentName}</p>
                         )}
                         {course.expiry && (
                           <p className="text-xs text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
@@ -1146,7 +1146,7 @@ function TreatmentDetailExpanded({ detail, ac, acRgb, isDark }) {
           </span>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
             {(medCert.isActuallyCome || d.medCertActuallyCome) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>มาตรวจจริง</span>}
-            {(medCert.isRest || d.medCertIsRest) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700'}`}>พักงาน {medCert.period || d.medCertPeriod || ''}</span>}
+            {(medCert.isRest || d.medCertIsRest) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>พักงาน {medCert.period || d.medCertPeriod || ''}</span>}
             {(medCert.isOther || d.medCertIsOther) && <span className={`px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700'}`}>{medCert.otherDetail || d.medCertOtherDetail || 'อื่นๆ'}</span>}
           </div>
         </div>
@@ -1201,7 +1201,7 @@ function ImageRow({ label, images }) {
           if (!src) return null;
           return (
             <a key={i} href={src} target="_blank" rel="noopener noreferrer"
-              className="w-14 h-14 rounded border border-[var(--bd)] overflow-hidden flex-shrink-0 hover:ring-1 hover:ring-amber-500 transition-all">
+              className="w-14 h-14 rounded border border-[var(--bd)] overflow-hidden flex-shrink-0 hover:ring-1 hover:ring-orange-500 transition-all">
               <img src={src} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
             </a>
           );

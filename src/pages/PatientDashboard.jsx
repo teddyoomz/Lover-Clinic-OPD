@@ -227,7 +227,7 @@ function SyncButton({ syncStatus, syncTimeStr, inCooldown, cooldownMins, onResyn
       disabled={!isReady}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all ${
         isReady
-          ? 'cursor-pointer text-yellow-300 border-yellow-600/40 bg-yellow-950/30 hover:bg-yellow-950/50 active:scale-95'
+          ? 'cursor-pointer text-orange-300 border-orange-600/40 bg-orange-950/30 hover:bg-orange-950/50 active:scale-95'
           : isDone
           ? 'cursor-default'
           : 'cursor-default text-[var(--tx-muted)] border-gray-700/30 bg-gray-900/20'

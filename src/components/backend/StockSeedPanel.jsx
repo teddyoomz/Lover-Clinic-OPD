@@ -241,7 +241,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
           <Square size={12} /> ยกเลิกทั้งหมด
         </button>
         <div className="text-[11px] text-[var(--tx-muted)]">
-          เลือก: <span className="font-bold text-rose-400">{includedCount}</span> • มูลค่ารวม: <span className="font-mono text-amber-400">฿{fmtQty(totalValue)}</span>
+          เลือก: <span className="font-bold text-rose-400">{includedCount}</span> • มูลค่ารวม: <span className="font-mono text-orange-400">฿{fmtQty(totalValue)}</span>
         </div>
       </div>
 
@@ -308,7 +308,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
                     <td className="px-2 py-1.5">
                       <DateField value={r.expiresAt || ''} onChange={v => updateRow(id, { expiresAt: v })} locale="ce" size="sm" />
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-amber-400">
+                    <td className="px-2 py-1.5 text-right font-mono text-orange-400">
                       {lineTotal > 0 ? `฿${fmtQty(lineTotal)}` : '-'}
                     </td>
                   </tr>

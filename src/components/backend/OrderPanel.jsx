@@ -210,7 +210,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                     <td className="px-3 py-2 text-[var(--tx-primary)]">{o.vendorName || '-'}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)]">{fmtDate(o.importedDate)}</td>
                     <td className="px-3 py-2 text-center text-[var(--tx-primary)]">{itemCount}</td>
-                    <td className="px-3 py-2 text-right font-mono text-amber-400">{fmtMoney(total)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-orange-400">{fmtMoney(total)}</td>
                     <td className="px-3 py-2 text-center">
                       {o.status === 'cancelled' ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/30 text-red-400 border border-red-800">ยกเลิก</span>
@@ -388,7 +388,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
           <h3 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
             <Package size={14} /> รายการสินค้า ({validItems.length}/{items.length})
           </h3>
-          <div className="text-xs text-[var(--tx-muted)]">ยอดรวม: <span className="font-mono text-amber-400 font-bold">฿{fmtMoney(total)}</span></div>
+          <div className="text-xs text-[var(--tx-muted)]">ยอดรวม: <span className="font-mono text-orange-400 font-bold">฿{fmtMoney(total)}</span></div>
         </div>
 
         {productsLoading && (
@@ -444,7 +444,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
                       <input type="checkbox" checked={it.isPremium} onChange={e => updateItem(idx, { isPremium: e.target.checked })}
                         className="w-4 h-4 accent-rose-500" />
                     </td>
-                    <td className="px-2 py-2 text-right font-mono text-amber-400">{fmtMoney(lineTotal)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-orange-400">{fmtMoney(lineTotal)}</td>
                     <td className="px-2 py-2 text-center">
                       <button onClick={() => removeItem(idx)} disabled={items.length === 1}
                         className="p-1 rounded text-[var(--tx-muted)] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed">

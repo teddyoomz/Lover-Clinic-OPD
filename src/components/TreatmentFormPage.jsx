@@ -106,14 +106,14 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
     <div>
       <label className={labelCls}>{label}</label>
       {hasPrev && (
-        <div className={`mb-1.5 rounded-lg border px-3 py-2 ${isDark ? 'bg-[#0d0d0d] border-[#2a2a2a]' : 'bg-amber-50/40 border-amber-200/50'}`}>
+        <div className={`mb-1.5 rounded-lg border px-3 py-2 ${isDark ? 'bg-[#0d0d0d] border-[#2a2a2a]' : 'bg-orange-50/40 border-orange-200/50'}`}>
           <div className="flex items-center justify-between mb-1">
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>ครั้งก่อน</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-orange-500/70' : 'text-orange-600/70'}`}>ครั้งก่อน</span>
             <button type="button" onClick={handleCopyAndFill}
               className={`text-[11px] font-bold px-1.5 py-0.5 rounded border transition-all flex items-center gap-1 ${
                 copied
                   ? isDark ? 'bg-green-950/40 text-green-400 border-green-900/50' : 'bg-green-50 text-green-600 border-green-200'
-                  : isDark ? 'bg-[#111] border-[#333] text-gray-400 hover:text-amber-400 hover:border-amber-500/30' : 'bg-white border-gray-200 text-gray-500 hover:text-amber-600 hover:border-amber-300'
+                  : isDark ? 'bg-[#111] border-[#333] text-gray-400 hover:text-orange-400 hover:border-orange-500/30' : 'bg-white border-gray-200 text-gray-500 hover:text-orange-600 hover:border-orange-300'
               }`}>
               {copied ? <Check size={9} /> : <Copy size={9} />}
               {copied ? 'คัดลอกแล้ว' : 'ใช้ข้อมูลนี้'}
@@ -2245,7 +2245,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <FormSection isDark={isDark}>
               <SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent}>
                 {prevTreatment && (
-                  <span className={`text-[11px] font-bold ${isDark ? 'text-amber-500/60' : 'text-amber-600/60'}`}>
+                  <span className={`text-[11px] font-bold ${isDark ? 'text-orange-500/60' : 'text-orange-600/60'}`}>
                     มีข้อมูลครั้งก่อน {prevTreatment.treatmentDate ? `(${prevTreatment.treatmentDate})` : ''}
                   </span>
                 )}
@@ -2289,7 +2289,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label} <span className="text-gray-600 normal-case">({images.length}/12)</span></span>
                   {images.length < 12 && (
-                    <label className="text-xs font-bold text-amber-500 cursor-pointer flex items-center gap-1 hover:text-amber-400">
+                    <label className="text-xs font-bold text-orange-500 cursor-pointer flex items-center gap-1 hover:text-orange-400">
                       <Plus size={10} /> เพิ่มรูป
                       <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
                         const files = Array.from(e.target.files || []);
@@ -2966,7 +2966,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                           <div className={`px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
                             {course.courseName}
                             {course.parentName && (
-                              <span className={`ml-2 text-[10px] font-normal ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>· {course.parentName}</span>
+                              <span className={`ml-2 text-[10px] font-normal ${isDark ? 'text-orange-400/80' : 'text-orange-600'}`}>· {course.parentName}</span>
                             )}
                           </div>
                           {course.products.map(product => {
@@ -3019,7 +3019,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {customerPromotionGroups.map(group => (
                         <div key={`promo-${group.promotionId}`}>
-                          <div className={`px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-amber-900/40 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-100 text-amber-800'}`}>
+                          <div className={`px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
                             {group.promotionName}
                           </div>
                           {group.courses.map(course => (
@@ -3031,13 +3031,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                 const isSelected = selectedCourseItems.has(product.rowId);
                                 return (
                                   <label key={product.rowId} className={`flex items-center justify-between px-3 pl-7 py-1.5 border-b cursor-pointer transition-all ${
-                                    isSelected ? isDark ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-100'
+                                    isSelected ? isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100'
                                     : isDark ? 'border-[#1a1a1a] hover:bg-[#151515]' : 'border-gray-50 hover:bg-gray-50'
                                   }`}>
                                     <div className="flex items-center gap-2 min-w-0">
                                       <input type="checkbox" checked={isSelected} onChange={() => toggleCourseItem(product)}
-                                        className="w-3.5 h-3.5 rounded accent-amber-500 shrink-0" />
-                                      <span className={`text-xs truncate ${isSelected ? 'font-bold text-amber-400' : ''}`}>{product.name}</span>
+                                        className="w-3.5 h-3.5 rounded accent-orange-500 shrink-0" />
+                                      <span className={`text-xs truncate ${isSelected ? 'font-bold text-orange-400' : ''}`}>{product.name}</span>
                                     </div>
                                     <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
                                   </label>
@@ -3049,7 +3049,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       ))}
                       {purchasedByType.promotion.map((item, idx) => (
                         <div key={`pp-${idx}`}>
-                          <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-amber-900/40 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-100 text-amber-800'}`}>
+                          <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{item.name}</span>
                               <span className={`text-[11px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
@@ -3077,9 +3077,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       ) : treatmentItems.map(item => (
                         <div key={item.id} className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
                           <div className="flex-1 min-w-0">
-                            <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-amber-400' : ''}`}>
+                            <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-orange-400' : ''}`}>
                               {item.name}
-                              {item.source === 'purchased' && <span className="text-[11px] text-amber-500 ml-1">(ซื้อเพิ่ม)</span>}
+                              {item.source === 'purchased' && <span className="text-[11px] text-orange-500 ml-1">(ซื้อเพิ่ม)</span>}
                             </span>
                           </div>
                           <input type="number" value={item.qty} onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
@@ -3304,7 +3304,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       {!consModalSelected && (
                         <div className={`rounded-lg border mt-1 max-h-40 overflow-y-auto ${isDark ? 'border-[#222] bg-[#111]' : 'border-gray-200 bg-white'}`}>
                           {consModalLoading ? (
-                            <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
+                            <div className="flex items-center justify-center gap-2 py-4"><Loader2 size={14} className="animate-spin text-orange-400" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
                           ) : consFilteredProducts.length === 0 ? (
                             <p className="text-xs text-gray-500 text-center py-3">ไม่พบรายการ</p>
                           ) : consFilteredProducts.map(p => (
@@ -3329,7 +3329,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       ยกเลิก
                     </button>
                     <button onClick={confirmConsModal} disabled={!consModalSelected}
-                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-yellow-500 hover:bg-yellow-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                       ยืนยัน
                     </button>
                   </div>
@@ -3358,7 +3358,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   {/* Table */}
                   <div className="px-5 py-3 flex-1 min-h-0 overflow-y-auto">
                     {consGroupLoading ? (
-                      <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-yellow-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มสินค้า...</span></div>
+                      <div className="flex items-center justify-center gap-2 py-8"><Loader2 size={16} className="animate-spin text-orange-400" /><span className="text-xs text-gray-500">กำลังโหลดกลุ่มสินค้า...</span></div>
                     ) : selectedConsGroupProducts.length === 0 ? (
                       <p className="text-xs text-gray-500 text-center py-8">กรุณาเลือกกลุ่มสินค้าสิ้นเปลือง</p>
                     ) : (
@@ -3376,7 +3376,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                             <tr key={p.id} className={`border-t ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
                               <td className="py-2 pr-2">
                                 <input type="checkbox" checked={consGroupChecked.has(i)} onChange={() => toggleConsGroupCheck(i)}
-                                  className="w-3.5 h-3.5 rounded accent-yellow-500" />
+                                  className="w-3.5 h-3.5 rounded accent-orange-500" />
                               </td>
                               <td className="py-2 font-medium">{p.name}</td>
                               <td className="py-2 text-center">{parseFloat(p.qty) || 1}</td>
@@ -3393,7 +3393,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       <p className="text-xs font-bold text-gray-500 mb-1.5">รายการที่เลือก ({consGroupChecked.size} รายการ)</p>
                       <div className="flex flex-wrap gap-1.5">
                         {selectedConsGroupProducts.map((p, i) => consGroupChecked.has(i) && (
-                          <span key={i} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
+                          <span key={i} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400">
                             {p.name} ({parseFloat(p.qty)} {p.unit})
                             <button onClick={() => toggleConsGroupCheck(i)} className="hover:text-red-400 ml-0.5">&times;</button>
                           </span>
@@ -3408,7 +3408,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       ยกเลิก
                     </button>
                     <button onClick={confirmConsGroup} disabled={consGroupChecked.size === 0}
-                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-yellow-500 hover:bg-yellow-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      className="px-6 py-2 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                       ยืนยัน
                     </button>
                   </div>

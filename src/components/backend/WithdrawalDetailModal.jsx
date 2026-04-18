@@ -14,7 +14,7 @@ const STATUS_INFO = {
   3: { label: 'ยกเลิก', color: 'red' },
 };
 const BADGE_CLS = {
-  amber: 'bg-amber-900/30 text-amber-400 border-amber-800',
+  amber: 'bg-orange-900/30 text-orange-400 border-orange-800',
   sky: 'bg-sky-900/30 text-sky-400 border-sky-800',
   emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
   red: 'bg-red-900/30 text-red-400 border-red-800',

@@ -97,15 +97,15 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
     <div className="space-y-4">
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
         <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-amber-900/30 border border-amber-800">
-            <SlidersHorizontal size={22} className="text-amber-400" />
+          <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-orange-900/30 border border-orange-800">
+            <SlidersHorizontal size={22} className="text-orange-400" />
           </div>
           <div className="flex-1">
             <h2 className="text-lg font-bold text-[var(--tx-heading)]">ปรับสต็อก</h2>
             <p className="text-xs text-[var(--tx-muted)]">เพิ่ม/ลด stock ต่อ batch (lot) — เช่น นับสต็อก, ของเสีย, คืน vendor</p>
           </div>
           <button onClick={openCreate}
-            className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-700 text-white hover:bg-amber-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+            className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
             <Plus size={14} /> ปรับสต็อกใหม่
           </button>
         </div>
@@ -226,7 +226,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, o
     }
   };
 
-  const inputCls = `w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-amber-500`;
+  const inputCls = `w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-orange-500`;
   const labelCls = 'block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold';
 
   return (
@@ -241,7 +241,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, o
           <p className="text-xs text-[var(--tx-muted)]">เพิ่ม/ลด qty ต่อ batch — บันทึกเหตุผลเพื่อ audit</p>
         </div>
         <button onClick={handleSave} disabled={!canSave || saving}
-          className="px-5 py-2 rounded-lg text-xs font-bold bg-amber-700 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+          className="px-5 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
           {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <CheckCircle2 size={14} /> : <Plus size={14} />}
           {saving ? 'กำลังบันทึก' : success ? 'สำเร็จ' : 'บันทึก'}
         </button>
@@ -285,7 +285,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, o
           <div className="p-3 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[11px] text-[var(--tx-muted)] grid grid-cols-4 gap-3">
             <div>คงเหลือ <div className="text-sm font-mono text-[var(--tx-heading)] font-bold">{fmtQty(selectedBatch.qty.remaining)} {selectedBatch.unit}</div></div>
             <div>ทั้งหมด <div className="text-sm font-mono text-[var(--tx-primary)]">{fmtQty(selectedBatch.qty.total)} {selectedBatch.unit}</div></div>
-            <div>ต้นทุน/หน่วย <div className="text-sm font-mono text-amber-400">฿{fmtQty(selectedBatch.originalCost)}</div></div>
+            <div>ต้นทุน/หน่วย <div className="text-sm font-mono text-orange-400">฿{fmtQty(selectedBatch.originalCost)}</div></div>
             <div>หมดอายุ <div className="text-sm text-[var(--tx-primary)]">{selectedBatch.expiresAt || '-'}</div></div>
           </div>
         )}

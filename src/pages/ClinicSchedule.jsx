@@ -211,7 +211,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   const docCellBg = isDark ? 'border-sky-700/40' : '';
   const availCellBg = isDark ? 'border-emerald-800/30' : '';
   const availColor = isDark ? 'text-emerald-400' : 'text-emerald-600';
-  const fullColor = isDark ? 'text-amber-400' : 'text-pink-500';
+  const fullColor = isDark ? 'text-orange-400' : 'text-pink-500';
   const todayDotColor = isDark ? 'bg-orange-400' : 'bg-pink-500';
   const todayTextColor = isDark ? 'text-orange-400' : 'text-pink-600';
   const weekendColor = isDark ? 'text-rose-400/70' : 'text-rose-400';
@@ -542,7 +542,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                       {slot.doctorSlot && !slot.booked && (
                         <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
                           slot.doctorBusy
-                            ? (isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-600')
+                            ? (isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600')
                             : (isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-pink-100 text-pink-600')
                         }`}>
                           {slot.doctorBusy ? t.doctorBusy : t.doctorFree}

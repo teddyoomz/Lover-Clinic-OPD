@@ -206,7 +206,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ยอดรวม</div>
-                <div className="font-mono text-amber-400 font-bold">฿{fmtMoney(total)}</div>
+                <div className="font-mono text-orange-400 font-bold">฿{fmtMoney(total)}</div>
               </div>
               <div className="col-span-2 md:col-span-4">
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">หมายเหตุ</div>
@@ -246,7 +246,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                       const edit = itemEdits[it.orderProductId] || { cost: '', expiresAt: '' };
                       const editable = editMode && !isUsed && !isCancelled;
                       return (
-                        <tr key={it.orderProductId || idx} className={`border-t border-[var(--bd)] ${isUsed ? 'bg-amber-900/10' : ''}`}>
+                        <tr key={it.orderProductId || idx} className={`border-t border-[var(--bd)] ${isUsed ? 'bg-orange-900/10' : ''}`}>
                           <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
                           <td className="px-2 py-2 text-[var(--tx-primary)]">
                             <div>{it.productName || '-'}</div>
@@ -265,7 +265,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                                 }))}
                                 className="w-24 px-2 py-1 rounded text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-right text-[var(--tx-primary)]" />
                             ) : (
-                              <span className="font-mono text-amber-400">{fmtMoney(it.cost)}</span>
+                              <span className="font-mono text-orange-400">{fmtMoney(it.cost)}</span>
                             )}
                           </td>
                           <td className="px-2 py-2">
@@ -285,7 +285,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                             {isCancelled ? (
                               <span className="px-2 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800">ยกเลิก</span>
                             ) : isUsed ? (
-                              <span className="px-2 py-0.5 rounded text-[9px] bg-amber-900/30 text-amber-400 border border-amber-800"
+                              <span className="px-2 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800"
                                 title={`${c.count} movements, ใช้ไป ${fmtQty(c.totalOut)}`}>
                                 ใช้แล้ว ({fmtQty(c.totalOut)})
                               </span>
@@ -300,8 +300,8 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
                 </table>
               </div>
               {editMode && (
-                <div className="mt-3 text-[10px] text-[var(--tx-muted)] flex items-start gap-1.5 p-2 rounded bg-amber-950/20 border border-amber-900/30">
-                  <AlertCircle size={11} className="flex-shrink-0 mt-0.5 text-amber-400" />
+                <div className="mt-3 text-[10px] text-[var(--tx-muted)] flex items-start gap-1.5 p-2 rounded bg-orange-950/20 border border-orange-900/30">
+                  <AlertCircle size={11} className="flex-shrink-0 mt-0.5 text-orange-400" />
                   <div>
                     <div>แก้ไขได้เฉพาะ <b>ต้นทุน</b> และ <b>วันหมดอายุ</b> ของ batch ที่ยังไม่ถูกใช้</div>
                     <div>— จำนวนแก้ไม่ได้ (ต้องใช้ "ปรับสต็อก" เพื่อ log การเปลี่ยนแปลง)</div>

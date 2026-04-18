@@ -15,7 +15,7 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 const TAB_COLOR_MAP = {
   violet: { active: 'bg-violet-700 text-white shadow-[0_0_15px_rgba(139,92,246,0.4)]', hover: 'hover:text-violet-400 hover:border-violet-800/50' },
   teal: { active: 'bg-teal-700 text-white shadow-[0_0_15px_rgba(20,184,166,0.4)]', hover: 'hover:text-teal-400 hover:border-teal-800/50' },
-  amber: { active: 'bg-amber-700 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]', hover: 'hover:text-amber-400 hover:border-amber-800/50' },
+  amber: { active: 'bg-orange-700 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]', hover: 'hover:text-orange-400 hover:border-orange-800/50' },
   sky: { active: 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]', hover: 'hover:text-sky-400 hover:border-sky-900/50' },
   rose: { active: 'bg-rose-700 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]', hover: 'hover:text-rose-400 hover:border-rose-900/50' },
   emerald: { active: 'bg-emerald-700 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]', hover: 'hover:text-emerald-400 hover:border-emerald-800/50' },

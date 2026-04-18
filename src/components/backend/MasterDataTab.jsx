@@ -34,14 +34,14 @@ const SYNC_COLOR_MAP_DARK = {
   emerald: { btn: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40', badge: 'bg-emerald-900/40 text-emerald-400', btnSolid: 'bg-emerald-700 hover:bg-emerald-600' },
   sky: { btn: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40', badge: 'bg-sky-900/40 text-sky-400', btnSolid: 'bg-sky-700 hover:bg-sky-600' },
   purple: { btn: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40', badge: 'bg-purple-900/40 text-purple-400', btnSolid: 'bg-purple-700 hover:bg-purple-600' },
-  amber: { btn: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40', badge: 'bg-amber-900/40 text-amber-400', btnSolid: 'bg-amber-700 hover:bg-amber-600' },
+  amber: { btn: 'bg-orange-950/30 border-orange-800 text-orange-400 hover:bg-orange-900/40', badge: 'bg-orange-900/40 text-orange-400', btnSolid: 'bg-orange-700 hover:bg-orange-600' },
   rose: { btn: 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40', badge: 'bg-rose-900/40 text-rose-400', btnSolid: 'bg-rose-700 hover:bg-rose-600' },
 };
 const SYNC_COLOR_MAP_LIGHT = {
   emerald: { btn: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100', badge: 'bg-emerald-50 text-emerald-700' },
   sky: { btn: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100', badge: 'bg-sky-50 text-sky-700' },
   purple: { btn: 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100', badge: 'bg-purple-50 text-purple-700' },
-  amber: { btn: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100', badge: 'bg-amber-50 text-amber-700' },
+  amber: { btn: 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100', badge: 'bg-orange-50 text-orange-700' },
   rose: { btn: 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100', badge: 'bg-rose-50 text-rose-700' },
 };
 
@@ -532,7 +532,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-2">
         <button onClick={() => setCourseFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]" aria-label="กลับ"><ArrowLeft size={18} /></button>
-        <h2 className="text-sm font-bold text-amber-400">{editingCourse ? 'แก้ไขคอร์ส' : 'สร้างคอร์สใหม่'}</h2>
+        <h2 className="text-sm font-bold text-orange-400">{editingCourse ? 'แก้ไขคอร์ส' : 'สร้างคอร์สใหม่'}</h2>
       </div>
       {courseError && <div className={`${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} border rounded-lg px-3 py-2 text-xs`}>{courseError}</div>}
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-5 space-y-4">
@@ -566,7 +566,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold text-[var(--tx-muted)]">สินค้าในคอร์ส ({cfProducts.length})</label>
             <button onClick={() => setCfProducts(p => [...p, { id: '', name: '', qty: '1', unit: '' }])}
-              className="text-xs font-bold text-amber-400 flex items-center gap-1"><Plus size={12} /> เพิ่มสินค้า</button>
+              className="text-xs font-bold text-orange-400 flex items-center gap-1"><Plus size={12} /> เพิ่มสินค้า</button>
           </div>
           {cfProducts.length === 0 && <p className="text-xs text-[var(--tx-muted)] text-center py-3 bg-[var(--bg-elevated)] rounded-lg">ยังไม่มีสินค้า — กด "เพิ่มสินค้า"</p>}
           {cfProducts.map((p, pi) => (
@@ -599,7 +599,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       <div className="flex items-center gap-3">
         <button onClick={() => setCourseFormOpen(false)} className="px-4 py-2.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
         <button onClick={handleCourseSave} disabled={courseSaving}
-          className="px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2 transition-all">
+          className="px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-orange-700 hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2 transition-all">
           {courseSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
           {editingCourse ? 'บันทึก' : 'สร้างคอร์ส'}
         </button>
@@ -614,7 +614,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(245,158,11,0.15)` }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-bold text-[var(--tx-heading)] uppercase tracking-wider flex items-center gap-2">
-            <Download size={14} className="text-amber-400" /> Sync ข้อมูลจาก ProClinic
+            <Download size={14} className="text-orange-400" /> Sync ข้อมูลจาก ProClinic
           </h3>
           <button onClick={handleSyncAll} disabled={isSyncing}
             className="px-5 py-2.5 rounded-xl font-black text-xs text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
@@ -671,12 +671,12 @@ export default function MasterDataTab({ clinicSettings, theme }) {
             <button key={st.key} onClick={() => setActiveSubTab(st.key)}
               className={`px-3 py-2 rounded-lg text-xs font-bold tracking-wider transition-all flex items-center gap-1.5 ${
                 isActive
-                  ? 'bg-amber-700 text-white shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                  : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-amber-400 hover:border-amber-800/50'
+                  ? 'bg-orange-700 text-white shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                  : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-800/50'
               }`}>
               <span>{st.icon}</span> {st.label.split(' / ')[0]}
               {m?.count != null && (
-                <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-amber-600/50' : 'bg-[var(--bg-elevated)]'}`}>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-orange-600/50' : 'bg-[var(--bg-elevated)]'}`}>
                   {m.count}
                 </span>
               )}
@@ -692,14 +692,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
           <input type="text" value={filterQuery} onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="ค้นหา..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-amber-700/50 transition-all" />
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-orange-700/50 transition-all" />
         </div>
 
         {/* Dropdown filters */}
         {(FILTER_CONFIG[activeSubTab] || []).map(f => (
           <select key={f.key} value={filters[f.key] || ''}
             onChange={(e) => setFilters(prev => ({ ...prev, [f.key]: e.target.value }))}
-            className="px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-amber-700/50 transition-all">
+            className="px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-orange-700/50 transition-all">
             <option value="">ทุก{f.label}</option>
             {(filterOptions[f.key] || []).map(v => (
               <option key={v} value={v}>{v}</option>
@@ -714,7 +714,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         {/* Create buttons per sub-tab */}
         {activeSubTab === 'courses' && (
           <button onClick={openCourseCreate}
-            className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
+            className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-orange-700 hover:bg-orange-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
             <Plus size={13} /> สร้างคอร์ส
           </button>
         )}
@@ -743,13 +743,13 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           <div className="relative mb-6">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
               style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.05))', border: '1.5px solid rgba(245,158,11,0.3)', boxShadow: '0 0 40px rgba(245,158,11,0.15)' }}>
-              <Database size={28} className="text-amber-400" />
+              <Database size={28} className="text-orange-400" />
             </div>
             <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%)' }} />
           </div>
           <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ยังไม่มีข้อมูล{SYNC_TYPES.find(s => s.key === activeSubTab)?.label || ''}</h3>
           <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-6">
-            กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic
+            กดปุ่ม <span className="font-bold text-orange-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic
             {(activeSubTab === 'wallet_types' || activeSubTab === 'membership_types' || activeSubTab === 'courses') && (
               <> หรือ <span className="font-bold text-emerald-400">+ สร้าง</span> ใหม่ในระบบ</>
             )}

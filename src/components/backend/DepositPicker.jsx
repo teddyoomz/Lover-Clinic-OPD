@@ -234,9 +234,9 @@ export default function DepositPicker({
                   {dep.paymentDate && <span>{fmtDate(dep.paymentDate)} · </span>}
                   คงเหลือ ฿{fmtMoney(availableFor(dep))}
                   {(initialApplied[dep.depositId] || 0) > 0 && (
-                    <span className="ml-1 text-amber-400">(ใช้บิลนี้ ฿{fmtMoney(initialApplied[dep.depositId])})</span>
+                    <span className="ml-1 text-orange-400">(ใช้บิลนี้ ฿{fmtMoney(initialApplied[dep.depositId])})</span>
                   )}
-                  {dep._stale && <span className="ml-1 text-amber-400">(บันทึกเดิม)</span>}
+                  {dep._stale && <span className="ml-1 text-orange-400">(บันทึกเดิม)</span>}
                 </div>
               </div>
               <input type="number" value={selAmt || ''} min="0" step="1"

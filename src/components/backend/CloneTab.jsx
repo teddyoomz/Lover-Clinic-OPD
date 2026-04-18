@@ -225,7 +225,7 @@ export default function CloneTab({ clinicSettings, theme }) {
               <div className="flex items-center gap-2">
                 {(bulkPhase === 'cloning' || bulkPhase === 'listing' || bulkPhase === 'checking') && (
                   <>
-                    <button onClick={handlePauseBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
+                    <button onClick={handlePauseBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'}`}>
                       <Pause size={12} /> หยุด
                     </button>
                     <button onClick={handleCancelBulk} className={`px-3 py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>

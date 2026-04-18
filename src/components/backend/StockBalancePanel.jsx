@@ -112,16 +112,16 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     <div className="space-y-4">
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
         <div className="flex items-center gap-3">
-          <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${isCentral ? 'bg-amber-900/30 border border-amber-800' : 'bg-emerald-900/30 border border-emerald-800'}`}>
-            {isCentral ? <Warehouse size={22} className="text-amber-400" /> : <Package size={22} className="text-emerald-400" />}
+          <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${isCentral ? 'bg-orange-900/30 border border-orange-800' : 'bg-emerald-900/30 border border-emerald-800'}`}>
+            {isCentral ? <Warehouse size={22} className="text-orange-400" /> : <Package size={22} className="text-emerald-400" />}
           </div>
           <div className="flex-1">
             <h2 className="text-lg font-bold text-[var(--tx-heading)]">
               ยอดคงเหลือ — {currentLocation.name}
-              {isCentral && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800">คลังกลาง</span>}
+              {isCentral && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-orange-900/30 text-orange-400 border border-orange-800">คลังกลาง</span>}
             </h2>
             <p className="text-xs text-[var(--tx-muted)]">
-              {products.length} สินค้า • {batches.length} batches • มูลค่าต้นทุนรวม <span className="font-mono text-amber-400">฿{fmtQty(totalValue)}</span>
+              {products.length} สินค้า • {batches.length} batches • มูลค่าต้นทุนรวม <span className="font-mono text-orange-400">฿{fmtQty(totalValue)}</span>
             </p>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
               className="w-full pl-9 pr-3 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
           </div>
           <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer">
-            <input type="checkbox" checked={showExpiringOnly} onChange={e => setShowExpiringOnly(e.target.checked)} className="accent-amber-500" />
+            <input type="checkbox" checked={showExpiringOnly} onChange={e => setShowExpiringOnly(e.target.checked)} className="accent-orange-500" />
             ใกล้หมดอายุ (≤30 วัน)
           </label>
           <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer">
@@ -184,7 +184,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 const days = p.nextExpiry ? Math.floor((new Date(p.nextExpiry).getTime() - Date.now()) / 86400000) : null;
                 const expiryClass = days == null ? 'text-[var(--tx-muted)]' :
                   days < 0 ? 'text-red-400 font-bold' :
-                  days <= 30 ? 'text-amber-400' :
+                  days <= 30 ? 'text-orange-400' :
                   'text-[var(--tx-primary)]';
                 const lowStock = p.totalRemaining <= 5 && p.totalRemaining > 0;
                 const outOfStock = p.totalRemaining <= 0;
@@ -193,12 +193,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {p.productName || `Product ${p.productId}`}
                       {outOfStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800">หมด</span>}
-                      {lowStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-amber-900/30 text-amber-400 border border-amber-800">ใกล้หมด</span>}
+                      {lowStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800">ใกล้หมด</span>}
                     </td>
                     <td className="px-3 py-2 text-center text-[var(--tx-muted)]">{p.batches.length}</td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>
                     <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]">{fmtQty(p.totalCapacity)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-amber-400">฿{fmtQty(p.valueCost)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-orange-400">฿{fmtQty(p.valueCost)}</td>
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>
                       {p.nextExpiry || '-'}
                       {days != null && <div className="text-[9px]">{days < 0 ? `หมดแล้ว ${-days}d` : `อีก ${days}d`}</div>}
@@ -207,7 +207,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                       <button
                         onClick={e => { e.stopPropagation(); onAdjustProduct?.(p); }}
                         title="ปรับสต็อก (+/-)"
-                        className="px-2 py-1 rounded text-[10px] bg-amber-900/20 hover:bg-amber-900/40 text-amber-400 border border-amber-800 hover:border-amber-600 inline-flex items-center gap-1 mr-1">
+                        className="px-2 py-1 rounded text-[10px] bg-orange-900/20 hover:bg-orange-900/40 text-orange-400 border border-orange-800 hover:border-orange-600 inline-flex items-center gap-1 mr-1">
                         <SlidersHorizontal size={10} /> ปรับ
                       </button>
                       <button

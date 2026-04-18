@@ -758,11 +758,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">
                         {sale.source === 'exchange' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>เปลี่ยนสินค้า</span>
                         : sale.source === 'share' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700'}`}>แชร์คอร์ส</span>
-                        : sale.source === 'treatment' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700'}`}>จาก OPD</span>
+                        : sale.source === 'treatment' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD</span>
                         : sale.source === 'addRemaining' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
                         : `${fmtMoney(sale.billing?.netTotal)} ฿`}
                       </td>
-                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
+                      <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
                           <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
@@ -882,17 +882,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <span className="text-xs text-[var(--tx-muted)]">กำลังวิเคราะห์ผลกระทบ...</span>
                 </div>
               ) : cancelAnalysis && (
-                <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'bg-amber-950/10 border-amber-900/40' : 'bg-amber-50 border-amber-200'}`}>
-                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'bg-orange-950/10 border-orange-900/40' : 'bg-orange-50 border-orange-200'}`}>
+                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-orange-400' : 'text-orange-700'}`}>
                     <AlertCircle size={12} /> รายการที่จะได้รับผลกระทบ
                   </div>
                   {/* Financials to be auto-reversed */}
                   {(cancelAnalysis.depositApplied > 0 || cancelAnalysis.walletApplied > 0 || cancelAnalysis.pointsEarned > 0) && (
-                    <div className={`text-xs space-y-0.5 pb-2 border-b ${isDark ? 'border-[var(--bd)]/60' : 'border-amber-200'}`}>
+                    <div className={`text-xs space-y-0.5 pb-2 border-b ${isDark ? 'border-[var(--bd)]/60' : 'border-orange-200'}`}>
                       <div className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">จะคืนให้ลูกค้าอัตโนมัติ</div>
                       {cancelAnalysis.depositApplied > 0 && <div>• มัดจำ <span className="font-mono text-emerald-400">฿{fmtMoney(cancelAnalysis.depositApplied)}</span></div>}
                       {cancelAnalysis.walletApplied > 0 && <div>• Wallet <span className="font-mono text-sky-400">฿{fmtMoney(cancelAnalysis.walletApplied)}</span></div>}
-                      {cancelAnalysis.pointsEarned > 0 && <div>• คะแนนที่สะสมไป <span className="font-mono text-amber-400">{cancelAnalysis.pointsEarned}</span> คะแนน</div>}
+                      {cancelAnalysis.pointsEarned > 0 && <div>• คะแนนที่สะสมไป <span className="font-mono text-orange-400">{cancelAnalysis.pointsEarned}</span> คะแนน</div>}
                     </div>
                   )}
                   {/* Courses */}
@@ -910,7 +910,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       )}
                       {cancelAnalysis.partiallyUsed.length > 0 && (
                         <div>
-                          <div className={isDark ? 'text-amber-400 font-bold' : 'text-amber-700 font-bold'}>⚠ ใช้ไปแล้วบางส่วน ({cancelAnalysis.partiallyUsed.length} รายการ)</div>
+                          <div className={isDark ? 'text-orange-400 font-bold' : 'text-orange-700 font-bold'}>⚠ ใช้ไปแล้วบางส่วน ({cancelAnalysis.partiallyUsed.length} รายการ)</div>
                           <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
                             {cancelAnalysis.partiallyUsed.slice(0, 5).map((c, i) => <div key={i}>• {c.product || c.name} ({c.qty})</div>)}
                             {cancelAnalysis.partiallyUsed.length > 5 && <div>… และอีก {cancelAnalysis.partiallyUsed.length - 5} รายการ</div>}
@@ -938,7 +938,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   )}
                   {/* Physical goods — now auto-reversed via stock system (Phase 8b) */}
                   {cancelAnalysis.stockImpact && cancelAnalysis.stockImpact.totalQtyToRestore > 0 && (
-                    <div className={`text-xs ${cancelAnalysis.stockImpact.canReverseFully ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    <div className={`text-xs ${cancelAnalysis.stockImpact.canReverseFully ? 'text-emerald-400' : 'text-orange-400'}`}>
                       📦 <span className="font-bold">สต็อกจะถูกคืนอัตโนมัติ</span> — {cancelAnalysis.stockImpact.batchesAffected.length} lot, รวม {cancelAnalysis.stockImpact.totalQtyToRestore} หน่วย
                       <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
                         {cancelAnalysis.stockImpact.batchesAffected.slice(0, 5).map((b, i) => (
@@ -949,7 +949,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         )}
                       </div>
                       {!cancelAnalysis.stockImpact.canReverseFully && (
-                        <div className="pl-4 text-[10px] text-amber-300 mt-1">
+                        <div className="pl-4 text-[10px] text-orange-300 mt-1">
                           ⚠ คืนไม่ครบบาง lot: {cancelAnalysis.stockImpact.warnings.slice(0, 2).join('; ')}
                         </div>
                       )}
@@ -1132,7 +1132,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 <h3 className="text-xs font-bold uppercase tracking-widest text-rose-400 flex items-center gap-1.5"><ShoppingCart size={12} /> รายการสินค้า</h3>
                 <div className="flex gap-1.5">
                   <button onClick={() => openBuyModal('course')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-teal-900/20 border-teal-700/40 text-teal-400 hover:bg-teal-900/30' : 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'}`}><Plus size={10} /> ซื้อคอร์ส</button>
-                  <button onClick={() => openBuyModal('product')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-400 hover:bg-amber-900/30' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}><Plus size={10} /> สินค้า</button>
+                  <button onClick={() => openBuyModal('product')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'}`}><Plus size={10} /> สินค้า</button>
                   <button onClick={() => openBuyModal('promotion')} className={`text-xs font-bold px-2 py-1 rounded border ${isDark ? 'bg-sky-900/20 border-sky-700/40 text-sky-400 hover:bg-sky-900/30' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'}`}><Plus size={10} /> โปรโมชัน</button>
                   <button onClick={() => { setMedModalOpen(true); setMedModalQuery(''); setMedModalSelected(null); setMedModalQty('1'); setMedModalDosage(''); setMedModalUnit('เม็ด'); setMedEditIdx(-1); setMedModalPremium(false); }}
                     className={`text-xs font-bold px-2 py-1 rounded border flex items-center gap-1 ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}><Plus size={10} /> ยากลับบ้าน</button>
@@ -1239,7 +1239,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(billing.netTotal)} บาท</span>
                 </div>
                 {Number(activeMembership?.bahtPerPoint) > 0 && billing.netTotal > 0 && (
-                  <div className="text-[10px] text-amber-400 flex items-center justify-end gap-1">
+                  <div className="text-[10px] text-orange-400 flex items-center justify-end gap-1">
                     ⭐ จะสะสม {Math.floor(billing.netTotal / activeMembership.bahtPerPoint)} คะแนน (อัตรา ฿{activeMembership.bahtPerPoint}/คะแนน)
                   </div>
                 )}
@@ -1291,10 +1291,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
             {/* Sellers */}
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-3"><UsersIcon size={12} /> พนักงานขาย</h3>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-orange-400 flex items-center gap-1.5 mb-3"><UsersIcon size={12} /> พนักงานขาย</h3>
               {pmSellers.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 mb-1.5">
-                  <input type="checkbox" checked={s.enabled} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, enabled: e.target.checked} : x))} className="accent-amber-500" />
+                  <input type="checkbox" checked={s.enabled} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, enabled: e.target.checked} : x))} className="accent-orange-500" />
                   <select value={s.id} onChange={e => { const sel = sellers.find(x => String(x.id)===e.target.value); setPmSellers(prev => prev.map((x,j) => j===i ? {...x, id: e.target.value, name: sel?.name||''} : x)); }} className={`${inputCls} !w-48`} disabled={!s.enabled}>
                     <option value="">เลือกพนักงาน</option>
                     {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
