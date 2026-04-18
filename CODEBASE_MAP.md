@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-06 (Treatment Records Phase 2, Master Data Sync Phase 1, Chat system FB/LINE, Import from ProClinic)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8a Stock Foundation — stockUtils + stock primitives in backendClient + firestore.indexes.json)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -56,6 +56,7 @@ src/
 │   │                             points (earn/adjust/reverse + PTX log + denorm finance.loyaltyPoints)
 │   │                             manual master items (createMasterItem/update/delete for wallet_types + membership_types)
 │   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, isMembershipExpired, fmtMoney, fmtPoints (Phase 7)
+│   ├── stockUtils.js           — Phase 8a: Pure stock qty/allocation helpers. Exports: DEFAULT_BRANCH_ID, MOVEMENT_TYPES (1..14 enum), TRANSFER_STATUS (0..4), WITHDRAWAL_STATUS (0..3), BATCH_STATUS. Functions: deductQtyNumeric, reverseQtyNumeric, buildQtyNumeric, formatStockQty, hasExpired, daysToExpiry, isBatchDepleted, isBatchAvailable, batchFifoAllocate (FIFO/FEFO/LIFO + exactBatchId first)
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
@@ -100,8 +101,21 @@ artifacts/{appId}/public/data/
 ├── be_customer_wallets/{id}    — Phase 7: composite id `${customerId}__${walletTypeId}` — balance, totalTopUp, totalUsed
 ├── be_wallet_transactions/{id} — Phase 7: WTX-<ts> — type (topup/deduct/refund/adjust/membership_credit), amount, balanceBefore/After, referenceType/Id
 ├── be_memberships/{id}         — Phase 7: MBR-<ts> — cardTypeId/Name, purchasePrice, initialCredit, discountPercent, initialPoints, bahtPerPoint, walletTypeId, activatedAt, expiresAt, renewals[], walletTxId, pointTxId, sellers[]
-└── be_point_transactions/{id}  — Phase 7: PTX-<ts> — type (earn/redeem/adjust/membership_initial/reverse/expire), amount, pointsBefore/After, referenceType/Id, purchaseAmount, bahtPerPoint
+├── be_point_transactions/{id}  — Phase 7: PTX-<ts> — type (earn/redeem/adjust/membership_initial/reverse/expire), amount, pointsBefore/After, referenceType/Id, purchaseAmount, bahtPerPoint
+├── be_stock_orders/{orderId}   — Phase 8a: ORD-<ts> — vendor imports. Fields: vendorName, importedDate, branchId, note, discount, discountType, items[{orderProductId, batchId, productId, qty, cost, expiresAt, isPremium, unit}], status='active'|'cancelled', createdBy/cancelledBy
+├── be_stock_batches/{batchId}  — Phase 8a: BATCH-<ts>-<rand> — FIFO lot (linchpin). Fields: productId, productName, branchId, orderProductId, sourceOrderId, sourceBatchId?, receivedAt, expiresAt, unit, qty:{remaining,total} NUMERIC, originalCost, isPremium, status='active'|'depleted'|'cancelled'|'expired'
+├── be_stock_movements/{id}     — Phase 8a: MVT-<ts>-<rand> — IMMUTABLE append-only log. Fields: type (1..14 ProClinic enum), batchId, productId, qty (signed), before, after, branchId, sourceDocPath, linkedSaleId?|linkedTreatmentId?|linkedOrderId?|linkedAdjustId?|linkedTransferId?|linkedWithdrawalId?, revenueImpact, costBasis, isPremium, skipped?, reversedByMovementId?, user:{userId,userName}, note, createdAt
+└── be_stock_adjustments/{id}   — Phase 8a: ADJ-<ts>-<rand> — manual +/-. Fields: batchId (required), type:'add'|'reduce', qty, note, branchId, user, movementId, createdAt
 ```
+
+### Phase 8 backendClient stock primitives (line ~1720+)
+- `getStockBatch(batchId)` / `listStockBatches({productId?, branchId?, status?})` — read helpers
+- `getStockOrder(orderId)` / `listStockOrders({branchId?, status?})` — read helpers sorted by importedDate DESC
+- `listStockMovements(filters)` — query by any linkedId or batchId/productId/branchId/type; `includeReversed` flag (default false)
+- `createStockOrder(data, {user})` — creates order + N batches + N type=1 movements. Validates qty>0, allows isPremium flag, costBasis=cost*qty on every movement.
+- `cancelStockOrder(orderId, {reason, user})` — BLOCKED if any batch has non-import movement (ProClinic parity). Else: marks order+batches cancelled + emits type=14 movements. Idempotent.
+- `updateStockOrder(orderId, patch)` — allows note/vendorName/discount + per-item cost/expiresAt. qty edits THROW. Cancelled orders THROW. Cost updates cascade to batch.originalCost.
+- `createStockAdjustment({batchId, type, qty, note, branchId}, {user})` — runTransaction: read batch → verify → mutate qty → write movement + adjustment doc. Blocks on cancelled batches. Transactional rollback on insufficient qty.
 
 ### Chat Firestore path
 ```

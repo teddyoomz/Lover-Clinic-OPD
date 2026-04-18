@@ -1716,3 +1716,484 @@ export async function runMasterDataSync(type, syncFn) {
 
   return { success: true, count: data.items.length, totalPages: data.totalPages || 1 };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8 — Stock System Primitives
+// ═══════════════════════════════════════════════════════════════════════════
+// Core CRUD for stock orders, batches, adjustments, movements. Sale/treatment
+// hooks and transfer/withdrawal state machines come in later sub-phases.
+//
+// Rule: every batch mutation must be append-only to the movement log. Never
+// update or delete a movement — only write a reverse entry that points back
+// via `reversedByMovementId`. MOPH audit relies on this invariant.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const stockBatchesCol = () => collection(db, ...basePath(), 'be_stock_batches');
+const stockBatchDoc = (id) => doc(db, ...basePath(), 'be_stock_batches', String(id));
+const stockOrdersCol = () => collection(db, ...basePath(), 'be_stock_orders');
+const stockOrderDoc = (id) => doc(db, ...basePath(), 'be_stock_orders', String(id));
+const stockMovementsCol = () => collection(db, ...basePath(), 'be_stock_movements');
+const stockMovementDoc = (id) => doc(db, ...basePath(), 'be_stock_movements', String(id));
+const stockAdjustmentsCol = () => collection(db, ...basePath(), 'be_stock_adjustments');
+const stockAdjustmentDoc = (id) => doc(db, ...basePath(), 'be_stock_adjustments', String(id));
+
+// ─── ID generators ──────────────────────────────────────────────────────────
+// batches + movements + adjustments get a 4-char random suffix because multiple
+// can be written in the same millisecond (a single order creates many).
+function _rand4() {
+  return Math.random().toString(36).slice(2, 6);
+}
+function _genBatchId() { return `BATCH-${Date.now()}-${_rand4()}`; }
+function _genOrderId() { return `ORD-${Date.now()}`; }
+function _genMovementId() { return `MVT-${Date.now()}-${_rand4()}`; }
+function _genAdjustmentId() { return `ADJ-${Date.now()}-${_rand4()}`; }
+
+// ─── Stock read helpers ────────────────────────────────────────────────────
+
+/** Fetch one batch by id. */
+export async function getStockBatch(batchId) {
+  const snap = await getDoc(stockBatchDoc(batchId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/**
+ * List batches for a product at a branch. Caller filters by status as needed.
+ * Returns sorted by receivedAt ASC (so batchFifoAllocate can consume).
+ */
+export async function listStockBatches({ productId, branchId, status } = {}) {
+  const clauses = [];
+  if (productId) clauses.push(where('productId', '==', String(productId)));
+  if (branchId) clauses.push(where('branchId', '==', String(branchId)));
+  if (status) clauses.push(where('status', '==', String(status)));
+  const q = clauses.length
+    ? query(stockBatchesCol(), ...clauses)
+    : stockBatchesCol();
+  const snap = await getDocs(q);
+  const batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  batches.sort((a, b) => (a.receivedAt || '').localeCompare(b.receivedAt || ''));
+  return batches;
+}
+
+/** Fetch one order by id (includes items). */
+export async function getStockOrder(orderId) {
+  const snap = await getDoc(stockOrderDoc(orderId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/** List orders with optional filters. Sorted by importedDate DESC (newest first). */
+export async function listStockOrders({ branchId, status } = {}) {
+  const clauses = [];
+  if (branchId) clauses.push(where('branchId', '==', String(branchId)));
+  if (status) clauses.push(where('status', '==', String(status)));
+  const q = clauses.length
+    ? query(stockOrdersCol(), ...clauses)
+    : stockOrdersCol();
+  const snap = await getDocs(q);
+  const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  orders.sort((a, b) => (b.importedDate || '').localeCompare(a.importedDate || ''));
+  return orders;
+}
+
+/**
+ * Query movements by arbitrary link IDs — used by reverseStockForSale /
+ * analyzeStockImpact in later sub-phases.
+ *
+ * Filters: linkedSaleId, linkedTreatmentId, linkedOrderId, linkedAdjustId,
+ *          linkedTransferId, linkedWithdrawalId, batchId, productId, branchId,
+ *          type, includeReversed (default false — hide already-reversed entries)
+ */
+export async function listStockMovements(filters = {}) {
+  const clauses = [];
+  const mapFields = [
+    'linkedSaleId', 'linkedTreatmentId', 'linkedOrderId', 'linkedAdjustId',
+    'linkedTransferId', 'linkedWithdrawalId', 'batchId', 'productId', 'branchId',
+  ];
+  for (const f of mapFields) {
+    if (filters[f] != null) clauses.push(where(f, '==', String(filters[f])));
+  }
+  if (filters.type != null) clauses.push(where('type', '==', Number(filters.type)));
+  const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
+  const snap = await getDocs(q);
+  let mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (!filters.includeReversed) {
+    mvts = mvts.filter(m => !m.reversedByMovementId);
+  }
+  mvts.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  return mvts;
+}
+
+// ─── Stock Order CRUD ───────────────────────────────────────────────────────
+
+/**
+ * Create a vendor order: one order doc + N batch docs + N IMPORT movements.
+ *
+ * NOT wrapped in runTransaction because these are all new documents (no
+ * contention). If a write fails mid-way we leave orphan batches — acceptable
+ * trade-off for Phase 8a (Phase 8d UI will add journalling).
+ *
+ * @param {object} data
+ *   - vendorName, importedDate (ISO or yyyy-mm-dd), note, branchId
+ *   - discount, discountType ('amount' | 'percent')
+ *   - items: [{ productId, productName, qty, cost, expiresAt?, isPremium?, unit? }]
+ * @param {object} [opts]
+ *   - user: { userId, userName }
+ * @returns { orderId, batchIds[] }
+ */
+export async function createStockOrder(data, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, buildQtyNumeric, DEFAULT_BRANCH_ID } = stockUtils;
+
+  const items = Array.isArray(data?.items) ? data.items : [];
+  if (items.length === 0) throw new Error('Order must have at least one item');
+
+  const orderId = _genOrderId();
+  const branchId = String(data.branchId || DEFAULT_BRANCH_ID);
+  const importedDate = data.importedDate || new Date().toISOString();
+  const now = new Date().toISOString();
+  const user = opts.user || { userId: null, userName: null };
+
+  const batchIds = [];
+  const resolvedItems = [];
+
+  for (const [idx, item] of items.entries()) {
+    const qtyNum = Number(item.qty);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      throw new Error(`Item #${idx + 1} invalid qty: ${item.qty}`);
+    }
+    const batchId = _genBatchId();
+    const orderProductId = item.orderProductId || `${orderId}-${idx}`;
+    const cost = Number(item.cost) || 0;
+    const isPremium = !!item.isPremium;
+
+    // 1. Create batch doc
+    await setDoc(stockBatchDoc(batchId), {
+      batchId,
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      branchId,
+      orderProductId,
+      sourceOrderId: orderId,
+      receivedAt: now,
+      expiresAt: item.expiresAt || null,
+      unit: String(item.unit || ''),
+      qty: buildQtyNumeric(qtyNum),
+      originalCost: cost,
+      isPremium,
+      status: BATCH_STATUS.ACTIVE,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Append IMPORT movement (type=1) — immutable log entry
+    const movementId = _genMovementId();
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: MOVEMENT_TYPES.IMPORT,
+      batchId,
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      qty: qtyNum,
+      before: 0,
+      after: qtyNum,
+      branchId,
+      sourceDocPath: `artifacts/${appId}/public/data/be_stock_orders/${orderId}`,
+      linkedOrderId: orderId,
+      revenueImpact: 0,
+      costBasis: cost * qtyNum,
+      isPremium,
+      user,
+      note: data.note || '',
+      createdAt: now,
+    });
+
+    batchIds.push(batchId);
+    resolvedItems.push({
+      orderProductId, batchId,
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      qty: qtyNum,
+      cost,
+      expiresAt: item.expiresAt || null,
+      isPremium,
+      unit: String(item.unit || ''),
+    });
+  }
+
+  // 3. Finally: create the order doc (with resolved batchIds baked in)
+  await setDoc(stockOrderDoc(orderId), {
+    orderId,
+    vendorName: String(data.vendorName || ''),
+    importedDate,
+    branchId,
+    note: String(data.note || ''),
+    discount: Number(data.discount) || 0,
+    discountType: data.discountType === 'percent' ? 'percent' : 'amount',
+    items: resolvedItems,
+    status: 'active',
+    createdBy: user,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return { orderId, batchIds, success: true };
+}
+
+/**
+ * Cancel an order: blocked if any batch has had activity beyond the initial
+ * IMPORT movement (ProClinic parity — once units have been sold/used, you
+ * can't rewind the whole order).
+ *
+ * On success: marks order cancelled + each batch cancelled + emits CANCEL_IMPORT
+ * (type=14) movement per batch.
+ *
+ * @returns { cancelledBatchIds[], movementIds[] }
+ */
+export async function cancelStockOrder(orderId, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS } = stockUtils;
+
+  const order = await getStockOrder(orderId);
+  if (!order) throw new Error(`Order ${orderId} not found`);
+  if (order.status === 'cancelled') {
+    return { orderId, cancelledBatchIds: [], movementIds: [], alreadyCancelled: true };
+  }
+
+  // Check every batch: must have IMPORT movement only (nothing else).
+  const batchIds = (order.items || []).map(it => it.batchId).filter(Boolean);
+  for (const batchId of batchIds) {
+    const allMvts = await listStockMovements({ batchId, includeReversed: true });
+    const nonImport = allMvts.filter(m => m.type !== MOVEMENT_TYPES.IMPORT);
+    if (nonImport.length > 0) {
+      throw new Error(
+        `Cannot cancel order ${orderId}: batch ${batchId} has ${nonImport.length} non-import movement(s). ` +
+        `ยกเลิกคำสั่งซื้อไม่ได้เพราะสินค้าบางส่วนถูกใช้แล้ว`
+      );
+    }
+  }
+
+  const now = new Date().toISOString();
+  const user = opts.user || { userId: null, userName: null };
+  const reason = String(opts.reason || '');
+  const movementIds = [];
+
+  for (const batchId of batchIds) {
+    const batch = await getStockBatch(batchId);
+    if (!batch) continue;
+    const total = Number(batch.qty?.total) || 0;
+
+    // Flip batch → cancelled
+    await updateDoc(stockBatchDoc(batchId), {
+      status: BATCH_STATUS.CANCELLED,
+      qty: { remaining: 0, total },
+      updatedAt: now,
+      cancelReason: reason,
+    });
+
+    // Append CANCEL_IMPORT movement
+    const movementId = _genMovementId();
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: MOVEMENT_TYPES.CANCEL_IMPORT,
+      batchId,
+      productId: batch.productId,
+      productName: batch.productName,
+      qty: -total,
+      before: total,
+      after: 0,
+      branchId: batch.branchId,
+      sourceDocPath: `artifacts/${appId}/public/data/be_stock_orders/${orderId}`,
+      linkedOrderId: orderId,
+      revenueImpact: 0,
+      costBasis: (Number(batch.originalCost) || 0) * total,
+      isPremium: !!batch.isPremium,
+      user,
+      note: reason,
+      createdAt: now,
+    });
+    movementIds.push(movementId);
+  }
+
+  await updateDoc(stockOrderDoc(orderId), {
+    status: 'cancelled',
+    cancelReason: reason,
+    cancelledAt: now,
+    cancelledBy: user,
+    updatedAt: now,
+  });
+
+  return { orderId, cancelledBatchIds: batchIds, movementIds, success: true };
+}
+
+/**
+ * Update an order's mutable fields — note, vendor, and per-item cost/expiresAt.
+ * Qty edits are BLOCKED (throws) because the batch qty is the source of truth
+ * and changing it here would desync the movement log.
+ *
+ * Cost updates cascade to the batch's originalCost (affects future movement
+ * costBasis calculations). Past movements' costBasis remain frozen (audit trail).
+ *
+ * @param {string} orderId
+ * @param {object} patch
+ *   - note?, vendorName?, discount?, discountType?
+ *   - items?: [{ orderProductId, cost?, expiresAt? }]  // qty NOT allowed
+ */
+export async function updateStockOrder(orderId, patch) {
+  const order = await getStockOrder(orderId);
+  if (!order) throw new Error(`Order ${orderId} not found`);
+  if (order.status === 'cancelled') throw new Error('Cannot edit a cancelled order');
+
+  const now = new Date().toISOString();
+  const docPatch = { updatedAt: now };
+
+  if (patch.note != null) docPatch.note = String(patch.note);
+  if (patch.vendorName != null) docPatch.vendorName = String(patch.vendorName);
+  if (patch.discount != null) docPatch.discount = Number(patch.discount) || 0;
+  if (patch.discountType != null) {
+    docPatch.discountType = patch.discountType === 'percent' ? 'percent' : 'amount';
+  }
+
+  if (Array.isArray(patch.items)) {
+    const existingItems = Array.isArray(order.items) ? [...order.items] : [];
+    for (const pi of patch.items) {
+      const key = pi.orderProductId;
+      if (!key) continue;
+      const idx = existingItems.findIndex(it => it.orderProductId === key);
+      if (idx < 0) throw new Error(`Item ${key} not found in order ${orderId}`);
+      if (pi.qty != null) throw new Error('Qty edits are blocked post-import');
+
+      const before = existingItems[idx];
+      const updatedItem = { ...before };
+      if (pi.cost != null) updatedItem.cost = Number(pi.cost) || 0;
+      if (pi.expiresAt !== undefined) updatedItem.expiresAt = pi.expiresAt || null;
+      existingItems[idx] = updatedItem;
+
+      // Cascade cost/expiresAt to the batch doc (future movements use it)
+      if (before.batchId) {
+        const bp = {};
+        if (pi.cost != null) bp.originalCost = Number(pi.cost) || 0;
+        if (pi.expiresAt !== undefined) bp.expiresAt = pi.expiresAt || null;
+        if (Object.keys(bp).length > 0) {
+          bp.updatedAt = now;
+          await updateDoc(stockBatchDoc(before.batchId), bp);
+        }
+      }
+    }
+    docPatch.items = existingItems;
+  }
+
+  await updateDoc(stockOrderDoc(orderId), docPatch);
+  return { orderId, success: true };
+}
+
+// ─── Stock Adjustment ───────────────────────────────────────────────────────
+
+/**
+ * Manual stock adjustment — requires batch selection (ProClinic parity).
+ *
+ * Transactional: read batch → verify → mutate qty → write movement + adjustment
+ * in a single runTransaction so a mid-flight failure leaves no partial state.
+ *
+ * @param {object} p
+ *   - batchId (required), type: 'add' | 'reduce', qty (required > 0)
+ *   - note, branchId (defaults to batch's branchId)
+ * @param {object} [opts]
+ *   - user: { userId, userName }
+ * @returns { adjustmentId, movementId }
+ */
+export async function createStockAdjustment(p, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, reverseQtyNumeric } = stockUtils;
+
+  const batchId = p?.batchId;
+  const type = p?.type;
+  const qty = Number(p?.qty);
+  if (!batchId) throw new Error('batchId required');
+  if (type !== 'add' && type !== 'reduce') {
+    throw new Error(`Invalid adjustment type: ${type} (expected 'add' or 'reduce')`);
+  }
+  if (!Number.isFinite(qty) || qty <= 0) {
+    throw new Error(`Invalid qty: ${p?.qty} (must be > 0)`);
+  }
+
+  const adjustmentId = _genAdjustmentId();
+  const movementId = _genMovementId();
+  const now = new Date().toISOString();
+  const user = opts.user || { userId: null, userName: null };
+  const note = String(p.note || '');
+
+  const result = await runTransaction(db, async (tx) => {
+    const batchRef = stockBatchDoc(batchId);
+    const snap = await tx.get(batchRef);
+    if (!snap.exists()) throw new Error(`Batch ${batchId} not found`);
+    const batch = snap.data();
+    if (batch.status === BATCH_STATUS.CANCELLED) {
+      throw new Error(`Cannot adjust cancelled batch ${batchId}`);
+    }
+
+    const beforeRemaining = Number(batch.qty?.remaining) || 0;
+    const newQty = type === 'add'
+      ? reverseQtyNumeric(batch.qty, qty)
+      : deductQtyNumeric(batch.qty, qty);
+    const afterRemaining = newQty.remaining;
+    const newStatus = afterRemaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+    const branchId = p.branchId || batch.branchId;
+
+    // Mutate batch
+    tx.update(batchRef, {
+      qty: newQty,
+      status: newStatus,
+      updatedAt: now,
+    });
+
+    // Append movement (immutable)
+    const movementType = type === 'add' ? MOVEMENT_TYPES.ADJUST_ADD : MOVEMENT_TYPES.ADJUST_REDUCE;
+    const signedQty = type === 'add' ? qty : -qty;
+    tx.set(stockMovementDoc(movementId), {
+      movementId,
+      type: movementType,
+      batchId,
+      productId: batch.productId,
+      productName: batch.productName,
+      qty: signedQty,
+      before: beforeRemaining,
+      after: afterRemaining,
+      branchId,
+      sourceDocPath: `artifacts/${appId}/public/data/be_stock_adjustments/${adjustmentId}`,
+      linkedAdjustId: adjustmentId,
+      revenueImpact: 0,
+      costBasis: (Number(batch.originalCost) || 0) * qty,
+      isPremium: !!batch.isPremium,
+      user,
+      note,
+      createdAt: now,
+    });
+
+    // Record adjustment doc
+    tx.set(stockAdjustmentDoc(adjustmentId), {
+      adjustmentId,
+      batchId,
+      productId: batch.productId,
+      productName: batch.productName,
+      type,
+      qty,
+      note,
+      branchId,
+      user,
+      movementId,
+      createdAt: now,
+    });
+
+    return { adjustmentId, movementId, before: beforeRemaining, after: afterRemaining };
+  });
+
+  return { ...result, success: true };
+}
+
+// ─── Internal: stockUtils bridge (avoids top-of-file circular-like import cost) ─
+let __stockLibCache = null;
+async function _stockLib() {
+  if (__stockLibCache) return __stockLibCache;
+  const mod = await import('./stockUtils.js');
+  __stockLibCache = { stockUtils: mod };
+  return __stockLibCache;
+}
