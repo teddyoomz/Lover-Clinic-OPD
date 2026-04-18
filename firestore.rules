@@ -58,6 +58,67 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 7 Finance (Deposits / Wallets / Memberships / Points) ──
+      match /be_deposits/{depositId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_customer_wallets/{walletId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_wallet_transactions/{txId} {
+        allow read, create: if isClinicStaff();
+        // Wallet transactions are audit records — no update/delete from client.
+        allow update, delete: if false;
+      }
+      match /be_memberships/{membershipId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_point_transactions/{txId} {
+        allow read, create: if isClinicStaff();
+        // Point transactions are audit records — no update/delete from client.
+        allow update, delete: if false;
+      }
+
+      // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
+      match /be_stock_orders/{orderId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isClinicStaff();
+        // Orders are cancelled (status='cancelled'), never deleted — preserve history.
+        allow delete: if false;
+      }
+      match /be_stock_batches/{batchId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isClinicStaff();
+        // Batches are cancelled/depleted (status flip), never deleted — FIFO audit.
+        allow delete: if false;
+      }
+      match /be_stock_movements/{movementId} {
+        allow read, create: if isClinicStaff();
+        // MOVEMENTS ARE IMMUTABLE — MOPH audit requires append-only ledger.
+        // Reversals create a NEW entry with reversedByMovementId pointing back.
+        allow update, delete: if false;
+      }
+      match /be_stock_adjustments/{adjustId} {
+        allow read, create: if isClinicStaff();
+        // Adjustments are audit records paired with a movement — no update/delete.
+        allow update, delete: if false;
+      }
+      match /be_stock_transfers/{transferId} {
+        allow read: if isClinicStaff();
+        // Transfers mutate via status transitions (0→1→2→3/4); updates allowed, deletes blocked.
+        allow create, update: if isClinicStaff();
+        allow delete: if false;
+      }
+      match /be_stock_withdrawals/{withdrawalId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isClinicStaff();
+        allow delete: if false;
+      }
+      match /be_central_stock_warehouses/{stockId} {
+        allow read: if isClinicStaff();
+        allow write: if isClinicStaff();
+      }
+
       // ── Master Data (products, doctors, staff, courses, promotions) ──
       match /master_data/{type} {
         allow read: if isSignedIn();
