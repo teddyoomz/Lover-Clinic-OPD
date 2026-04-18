@@ -331,6 +331,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedSlotDuration, setSchedSlotDuration] = useState(60);
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
   const [schedSelectedDoctor, setSchedSelectedDoctor] = useState(null); // practitioner id for per-doctor schedule
+  const [schedSelectedRoom, setSchedSelectedRoom] = useState(null); // room id (string) — filters bookedSlots by roomId
   const [schedShowFrom, setSchedShowFrom] = useState('today'); // 'today' | 'tomorrow'
   const [schedEndDay, setSchedEndDay] = useState(''); // 'YYYY-MM-DD' or '' for last day of month
   const [schedManualBlocked, setSchedManualBlocked] = useState([]); // [{ date, startTime, endTime }]
@@ -1063,7 +1064,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await broker.syncAppointments(mo);
       }
 
-      // 3. Collect booked slots from Firestore — filtered by selected doctor or assistants
+      // 3. Collect booked slots from Firestore — filtered by doctor/assistants
+      //    AND (optionally) by selected room. A slot is marked busy if EITHER the
+      //    doctor/assistant OR the room is occupied during that time — the physical
+      //    room can only serve one appointment at a time regardless of who books it.
       const bookedSlots = [];
       const doctorBookedSlots = []; // นัดของแพทย์ทุกคน — ใช้แสดง "หมอว่าง/ไม่ว่าง" ในหน้าลูกค้า
       // Use live practitioners fetched from ProClinic (5-min cache); fall back to
@@ -1071,6 +1075,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const allPractitioners = practitioners;
       const doctorIds = new Set(allPractitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
+      const selectedRoomStr = schedSelectedRoom ? String(schedSelectedRoom) : null;
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
         if (snap.exists()) {
@@ -1081,15 +1086,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
               doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
-            if (schedNoDoctorRequired) {
-              if (assistantIds.has(String(a.doctorId))) {
-                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-              }
-            } else if (schedSelectedDoctor) {
-              if (String(a.doctorId) === String(schedSelectedDoctor)) {
-                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-              }
-            } else {
+            let doctorMatch;
+            if (schedNoDoctorRequired) doctorMatch = assistantIds.has(String(a.doctorId));
+            else if (schedSelectedDoctor) doctorMatch = String(a.doctorId) === String(schedSelectedDoctor);
+            else doctorMatch = true;
+            const roomMatch = selectedRoomStr && String(a.roomId) === selectedRoomStr;
+            // If a room filter is active, either the doctor OR the room being busy blocks the slot.
+            const include = selectedRoomStr ? (doctorMatch || roomMatch) : doctorMatch;
+            if (include) {
               bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
           });
@@ -1126,6 +1130,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorEndTimeWeekend: clinicSettings.doctorEndTimeWeekend || '17:00',
         selectedDoctorId: schedSelectedDoctor || null,
         selectedDoctorName: allPractitioners.find(p => p.id === schedSelectedDoctor)?.name || null,
+        selectedRoomId: selectedRoomStr || null,
+        selectedRoomName: selectedRoomStr
+          ? ((clinicSettings.rooms || []).find(r => String(r.id) === selectedRoomStr)?.name || null)
+          : null,
       });
 
       // 5b. Prefs are already saved on every toggle — no need to save again
@@ -1160,15 +1168,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
                   freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
                 }
-                if (schedNoDoctorRequired) {
-                  if (assistantIds.has(String(a.doctorId))) {
-                    freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-                  }
-                } else if (schedSelectedDoctor) {
-                  if (String(a.doctorId) === String(schedSelectedDoctor)) {
-                    freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-                  }
-                } else {
+                let doctorMatch;
+                if (schedNoDoctorRequired) doctorMatch = assistantIds.has(String(a.doctorId));
+                else if (schedSelectedDoctor) doctorMatch = String(a.doctorId) === String(schedSelectedDoctor);
+                else doctorMatch = true;
+                const roomMatch = selectedRoomStr && String(a.roomId) === selectedRoomStr;
+                const include = selectedRoomStr ? (doctorMatch || roomMatch) : doctorMatch;
+                if (include) {
                   freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
                 }
               });
@@ -3897,7 +3903,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
                     {apptSyncSuccess && apptData?.syncedAt && <span className="text-[11px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
                   </button>
-                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
+                  <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedSelectedRoom(null); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
                     disabled={apptSyncing}
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'opacity-50 cursor-not-allowed ' : ''}${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
@@ -6442,7 +6448,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                     <div className="flex items-end pb-0.5">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => { setSchedNoDoctorRequired(e.target.checked); if (e.target.checked) setSchedSelectedDoctor(null); }}
+                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => { setSchedNoDoctorRequired(e.target.checked); if (e.target.checked) setSchedSelectedDoctor(null); setSchedSelectedRoom(null); }}
                           className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
                         <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
                       </label>
@@ -6462,6 +6468,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </select>
                     </div>
                   )}
+                  {/* Room selector — filtered by schedule mode.
+                      พบแพทย์ → ห้องแพทย์ ; ไม่พบแพทย์ → ห้องหัตถการทั่วไป.
+                      Rooms configured in ClinicSettingsPanel (`clinicSettings.rooms[]`). */}
+                  {(() => {
+                    const allRooms = clinicSettings.rooms || [];
+                    const wanted = schedNoDoctorRequired ? 'staff' : 'doctor';
+                    const shown = allRooms.filter(r => r.role === wanted);
+                    if (shown.length === 0) return null;
+                    return (
+                      <div>
+                        <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
+                          เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
+                        </label>
+                        <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
+                          className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                          <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
+                          {shown.map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })()}
 
                   {/* Show from option — only relevant if start month is current month */}
                   {schedStartMonth === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` && (

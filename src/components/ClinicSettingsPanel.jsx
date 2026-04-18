@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download, DoorOpen } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -47,6 +47,15 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   });
   const [fetchingPractitioners, setFetchingPractitioners] = useState(false);
   const [practitionerMsg, setPractitionerMsg] = useState('');
+  // Rooms: ProClinic has no doctor-vs-staff-room distinction, so admin tags each
+  // room here. Used by the schedule-link modal: พบแพทย์→doctor rooms, ไม่พบแพทย์→staff rooms.
+  const [rooms, setRooms] = useState(() => {
+    const raw = clinicSettings?.rooms || [];
+    const seen = new Set();
+    return raw.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+  });
+  const [fetchingRooms, setFetchingRooms] = useState(false);
+  const [roomMsg, setRoomMsg] = useState('');
   const [syncStatus, setSyncStatus] = useState({});  // { products: 'loading'|'done'|'error', ... }
   const [syncResults, setSyncResults] = useState({}); // { products: { count, totalPages }, ... }
 
@@ -134,6 +143,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         chatOpenTimeWeekend: settings.chatOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatOpenTimeWeekend,
         chatCloseTimeWeekend: settings.chatCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatCloseTimeWeekend,
         practitioners: practitioners,
+        rooms: rooms,
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -581,6 +591,75 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                   >
                     <option value="doctor">🩺 แพทย์</option>
                     <option value="assistant">👤 ผู้ช่วย</option>
+                    <option value="hidden">❌ ซ่อน</option>
+                  </select>
+                </div>
+              ))}
+              <p className="text-xs text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
+            </div>
+          )}
+        </div>
+
+        {/* Rooms — doctor rooms vs general procedure rooms */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <DoorOpen size={14} style={{color: '#22d3ee'}}/> ห้องตรวจ / ห้องหัตถการ
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            ดึงรายชื่อห้องจาก ProClinic แล้วกำหนดว่าเป็น ห้องแพทย์ หรือ ห้องหัตถการทั่วไป — ใช้สำหรับสร้างลิงก์ตารางรายห้อง
+          </p>
+
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={async () => {
+                setFetchingRooms(true);
+                setRoomMsg('');
+                try {
+                  const res = await getDepositOptions();
+                  if (!res.success) { setRoomMsg(`ดึงข้อมูลล้มเหลว: ${res.error}`); return; }
+                  const opts = res.options || {};
+                  const fetched = (opts.rooms || []).map(r => ({ id: String(r.value), name: r.label, role: 'doctor' }));
+                  // Keep existing roles for known ids
+                  const existingMap = new Map(rooms.map(r => [String(r.id), r]));
+                  const merged = fetched.map(f => existingMap.get(f.id) ? { ...f, role: existingMap.get(f.id).role } : f);
+                  setRooms(merged);
+                  setRoomMsg(`ดึงข้อมูลสำเร็จ — ${merged.length} ห้อง`);
+                  setTimeout(() => setRoomMsg(''), 5000);
+                } catch (err) {
+                  setRoomMsg(`ดึงข้อมูลล้มเหลว: ${err.message}`);
+                } finally {
+                  setFetchingRooms(false);
+                }
+              }}
+              disabled={fetchingRooms}
+              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-cyan-950/30 border border-cyan-800 text-cyan-400 hover:bg-cyan-900/40 disabled:opacity-50"
+            >
+              {fetchingRooms ? <><RefreshCw size={14} className="animate-spin"/> กำลังดึง...</> : <><Download size={14}/> ดึงข้อมูลจาก ProClinic</>}
+            </button>
+            {roomMsg && (
+              <span className={`text-sm font-bold ${roomMsg.includes('สำเร็จ') ? 'text-green-500' : 'text-red-500'}`}>{roomMsg}</span>
+            )}
+          </div>
+
+          {rooms.length > 0 && (
+            <div className="space-y-1.5">
+              {rooms.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
+                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate">{r.name}</span>
+                  <span className="text-xs text-gray-500 font-mono shrink-0">#{r.id}</span>
+                  <select
+                    value={r.role}
+                    onChange={e => {
+                      setRooms(prev => prev.map(x => x.id === r.id ? { ...x, role: e.target.value } : x));
+                    }}
+                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none cursor-pointer shrink-0 ${
+                      r.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-400' :
+                      r.role === 'staff' ? 'bg-cyan-950/30 border-cyan-800/50 text-cyan-400' :
+                      'bg-red-950/30 border-red-800/50 text-red-400'
+                    }`}
+                  >
+                    <option value="doctor">🩺 ห้องแพทย์</option>
+                    <option value="staff">🛏️ ห้องหัตถการทั่วไป</option>
                     <option value="hidden">❌ ซ่อน</option>
                   </select>
                 </div>
