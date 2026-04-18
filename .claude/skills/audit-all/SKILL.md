@@ -1,6 +1,6 @@
 ---
 name: audit-all
-description: "Run all 3 LoverClinic backend audits (money-flow, stock-flow, cascade-logic) sequentially and produce a consolidated violation report. Use before releases, during regression hunts, or after saga/cascade refactors. Read-only (no Edit/Write/Bash)."
+description: "Run all 13 LoverClinic backend audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, and PDPA privacy."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob, Skill"
@@ -8,16 +8,34 @@ allowed-tools: "Read, Grep, Glob, Skill"
 
 # Audit All — LoverClinic backend
 
-Runs the 3 audit skills in order and aggregates output.
+Meta-runner that chains every `audit-*` skill and aggregates output.
 
 ## Execution flow
 
-1. Invoke `/audit-money-flow` with the same argument passed to this skill (`--quick` or `--full`).
-2. Invoke `/audit-stock-flow` with the same argument.
-3. Invoke `/audit-cascade-logic` with the same argument.
-4. Aggregate all 45 invariant results into one consolidated report (see format below).
+Run these in order (13 total):
 
-Do NOT write to disk — chat output only.
+**Tier 1 — existing (money/stock/cascade, 45 invariants)**:
+1. `/audit-money-flow` (M1–M15)
+2. `/audit-stock-flow` (S1–S15)
+3. `/audit-cascade-logic` (C1–C15)
+
+**Tier 2 — data + system integrity (47 invariants)**:
+4. `/audit-referential-integrity` (R1–R11) — FK / orphan detection
+5. `/audit-firestore-correctness` (F1–F10) — rules, updateMask, snapshot 2x, counters
+6. `/audit-clone-sync` (CL1–CL9) — Phase 1-2 races + dedup
+7. `/audit-api-layer` (A1–A9) — Vercel serverless + webhooks
+
+**Tier 3 — UI + user-facing (40 invariants)**:
+8. `/audit-treatment-form` (TF1–TF10) — Phase 3 (3200 LOC)
+9. `/audit-appointment-calendar` (AP1–AP8) — Phase 4 slot conflicts + TZ
+10. `/audit-react-patterns` (RP1–RP10) — IIFE JSX, stale closure, listeners
+11. `/audit-ui-cultural-a11y` (UC1–UC8) — Thai rules + WCAG 2.2
+12. `/audit-performance` (P1–P8) — N+1, bundle, pagination
+
+**Tier 4 — legal/compliance (7 invariants)**:
+13. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+
+**Total: 135 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 
@@ -25,54 +43,62 @@ Do NOT write to disk — chat output only.
 # Audit All Report — <YYYY-MM-DD HH:MM>
 
 ## Overall Summary
-- Total invariants checked: 45 (M1–M15 + S1–S15 + C1–C15)
-- ✅ PASS: {X}
-- ⚠️  WARN: {Y}
-- ❌ VIOLATION: {Z}
+- Total invariants checked: 135
+- ✅ PASS: X
+- ⚠️  WARN: Y
+- ❌ VIOLATION: Z
+- Scope: {--quick | --full}
 
-## Violations by severity (CRITICAL first)
+## Violations by severity
 
-### CRITICAL — money can be created/lost, or audit trail broken
-- {list VIOLATION entries from all 3 reports}
+### CRITICAL — money creation/loss, audit chain broken, orphaned data, credential leak
+- {list from all 13 skills}
 
-### HIGH — stock/cascade integrity broken
+### HIGH — cascade incompleteness, concurrent race, slot double-book, memory leak
 - {list}
 
-### MEDIUM — audit gaps or concurrency fragility
+### MEDIUM — audit-field gaps, silent catches, small data drift
 - {list}
 
-## Warnings (WARN entries merged)
-
+### LOW — accessibility, polish, performance micro-improvements
 - {list}
 
-## Passing (abbreviated counts per skill)
-- audit-money-flow: X/15 pass
-- audit-stock-flow: Y/15 pass
-- audit-cascade-logic: Z/15 pass
+## Warnings (aggregated from all tiers)
+- {list}
 
-## Top-5 recommended fixes (ranked by blast radius)
-1. [C3] Treatment delete doesn't reverse stock — bleeds inventory silently
-2. [S5] Concurrent reverse breaks reversedByMovementId chain — audit trail broken
-3. [C5] Sale cancel doesn't update treatments' hasSale — double-deduct risk
-4. [M15] Sale cancel doesn't reverse loyalty points (if true) — points inflation
-5. [M5] Wallet tx+balance not atomic — orphan risk on crash
+## Passing (counts per skill)
+- audit-money-flow: X/15
+- audit-stock-flow: Y/15
+- audit-cascade-logic: Z/15
+- ... etc.
+
+## Top-N recommended fixes (ranked by blast radius)
+1. ...
+2. ...
+
+## Marketplace skills to invoke as follow-up
+- /harden — for the longest files after WARN fixes
+- /firestore-security-rules-auditor — if F2-F4 flagged
+- /security-review — if A4 (credential leak) flagged
+- /audit (generic) — for UC5 axe-core contrast scan
+- /vercel-react-best-practices — if P4 memo issues found
+- /polish — final pre-release pass
 
 ## Meta
-- Report generated at {timestamp}
-- Skills invoked: audit-money-flow, audit-stock-flow, audit-cascade-logic
-- Scope: {--quick | --full}
-- Files read across all 3 audits: {list}
+- Skills invoked: 13
+- Files read: {summary}
+- Grep patterns run: ~135
+- Known limitations: static audit only; concurrency/race bugs inferred, not execution-verified
 ```
 
-## Severity mapping (CRITICAL / HIGH / MEDIUM)
+## Severity mapping
 
-- **CRITICAL**: money creation/loss, broken audit chain, orphaned stock deduction (MOPH audit failure class)
-- **HIGH**: cascade incompleteness, concurrency corruption possible under normal usage
-- **MEDIUM**: silent failures, audit-field gaps, edge-case fragility
-
-Sort violations into these buckets. Within each bucket, sort by probability of triggering (routine > rare).
+- **CRITICAL**: money can be created/lost, audit chain broken, orphaned data in production, credential leak (MOPH + PDPA + financial audit failures)
+- **HIGH**: cascade incomplete, concurrency corruption under normal usage, memory leak bounded by working hours, slot double-booking
+- **MEDIUM**: silent failures, audit-field gaps, small data drift, stale UI state
+- **LOW**: accessibility polish, performance micro-gains, cosmetic consistency
 
 ## Do NOT
 - Write the report to disk — chat only
-- Auto-fix anything — that's a separate session per violation category
-- Skip any of the 3 underlying skills — always run all 3 for a complete picture
+- Auto-fix anything — separate session per violation category
+- Skip any skill — the 13 cover complementary dimensions; skipping one leaves holes
