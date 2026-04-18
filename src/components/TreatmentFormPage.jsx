@@ -1730,7 +1730,98 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               reverseStockForSale, deductStockForSale,
             } = await import('../lib/backendClient.js');
             const linkedSale = await getSaleByTreatmentId(result.treatmentId || treatmentId || '');
-            if (linkedSale && linkedSale.status !== 'cancelled') {
+            // TF4: hasSale false→true transition on edit. The treatment was
+            // saved without purchased items on a previous visit; user edited
+            // and added items/meds this time. No linked sale exists yet, so
+            // the reverse-and-reapply branch below would skip — but we still
+            // need to CREATE a sale now. Mirror the create-path saga.
+            if (!linkedSale) {
+              try {
+                const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, deductStockForSale, deleteBackendSale } = await import('../lib/backendClient.js');
+                const newGrouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
+                purchasedItems.forEach(p => {
+                  const t = p.itemType || 'product';
+                  if (t === 'promotion') newGrouped.promotions.push(p);
+                  else if (t === 'course') newGrouped.courses.push(p);
+                  else newGrouped.products.push(p);
+                });
+                const pmStatusMap = { '2': 'paid', '4': 'split', '0': 'unpaid' };
+                const depositIdsPayload = selectedDeposits
+                  .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
+                  .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+                const walletAppliedValue = Number(billing.walDed) || 0;
+                const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
+                const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
+                const firstSeller = pmSellers.find(s => s.enabled && s.id);
+                const createRes = await createBackendSale(clean({
+                  customerId, customerName: patientName, customerHN: '',
+                  saleDate: treatmentDate, saleNote: '',
+                  items: newGrouped,
+                  billing: {
+                    subtotal: billing.subtotal, billDiscount: billing.billDiscAmt,
+                    membershipDiscount: billing.membershipDisc,
+                    membershipDiscountPercent: billing.memPct,
+                    depositApplied: billing.depDed, depositIds: depositIdsPayload,
+                    walletApplied: walletAppliedValue,
+                    walletTypeId: walletTypeIdPayload, walletTypeName: walletTypeNamePayload,
+                    netTotal: billing.netTotal,
+                  },
+                  membershipId: backendActiveMembership?.membershipId || null,
+                  payment: { status: pmStatusMap[paymentStatus] || 'paid', channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
+                  sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
+                  source: 'treatment',
+                  linkedTreatmentId: result.treatmentId || treatmentId || '',
+                }));
+                try {
+                  await deductStockForSale(createRes.saleId, newGrouped, {
+                    customerId, branchId: 'main',
+                    user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
+                  });
+                } catch (stockErr) {
+                  try { await deleteBackendSale(createRes.saleId); } catch {}
+                  throw new Error(`ตัดสต็อก auto-sale (edit→sale) ไม่สำเร็จ: ${stockErr.message}`);
+                }
+                for (const d of depositIdsPayload) {
+                  try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }
+                  catch (e) { console.warn('[TreatmentForm] apply deposit (edit→sale) failed:', e); }
+                }
+                if (walletTypeIdPayload && walletAppliedValue > 0) {
+                  try {
+                    await deductWallet(customerId, walletTypeIdPayload, {
+                      amount: walletAppliedValue, walletTypeName: walletTypeNamePayload,
+                      note: `หัก wallet จากใบเสร็จ ${createRes.saleId}`,
+                      referenceType: 'sale', referenceId: createRes.saleId,
+                      staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                    });
+                  } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit→sale) failed:', e); }
+                }
+                const bpp2 = Number(backendActiveMembership?.bahtPerPoint) || 0;
+                if (bpp2 > 0 && billing.netTotal > 0) {
+                  try {
+                    await earnPoints(customerId, {
+                      purchaseAmount: billing.netTotal, bahtPerPoint: bpp2,
+                      referenceType: 'sale', referenceId: createRes.saleId,
+                      note: `สะสมจาก treatment edit→sale ${result.treatmentId || treatmentId}`,
+                      staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                    });
+                  } catch (e) {
+                    console.error('[TreatmentForm] earnPoints (edit→sale) failed', {
+                      customerId, saleId: createRes.saleId, error: e?.message,
+                    });
+                  }
+                }
+                const linkedTreatmentId2 = result.treatmentId || treatmentId || '';
+                for (const course of newGrouped.courses) {
+                  try {
+                    const pQty = Number(course.qty) || 1;
+                    const prods = course.products?.length
+                      ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                      : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
+                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
+                  } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
+                }
+              } catch (e) { console.warn('[TreatmentForm] edit→sale creation failed:', e); }
+            } else if (linkedSale.status !== 'cancelled') {
               const saleId = linkedSale.saleId || linkedSale.id;
               // 1. Reverse existing deposits
               const oldDeps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];

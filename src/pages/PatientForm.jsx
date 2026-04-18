@@ -11,6 +11,7 @@ import {
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+import DateField from '../components/DateField.jsx';
 import thaiAddressDB from '../data/thai-address-db.js';
 
 export default function PatientForm({ db, appId, user, sessionId, isSimulation, suppressNotif, onBack, clinicSettings = {}, theme, setTheme }) {
@@ -684,7 +685,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
                 {(isFollowUp || isCustom) && (
                    <div className="w-full sm:w-1/2">
                     <label className={labelClass}>{language === 'en' ? 'Date' : 'วันที่บันทึก'} <span className="text-red-600">*</span></label>
-                    <input type="date" name="assessmentDate" value={formData.assessmentDate || ''} onChange={handleInputChange} required className={inputClass}/>
+                    {/* UC3: use DateField (dd/mm/yyyy พ.ศ.) not native mm/dd/yyyy. */}
+                    <DateField
+                      value={formData.assessmentDate || ''}
+                      onChange={(v) => handleInputChange({ target: { name: 'assessmentDate', value: v } })}
+                      locale={language === 'en' ? 'ce' : 'be'}
+                      size="md"
+                    />
                    </div>
                 )}
 

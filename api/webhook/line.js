@@ -41,7 +41,13 @@ async function getLineProfile(userId, accessToken) {
 }
 
 async function firestorePatch(path, fields) {
-  await fetch(`${FIRESTORE_BASE}/${path}`, {
+  // CLAUDE.md rule 7 / audit-api-layer A1: Firestore REST PATCH without
+  // updateMask.fieldPaths REPLACES the entire document — silently wipes
+  // every field not included in `fields`. The mask restricts the PATCH to
+  // the named fields only. Match the pattern used by facebook.js / send.js.
+  const mask = Object.keys(fields || {}).map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
+  const url = mask ? `${FIRESTORE_BASE}/${path}?${mask}` : `${FIRESTORE_BASE}/${path}`;
+  await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),

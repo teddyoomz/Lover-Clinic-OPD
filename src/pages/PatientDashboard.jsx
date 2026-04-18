@@ -613,7 +613,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
             {/* Info */}
             <div className="flex flex-col gap-2 pt-0.5 min-w-0 flex-1">
-              <p className={`text-xl font-black leading-snug ${isDark ? 'text-red-50' : 'text-[var(--tx-secondary)]'}`}>{patientName || tx.unknown}</p>
+              {/* UC1: no red on patient names (Thai cultural rule — สีแดง = คนตาย). */}
+              <p className="text-xl font-black leading-snug text-[var(--tx-secondary)]">{patientName || tx.unknown}</p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {hn && (
                   <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg"

@@ -41,9 +41,24 @@ export async function getAllCustomers() {
   return customers;
 }
 
-/** Save/overwrite customer to be_customers */
+/**
+ * Save/overwrite customer to be_customers.
+ *
+ * PV1-PV2 (Thai PDPA 2562): every customer doc carries a `consent` block.
+ * Defaults both flags to `false` — Phase 9 marketing MUST set `marketing:
+ * true` via an explicit UI opt-in before sending any promotional message.
+ * `healthData: true` is required by PDPA §26 before processing sensitive
+ * data (vitals, diagnosis). Existing customers imported from ProClinic get
+ * the defaults; the admin needs to re-confirm via a one-time consent prompt.
+ */
 export async function saveCustomer(proClinicId, data) {
-  await setDoc(customerDoc(proClinicId), data, { merge: false });
+  const safe = data && typeof data === 'object' ? data : {};
+  const withConsent = {
+    ...safe,
+    // PV1/PV2 consent block last so it can't be stomped by `...safe` above.
+    consent: { marketing: false, healthData: false, ...(safe.consent || {}) },
+  };
+  await setDoc(customerDoc(proClinicId), withConsent, { merge: false });
 }
 
 /** Update specific fields on be_customers doc */

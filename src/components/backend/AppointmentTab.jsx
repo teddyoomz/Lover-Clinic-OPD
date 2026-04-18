@@ -235,6 +235,44 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
     setFormSaving(true); setFormError('');
     try {
+      // AP1: overlap detection. A time slot is considered busy if either
+      // the room OR the doctor already has an appointment whose [start,end)
+      // range intersects the new one. Check against appointments for the
+      // EXACT target date (formData.date), not the UI-selected date — user
+      // may pick a different date in the form than what the calendar shows.
+      const editingId = formMode.mode === 'edit' ? (formMode.appt.appointmentId || formMode.appt.id) : null;
+      const newStart = String(formData.startTime);
+      const newEnd = String(formData.endTime || formData.startTime) || newStart;
+      const targetDate = String(formData.date);
+      let sameDay = [];
+      if (targetDate === selectedDate) {
+        sameDay = Array.isArray(dayAppts) ? dayAppts : [];
+      } else {
+        try { sameDay = await getAppointmentsByDate(targetDate); }
+        catch { sameDay = []; }
+      }
+      const overlaps = sameDay.filter(a => {
+        const aid = a.appointmentId || a.id;
+        if (aid && editingId && String(aid) === String(editingId)) return false; // editing self
+        if ((a.status || '') === 'cancelled') return false;
+        const aStart = String(a.startTime || '');
+        const aEnd = String(a.endTime || a.startTime || '');
+        if (!aStart) return false;
+        // half-open interval overlap: aStart < newEnd && aEnd > newStart
+        const startsBeforeNewEnds = aStart < newEnd;
+        const endsAfterNewStarts = (aEnd || aStart) > newStart;
+        if (!(startsBeforeNewEnds && endsAfterNewStarts)) return false;
+        const sameRoom = formData.roomName && a.roomName && a.roomName === formData.roomName;
+        const sameDoctor = formData.doctorId && a.doctorId && String(a.doctorId) === String(formData.doctorId);
+        return !!(sameRoom || sameDoctor);
+      });
+      if (overlaps.length > 0) {
+        const o = overlaps[0];
+        const who = o.roomName === formData.roomName ? `ห้อง "${o.roomName}"` : `หมอ "${o.doctorName || o.doctorId}"`;
+        setFormError(`ช่วงเวลานี้ชน: ${who} มีนัด ${o.startTime}–${o.endTime || o.startTime} (${o.customerName || o.customerHN || 'อีกนัด'}) อยู่แล้ว`);
+        setFormSaving(false);
+        return;
+      }
       const clean = JSON.parse(JSON.stringify({
         customerId:formData.customerId, customerName:formData.customerName, customerHN:formData.customerHN,
         date:formData.date, startTime:formData.startTime, endTime:formData.endTime||formData.startTime,

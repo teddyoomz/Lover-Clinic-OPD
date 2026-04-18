@@ -126,7 +126,12 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
         expiredCourses: coursesResult.expiredCourses || [],
         appointments: appts,
       });
-      // Also save appointments to be_appointments collection for calendar view
+      // Also save appointments to be_appointments collection for calendar view.
+      // CL8: track per-appointment outcome so a mid-loop crash doesn't leave
+      // orphaned records silently. We collect errors into the `errors` array
+      // (already returned to the caller) so the orchestrator surface can
+      // detect partial-clone state.
+      let apptOk = 0, apptFail = 0;
       for (const appt of appts) {
         try {
           // Parse time "10:30 - 11:00" → startTime + endTime
@@ -149,8 +154,15 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
               status: 'confirmed',
               source: 'cloned',
             })));
+            apptOk++;
           }
-        } catch {} // skip individual appointment errors
+        } catch (e) {
+          apptFail++;
+          errors.push(`[Step 2 appt ${appt?.date || '?'} ${appt?.time || '?'}] ${e?.message || e}`);
+        }
+      }
+      if (apptFail > 0) {
+        console.error(`[cloneOrchestrator] ${apptFail}/${apptOk + apptFail} appointments failed for customer ${proClinicId}`);
       }
       progress.courses = true;
     } else {

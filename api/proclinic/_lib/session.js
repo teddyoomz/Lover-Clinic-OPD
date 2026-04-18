@@ -18,6 +18,13 @@ export class SessionExpiredError extends Error {
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const SESSION_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session`;
+
+// A4: gate verbose session logs behind an opt-in flag so we don't spam
+// Vercel function logs with session-state breadcrumbs in production.
+// Errors still log unconditionally (console.error below). Set
+// PROCLINIC_DEBUG=1 in env to re-enable the breadcrumbs while debugging.
+const DEBUG = process.env.PROCLINIC_DEBUG === '1';
+function dbg(...args) { if (DEBUG) console.log(...args); }
 const SESSION_TRIAL_DOC_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/proclinic_session_trial`;
 
 // ─── Cookie helpers ─────────────────────────────────────────────────────────
@@ -67,7 +74,7 @@ async function loadCachedCookies(origin, docPath = SESSION_DOC_PATH) {
       const docHost = new URL(docOrigin).hostname.replace(/^(www\.|trial\.)/, '');
       const curHost = new URL(origin).hostname.replace(/^(www\.|trial\.)/, '');
       if (docHost !== curHost) {
-        console.log('[session] cookie domain mismatch, invalidating:', docHost, 'vs', curHost);
+        dbg('[session] cookie domain mismatch, invalidating:', docHost, 'vs', curHost);
         return null;
       }
     } catch {
@@ -113,11 +120,11 @@ export async function performLogin(origin, email, password, _sessionDocPath) {
   });
   const loginHtml = await loginPageRes.text();
   const csrf = extractCSRF(loginHtml);
-  console.log(`[session] GET /login status=${loginPageRes.status} url=${loginPageRes.url} csrf=${csrf ? 'found' : 'MISSING'} htmlLen=${loginHtml.length}`);
+  dbg(`[session] GET /login status=${loginPageRes.status} url=${loginPageRes.url} csrf=${csrf ? 'found' : 'MISSING'} htmlLen=${loginHtml.length}`);
   if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า login');
 
   let cookies = parseSetCookies(loginPageRes);
-  console.log(`[session] cookies from GET: ${cookies.length} items`);
+  dbg(`[session] cookies from GET: ${cookies.length} items`);
 
   // Step 2: POST /login
   const body = new URLSearchParams({
@@ -142,11 +149,11 @@ export async function performLogin(origin, email, password, _sessionDocPath) {
 
   const status = loginRes.status;
   const location = loginRes.headers.get('location') || '';
-  console.log(`[session] POST /login status=${status} location=${location} newCookies=${postCookies.length} totalCookies=${cookies.length}`);
+  dbg(`[session] POST /login status=${status} location=${location} newCookies=${postCookies.length} totalCookies=${cookies.length}`);
 
   // Success: redirected to dashboard (not back to /login)
   if (status >= 300 && status < 400 && !location.includes('/login')) {
-    console.log('[session] performLogin success — saving cookies');
+    dbg('[session] performLogin success — saving cookies');
     await saveCookies(origin, cookies, _sessionDocPath);
     return { success: true, cookies };
   }
@@ -192,7 +199,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
 
   if (!cookies) {
     // No cache → login once, then cache for all future requests
-    console.log('[session] no cached cookies — performing login');
+    dbg('[session] no cached cookies — performing login');
     try {
       const result = await performLogin(origin, email, password, docPath);
       cookies = result.cookies;
@@ -207,7 +214,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
   const sessionState = { origin, email, password, cookies };
 
   async function reLogin() {
-    console.log('[session] mid-request re-login triggered');
+    dbg('[session] mid-request re-login triggered');
     const result = await performLogin(origin, email, password, docPath);
     sessionState.cookies = result.cookies;
   }
@@ -254,7 +261,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
       // Detection: login page has action="/login" — customer pages don't
       const isLoginPage = text.includes('action="/login"') || (text.includes('/login') && text.includes('name="password"') && !text.includes('admin/customer'));
       if (isLoginPage) {
-        console.log('[session] fetchText got login page — auto re-login & retry');
+        dbg('[session] fetchText got login page — auto re-login & retry');
         try {
           await reLogin();
           // Retry the original request with new cookies
@@ -295,7 +302,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
       }
       // Check if redirected to login page
       if (res.redirected && res.url.includes('/login')) {
-        console.log('[session] fetchJSON redirected to login — auto re-login & retry');
+        dbg('[session] fetchJSON redirected to login — auto re-login & retry');
         await reLogin();
         const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
         const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
@@ -306,7 +313,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
       if (!ct.includes('json')) {
         const body = await res.text();
         if (body.includes('action="/login"') || body.includes('name="password"')) {
-          console.log('[session] fetchJSON got HTML login page — auto re-login & retry');
+          dbg('[session] fetchJSON got HTML login page — auto re-login & retry');
           await reLogin();
           const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
           const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
