@@ -1986,7 +1986,7 @@ function _rand4() {
   return Math.random().toString(36).slice(2, 6);
 }
 function _genBatchId() { return `BATCH-${Date.now()}-${_rand4()}`; }
-function _genOrderId() { return `ORD-${Date.now()}`; }
+function _genOrderId() { return `ORD-${Date.now()}-${_rand4()}`; }
 function _genMovementId() { return `MVT-${Date.now()}-${_rand4()}`; }
 function _genAdjustmentId() { return `ADJ-${Date.now()}-${_rand4()}`; }
 
