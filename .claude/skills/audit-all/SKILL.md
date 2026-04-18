@@ -1,20 +1,20 @@
 ---
 name: audit-all
-description: "Run all 13 LoverClinic backend audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, and PDPA privacy."
+description: "Run all 16 LoverClinic audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, PDPA privacy, plus frontend-specific timezone/links/forms audits."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob, Skill"
 ---
 
-# Audit All — LoverClinic backend
+# Audit All — LoverClinic full stack
 
 Meta-runner that chains every `audit-*` skill and aggregates output.
 
 ## Execution flow
 
-Run these in order (13 total):
+Run these in order (16 total):
 
-**Tier 1 — existing (money/stock/cascade, 45 invariants)**:
+**Tier 1 — backend integrity (money/stock/cascade, 45 invariants)**:
 1. `/audit-money-flow` (M1–M15)
 2. `/audit-stock-flow` (S1–S15)
 3. `/audit-cascade-logic` (C1–C15)
@@ -32,10 +32,15 @@ Run these in order (13 total):
 11. `/audit-ui-cultural-a11y` (UC1–UC8) — Thai rules + WCAG 2.2
 12. `/audit-performance` (P1–P8) — N+1, bundle, pagination
 
-**Tier 4 — legal/compliance (7 invariants)**:
-13. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+**Tier 4 — frontend-specific (28 invariants — session 2026-04-19)**:
+13. `/audit-frontend-timezone` (TZ1–TZ8) — Thai GMT+7 correctness (naked `new Date()`, `.toISOString()` drifts, `.getDay()` TZ-fragile)
+14. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
+15. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
 
-**Total: 135 invariants**. Do NOT write report to disk — chat output only.
+**Tier 5 — legal/compliance (7 invariants)**:
+16. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+
+**Total: 163 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 

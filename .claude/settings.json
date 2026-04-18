@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[HOOK REMINDER] You edited a file. Remember: (1) Update CODEBASE_MAP.md if you changed backend files (2) Run npm test before commit (3) Backend files = commit only, no deploy\"}'"
+            "command": "echo '{\"additionalContext\": \"[HOOK REMINDER] You edited a file. Remember: (1) Update CODEBASE_MAP.md if you changed backend files (2) Run npm test before commit (3) Backend files = commit only, no deploy (4) META-RULE: did this edit expose a bug class not covered by an audit skill? If yes, add/extend one in .claude/skills/audit-*.\"}'"
           }
         ]
       }
@@ -25,11 +25,21 @@
     ],
     "SessionStart": [
       {
-        "matcher": "compact|resume",
+        "matcher": "compact|resume|startup",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[SESSION CONTEXT] LoverClinic Backend OPD Phase 6/12 DONE. Key rules: (1) Backend = commit only, NO deploy (2) npm test ALL PASS before commit (3) Update CODEBASE_MAP.md after code changes (4) Thai culture: red color NOT on patient names (5) No IIFE in JSX (Vite OXC crash) (6) Firestore REST PATCH needs updateMask always\"}'"
+            "command": "echo '{\"additionalContext\": \"[META-RULE 2026-04-19 iron-clad, NEVER FORGET] ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น. Every bug → add test + audit skill invariant. Every new pattern → document + make a skill. Every session leaves .claude/skills/** sharper. See .claude/rules/07-continuous-improvement.md + memory/feedback_continuous_improvement.md. [SESSION CONTEXT] Phase 8/12 DONE + audit clean. 1054 tests pass. 16 audit skills / 163 invariants. Rules: (1) Backend files = commit only, NO deploy (2) npm test ALL PASS before commit (3) Update CODEBASE_MAP.md after code changes (4) Thai culture: red color NOT on patient names (5) No IIFE in JSX (Vite OXC crash) (6) Firestore REST PATCH needs updateMask always (7) Thai time: use bangkokNow/thaiTodayISO from utils.js — NEVER new Date().toISOString().slice(0,10) for display (8) Schedule-link resync must re-apply persisted filter via shouldBlockScheduleSlot.\"}'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"additionalContext\": \"[META-RULE] ยิ่งทำงาน ยิ่งเก่งขึ้น — if you fix a bug this turn, add/extend an audit skill invariant in .claude/skills/audit-*. If you introduce a pattern, document + skill-ify it. End-of-session: commit .claude/** alongside code. (.claude/rules/07-continuous-improvement.md)\"}'"
           }
         ]
       }

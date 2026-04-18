@@ -1,7 +1,21 @@
 # LoverClinic App — Claude Master Index
 
-> อัพเดท: 2026-04-09 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
-> Tests: Vitest 214+ | Playwright E2E 40+ | RTL 40+ | Phase: 6/12 DONE
+> อัพเดท: 2026-04-19 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
+> Tests: Vitest 1054+ | Playwright E2E 40+ | RTL 40+ | Phase: 8/12 DONE + audit clean
+
+---
+
+## 🔥 META-RULE — NEVER FORGET (2026-04-19, iron-clad)
+
+**ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น.** Every session must sharpen the toolkit:
+- Bug found → fix + add adversarial test + add/update an audit skill invariant
+- New pattern/convention → document in CLAUDE.md or `.claude/rules/` + make a skill if greppable
+- Tool would've prevented it → propose + install low-risk cheap wins
+- End of session → verify new skills fire + commit `.claude/**` alongside code
+
+Full rule: `.claude/rules/07-continuous-improvement.md`.
+Memory mirror: `~/.claude/projects/F--LoverClinic-app/memory/feedback_continuous_improvement.md`.
+Survives context compaction because it's at the TOP of both index files (always-loaded).
 
 ---
 
