@@ -13,6 +13,7 @@ import {
 } from '../../lib/backendClient.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import FileUploadField from './FileUploadField.jsx';
+import DateField from '../DateField.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
@@ -404,11 +405,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
         <div className="flex items-center gap-2 mt-3 flex-wrap">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--tx-muted)]">ช่วงวันที่:</span>
-          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" />
+          <DateField value={filterFrom} onChange={setFilterFrom} size="sm" className="w-36" placeholder="เริ่ม" />
           <span className="text-[var(--tx-muted)] text-xs">—</span>
-          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]" />
+          <DateField value={filterTo} onChange={setFilterTo} size="sm" className="w-36" placeholder="สิ้นสุด" />
           {(filterFrom || filterTo || filterStatus || filterQuery) && (
             <button onClick={() => { setFilterFrom(''); setFilterTo(''); setFilterStatus(''); setFilterQuery(''); }}
               className="text-xs text-emerald-400 hover:underline ml-1">ล้างตัวกรอง</button>
@@ -567,7 +566,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
               </div>
               <div>
                 <label className={labelCls}>วันที่คืน</label>
-                <input type="date" value={refundDate} onChange={e => setRefundDate(e.target.value)} className={inputCls} />
+                <DateField value={refundDate} onChange={setRefundDate} />
               </div>
               <div>
                 <label className={labelCls}>หมายเหตุ</label>
@@ -666,7 +665,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={labelCls}>วันที่จ่ายมัดจำ *</label>
-                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className={inputCls} />
+                  <DateField value={paymentDate} onChange={setPaymentDate} />
                 </div>
                 <div>
                   <label className={labelCls}>เวลา</label>
@@ -799,7 +798,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className={labelCls}>วันนัด *</label>
-                        <input type="date" value={apptDate} onChange={e => setApptDate(e.target.value)} className={inputCls} />
+                        <DateField value={apptDate} onChange={setApptDate} />
                       </div>
                       <div>
                         <label className={labelCls}>เริ่ม *</label>

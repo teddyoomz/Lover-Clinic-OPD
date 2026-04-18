@@ -790,6 +790,688 @@ export async function reverseDepositUsage(depositId, saleId) {
   return { success: true, ...result };
 }
 
+// ─── Wallet CRUD (Phase 7) ─────────────────────────────────────────────────
+
+const walletsCol = () => collection(db, ...basePath(), 'be_customer_wallets');
+const walletDoc = (id) => doc(db, ...basePath(), 'be_customer_wallets', String(id));
+const walletTxCol = () => collection(db, ...basePath(), 'be_wallet_transactions');
+const walletTxDoc = (id) => doc(db, ...basePath(), 'be_wallet_transactions', String(id));
+
+/** Composite doc id: `${customerId}__${walletTypeId}` so a customer can have one wallet per type. */
+function walletKey(customerId, walletTypeId) {
+  return `${String(customerId)}__${String(walletTypeId)}`;
+}
+
+/** Get or create a customer's wallet for a specific type. Returns the wallet doc. */
+export async function ensureCustomerWallet(customerId, walletTypeId, walletTypeName = '') {
+  const key = walletKey(customerId, walletTypeId);
+  const ref = walletDoc(key);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return { id: snap.id, ...snap.data() };
+  const now = new Date().toISOString();
+  const payload = {
+    walletDocId: key,
+    customerId: String(customerId),
+    walletTypeId: String(walletTypeId),
+    walletTypeName: walletTypeName || '',
+    balance: 0,
+    totalTopUp: 0,
+    totalUsed: 0,
+    lastTransactionAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await setDoc(ref, payload);
+  return payload;
+}
+
+/** Recalculate denormalized wallet fields on the customer doc.  */
+export async function recalcCustomerWalletBalances(customerId) {
+  const cid = String(customerId || '');
+  if (!cid) return 0;
+  const q = query(walletsCol(), where('customerId', '==', cid));
+  const snap = await getDocs(q);
+  const balances = {};
+  let total = 0;
+  snap.docs.forEach(d => {
+    const w = d.data();
+    balances[w.walletTypeId] = Number(w.balance) || 0;
+    total += Number(w.balance) || 0;
+  });
+  try {
+    await updateDoc(customerDoc(cid), {
+      'finance.walletBalances': balances,
+      'finance.totalWalletBalance': total,
+    });
+  } catch {}
+  return total;
+}
+
+/** Get all wallets for a customer (sorted by walletTypeName). */
+export async function getCustomerWallets(customerId) {
+  const q = query(walletsCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (a.walletTypeName || '').localeCompare(b.walletTypeName || ''));
+  return list;
+}
+
+/** Get balance for a specific wallet (0 if wallet missing). */
+export async function getWalletBalance(customerId, walletTypeId) {
+  const snap = await getDoc(walletDoc(walletKey(customerId, walletTypeId)));
+  if (!snap.exists()) return 0;
+  return Number(snap.data().balance) || 0;
+}
+
+function txId() { return `WTX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+
+/** Top up a customer's wallet (adds to balance, creates WTX record). */
+export async function topUpWallet(customerId, walletTypeId, {
+  amount, walletTypeName = '', paymentChannel = '', refNo = '', note = '',
+  staffId = '', staffName = '', referenceType = 'manual', referenceId = '',
+} = {}) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('ยอดเติมต้องมากกว่า 0');
+  await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
+  const key = walletKey(customerId, walletTypeId);
+  const ref = walletDoc(key);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.data() || {};
+    const before = Number(cur.balance) || 0;
+    const after = before + amt;
+    tx.update(ref, {
+      balance: after,
+      totalTopUp: (Number(cur.totalTopUp) || 0) + amt,
+      lastTransactionAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { before, after };
+  });
+
+  const newTxId = txId();
+  await setDoc(walletTxDoc(newTxId), {
+    txId: newTxId,
+    customerId: String(customerId),
+    walletTypeId: String(walletTypeId),
+    walletTypeName,
+    type: 'topup',
+    amount: amt,
+    balanceBefore: result.before,
+    balanceAfter: result.after,
+    referenceType, referenceId: String(referenceId || ''),
+    paymentChannel, refNo,
+    note, staffId, staffName,
+    createdAt: new Date().toISOString(),
+  });
+  await recalcCustomerWalletBalances(customerId);
+  return { success: true, txId: newTxId, ...result };
+}
+
+/** Deduct from wallet (for sale/treatment apply). Throws if insufficient balance. */
+export async function deductWallet(customerId, walletTypeId, {
+  amount, walletTypeName = '', note = '', staffId = '', staffName = '',
+  referenceType = 'sale', referenceId = '',
+} = {}) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('ยอดหักต้องมากกว่า 0');
+  const key = walletKey(customerId, walletTypeId);
+  const ref = walletDoc(key);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('ไม่พบกระเป๋าเงินของลูกค้า');
+    const cur = snap.data();
+    const before = Number(cur.balance) || 0;
+    if (before < amt) throw new Error(`ยอดกระเป๋าไม่พอ (มี ${before} ต้องการ ${amt})`);
+    const after = before - amt;
+    tx.update(ref, {
+      balance: after,
+      totalUsed: (Number(cur.totalUsed) || 0) + amt,
+      lastTransactionAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { before, after };
+  });
+
+  const newTxId = txId();
+  await setDoc(walletTxDoc(newTxId), {
+    txId: newTxId,
+    customerId: String(customerId),
+    walletTypeId: String(walletTypeId),
+    walletTypeName,
+    type: 'deduct',
+    amount: amt,
+    balanceBefore: result.before,
+    balanceAfter: result.after,
+    referenceType, referenceId: String(referenceId || ''),
+    paymentChannel: '', refNo: '',
+    note, staffId, staffName,
+    createdAt: new Date().toISOString(),
+  });
+  await recalcCustomerWalletBalances(customerId);
+  return { success: true, txId: newTxId, ...result };
+}
+
+/** Refund amount back to wallet (on sale cancel/edit). */
+export async function refundToWallet(customerId, walletTypeId, {
+  amount, walletTypeName = '', note = '', staffId = '', staffName = '',
+  referenceType = 'sale', referenceId = '',
+} = {}) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('ยอดคืนต้องมากกว่า 0');
+  await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
+  const key = walletKey(customerId, walletTypeId);
+  const ref = walletDoc(key);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.data() || {};
+    const before = Number(cur.balance) || 0;
+    const after = before + amt;
+    tx.update(ref, {
+      balance: after,
+      // totalUsed is NOT decremented so lifetime usage metrics stay accurate
+      lastTransactionAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { before, after };
+  });
+
+  const newTxId = txId();
+  await setDoc(walletTxDoc(newTxId), {
+    txId: newTxId,
+    customerId: String(customerId),
+    walletTypeId: String(walletTypeId),
+    walletTypeName,
+    type: 'refund',
+    amount: amt,
+    balanceBefore: result.before,
+    balanceAfter: result.after,
+    referenceType, referenceId: String(referenceId || ''),
+    paymentChannel: '', refNo: '',
+    note, staffId, staffName,
+    createdAt: new Date().toISOString(),
+  });
+  await recalcCustomerWalletBalances(customerId);
+  return { success: true, txId: newTxId, ...result };
+}
+
+/** Manual ± adjust. `isIncrease = true` adds, false subtracts. */
+export async function adjustWallet(customerId, walletTypeId, {
+  amount, isIncrease = true, walletTypeName = '', note = '',
+  staffId = '', staffName = '',
+} = {}) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('ยอดปรับต้องมากกว่า 0');
+  await ensureCustomerWallet(customerId, walletTypeId, walletTypeName);
+  const key = walletKey(customerId, walletTypeId);
+  const ref = walletDoc(key);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.data() || {};
+    const before = Number(cur.balance) || 0;
+    const after = isIncrease ? before + amt : Math.max(0, before - amt);
+    const delta = after - before;
+    tx.update(ref, {
+      balance: after,
+      ...(delta > 0 ? { totalTopUp: (Number(cur.totalTopUp) || 0) + delta } : {}),
+      ...(delta < 0 ? { totalUsed: (Number(cur.totalUsed) || 0) + Math.abs(delta) } : {}),
+      lastTransactionAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return { before, after, delta };
+  });
+
+  const newTxId = txId();
+  await setDoc(walletTxDoc(newTxId), {
+    txId: newTxId,
+    customerId: String(customerId),
+    walletTypeId: String(walletTypeId),
+    walletTypeName,
+    type: 'adjust',
+    amount: Math.abs(result.delta),
+    balanceBefore: result.before,
+    balanceAfter: result.after,
+    referenceType: 'manual', referenceId: '',
+    paymentChannel: '', refNo: '',
+    note, staffId, staffName,
+    createdAt: new Date().toISOString(),
+  });
+  await recalcCustomerWalletBalances(customerId);
+  return { success: true, txId: newTxId, ...result };
+}
+
+/** Get wallet transactions — optionally filter by walletTypeId. Sorted desc. */
+export async function getWalletTransactions(customerId, walletTypeId = null) {
+  const q = query(walletTxCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (walletTypeId) list = list.filter(tx => String(tx.walletTypeId) === String(walletTypeId));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+// ─── Membership CRUD (Phase 7) ─────────────────────────────────────────────
+
+const membershipsCol = () => collection(db, ...basePath(), 'be_memberships');
+const membershipDoc = (id) => doc(db, ...basePath(), 'be_memberships', String(id));
+
+/** Create a membership card for a customer + side-effects (credit wallet, grant initial points).
+ *  Saves wallet/point tx references back onto the membership doc for traceability. */
+export async function createMembership(data) {
+  const membershipId = `MBR-${Date.now()}`;
+  const now = new Date().toISOString();
+  const activatedAt = data.activatedAt || now;
+  const expiredInDays = Number(data.expiredInDays) || 365;
+  const expiresAt = new Date(new Date(activatedAt).getTime() + expiredInDays * 86400000).toISOString();
+
+  const payload = {
+    membershipId,
+    customerId: String(data.customerId),
+    customerName: data.customerName || '',
+    customerHN: data.customerHN || '',
+    cardTypeId: String(data.cardTypeId || ''),
+    cardTypeName: data.cardTypeName || '',
+    cardColor: data.cardColor || '',
+    colorName: data.colorName || '',
+    purchasePrice: Number(data.purchasePrice) || 0,
+    initialCredit: Number(data.initialCredit) || 0,
+    discountPercent: Number(data.discountPercent) || 0,
+    initialPoints: Number(data.initialPoints) || 0,
+    bahtPerPoint: Number(data.bahtPerPoint) || 0,
+    walletTypeId: data.walletTypeId ? String(data.walletTypeId) : '',
+    walletTypeName: data.walletTypeName || '',
+    status: 'active',
+    activatedAt,
+    expiresAt,
+    cancelledAt: null,
+    cancelNote: '',
+    cancelEvidenceUrl: '',
+    paymentChannel: data.paymentChannel || '',
+    paymentDate: data.paymentDate || activatedAt.slice(0, 10),
+    paymentTime: data.paymentTime || '',
+    refNo: data.refNo || '',
+    paymentEvidenceUrl: data.paymentEvidenceUrl || '',
+    sellers: Array.isArray(data.sellers) ? data.sellers : [],
+    note: data.note || '',
+    renewals: [],
+    walletCredited: false,
+    pointsCredited: false,
+    walletTxId: null,
+    pointTxId: null,
+    linkedSaleId: data.linkedSaleId || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await setDoc(membershipDoc(membershipId), payload);
+
+  // ─── Side-effects: wallet credit + initial points ─────────────────────
+  let walletTxId = null;
+  if (payload.initialCredit > 0 && payload.walletTypeId) {
+    try {
+      const res = await topUpWallet(payload.customerId, payload.walletTypeId, {
+        amount: payload.initialCredit,
+        walletTypeName: payload.walletTypeName,
+        note: `เครดิตจากบัตร ${payload.cardTypeName}`,
+        referenceType: 'membership',
+        referenceId: membershipId,
+        staffId: (payload.sellers[0] && payload.sellers[0].id) || '',
+        staffName: (payload.sellers[0] && payload.sellers[0].name) || '',
+      });
+      walletTxId = res.txId;
+    } catch (e) { console.warn('[createMembership] wallet credit failed:', e); }
+  }
+  let pointTxId = null;
+  if (payload.initialPoints > 0) {
+    try {
+      const res = await _earnPointsInternal(payload.customerId, payload.initialPoints, {
+        type: 'membership_initial',
+        note: `คะแนนเริ่มต้นจากบัตร ${payload.cardTypeName}`,
+        referenceType: 'membership',
+        referenceId: membershipId,
+        staffId: (payload.sellers[0] && payload.sellers[0].id) || '',
+        staffName: (payload.sellers[0] && payload.sellers[0].name) || '',
+      });
+      pointTxId = res.txId;
+    } catch (e) { console.warn('[createMembership] points credit failed:', e); }
+  }
+
+  await updateDoc(membershipDoc(membershipId), {
+    walletCredited: !!walletTxId,
+    pointsCredited: !!pointTxId,
+    walletTxId, pointTxId,
+    updatedAt: new Date().toISOString(),
+  });
+
+  // Denormalise membership summary onto customer doc
+  try {
+    await updateDoc(customerDoc(payload.customerId), {
+      'finance.membershipId': membershipId,
+      'finance.membershipType': payload.cardTypeName,
+      'finance.membershipExpiry': expiresAt,
+      'finance.membershipDiscountPercent': payload.discountPercent,
+    });
+  } catch {}
+
+  return { membershipId, walletTxId, pointTxId, success: true };
+}
+
+/** Update a membership doc (manual tweaks: note, sellers, refNo). Does NOT run side-effects. */
+export async function updateMembership(membershipId, data) {
+  const ref = membershipDoc(membershipId);
+  const { walletCredited, pointsCredited, walletTxId, pointTxId, membershipId: _id, customerId: _cid, ...clean } = data; // avoid clobbering refs
+  await updateDoc(ref, { ...clean, updatedAt: new Date().toISOString() });
+  return { success: true };
+}
+
+/** Renew a membership — extend expiresAt + push to renewals[]. No wallet/points credit by default. */
+export async function renewMembership(membershipId, {
+  extendDays = 365, price = 0, paymentChannel = '', refNo = '',
+  note = '', grantCredit = 0, grantPoints = 0,
+} = {}) {
+  const ref = membershipDoc(membershipId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Membership not found');
+  const cur = snap.data();
+  const now = new Date().toISOString();
+  const baseTime = Math.max(
+    Date.now(),
+    cur.expiresAt ? new Date(cur.expiresAt).getTime() : Date.now()
+  );
+  const newExpiry = new Date(baseTime + Number(extendDays) * 86400000).toISOString();
+
+  const renewals = Array.isArray(cur.renewals) ? [...cur.renewals] : [];
+  renewals.push({
+    renewedAt: now,
+    expiresAt: newExpiry,
+    price: Number(price) || 0,
+    paymentChannel, refNo, note,
+    grantCredit: Number(grantCredit) || 0,
+    grantPoints: Number(grantPoints) || 0,
+  });
+
+  await updateDoc(ref, {
+    expiresAt: newExpiry,
+    renewals,
+    status: 'active',
+    updatedAt: now,
+  });
+
+  if (grantCredit > 0 && cur.walletTypeId) {
+    try {
+      await topUpWallet(cur.customerId, cur.walletTypeId, {
+        amount: grantCredit,
+        walletTypeName: cur.walletTypeName,
+        note: `ต่ออายุบัตร ${cur.cardTypeName}`,
+        referenceType: 'membership',
+        referenceId: membershipId,
+      });
+    } catch (e) { console.warn('[renewMembership] grant credit failed:', e); }
+  }
+  if (grantPoints > 0) {
+    try {
+      await _earnPointsInternal(cur.customerId, grantPoints, {
+        type: 'earn',
+        note: `ต่ออายุบัตร ${cur.cardTypeName}`,
+        referenceType: 'membership',
+        referenceId: membershipId,
+      });
+    } catch (e) { console.warn('[renewMembership] grant points failed:', e); }
+  }
+
+  try {
+    await updateDoc(customerDoc(cur.customerId), {
+      'finance.membershipExpiry': newExpiry,
+    });
+  } catch {}
+  return { success: true, expiresAt: newExpiry };
+}
+
+/** Cancel a membership. ProClinic policy: DO NOT refund credit/points. */
+export async function cancelMembership(membershipId, { cancelNote = '', cancelEvidenceUrl = '' } = {}) {
+  const ref = membershipDoc(membershipId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Membership not found');
+  const cur = snap.data();
+  const now = new Date().toISOString();
+  await updateDoc(ref, {
+    status: 'cancelled',
+    cancelNote,
+    cancelEvidenceUrl,
+    cancelledAt: now,
+    updatedAt: now,
+  });
+  try {
+    await updateDoc(customerDoc(cur.customerId), {
+      'finance.membershipId': null,
+      'finance.membershipType': null,
+      'finance.membershipExpiry': null,
+      'finance.membershipDiscountPercent': 0,
+    });
+  } catch {}
+  return { success: true };
+}
+
+/** Get active membership for a customer (or null). Also marks expired ones as 'expired'. */
+export async function getCustomerMembership(customerId) {
+  const q = query(membershipsCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const now = Date.now();
+  const active = [];
+  for (const d of snap.docs) {
+    const m = { id: d.id, ...d.data() };
+    if (m.status === 'active') {
+      if (m.expiresAt && new Date(m.expiresAt).getTime() < now) {
+        // Lazy expire
+        try {
+          await updateDoc(d.ref, { status: 'expired', updatedAt: new Date().toISOString() });
+        } catch {}
+        try {
+          await updateDoc(customerDoc(customerId), {
+            'finance.membershipId': null,
+            'finance.membershipType': null,
+            'finance.membershipExpiry': null,
+            'finance.membershipDiscountPercent': 0,
+          });
+        } catch {}
+        m.status = 'expired';
+      } else {
+        active.push(m);
+      }
+    }
+  }
+  active.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return active[0] || null;
+}
+
+/** Get all memberships (sorted desc). */
+export async function getAllMemberships() {
+  const snap = await getDocs(membershipsCol());
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+/** Get discount % for a customer's active membership (0 if none). */
+export async function getCustomerMembershipDiscount(customerId) {
+  const m = await getCustomerMembership(customerId);
+  return m ? (Number(m.discountPercent) || 0) : 0;
+}
+
+/** Return bahtPerPoint rate for the customer (from active membership; 0 = no points). */
+export async function getCustomerBahtPerPoint(customerId) {
+  const m = await getCustomerMembership(customerId);
+  return m ? (Number(m.bahtPerPoint) || 0) : 0;
+}
+
+/** Delete a membership (hard delete). For corrections only — does NOT reverse side-effects. */
+export async function deleteMembership(membershipId) {
+  const ref = membershipDoc(membershipId);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const cur = snap.data();
+    await deleteDoc(ref);
+    try {
+      await updateDoc(customerDoc(cur.customerId), {
+        'finance.membershipId': null,
+        'finance.membershipType': null,
+        'finance.membershipExpiry': null,
+        'finance.membershipDiscountPercent': 0,
+      });
+    } catch {}
+  }
+  return { success: true };
+}
+
+// ─── Points CRUD (Phase 7) ─────────────────────────────────────────────────
+
+const pointTxCol = () => collection(db, ...basePath(), 'be_point_transactions');
+const pointTxDoc = (id) => doc(db, ...basePath(), 'be_point_transactions', String(id));
+
+function ptxId() { return `PTX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+
+/** Read customer's current point balance (from customer doc). */
+export async function getPointBalance(customerId) {
+  try {
+    const snap = await getDoc(customerDoc(customerId));
+    if (!snap.exists()) return 0;
+    return Number(snap.data().finance?.loyaltyPoints) || 0;
+  } catch { return 0; }
+}
+
+/** Internal: create a point transaction record + update customer balance. */
+async function _earnPointsInternal(customerId, points, meta = {}) {
+  const amt = Number(points) || 0;
+  if (amt <= 0) return { success: true, txId: null, pointsAfter: await getPointBalance(customerId) };
+  const before = await getPointBalance(customerId);
+  const after = before + amt;
+  const newTxId = ptxId();
+  await setDoc(pointTxDoc(newTxId), {
+    ptxId: newTxId,
+    customerId: String(customerId),
+    type: meta.type || 'earn',
+    amount: amt,
+    pointsBefore: before,
+    pointsAfter: after,
+    referenceType: meta.referenceType || 'manual',
+    referenceId: String(meta.referenceId || ''),
+    purchaseAmount: Number(meta.purchaseAmount) || 0,
+    bahtPerPoint: Number(meta.bahtPerPoint) || 0,
+    note: meta.note || '',
+    staffId: meta.staffId || '',
+    staffName: meta.staffName || '',
+    createdAt: new Date().toISOString(),
+  });
+  try {
+    await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
+  } catch {}
+  return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
+}
+
+/** Earn points from a sale based on bahtPerPoint rate. */
+export async function earnPoints(customerId, {
+  purchaseAmount, bahtPerPoint, referenceType = 'sale', referenceId = '',
+  note = '', staffId = '', staffName = '',
+} = {}) {
+  const p = Number(purchaseAmount) || 0;
+  const b = Number(bahtPerPoint) || 0;
+  if (b <= 0 || p <= 0) return { success: true, txId: null, earned: 0 };
+  const earned = Math.floor(p / b);
+  if (earned <= 0) return { success: true, txId: null, earned: 0 };
+  const res = await _earnPointsInternal(customerId, earned, {
+    type: 'earn',
+    referenceType, referenceId,
+    purchaseAmount: p, bahtPerPoint: b,
+    note: note || `สะสมจากการซื้อ ${p} บาท`,
+    staffId, staffName,
+  });
+  return { ...res, earned };
+}
+
+/** Manually adjust points (±). */
+export async function adjustPoints(customerId, {
+  amount, isIncrease = true, note = '', staffId = '', staffName = '',
+} = {}) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('จำนวนต้องมากกว่า 0');
+  if (isIncrease) {
+    return await _earnPointsInternal(customerId, amt, {
+      type: 'adjust', note, staffId, staffName,
+      referenceType: 'manual',
+    });
+  }
+  // Deduct
+  const before = await getPointBalance(customerId);
+  if (before < amt) throw new Error(`คะแนนไม่พอ (มี ${before} ต้องการ ${amt})`);
+  const after = before - amt;
+  const newTxId = ptxId();
+  await setDoc(pointTxDoc(newTxId), {
+    ptxId: newTxId,
+    customerId: String(customerId),
+    type: 'adjust',
+    amount: amt,
+    pointsBefore: before,
+    pointsAfter: after,
+    referenceType: 'manual', referenceId: '',
+    purchaseAmount: 0, bahtPerPoint: 0,
+    note, staffId, staffName,
+    createdAt: new Date().toISOString(),
+  });
+  try {
+    await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
+  } catch {}
+  return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
+}
+
+/** Reverse points earned from a sale (for cancel/delete). */
+export async function reversePointsEarned(customerId, referenceId) {
+  const q = query(pointTxCol(),
+    where('customerId', '==', String(customerId)),
+    where('referenceId', '==', String(referenceId)),
+  );
+  const snap = await getDocs(q);
+  let totalReversed = 0;
+  for (const d of snap.docs) {
+    const tx = d.data();
+    if (tx.type !== 'earn') continue;
+    totalReversed += Number(tx.amount) || 0;
+  }
+  if (totalReversed > 0) {
+    const before = await getPointBalance(customerId);
+    const after = Math.max(0, before - totalReversed);
+    const newTxId = ptxId();
+    await setDoc(pointTxDoc(newTxId), {
+      ptxId: newTxId,
+      customerId: String(customerId),
+      type: 'reverse',
+      amount: totalReversed,
+      pointsBefore: before,
+      pointsAfter: after,
+      referenceType: 'sale', referenceId: String(referenceId),
+      note: `คืนคะแนนจากการยกเลิก/ลบ ${referenceId}`,
+      staffId: '', staffName: '',
+      createdAt: new Date().toISOString(),
+    });
+    try {
+      await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
+    } catch {}
+  }
+  return { success: true, reversed: totalReversed };
+}
+
+/** Get all point transactions for a customer (desc). */
+export async function getPointTransactions(customerId) {
+  const q = query(pointTxCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
 /** Run sync: call broker function → write metadata + items to Firestore.
  *  Same logic as ClinicSettingsPanel.jsx lines 621-644. */
 export async function runMasterDataSync(type, syncFn) {
