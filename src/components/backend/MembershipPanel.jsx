@@ -15,6 +15,7 @@ import {
 import { fmtMoney, calcMembershipExpiry, isMembershipExpired } from '../../lib/financeUtils.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
+import { thaiTodayISO } from '../../utils.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -24,7 +25,7 @@ function fmtThaiDate(iso) {
   if (isNaN(d.getTime())) return iso;
   return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() { return thaiTodayISO(); }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
 const COLOR_MAP = {

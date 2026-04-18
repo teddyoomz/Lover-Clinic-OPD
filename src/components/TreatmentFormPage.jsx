@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
+import { thaiTodayISO } from '../utils.js';
 import ChartSection from './ChartSection.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -146,11 +147,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
   const [assistantIds, setAssistantIds] = useState([]);
-  // Use local date (user's timezone) — toISOString() returns UTC which is wrong for GMT+7
-  const [treatmentDate, setTreatmentDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  // Thai time (GMT+7) — browser-local date drifts to yesterday for non-Thai
+  // browsers, and `.toISOString()` always returns UTC. Canonical helper in utils.js.
+  const [treatmentDate, setTreatmentDate] = useState(() => thaiTodayISO());
 
   // Doctor fees (ค่ามือแพทย์)
   const [doctorFees, setDoctorFees] = useState([]); // [{doctorId, name, fee, groupId}]
@@ -296,14 +295,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
   // Payment
   const [paymentStatus, setPaymentStatus] = useState('2'); // 0=ชำระภายหลัง, 2=ชำระเต็มจำนวน, 4=แบ่งชำระ
-  const [saleDate, setSaleDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  const [paymentDate, setPaymentDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  const [saleDate, setSaleDate] = useState(() => thaiTodayISO());
+  const [paymentDate, setPaymentDate] = useState(() => thaiTodayISO());
   const [paymentTime, setPaymentTime] = useState('');
   const [refNo, setRefNo] = useState('');
   const [note, setNote] = useState('');

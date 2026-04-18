@@ -4,6 +4,7 @@ import { db, appId } from '../firebase.js';
 import { CalendarDays, ChevronLeft, ChevronRight, X, Clock, Stethoscope, Phone, MessageCircle, Globe, CheckCircle2, XCircle } from 'lucide-react';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import { bangkokNow, thaiTodayISO, thaiNowMinutes } from '../utils.js';
 
 // ── i18n ──
 const LANG = {
@@ -185,15 +186,18 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     return !ranges.some(r => sMin >= toMin(r.start) && eMin <= toMin(r.end));
   };
 
-  const todayStr = new Date().toISOString().substring(0, 10);
+  // Thai time (GMT+7) — critical: `.toISOString().slice(0,10)` would emit UTC
+  // and drift to the previous day between 00:00–07:00 Thai, breaking "today"
+  // highlighting and past-slot filtering for the clinic's timezone.
+  const todayStr = thaiTodayISO();
   const showFrom = data.showFrom || 'today'; // 'today' | 'tomorrow'
   const showFromDate = showFrom === 'tomorrow'
-    ? new Date(new Date().getTime() + 86400000).toISOString().substring(0, 10)
+    ? (() => { const t = bangkokNow(); t.setUTCDate(t.getUTCDate() + 1); return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`; })()
     : todayStr;
   const endDate = data.endDate || ''; // 'YYYY-MM-DD' or '' for no limit
 
-  // For today: compute current time in minutes for filtering past slots
-  const nowMinutes = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); })();
+  // For today: compute current Thai time in minutes for filtering past slots
+  const nowMinutes = thaiNowMinutes();
 
   const availByDate = {};
   for (let d = 1; d <= daysInMonth; d++) {

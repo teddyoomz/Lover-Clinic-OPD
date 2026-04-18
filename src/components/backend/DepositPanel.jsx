@@ -14,6 +14,7 @@ import {
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
+import { thaiTodayISO, bangkokNow } from '../../utils.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
@@ -37,10 +38,10 @@ function fmtThaiDate(s) {
   if (!y || !m || !d) return s;
   return `${+d} ${THAI_MONTHS_SHORT[(+m) - 1]} ${(+y) + 543}`;
 }
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() { return thaiTodayISO(); }
 function nowTimeStr() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const d = bangkokNow();
+  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
 }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 

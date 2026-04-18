@@ -51,10 +51,16 @@ function formatSyncTime(fetchedAt, lang = 'th') {
   try {
     const d = new Date(fetchedAt);
     const locale = lang === 'en' ? 'en-US' : 'th-TH';
-    const isToday = d.toDateString() === new Date().toDateString();
-    const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    // Compare as Thai wall-clock dates so "today" doesn't flip for non-Thai users.
+    const toThaiYMD = (date) => {
+      const shifted = new Date(date.getTime() + 7 * 3600000);
+      return `${shifted.getUTCFullYear()}-${shifted.getUTCMonth()}-${shifted.getUTCDate()}`;
+    };
+    const isToday = toThaiYMD(d) === toThaiYMD(new Date());
+    const tzOpt = { timeZone: 'Asia/Bangkok' };
+    const time = d.toLocaleTimeString(locale, { ...tzOpt, hour: '2-digit', minute: '2-digit' });
     if (isToday) return lang === 'en' ? time : `${time} น.`;
-    const dateStr = d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    const dateStr = d.toLocaleDateString(locale, { ...tzOpt, day: 'numeric', month: 'short' });
     return lang === 'en' ? `${dateStr} ${time}` : `${dateStr} ${time} น.`;
   } catch { return null; }
 }

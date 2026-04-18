@@ -13,6 +13,7 @@ import {
   getAllMasterDataItems,
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
+import { thaiTodayISO } from '../../utils.js';
 
 // S12: pull the logged-in admin's identity so every stock mutation leaves a
 // real actor on the movement log (MOPH audit).
@@ -254,7 +255,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
 // Order Create Form
 // ═══════════════════════════════════════════════════════════════════════════
 function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, onClose, onSaved }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = thaiTodayISO();
   const [vendorName, setVendorName] = useState('');
   const [importedDate, setImportedDate] = useState(today);
   const [note, setNote] = useState('');

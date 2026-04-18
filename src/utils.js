@@ -25,7 +25,30 @@ export const EN_MONTHS = [
   { value: '10', label: 'October' }, { value: '11', label: 'November' }, { value: '12', label: 'December' }
 ];
 
-const currentYearCE = new Date().getFullYear();
+// ─── Canonical Thai (Asia/Bangkok, GMT+7) time helpers ─────────────────────
+// Use these EVERYWHERE the app needs to resolve "today" / "now" for a display
+// or date comparison. Raw `new Date()` / `.toISOString().slice(0,10)` silently
+// use the user's browser timezone, which for Thai clinics drifts to the
+// previous day between 00:00–07:00 Thai time (UTC is still the day before).
+// Bug observed on Vercel prod 2026-04-19 — "today" showed April 18.
+export function bangkokNow() {
+  // Add 7h to UTC epoch so getUTC* methods return Thai wall-clock values.
+  return new Date(Date.now() + 7 * 3600000);
+}
+export function thaiTodayISO() {
+  const d = bangkokNow();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+export function thaiNowMinutes() {
+  const d = bangkokNow();
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+export function thaiYearMonth() {
+  const d = bangkokNow();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+const currentYearCE = bangkokNow().getUTCFullYear();
 export const YEARS_BE = Array.from({ length: 120 }, (_, i) => (currentYearCE + 543) - i);
 export const YEARS_CE = Array.from({ length: 120 }, (_, i) => currentYearCE - i);
 
@@ -139,7 +162,7 @@ export const defaultFormData = {
   adam_5: false, adam_6: false, adam_7: false, adam_8: false, adam_9: false, adam_10: false,
   iief_1: '', iief_2: '', iief_3: '', iief_4: '', iief_5: '',
   mrs_1: '', mrs_2: '', mrs_3: '', mrs_4: '', mrs_5: '', mrs_6: '', mrs_7: '', mrs_8: '', mrs_9: '', mrs_10: '', mrs_11: '',
-  assessmentDate: new Date().toISOString().split('T')[0]
+  assessmentDate: thaiTodayISO()
 };
 
 export const formatBangkokTime = (timestamp) => {

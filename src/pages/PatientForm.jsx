@@ -7,7 +7,7 @@ import {
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import {
   hexToRgb, THAI_MONTHS, EN_MONTHS, YEARS_BE, YEARS_CE,
-  COUNTRY_CODES, NATIONALITY_COUNTRIES, defaultFormData
+  COUNTRY_CODES, NATIONALITY_COUNTRIES, defaultFormData, bangkokNow
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
@@ -205,13 +205,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
       if (newData.dobDay && newData.dobMonth && newData.dobYear) {
-        const today = new Date();
+        const today = bangkokNow();
         let birthYearAD = parseInt(newData.dobYear);
-        if (birthYearAD > 2400) birthYearAD -= 543; 
-        const birthMonth = parseInt(newData.dobMonth) - 1; 
+        if (birthYearAD > 2400) birthYearAD -= 543;
+        const birthMonth = parseInt(newData.dobMonth) - 1;
         const birthDate = parseInt(newData.dobDay);
-        let calculatedAge = today.getFullYear() - birthYearAD;
-        if (today.getMonth() < birthMonth || (today.getMonth() === birthMonth && today.getDate() < birthDate)) {
+        let calculatedAge = today.getUTCFullYear() - birthYearAD;
+        if (today.getUTCMonth() < birthMonth || (today.getUTCMonth() === birthMonth && today.getUTCDate() < birthDate)) {
           calculatedAge--;
         }
         newData.age = calculatedAge >= 0 ? calculatedAge.toString() : '0';
@@ -339,13 +339,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     }
 
     if ((sessionType === 'intake' || sessionType === 'deposit' || sessionType === 'custom') && formData.dobDay && formData.dobMonth && formData.dobYear && formData.age) {
-        const today = new Date();
+        const today = bangkokNow();
         let birthYearAD = parseInt(formData.dobYear);
         if (birthYearAD > 2400) birthYearAD -= 543;
-        const birthMonth = parseInt(formData.dobMonth) - 1; 
+        const birthMonth = parseInt(formData.dobMonth) - 1;
         const birthDate = parseInt(formData.dobDay);
-        let calculatedAge = today.getFullYear() - birthYearAD;
-        if (today.getMonth() < birthMonth || (today.getMonth() === birthMonth && today.getDate() < birthDate)) { calculatedAge--; }
+        let calculatedAge = today.getUTCFullYear() - birthYearAD;
+        if (today.getUTCMonth() < birthMonth || (today.getUTCMonth() === birthMonth && today.getUTCDate() < birthDate)) { calculatedAge--; }
         if (parseInt(formData.age) !== calculatedAge) {
             alert(language === 'en' ? `Age mismatch: Calculated age is ${calculatedAge} years. Please correct.` : `ข้อมูลอายุไม่ตรงกับปีเกิด (อายุจริงคือ ${calculatedAge} ปี) กรุณาตรวจสอบ`);
             return;

@@ -16,9 +16,11 @@ import { fmtMoney } from '../../lib/financeUtils.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 
+import { thaiTodayISO } from '../../utils.js';
+
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() { return thaiTodayISO(); }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
 function TxTypeBadge({ type, isDark }) {

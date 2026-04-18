@@ -20,7 +20,7 @@ import {
 // Single-branch scaffold — matches DEFAULT_BRANCH_ID in src/lib/stockUtils.js.
 // Phase 8f will introduce a UI selector; until then every sale hits "main".
 const BRANCH_ID = 'main';
-import { hexToRgb } from '../../utils.js';
+import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
@@ -93,7 +93,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [payModal, setPayModal] = useState(null); // { sale }
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [payDate, setPayDate] = useState(() => thaiTodayISO());
   const [payRefNo, setPayRefNo] = useState('');
   const [paySaving, setPaySaving] = useState(false);
 
@@ -108,7 +108,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerHN, setCustomerHN] = useState('');
-  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [saleDate, setSaleDate] = useState(() => thaiTodayISO());
   const [saleNote, setSaleNote] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [appointmentId, setAppointmentId] = useState('');
@@ -120,7 +120,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [billDiscountType, setBillDiscountType] = useState('amount');
   const [couponCode, setCouponCode] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('paid');
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(() => thaiTodayISO());
   const [paymentTime, setPaymentTime] = useState('');
   const [refNo, setRefNo] = useState('');
   const [pmChannels, setPmChannels] = useState([
@@ -222,10 +222,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       setCustomerId(initialCustomer.proClinicId || initialCustomer.id || '');
       setCustomerName(`${initialCustomer.patientData?.prefix || ''} ${initialCustomer.patientData?.firstName || ''} ${initialCustomer.patientData?.lastName || ''}`.trim());
       setCustomerHN(initialCustomer.proClinicHN || '');
-      setSaleDate(new Date().toISOString().split('T')[0]);
+      setSaleDate(thaiTodayISO());
       setSaleNote(''); setPurchasedItems([]); setMedications([]);
       setBillDiscount(''); setBillDiscountType('amount');
-      setPaymentStatus('paid'); setPaymentDate(new Date().toISOString().split('T')[0]); setPaymentTime(''); setRefNo('');
+      setPaymentStatus('paid'); setPaymentDate(thaiTodayISO()); setPaymentTime(''); setRefNo('');
       setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
       setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
       setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
@@ -340,10 +340,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     loadOptions();
     setEditingSale(null);
     setCustomerId(''); setCustomerName(''); setCustomerHN('');
-    setSaleDate(new Date().toISOString().split('T')[0]);
+    setSaleDate(thaiTodayISO());
     setSaleNote(''); setPurchasedItems([]); setMedications([]);
     setBillDiscount(''); setBillDiscountType('amount');
-    setPaymentStatus('paid'); setPaymentDate(new Date().toISOString().split('T')[0]); setPaymentTime(''); setRefNo('');
+    setPaymentStatus('paid'); setPaymentDate(thaiTodayISO()); setPaymentTime(''); setRefNo('');
     setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
     setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
     setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
@@ -768,7 +768,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                           <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
                           <button onClick={() => openEdit(sale)} className="p-2.5 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           {(sale.payment?.status === 'unpaid' || sale.payment?.status === 'split') && (
-                            <button onClick={() => { setPayModal(sale); setPayMethod(''); setPayAmount(''); setPayDate(new Date().toISOString().split('T')[0]); setPayRefNo(''); }}
+                            <button onClick={() => { setPayModal(sale); setPayMethod(''); setPayAmount(''); setPayDate(thaiTodayISO()); setPayRefNo(''); }}
                               className="p-2.5 rounded hover:bg-emerald-900/20 text-emerald-400" title="รับชำระเงิน" aria-label="รับชำระเงิน"><DollarSign size={13} /></button>
                           )}
                           {sale.status !== 'cancelled' && (

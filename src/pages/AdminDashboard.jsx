@@ -15,7 +15,8 @@ import * as broker from '../lib/brokerClient.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
-  formatPhoneNumberDisplay, renderDobFormat, playNotificationSound, formatBangkokTime
+  formatPhoneNumberDisplay, renderDobFormat, playNotificationSound, formatBangkokTime,
+  bangkokNow as bangkokNowUtil, thaiTodayISO, thaiYearMonth
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
@@ -24,6 +25,7 @@ import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
+import { shouldBlockScheduleSlot } from '../lib/scheduleFilterUtils.js';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -40,15 +42,10 @@ function fromThaiDate(thaiDate) {
   if (parts.length === 3 && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
   return thaiDate;
 }
-function bangkokNow() {
-  // Always GMT+7 regardless of browser locale
-  const utc = Date.now();
-  return new Date(utc + 7 * 3600000);
-}
-function todayISO() {
-  const d = bangkokNow();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-}
+// Thin local aliases — canonical helpers live in src/utils.js so every file
+// resolves "today" / "now" in Asia/Bangkok consistently (see utils.js comment).
+const bangkokNow = bangkokNowUtil;
+const todayISO = thaiTodayISO;
 
 // ── DatePickerThai — shows DD/MM/YYYY + opens native calendar picker on click
 function DatePickerThai({ value, onChange, className = '', placeholder = 'DD/MM/YYYY' }) {
@@ -293,10 +290,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   }, [db, appId]);
 
   // ── Appointment calendar state ──
-  const [apptMonth, setApptMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [apptMonth, setApptMonth] = useState(() => thaiYearMonth());
   const [apptData, setApptData] = useState(null);
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSyncing, setApptSyncing] = useState(false);
@@ -319,10 +313,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [schedStartMonth, setSchedStartMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [schedStartMonth, setSchedStartMonth] = useState(() => thaiYearMonth());
   const [schedAdvanceMonths, setSchedAdvanceMonths] = useState(1);
   const [schedDoctorDays, setSchedDoctorDays] = useState(new Set());
   const [schedClosedDays, setSchedClosedDays] = useState(new Set());
@@ -497,8 +488,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       setApptSyncing(true);
       setApptSyncSuccess(false);
       try {
-        const now = new Date();
-        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const currentMonth = thaiYearMonth();
         await broker.syncAppointments(currentMonth);
         apptSyncedMonthsRef.current.add(currentMonth);
         setApptSyncSuccess(true);
@@ -528,10 +518,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     if (!db || !appId) return;
     const check = async () => {
-      const now = new Date();
-      const hh = now.getHours();
-      const mm = now.getMinutes();
-      const todayKey = now.toISOString().substring(0, 10);
+      const now = bangkokNow();
+      const hh = now.getUTCHours();
+      const mm = now.getUTCMinutes();
+      const todayKey = thaiTodayISO();
       // Trigger at 21:00-21:04 (5-min window), once per day
       if (hh !== 21 || mm > 4) return;
       if (apptAutoSyncDoneRef.current === todayKey) return;
@@ -1064,18 +1054,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await broker.syncAppointments(mo);
       }
 
-      // 3. Collect booked slots from Firestore — filtered by doctor/assistants
-      //    AND (optionally) by selected room. A slot is marked busy if EITHER the
-      //    doctor/assistant OR the room is occupied during that time — the physical
-      //    room can only serve one appointment at a time regardless of who books it.
+      // 3. Collect booked slots — filter rules live in scheduleFilterUtils.js
+      //    so they're testable in isolation (see tests/schedule-filter.test.js).
+      //    Rule summary: a slot is busy if EITHER the specific doctor (when
+      //    selected) is busy OR the specific room (when selected) is occupied.
+      //    With no room filter, legacy "all doctors" behaviour is preserved.
       const bookedSlots = [];
       const doctorBookedSlots = []; // นัดของแพทย์ทุกคน — ใช้แสดง "หมอว่าง/ไม่ว่าง" ในหน้าลูกค้า
-      // Use live practitioners fetched from ProClinic (5-min cache); fall back to
-      // clinicSettings when live fetch is not yet ready.
       const allPractitioners = practitioners;
       const doctorIds = new Set(allPractitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       const selectedRoomStr = schedSelectedRoom ? String(schedSelectedRoom) : null;
+      const filterCfg = {
+        noDoctorRequired: schedNoDoctorRequired,
+        selectedDoctorId: schedSelectedDoctor,
+        selectedRoomId: schedSelectedRoom,
+        assistantIds,
+      };
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
         if (snap.exists()) {
@@ -1086,14 +1081,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
               doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
-            let doctorMatch;
-            if (schedNoDoctorRequired) doctorMatch = assistantIds.has(String(a.doctorId));
-            else if (schedSelectedDoctor) doctorMatch = String(a.doctorId) === String(schedSelectedDoctor);
-            else doctorMatch = true;
-            const roomMatch = selectedRoomStr && String(a.roomId) === selectedRoomStr;
-            // If a room filter is active, either the doctor OR the room being busy blocks the slot.
-            const include = selectedRoomStr ? (doctorMatch || roomMatch) : doctorMatch;
-            if (include) {
+            if (shouldBlockScheduleSlot(a, filterCfg)) {
               bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
           });
@@ -1168,13 +1156,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
                   freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
                 }
-                let doctorMatch;
-                if (schedNoDoctorRequired) doctorMatch = assistantIds.has(String(a.doctorId));
-                else if (schedSelectedDoctor) doctorMatch = String(a.doctorId) === String(schedSelectedDoctor);
-                else doctorMatch = true;
-                const roomMatch = selectedRoomStr && String(a.roomId) === selectedRoomStr;
-                const include = selectedRoomStr ? (doctorMatch || roomMatch) : doctorMatch;
-                if (include) {
+                if (shouldBlockScheduleSlot(a, filterCfg)) {
                   freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
                 }
               });
@@ -3865,7 +3847,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           setApptSelectedDate(null);
         };
 
-        const todayStr = new Date().toISOString().substring(0, 10);
+        const todayStr = thaiTodayISO();
 
         // Stale detection: syncedAt > 1 hour or never synced
         const syncedAt = apptData?.syncedAt ? new Date(apptData.syncedAt) : null;
@@ -4238,8 +4220,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       if (el && el._scrolled) return;
                       if (el && apptCustomerAppts.length > 0) {
                         el._scrolled = true;
-                        const todayISO = new Date().toISOString().substring(0, 10);
-                        const firstFutureIdx = apptCustomerAppts.findIndex(a => a.date >= todayISO);
+                        const today = thaiTodayISO();
+                        const firstFutureIdx = apptCustomerAppts.findIndex(a => a.date >= today);
                         if (firstFutureIdx > 0) {
                           const target = el.children[firstFutureIdx];
                           if (target) requestAnimationFrame(() => el.scrollTop = target.offsetTop - el.offsetTop);
@@ -4247,7 +4229,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       }
                     }}>
                       {apptCustomerAppts.map(a => {
-                        const isPast = a.date < new Date().toISOString().substring(0, 10);
+                        const isPast = a.date < thaiTodayISO();
                         const [ay, amo, ad] = (a.date || '').split('-').map(Number);
                         const thMo = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
                         const dateDisplay = ad && amo ? `${ad} ${thMo[amo - 1]} ${ay + 543}` : a.date;
@@ -6385,11 +6367,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {showScheduleModal && (() => {
         const thaiMo = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
         const monthOptions = [];
-        const nowForOpts = new Date();
+        const nowForOpts = bangkokNow();
         for (let i = 0; i < 7; i++) {
-          const d = new Date(nowForOpts.getFullYear(), nowForOpts.getMonth() + i, 1);
-          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          const label = `${thaiMo[d.getMonth()]} ${d.getFullYear() + 543}`;
+          const d = new Date(Date.UTC(nowForOpts.getUTCFullYear(), nowForOpts.getUTCMonth() + i, 1));
+          const val = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+          const label = `${thaiMo[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
           monthOptions.push({ val, label });
         }
 
@@ -6493,7 +6475,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   })()}
 
                   {/* Show from option — only relevant if start month is current month */}
-                  {schedStartMonth === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` && (
+                  {schedStartMonth === thaiYearMonth() && (
                   <div>
                     <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงคิวตั้งแต่</label>
                     <div className="flex gap-2">
@@ -6515,10 +6497,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const lastMo = new Date(sy2, sm2 - 1 + schedAdvanceMonths, 0);
                     const lastMoStr = `${lastMo.getFullYear()}-${String(lastMo.getMonth() + 1).padStart(2, '0')}`;
                     const dimLast = lastMo.getDate();
-                    const todayD = new Date();
-                    const todayFull = `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}-${String(todayD.getDate()).padStart(2, '0')}`;
-                    const isCurrentMonth = lastMoStr === `${todayD.getFullYear()}-${String(todayD.getMonth() + 1).padStart(2, '0')}`;
-                    const minDay = isCurrentMonth ? todayD.getDate() : 1;
+                    const todayD = bangkokNow();
+                    const todayFull = `${todayD.getUTCFullYear()}-${String(todayD.getUTCMonth() + 1).padStart(2, '0')}-${String(todayD.getUTCDate()).padStart(2, '0')}`;
+                    const isCurrentMonth = lastMoStr === `${todayD.getUTCFullYear()}-${String(todayD.getUTCMonth() + 1).padStart(2, '0')}`;
+                    const minDay = isCurrentMonth ? todayD.getUTCDate() : 1;
                     const dayOptions = [];
                     for (let d = minDay; d <= dimLast; d++) dayOptions.push(d);
                     const defaultEnd = `${lastMoStr}-${String(dimLast).padStart(2, '0')}`;

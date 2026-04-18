@@ -16,6 +16,7 @@ import {
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
+import { thaiTodayISO } from '../../utils.js';
 
 const BRANCH_ID = 'main';
 
@@ -30,7 +31,7 @@ function currentAuditUser() {
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockSeedPanel({ onClose, onSaved }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = thaiTodayISO();
   const [vendorName, setVendorName] = useState('ยอดยกมา');
   const [importedDate, setImportedDate] = useState(today);
   const [note, setNote] = useState('บันทึกสต็อกเริ่มต้นจากข้อมูลพื้นฐาน');

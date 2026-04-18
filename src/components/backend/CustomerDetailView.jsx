@@ -15,7 +15,7 @@ import {
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
-import { hexToRgb } from '../../utils.js';
+import { hexToRgb, thaiTodayISO } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
 const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -661,7 +661,7 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
               const { createBackendSale } = await import('../../lib/backendClient.js');
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId, customerName: customerName || '', customerHN: '',
-                saleDate: new Date().toISOString().split('T')[0],
+                saleDate: thaiTodayISO(),
                 saleNote: `เพิ่มคงเหลือ: ${courseName} +${addQty}`,
                 items: { promotions: [], courses: [{ name: `เพิ่มคงเหลือ: ${courseName} +${addQty}`, qty: '1', unitPrice: '0', itemType: 'addRemaining' }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
@@ -809,7 +809,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
               // 2. Create sale record (price=0) for audit trail
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId, customerName: customerName || '', customerHN: '',
-                saleDate: new Date().toISOString().split('T')[0],
+                saleDate: thaiTodayISO(),
                 saleNote: `เปลี่ยนสินค้า: ${qty}${currentParsed.unit} ${course.product} → ${newQty}${selected.unit || ''} ${selected.name}${isRetail ? ' (สินค้าหน้าร้าน - นำกลับบ้าน)' : ''}${reason ? ` | ${reason}` : ''}`,
                 items: { promotions: [], courses: [{ name: `เปลี่ยนสินค้า: ${course.product} → ${selected.name}`, qty: '1', unitPrice: '0', itemType: 'exchange' }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
@@ -950,7 +950,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
               // 3. Create sale record (price=0)
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId: fromCustomerId, customerName: fromCustomerName, customerHN: '',
-                saleDate: new Date().toISOString().split('T')[0],
+                saleDate: thaiTodayISO(),
                 saleNote: `แชร์คอร์ส: ${shareQty} ${currentParsed.unit} ${course.product} → ${toName}`,
                 items: { promotions: [], courses: [{ name: `แชร์คอร์ส: ${course.product} → ${toName}`, qty: '1', unitPrice: '0', itemType: 'share' }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
