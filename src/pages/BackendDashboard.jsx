@@ -229,13 +229,23 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             })}
             onDeleteTreatment={async (treatmentId) => {
               if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
-              // Phase 7: reverse deposits + refund wallet + reverse points on the linked sale
+              // Phase 7: reverse deposits + refund wallet + reverse points + reverse course deductions
+              const cid = viewingCustomer.proClinicId;
               try {
-                const { getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned } = await import('../lib/backendClient.js');
+                const { getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned, getTreatment, reverseCourseDeduction } = await import('../lib/backendClient.js');
+                // 1. Reverse the treatment's course deductions (both existing + purchased-in-session)
+                try {
+                  const t = await getTreatment(treatmentId);
+                  const courseItems = t?.detail?.courseItems || [];
+                  const oldExisting = courseItems.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+                  const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+                  if (oldExisting.length > 0) await reverseCourseDeduction(cid, oldExisting);
+                  if (oldPurchased.length > 0) await reverseCourseDeduction(cid, oldPurchased, { preferNewest: true });
+                } catch (e) { console.warn('[BackendDashboard] reverse course deduction on treatment delete failed:', e); }
+                // 2. Reverse the linked sale's deposits / wallet / points
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
                 if (linkedSale && linkedSale.status !== 'cancelled') {
                   const saleId = linkedSale.saleId || linkedSale.id;
-                  const cid = linkedSale.customerId;
                   const deps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
                   for (const d of deps) {
                     try { await reverseDepositUsage(d.depositId, saleId); }
@@ -256,8 +266,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                 }
               } catch (e) { console.warn('[BackendDashboard] linked sale lookup failed:', e); }
               await deleteBackendTreatment(treatmentId);
-              await rebuildTreatmentSummary(viewingCustomer.proClinicId);
-              const refreshed = await getCustomer(viewingCustomer.proClinicId);
+              await rebuildTreatmentSummary(cid);
+              const refreshed = await getCustomer(cid);
               if (refreshed) setViewingCustomer(refreshed);
             }}
             onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}

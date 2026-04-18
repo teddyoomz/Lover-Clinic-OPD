@@ -134,19 +134,27 @@ import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString,
 /**
  * Deduct course items after treatment save.
  * @param {string} customerId - proClinicId
- * @param {Array<{courseIndex: number, deductQty: number, courseName?: string}>} deductions
+ * @param {Array<{courseIndex: number, deductQty: number, courseName?: string, productName?: string}>} deductions
+ * @param {{preferNewest?: boolean}} [opts] — when `preferNewest: true`, iterate courses last→first.
+ *        Use for purchased-in-session deductions so the newly-assigned course (pushed last) is
+ *        deducted first, not old entries with the same name+product.
  */
-export async function deductCourseItems(customerId, deductions) {
+export async function deductCourseItems(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
   const { parseQtyString } = await import('./courseUtils.js');
+  const preferNewest = !!opts?.preferNewest;
 
   for (const d of deductions) {
     let remaining = d.deductQty || 1;
-    // Find ALL matching course entries by name+product and deduct across them
-    for (let i = 0; i < courses.length && remaining > 0; i++) {
+    // Build iteration order: reversed when preferNewest (newest entries first)
+    const order = preferNewest
+      ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
+      : Array.from({ length: courses.length }, (_, i) => i);
+    for (const i of order) {
+      if (remaining <= 0) break;
       const c = courses[i];
       const nameMatch = d.courseName ? c.name === d.courseName : true;
       const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
@@ -169,19 +177,29 @@ export async function deductCourseItems(customerId, deductions) {
 /**
  * Reverse course deduction (on edit/delete treatment).
  * @param {string} customerId
- * @param {Array<{courseIndex: number, deductQty: number, courseName?: string}>} deductions
+ * @param {Array<{courseIndex: number, deductQty: number, courseName?: string, productName?: string}>} deductions
+ * @param {{preferNewest?: boolean}} [opts] — when true, prefer newest matching entry (symmetric to deduct).
  */
-export async function reverseCourseDeduction(customerId, deductions) {
+export async function reverseCourseDeduction(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
+  const preferNewest = !!opts?.preferNewest;
 
   for (const d of deductions) {
     // Find by name+product (not index — form deduplicates courses)
     let idx = -1;
     if (d.courseName) {
-      idx = courses.findIndex(c => c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName));
+      if (preferNewest) {
+        // Search from the end so we hit the most-recently-assigned entry first
+        for (let i = courses.length - 1; i >= 0; i--) {
+          const c = courses[i];
+          if (c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName)) { idx = i; break; }
+        }
+      } else {
+        idx = courses.findIndex(c => c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName));
+      }
     }
     if (idx < 0 && d.courseIndex >= 0 && d.courseIndex < courses.length) {
       idx = d.courseIndex; // fallback to index for backward compat

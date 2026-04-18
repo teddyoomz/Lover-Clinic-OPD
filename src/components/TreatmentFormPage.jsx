@@ -1533,17 +1533,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             return null;
           }).filter(Boolean),
         });
-        // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session)
+        // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session).
+        // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm
+        // hits the same entry the deduction touched (purchased items go to the newest match, which is
+        // what preferNewest: true gives us).
         const existingDeductions = (backendDetail.courseItems || []).filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
-        if (existingDeductions.length > 0) {
-          const { deductCourseItems, reverseCourseDeduction } = await import('../lib/backendClient.js');
-          if (isEdit && existingCourseItems?.length > 0) {
-            await reverseCourseDeduction(customerId, existingCourseItems);
-          }
-          await deductCourseItems(customerId, existingDeductions);
-        } else if (isEdit && existingCourseItems?.length > 0) {
+        const oldExisting = (existingCourseItems || []).filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+        const oldPurchased = (existingCourseItems || []).filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+        if (isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/backendClient.js');
-          await reverseCourseDeduction(customerId, existingCourseItems);
+          if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
+          if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
+        }
+        if (existingDeductions.length > 0) {
+          const { deductCourseItems } = await import('../lib/backendClient.js');
+          await deductCourseItems(customerId, existingDeductions);
         }
 
         const result = isEdit
@@ -1747,12 +1751,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           } catch (e) { console.warn('[TreatmentForm] edit deposit/wallet/points sync failed:', e); }
         }
 
-        // Deduct purchased courses that were USED in this treatment (after assign)
+        // Deduct purchased courses that were USED in this treatment (after assign).
+        // `preferNewest: true` — iterate last→first so the just-assigned course entries
+        // (always pushed to the end by assignCourseToCustomer) get deducted, not any
+        // older entries with the same name+product from prior treatments.
         const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
         if (purchasedDeductions.length > 0) {
           try {
             const { deductCourseItems } = await import('../lib/backendClient.js');
-            await deductCourseItems(customerId, purchasedDeductions);
+            await deductCourseItems(customerId, purchasedDeductions, { preferNewest: true });
           } catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }
         }
 

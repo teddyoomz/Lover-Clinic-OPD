@@ -1568,6 +1568,120 @@ describe('Sale Retrieval — no limit', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// REGRESSION: Purchased-in-session course deduction must target the NEWLY
+// assigned course entry, not older entries with the same name+product.
+// This guards against data-integrity bugs where 10M-baht clinic treatments
+// could silently fail to deduct inventory.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
+  const CUST_ID = `DEDUCT-TEST-${TS}`;
+  const ref = () => doc(db, ...P, 'be_customers', CUST_ID);
+
+  beforeAll(async () => {
+    // Simulate a customer with multiple existing "Allergan 100 unit / Allergan 100 U"
+    // entries from prior treatments, PLUS a brand-new one just assigned by the
+    // current purchased-promo flow.
+    await setDoc(ref(), clean({
+      proClinicId: CUST_ID, proClinicHN: 'HN-DEDUCT',
+      patientData: { firstName: 'Deduct', lastName: 'Test' },
+      courses: [
+        // Old entries from prior treatments
+        { name: 'Allergan 100 unit', product: 'Allergan 100 U', qty: '10 / 100 U', status: 'กำลังใช้งาน' },
+        { name: 'Allergan 100 unit', product: 'Allergan 100 U', qty: '40 / 40 U',  status: 'กำลังใช้งาน' },
+        { name: 'Allergan 100 unit', product: 'Allergan 100 U', qty: '0 / 100 U',  status: 'กำลังใช้งาน' },
+        // Unrelated course (to confirm it stays untouched)
+        { name: 'ALLERGAN 50 UNIT',  product: 'BA - Allergan 50 U', qty: '50 / 50 U', status: 'กำลังใช้งาน' },
+        // Newly assigned by the current purchased-promo flow (always pushed to the end)
+        { name: 'Allergan 100 unit', product: 'Allergan 100 U', qty: '100 / 100 U',
+          status: 'กำลังใช้งาน', source: 'treatment', parentName: 'โปรโมชัน: หน้ายก01' },
+      ],
+      cloneStatus: 'complete',
+    }));
+  });
+
+  afterAll(async () => { try { await deleteDoc(ref()); } catch {} });
+
+  it('preferNewest: true → deducts 50 from the newest entry (100→50), old entries untouched', async () => {
+    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    await deductCourseItems(CUST_ID, [
+      { courseName: 'Allergan 100 unit', productName: 'Allergan 100 U', deductQty: 50 },
+    ], { preferNewest: true });
+    const d = (await getDoc(ref())).data();
+    const allergran = d.courses.filter(c => c.name === 'Allergan 100 unit' && c.product === 'Allergan 100 U');
+    // Find the one from "โปรโมชัน: หน้ายก01" (the newest)
+    const newest = allergran.find(c => c.parentName === 'โปรโมชัน: หน้ายก01');
+    expect(newest.qty).toBe('50 / 100 U');  // ← the fix
+    // Old entries unchanged
+    const oldQtys = allergran.filter(c => !c.parentName).map(c => c.qty).sort();
+    expect(oldQtys).toEqual(['0 / 100 U', '10 / 100 U', '40 / 40 U']);
+    // Unrelated course unchanged
+    expect(d.courses.find(c => c.name === 'ALLERGAN 50 UNIT').qty).toBe('50 / 50 U');
+  });
+
+  it('default (no preferNewest) → deducts from oldest first (existing behaviour preserved)', async () => {
+    // Reset to baseline
+    await setDoc(ref(), clean({
+      proClinicId: CUST_ID, proClinicHN: 'HN-DEDUCT',
+      patientData: { firstName: 'Deduct' },
+      courses: [
+        { name: 'Botox', product: 'Nabota', qty: '5 / 10 U', status: 'กำลังใช้งาน', tag: 'old' },
+        { name: 'Botox', product: 'Nabota', qty: '20 / 20 U', status: 'กำลังใช้งาน', tag: 'new' },
+      ],
+      cloneStatus: 'complete',
+    }));
+    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    await deductCourseItems(CUST_ID, [
+      { courseName: 'Botox', productName: 'Nabota', deductQty: 3 },
+    ]);
+    const d = (await getDoc(ref())).data();
+    // 3 units deducted from OLD entry → 2/10
+    const oldEntry = d.courses.find(c => c.tag === 'old');
+    expect(oldEntry.qty).toBe('2 / 10 U');
+    const newEntry = d.courses.find(c => c.tag === 'new');
+    expect(newEntry.qty).toBe('20 / 20 U');  // untouched
+  });
+
+  it('preferNewest + cross-entry deduct when one entry insufficient', async () => {
+    // newest: 30/30, old: 100/100. Deduct 50 with preferNewest → 30 from newest, 20 from old.
+    await setDoc(ref(), clean({
+      proClinicId: CUST_ID, proClinicHN: 'HN-DEDUCT',
+      patientData: { firstName: 'Deduct' },
+      courses: [
+        { name: 'C1', product: 'P1', qty: '100 / 100 U', status: 'กำลังใช้งาน', tag: 'old' },
+        { name: 'C1', product: 'P1', qty: '30 / 30 U',   status: 'กำลังใช้งาน', tag: 'new' },
+      ],
+      cloneStatus: 'complete',
+    }));
+    const { deductCourseItems } = await import('../src/lib/backendClient.js');
+    await deductCourseItems(CUST_ID, [
+      { courseName: 'C1', productName: 'P1', deductQty: 50 },
+    ], { preferNewest: true });
+    const d = (await getDoc(ref())).data();
+    expect(d.courses.find(c => c.tag === 'new').qty).toBe('0 / 30 U');
+    expect(d.courses.find(c => c.tag === 'old').qty).toBe('80 / 100 U');
+  });
+
+  it('preferNewest: reverseCourseDeduction also targets newest entry', async () => {
+    await setDoc(ref(), clean({
+      proClinicId: CUST_ID, proClinicHN: 'HN-DEDUCT',
+      patientData: { firstName: 'Deduct' },
+      courses: [
+        { name: 'C2', product: 'P2', qty: '5 / 10 U', status: 'กำลังใช้งาน', tag: 'old' },
+        { name: 'C2', product: 'P2', qty: '0 / 10 U', status: 'กำลังใช้งาน', tag: 'new' }, // fully consumed
+      ],
+      cloneStatus: 'complete',
+    }));
+    const { reverseCourseDeduction } = await import('../src/lib/backendClient.js');
+    await reverseCourseDeduction(CUST_ID, [
+      { courseName: 'C2', productName: 'P2', deductQty: 10 },
+    ], { preferNewest: true });
+    const d = (await getDoc(ref())).data();
+    expect(d.courses.find(c => c.tag === 'new').qty).toBe('10 / 10 U'); // restored
+    expect(d.courses.find(c => c.tag === 'old').qty).toBe('5 / 10 U');  // untouched
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEPOSIT CRUD — Phase 7 be_deposits
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Deposit CRUD', () => {
