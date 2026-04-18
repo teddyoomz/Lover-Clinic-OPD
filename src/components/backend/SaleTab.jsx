@@ -14,7 +14,12 @@ import {
   applyDepositToSale, reverseDepositUsage,
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
   analyzeSaleCancel, removeLinkedSaleCourses,
+  deductStockForSale, reverseStockForSale, analyzeStockImpact,
 } from '../../lib/backendClient.js';
+
+// Single-branch scaffold — matches DEFAULT_BRANCH_ID in src/lib/stockUtils.js.
+// Phase 8f will introduce a UI selector; until then every sale hits "main".
+const BRANCH_ID = 'main';
 import { hexToRgb } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
@@ -173,7 +178,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   }, []);
   useEffect(() => { loadSales(); }, [loadSales]);
 
-  // Load cancel analysis whenever the cancel modal opens
+  // Load cancel analysis (courses + money + stock) whenever the cancel modal opens
   useEffect(() => {
     if (!cancelModal) { setCancelAnalysis(null); setCancelAlsoRemoveUsed(false); return; }
     let cancelled = false;
@@ -181,10 +186,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     setCancelAnalysisLoading(true);
     (async () => {
       try {
-        const a = await analyzeSaleCancel(saleId);
-        if (!cancelled) setCancelAnalysis(a);
+        const [a, stk] = await Promise.all([
+          analyzeSaleCancel(saleId).catch(() => null),
+          analyzeStockImpact({ saleId }).catch(() => null),
+        ]);
+        if (!cancelled) setCancelAnalysis(a ? { ...a, stockImpact: stk } : (stk ? { stockImpact: stk } : null));
       } catch (e) {
-        console.warn('[SaleTab] analyzeSaleCancel failed:', e);
+        console.warn('[SaleTab] analyzeSaleCancel/Stock failed:', e);
         if (!cancelled) setCancelAnalysis(null);
       } finally { if (!cancelled) setCancelAnalysisLoading(false); }
     })();
@@ -440,6 +448,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       if (editingSale) {
         const saleId = editingSale.saleId || editingSale.id;
         newSaleId = saleId;
+        // STEP 0 — Reverse OLD stock deductions (idempotent, must succeed). Runs
+        // BEFORE money/points reverses so that on mid-saga failure we haven't lost
+        // the ability to identify old stock (linkedSaleId still binds the movements).
+        await reverseStockForSale(saleId, { user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' } });
+
         // Reverse previously-applied deposits before re-applying
         for (const od of oldDeps) {
           try { await reverseDepositUsage(od.depositId, saleId); }
@@ -462,6 +475,20 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
         await updateBackendSale(saleId, data);
 
+        // STEP 5b — Deduct NEW stock. Hard error on failure: by now old stock+money
+        // are reversed and sale doc has new items. We roll back any partial new
+        // deductions via reverseStockForSale (idempotent) and re-throw so the user
+        // sees the actual cause. They can cancel the sale and recreate.
+        try {
+          await deductStockForSale(saleId, data.items, {
+            branchId: BRANCH_ID, customerId,
+            user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
+          });
+        } catch (stockErr) {
+          try { await reverseStockForSale(saleId); } catch {}
+          throw new Error(`ตัดสต็อก (แก้ไข) ไม่สำเร็จ: ${stockErr.message}`);
+        }
+
         // Apply new deposits
         for (const nd of depositIdsPayload) {
           try { await applyDepositToSale(nd.depositId, saleId, nd.amount); }
@@ -482,6 +509,20 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       } else {
         const createRes = await createBackendSale(data);
         newSaleId = createRes.saleId;
+
+        // STEP 1b — Deduct stock right after sale creation. On failure, delete the
+        // just-created sale so there's nothing dangling. Fail fast BEFORE any
+        // deposits/wallet/courses/points are committed.
+        try {
+          await deductStockForSale(newSaleId, data.items, {
+            branchId: BRANCH_ID, customerId,
+            user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
+          });
+        } catch (stockErr) {
+          try { await deleteBackendSale(newSaleId); } catch {}
+          throw new Error(`ตัดสต็อกไม่สำเร็จ: ${stockErr.message}`);
+        }
+
         // Apply deposits
         for (const nd of depositIdsPayload) {
           try { await applyDepositToSale(nd.depositId, newSaleId, nd.amount); }
@@ -564,15 +605,22 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     try { analysis = await analyzeSaleCancel(saleId); }
     catch (e) { console.warn('[SaleTab] analyzeSaleCancel (delete) failed:', e); }
     const warnings = [];
+    let stockImpact = null;
+    try { stockImpact = await analyzeStockImpact({ saleId }); }
+    catch (e) { console.warn('[SaleTab] analyzeStockImpact (delete) failed:', e); }
     if (analysis) {
       if (analysis.unused.length > 0) warnings.push(`• ${analysis.unused.length} คอร์สที่ยังไม่ใช้ — จะถูกถอดออก`);
       if (analysis.partiallyUsed.length > 0) warnings.push(`• ⚠ ${analysis.partiallyUsed.length} คอร์สใช้ไปแล้วบางส่วน — จะถูกเก็บไว้ (ประวัติไม่ถูกทำลาย)`);
       if (analysis.fullyUsed.length > 0) warnings.push(`• ⚠ ${analysis.fullyUsed.length} คอร์สใช้หมดแล้ว — จะถูกเก็บไว้`);
-      if (analysis.productsCount > 0) warnings.push(`• ⚠ สินค้าหน้าร้าน ${analysis.productsCount} รายการ (เรียกคืนไม่ได้อัตโนมัติ)`);
-      if (analysis.medsCount > 0) warnings.push(`• ⚠ ยากลับบ้าน ${analysis.medsCount} รายการ (เรียกคืนไม่ได้อัตโนมัติ)`);
       if (analysis.depositApplied > 0) warnings.push(`• มัดจำ ฿${fmtMoney(analysis.depositApplied)} จะถูกคืน`);
       if (analysis.walletApplied > 0) warnings.push(`• Wallet ฿${fmtMoney(analysis.walletApplied)} จะถูกคืน`);
       if (analysis.pointsEarned > 0) warnings.push(`• คะแนน ${analysis.pointsEarned} จะถูกคืน`);
+    }
+    if (stockImpact && stockImpact.totalQtyToRestore > 0) {
+      warnings.push(`• สินค้า/ยา ${stockImpact.batchesAffected.length} lot (${stockImpact.totalQtyToRestore} หน่วย) จะถูกคืนเข้า stock อัตโนมัติ`);
+      if (!stockImpact.canReverseFully) {
+        warnings.push(`• ⚠ Stock บาง lot คืนไม่ครบ: ${stockImpact.warnings.slice(0, 3).join('; ')}`);
+      }
     }
     const msg = `ต้องการลบใบเสร็จ ${saleId}?${warnings.length ? '\n\n' + warnings.join('\n') : ''}\n\nการลบจะเก็บประวัติไว้บน Firestore ไม่ได้`;
     if (!confirm(msg)) return;
@@ -599,6 +647,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     // Remove unused linked courses (keep used ones so history stays intact)
     try { await removeLinkedSaleCourses(saleId, { removeUsed: false }); }
     catch (e) { console.warn('[SaleTab] remove linked courses on delete failed:', e); }
+    // Restore stock — idempotent, hard error if unexpected failure (abort delete)
+    try { await reverseStockForSale(saleId); }
+    catch (e) {
+      console.error('[SaleTab] reverseStockForSale (delete) failed:', e);
+      alert(`คืนสต็อกล้มเหลว: ${e.message}\nยกเลิกการลบใบเสร็จ`);
+      return;
+    }
     await deleteBackendSale(saleId);
     loadSales();
   };
@@ -881,23 +936,28 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       )}
                     </div>
                   )}
-                  {/* Physical goods — warn only, cannot be un-sold */}
-                  {cancelAnalysis.productsCount > 0 && (
-                    <div className="text-xs text-red-400">
-                      🏷 สินค้าหน้าร้านที่ขายไปแล้ว ({cancelAnalysis.productsCount} รายการ) — <span className="font-bold">เรียกคืนไม่ได้อัตโนมัติ</span>
+                  {/* Physical goods — now auto-reversed via stock system (Phase 8b) */}
+                  {cancelAnalysis.stockImpact && cancelAnalysis.stockImpact.totalQtyToRestore > 0 && (
+                    <div className={`text-xs ${cancelAnalysis.stockImpact.canReverseFully ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      📦 <span className="font-bold">สต็อกจะถูกคืนอัตโนมัติ</span> — {cancelAnalysis.stockImpact.batchesAffected.length} lot, รวม {cancelAnalysis.stockImpact.totalQtyToRestore} หน่วย
                       <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
-                        {cancelAnalysis.productsList.slice(0, 5).map((n, i) => <div key={i}>• {n}</div>)}
-                        {cancelAnalysis.productsList.length > 5 && <div>… และอีก {cancelAnalysis.productsList.length - 5} รายการ</div>}
+                        {cancelAnalysis.stockImpact.batchesAffected.slice(0, 5).map((b, i) => (
+                          <div key={i}>• {b.productName} — คืน {b.willRestore} หน่วย (lot {b.batchId.slice(-8)})</div>
+                        ))}
+                        {cancelAnalysis.stockImpact.batchesAffected.length > 5 && (
+                          <div>… และอีก {cancelAnalysis.stockImpact.batchesAffected.length - 5} lot</div>
+                        )}
                       </div>
+                      {!cancelAnalysis.stockImpact.canReverseFully && (
+                        <div className="pl-4 text-[10px] text-amber-300 mt-1">
+                          ⚠ คืนไม่ครบบาง lot: {cancelAnalysis.stockImpact.warnings.slice(0, 2).join('; ')}
+                        </div>
+                      )}
                     </div>
                   )}
-                  {cancelAnalysis.medsCount > 0 && (
-                    <div className="text-xs text-red-400">
-                      💊 ยากลับบ้านที่จ่ายแล้ว ({cancelAnalysis.medsCount} รายการ) — <span className="font-bold">เรียกคืนไม่ได้อัตโนมัติ</span>
-                      <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
-                        {cancelAnalysis.medsList.slice(0, 5).map((n, i) => <div key={i}>• {n}</div>)}
-                        {cancelAnalysis.medsList.length > 5 && <div>… และอีก {cancelAnalysis.medsList.length - 5} รายการ</div>}
-                      </div>
+                  {cancelAnalysis.stockImpact && cancelAnalysis.stockImpact.totalQtyToRestore === 0 && (cancelAnalysis.productsCount > 0 || cancelAnalysis.medsCount > 0) && (
+                    <div className="text-xs text-[var(--tx-muted)]">
+                      ℹ สินค้า/ยาบางรายการไม่ได้ track stock (trackStock=false) — ไม่กระทบสต็อก
                     </div>
                   )}
                 </div>
@@ -954,6 +1014,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 // Remove linked courses from customer.courses (respect user's "also remove used" choice)
                 try { await removeLinkedSaleCourses(saleId, { removeUsed: cancelAlsoRemoveUsed }); }
                 catch (e) { console.warn('[SaleTab] remove linked courses on cancel failed:', e); }
+                // Restore stock — hard error aborts the cancel flow
+                try { await reverseStockForSale(saleId); }
+                catch (e) {
+                  console.error('[SaleTab] reverseStockForSale (cancel) failed:', e);
+                  alert(`คืนสต็อกล้มเหลว: ${e.message}\nยกเลิกการทำรายการ`);
+                  setCancelSaving(false);
+                  return;
+                }
                 await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
                 setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
               }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5">

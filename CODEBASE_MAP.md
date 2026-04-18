@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8a Stock Foundation — stockUtils + stock primitives in backendClient + firestore.indexes.json)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8b Sale integration — deduct/reverse stock wired into SaleTab create/edit/cancel/delete)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -111,11 +111,26 @@ artifacts/{appId}/public/data/
 ### Phase 8 backendClient stock primitives (line ~1720+)
 - `getStockBatch(batchId)` / `listStockBatches({productId?, branchId?, status?})` — read helpers
 - `getStockOrder(orderId)` / `listStockOrders({branchId?, status?})` — read helpers sorted by importedDate DESC
-- `listStockMovements(filters)` — query by any linkedId or batchId/productId/branchId/type; `includeReversed` flag (default false)
+- `listStockMovements(filters)` — query by any linkedId or batchId/productId/branchId/type; `includeReversed` flag (default false) hides both sides of a reversed pair (reversedByMovementId OR reverseOf set)
 - `createStockOrder(data, {user})` — creates order + N batches + N type=1 movements. Validates qty>0, allows isPremium flag, costBasis=cost*qty on every movement.
 - `cancelStockOrder(orderId, {reason, user})` — BLOCKED if any batch has non-import movement (ProClinic parity). Else: marks order+batches cancelled + emits type=14 movements. Idempotent.
 - `updateStockOrder(orderId, patch)` — allows note/vendorName/discount + per-item cost/expiresAt. qty edits THROW. Cancelled orders THROW. Cost updates cascade to batch.originalCost.
 - `createStockAdjustment({batchId, type, qty, note, branchId}, {user})` — runTransaction: read batch → verify → mutate qty → write movement + adjustment doc. Blocks on cancelled batches. Transactional rollback on insufficient qty.
+
+### Phase 8b sale/treatment stock integration (same file, +450 LoC)
+- `_normalizeStockItems(items)` / `_getProductStockConfig(productId)` / `_deductOneItem(...)` / `_reverseOneMovement(...)` — internals
+- `deductStockForSale(saleId, items, {customerId, branchId, user, movementType})` — per-item saga with compensation-on-failure. trackStock=false → skipped movement (audit, no batch touch). movementType defaults to 2 (SALE).
+- `deductStockForTreatment(treatmentId, items, opts)` — mirror; default movementType=6 (TREATMENT), opts.movementType=7 for take-home meds.
+- `reverseStockForSale(saleId, opts)` / `reverseStockForTreatment(treatmentId, opts)` — idempotent full reversal. Returns {reversedCount, skippedCount}.
+- `analyzeStockImpact({saleId? | treatmentId?})` — returns {movements, batchesAffected, warnings, canReverseFully, totalQtyToRestore} — feeds the SaleTab cancel-confirmation modal.
+
+### SaleTab.jsx hooks (Phase 8b UI)
+- `handleSave` create branch (:484+): `deductStockForSale` right after `createBackendSale`. On throw → `deleteBackendSale` + re-throw with `ตัดสต็อกไม่สำเร็จ` error.
+- `handleSave` edit branch (:440-500+): STEP 0 `reverseStockForSale` (idempotent) BEFORE reverse deposits/wallet/points. STEP 5b `deductStockForSale` AFTER `updateBackendSale`. On throw → `reverseStockForSale` rollback + re-throw.
+- `handleDelete` (:600+): `reverseStockForSale` before `deleteBackendSale`. Hard error aborts the delete.
+- Cancel modal (:955+): `reverseStockForSale` before `cancelBackendSale`. Hard error aborts the cancel.
+- `analyzeSaleCancel` useEffect (:184): now also fetches `analyzeStockImpact` and merges into `cancelAnalysis.stockImpact` → modal shows batches-to-restore preview with canReverseFully flag.
+- Single-branch scaffold constant `BRANCH_ID = 'main'` at top of file (mirrors DEFAULT_BRANCH_ID in stockUtils).
 
 ### Chat Firestore path
 ```
