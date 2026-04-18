@@ -2,6 +2,15 @@
 // Deposit / Wallet / Membership / Points / Billing
 // No Firestore imports — all pure, safe for client + tests.
 
+// M10: THB is stored to 2 decimal places. Multiplications (percent discounts,
+// membership discounts) produce float results that must be rounded before
+// storage or downstream arithmetic — otherwise tiny drifts accumulate across
+// many sales and totals disagree with the sum-of-parts.
+export function roundTHB(n) {
+  const v = Number(n) || 0;
+  return Math.round(v * 100) / 100;
+}
+
 // ─── Deposit ────────────────────────────────────────────────────────────────
 
 /** ยอดคงเหลือของมัดจำ = amount - usedAmount (ไม่ต่ำกว่า 0) */
@@ -38,21 +47,23 @@ export function calcSaleBilling({
   depositApplied = 0,
   walletApplied = 0,
 } = {}) {
-  const sub = Math.max(0, Number(subtotal) || 0);
+  const sub = roundTHB(Math.max(0, Number(subtotal) || 0));
   const rawDiscount = Number(billDiscount) || 0;
-  const discount = billDiscountType === 'percent'
+  // M10: round after the percent multiplication so 12345 × 7.5% = 925.875
+  // is stored as 925.88 (not left as a trailing binary-float).
+  const discount = roundTHB(billDiscountType === 'percent'
     ? sub * rawDiscount / 100
-    : rawDiscount;
-  const afterDiscount = Math.max(0, sub - discount);
+    : rawDiscount);
+  const afterDiscount = roundTHB(Math.max(0, sub - discount));
 
   const memPercent = Number(membershipDiscountPercent) || 0;
-  const membershipDiscount = afterDiscount * memPercent / 100;
-  const afterMembership = Math.max(0, afterDiscount - membershipDiscount);
+  const membershipDiscount = roundTHB(afterDiscount * memPercent / 100);
+  const afterMembership = roundTHB(Math.max(0, afterDiscount - membershipDiscount));
 
-  const dep = Math.min(Math.max(0, Number(depositApplied) || 0), afterMembership);
-  const wal = Math.min(Math.max(0, Number(walletApplied) || 0), afterMembership - dep);
+  const dep = roundTHB(Math.min(Math.max(0, Number(depositApplied) || 0), afterMembership));
+  const wal = roundTHB(Math.min(Math.max(0, Number(walletApplied) || 0), afterMembership - dep));
 
-  const netTotal = Math.max(0, afterMembership - dep - wal);
+  const netTotal = roundTHB(Math.max(0, afterMembership - dep - wal));
 
   return {
     subtotal: sub,

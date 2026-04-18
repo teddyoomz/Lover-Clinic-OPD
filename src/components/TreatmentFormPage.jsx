@@ -1674,7 +1674,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   note: `สะสมจาก treatment ${result.treatmentId || treatmentId}`,
                   staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
                 });
-              } catch (e) { console.warn('[TreatmentForm] earnPoints failed:', e); }
+              } catch (e) {
+                // C13: non-blocking — sale + treatment already committed.
+                // Structured error lets ops reconcile missed points later.
+                console.error('[TreatmentForm] earnPoints failed (treatment still saved, points NOT earned)', {
+                  customerId, saleId: createRes.saleId,
+                  treatmentId: result.treatmentId || treatmentId,
+                  purchaseAmount: billing.netTotal, bahtPerPoint: bpp,
+                  error: e?.message,
+                });
+              }
             }
             // Auto-assign purchased courses + promotions to customer.
             // purchased qty multiplies master product qty.
@@ -1797,7 +1806,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     note: `แก้ไข treatment — สะสมใหม่`,
                     staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
                   });
-                } catch (e) { console.warn('[TreatmentForm] earnPoints (edit) failed:', e); }
+                } catch (e) {
+                  // C13: edit flow — sale + treatment already updated; only
+                  // points re-earn failed. Log enough context to reconcile.
+                  console.error('[TreatmentForm] earnPoints (edit) failed (treatment updated, points NOT re-earned)', {
+                    customerId, saleId, treatmentId,
+                    purchaseAmount: billing.netTotal, bahtPerPoint: bpp,
+                    error: e?.message,
+                  });
+                }
               }
             }
           } catch (e) { console.warn('[TreatmentForm] edit deposit/wallet/points sync failed:', e); }

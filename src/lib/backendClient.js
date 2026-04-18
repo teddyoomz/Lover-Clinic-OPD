@@ -707,7 +707,12 @@ export async function updateSalePayment(saleId, newChannel) {
   const sale = snap.data();
   const existingChannels = sale.payment?.channels || [];
   const updatedChannels = [...existingChannels, { ...newChannel, enabled: true }];
-  const totalPaid = updatedChannels.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+  // M12: float accumulation (`0.1 + 0.1 + 0.1` !== 0.3) can flip the `>=`
+  // comparison below on edge cases. Round to 2 decimals (THB convention)
+  // before comparing so split-to-paid transitions are deterministic.
+  const totalPaid = Math.round(
+    updatedChannels.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0) * 100
+  ) / 100;
   const netTotal = sale.billing?.netTotal || 0;
   const newStatus = totalPaid >= netTotal ? 'paid' : 'split';
   await updateDoc(saleDoc(saleId), {
@@ -1639,7 +1644,15 @@ async function _earnPointsInternal(customerId, points, meta = {}) {
   });
   try {
     await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-  } catch {}
+  } catch (e) {
+    // M9: the point tx log above was already written, so the audit trail is
+    // complete. Only the customer summary field failed to update (likely
+    // customer doc missing or permission error). Flag with structured data
+    // so a nightly reconciler can detect and repair the drift.
+    console.error('[backendClient] _earnPointsInternal: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
+      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+    });
+  }
   return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
 }
 
@@ -1694,7 +1707,12 @@ export async function adjustPoints(customerId, {
   });
   try {
     await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-  } catch {}
+  } catch (e) {
+    // M9: see _earnPointsInternal for rationale. Tx log authoritative; summary drift flagged.
+    console.error('[backendClient] adjustPoints: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
+      customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+    });
+  }
   return { success: true, txId: newTxId, pointsBefore: before, pointsAfter: after };
 }
 
@@ -1729,7 +1747,12 @@ export async function reversePointsEarned(customerId, referenceId) {
     });
     try {
       await updateDoc(customerDoc(customerId), { 'finance.loyaltyPoints': after });
-    } catch {}
+    } catch (e) {
+      // M9: see _earnPointsInternal for rationale.
+      console.error('[backendClient] reversePointsEarned: finance.loyaltyPoints update failed — tx log is authoritative, summary stale', {
+        customerId: String(customerId), txId: newTxId, pointsBefore: before, expectedAfter: after, error: e?.message,
+      });
+    }
   }
   return { success: true, reversed: totalReversed };
 }
@@ -2657,6 +2680,13 @@ async function _reverseOneMovement(movementId, { user } = {}) {
  * Deduct stock for a retail sale. One movement per batch per item.
  * Products flagged stockConfig.trackStock=false emit a skipped movement
  * (no batch mutation).
+ *
+ * C10: DO NOT wrap this function (or its caller's loop) in a single
+ * runTransaction. Internally every batch allocation is its own small tx
+ * (~3 ops: read batch, update batch, write movement). A 150-item sale
+ * across 3 batches each = ~450 ops — already close to Firestore's 500-op
+ * per-tx hard limit. Wrapping outside would blow the limit and abort the
+ * whole sale. The saga-per-batch pattern is intentional.
  *
  * @param {string} saleId
  * @param {object|Array} items — SaleTab `items` object or flat array
