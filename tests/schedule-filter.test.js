@@ -4,7 +4,7 @@
 // leaked through to a พบแพทย์ link that targeted ห้องตรวจ/ผ่าตัด (doctor room).
 // ═══════════════════════════════════════════════════════════════════════════
 import { describe, it, expect } from 'vitest';
-import { shouldBlockScheduleSlot } from '../src/lib/scheduleFilterUtils.js';
+import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../src/lib/scheduleFilterUtils.js';
 
 // Practitioner / room fixtures
 const DR_A = '101';     // doctor
@@ -153,6 +153,49 @@ describe('shouldBlockScheduleSlot — edge cases', () => {
     const cfg = { noDoctorRequired: true, selectedDoctorId: null, selectedRoomId: null, assistantIds: new Set() };
     // No assistants configured → nobody blocks in "legacy" ไม่พบแพทย์ path.
     expect(shouldBlockScheduleSlot(appt, cfg)).toBe(false);
+  });
+});
+
+describe('shouldBlockDoctorSlot — "หมอไม่ว่าง" info badge', () => {
+  // User bug 2026-04-19: iv-drip (staff room) link showed "หมอไม่ว่าง" because
+  // a doctor was in Shockwave (also staff room). Rule: only doctor-in-doctor-room.
+  const doctorPractitionerIds = new Set([DR_A, DR_B]);
+  const doctorRoomIds = new Set([ROOM_DOC1, ROOM_DOC2]);
+  const baseCfg = { noDoctorRequired: true, doctorPractitionerIds, doctorRoomIds };
+
+  it('BUG-REPRO: doctor in Shockwave (staff room) → NOT "หมอไม่ว่าง"', () => {
+    const appt = { doctorId: DR_A, roomId: ROOM_STAFF1 };
+    expect(shouldBlockDoctorSlot(appt, baseCfg)).toBe(false);
+  });
+  it('doctor in a DOCTOR room → "หมอไม่ว่าง"', () => {
+    const appt = { doctorId: DR_A, roomId: ROOM_DOC1 };
+    expect(shouldBlockDoctorSlot(appt, baseCfg)).toBe(true);
+  });
+  it('assistant in any room → NOT "หมอไม่ว่าง" (not a doctor at all)', () => {
+    expect(shouldBlockDoctorSlot({ doctorId: AST_X, roomId: ROOM_DOC1 }, baseCfg)).toBe(false);
+    expect(shouldBlockDoctorSlot({ doctorId: AST_X, roomId: ROOM_STAFF1 }, baseCfg)).toBe(false);
+  });
+  it('พบแพทย์ mode (noDoctorRequired=false) → never populates the badge data', () => {
+    const cfg = { ...baseCfg, noDoctorRequired: false };
+    expect(shouldBlockDoctorSlot({ doctorId: DR_A, roomId: ROOM_DOC1 }, cfg)).toBe(false);
+  });
+  it('legacy fallback: doctorRoomIds not configured → any room counts (old links still work)', () => {
+    const cfg = { noDoctorRequired: true, doctorPractitionerIds, doctorRoomIds: new Set() };
+    expect(shouldBlockDoctorSlot({ doctorId: DR_A, roomId: ROOM_STAFF1 }, cfg)).toBe(true);
+    expect(shouldBlockDoctorSlot({ doctorId: DR_A, roomId: ROOM_DOC1 }, cfg)).toBe(true);
+  });
+  it('null doctorId → no match', () => {
+    expect(shouldBlockDoctorSlot({ doctorId: null, roomId: ROOM_DOC1 }, baseCfg)).toBe(false);
+  });
+  it('null roomId + doctorRoomIds set → no match (room doesn\'t classify as doctor room)', () => {
+    expect(shouldBlockDoctorSlot({ doctorId: DR_A, roomId: null }, baseCfg)).toBe(false);
+  });
+  it('unknown roomId (not in any list) → no match under doctor-rooms mode', () => {
+    expect(shouldBlockDoctorSlot({ doctorId: DR_A, roomId: '999' }, baseCfg)).toBe(false);
+  });
+  it('number-vs-string ids — coerces correctly', () => {
+    const appt = { doctorId: 101, roomId: 301 };
+    expect(shouldBlockDoctorSlot(appt, baseCfg)).toBe(true);
   });
 });
 

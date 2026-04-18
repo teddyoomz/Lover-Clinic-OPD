@@ -25,7 +25,7 @@ import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
-import { shouldBlockScheduleSlot } from '../lib/scheduleFilterUtils.js';
+import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -1064,6 +1064,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const allPractitioners = practitioners;
       const doctorIds = new Set(allPractitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
+      // "Doctor busy" label only fires when the doctor is at their DOCTOR room
+      // (per user 2026-04-19: a doctor performing Shockwave in a staff room
+      // should NOT surface as "หมอไม่ว่าง" to a customer looking at an iv-drip link).
+      const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
       const selectedRoomStr = schedSelectedRoom ? String(schedSelectedRoom) : null;
       const filterCfg = {
         noDoctorRequired: schedNoDoctorRequired,
@@ -1071,14 +1075,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         selectedRoomId: schedSelectedRoom,
         assistantIds,
       };
+      const doctorSlotCfg = {
+        noDoctorRequired: schedNoDoctorRequired,
+        doctorPractitionerIds: doctorIds,
+        doctorRoomIds,
+      };
       for (const mo of months) {
         const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
         if (snap.exists()) {
           const appts = snap.data().appointments || [];
           appts.forEach(a => {
             if (!a.date || !a.startTime || !a.endTime) return;
-            // Collect doctor booked slots separately (for "หมอว่าง/ไม่ว่าง" in ไม่พบแพทย์ mode)
-            if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
+            if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
               doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
             }
             if (shouldBlockScheduleSlot(a, filterCfg)) {
@@ -1153,7 +1161,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             if (snap.exists()) {
               (snap.data().appointments || []).forEach(a => {
                 if (!a.date || !a.startTime || !a.endTime) return;
-                if (schedNoDoctorRequired && doctorIds.has(String(a.doctorId))) {
+                if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
                   freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
                 }
                 if (shouldBlockScheduleSlot(a, filterCfg)) {
@@ -4640,10 +4648,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div key={s.id} className={`rounded-xl border p-3 transition-all ${!isEnabled || isExpired ? 'border-red-900/30 bg-red-950/10 opacity-60' : 'border-[var(--bd)] bg-[var(--bg-hover)]'}`}>
                         <div className="flex items-center gap-3">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                               <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${isDoctor ? 'bg-sky-950/40 border border-sky-900/40 text-sky-400' : 'bg-purple-950/40 border border-purple-900/40 text-purple-400'}`}>
                                 {isDoctor ? 'พบแพทย์' : 'ไม่พบแพทย์'}
                               </span>
+                              {s.selectedDoctorName && (
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold bg-sky-950/30 border border-sky-800/40 text-sky-300" title="แพทย์ที่เลือก">
+                                  🩺 {s.selectedDoctorName}
+                                </span>
+                              )}
+                              {s.selectedRoomName && (
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold bg-cyan-950/30 border border-cyan-800/40 text-cyan-300" title="ห้องที่เลือก">
+                                  {isDoctor ? '🏥' : '🛏️'} {s.selectedRoomName}
+                                </span>
+                              )}
                               <span className={`text-[11px] font-bold ${isExpired ? 'text-red-400' : remainHrs < 6 ? 'text-orange-400' : 'text-green-400'}`}>{remainText}</span>
                             </div>
                             <div className="text-xs text-[var(--tx-muted)]">{date} · {(s.months || []).length} เดือน · {s.slotDurationMins || 60} นาที/slot</div>

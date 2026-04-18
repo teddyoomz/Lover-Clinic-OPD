@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   shouldBlockScheduleSlot,
+  shouldBlockDoctorSlot,
   generateTimeSlots,
   isSlotBooked,
   getDoctorRangesForDate,
@@ -36,17 +37,24 @@ const ROOM_SHOCK = '401';    // staff room (Shockwave)
 const ROOM_SHOCK2 = '402';   // staff room
 
 const assistantIds = new Set([AST_X, AST_Y]);
-const doctorIdsSet = new Set([DR_A, DR_B]);
+const doctorPractitionerIds = new Set([DR_A, DR_B]);
+const doctorRoomIds = new Set([ROOM_EXAM, ROOM_EXAM2]);
 
 // Utility: given a list of appointments and filter, produce bookedSlots the
 // same way AdminDashboard.handleGenScheduleLink would. Mirrors that flow
-// minus the Firestore I/O.
+// minus the Firestore I/O. Both admin-side helpers are shared from
+// scheduleFilterUtils, so this test stays in lockstep with production.
 function buildBookedSlots(appointments, filterCfg) {
+  const doctorSlotCfg = {
+    noDoctorRequired: filterCfg.noDoctorRequired,
+    doctorPractitionerIds,
+    doctorRoomIds,
+  };
   const bookedSlots = [];
   const doctorBookedSlots = [];
   appointments.forEach((a) => {
     if (!a.date || !a.startTime || !a.endTime) return;
-    if (filterCfg.noDoctorRequired && doctorIdsSet.has(String(a.doctorId))) {
+    if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
       doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
     }
     if (shouldBlockScheduleSlot(a, filterCfg)) {
@@ -355,6 +363,41 @@ describe('integration — full customer-view walk-through', () => {
     expect(free).toContain('12:00-12:30');
     expect(free).toContain('16:30-17:00'); // assistant in Shockwave
     expect(free).not.toContain('10:00-10:30');
+  });
+
+  it('doctorBookedSlots excludes doctor-in-STAFF-room (user bug 2026-04-19)', () => {
+    // Appointment: Dr A in Shockwave (staff room) at 16:30.
+    // Link: ไม่พบแพทย์ + IV-drip (another staff room).
+    // Expected: 16:30 free for IV-drip + "หมอว่าง" (NOT หมอไม่ว่าง) because
+    // the doctor is doing a procedure, not at their exam station.
+    const cfg = { noDoctorRequired: true, selectedDoctorId: null, selectedRoomId: ROOM_SHOCK2, assistantIds };
+    const apptsUserScenario = [
+      { date: '2026-04-20', startTime: '16:30', endTime: '17:00', doctorId: DR_A, roomId: ROOM_SHOCK },
+    ];
+    const { bookedSlots, doctorBookedSlots } = buildBookedSlots(apptsUserScenario, cfg);
+    // IV-drip slot itself is free — the other staff room is Shockwave, unrelated.
+    expect(isSlotBooked('2026-04-20', '16:30', '17:00', bookedSlots)).toBe(false);
+    // "หมอไม่ว่าง" would only fire if doctorBookedSlots contained this appointment.
+    expect(isSlotBooked('2026-04-20', '16:30', '17:00', doctorBookedSlots)).toBe(false);
+  });
+
+  it('doctorBookedSlots INCLUDES doctor-in-DOCTOR-room (legitimate "หมอไม่ว่าง")', () => {
+    const cfg = { noDoctorRequired: true, selectedDoctorId: null, selectedRoomId: ROOM_SHOCK, assistantIds };
+    const apptsUserScenario = [
+      { date: '2026-04-20', startTime: '14:00', endTime: '15:00', doctorId: DR_A, roomId: ROOM_EXAM },
+    ];
+    const { doctorBookedSlots } = buildBookedSlots(apptsUserScenario, cfg);
+    // Doctor is at their doctor desk → genuinely busy.
+    expect(isSlotBooked('2026-04-20', '14:00', '15:00', doctorBookedSlots)).toBe(true);
+  });
+
+  it('doctorBookedSlots excludes assistant in doctor room (assistants never count as "หมอ")', () => {
+    const cfg = { noDoctorRequired: true, selectedDoctorId: null, selectedRoomId: ROOM_SHOCK, assistantIds };
+    const apptsUserScenario = [
+      { date: '2026-04-20', startTime: '14:00', endTime: '15:00', doctorId: AST_X, roomId: ROOM_EXAM },
+    ];
+    const { doctorBookedSlots } = buildBookedSlots(apptsUserScenario, cfg);
+    expect(isSlotBooked('2026-04-20', '14:00', '15:00', doctorBookedSlots)).toBe(false);
   });
 
   it('type F link (Shockwave room) — exam-room appointments do NOT block', () => {

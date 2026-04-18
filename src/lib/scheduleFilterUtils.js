@@ -78,6 +78,36 @@ export function shouldBlockScheduleSlot(appointment, config) {
   return personBusy || roomBusy;
 }
 
+/**
+ * Decide whether an appointment should show up as "doctor busy" in the
+ * customer link's `doctorBookedSlots` — the info badge that tells the
+ * customer "btw, a doctor is occupied at this time".
+ *
+ * Semantics (per user 2026-04-19): a doctor is considered busy only when
+ * they're at their DOCTOR room — i.e. role='doctor' room. A doctor doing
+ * a Shockwave / IV-drip / other procedure in a STAFF room is doing
+ * something other than seeing patients at their station, so their "doctor
+ * availability" for the customer is unaffected.
+ *
+ * Only applies in ไม่พบแพทย์ mode; other modes don't render the badge.
+ *
+ * @param {AppointmentLike} appointment
+ * @param {Object} config
+ * @param {boolean} config.noDoctorRequired
+ * @param {Set<string>} config.doctorPractitionerIds   practitioners role='doctor'
+ * @param {Set<string>} config.doctorRoomIds           rooms role='doctor'
+ */
+export function shouldBlockDoctorSlot(appointment, config) {
+  if (!config.noDoctorRequired) return false;
+  const doctorStr = appointment.doctorId == null ? '' : String(appointment.doctorId);
+  const roomStr = appointment.roomId == null ? '' : String(appointment.roomId);
+  if (!config.doctorPractitionerIds?.has(doctorStr)) return false;
+  // If doctor-room list isn't configured, fall back to legacy "any room" behaviour
+  // so links generated before the room-role config still work.
+  if (!config.doctorRoomIds || config.doctorRoomIds.size === 0) return true;
+  return config.doctorRoomIds.has(roomStr);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Customer-view helpers (shared with ClinicSchedule.jsx)
 // ═══════════════════════════════════════════════════════════════════════════
