@@ -14,9 +14,18 @@ import {
 import {
   getAllMasterDataItems, listStockBatches, createStockOrder,
 } from '../../lib/backendClient.js';
+import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 
 const BRANCH_ID = 'main';
+
+function currentAuditUser() {
+  const u = auth.currentUser;
+  return {
+    userId: u?.uid || '',
+    userName: u?.email?.split('@')[0] || u?.displayName || '',
+  };
+}
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
@@ -155,7 +164,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
         importedDate, note: note.trim(),
         branchId: BRANCH_ID,
         items,
-      }, { user: { userId: '', userName: '' } });
+      }, { user: currentAuditUser() });
       setSuccess(true);
       setTimeout(() => { onSaved?.(); }, 600);
     } catch (e) {

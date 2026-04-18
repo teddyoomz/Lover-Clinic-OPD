@@ -15,9 +15,17 @@ import {
 import {
   getFirestore, collection, getDocs, query, where,
 } from 'firebase/firestore';
-import { db, appId } from '../../firebase.js';
+import { db, appId, auth } from '../../firebase.js';
 
 const BRANCH_ID = 'main';
+
+function currentAuditUser() {
+  const u = auth.currentUser;
+  return {
+    userId: u?.uid || '',
+    userName: u?.email?.split('@')[0] || u?.displayName || '',
+  };
+}
 
 function fmtDate(iso) {
   if (!iso) return '-';
@@ -208,7 +216,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, o
     try {
       await createStockAdjustment(
         { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
-        { user: { userId: '', userName: '' } }
+        { user: currentAuditUser() }
       );
       setSuccess(true);
       setTimeout(onSaved, 600);

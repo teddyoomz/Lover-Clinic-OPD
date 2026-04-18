@@ -2029,6 +2029,21 @@ describe('Deposit Apply + Reverse', () => {
     await expect(applyDepositToSale(DEP_ID, 'INV-TEST-X', 999999)).rejects.toThrow();
   });
 
+  // M1 regression: a deposit can be applied to a sale at most once. Protects
+  // against concurrent UI clicks / retry loops that would otherwise create
+  // duplicate usageHistory entries and silently duplicate the customer's
+  // deposit usage (money created from thin air).
+  it('M1 — apply same deposit to same sale twice → throws, history unchanged', async () => {
+    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const before = (await getDoc(depRef(DEP_ID))).data();
+    const historyCountBefore = (before.usageHistory || []).length;
+    const usedBefore = before.usedAmount;
+    await expect(applyDepositToSale(DEP_ID, 'INV-TEST-1', 100)).rejects.toThrow(/ถูกใช้กับบิล|already/i);
+    const after = (await getDoc(depRef(DEP_ID))).data();
+    expect(after.usageHistory).toHaveLength(historyCountBefore);
+    expect(after.usedAmount).toBe(usedBefore);
+  });
+
   it('apply fully — status becomes used', async () => {
     const { applyDepositToSale } = await import('../src/lib/backendClient.js');
     await applyDepositToSale(DEP_ID, 'INV-TEST-FULL', 5000);

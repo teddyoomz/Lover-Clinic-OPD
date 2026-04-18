@@ -287,13 +287,17 @@ describe('[SAE] Deposit — exhaustive mutation + invariant checks', () => {
     await deleteDoc(depDoc(depositId));
   });
 
-  it('multiple applies to same sale + single reverse restores all', async () => {
+  // M1: applying the same deposit to the same saleId twice is now blocked at
+  // the server — prevents silent duplication of deposit usage via concurrent
+  // clicks or retry-after-partial-failure. Reverse restores the single legit
+  // entry.
+  it('second apply to same sale throws (M1); reverse restores only the first entry', async () => {
     const { createDeposit, applyDepositToSale, reverseDepositUsage } = await bc();
     const { depositId } = await createDeposit({ customerId: CID, amount: 1000, paymentChannel: 'เงินสด' });
     await applyDepositToSale(depositId, 'INV-DUP', 200);
-    await applyDepositToSale(depositId, 'INV-DUP', 150);
+    await expect(applyDepositToSale(depositId, 'INV-DUP', 150)).rejects.toThrow(/ถูกใช้กับบิล|already/i);
     const res = await reverseDepositUsage(depositId, 'INV-DUP');
-    expect(res.restored).toBe(350);
+    expect(res.restored).toBe(200);
     const d = (await getDoc(depDoc(depositId))).data();
     expect(d.usedAmount).toBe(0);
     expect(d.remainingAmount).toBe(1000);
@@ -2373,17 +2377,20 @@ describe('[SAE] Adversarial — money + courses edge cases that could silently b
     expect(c.courses[0].qty).toBe('4 / 5 U'); // -1 due to fallback
   });
 
-  it('A20: applyDepositToSale + same saleId applied twice → usageHistory has 2 entries + reverse restores both', async () => {
+  // M1: same-sale second apply is blocked. The prior assertion (2 history
+  // entries + 500 total) represented the silent duplication bug; the server
+  // now throws on the second attempt so usedAmount stays at the first apply.
+  it('A20: applyDepositToSale + same saleId applied twice → second throws (M1 guard)', async () => {
     const { createDeposit, applyDepositToSale, reverseDepositUsage, getDeposit } = await bc();
     const d = await createDeposit({ customerId: CID, amount: 1000, paymentChannel: 'เงินสด' });
     created.deps.push(d.depositId);
     await applyDepositToSale(d.depositId, 'INV-TWICE', 200);
-    await applyDepositToSale(d.depositId, 'INV-TWICE', 300);
+    await expect(applyDepositToSale(d.depositId, 'INV-TWICE', 300)).rejects.toThrow(/ถูกใช้กับบิล|already/i);
     const cur = await getDeposit(d.depositId);
-    expect(cur.usageHistory).toHaveLength(2);
-    expect(cur.usedAmount).toBe(500);
+    expect(cur.usageHistory).toHaveLength(1);
+    expect(cur.usedAmount).toBe(200);
     const res = await reverseDepositUsage(d.depositId, 'INV-TWICE');
-    expect(res.restored).toBe(500);
+    expect(res.restored).toBe(200);
     const after = await getDeposit(d.depositId);
     expect(after.usedAmount).toBe(0);
     expect(after.remainingAmount).toBe(1000);

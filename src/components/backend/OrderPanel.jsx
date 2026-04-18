@@ -12,6 +12,17 @@ import {
   listStockOrders, createStockOrder, cancelStockOrder,
   getAllMasterDataItems,
 } from '../../lib/backendClient.js';
+import { auth } from '../../firebase.js';
+
+// S12: pull the logged-in admin's identity so every stock mutation leaves a
+// real actor on the movement log (MOPH audit).
+function currentAuditUser() {
+  const u = auth.currentUser;
+  return {
+    userId: u?.uid || '',
+    userName: u?.email?.split('@')[0] || u?.displayName || '',
+  };
+}
 import DateField from '../DateField.jsx';
 import StockSeedPanel from './StockSeedPanel.jsx';
 import OrderDetailModal from './OrderDetailModal.jsx';
@@ -87,7 +98,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
     const msg = `ยกเลิกใบสั่งซื้อ ${order.orderId}?\nถ้ามีสินค้าบาง lot ถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) — ระบบจะบล็อกไม่ให้ยกเลิก`;
     if (!confirm(msg)) return;
     try {
-      await cancelStockOrder(order.orderId, { reason: '', user: { userId: '', userName: '' } });
+      await cancelStockOrder(order.orderId, { reason: '', user: currentAuditUser() });
       await loadOrders();
     } catch (e) {
       alert(`ยกเลิกไม่สำเร็จ: ${e.message}`);
@@ -314,7 +325,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
           isPremium: !!it.isPremium,
         })),
       };
-      await createStockOrder(payload, { user: { userId: '', userName: '' } });
+      await createStockOrder(payload, { user: currentAuditUser() });
       setSuccess(true);
       setTimeout(onSaved, 600);
     } catch (e) {

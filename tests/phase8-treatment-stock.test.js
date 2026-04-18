@@ -261,4 +261,47 @@ describe('[STK-T-HOOK] delete with linked sale — both sides reversed', () => {
     expect(con.qty.remaining).toBe(100);
     expect(prod.qty.remaining).toBe(100);
   });
+
+  // C3 regression: `deleteBackendTreatment` must reverse stock internally so
+  // that any caller (not just the defensive BackendDashboard wrapper) is
+  // guaranteed safe. Before the fix, the function hard-deleted the doc and
+  // orphaned batch deductions forever.
+  it('C3 — deleteBackendTreatment reverses stock even without external wrapper', async () => {
+    const { deductStockForTreatment, deleteBackendTreatment, listStockMovements } = await bc();
+    const bCon = await seedBatch(PID_CON, 100);
+    const bItem = await seedBatch(PID_ITEM, 100);
+    const treatmentId = `TRT-C3-${TS}`;
+
+    // Simulate a treatment that deducted some consumables + items
+    await deductStockForTreatment(treatmentId, {
+      consumables: [{ productId: PID_CON, productName: PID_CON, qty: 4 }],
+      treatmentItems: [{ productId: PID_ITEM, productName: PID_ITEM, qty: 6 }],
+    }, { branchId: BRANCH });
+
+    // Pre-check: both batches depleted
+    let con = (await getDoc(batchDoc(bCon))).data();
+    let item = (await getDoc(batchDoc(bItem))).data();
+    expect(con.qty.remaining).toBe(96);
+    expect(item.qty.remaining).toBe(94);
+
+    // Seed treatment doc so deleteDoc has something to remove
+    await setDoc(doc(db, ...P, 'be_treatments', treatmentId), {
+      treatmentId, customerId: 'TEST', detail: {}, createdAt: new Date().toISOString(),
+    });
+
+    // Under fix: deleteBackendTreatment internally calls reverseStockForTreatment
+    await deleteBackendTreatment(treatmentId);
+
+    con = (await getDoc(batchDoc(bCon))).data();
+    item = (await getDoc(batchDoc(bItem))).data();
+    expect(con.qty.remaining).toBe(100);
+    expect(item.qty.remaining).toBe(100);
+
+    // Reverse movement was appended (not removed — append-only log)
+    const mvts = await listStockMovements({ linkedTreatmentId: treatmentId, includeReversed: true });
+    const originals = mvts.filter(m => m.reversedByMovementId);
+    const reverses = mvts.filter(m => m.reverseOf);
+    expect(originals.length).toBe(reverses.length);
+    expect(originals.length).toBeGreaterThan(0);
+  });
 });

@@ -102,8 +102,20 @@ export async function updateBackendTreatment(treatmentId, detail) {
   return { success: true };
 }
 
-/** Delete a backend treatment */
+/**
+ * Delete a backend treatment.
+ *
+ * C3: before hard-deleting the treatment doc, we must reverse any stock
+ * movements it caused (medications/consumables/treatmentItems). Without
+ * this, the movement log keeps the deductions but the treatment doc is
+ * gone — orphaned inventory that silently leaks from physical stock.
+ *
+ * reverseStockForTreatment is idempotent (filters by `includeReversed:
+ * false`), so callers that already reversed (BackendDashboard's onDelete
+ * wrapper) will see a no-op second call — safe.
+ */
 export async function deleteBackendTreatment(treatmentId) {
+  await reverseStockForTreatment(treatmentId);
   await deleteDoc(treatmentDoc(treatmentId));
   return { success: true };
 }
@@ -514,8 +526,32 @@ export async function updateBackendSale(saleId, data) {
 
 /** Delete a sale */
 export async function deleteBackendSale(saleId) {
+  await _clearLinkedTreatmentsHasSale(saleId);
   await deleteDoc(saleDoc(saleId));
   return { success: true };
+}
+
+/**
+ * C5: when a sale is cancelled or deleted, any treatment whose linkedSaleId
+ * points to it must be detached — otherwise TreatmentFormPage's hasSale
+ * split logic stays skewed and medication deduction can be lost on the next
+ * edit. Idempotent: if no treatments link, no writes happen.
+ */
+async function _clearLinkedTreatmentsHasSale(saleId) {
+  try {
+    const sid = String(saleId);
+    const q = query(treatmentsCol(), where('linkedSaleId', '==', sid));
+    const snap = await getDocs(q);
+    if (snap.empty) return;
+    const now = new Date().toISOString();
+    await Promise.all(snap.docs.map(d => updateDoc(d.ref, {
+      hasSale: false,
+      linkedSaleId: null,
+      updatedAt: now,
+    })));
+  } catch (e) {
+    console.warn('[backendClient] clearLinkedTreatmentsHasSale failed:', e);
+  }
 }
 
 /** Get all sales (sorted by date desc) */
@@ -658,6 +694,9 @@ export async function cancelBackendSale(saleId, reason, refundMethod, refundAmou
     'payment.status': 'cancelled',
     updatedAt: new Date().toISOString(),
   });
+  // C5: detach any treatments that linked to this sale so their hasSale split
+  // logic doesn't become stale (would cause silent double-deduct on re-edit).
+  await _clearLinkedTreatmentsHasSale(saleId);
   return { success: true };
 }
 
@@ -941,6 +980,12 @@ export async function applyDepositToSale(depositId, saleId, amount) {
     if (cur.status === 'cancelled' || cur.status === 'refunded' || cur.status === 'expired') {
       throw new Error(`มัดจำสถานะ ${cur.status} ไม่สามารถใช้ได้`);
     }
+    // M1: idempotency guard — a deposit must never be applied to the same sale
+    // more than once. Without this, concurrent UI clicks or retry-after-partial-
+    // failure can create phantom usageHistory entries (money duplication).
+    if ((cur.usageHistory || []).some(u => String(u.saleId) === String(saleId))) {
+      throw new Error(`มัดจำนี้ถูกใช้กับบิล ${saleId} อยู่แล้ว`);
+    }
     const remaining = Number(cur.remainingAmount) || 0;
     if (remaining < amt) {
       throw new Error(`ยอดมัดจำคงเหลือไม่พอ (มี ${remaining} บาท ต้องการ ${amt} บาท)`);
@@ -1091,35 +1136,40 @@ export async function topUpWallet(customerId, walletTypeId, {
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
 
+  // M5: generate tx id outside so it's available inside the tx callback.
+  // Moving the walletTx setDoc INTO runTransaction makes balance + audit log
+  // atomic — a crash between them can no longer leave an orphaned balance or
+  // orphaned log entry.
+  const newTxId = txId();
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.data() || {};
     const before = Number(cur.balance) || 0;
     const after = before + amt;
+    const now = new Date().toISOString();
     tx.update(ref, {
       balance: after,
       totalTopUp: (Number(cur.totalTopUp) || 0) + amt,
-      lastTransactionAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastTransactionAt: now,
+      updatedAt: now,
+    });
+    tx.set(walletTxDoc(newTxId), {
+      txId: newTxId,
+      customerId: String(customerId),
+      walletTypeId: String(walletTypeId),
+      walletTypeName,
+      type: 'topup',
+      amount: amt,
+      balanceBefore: before,
+      balanceAfter: after,
+      referenceType, referenceId: String(referenceId || ''),
+      paymentChannel, refNo,
+      note, staffId, staffName,
+      createdAt: now,
     });
     return { before, after };
   });
 
-  const newTxId = txId();
-  await setDoc(walletTxDoc(newTxId), {
-    txId: newTxId,
-    customerId: String(customerId),
-    walletTypeId: String(walletTypeId),
-    walletTypeName,
-    type: 'topup',
-    amount: amt,
-    balanceBefore: result.before,
-    balanceAfter: result.after,
-    referenceType, referenceId: String(referenceId || ''),
-    paymentChannel, refNo,
-    note, staffId, staffName,
-    createdAt: new Date().toISOString(),
-  });
   await recalcCustomerWalletBalances(customerId);
   return { success: true, txId: newTxId, ...result };
 }
@@ -1134,6 +1184,8 @@ export async function deductWallet(customerId, walletTypeId, {
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
 
+  // M5: atomic balance + tx-log write.
+  const newTxId = txId();
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('ไม่พบกระเป๋าเงินของลูกค้า');
@@ -1141,30 +1193,30 @@ export async function deductWallet(customerId, walletTypeId, {
     const before = Number(cur.balance) || 0;
     if (before < amt) throw new Error(`ยอดกระเป๋าไม่พอ (มี ${before} ต้องการ ${amt})`);
     const after = before - amt;
+    const now = new Date().toISOString();
     tx.update(ref, {
       balance: after,
       totalUsed: (Number(cur.totalUsed) || 0) + amt,
-      lastTransactionAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastTransactionAt: now,
+      updatedAt: now,
+    });
+    tx.set(walletTxDoc(newTxId), {
+      txId: newTxId,
+      customerId: String(customerId),
+      walletTypeId: String(walletTypeId),
+      walletTypeName,
+      type: 'deduct',
+      amount: amt,
+      balanceBefore: before,
+      balanceAfter: after,
+      referenceType, referenceId: String(referenceId || ''),
+      paymentChannel: '', refNo: '',
+      note, staffId, staffName,
+      createdAt: now,
     });
     return { before, after };
   });
 
-  const newTxId = txId();
-  await setDoc(walletTxDoc(newTxId), {
-    txId: newTxId,
-    customerId: String(customerId),
-    walletTypeId: String(walletTypeId),
-    walletTypeName,
-    type: 'deduct',
-    amount: amt,
-    balanceBefore: result.before,
-    balanceAfter: result.after,
-    referenceType, referenceId: String(referenceId || ''),
-    paymentChannel: '', refNo: '',
-    note, staffId, staffName,
-    createdAt: new Date().toISOString(),
-  });
   await recalcCustomerWalletBalances(customerId);
   return { success: true, txId: newTxId, ...result };
 }
@@ -1180,35 +1232,37 @@ export async function refundToWallet(customerId, walletTypeId, {
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
 
+  // M5: atomic balance + tx-log write.
+  const newTxId = txId();
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.data() || {};
     const before = Number(cur.balance) || 0;
     const after = before + amt;
+    const now = new Date().toISOString();
     tx.update(ref, {
       balance: after,
       // totalUsed is NOT decremented so lifetime usage metrics stay accurate
-      lastTransactionAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastTransactionAt: now,
+      updatedAt: now,
+    });
+    tx.set(walletTxDoc(newTxId), {
+      txId: newTxId,
+      customerId: String(customerId),
+      walletTypeId: String(walletTypeId),
+      walletTypeName,
+      type: 'refund',
+      amount: amt,
+      balanceBefore: before,
+      balanceAfter: after,
+      referenceType, referenceId: String(referenceId || ''),
+      paymentChannel: '', refNo: '',
+      note, staffId, staffName,
+      createdAt: now,
     });
     return { before, after };
   });
 
-  const newTxId = txId();
-  await setDoc(walletTxDoc(newTxId), {
-    txId: newTxId,
-    customerId: String(customerId),
-    walletTypeId: String(walletTypeId),
-    walletTypeName,
-    type: 'refund',
-    amount: amt,
-    balanceBefore: result.before,
-    balanceAfter: result.after,
-    referenceType, referenceId: String(referenceId || ''),
-    paymentChannel: '', refNo: '',
-    note, staffId, staffName,
-    createdAt: new Date().toISOString(),
-  });
   await recalcCustomerWalletBalances(customerId);
   return { success: true, txId: newTxId, ...result };
 }
@@ -1224,37 +1278,39 @@ export async function adjustWallet(customerId, walletTypeId, {
   const key = walletKey(customerId, walletTypeId);
   const ref = walletDoc(key);
 
+  // M5: atomic balance + tx-log write.
+  const newTxId = txId();
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.data() || {};
     const before = Number(cur.balance) || 0;
     const after = isIncrease ? before + amt : Math.max(0, before - amt);
     const delta = after - before;
+    const now = new Date().toISOString();
     tx.update(ref, {
       balance: after,
       ...(delta > 0 ? { totalTopUp: (Number(cur.totalTopUp) || 0) + delta } : {}),
       ...(delta < 0 ? { totalUsed: (Number(cur.totalUsed) || 0) + Math.abs(delta) } : {}),
-      lastTransactionAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastTransactionAt: now,
+      updatedAt: now,
+    });
+    tx.set(walletTxDoc(newTxId), {
+      txId: newTxId,
+      customerId: String(customerId),
+      walletTypeId: String(walletTypeId),
+      walletTypeName,
+      type: 'adjust',
+      amount: Math.abs(delta),
+      balanceBefore: before,
+      balanceAfter: after,
+      referenceType: 'manual', referenceId: '',
+      paymentChannel: '', refNo: '',
+      note, staffId, staffName,
+      createdAt: now,
     });
     return { before, after, delta };
   });
 
-  const newTxId = txId();
-  await setDoc(walletTxDoc(newTxId), {
-    txId: newTxId,
-    customerId: String(customerId),
-    walletTypeId: String(walletTypeId),
-    walletTypeName,
-    type: 'adjust',
-    amount: Math.abs(result.delta),
-    balanceBefore: result.before,
-    balanceAfter: result.after,
-    referenceType: 'manual', referenceId: '',
-    paymentChannel: '', refNo: '',
-    note, staffId, staffName,
-    createdAt: new Date().toISOString(),
-  });
   await recalcCustomerWalletBalances(customerId);
   return { success: true, txId: newTxId, ...result };
 }
@@ -1748,6 +1804,25 @@ function _genOrderId() { return `ORD-${Date.now()}`; }
 function _genMovementId() { return `MVT-${Date.now()}-${_rand4()}`; }
 function _genAdjustmentId() { return `ADJ-${Date.now()}-${_rand4()}`; }
 
+/**
+ * S12: every stock movement must have a non-empty actor for MOPH audit.
+ * UI callers sometimes pass `{ userId: '', userName: '' }` when no seller is
+ * selected — that bypasses trivial truthy checks and pollutes the log with
+ * anonymous entries. This normalizer coerces blanks to the synthetic
+ * `system`/`ระบบ` user and logs a warning so we can hunt down UI callers
+ * that should be passing a real auth.currentUser.
+ */
+function _normalizeAuditUser(user) {
+  const u = user || {};
+  const userId = String(u.userId || '').trim();
+  const userName = String(u.userName || '').trim();
+  if (!userId || !userName) {
+    try { console.warn('[backendClient] audit user missing — falling back to system user'); } catch {}
+    return { userId: userId || 'system', userName: userName || 'ระบบ' };
+  }
+  return { userId, userName };
+}
+
 // ─── Stock read helpers ────────────────────────────────────────────────────
 
 /** Fetch one batch by id. */
@@ -1852,7 +1927,7 @@ export async function createStockOrder(data, opts = {}) {
   const branchId = String(data.branchId || DEFAULT_BRANCH_ID);
   const importedDate = data.importedDate || new Date().toISOString();
   const now = new Date().toISOString();
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
 
   const batchIds = [];
   const resolvedItems = [];
@@ -2001,7 +2076,7 @@ export async function cancelStockOrder(orderId, opts = {}) {
   }
 
   const now = new Date().toISOString();
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
   const reason = String(opts.reason || '');
   const movementIds = [];
 
@@ -2147,7 +2222,7 @@ export async function createStockAdjustment(p, opts = {}) {
   const adjustmentId = _genAdjustmentId();
   const movementId = _genMovementId();
   const now = new Date().toISOString();
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
   const note = String(p.note || '');
 
   const result = await runTransaction(db, async (tx) => {
@@ -2492,6 +2567,9 @@ async function _deductOneItem({
 async function _reverseOneMovement(movementId, { user } = {}) {
   const { stockUtils } = await _stockLib();
   const { BATCH_STATUS, reverseQtyNumeric } = stockUtils;
+  // S12: normalize the incoming user; if none supplied, the original
+  // movement's user (m.user) is reused when writing the reverse entry.
+  const reverseUser = user ? _normalizeAuditUser(user) : null;
 
   const movRef = stockMovementDoc(movementId);
   const movSnap = await getDoc(movRef);
@@ -2514,7 +2592,7 @@ async function _reverseOneMovement(movementId, { user } = {}) {
       reversedByMovementId: null,
       reverseOf: m.movementId,
       createdAt: now,
-      user: user || m.user,
+      user: reverseUser || m.user,
     });
     await updateDoc(movRef, { reversedByMovementId: reverseMovementId });
     return { skipped: true, reverseMovementId };
@@ -2525,6 +2603,17 @@ async function _reverseOneMovement(movementId, { user } = {}) {
 
   const reverseMovementId = _genMovementId();
   const result = await runTransaction(db, async (tx) => {
+    // S5: re-verify reversedByMovementId INSIDE the transaction. Two concurrent
+    // _reverseOneMovement calls on the same movement would otherwise both pass
+    // the outer check at line 2500 and both tx.update(movRef, ...) at the end
+    // — last write wins, first reverse orphaned, audit chain broken. By
+    // reading movRef inside the tx, Firestore OCC serializes us: the second
+    // tx sees reversedByMovementId already set and returns early.
+    const mSnap2 = await tx.get(movRef);
+    if (mSnap2.data()?.reversedByMovementId) {
+      return { alreadyReversed: true, reverseMovementId: mSnap2.data().reversedByMovementId };
+    }
+
     const batchRef = stockBatchDoc(m.batchId);
     const bSnap = await tx.get(batchRef);
     if (!bSnap.exists()) throw new Error(`Batch ${m.batchId} vanished before reverse`);
@@ -2550,14 +2639,17 @@ async function _reverseOneMovement(movementId, { user } = {}) {
       reversedByMovementId: null,
       reverseOf: m.movementId,
       createdAt: now,
-      user: user || m.user,
+      user: reverseUser || m.user,
     });
 
     tx.update(movRef, { reversedByMovementId: reverseMovementId });
 
-    return { reverseMovementId, before: beforeRemaining, after: afterRemaining };
+    return { reverseMovementId, before: beforeRemaining, after: afterRemaining, alreadyReversed: false };
   });
 
+  if (result.alreadyReversed) {
+    return { skipped: true, reason: 'concurrent-reverse', reverseMovementId: result.reverseMovementId };
+  }
   return { skipped: false, ...result };
 }
 
@@ -2584,7 +2676,7 @@ export async function deductStockForSale(saleId, items, opts = {}) {
   const { MOVEMENT_TYPES, DEFAULT_BRANCH_ID } = stockUtils;
 
   const branchId = opts.branchId || DEFAULT_BRANCH_ID;
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
   const movementType = Number(opts.movementType) || MOVEMENT_TYPES.SALE;
   const preferNewest = !!opts.preferNewest;
   const customerId = opts.customerId ? String(opts.customerId) : null;
@@ -2629,7 +2721,7 @@ export async function deductStockForTreatment(treatmentId, items, opts = {}) {
   const { MOVEMENT_TYPES, DEFAULT_BRANCH_ID } = stockUtils;
 
   const branchId = opts.branchId || DEFAULT_BRANCH_ID;
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
   const movementType = Number(opts.movementType) || MOVEMENT_TYPES.TREATMENT;
   const preferNewest = !!opts.preferNewest;
   const customerId = opts.customerId ? String(opts.customerId) : null;
@@ -2897,7 +2989,7 @@ export async function createStockTransfer(data, opts = {}) {
 
   const transferId = _genTransferId();
   const now = new Date().toISOString();
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
 
   // Resolve item metadata from source batches (cost/expiry inherited on receive)
   const resolvedItems = [];
@@ -3166,7 +3258,7 @@ export async function createStockWithdrawal(data, opts = {}) {
 
   const withdrawalId = _genWithdrawalId();
   const now = new Date().toISOString();
-  const user = opts.user || { userId: null, userName: null };
+  const user = _normalizeAuditUser(opts.user);
   const resolvedItems = [];
   for (const it of items) {
     const snap = await getDoc(stockBatchDoc(it.sourceBatchId));

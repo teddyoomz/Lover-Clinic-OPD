@@ -10,7 +10,16 @@ import {
 import {
   getStockOrder, listStockMovements, updateStockOrder, cancelStockOrder,
 } from '../../lib/backendClient.js';
+import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
+
+function currentAuditUser() {
+  const u = auth.currentUser;
+  return {
+    userId: u?.uid || '',
+    userName: u?.email?.split('@')[0] || u?.displayName || '',
+  };
+}
 
 function fmtMoney(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
@@ -117,7 +126,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
     if (!confirm(msg)) return;
     setSaving(true); setError('');
     try {
-      await cancelStockOrder(orderId, { reason: '', user: { userId: '', userName: '' } });
+      await cancelStockOrder(orderId, { reason: '', user: currentAuditUser() });
       onSaved?.();
       onClose?.();
     } catch (e) { setError(e.message || 'ยกเลิกไม่สำเร็จ'); setSaving(false); }
