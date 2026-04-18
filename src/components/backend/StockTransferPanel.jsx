@@ -12,6 +12,7 @@ import {
   listStockTransfers, createStockTransfer, updateStockTransferStatus,
   listStockLocations, listStockBatches,
 } from '../../lib/backendClient.js';
+import TransferDetailModal from './TransferDetailModal.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 function fmtDate(iso) {
@@ -39,6 +40,7 @@ export default function StockTransferPanel({ clinicSettings, theme }) {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [locations, setLocations] = useState([]);
+  const [detailId, setDetailId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,7 +117,8 @@ export default function StockTransferPanel({ clinicSettings, theme }) {
                 const s = Number(t.status);
                 const info = STATUS_INFO[s] || { label: '-', color: 'amber' };
                 return (
-                  <tr key={t.transferId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                  <tr key={t.transferId} onClick={() => setDetailId(t.transferId)}
+                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer">
                     <td className="px-3 py-2 font-mono text-sky-400">{t.transferId}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(t.createdAt)}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">
@@ -127,7 +130,9 @@ export default function StockTransferPanel({ clinicSettings, theme }) {
                     <td className="px-3 py-2 text-center">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`}>{info.label}</span>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setDetailId(t.transferId)}
+                        className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 hover:border-sky-600 mr-1" title="ดูรายละเอียด">ดู</button>
                       {s === 0 && (
                         <>
                           <button onClick={() => handleTransition(t, 1)} className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 inline-flex items-center gap-1 mr-1" title="ส่งของ"><Send size={10} /> ส่ง</button>
@@ -148,6 +153,10 @@ export default function StockTransferPanel({ clinicSettings, theme }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {detailId && (
+        <TransferDetailModal transferId={detailId} onClose={() => setDetailId(null)} />
       )}
     </div>
   );

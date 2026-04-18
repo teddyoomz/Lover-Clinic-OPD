@@ -7,11 +7,9 @@
 // clinic ever scales past that, move to backend aggregation.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal } from 'lucide-react';
-import { listStockBatches } from '../../lib/backendClient.js';
+import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse } from 'lucide-react';
+import { listStockBatches, listStockLocations } from '../../lib/backendClient.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
-
-const BRANCH_ID = 'main';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
@@ -21,17 +19,33 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const [search, setSearch] = useState('');
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [locations, setLocations] = useState([{ id: 'main', name: 'สาขาหลัก', kind: 'branch' }]);
+  const [locationId, setLocationId] = useState('main');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const locs = await listStockLocations();
+        if (!cancelled && Array.isArray(locs) && locs.length) setLocations(locs);
+      } catch (e) { console.error('[StockBalance] listStockLocations failed:', e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await listStockBatches({ branchId: BRANCH_ID, status: 'active' });
+      const list = await listStockBatches({ branchId: locationId, status: 'active' });
       setBatches(list);
     } catch (e) { console.error('[StockBalance] load failed:', e); setBatches([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [locationId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const currentLocation = locations.find(l => l.id === locationId) || { name: locationId, kind: 'branch' };
+  const isCentral = currentLocation.kind === 'central';
 
   // Group by productId, sum remaining
   const products = useMemo(() => {
@@ -98,11 +112,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     <div className="space-y-4">
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
         <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-emerald-900/30 border border-emerald-800">
-            <Package size={22} className="text-emerald-400" />
+          <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${isCentral ? 'bg-amber-900/30 border border-amber-800' : 'bg-emerald-900/30 border border-emerald-800'}`}>
+            {isCentral ? <Warehouse size={22} className="text-amber-400" /> : <Package size={22} className="text-emerald-400" />}
           </div>
           <div className="flex-1">
-            <h2 className="text-lg font-bold text-[var(--tx-heading)]">ยอดคงเหลือ (Stock Balance)</h2>
+            <h2 className="text-lg font-bold text-[var(--tx-heading)]">
+              ยอดคงเหลือ — {currentLocation.name}
+              {isCentral && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800">คลังกลาง</span>}
+            </h2>
             <p className="text-xs text-[var(--tx-muted)]">
               {products.length} สินค้า • {batches.length} batches • มูลค่าต้นทุนรวม <span className="font-mono text-amber-400">฿{fmtQty(totalValue)}</span>
             </p>
@@ -110,6 +127,17 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">สถานที่:</label>
+            <select value={locationId} onChange={e => setLocationId(e.target.value)}
+              className="px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 min-w-[180px]">
+              {locations.map(l => (
+                <option key={l.id} value={l.id}>
+                  {l.name}{l.kind === 'central' ? ' (คลังกลาง)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex-1 relative min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาสินค้า..."

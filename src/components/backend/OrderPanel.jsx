@@ -14,6 +14,7 @@ import {
 } from '../../lib/backendClient.js';
 import DateField from '../DateField.jsx';
 import StockSeedPanel from './StockSeedPanel.jsx';
+import OrderDetailModal from './OrderDetailModal.jsx';
 
 const BRANCH_ID = 'main';
 
@@ -37,6 +38,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const [productsLoading, setProductsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [pendingPrefill, setPendingPrefill] = useState(null);
+  const [detailOrderId, setDetailOrderId] = useState(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -91,6 +93,9 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
       alert(`ยกเลิกไม่สำเร็จ: ${e.message}`);
     }
   };
+
+  const openDetail = (orderId) => setDetailOrderId(orderId);
+  const closeDetail = () => setDetailOrderId(null);
 
   if (seedOpen) {
     return (
@@ -187,7 +192,8 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                 const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                 const total = (o.items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
                 return (
-                  <tr key={o.orderId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                  <tr key={o.orderId} onClick={() => openDetail(o.orderId)}
+                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer">
                     <td className="px-3 py-2 font-mono text-sky-400">{o.orderId}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">{o.vendorName || '-'}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)]">{fmtDate(o.importedDate)}</td>
@@ -200,7 +206,12 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-800">ใช้งาน</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => openDetail(o.orderId)}
+                        className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 hover:border-sky-600 mr-1"
+                        title="ดู/แก้ไข">
+                        ดู
+                      </button>
                       {o.status !== 'cancelled' && (
                         <button onClick={() => handleCancel(o)}
                           className="px-2 py-1 rounded text-[10px] bg-[var(--bg-hover)] hover:bg-red-900/20 text-[var(--tx-muted)] hover:text-red-400 border border-[var(--bd)] hover:border-red-700"
@@ -215,6 +226,14 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
             </tbody>
           </table>
         </div>
+      )}
+
+      {detailOrderId && (
+        <OrderDetailModal
+          orderId={detailOrderId}
+          onClose={closeDetail}
+          onSaved={loadOrders}
+        />
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import {
   listStockWithdrawals, createStockWithdrawal, updateStockWithdrawalStatus,
   listStockLocations, listStockBatches,
 } from '../../lib/backendClient.js';
+import WithdrawalDetailModal from './WithdrawalDetailModal.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 function fmtDate(iso) {
@@ -37,6 +38,7 @@ export default function StockWithdrawalPanel({ clinicSettings, theme }) {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [locations, setLocations] = useState([]);
+  const [detailId, setDetailId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,7 +113,8 @@ export default function StockWithdrawalPanel({ clinicSettings, theme }) {
                 const s = Number(w.status);
                 const info = STATUS_INFO[s] || { label: '-', color: 'amber' };
                 return (
-                  <tr key={w.withdrawalId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                  <tr key={w.withdrawalId} onClick={() => setDetailId(w.withdrawalId)}
+                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer">
                     <td className="px-3 py-2 font-mono text-violet-400">{w.withdrawalId}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(w.createdAt)}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">{w.direction === 'branch_to_central' ? 'สาขา→คลัง' : 'คลัง→สาขา'}</td>
@@ -124,7 +127,9 @@ export default function StockWithdrawalPanel({ clinicSettings, theme }) {
                     <td className="px-3 py-2 text-center">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`}>{info.label}</span>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setDetailId(w.withdrawalId)}
+                        className="px-2 py-1 rounded text-[10px] bg-violet-900/20 hover:bg-violet-900/40 text-violet-400 border border-violet-800 hover:border-violet-600 mr-1" title="ดูรายละเอียด">ดู</button>
                       {s === 0 && (
                         <>
                           <button onClick={() => handleTransition(w, 1)} className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 inline-flex items-center gap-1 mr-1"><Send size={10} /> อนุมัติ</button>
@@ -144,6 +149,10 @@ export default function StockWithdrawalPanel({ clinicSettings, theme }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {detailId && (
+        <WithdrawalDetailModal withdrawalId={detailId} onClose={() => setDetailId(null)} />
       )}
     </div>
   );
