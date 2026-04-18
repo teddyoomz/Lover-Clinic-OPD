@@ -1,4 +1,14 @@
-// ─── Schedule link slot-blocking filter ─────────────────────────────────────
+// ─── Schedule link: slot-blocking filter + customer-view helpers ───────────
+// This module owns the pure logic used by BOTH sides of the schedule link:
+//   1. Admin side (AdminDashboard.handleGenScheduleLink) — decides which
+//      appointments end up in the schedule doc's `bookedSlots`.
+//   2. Customer side (ClinicSchedule.jsx) — renders the calendar + slots
+//      the customer sees. `isSlotBooked` / `generateTimeSlots` / doctor-hours
+//      helpers live here so they can be tested without mounting React.
+//
+// Keeping the logic in one file means the admin filter and customer display
+// can't silently drift out of sync — a class of bug the user called out
+// 2026-04-19 (Shockwave leak + "ลิ้งก์ที่ลูกค้าได้รับ ตรงกันไหม").
 // Pure logic for deciding whether an appointment should mark a schedule-link
 // slot as "busy". Extracted so AdminDashboard's schedule-link creation and the
 // background resync can share identical rules, and so it can be unit-tested
@@ -66,4 +76,113 @@ export function shouldBlockScheduleSlot(appointment, config) {
   }
 
   return personBusy || roomBusy;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Customer-view helpers (shared with ClinicSchedule.jsx)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _toMin = (hhmm) => {
+  const [h, m] = String(hhmm).split(':').map((x) => parseInt(x, 10));
+  return (h || 0) * 60 + (m || 0);
+};
+
+/** Parse "YYYY-MM-DD" → UTC-midnight Date. Safe for day-of-week checks regardless of the browser timezone. */
+function _parseYMDToUTC(dateStr) {
+  const [y, m, d] = String(dateStr).split('-').map((x) => parseInt(x, 10));
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+}
+
+/**
+ * Fixed-duration slot generator from clinic open/close times. Slots that
+ * would run past `closeTime` are dropped. Pure.
+ * @returns {Array<{start:string,end:string}>}
+ */
+export function generateTimeSlots(openTime, closeTime, durationMins) {
+  const slots = [];
+  const start = _toMin(openTime);
+  const end = _toMin(closeTime);
+  const dur = Number(durationMins) || 0;
+  if (dur <= 0) return slots;
+  let current = start;
+  while (current + dur <= end) {
+    const sH = String(Math.floor(current / 60)).padStart(2, '0');
+    const sM = String(current % 60).padStart(2, '0');
+    const eH = String(Math.floor((current + dur) / 60)).padStart(2, '0');
+    const eM = String((current + dur) % 60).padStart(2, '0');
+    slots.push({ start: `${sH}:${sM}`, end: `${eH}:${eM}` });
+    current += dur;
+  }
+  return slots;
+}
+
+/**
+ * Does any entry in `bookedSlots` overlap the given slot window?
+ * Overlap rule: busy if `b.start < slotEnd && b.end > slotStart`
+ * (half-open interval — a 10:00–11:00 booking does NOT block a 11:00–12:00 slot).
+ */
+export function isSlotBooked(date, slotStart, slotEnd, bookedSlots) {
+  const sMin = _toMin(slotStart);
+  const eMin = _toMin(slotEnd);
+  return (bookedSlots || []).some((b) => {
+    if (b.date !== date) return false;
+    const bS = _toMin(b.startTime);
+    const bE = _toMin(b.endTime);
+    return bS < eMin && bE > sMin;
+  });
+}
+
+/**
+ * Doctor working-hour ranges for a given calendar date. Falls back to weekly
+ * defaults based on weekday/weekend; honours `customDoctorHours[dateStr]`
+ * overrides (either a single `{start,end}` or an array of ranges).
+ */
+export function getDoctorRangesForDate(dateStr, scheduleDoc) {
+  const custom = (scheduleDoc.customDoctorHours || {})[dateStr];
+  if (custom) return Array.isArray(custom) ? custom : [custom];
+  const dow = _parseYMDToUTC(dateStr).getUTCDay(); // 0=Sun, 6=Sat
+  const isWknd = dow === 0 || dow === 6;
+  return [{
+    start: isWknd ? (scheduleDoc.doctorStartTimeWeekend || scheduleDoc.doctorStartTime || '10:00') : (scheduleDoc.doctorStartTime || '10:00'),
+    end:   isWknd ? (scheduleDoc.doctorEndTimeWeekend   || scheduleDoc.doctorEndTime   || '19:00') : (scheduleDoc.doctorEndTime   || '19:00'),
+  }];
+}
+
+/**
+ * Is a candidate slot outside the doctor's working hours for that date?
+ * Returns false for no-doctor mode or on non-doctor days (no gating applies).
+ * A slot is "outside" if it doesn't fit ENTIRELY within at least one range.
+ */
+export function isSlotOutsideDoctorHours(dateStr, slotStart, slotEnd, scheduleDoc) {
+  if (scheduleDoc.noDoctorRequired) return false;
+  const doctorDaysSet = new Set(scheduleDoc.doctorDays || []);
+  if (!doctorDaysSet.has(dateStr)) return false;
+  const ranges = getDoctorRangesForDate(dateStr, scheduleDoc);
+  const sMin = _toMin(slotStart);
+  const eMin = _toMin(slotEnd);
+  return !ranges.some((r) => sMin >= _toMin(r.start) && eMin <= _toMin(r.end));
+}
+
+/**
+ * Clinic-day visibility: closed → false; before showFromDate → false;
+ * after endDate → false; otherwise true. Pure.
+ */
+export function isDayVisible(dateStr, scheduleDoc, { showFromDate = '', endDate = '' } = {}) {
+  if ((scheduleDoc.closedDays || []).includes(dateStr)) return false;
+  if (showFromDate && dateStr < showFromDate) return false;
+  if (endDate && dateStr > endDate) return false;
+  return true;
+}
+
+/**
+ * Pick the appropriate clinic open/close tuple for the given calendar date.
+ * Returns {open, close} in "HH:MM" format.
+ */
+export function getClinicHoursForDate(dateStr, scheduleDoc) {
+  const dow = _parseYMDToUTC(dateStr).getUTCDay();
+  const isWknd = dow === 0 || dow === 6;
+  return {
+    open:  isWknd ? (scheduleDoc.clinicOpenTimeWeekend  || scheduleDoc.clinicOpenTime  || '10:00') : (scheduleDoc.clinicOpenTime  || '10:00'),
+    close: isWknd ? (scheduleDoc.clinicCloseTimeWeekend || scheduleDoc.clinicCloseTime || '17:00') : (scheduleDoc.clinicCloseTime || '19:00'),
+  };
 }

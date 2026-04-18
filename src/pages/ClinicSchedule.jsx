@@ -5,6 +5,10 @@ import { CalendarDays, ChevronLeft, ChevronRight, X, Clock, Stethoscope, Phone, 
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { bangkokNow, thaiTodayISO, thaiNowMinutes } from '../utils.js';
+import {
+  generateTimeSlots, isSlotBooked, getDoctorRangesForDate,
+  isSlotOutsideDoctorHours,
+} from '../lib/scheduleFilterUtils.js';
 
 // ── i18n ──
 const LANG = {
@@ -53,35 +57,6 @@ const LANG = {
     selectDate: 'Select a date to view available times',
   },
 };
-
-function generateTimeSlots(openTime, closeTime, durationMins) {
-  const slots = [];
-  const [oh, om] = openTime.split(':').map(Number);
-  const [ch, cm] = closeTime.split(':').map(Number);
-  let current = oh * 60 + om;
-  const end = ch * 60 + cm;
-  while (current + durationMins <= end) {
-    const startH = String(Math.floor(current / 60)).padStart(2, '0');
-    const startM = String(current % 60).padStart(2, '0');
-    const endMin = current + durationMins;
-    const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
-    const endM = String(endMin % 60).padStart(2, '0');
-    slots.push({ start: `${startH}:${startM}`, end: `${endH}:${endM}` });
-    current += durationMins;
-  }
-  return slots;
-}
-
-function isSlotBooked(date, slotStart, slotEnd, bookedSlots) {
-  const slotStartMin = parseInt(slotStart.split(':')[0]) * 60 + parseInt(slotStart.split(':')[1]);
-  const slotEndMin = parseInt(slotEnd.split(':')[0]) * 60 + parseInt(slotEnd.split(':')[1]);
-  return bookedSlots.some(b => {
-    if (b.date !== date) return false;
-    const bStart = parseInt(b.startTime.split(':')[0]) * 60 + parseInt(b.startTime.split(':')[1]);
-    const bEnd = parseInt(b.endTime.split(':')[0]) * 60 + parseInt(b.endTime.split(':')[1]);
-    return bStart < slotEndMin && bEnd > slotStartMin;
-  });
-}
 
 export default function ClinicSchedule({ token, clinicSettings, theme, setTheme }) {
   const [scheduleData, setScheduleData] = useState(null);
@@ -158,33 +133,16 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
   const weekdaySlots = generateTimeSlots(data.clinicOpenTime || '10:00', data.clinicCloseTime || '19:00', data.slotDurationMins || 60);
   const weekendSlots = generateTimeSlots(data.clinicOpenTimeWeekend || data.clinicOpenTime || '10:00', data.clinicCloseTimeWeekend || data.clinicCloseTime || '17:00', data.slotDurationMins || 60);
-  const getSlotsForDate = (dateStr) => {
-    const d = new Date(dateStr);
-    return (d.getDay() === 0 || d.getDay() === 6) ? weekendSlots : weekdaySlots;
+  const isWeekendDate = (dateStr) => {
+    // YYYY-MM-DD → parse at UTC midnight so day-of-week is timezone-invariant.
+    const [y, mo, d] = (dateStr || '').split('-').map(Number);
+    const dow = new Date(Date.UTC(y, (mo || 1) - 1, d || 1)).getUTCDay();
+    return dow === 0 || dow === 6;
   };
+  const getSlotsForDate = (dateStr) => isWeekendDate(dateStr) ? weekendSlots : weekdaySlots;
 
   const toMin = (t) => parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]);
-  // Returns array of { start, end } — backwards compat with old single-range format
-  const getDoctorRangesForDate = (dateStr) => {
-    const custom = customDoctorHours[dateStr];
-    if (custom) return Array.isArray(custom) ? custom : [custom];
-    const d = new Date(dateStr);
-    const isWknd = d.getDay() === 0 || d.getDay() === 6;
-    return [{
-      start: isWknd ? (data.doctorStartTimeWeekend || data.doctorStartTime || '10:00') : (data.doctorStartTime || '10:00'),
-      end: isWknd ? (data.doctorEndTimeWeekend || data.doctorEndTime || '19:00') : (data.doctorEndTime || '19:00'),
-    }];
-  };
-  const getDoctorHoursForDate = (dateStr) => getDoctorRangesForDate(dateStr)[0] || { start: '10:00', end: '19:00' };
-  const isSlotOutsideDoctorHours = (dateStr, slotStart, slotEnd) => {
-    if (noDoctorRequired) return false;
-    if (!doctorDaysSet.has(dateStr)) return false;
-    const ranges = getDoctorRangesForDate(dateStr);
-    const sMin = toMin(slotStart);
-    const eMin = toMin(slotEnd);
-    // Slot is outside if it doesn't fit entirely within ANY range
-    return !ranges.some(r => sMin >= toMin(r.start) && eMin <= toMin(r.end));
-  };
+  const getDoctorHoursForDate = (dateStr) => getDoctorRangesForDate(dateStr, data)[0] || { start: '10:00', end: '19:00' };
 
   // Thai time (GMT+7) — critical: `.toISOString().slice(0,10)` would emit UTC
   // and drift to the previous day between 00:00–07:00 Thai, breaking "today"
@@ -207,7 +165,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     const slots = getSlotsForDate(dateStr);
     const free = slots.filter(s => {
       if (isSlotBooked(dateStr, s.start, s.end, bookedSlots)) return false;
-      if (isSlotOutsideDoctorHours(dateStr, s.start, s.end)) return false;
+      if (isSlotOutsideDoctorHours(dateStr, s.start, s.end, data)) return false;
       // For today with showFrom=today: exclude past slots from count
       if (dateStr === todayStr && showFrom === 'today') {
         const sMin = parseInt(s.start.split(':')[0]) * 60 + parseInt(s.start.split(':')[1]);
@@ -220,7 +178,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
   const isSlotWithinDoctorHours = (dateStr, slotStart, slotEnd) => {
     if (!doctorDaysSet.has(dateStr)) return false;
-    const ranges = getDoctorRangesForDate(dateStr);
+    const ranges = getDoctorRangesForDate(dateStr, data);
     const sMin = toMin(slotStart);
     const eMin = toMin(slotEnd);
     return ranges.some(r => sMin >= toMin(r.start) && eMin <= toMin(r.end));
@@ -236,7 +194,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
     .filter(s => !isSlotPast(selectedDate, s.start))
     .map(s => ({
       ...s,
-      booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end),
+      booked: isSlotBooked(selectedDate, s.start, s.end, bookedSlots) || isSlotOutsideDoctorHours(selectedDate, s.start, s.end, data),
       doctorSlot: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end),
       doctorBusy: noDoctorRequired && isSlotWithinDoctorHours(selectedDate, s.start, s.end) && isSlotBooked(selectedDate, s.start, s.end, doctorBookedSlots),
     })) : [];
@@ -524,7 +482,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                 <div className="flex items-center gap-3 mt-1">
                   {doctorDaysSet.has(selectedDate) && (
                     <span className={`text-[11px] font-semibold flex items-center gap-1 ${docIconColor}`}>
-                      <Stethoscope size={10} /> {t.doctor} {getDoctorRangesForDate(selectedDate).map(r => `${r.start}-${r.end}`).join(', ')}
+                      <Stethoscope size={10} /> {t.doctor} {getDoctorRangesForDate(selectedDate, data).map(r => `${r.start}-${r.end}`).join(', ')}
                     </span>
                   )}
                   <span className={`text-[11px] ${isDark ? 'text-orange-300/60' : 'text-pink-400/60'}`}>
