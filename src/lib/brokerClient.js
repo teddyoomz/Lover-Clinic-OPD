@@ -198,6 +198,54 @@ export function getDepositOptions() {
   return apiFetch('deposit', { action: 'options' });
 }
 
+// ─── Live practitioners cache (5-min TTL, kills ProClinic 429) ───────────────
+const _LIVE_PRAC_KEY = 'lc_live_practitioners_v1';
+const _LIVE_PRAC_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Fetch doctor + assistant lists directly from ProClinic.
+ * 5-minute sessionStorage cache. Call with { forceRefresh:true } to bypass.
+ *
+ * Returns { success, doctors:[{id,name}], assistants:[{id,name}], fetchedAt, fromCache }.
+ * Same person can appear in BOTH lists (ProClinic source of truth — we don't dedupe).
+ *
+ * On fetch failure: returns { success:false, error, doctors:[], assistants:[] }.
+ * Consumers should fall back to clinicSettings.practitioners if desired.
+ */
+export async function getLivePractitioners({ forceRefresh = false } = {}) {
+  try {
+    if (!forceRefresh && typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem(_LIVE_PRAC_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached && (Date.now() - cached.fetchedAt) < _LIVE_PRAC_TTL_MS) {
+          return { ...cached, fromCache: true };
+        }
+      }
+    }
+  } catch (_) {}
+
+  const res = await apiFetch('deposit', { action: 'options' });
+  if (!res?.success) {
+    return { success: false, error: res?.error || 'fetch failed', doctors: [], assistants: [] };
+  }
+  const opts = res.options || {};
+  const doctors = (opts.doctors || []).map(d => ({ id: Number(d.value), name: d.label }));
+  const assistants = (opts.assistants || []).map(d => ({ id: Number(d.value), name: d.label }));
+  const fresh = { success: true, doctors, assistants, fetchedAt: Date.now(), fromCache: false };
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(_LIVE_PRAC_KEY, JSON.stringify(fresh));
+  } catch (_) {}
+  return fresh;
+}
+
+/** Invalidate the live practitioners cache (e.g. after known ProClinic edit). */
+export function invalidateLivePractitioners() {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(_LIVE_PRAC_KEY);
+  } catch (_) {}
+}
+
 /** Submit deposit record to ProClinic */
 export function submitDeposit(proClinicId, proClinicHN, deposit) {
   return apiFetch('deposit', { action: 'submit', proClinicId, proClinicHN, deposit });

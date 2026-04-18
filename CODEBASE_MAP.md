@@ -924,7 +924,7 @@ Inline component ด้านบนขวา — สลับ TH/EN
 14. **DatePickerThai** — custom component: แสดง DD/MM/YYYY + ไอคอนปฏิทิน, กดแล้วเปิด native calendar picker, value เก็บเป็น YYYY-MM-DD (compatible กับ ProClinic)
 15. **API Security (Firebase Auth)** — ทุก `/api/proclinic/*` endpoint ต้องมี `Authorization: Bearer <firebaseIdToken>` header. ตรวจสอบผ่าน `_lib/auth.js` → `verifyAuth()` (เรียก Firebase `accounts:lookup` REST API). brokerClient.js แนบ token อัตโนมัติทุก request
 16. **ProClinic credential reload** — เปลี่ยน env vars ใน Vercel แล้วกดปุ่ม "โหลด Credentials ใหม่" ใน ClinicSettingsPanel → เรียก `/api/proclinic/clear-session` → ลบ session cache จาก Firestore → ครั้งถัดไป API จะ login ใหม่ด้วย credentials ใหม่ (ไม่ต้อง redeploy)
-17. **Practitioner settings** — ClinicSettingsPanel: ดึงรายชื่อจาก ProClinic (via getDepositOptions) → admin กำหนด role (doctor/assistant/hidden) → save ลง `clinicSettings.practitioners[]`. ใช้สำหรับ filter ปฏิทินนัดหมาย + สร้างลิงก์ตารางรายแพทย์
+17. **Practitioner data (frontend)** — AdminDashboard ดึงรายชื่อแพทย์/ผู้ช่วยสด ๆ จาก ProClinic ผ่าน `broker.getLivePractitioners()` (5-min sessionStorage cache, key `lc_live_practitioners_v1`). ไม่ต้องตั้งค่าใน Settings ก่อนใช้งาน — คนเดียวกันที่ ProClinic ใส่ไว้ทั้งแพทย์+ผู้ช่วยจะโชว์ทั้ง 2 ที่. `clinicSettings.practitioners[]` (+ Settings panel) เก็บไว้เป็น **fallback** เมื่อ live fetch ล้มเหลว (offline / 429 / no creds) — role `hidden` ถูก filter ออก. Backend Dashboard (`TreatmentFormPage.jsx` เมื่อ `saveTarget==='backend'`) ยังใช้ `master_data/doctors` + `master_data/staff` ตาม Rule #10
 18. **Chat system** — FB Messenger: full reply + echo support (admin replies show as blue bubbles). LINE: receive only, no reply from app. Saved Replies from FB API with 5-min cache. Badge = unread people count. History 20/page + auto-delete > 7 days
 19. **Import from ProClinic** — Search by HN/phone/ID card/name, preview patient data + courses + appointments, duplicate detection with auto-resync for broken sync, creates `IMP-XXXXXX` sessions. Uses `reverseMapPatient()` to map ProClinic fields back to app format
 20. **Firestore REST API updateMask** — All `firestorePatch()` calls must include `updateMask.fieldPaths` query params to prevent PATCH from deleting unmentioned fields (REST API quirk: PATCH = replace entire doc without mask)
@@ -1241,6 +1241,8 @@ testLogin()                                            // POST test login
 fetchPatientFromProClinic(proClinicId)                   // POST fetchPatient → full patient data
 // Deposit
 getDepositOptions()                                    // GET dropdown options
+getLivePractitioners({forceRefresh?})                  // GET doctors+assistants live from ProClinic (5-min cache)
+invalidateLivePractitioners()                          // clear the 5-min cache
 submitDeposit(proClinicId, proClinicHN, deposit)       // POST new deposit
 updateDeposit(proClinicId, proClinicHN, depositProClinicId, deposit) // PUT existing
 cancelDeposit(proClinicId, proClinicHN)                // POST cancel + DELETE customer

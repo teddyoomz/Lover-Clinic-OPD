@@ -143,12 +143,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  // Dedup practitioners from clinicSettings (Firestore may have duplicates from older saves)
+  // Live practitioners — fetched directly from ProClinic (5-min cache).
+  // Fallback to clinicSettings.practitioners if fetch fails (offline / 429 / no creds).
+  // User rule: show everyone (drop 'hidden' role); same person can appear in both
+  // doctor and assistant lists when ProClinic has them in both.
+  const [livePractitioners, setLivePractitioners] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await broker.getLivePractitioners();
+        if (cancelled) return;
+        if (res?.success) {
+          const docs = res.doctors.map(d => ({ id: d.id, name: d.name, role: 'doctor' }));
+          const assts = res.assistants.map(a => ({ id: a.id, name: a.name, role: 'assistant' }));
+          setLivePractitioners([...docs, ...assts]);
+        }
+      } catch (_) { /* silent — fallback to clinicSettings */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const practitioners = useMemo(() => {
+    if (livePractitioners) return livePractitioners;
+    // Fallback: dedup clinicSettings + drop hidden
     const raw = clinicSettings.practitioners || [];
     const seen = new Set();
-    return raw.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
-  }, [clinicSettings.practitioners]);
+    return raw.filter(p => p.role !== 'hidden').filter(p => {
+      const key = `${p.id}-${p.role}`;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+  }, [livePractitioners, clinicSettings.practitioners]);
   const [sessions, setSessions] = useState([]);
   const [formTemplates, setFormTemplates] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1041,7 +1066,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // 3. Collect booked slots from Firestore — filtered by selected doctor or assistants
       const bookedSlots = [];
       const doctorBookedSlots = []; // นัดของแพทย์ทุกคน — ใช้แสดง "หมอว่าง/ไม่ว่าง" ในหน้าลูกค้า
-      const allPractitioners = clinicSettings.practitioners || [];
+      // Use live practitioners fetched from ProClinic (5-min cache); fall back to
+      // clinicSettings when live fetch is not yet ready.
+      const allPractitioners = practitioners;
       const doctorIds = new Set(allPractitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(allPractitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       for (const mo of months) {
@@ -3736,7 +3763,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const selectColor = isDark ? '[color-scheme:dark]' : '[color-scheme:light]';
         const selectText = isDark ? 'text-white' : 'text-[var(--tx-heading)]';
         const appointments = apptData?.appointments || [];
-        const pList = clinicSettings.practitioners || [];
+        const pList = practitioners;
         const doctorIdSet = new Set(pList.filter(p => p.role === 'doctor').map(p => String(p.id)));
         const assistantIdSet = new Set(pList.filter(p => p.role === 'assistant').map(p => String(p.id)));
         const filteredAppointments = apptFilterPractitioner === 'all'
