@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8c Treatment integration — stock wired into TreatmentFormPage create/edit + auto-sale + BackendDashboard treatment-delete)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8d OrderPanel + opt-in default — seed batches via UI, unconfigured products skip silently)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -140,6 +140,19 @@ artifacts/{appId}/public/data/
 
 ### BackendDashboard.jsx hooks (Phase 8c UI)
 - `onDeleteTreatment` (:230+): after reversing deposits/wallet/points/courses → `reverseStockForSale(linkedSaleId)` (if linkedSale exists) THEN `reverseStockForTreatment(treatmentId)`. Hard errors alert+abort the delete.
+
+### OrderPanel (Phase 8d) — `src/components/backend/OrderPanel.jsx`
+- List view: table of be_stock_orders filtered by branchId='main', sorted newest-first by importedDate. Columns: ORD-id / vendor / date / item count / ยอดรวม / status / cancel action.
+- Create form overlay: vendor (text), importedDate (DateField ce), note (textarea), items grid (product dropdown from master_data/products, qty, unit, cost, expiresAt DateField, isPremium checkbox, line total, remove button), "+ เพิ่มรายการ" button.
+- Client-side validation: vendor + date + at least 1 valid item (productId set AND qty>0). Disable save button until satisfied.
+- On save: call `createStockOrder(data, {user})` → creates order doc + N batches + N type=1 IMPORT movements. Auto-upserts `stockConfig.trackStock=true` on master products that didn't have stockConfig yet (respects existing trackStock=false opt-outs).
+- Cancel action: confirm dialog → `cancelStockOrder(orderId)` → blocked by backend if any batch has non-import movements.
+- Wired into BackendDashboard as new tab `stock` with Package icon (rose color).
+
+### Opt-in stock tracking (Phase 8d default fix)
+- `_deductOneItem`: missing `stockConfig` (cfg===null) → skip with reason `'not-tracked'` + movement.skipped=true, note="product not yet configured for stock tracking".
+- Previous behavior (pre-fix): threw "insufficient stock" when no batches existed → broke existing sale/treatment UI for cloned products that never had stockConfig.
+- Test coverage: `phase8-sale-stock.test.js` [STK-S] skipped items — "missing stockConfig (unconfigured product) → skipped with reason 'not-tracked'" + auto-upsert tests (first-time set, existing trackStock=false respected).
 
 ### Chat Firestore path
 ```

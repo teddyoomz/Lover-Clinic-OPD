@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet, Package } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -27,6 +27,7 @@ import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 import AppointmentTab from '../components/backend/AppointmentTab.jsx';
 import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
+import OrderPanel from '../components/backend/OrderPanel.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -66,7 +67,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         .catch(() => {})
         .finally(() => setHydrated(true));
     } else {
-      if (tab && ['clone','customers','masterdata','appointments','sales','finance'].includes(tab)) {
+      if (tab && ['clone','customers','masterdata','appointments','sales','finance','stock'].includes(tab)) {
         setActiveTab(tab);
         if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
       }
@@ -122,6 +123,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     { id: 'appointments', icon: <CalendarDays size={16} />, label: 'นัดหมาย', color: 'sky' },
     { id: 'sales', icon: <ShoppingCart size={16} />, label: 'ขาย/ใบเสร็จ', color: 'rose' },
     { id: 'finance', icon: <Wallet size={16} />, label: 'การเงิน', color: 'emerald' },
+    { id: 'stock', icon: <Package size={16} />, label: 'สต็อก', color: 'rose' },
   ];
 
   return (
@@ -329,6 +331,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             initialCustomer={financeInitialCustomer}
             onCustomerUsed={() => { setFinanceInitialCustomer(null); setFinanceSubTab(null); }}
           />
+        ) : activeTab === 'stock' ? (
+          <OrderPanel clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
 

@@ -253,6 +253,70 @@ describe('[STK-S] skipped items', () => {
     expect(ms[0].skipped).toBe(true);
     expect(ms[0].batchId).toBeNull();
   });
+
+  it('missing stockConfig (unconfigured product) → skipped with reason "not-tracked" — backward compat for pre-Phase-8 products', async () => {
+    const { deductStockForSale } = await bc();
+    // Product without stockConfig: no seedProduct() call
+    const PID_UNCONFIGURED = `STK-SALE-UNCONF-${TS}`;
+    const saleId = SALE_PREFIX + 'unconf';
+    const r = await deductStockForSale(saleId, {
+      products: [{ productId: PID_UNCONFIGURED, productName: PID_UNCONFIGURED, qty: 5 }],
+    }, { branchId: BRANCH });
+    expect(r.skippedItems.length).toBe(1);
+    expect(r.skippedItems[0].reason).toBe('not-tracked');
+    // Movement was written for audit, no batch touch
+    const mq = query(movementsCol(), where('linkedSaleId', '==', saleId));
+    const ms = (await getDocs(mq)).docs.map(d => d.data());
+    expect(ms.length).toBe(1);
+    expect(ms[0].skipped).toBe(true);
+    expect(ms[0].batchId).toBeNull();
+    expect(ms[0].note).toMatch(/not yet configured/i);
+  });
+
+  it('createStockOrder auto-upserts stockConfig.trackStock=true on first-time product', async () => {
+    const { createStockOrder } = await bc();
+    const PID_FRESH = `STK-SALE-FRESH-${TS}`;
+    // Seed WITHOUT stockConfig — just name + id
+    await setDoc(productDoc(PID_FRESH), { id: PID_FRESH, name: PID_FRESH });
+
+    let before = (await getDoc(productDoc(PID_FRESH))).data();
+    expect(before.stockConfig).toBeUndefined();
+
+    await createStockOrder({
+      branchId: BRANCH,
+      items: [{ productId: PID_FRESH, productName: PID_FRESH, qty: 10, cost: 5, unit: 'ml' }],
+    });
+
+    const after = (await getDoc(productDoc(PID_FRESH))).data();
+    expect(after.stockConfig).toBeDefined();
+    expect(after.stockConfig.trackStock).toBe(true);
+    expect(after.stockConfig.unit).toBe('ml');
+
+    // Cleanup
+    await deleteDoc(productDoc(PID_FRESH));
+  });
+
+  it('createStockOrder does NOT overwrite existing stockConfig (respects explicit trackStock=false)', async () => {
+    const { createStockOrder } = await bc();
+    const PID_OPTOUT = `STK-SALE-OPTOUT-${TS}`;
+    await setDoc(productDoc(PID_OPTOUT), {
+      id: PID_OPTOUT, name: PID_OPTOUT,
+      stockConfig: { trackStock: false, unit: 'zzz', isControlled: false },
+    });
+
+    await createStockOrder({
+      branchId: BRANCH,
+      items: [{ productId: PID_OPTOUT, productName: PID_OPTOUT, qty: 10, cost: 5, unit: 'ml' }],
+    });
+
+    const after = (await getDoc(productDoc(PID_OPTOUT))).data();
+    // stockConfig left alone — user's explicit opt-out preserved
+    expect(after.stockConfig.trackStock).toBe(false);
+    expect(after.stockConfig.unit).toBe('zzz');
+
+    // Cleanup
+    await deleteDoc(productDoc(PID_OPTOUT));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

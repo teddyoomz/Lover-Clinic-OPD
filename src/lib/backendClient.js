@@ -1867,6 +1867,33 @@ export async function createStockOrder(data, opts = {}) {
     const cost = Number(item.cost) || 0;
     const isPremium = !!item.isPremium;
 
+    // First time we see this productId via an order → opt it in to stock tracking.
+    // If stockConfig already exists (user set trackStock=false deliberately, or it's
+    // already true), leave it alone. Missing stockConfig only.
+    if (item.productId) {
+      try {
+        const existing = await _getProductStockConfig(item.productId);
+        if (!existing) {
+          const productRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
+          const snap = await getDoc(productRef);
+          if (snap.exists()) {
+            await updateDoc(productRef, {
+              stockConfig: {
+                trackStock: true,
+                minAlert: 0,
+                unit: String(item.unit || ''),
+                isControlled: false,
+              },
+              _stockConfigSetBy: 'createStockOrder',
+              _stockConfigSetAt: now,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[createStockOrder] failed to auto-set stockConfig for', item.productId, e);
+      }
+    }
+
     // 1. Create batch doc
     await setDoc(stockBatchDoc(batchId), {
       batchId,
@@ -2325,9 +2352,14 @@ async function _deductOneItem({
     return { productId: item.productId, skipped: true, reason: 'zero-qty', movements: [] };
   }
 
-  // Honour trackStock flag on master product
+  // Stock tracking is OPT-IN: only products with explicit stockConfig.trackStock===true
+  // are tracked. Missing stockConfig (cfg===null) OR trackStock===false → skip silently
+  // with an audit movement (batchId=null). This prevents existing cloned products from
+  // breaking sale/treatment flows before their first vendor order is placed.
   const cfg = await _getProductStockConfig(item.productId);
-  if (cfg && cfg.trackStock === false) {
+  const tracked = cfg && cfg.trackStock === true;
+  if (!tracked) {
+    const reason = cfg && cfg.trackStock === false ? 'trackStock-false' : 'not-tracked';
     const movementId = _genMovementId();
     const now = new Date().toISOString();
     const baseDocPath = saleId
@@ -2354,11 +2386,11 @@ async function _deductOneItem({
       isPremium: item.isPremium,
       skipped: true,
       user,
-      note: 'trackStock=false — no batch mutation',
+      note: reason === 'trackStock-false' ? 'trackStock=false — no batch mutation' : 'product not yet configured for stock tracking',
       customerId: customerId || null,
       createdAt: now,
     });
-    return { productId: item.productId, skipped: true, reason: 'trackStock-false', movements: [{ movementId }] };
+    return { productId: item.productId, skipped: true, reason, movements: [{ movementId }] };
   }
 
   // Fetch candidate batches
