@@ -28,13 +28,14 @@ function fmtDate(iso) {
 }
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
-export default function StockAdjustPanel({ clinicSettings, theme }) {
+export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
   const [adjustments, setAdjustments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [pendingPrefill, setPendingPrefill] = useState(null);
 
   const loadAdjustments = useCallback(async () => {
     setLoading(true);
@@ -51,15 +52,25 @@ export default function StockAdjustPanel({ clinicSettings, theme }) {
 
   useEffect(() => { loadAdjustments(); }, [loadAdjustments]);
 
-  const openCreate = async () => {
+  const openCreate = async (prefill = null) => {
     setProductsLoading(true);
     try {
       const data = await getAllMasterDataItems('products');
       setProducts(Array.isArray(data) ? data : []);
     } catch { setProducts([]); }
     finally { setProductsLoading(false); }
+    setPendingPrefill(prefill);
     setFormOpen(true);
   };
+
+  // Auto-open form when parent hands us a prefill (from Balance row "ปรับ" button)
+  useEffect(() => {
+    if (prefillProduct) {
+      openCreate(prefillProduct);
+      onPrefillConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillProduct]);
 
   if (formOpen) {
     return (
@@ -67,8 +78,9 @@ export default function StockAdjustPanel({ clinicSettings, theme }) {
         isDark={isDark}
         products={products}
         productsLoading={productsLoading}
-        onClose={() => setFormOpen(false)}
-        onSaved={async () => { setFormOpen(false); await loadAdjustments(); }}
+        prefillProduct={pendingPrefill}
+        onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
+        onSaved={async () => { setFormOpen(false); setPendingPrefill(null); await loadAdjustments(); }}
       />
     );
   }
@@ -146,9 +158,9 @@ export default function StockAdjustPanel({ clinicSettings, theme }) {
   );
 }
 
-function AdjustCreateForm({ isDark, products, productsLoading, onClose, onSaved }) {
-  const [productId, setProductId] = useState('');
-  const [productName, setProductName] = useState('');
+function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, onClose, onSaved }) {
+  const [productId, setProductId] = useState(prefillProduct ? String(prefillProduct.productId || prefillProduct.id) : '');
+  const [productName, setProductName] = useState(prefillProduct ? (prefillProduct.productName || prefillProduct.name || '') : '');
   const [batches, setBatches] = useState([]);
   const [batchesLoading, setBatchesLoading] = useState(false);
   const [batchId, setBatchId] = useState('');

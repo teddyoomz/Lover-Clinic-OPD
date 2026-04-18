@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8e+8i StockTab sub-tabs: Balance / Orders / Adjust / MovementLog — complete single-branch stock management UI)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8d++ StockSeedPanel bulk-import + Balance row quick-actions — ready for realistic testing)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -152,6 +152,16 @@ artifacts/{appId}/public/data/
 - FEFO ordering within each product (expiresAt ASC, null last)
 - Filters: search, "ใกล้หมดอายุ ≤30 วัน", "สต็อกน้อย ≤5"
 - Row tooltip: full batch list with IDs + expiry
+- **Row quick-actions**: ปรับ (→ Adjust form pre-filled) / เพิ่ม (→ Order form pre-filled) — emits via onAdjustProduct/onAddStockForProduct callbacks to parent StockTab
+
+### StockSeedPanel (Phase 8d++) — `src/components/backend/StockSeedPanel.jsx`
+- One-click "opening balance" bulk-import from `master_data/products`
+- Table: every product row with checkbox + qty + cost (default=master price) + unit + expiry + line total
+- Filters: search, "เฉพาะที่ยังไม่มีสต็อก" (untracked-only)
+- Auto-check include when qty > 0 (UX shortcut)
+- "เลือก (ที่มี qty)" / "ยกเลิกทั้งหมด" bulk toggle
+- Save → single `createStockOrder` with all included items → batches + auto-upsert stockConfig
+- Entry points: OrderPanel header button "นำเข้าจากข้อมูลพื้นฐาน" + empty-state CTA
 
 ### StockAdjustPanel (Phase 8e) — `src/components/backend/StockAdjustPanel.jsx`
 - List view: all be_stock_adjustments for branch, sorted by createdAt DESC

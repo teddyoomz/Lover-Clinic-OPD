@@ -7,7 +7,7 @@
 // clinic ever scales past that, move to backend aggregation.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Package, AlertTriangle, Search } from 'lucide-react';
+import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal } from 'lucide-react';
 import { listStockBatches } from '../../lib/backendClient.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
 
@@ -15,7 +15,7 @@ const BRANCH_ID = 'main';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
-export default function StockBalancePanel({ clinicSettings, theme }) {
+export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct }) {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -148,6 +148,7 @@ export default function StockBalancePanel({ clinicSettings, theme }) {
                 <th className="px-3 py-2 text-right font-bold w-24">ความจุ</th>
                 <th className="px-3 py-2 text-right font-bold w-28">มูลค่าทุน</th>
                 <th className="px-3 py-2 text-center font-bold w-28">หมดอายุถัดไป</th>
+                <th className="px-3 py-2 text-center font-bold w-28">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -173,6 +174,20 @@ export default function StockBalancePanel({ clinicSettings, theme }) {
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>
                       {p.nextExpiry || '-'}
                       {days != null && <div className="text-[9px]">{days < 0 ? `หมดแล้ว ${-days}d` : `อีก ${days}d`}</div>}
+                    </td>
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                      <button
+                        onClick={e => { e.stopPropagation(); onAdjustProduct?.(p); }}
+                        title="ปรับสต็อก (+/-)"
+                        className="px-2 py-1 rounded text-[10px] bg-amber-900/20 hover:bg-amber-900/40 text-amber-400 border border-amber-800 hover:border-amber-600 inline-flex items-center gap-1 mr-1">
+                        <SlidersHorizontal size={10} /> ปรับ
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); onAddStockForProduct?.(p); }}
+                        title="สั่งของเพิ่ม (สร้าง Order)"
+                        className="px-2 py-1 rounded text-[10px] bg-rose-900/20 hover:bg-rose-900/40 text-rose-400 border border-rose-800 hover:border-rose-600 inline-flex items-center gap-1">
+                        <Plus size={10} /> เพิ่ม
+                      </button>
                     </td>
                   </tr>
                 );

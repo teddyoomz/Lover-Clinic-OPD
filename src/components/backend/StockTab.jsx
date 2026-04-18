@@ -9,19 +9,30 @@ import MovementLogPanel from './MovementLogPanel.jsx';
 import StockBalancePanel from './StockBalancePanel.jsx';
 
 const SUB_TABS = [
-  { id: 'balance', label: 'ยอดคงเหลือ', icon: <Package size={14} />, Component: StockBalancePanel },
-  { id: 'orders', label: 'นำเข้า', icon: <ShoppingBag size={14} />, Component: OrderPanel },
-  { id: 'adjust', label: 'ปรับสต็อก', icon: <SlidersHorizontal size={14} />, Component: StockAdjustPanel },
-  { id: 'log', label: 'Movement Log', icon: <Activity size={14} />, Component: MovementLogPanel },
+  { id: 'balance', label: 'ยอดคงเหลือ', icon: <Package size={14} /> },
+  { id: 'orders', label: 'นำเข้า', icon: <ShoppingBag size={14} /> },
+  { id: 'adjust', label: 'ปรับสต็อก', icon: <SlidersHorizontal size={14} /> },
+  { id: 'log', label: 'Movement Log', icon: <Activity size={14} /> },
 ];
 
 export default function StockTab({ clinicSettings, theme, initialSubTab }) {
   const [subTab, setSubTab] = useState(initialSubTab || 'balance');
-  const Current = SUB_TABS.find(t => t.id === subTab)?.Component || StockBalancePanel;
+  // When a Balance row button is clicked, we hand the selected product to the
+  // target sub-tab so its create-form opens pre-filled.
+  const [adjustPrefill, setAdjustPrefill] = useState(null);
+  const [orderPrefill, setOrderPrefill] = useState(null);
+
+  const handleAdjustProduct = (product) => {
+    setAdjustPrefill(product);
+    setSubTab('adjust');
+  };
+  const handleAddStockForProduct = (product) => {
+    setOrderPrefill(product);
+    setSubTab('orders');
+  };
 
   return (
     <div className="space-y-3">
-      {/* Sub-tab nav */}
       <div className="bg-[var(--bg-surface)] rounded-xl p-1.5 shadow border border-[var(--bd)] flex gap-1 overflow-x-auto">
         {SUB_TABS.map(t => {
           const active = subTab === t.id;
@@ -38,7 +49,28 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
         })}
       </div>
 
-      <Current clinicSettings={clinicSettings} theme={theme} />
+      {subTab === 'balance' && (
+        <StockBalancePanel
+          clinicSettings={clinicSettings} theme={theme}
+          onAdjustProduct={handleAdjustProduct}
+          onAddStockForProduct={handleAddStockForProduct}
+        />
+      )}
+      {subTab === 'orders' && (
+        <OrderPanel
+          clinicSettings={clinicSettings} theme={theme}
+          prefillProduct={orderPrefill}
+          onPrefillConsumed={() => setOrderPrefill(null)}
+        />
+      )}
+      {subTab === 'adjust' && (
+        <StockAdjustPanel
+          clinicSettings={clinicSettings} theme={theme}
+          prefillProduct={adjustPrefill}
+          onPrefillConsumed={() => setAdjustPrefill(null)}
+        />
+      )}
+      {subTab === 'log' && <MovementLogPanel clinicSettings={clinicSettings} theme={theme} />}
     </div>
   );
 }

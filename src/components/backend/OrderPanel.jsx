@@ -6,13 +6,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package, Plus, Trash2, X, Loader2, AlertCircle, CheckCircle2,
-  ShoppingBag, ArrowLeft, Search, Filter,
+  ShoppingBag, ArrowLeft, Search, Filter, Database,
 } from 'lucide-react';
 import {
   listStockOrders, createStockOrder, cancelStockOrder,
   getAllMasterDataItems,
 } from '../../lib/backendClient.js';
 import DateField from '../DateField.jsx';
+import StockSeedPanel from './StockSeedPanel.jsx';
 
 const BRANCH_ID = 'main';
 
@@ -25,15 +26,17 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
-export default function OrderPanel({ clinicSettings, theme }) {
+export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
+  const [seedOpen, setSeedOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [pendingPrefill, setPendingPrefill] = useState(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -53,11 +56,21 @@ export default function OrderPanel({ clinicSettings, theme }) {
     finally { setProductsLoading(false); }
   }, []);
 
-  const openCreate = () => {
+  const openCreate = (prefill = null) => {
     loadProducts();
     setEditingOrder(null);
+    setPendingPrefill(prefill);
     setFormOpen(true);
   };
+
+  // Auto-open form when parent hands us a prefill (from Balance row "เพิ่ม" button)
+  useEffect(() => {
+    if (prefillProduct) {
+      openCreate(prefillProduct);
+      onPrefillConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillProduct]);
 
   const filteredOrders = useMemo(() => {
     if (!search.trim()) return orders;
@@ -79,15 +92,25 @@ export default function OrderPanel({ clinicSettings, theme }) {
     }
   };
 
+  if (seedOpen) {
+    return (
+      <StockSeedPanel
+        onClose={() => setSeedOpen(false)}
+        onSaved={async () => { setSeedOpen(false); await loadOrders(); }}
+      />
+    );
+  }
   if (formOpen) {
     return (
       <OrderCreateForm
         isDark={isDark}
         products={products}
         productsLoading={productsLoading}
-        onClose={() => setFormOpen(false)}
+        prefillProduct={pendingPrefill}
+        onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
         onSaved={async () => {
           setFormOpen(false);
+          setPendingPrefill(null);
           await loadOrders();
         }}
       />
@@ -106,6 +129,11 @@ export default function OrderPanel({ clinicSettings, theme }) {
             <h2 className="text-lg font-bold text-[var(--tx-heading)] flex items-center gap-2">Orders นำเข้าสินค้า</h2>
             <p className="text-xs text-[var(--tx-muted)]">นำเข้าสินค้าจาก vendor → สร้าง batch (FIFO) → สต็อกตามคำสั่งซื้อจริง</p>
           </div>
+          <button onClick={() => setSeedOpen(true)}
+            className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-rose-400 border border-[var(--bd)] hover:border-rose-700 flex items-center gap-1.5"
+            title="เลือกสินค้าจากข้อมูลพื้นฐาน แล้วคีย์ qty/ต้นทุน/วันหมดอายุ ทีละหลายๆ ตัวในครั้งเดียว">
+            <Database size={14} /> นำเข้าจากข้อมูลพื้นฐาน
+          </button>
           <button onClick={openCreate}
             className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
             <Plus size={14} /> สร้าง Order ใหม่
@@ -124,9 +152,21 @@ export default function OrderPanel({ clinicSettings, theme }) {
           <Loader2 size={16} className="animate-spin mr-2" /> กำลังโหลด...
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)]">
-          <Package size={32} className="mx-auto text-[var(--tx-muted)] mb-2" />
-          <p className="text-xs text-[var(--tx-muted)]">{search ? 'ไม่พบ order ที่ตรงกับคำค้น' : 'ยังไม่มี order — กดปุ่ม "สร้าง Order ใหม่" เพื่อเริ่มนำเข้าสินค้า'}</p>
+        <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)] space-y-4">
+          <Package size={32} className="mx-auto text-[var(--tx-muted)]" />
+          <p className="text-xs text-[var(--tx-muted)]">{search ? 'ไม่พบ order ที่ตรงกับคำค้น' : 'ยังไม่มี order — เริ่มได้ 2 วิธี'}</p>
+          {!search && (
+            <div className="flex justify-center gap-3">
+              <button onClick={() => setSeedOpen(true)}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
+                <Database size={14} /> นำเข้าจากข้อมูลพื้นฐาน (แนะนำ — bulk)
+              </button>
+              <button onClick={openCreate}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-rose-400 border border-[var(--bd)] flex items-center gap-1.5">
+                <Plus size={14} /> สร้าง Order รายการเดียว
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-lg border border-[var(--bd)]">
@@ -183,12 +223,26 @@ export default function OrderPanel({ clinicSettings, theme }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Order Create Form
 // ═══════════════════════════════════════════════════════════════════════════
-function OrderCreateForm({ isDark, products, productsLoading, onClose, onSaved }) {
+function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, onClose, onSaved }) {
   const today = new Date().toISOString().slice(0, 10);
   const [vendorName, setVendorName] = useState('');
   const [importedDate, setImportedDate] = useState(today);
   const [note, setNote] = useState('');
-  const [items, setItems] = useState([mkEmptyItem()]);
+  const [items, setItems] = useState(() => {
+    if (prefillProduct) {
+      const pid = String(prefillProduct.productId || prefillProduct.id);
+      return [{
+        productId: pid,
+        productName: prefillProduct.productName || prefillProduct.name || '',
+        qty: '',
+        cost: prefillProduct.price ? String(prefillProduct.price) : '',
+        unit: prefillProduct.unit || '',
+        expiresAt: '',
+        isPremium: false,
+      }];
+    }
+    return [mkEmptyItem()];
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
