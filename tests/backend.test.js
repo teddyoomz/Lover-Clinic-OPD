@@ -1682,6 +1682,165 @@ describe('deductCourseItems — preferNewest (purchased-in-session)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// REGRESSION: createBackendSale must return the final (collision-suffixed)
+// saleId so downstream operations (applyDepositToSale, deductWallet, etc.)
+// use the same id the sale doc is stored under. Before the fix, the raw
+// invoice number was returned even when a `-<ts>` suffix was added for
+// collision avoidance — causing silent mismatches in deposit.usageHistory.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('createBackendSale return value — always finalId', () => {
+  const SALE_REF = (id) => doc(db, ...P, 'be_sales', id);
+  const createdIds = [];
+
+  afterAll(async () => {
+    for (const id of createdIds) { try { await deleteDoc(SALE_REF(id)); } catch {} }
+  });
+
+  it('returns finalId with suffix when primary saleId already exists', async () => {
+    const { createBackendSale } = await import('../src/lib/backendClient.js');
+    // First create a sale so the primary INV number for today is taken
+    const r1 = await createBackendSale(clean({
+      customerId: `TEST-COLL-${TS}`, customerName: 'Collision Test',
+      saleDate: new Date().toISOString().split('T')[0],
+      items: { courses: [], promotions: [], products: [], medications: [] },
+      billing: { subtotal: 100, netTotal: 100 },
+      payment: { status: 'paid', channels: [] }, sellers: [],
+    }));
+    createdIds.push(r1.saleId);
+
+    // Manually clobber the invoice counter back so the next call collides
+    const { runTransaction } = await import('firebase/firestore');
+    const counterRef = doc(db, ...P, 'be_sales_counter', 'counter');
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(counterRef);
+      if (snap.exists()) tx.set(counterRef, { ...snap.data(), seq: (snap.data().seq || 1) - 1 });
+    });
+
+    const r2 = await createBackendSale(clean({
+      customerId: `TEST-COLL-${TS}`, customerName: 'Collision Test 2',
+      saleDate: new Date().toISOString().split('T')[0],
+      items: { courses: [], promotions: [], products: [], medications: [] },
+      billing: { subtotal: 200, netTotal: 200 },
+      payment: { status: 'paid', channels: [] }, sellers: [],
+    }));
+    createdIds.push(r2.saleId);
+
+    // r2.saleId should be different from r1.saleId (finalId with -<ts> suffix)
+    expect(r2.saleId).not.toBe(r1.saleId);
+    // And the doc is actually stored under r2.saleId
+    const snap = await getDoc(SALE_REF(r2.saleId));
+    expect(snap.exists()).toBe(true);
+    expect(snap.data().saleId).toBe(r2.saleId);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGRESSION: linkedSaleId tagging + analyzeSaleCancel + removeLinkedSaleCourses
+// Cancelling a sale must remove the courses it assigned to the customer (or
+// at least the unused ones). Before the fix, sale cancel left orphaned
+// courses in customer.courses causing inventory inflation.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Sale cancel — linkedSaleId + analysis + cleanup', () => {
+  const CID = `LINKED-SALE-${TS}`;
+  const SID = `INV-LINKED-${TS}`;
+  const custRef = () => doc(db, ...P, 'be_customers', CID);
+  const saleRef = () => doc(db, ...P, 'be_sales', SID);
+
+  beforeAll(async () => {
+    // Pre-seed customer with 2 pre-existing courses + 3 courses linked to SID
+    // (one unused, one partially used, one fully used)
+    await setDoc(custRef(), clean({
+      proClinicId: CID, patientData: { firstName: 'Linked' },
+      courses: [
+        { name: 'Old Course A', product: 'P1', qty: '5 / 10 U', status: 'กำลังใช้งาน' },
+        { name: 'Old Course B', product: 'P2', qty: '10 / 10 U', status: 'กำลังใช้งาน' },
+        // From SID:
+        { name: 'Linked Unused', product: 'Pu', qty: '10 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID, source: 'sale' },
+        { name: 'Linked Partial', product: 'Pp', qty: '4 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID, source: 'sale' },
+        { name: 'Linked Used',    product: 'Pf', qty: '0 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID, source: 'sale' },
+      ],
+    }));
+    // Pre-seed sale doc with products + meds to analyze
+    await setDoc(saleRef(), clean({
+      saleId: SID, customerId: CID, customerName: 'Linked Test',
+      saleDate: '2026-04-18',
+      items: {
+        courses: [], promotions: [],
+        products: [{ name: 'Panadol' }, { name: 'ยาหม่อง' }],
+        medications: [{ name: 'Paracetamol' }],
+      },
+      billing: { subtotal: 1000, depositApplied: 300, walletApplied: 200, netTotal: 500 },
+      payment: { status: 'paid', channels: [] }, sellers: [],
+      status: 'active', createdAt: new Date().toISOString(),
+    }));
+  });
+
+  afterAll(async () => {
+    try { await deleteDoc(custRef()); } catch {}
+    try { await deleteDoc(saleRef()); } catch {}
+  });
+
+  it('analyzeSaleCancel classifies linked courses by usage + counts goods', async () => {
+    const { analyzeSaleCancel } = await import('../src/lib/backendClient.js');
+    const a = await analyzeSaleCancel(SID);
+    expect(a.unused).toHaveLength(1);
+    expect(a.unused[0].name).toBe('Linked Unused');
+    expect(a.partiallyUsed).toHaveLength(1);
+    expect(a.partiallyUsed[0].name).toBe('Linked Partial');
+    expect(a.fullyUsed).toHaveLength(1);
+    expect(a.fullyUsed[0].name).toBe('Linked Used');
+    expect(a.productsCount).toBe(2);
+    expect(a.productsList).toEqual(['Panadol', 'ยาหม่อง']);
+    expect(a.medsCount).toBe(1);
+    expect(a.depositApplied).toBe(300);
+    expect(a.walletApplied).toBe(200);
+  });
+
+  it('removeLinkedSaleCourses (default) removes only fully-unused courses', async () => {
+    // Reset courses to the baseline
+    await setDoc(custRef(), clean({
+      proClinicId: CID, patientData: { firstName: 'Linked' },
+      courses: [
+        { name: 'Old Course A', product: 'P1', qty: '5 / 10 U', status: 'กำลังใช้งาน' },
+        { name: 'Linked Unused', product: 'Pu', qty: '10 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+        { name: 'Linked Partial', product: 'Pp', qty: '4 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+        { name: 'Linked Used', product: 'Pf', qty: '0 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+      ],
+    }));
+    const { removeLinkedSaleCourses } = await import('../src/lib/backendClient.js');
+    const res = await removeLinkedSaleCourses(SID);
+    expect(res.removedCount).toBe(1); // only the unused one
+    expect(res.keptUsedCount).toBe(2); // partial + fully used retained
+    const d = (await getDoc(custRef())).data();
+    const linkedLeft = d.courses.filter(c => c.linkedSaleId === SID);
+    expect(linkedLeft).toHaveLength(2);
+    expect(linkedLeft.map(c => c.name).sort()).toEqual(['Linked Partial', 'Linked Used']);
+    // Old unrelated course stays
+    expect(d.courses.find(c => c.name === 'Old Course A')).toBeTruthy();
+  });
+
+  it('removeLinkedSaleCourses with removeUsed: true wipes all linked', async () => {
+    // Reset to baseline
+    await setDoc(custRef(), clean({
+      proClinicId: CID, patientData: { firstName: 'Linked' },
+      courses: [
+        { name: 'Old Course A', product: 'P1', qty: '5 / 10 U', status: 'กำลังใช้งาน' },
+        { name: 'Linked Unused', product: 'Pu', qty: '10 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+        { name: 'Linked Partial', product: 'Pp', qty: '4 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+        { name: 'Linked Used', product: 'Pf', qty: '0 / 10 U', status: 'กำลังใช้งาน', linkedSaleId: SID },
+      ],
+    }));
+    const { removeLinkedSaleCourses } = await import('../src/lib/backendClient.js');
+    const res = await removeLinkedSaleCourses(SID, { removeUsed: true });
+    expect(res.removedCount).toBe(3);
+    expect(res.keptUsedCount).toBe(0);
+    const d = (await getDoc(custRef())).data();
+    expect(d.courses.filter(c => c.linkedSaleId === SID)).toHaveLength(0);
+    expect(d.courses.find(c => c.name === 'Old Course A')).toBeTruthy();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEPOSIT CRUD — Phase 7 be_deposits
 // ═══════════════════════════════════════════════════════════════════════════
 describe('Deposit CRUD', () => {

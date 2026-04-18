@@ -273,6 +273,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   const parentName = masterCourse.parentName || '';
   const source = masterCourse.source || ''; // 'sale', 'treatment', 'exchange', 'share'
 
+  const linkedSaleId = masterCourse.linkedSaleId || null;
+  const linkedTreatmentId = masterCourse.linkedTreatmentId || null;
+
   for (const p of products) {
     courses.push({
       name: masterCourse.name,
@@ -283,6 +286,8 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       value: masterCourse.price ? `${masterCourse.price} บาท` : '',
       parentName,
       source,
+      linkedSaleId,
+      linkedTreatmentId,
       assignedAt: new Date().toISOString(),
     });
   }
@@ -298,6 +303,8 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       value: masterCourse.price ? `${masterCourse.price} บาท` : '',
       parentName,
       source,
+      linkedSaleId,
+      linkedTreatmentId,
       assignedAt: new Date().toISOString(),
     });
   }
@@ -432,7 +439,11 @@ export async function generateInvoiceNumber() {
   return `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
 }
 
-/** Create a new sale — uses unique saleId, never overwrites existing */
+/** Create a new sale — uses unique saleId, never overwrites existing.
+ *  Returns the ACTUAL saleId used (may include a `-<ts>` suffix when the
+ *  primary invoice number collides — the doc is stored under `finalId`, so
+ *  callers must use this return value when referencing the sale elsewhere
+ *  (applyDepositToSale, deductWallet, earnPoints, etc.). */
 export async function createBackendSale(data) {
   const saleId = await generateInvoiceNumber();
   const now = new Date().toISOString();
@@ -446,7 +457,7 @@ export async function createBackendSale(data) {
     createdAt: now,
     updatedAt: now,
   });
-  return { saleId, success: true };
+  return { saleId: finalId, success: true };
 }
 
 /** Update an existing sale */
@@ -486,6 +497,111 @@ export async function getSaleByTreatmentId(treatmentId) {
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { id: d.id, ...d.data() };
+}
+
+/**
+ * Analyze what cancelling/deleting a sale will affect — returns a report
+ * (courses grouped by usage state + physical-goods counts) so the UI can
+ * warn the user before they confirm.
+ *
+ * @returns {Promise<{
+ *   unused: Array,         // customer.courses entries with remaining === total (safe to remove)
+ *   partiallyUsed: Array,  // 0 < remaining < total
+ *   fullyUsed: Array,      // remaining === 0
+ *   productsCount: number, // items.products length (physical front-shop goods)
+ *   productsList: Array,   // names of products (for warning display)
+ *   medsCount: number,
+ *   medsList: Array,
+ *   depositApplied: number,
+ *   walletApplied: number,
+ *   pointsEarned: number,  // from be_point_transactions matching saleId
+ * }>}
+ */
+export async function analyzeSaleCancel(saleId) {
+  const saleSnap = await getDoc(saleDoc(saleId));
+  if (!saleSnap.exists()) throw new Error('Sale not found');
+  const sale = saleSnap.data();
+  const customerId = String(sale.customerId || '');
+  let courses = [];
+  try {
+    const custSnap = await getDoc(customerDoc(customerId));
+    if (custSnap.exists()) courses = custSnap.data().courses || [];
+  } catch {}
+  const { parseQtyString } = await import('./courseUtils.js');
+  const linked = courses.filter(c => String(c.linkedSaleId || '') === String(saleId));
+  const unused = [];
+  const partiallyUsed = [];
+  const fullyUsed = [];
+  for (const c of linked) {
+    const p = parseQtyString(c.qty);
+    if (p.total <= 0) { unused.push(c); continue; } // treat degenerate as unused
+    if (p.remaining >= p.total) unused.push(c);
+    else if (p.remaining <= 0) fullyUsed.push(c);
+    else partiallyUsed.push(c);
+  }
+  const productsList = (sale.items?.products || []).map(p => p.name || '').filter(Boolean);
+  const medsList = (sale.items?.medications || []).map(m => m.name || '').filter(Boolean);
+  // Points earned: sum earn-type tx matching referenceId
+  let pointsEarned = 0;
+  try {
+    const q = query(pointTxCol(),
+      where('customerId', '==', customerId),
+      where('referenceId', '==', String(saleId)),
+    );
+    const snap = await getDocs(q);
+    snap.docs.forEach(d => {
+      const tx = d.data();
+      if (tx.type === 'earn') pointsEarned += Number(tx.amount) || 0;
+    });
+  } catch {}
+  return {
+    unused,
+    partiallyUsed,
+    fullyUsed,
+    productsCount: productsList.length,
+    productsList,
+    medsCount: medsList.length,
+    medsList,
+    depositApplied: Number(sale.billing?.depositApplied) || 0,
+    walletApplied: Number(sale.billing?.walletApplied) || 0,
+    pointsEarned,
+  };
+}
+
+/**
+ * Remove courses linked to a cancelled/deleted sale from customer.courses.
+ * Default: only remove entries where `remaining === total` (fully unused).
+ * Pass `removeUsed: true` to also remove partially/fully-used entries
+ * (loses usage history — the UI should only enable this with explicit opt-in).
+ *
+ * @param {string} saleId
+ * @param {{removeUsed?: boolean}} [opts]
+ * @returns {Promise<{removedCount: number, keptUsedCount: number}>}
+ */
+export async function removeLinkedSaleCourses(saleId, { removeUsed = false } = {}) {
+  const saleSnap = await getDoc(saleDoc(saleId));
+  if (!saleSnap.exists()) throw new Error('Sale not found');
+  const customerId = String(saleSnap.data().customerId || '');
+  if (!customerId) return { removedCount: 0, keptUsedCount: 0 };
+  const custSnap = await getDoc(customerDoc(customerId));
+  if (!custSnap.exists()) return { removedCount: 0, keptUsedCount: 0 };
+  const current = custSnap.data().courses || [];
+  const { parseQtyString } = await import('./courseUtils.js');
+  let removedCount = 0;
+  let keptUsedCount = 0;
+  const next = current.filter(c => {
+    if (String(c.linkedSaleId || '') !== String(saleId)) return true;
+    const p = parseQtyString(c.qty);
+    const isUnused = p.total > 0 && p.remaining >= p.total;
+    if (isUnused) { removedCount++; return false; }
+    if (removeUsed) { removedCount++; return false; }
+    keptUsedCount++;
+    return true;
+  });
+  if (removedCount > 0) {
+    await updateCustomer(customerId, { courses: next });
+  }
+  return { removedCount, keptUsedCount };
 }
 
 /** Cancel a sale with reason + refund tracking */

@@ -1626,15 +1626,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 });
               } catch (e) { console.warn('[TreatmentForm] earnPoints failed:', e); }
             }
-            // Auto-assign purchased courses + promotions to customer
-            // purchased qty multiplies master product qty
+            // Auto-assign purchased courses + promotions to customer.
+            // purchased qty multiplies master product qty.
+            // Tag each assignment with linkedSaleId + linkedTreatmentId for reversal.
+            const linkedTreatmentId = result.treatmentId || treatmentId || '';
             for (const course of grouped.courses) {
               try {
                 const pQty = Number(course.qty) || 1;
                 const prods = course.products?.length
                   ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                   : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}` });
+                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
               } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
             }
             for (const promo of grouped.promotions) {
@@ -1645,13 +1647,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     const subProds = sub.products?.length
                       ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                       : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
-                    await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}` });
+                    await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
                   }
                 } else {
                   const prods = promo.products?.length
                     ? promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                     : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
-                  await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}` });
+                  await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
                 }
               } catch (e) { console.error('[TreatmentForm] promo assign error:', e); }
             }

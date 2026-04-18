@@ -13,6 +13,7 @@ import {
   cancelBackendSale, updateSalePayment, assignCourseToCustomer,
   applyDepositToSale, reverseDepositUsage,
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
+  analyzeSaleCancel, removeLinkedSaleCourses,
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
@@ -70,6 +71,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
   const [cancelEvidencePath, setCancelEvidencePath] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
+  const [cancelAnalysis, setCancelAnalysis] = useState(null); // { unused, partiallyUsed, fullyUsed, productsList, medsList, depositApplied, walletApplied, pointsEarned }
+  const [cancelAlsoRemoveUsed, setCancelAlsoRemoveUsed] = useState(false);
+  const [cancelAnalysisLoading, setCancelAnalysisLoading] = useState(false);
   const [payModal, setPayModal] = useState(null); // { sale }
   const [payMethod, setPayMethod] = useState('');
   const [payAmount, setPayAmount] = useState('');
@@ -157,6 +161,24 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     finally { setListLoading(false); }
   }, []);
   useEffect(() => { loadSales(); }, [loadSales]);
+
+  // Load cancel analysis whenever the cancel modal opens
+  useEffect(() => {
+    if (!cancelModal) { setCancelAnalysis(null); setCancelAlsoRemoveUsed(false); return; }
+    let cancelled = false;
+    const saleId = cancelModal.saleId || cancelModal.id;
+    setCancelAnalysisLoading(true);
+    (async () => {
+      try {
+        const a = await analyzeSaleCancel(saleId);
+        if (!cancelled) setCancelAnalysis(a);
+      } catch (e) {
+        console.warn('[SaleTab] analyzeSaleCancel failed:', e);
+        if (!cancelled) setCancelAnalysis(null);
+      } finally { if (!cancelled) setCancelAnalysisLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [cancelModal]);
 
   // Load active membership + apply to billing (auto-discount)
   useEffect(() => {
@@ -467,7 +489,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
           } catch (e) { console.warn('[SaleTab] wallet deduct failed:', e); throw new Error(`หัก wallet ไม่สำเร็จ: ${e.message}`); }
         }
         // Auto-assign purchased courses + promotions to customer
-        // Key: purchased qty (user-entered) multiplies master product qty
+        // Key: purchased qty (user-entered) multiplies master product qty.
+        // Tag each assignment with `linkedSaleId` so cancel/delete can reverse it.
         if (customerId) {
           for (const course of grouped.courses) {
             try {
@@ -475,7 +498,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               const prods = course.products?.length
                 ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
                 : [{ name: course.name, qty: purchasedQty, unit: course.unit || 'ครั้ง' }];
-              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}` });
+              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}`, linkedSaleId: newSaleId });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
           }
           for (const promo of grouped.promotions) {
@@ -486,13 +509,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   const subProds = sub.products?.length
                     ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
                     : [{ name: sub.name || promo.name, qty: purchasedQty, unit: sub.unit || 'ครั้ง' }];
-                  await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
+                  await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'sale', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: newSaleId });
                 }
               } else if (promo.products?.length) {
                 const prods = promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }));
-                await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
+                await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: newSaleId });
               } else {
-                await assignCourseToCustomer(customerId, { name: promo.name, products: [{ name: promo.name, qty: purchasedQty, unit: 'โปรโมชัน' }], price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}` });
+                await assignCourseToCustomer(customerId, { name: promo.name, products: [{ name: promo.name, qty: purchasedQty, unit: 'โปรโมชัน' }], price: promo.unitPrice, source: 'sale', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: newSaleId });
               }
             } catch (e) { console.warn('[SaleTab] assign promotion failed:', e); }
           }
@@ -523,9 +546,25 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   };
 
   const handleDelete = async (sale) => {
-    if (!confirm('ต้องการลบใบเสร็จนี้?')) return;
     const saleId = sale.saleId || sale.id;
     const cid = sale.customerId;
+    // Analyze before confirm so we can warn about used courses / products / meds.
+    let analysis = null;
+    try { analysis = await analyzeSaleCancel(saleId); }
+    catch (e) { console.warn('[SaleTab] analyzeSaleCancel (delete) failed:', e); }
+    const warnings = [];
+    if (analysis) {
+      if (analysis.unused.length > 0) warnings.push(`• ${analysis.unused.length} คอร์สที่ยังไม่ใช้ — จะถูกถอดออก`);
+      if (analysis.partiallyUsed.length > 0) warnings.push(`• ⚠ ${analysis.partiallyUsed.length} คอร์สใช้ไปแล้วบางส่วน — จะถูกเก็บไว้ (ประวัติไม่ถูกทำลาย)`);
+      if (analysis.fullyUsed.length > 0) warnings.push(`• ⚠ ${analysis.fullyUsed.length} คอร์สใช้หมดแล้ว — จะถูกเก็บไว้`);
+      if (analysis.productsCount > 0) warnings.push(`• ⚠ สินค้าหน้าร้าน ${analysis.productsCount} รายการ (เรียกคืนไม่ได้อัตโนมัติ)`);
+      if (analysis.medsCount > 0) warnings.push(`• ⚠ ยากลับบ้าน ${analysis.medsCount} รายการ (เรียกคืนไม่ได้อัตโนมัติ)`);
+      if (analysis.depositApplied > 0) warnings.push(`• มัดจำ ฿${fmtMoney(analysis.depositApplied)} จะถูกคืน`);
+      if (analysis.walletApplied > 0) warnings.push(`• Wallet ฿${fmtMoney(analysis.walletApplied)} จะถูกคืน`);
+      if (analysis.pointsEarned > 0) warnings.push(`• คะแนน ${analysis.pointsEarned} จะถูกคืน`);
+    }
+    const msg = `ต้องการลบใบเสร็จ ${saleId}?${warnings.length ? '\n\n' + warnings.join('\n') : ''}\n\nการลบจะเก็บประวัติไว้บน Firestore ไม่ได้`;
+    if (!confirm(msg)) return;
     // Reverse applied deposits
     const deps = Array.isArray(sale.billing?.depositIds) ? sale.billing.depositIds : [];
     for (const d of deps) {
@@ -546,6 +585,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     // Reverse earned points
     try { await reversePointsEarned(cid, saleId); }
     catch (e) { console.warn('[SaleTab] points reverse on delete failed:', e); }
+    // Remove unused linked courses (keep used ones so history stays intact)
+    try { await removeLinkedSaleCourses(saleId, { removeUsed: false }); }
+    catch (e) { console.warn('[SaleTab] remove linked courses on delete failed:', e); }
     await deleteBackendSale(saleId);
     loadSales();
   };
@@ -761,11 +803,95 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       {/* ═══ CANCEL MODAL ═══ */}
       {cancelModal && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-cancel-sale" onClick={() => setCancelModal(null)} onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
-          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+          <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[88vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
               <h3 id="modal-title-cancel-sale" className="text-sm font-bold text-red-400">ยกเลิกใบเสร็จ {cancelModal.saleId}</h3>
+              <p className="text-xs text-[var(--tx-muted)] mt-1">{cancelModal.customerName} · ยอดสุทธิ ฿{fmtMoney(cancelModal.billing?.netTotal)}</p>
             </div>
             <div className="p-5 space-y-3">
+              {/* ══ Impact analysis ══ */}
+              {cancelAnalysisLoading ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--bd)]">
+                  <Loader2 size={12} className="animate-spin text-[var(--tx-muted)]" />
+                  <span className="text-xs text-[var(--tx-muted)]">กำลังวิเคราะห์ผลกระทบ...</span>
+                </div>
+              ) : cancelAnalysis && (
+                <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'bg-amber-950/10 border-amber-900/40' : 'bg-amber-50 border-amber-200'}`}>
+                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                    <AlertCircle size={12} /> รายการที่จะได้รับผลกระทบ
+                  </div>
+                  {/* Financials to be auto-reversed */}
+                  {(cancelAnalysis.depositApplied > 0 || cancelAnalysis.walletApplied > 0 || cancelAnalysis.pointsEarned > 0) && (
+                    <div className={`text-xs space-y-0.5 pb-2 border-b ${isDark ? 'border-[var(--bd)]/60' : 'border-amber-200'}`}>
+                      <div className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">จะคืนให้ลูกค้าอัตโนมัติ</div>
+                      {cancelAnalysis.depositApplied > 0 && <div>• มัดจำ <span className="font-mono text-emerald-400">฿{fmtMoney(cancelAnalysis.depositApplied)}</span></div>}
+                      {cancelAnalysis.walletApplied > 0 && <div>• Wallet <span className="font-mono text-sky-400">฿{fmtMoney(cancelAnalysis.walletApplied)}</span></div>}
+                      {cancelAnalysis.pointsEarned > 0 && <div>• คะแนนที่สะสมไป <span className="font-mono text-amber-400">{cancelAnalysis.pointsEarned}</span> คะแนน</div>}
+                    </div>
+                  )}
+                  {/* Courses */}
+                  {(cancelAnalysis.unused.length > 0 || cancelAnalysis.partiallyUsed.length > 0 || cancelAnalysis.fullyUsed.length > 0) && (
+                    <div className="text-xs space-y-1">
+                      <div className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">คอร์ส/สินค้าที่ขายในใบนี้</div>
+                      {cancelAnalysis.unused.length > 0 && (
+                        <div>
+                          <div className="text-emerald-400 font-bold">✓ ยังไม่ใช้ ({cancelAnalysis.unused.length} รายการ) — จะถูกถอดจากคอร์สคงเหลืออัตโนมัติ</div>
+                          <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
+                            {cancelAnalysis.unused.slice(0, 5).map((c, i) => <div key={i}>• {c.product || c.name} ({c.qty})</div>)}
+                            {cancelAnalysis.unused.length > 5 && <div>… และอีก {cancelAnalysis.unused.length - 5} รายการ</div>}
+                          </div>
+                        </div>
+                      )}
+                      {cancelAnalysis.partiallyUsed.length > 0 && (
+                        <div>
+                          <div className={isDark ? 'text-amber-400 font-bold' : 'text-amber-700 font-bold'}>⚠ ใช้ไปแล้วบางส่วน ({cancelAnalysis.partiallyUsed.length} รายการ)</div>
+                          <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
+                            {cancelAnalysis.partiallyUsed.slice(0, 5).map((c, i) => <div key={i}>• {c.product || c.name} ({c.qty})</div>)}
+                            {cancelAnalysis.partiallyUsed.length > 5 && <div>… และอีก {cancelAnalysis.partiallyUsed.length - 5} รายการ</div>}
+                          </div>
+                        </div>
+                      )}
+                      {cancelAnalysis.fullyUsed.length > 0 && (
+                        <div>
+                          <div className="text-red-400 font-bold">⚠ ใช้หมดแล้ว ({cancelAnalysis.fullyUsed.length} รายการ)</div>
+                          <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
+                            {cancelAnalysis.fullyUsed.slice(0, 5).map((c, i) => <div key={i}>• {c.product || c.name} ({c.qty})</div>)}
+                            {cancelAnalysis.fullyUsed.length > 5 && <div>… และอีก {cancelAnalysis.fullyUsed.length - 5} รายการ</div>}
+                          </div>
+                        </div>
+                      )}
+                      {(cancelAnalysis.partiallyUsed.length > 0 || cancelAnalysis.fullyUsed.length > 0) && (
+                        <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                          <input type="checkbox" checked={cancelAlsoRemoveUsed} onChange={e => setCancelAlsoRemoveUsed(e.target.checked)} className="accent-red-500 mt-0.5" />
+                          <span className="text-[11px] text-[var(--tx-secondary)]">
+                            ลบคอร์สที่ใช้ไปแล้วด้วย (จะสูญเสียประวัติการใช้ — ไม่แนะนำ)
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                  {/* Physical goods — warn only, cannot be un-sold */}
+                  {cancelAnalysis.productsCount > 0 && (
+                    <div className="text-xs text-red-400">
+                      🏷 สินค้าหน้าร้านที่ขายไปแล้ว ({cancelAnalysis.productsCount} รายการ) — <span className="font-bold">เรียกคืนไม่ได้อัตโนมัติ</span>
+                      <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
+                        {cancelAnalysis.productsList.slice(0, 5).map((n, i) => <div key={i}>• {n}</div>)}
+                        {cancelAnalysis.productsList.length > 5 && <div>… และอีก {cancelAnalysis.productsList.length - 5} รายการ</div>}
+                      </div>
+                    </div>
+                  )}
+                  {cancelAnalysis.medsCount > 0 && (
+                    <div className="text-xs text-red-400">
+                      💊 ยากลับบ้านที่จ่ายแล้ว ({cancelAnalysis.medsCount} รายการ) — <span className="font-bold">เรียกคืนไม่ได้อัตโนมัติ</span>
+                      <div className="pl-4 text-[10px] text-[var(--tx-muted)]">
+                        {cancelAnalysis.medsList.slice(0, 5).map((n, i) => <div key={i}>• {n}</div>)}
+                        {cancelAnalysis.medsList.length > 5 && <div>… และอีก {cancelAnalysis.medsList.length - 5} รายการ</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div><label className={labelCls}>เหตุผลการยกเลิก</label><textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="ระบุเหตุผล..." /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>วิธีคืนเงิน</label>
@@ -773,7 +899,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     <option value="เงินสด">เงินสด</option><option value="โอนธนาคาร">โอนธนาคาร</option><option value="Wallet">Wallet</option><option value="ไม่คืนเงิน">ไม่คืนเงิน</option>
                   </select>
                 </div>
-                <div><label className={labelCls}>จำนวนคืน (บาท)</label><input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} /></div>
+                <div>
+                  <label className={labelCls}>เงินสดที่ต้องคืน (บาท)</label>
+                  <input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} />
+                  <p className="text-[10px] text-[var(--tx-muted)] mt-0.5">ไม่รวมมัดจำ/Wallet ที่ระบบคืนให้อัตโนมัติ</p>
+                </div>
               </div>
               <FileUploadField
                 storagePath={`uploads/be_sales/${cancelModal.saleId}`}
@@ -784,7 +914,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 onDelete={() => { setCancelEvidenceUrl(''); setCancelEvidencePath(''); }}
               />
             </div>
-            <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
+            <div className={`px-5 py-4 border-t flex justify-end gap-2 sticky bottom-0 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
               <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
               <button onClick={async () => {
                 setCancelSaving(true);
@@ -810,10 +940,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 // Reverse earned points
                 try { await reversePointsEarned(cid, saleId); }
                 catch (e) { console.warn('[SaleTab] points reverse on cancel failed:', e); }
+                // Remove linked courses from customer.courses (respect user's "also remove used" choice)
+                try { await removeLinkedSaleCourses(saleId, { removeUsed: cancelAlsoRemoveUsed }); }
+                catch (e) { console.warn('[SaleTab] remove linked courses on cancel failed:', e); }
                 await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
                 setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
-              }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50">
-                {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : 'ยืนยันยกเลิก'}
+              }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5">
+                {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                ยืนยันยกเลิก
               </button>
             </div>
           </div>
