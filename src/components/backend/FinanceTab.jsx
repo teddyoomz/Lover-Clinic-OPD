@@ -1,13 +1,12 @@
 // ─── FinanceTab — การเงิน (Phase 7) ─────────────────────────────────────────
-// Container for 4 sub-tabs: Deposit / Wallet / Membership / Points
-// Only Deposit is wired in Phase 7 Step 1 — others show "Coming soon" placeholders
-// until their panels land in subsequent Phase 7 steps.
+// Container for 4 sub-tabs: Deposit / Wallet / Membership / Points (all wired).
 
 import { useState, useEffect } from 'react';
 import { Wallet, CreditCard, Ticket, Star } from 'lucide-react';
 import DepositPanel from './DepositPanel.jsx';
 import WalletPanel from './WalletPanel.jsx';
 import MembershipPanel from './MembershipPanel.jsx';
+import PointsPanel from './PointsPanel.jsx';
 
 const SUB_TABS = [
   { key: 'deposit',    label: 'มัดจำ',        icon: Wallet,     color: 'emerald' },
@@ -83,19 +82,14 @@ export default function FinanceTab({ clinicSettings, theme, initialCustomer, onC
           onCustomerUsed={onCustomerUsed}
         />
       )}
-      {activeSubTab === 'points' && <ComingSoon label="คะแนนสะสม (Loyalty Points)" />}
+      {activeSubTab === 'points' && (
+        <PointsPanel
+          theme={theme}
+          initialCustomer={initialCustomer}
+          onCustomerUsed={onCustomerUsed}
+        />
+      )}
     </div>
   );
 }
 
-function ComingSoon({ label }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--bd)] flex items-center justify-center mb-4">
-        <Star size={24} className="text-[var(--tx-muted)]" />
-      </div>
-      <p className="text-sm font-bold text-[var(--tx-heading)]">{label}</p>
-      <p className="text-xs text-[var(--tx-muted)] mt-1">กำลังพัฒนา — จะพร้อมใช้ใน Phase 7 ขั้นถัดไป</p>
-    </div>
-  );
-}
