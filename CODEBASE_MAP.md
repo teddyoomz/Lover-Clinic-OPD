@@ -40,13 +40,22 @@ src/
 │       ├── MasterDataTab.jsx   — Tab "ข้อมูลพื้นฐาน": sync buttons + 5 sub-tabs (Products/Doctors/Staff/Courses/Promotions) + data table + search/filter
 │       ├── AppointmentTab.jsx  — Tab "นัดหมาย": resource time grid (room columns × time rows) + create/edit modal
 │       ├── SaleTab.jsx         — Tab "ขาย/ใบเสร็จ": invoice list + create/edit form (buy modals, billing, sellers, payment)
-│       ├── FinanceTab.jsx      — Tab "การเงิน" (Phase 7): 4 sub-tabs (Deposit/Wallet/Membership/Points) — only Deposit wired
-│       ├── DepositPanel.jsx    — Deposit CRUD: list + create/edit form overlay (with optional appointment sub-form) + cancel/refund/detail modals
-│       └── DepositPicker.jsx   — Reusable picker (reads real `be_deposits` balance via getActiveDeposits) + multi-select with per-deposit amount + max cap — used in SaleTab + TreatmentFormPage billing
+│       ├── FinanceTab.jsx      — Tab "การเงิน" (Phase 7): 4 sub-tabs (Deposit/Wallet/Membership/Points) — ALL wired
+│       ├── DepositPanel.jsx    — Deposit CRUD: list + create/edit overlay (with optional appointment sub-form) + cancel/refund/detail
+│       ├── DepositPicker.jsx   — Reusable picker: reads `be_deposits` via getActiveDeposits, multi-select with per-deposit amount + max cap (used in SaleTab + TreatmentFormPage billing)
+│       ├── WalletPanel.jsx     — Wallet CRUD: customer wallet cards + top-up + adjust ± + transaction history modal
+│       ├── WalletPicker.jsx    — Reusable single-wallet picker: reads `be_customer_wallets`, edit-mode cap = balance + initiallyApplied
+│       ├── MembershipPanel.jsx — Card-types gradient grid + sold-memberships list + sell form (with wallet credit + initial points side-effects) + renew + cancel modals
+│       └── PointsPanel.jsx     — Loyalty point cards (balance + membership badge) + adjust (±) + transaction history modal
 ├── lib/
 │   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
-│   ├── backendClient.js        — Firestore CRUD for be_* collections + master data read/sync + Phase 7 deposit CRUD (create/update/cancel/refund/delete + apply/reverse to sale + recalcCustomerDepositBalance)
-│   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, fmtMoney, fmtPoints (Phase 7)
+│   ├── backendClient.js        — Firestore CRUD for be_* collections + master data read/sync + Phase 7:
+│   │                             deposit (CRUD + apply/reverse transactional)
+│   │                             wallet  (ensure/topUp/deduct/refund/adjust transactional + WTX records)
+│   │                             membership (create with wallet+points side-effects + renew + cancel + lazy expire)
+│   │                             points (earn/adjust/reverse + PTX log + denorm finance.loyaltyPoints)
+│   │                             manual master items (createMasterItem/update/delete for wallet_types + membership_types)
+│   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, isMembershipExpired, fmtMoney, fmtPoints (Phase 7)
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
@@ -85,9 +94,13 @@ artifacts/{appId}/public/data/
 │             appointmentData, appointmentProClinicId, appointmentSyncStatus, appointmentSyncError
 ├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
 ├── form_templates/{id}         — Custom form templates
-├── be_customers/{proClinicId}  — Backend: cloned customer data (patientData, courses, appointments, treatmentSummary, finance.depositBalance)
+├── be_customers/{proClinicId}  — Backend: cloned customer data (patientData, courses, appointments, treatmentSummary, finance.{depositBalance, walletBalances, totalWalletBalance, loyaltyPoints, membershipId, membershipType, membershipExpiry, membershipDiscountPercent})
 ├── be_treatments/{treatmentId} — Backend: cloned treatment details (customerId, detail with vitals/OPD/meds/images)
-└── be_deposits/{depositId}     — Phase 7: DEP-<ts> docs — amount, usedAmount, remainingAmount, status, sellers[], usageHistory[{saleId, amount, date}], optional appointment sub-doc
+├── be_deposits/{depositId}     — Phase 7: DEP-<ts> docs — amount, usedAmount, remainingAmount, refundAmount, status, sellers[], usageHistory[{saleId, amount, date}], optional appointment sub-doc
+├── be_customer_wallets/{id}    — Phase 7: composite id `${customerId}__${walletTypeId}` — balance, totalTopUp, totalUsed
+├── be_wallet_transactions/{id} — Phase 7: WTX-<ts> — type (topup/deduct/refund/adjust/membership_credit), amount, balanceBefore/After, referenceType/Id
+├── be_memberships/{id}         — Phase 7: MBR-<ts> — cardTypeId/Name, purchasePrice, initialCredit, discountPercent, initialPoints, bahtPerPoint, walletTypeId, activatedAt, expiresAt, renewals[], walletTxId, pointTxId, sellers[]
+└── be_point_transactions/{id}  — Phase 7: PTX-<ts> — type (earn/redeem/adjust/membership_initial/reverse/expire), amount, pointsBefore/After, referenceType/Id, purchaseAmount, bahtPerPoint
 ```
 
 ### Chat Firestore path
