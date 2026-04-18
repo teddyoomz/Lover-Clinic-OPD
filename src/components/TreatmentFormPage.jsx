@@ -413,44 +413,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
           const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
 
-          // Load customer courses from be_customers (NOT from ProClinic)
+          // Load customer courses from be_customers (NOT from ProClinic).
+          // One row per customer.courses entry — NO grouping — so each purchase
+          // is selectable/deductible independently. rowId encodes the exact array
+          // index so deductCourseItems can target that specific entry.
           let customerCoursesForForm = [];
           let customerPromotionsForForm = [];
           if (customerId) {
             try {
               const custData = await getBackendCustomer(customerId);
               const rawCourses = custData?.courses || [];
-              // Transform scraped course format → TreatmentFormPage format
-              // From: { name, product, qty: "200 / 200 U", value, status, expiry }
-              // To: { courseId, courseName, promotionId?, products: [{ rowId, name, remaining, unit, total }] }
-              // Group duplicate courses by name+product and merge remaining qty
-              const courseMap = new Map();
-              rawCourses.forEach((c) => {
-                const key = `${c.name}|${c.product || c.name}`;
-                const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
-                const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
-                const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
-                const unit = qtyMatch ? qtyMatch[3].trim() : '';
-                if (courseMap.has(key)) {
-                  const existing = courseMap.get(key);
-                  existing.remaining += remaining;
-                  existing.total += total;
-                } else {
-                  courseMap.set(key, { name: c.name || '', product: c.product || c.name || '', remaining, total, unit: unit || 'ครั้ง' });
-                }
-              });
-              let courseIdx = 0;
-              customerCoursesForForm = [...courseMap.values()].filter(c => c.name).map(c => ({
-                courseId: `be-course-${courseIdx}`,
-                courseName: c.name,
-                products: [{
-                  rowId: `be-row-${courseIdx++}`,
-                  name: c.product,
-                  remaining: c.remaining > 0 ? `${c.remaining}` : '0',
-                  total: `${c.total}`,
-                  unit: c.unit,
-                }],
-              }));
+              customerCoursesForForm = rawCourses
+                .map((c, idx) => {
+                  if (!c.name) return null;
+                  const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+                  const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
+                  const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
+                  const unit = qtyMatch ? qtyMatch[3].trim() : '';
+                  const productName = c.product || c.name;
+                  return {
+                    courseId: `be-course-${idx}`,
+                    courseName: c.name,
+                    parentName: c.parentName || '',
+                    source: c.source || '',
+                    linkedSaleId: c.linkedSaleId || null,
+                    status: c.status || '',
+                    expiry: c.expiry || '',
+                    products: [{
+                      rowId: `be-row-${idx}`,
+                      courseIndex: idx, // exact targeting — survives name-collision
+                      name: productName,
+                      remaining: remaining > 0 ? `${remaining}` : '0',
+                      total: `${total}`,
+                      unit: unit || 'ครั้ง',
+                    }],
+                  };
+                })
+                .filter(Boolean);
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
@@ -1440,21 +1439,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
-        // Phase 6: Validate course deductions against LIVE Firestore data
-        // Use name+product lookup (not index) because form deduplicates courses
+        // Validate course deductions against LIVE Firestore data.
+        // Since rows are no longer grouped, validate each row against the exact
+        // Firestore course entry at its `courseIndex`.
         if (selectedCourseItems.size > 0) {
           try {
             const { getCustomer: fetchLiveCustomer } = await import('../lib/backendClient.js');
             const { parseQtyString } = await import('../lib/courseUtils.js');
             const liveCustomer = await fetchLiveCustomer(customerId);
             const liveCourses = liveCustomer?.courses || [];
-            // Sum remaining by name+product from ALL live course entries (matching dedup logic)
-            const liveQtyMap = new Map();
-            liveCourses.forEach(c => {
-              const key = `${c.name}|${c.product || c.name}`;
-              const { remaining } = parseQtyString(c.qty);
-              liveQtyMap.set(key, (liveQtyMap.get(key) || 0) + remaining);
-            });
             const overDeductions = [];
             for (const rowId of selectedCourseItems) {
               for (const course of (options?.customerCourses || [])) {
@@ -1462,11 +1455,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 if (product) {
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
                   const isPurchased = rowId.startsWith('purchased-') || rowId.startsWith('promo-');
-                  // Purchased-in-session: validate against form remaining (not Firestore)
-                  // Existing: validate against LIVE Firestore remaining
-                  const remaining = isPurchased
-                    ? (parseFloat(product.remaining) || 0)
-                    : (liveQtyMap.get(`${course.courseName}|${product.name}`) || 0);
+                  // After de-grouping: each row = one customer.courses entry, so validate
+                  // against the row's own remaining. For existing entries we verify against
+                  // LIVE Firestore remaining at the exact courseIndex (race-safe).
+                  let remaining;
+                  if (isPurchased) {
+                    remaining = parseFloat(product.remaining) || 0;
+                  } else if (typeof product.courseIndex === 'number' && liveCourses[product.courseIndex]) {
+                    const liveC = liveCourses[product.courseIndex];
+                    const { remaining: liveRem } = parseQtyString(liveC.qty);
+                    remaining = liveRem;
+                  } else {
+                    remaining = parseFloat(product.remaining) || 0;
+                  }
                   if (deductAmt > remaining) {
                     overDeductions.push(`• "${product.name}" คงเหลือ${isPurchased ? '' : 'จริง'} ${remaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
                   }
@@ -1516,7 +1517,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note: note, saleNote },
           sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
           hasSale,
-          // Phase 6: Save course items used (for deduction tracking)
+          // Phase 6: Save course items used (for deduction tracking).
+          // `courseIndex` (when present) targets a specific customer.courses entry —
+          // lets deductCourseItems hit the exact row the user selected instead of
+          // falling back to FIFO name/product match across possibly many duplicates.
           courseItems: Array.from(selectedCourseItems).map(rowId => {
             for (const course of (options?.customerCourses || [])) {
               const product = course.products?.find(p => p.rowId === rowId);
@@ -1525,6 +1529,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   courseName: course.courseName,
                   productName: product.name,
                   rowId: product.rowId,
+                  courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
                   deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
                   unit: product.unit || '',
                 };
@@ -2765,20 +2770,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                         <div key={course.courseId}>
                           <div className={`px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
                             {course.courseName}
+                            {course.parentName && (
+                              <span className={`ml-2 text-[10px] font-normal ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>· {course.parentName}</span>
+                            )}
                           </div>
                           {course.products.map(product => {
                             const isSelected = selectedCourseItems.has(product.rowId);
+                            const remainingNum = parseFloat(product.remaining) || 0;
+                            const totalNum = parseFloat(product.total) || 0;
+                            const exhausted = totalNum > 0 && remainingNum <= 0;
                             return (
                               <label key={product.rowId} className={`flex items-center justify-between px-3 py-1.5 border-b cursor-pointer transition-all ${
                                 isSelected ? isDark ? 'bg-teal-500/10 border-teal-500/20' : 'bg-teal-50 border-teal-100'
                                 : isDark ? 'border-[#1a1a1a] hover:bg-[#151515]' : 'border-gray-50 hover:bg-gray-50'
-                              }`}>
+                              } ${exhausted ? 'opacity-50' : ''}`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <input type="checkbox" checked={isSelected} onChange={() => toggleCourseItem(product)}
+                                    disabled={exhausted}
                                     className="w-3.5 h-3.5 rounded accent-teal-500 shrink-0" />
                                   <span className={`text-xs truncate ${isSelected ? 'font-bold text-teal-400' : ''}`}>{product.name}</span>
                                 </div>
-                                <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap">{product.remaining} {product.unit}</span>
+                                <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap font-mono">
+                                  {product.remaining} / {product.total} {product.unit}
+                                </span>
                               </label>
                             );
                           })}

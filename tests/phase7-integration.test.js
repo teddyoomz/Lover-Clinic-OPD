@@ -1981,6 +1981,74 @@ describe('[SAE] Treatment flow — purchase + use + edit + delete (preferNewest 
     expect(c.courses[0].qty).toBe('1 / 10 U');
   });
 
+  it('exact courseIndex targeting: pick row #4 among 5 duplicates, deduct hits exactly that row', async () => {
+    // After de-grouping, TreatmentFormPage shows each customer.courses entry as a
+    // separate selectable row. The save must hit the EXACT entry the user clicked.
+    const { deductCourseItems } = await bc();
+    await resetCourses([
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r0' },
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r1' },
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r2' },
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r3' },
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r4' },
+    ]);
+    // User checked row index 3 in the UI; save passes courseIndex: 3
+    await deductCourseItems(CID, [
+      { courseName: 'X', productName: 'Xp', deductQty: 4, courseIndex: 3, rowId: 'be-row-3' },
+    ]);
+    const c = (await getDoc(custDoc(CID))).data();
+    expect(c.courses.find(x => x.tag === 'r3').qty).toBe('6 / 10 U');
+    // All others untouched
+    ['r0', 'r1', 'r2', 'r4'].forEach(tag => {
+      expect(c.courses.find(x => x.tag === tag).qty).toBe('10 / 10 U');
+    });
+  });
+
+  it('exact courseIndex fallback: if indexed row is insufficient, spill to name+product matches', async () => {
+    const { deductCourseItems } = await bc();
+    await resetCourses([
+      { name: 'X', product: 'Xp', qty: '10 / 10 U', tag: 'r0' },
+      { name: 'X', product: 'Xp', qty: '3 / 10 U', tag: 'r1' }, // only 3 remaining
+    ]);
+    // User wants to deduct 5 from row 1 (only has 3). Spillover should hit r0 next.
+    await deductCourseItems(CID, [
+      { courseName: 'X', productName: 'Xp', deductQty: 5, courseIndex: 1, rowId: 'be-row-1' },
+    ]);
+    const c = (await getDoc(custDoc(CID))).data();
+    expect(c.courses.find(x => x.tag === 'r1').qty).toBe('0 / 10 U'); // drained fully
+    expect(c.courses.find(x => x.tag === 'r0').qty).toBe('8 / 10 U'); // spilled 2
+  });
+
+  it('exact courseIndex with mismatched name (stale index) → ignores + falls back to lookup', async () => {
+    const { deductCourseItems } = await bc();
+    await resetCourses([
+      { name: 'X', product: 'Xp', qty: '10 / 10 U' },
+      { name: 'Y', product: 'Yp', qty: '10 / 10 U' }, // different name at index 1
+    ]);
+    // User's saved courseIndex was 1 but the backend state shifted — name mismatch.
+    // Fallback iteration finds "X|Xp" at index 0.
+    await deductCourseItems(CID, [
+      { courseName: 'X', productName: 'Xp', deductQty: 3, courseIndex: 1 },
+    ]);
+    const c = (await getDoc(custDoc(CID))).data();
+    expect(c.courses[0].qty).toBe('7 / 10 U');
+    expect(c.courses[1].qty).toBe('10 / 10 U'); // Y unchanged
+  });
+
+  it('reverseCourseDeduction exact index: restores the specific row', async () => {
+    const { reverseCourseDeduction } = await bc();
+    await resetCourses([
+      { name: 'R', product: 'Rp', qty: '10 / 10 U', tag: 'a' },
+      { name: 'R', product: 'Rp', qty: '0 / 10 U', tag: 'b' },
+    ]);
+    await reverseCourseDeduction(CID, [
+      { courseName: 'R', productName: 'Rp', deductQty: 5, courseIndex: 1 },
+    ]);
+    const c = (await getDoc(custDoc(CID))).data();
+    expect(c.courses.find(x => x.tag === 'a').qty).toBe('10 / 10 U'); // untouched
+    expect(c.courses.find(x => x.tag === 'b').qty).toBe('5 / 10 U'); // restored at exact index
+  });
+
   it('purchased + existing deductions in same treatment: both applied with correct strategies', async () => {
     await resetCourses([
       { name: 'Old', product: 'P', qty: '10 / 10 U', tag: 'old' }, // existing course

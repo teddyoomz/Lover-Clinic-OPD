@@ -133,11 +133,20 @@ import { deductQty, reverseQty, addRemaining as addRemainingQty, buildQtyString,
 
 /**
  * Deduct course items after treatment save.
+ *
+ * Resolution order per deduction:
+ *   1. If `courseIndex` is a valid number AND the entry at that index still matches
+ *      name+product (safety check against stale data), deduct from it first. This is
+ *      the "exact targeting" path — the UI lets users pick a specific purchase row,
+ *      so the save should hit THAT row, not a FIFO match among duplicates.
+ *   2. Any leftover amount (entry missing/insufficient) falls back to iterating by
+ *      name+product — oldest-first by default, newest-first when `preferNewest`.
+ *
  * @param {string} customerId - proClinicId
- * @param {Array<{courseIndex: number, deductQty: number, courseName?: string, productName?: string}>} deductions
- * @param {{preferNewest?: boolean}} [opts] — when `preferNewest: true`, iterate courses last→first.
- *        Use for purchased-in-session deductions so the newly-assigned course (pushed last) is
- *        deducted first, not old entries with the same name+product.
+ * @param {Array<{courseIndex?: number, deductQty: number, courseName?: string, productName?: string}>} deductions
+ * @param {{preferNewest?: boolean}} [opts] — when `preferNewest: true`, the FALLBACK
+ *        iteration goes last→first. Useful for purchased-in-session rows where the
+ *        newly-assigned entry sits at the end of the array.
  */
 export async function deductCourseItems(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
@@ -147,24 +156,46 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
   const { parseQtyString } = await import('./courseUtils.js');
   const preferNewest = !!opts?.preferNewest;
 
+  const matchesDed = (c, d) => {
+    const nameMatch = d.courseName ? c.name === d.courseName : true;
+    const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
+    return nameMatch && productMatch;
+  };
+
   for (const d of deductions) {
     let remaining = d.deductQty || 1;
-    // Build iteration order: reversed when preferNewest (newest entries first)
-    const order = preferNewest
-      ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
-      : Array.from({ length: courses.length }, (_, i) => i);
-    for (const i of order) {
-      if (remaining <= 0) break;
-      const c = courses[i];
-      const nameMatch = d.courseName ? c.name === d.courseName : true;
-      const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
-      if (!nameMatch || !productMatch) continue;
-      const parsed = parseQtyString(c.qty);
-      if (parsed.remaining <= 0) continue;
-      const toDeduct = Math.min(remaining, parsed.remaining);
-      courses[i] = { ...c, qty: deductQty(c.qty, toDeduct) };
-      remaining -= toDeduct;
+
+    // Step 1: exact-index targeting
+    if (typeof d.courseIndex === 'number' && d.courseIndex >= 0 && d.courseIndex < courses.length) {
+      const c = courses[d.courseIndex];
+      if (matchesDed(c, d)) {
+        const parsed = parseQtyString(c.qty);
+        if (parsed.remaining > 0) {
+          const toDeduct = Math.min(remaining, parsed.remaining);
+          courses[d.courseIndex] = { ...c, qty: deductQty(c.qty, toDeduct) };
+          remaining -= toDeduct;
+        }
+      }
     }
+
+    // Step 2: fallback iteration (name+product match) for any leftover amount
+    if (remaining > 0) {
+      const order = preferNewest
+        ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
+        : Array.from({ length: courses.length }, (_, i) => i);
+      for (const i of order) {
+        if (remaining <= 0) break;
+        if (i === d.courseIndex) continue; // already handled in Step 1
+        const c = courses[i];
+        if (!matchesDed(c, d)) continue;
+        const parsed = parseQtyString(c.qty);
+        if (parsed.remaining <= 0) continue;
+        const toDeduct = Math.min(remaining, parsed.remaining);
+        courses[i] = { ...c, qty: deductQty(c.qty, toDeduct) };
+        remaining -= toDeduct;
+      }
+    }
+
     if (remaining > 0) {
       throw new Error(`คอร์สคงเหลือไม่พอ: ${d.productName || d.courseName} ต้องการตัด ${d.deductQty} เหลือตัดไม่ได้อีก ${remaining}`);
     }
@@ -176,9 +207,16 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
 
 /**
  * Reverse course deduction (on edit/delete treatment).
+ *
+ * Resolution order per entry:
+ *   1. `courseIndex` — if provided and the entry at that index still matches
+ *      name+product, restore there (exact targeting, mirrors `deductCourseItems`).
+ *   2. Otherwise name+product lookup — oldest-first by default,
+ *      newest-first when `preferNewest` (for purchased-in-session reversals).
+ *
  * @param {string} customerId
- * @param {Array<{courseIndex: number, deductQty: number, courseName?: string, productName?: string}>} deductions
- * @param {{preferNewest?: boolean}} [opts] — when true, prefer newest matching entry (symmetric to deduct).
+ * @param {Array<{courseIndex?: number, deductQty: number, courseName?: string, productName?: string}>} deductions
+ * @param {{preferNewest?: boolean}} [opts]
  */
 export async function reverseCourseDeduction(customerId, deductions, opts = {}) {
   if (!deductions?.length) return [];
@@ -187,23 +225,31 @@ export async function reverseCourseDeduction(customerId, deductions, opts = {}) 
   const courses = [...(snap.data().courses || [])];
   const preferNewest = !!opts?.preferNewest;
 
+  const matchesDed = (c, d) => {
+    const nameMatch = d.courseName ? c.name === d.courseName : true;
+    const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
+    return nameMatch && productMatch;
+  };
+
   for (const d of deductions) {
-    // Find by name+product (not index — form deduplicates courses)
     let idx = -1;
-    if (d.courseName) {
+
+    // Step 1: exact-index targeting (preferred — survives name collisions)
+    if (typeof d.courseIndex === 'number' && d.courseIndex >= 0 && d.courseIndex < courses.length) {
+      if (matchesDed(courses[d.courseIndex], d)) idx = d.courseIndex;
+    }
+
+    // Step 2: name+product fallback
+    if (idx < 0 && d.courseName) {
       if (preferNewest) {
-        // Search from the end so we hit the most-recently-assigned entry first
         for (let i = courses.length - 1; i >= 0; i--) {
-          const c = courses[i];
-          if (c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName)) { idx = i; break; }
+          if (matchesDed(courses[i], d)) { idx = i; break; }
         }
       } else {
-        idx = courses.findIndex(c => c.name === d.courseName && (!d.productName || (c.product || c.name) === d.productName));
+        idx = courses.findIndex(c => matchesDed(c, d));
       }
     }
-    if (idx < 0 && d.courseIndex >= 0 && d.courseIndex < courses.length) {
-      idx = d.courseIndex; // fallback to index for backward compat
-    }
+
     if (idx < 0 || idx >= courses.length) continue;
     courses[idx] = { ...courses[idx], qty: reverseQty(courses[idx].qty, d.deductQty || 1) };
   }
