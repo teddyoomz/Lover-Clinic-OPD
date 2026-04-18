@@ -1820,6 +1820,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
                   } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
                 }
+                // Mirror create-path: also assign purchased promotions (bundled sub-courses or plain promo).
+                for (const promo of newGrouped.promotions) {
+                  try {
+                    const pQty = Number(promo.qty) || 1;
+                    if (promo.courses?.length) {
+                      for (const sub of promo.courses) {
+                        const subProds = sub.products?.length
+                          ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                          : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
+                        await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
+                      }
+                    } else {
+                      const prods = promo.products?.length
+                        ? promo.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+                        : [{ name: promo.name, qty: pQty, unit: 'โปรโมชัน' }];
+                      await assignCourseToCustomer(customerId, { name: promo.name, products: prods, price: promo.unitPrice, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
+                    }
+                  } catch (e) { console.error('[TreatmentForm] promo assign (edit→sale) error:', e); }
+                }
               } catch (e) { console.warn('[TreatmentForm] edit→sale creation failed:', e); }
             } else if (linkedSale.status !== 'cancelled') {
               const saleId = linkedSale.saleId || linkedSale.id;
