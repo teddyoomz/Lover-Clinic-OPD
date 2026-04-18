@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Wallet, CreditCard, Ticket, Star } from 'lucide-react';
 import DepositPanel from './DepositPanel.jsx';
 import WalletPanel from './WalletPanel.jsx';
+import MembershipPanel from './MembershipPanel.jsx';
 
 const SUB_TABS = [
   { key: 'deposit',    label: 'มัดจำ',        icon: Wallet,     color: 'emerald' },
@@ -75,7 +76,13 @@ export default function FinanceTab({ clinicSettings, theme, initialCustomer, onC
           onCustomerUsed={onCustomerUsed}
         />
       )}
-      {activeSubTab === 'membership' && <ComingSoon label="บัตรสมาชิก (Membership)" />}
+      {activeSubTab === 'membership' && (
+        <MembershipPanel
+          theme={theme}
+          initialCustomer={initialCustomer}
+          onCustomerUsed={onCustomerUsed}
+        />
+      )}
       {activeSubTab === 'points' && <ComingSoon label="คะแนนสะสม (Loyalty Points)" />}
     </div>
   );
