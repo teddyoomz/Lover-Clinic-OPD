@@ -229,10 +229,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             })}
             onDeleteTreatment={async (treatmentId) => {
               if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
-              // Phase 7: reverse deposits + refund wallet + reverse points + reverse course deductions
+              // Phase 7 + 8b: reverse course deductions + deposits + wallet + points + STOCK (treatment + linked sale)
               const cid = viewingCustomer.proClinicId;
               try {
-                const { getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned, getTreatment, reverseCourseDeduction } = await import('../lib/backendClient.js');
+                const {
+                  getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned,
+                  getTreatment, reverseCourseDeduction,
+                  reverseStockForTreatment, reverseStockForSale,
+                } = await import('../lib/backendClient.js');
                 // 1. Reverse the treatment's course deductions (both existing + purchased-in-session)
                 try {
                   const t = await getTreatment(treatmentId);
@@ -263,6 +267,20 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                   }
                   try { await reversePointsEarned(cid, saleId); }
                   catch (e) { console.warn('[BackendDashboard] points reverse on treatment delete failed:', e); }
+                  // 2b. Phase 8b — reverse linked sale's stock movements (products + meds)
+                  try { await reverseStockForSale(saleId); }
+                  catch (e) {
+                    console.error('[BackendDashboard] reverse linked sale stock failed:', e);
+                    alert(`คืนสต็อก auto-sale ล้มเหลว: ${e.message}\nยกเลิกการลบ`);
+                    return;
+                  }
+                }
+                // 3. Phase 8b — reverse treatment-side stock (consumables + treatmentItems + optionally meds)
+                try { await reverseStockForTreatment(treatmentId); }
+                catch (e) {
+                  console.error('[BackendDashboard] reverse treatment stock failed:', e);
+                  alert(`คืนสต็อกการรักษาล้มเหลว: ${e.message}\nยกเลิกการลบ`);
+                  return;
                 }
               } catch (e) { console.warn('[BackendDashboard] linked sale lookup failed:', e); }
               await deleteBackendTreatment(treatmentId);

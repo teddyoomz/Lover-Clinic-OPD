@@ -26,7 +26,7 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
-const TS = Date.now();
+const TS = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const bc = () => import('../src/lib/backendClient.js');
 const su = () => import('../src/lib/stockUtils.js');
 

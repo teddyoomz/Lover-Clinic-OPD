@@ -24,7 +24,9 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
-const TS = Date.now();
+// TS unique per test file — `Date.now() + random` prevents cross-file collisions
+// when vitest runs files in parallel (default) and two modules load in the same ms.
+const TS = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const bc = () => import('../src/lib/backendClient.js');
 const su = () => import('../src/lib/stockUtils.js');
 

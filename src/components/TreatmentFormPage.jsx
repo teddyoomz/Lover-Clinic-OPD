@@ -1555,10 +1555,40 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           await deductCourseItems(customerId, existingDeductions);
         }
 
+        // Phase 8b — Stock: on EDIT, reverse old treatment stock BEFORE the doc update.
+        // reverseStockForTreatment queries by linkedTreatmentId so it's safe to call
+        // before the doc changes. Idempotent.
+        if (isEdit) {
+          try {
+            const { reverseStockForTreatment } = await import('../lib/backendClient.js');
+            await reverseStockForTreatment(treatmentId);
+          } catch (stockErr) {
+            throw new Error(`คืนสต็อกการรักษาเดิมไม่สำเร็จ: ${stockErr.message}`);
+          }
+        }
+
         const result = isEdit
           ? await updateBackendTreatment(treatmentId, backendDetail)
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
+
+        // Phase 8b — Stock: deduct treatment-side items (consumables + treatmentItems).
+        // Medications: only when hasSale=false (else auto-sale deducts them via grouped.medications)
+        // to avoid double-deduct. purchasedItems: handled by auto-sale hook (never treatment-side).
+        try {
+          const newTreatmentId = result.treatmentId || treatmentId;
+          const { deductStockForTreatment } = await import('../lib/backendClient.js');
+          await deductStockForTreatment(newTreatmentId, {
+            consumables: backendDetail.consumables || [],
+            treatmentItems: backendDetail.treatmentItems || [],
+            ...(hasSale ? {} : { medications: backendDetail.medications || [] }),
+          }, {
+            customerId, branchId: 'main',
+            user: { userId: '', userName: '' },
+          });
+        } catch (stockErr) {
+          throw new Error(`ตัดสต็อกการรักษาไม่สำเร็จ: ${stockErr.message}`);
+        }
 
         // Auto-create sale invoice when treatment has billing items (hasSale)
         if (hasSale && !isEdit) {
@@ -1601,6 +1631,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               source: 'treatment',
               linkedTreatmentId: result.treatmentId || treatmentId || '',
             }));
+            // Phase 8b — Stock: deduct for auto-sale's products + medications. Fail-fast
+            // and delete the sale if stock can't be allocated, so no partial state.
+            try {
+              const { deductStockForSale, deleteBackendSale } = await import('../lib/backendClient.js');
+              await deductStockForSale(createRes.saleId, grouped, {
+                customerId, branchId: 'main',
+                user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
+              });
+            } catch (stockErr) {
+              try {
+                const { deleteBackendSale } = await import('../lib/backendClient.js');
+                await deleteBackendSale(createRes.saleId);
+              } catch {}
+              throw new Error(`ตัดสต็อก auto-sale ไม่สำเร็จ: ${stockErr.message}`);
+            }
             // Apply each selected deposit to this new sale
             for (const d of depositIdsPayload) {
               try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }

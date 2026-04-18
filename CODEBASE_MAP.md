@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8b Sale integration — deduct/reverse stock wired into SaleTab create/edit/cancel/delete)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8c Treatment integration — stock wired into TreatmentFormPage create/edit + auto-sale + BackendDashboard treatment-delete)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -131,6 +131,15 @@ artifacts/{appId}/public/data/
 - Cancel modal (:955+): `reverseStockForSale` before `cancelBackendSale`. Hard error aborts the cancel.
 - `analyzeSaleCancel` useEffect (:184): now also fetches `analyzeStockImpact` and merges into `cancelAnalysis.stockImpact` → modal shows batches-to-restore preview with canReverseFully flag.
 - Single-branch scaffold constant `BRANCH_ID = 'main'` at top of file (mirrors DEFAULT_BRANCH_ID in stockUtils).
+
+### TreatmentFormPage.jsx hooks (Phase 8c UI)
+- Create (:1561+): after `createBackendTreatment` + `rebuildTreatmentSummary` → `deductStockForTreatment` with `{consumables, treatmentItems}` + optionally `medications` when `hasSale=false` (else auto-sale deducts meds).
+- Edit saga (:1548+): BEFORE `updateBackendTreatment` → `reverseStockForTreatment` (idempotent). AFTER → `deductStockForTreatment` (same scope rules as create).
+- Auto-sale create (:1603+): after `createBackendSale` with `grouped` items → `deductStockForSale(saleId, grouped)`. On fail → `deleteBackendSale(saleId)` + re-throw.
+- Purchased items exclusion: treatment hook NEVER passes `purchasedItems` — they're already in `grouped.products` and handled by the sale hook. Prevents double-deduct.
+
+### BackendDashboard.jsx hooks (Phase 8c UI)
+- `onDeleteTreatment` (:230+): after reversing deposits/wallet/points/courses → `reverseStockForSale(linkedSaleId)` (if linkedSale exists) THEN `reverseStockForTreatment(treatmentId)`. Hard errors alert+abort the delete.
 
 ### Chat Firestore path
 ```
