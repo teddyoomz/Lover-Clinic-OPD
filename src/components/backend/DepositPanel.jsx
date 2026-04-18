@@ -443,7 +443,11 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
               </thead>
               <tbody>
                 {filteredDeposits.map((dep, i) => {
-                  const remain = calcDepositRemaining(dep.amount, dep.usedAmount);
+                  // Prefer the stored remainingAmount (source of truth — accounts for apply AND refund).
+  // Fall back to amount - usedAmount only when the field is missing (legacy docs).
+  const remain = dep.remainingAmount != null
+    ? Number(dep.remainingAmount) || 0
+    : calcDepositRemaining(dep.amount, dep.usedAmount);
                   const isFullyUsable = dep.status === 'active' || dep.status === 'partial';
                   const canCancel = dep.status === 'active';
                   const canRefund = isFullyUsable && remain > 0;
@@ -461,10 +465,14 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                         {dep.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{dep.customerHN}</span>}
                       </td>
                       <td className="px-3 py-2 font-mono">
-                        <div className="text-[var(--tx-heading)] font-bold">{fmtMoney(dep.amount)} <span className="text-[10px] text-[var(--tx-muted)] font-normal">บาท</span></div>
-                        {(dep.status === 'partial' || dep.status === 'used') && (
-                          <div className="text-[10px] text-sky-400">คงเหลือ {fmtMoney(remain)} / ใช้ {fmtMoney(dep.usedAmount)}</div>
-                        )}
+                        <div className="text-emerald-400 font-bold">
+                          คงเหลือ {fmtMoney(remain)} <span className="text-[10px] text-[var(--tx-muted)] font-normal">บาท</span>
+                        </div>
+                        <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">
+                          <span>ยอด {fmtMoney(dep.amount)}</span>
+                          {Number(dep.usedAmount) > 0 && <span> · ใช้ {fmtMoney(dep.usedAmount)}</span>}
+                          {Number(dep.refundAmount) > 0 && <span> · คืน {fmtMoney(dep.refundAmount)}</span>}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{dep.paymentChannel || '-'}</td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtThaiDate(dep.paymentDate)}</td>
@@ -934,7 +942,11 @@ function EmptyState({ onCreate, isDark }) {
 
 function DetailModal({ dep, isDark, onClose }) {
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
-  const remain = calcDepositRemaining(dep.amount, dep.usedAmount);
+  // Prefer the stored remainingAmount (source of truth — accounts for apply AND refund).
+  // Fall back to amount - usedAmount only when the field is missing (legacy docs).
+  const remain = dep.remainingAmount != null
+    ? Number(dep.remainingAmount) || 0
+    : calcDepositRemaining(dep.amount, dep.usedAmount);
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="deposit-detail-title"
       onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>

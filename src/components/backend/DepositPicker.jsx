@@ -42,6 +42,17 @@ export default function DepositPicker({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
+  // Snapshot "what was already applied to THIS record" at open time (edit mode = restored sale.billing.depositIds;
+  // create mode = []). This lets us show the correct "available = remainingAmount + mine" so edit mode doesn't
+  // over-restrict (since the remainingAmount in Firestore has already been reduced by this record's own apply).
+  // Re-snapshots on customerId or reloadKey change (parent resets both together after save/open).
+  const initialApplied = useMemo(() => {
+    const snap = {};
+    (value || []).forEach(v => { snap[v.depositId] = Number(v.amount) || 0; });
+    return snap;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, reloadKey]);
+
   // Load active deposits for this customer
   const load = useCallback(async () => {
     if (!customerId) { setDeposits([]); return; }
@@ -58,11 +69,8 @@ export default function DepositPicker({
 
   useEffect(() => { load(); }, [load, reloadKey]);
 
-  // Total balance (sum of remainingAmount for all active/partial)
-  const totalBalance = useMemo(
-    () => deposits.reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0),
-    [deposits]
-  );
+  // Total balance = Σ availableFor(dep) — accounts for edit-mode self-apply without double-counting stale rows.
+  // (Computed separately below after `rows` is built.)
 
   // Total currently-used amount across all selected deposits
   const usedTotal = useMemo(
@@ -93,6 +101,23 @@ export default function DepositPicker({
     return m;
   }, [value]);
 
+  // "available" for a deposit = current remaining (post-apply) + what this record already applied (edit mode).
+  // In create mode, `initialApplied[id]` is 0 so it's just remainingAmount.
+  // Stale rows (deposit no longer in active list) use the faked remainingAmount as-is — no double count.
+  const availableFor = (dep) => {
+    if (dep._stale) return Number(dep.remainingAmount) || 0;
+    const own = Number(dep.remainingAmount) || 0;
+    const mine = Number(initialApplied[dep.depositId]) || 0;
+    return own + mine;
+  };
+
+  const totalBalance = useMemo(
+    () => rows.reduce((s, d) => s + availableFor(d), 0),
+    // availableFor closes over initialApplied, already tracked via [rows, initialApplied]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, initialApplied]
+  );
+
   const setSelected = (depositId, amount) => {
     const a = Math.max(0, Number(amount) || 0);
     const without = value.filter(v => v.depositId !== depositId);
@@ -101,13 +126,11 @@ export default function DepositPicker({
   };
 
   const capFor = (dep) => {
-    // Per-deposit cap = its own remaining
-    const own = Number(dep.remainingAmount) || 0;
-    // Plus: prevent total from exceeding maxAmount
+    const avail = availableFor(dep);
     const myCurrent = selectedMap[dep.depositId] || 0;
     const othersTotal = usedTotal - myCurrent;
     const fromMax = Math.max(0, (Number(maxAmount) || 0) - othersTotal);
-    return Math.min(own, fromMax);
+    return Math.min(avail, fromMax);
   };
 
   const handleToggle = (dep, checked) => {
@@ -209,7 +232,10 @@ export default function DepositPicker({
                 <div className="text-xs font-mono text-[var(--tx-secondary)] truncate">{dep.depositId}</div>
                 <div className="text-[10px] text-[var(--tx-muted)]">
                   {dep.paymentDate && <span>{fmtDate(dep.paymentDate)} · </span>}
-                  คงเหลือ ฿{fmtMoney(dep.remainingAmount)}
+                  คงเหลือ ฿{fmtMoney(availableFor(dep))}
+                  {(initialApplied[dep.depositId] || 0) > 0 && (
+                    <span className="ml-1 text-amber-400">(ใช้บิลนี้ ฿{fmtMoney(initialApplied[dep.depositId])})</span>
+                  )}
                   {dep._stale && <span className="ml-1 text-amber-400">(บันทึกเดิม)</span>}
                 </div>
               </div>
