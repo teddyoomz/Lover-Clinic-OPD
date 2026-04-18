@@ -576,17 +576,18 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             <div className="space-y-1.5">
               {practitioners.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
-                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate">{p.name}</span>
+                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate" title={p.name}>{p.name}</span>
                   <span className="text-xs text-gray-500 font-mono shrink-0">#{p.id}</span>
                   <select
                     value={p.role}
+                    aria-label={`บทบาทของ ${p.name}`}
                     onChange={e => {
                       setPractitioners(prev => prev.map(x => x.id === p.id ? { ...x, role: e.target.value } : x));
                     }}
-                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none cursor-pointer shrink-0 ${
-                      p.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-400' :
-                      p.role === 'assistant' ? 'bg-purple-950/30 border-purple-800/50 text-purple-400' :
-                      'bg-red-950/30 border-red-800/50 text-red-400'
+                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none focus-visible:ring-2 focus-visible:ring-sky-500 cursor-pointer shrink-0 ${
+                      p.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-300' :
+                      p.role === 'assistant' ? 'bg-purple-950/30 border-purple-800/50 text-purple-300' :
+                      'bg-red-950/30 border-red-800/50 text-red-300'
                     }`}
                   >
                     <option value="doctor">🩺 แพทย์</option>
@@ -645,17 +646,18 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             <div className="space-y-1.5">
               {rooms.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
-                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate">{r.name}</span>
+                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate" title={r.name}>{r.name}</span>
                   <span className="text-xs text-gray-500 font-mono shrink-0">#{r.id}</span>
                   <select
                     value={r.role}
+                    aria-label={`ประเภทของห้อง ${r.name}`}
                     onChange={e => {
                       setRooms(prev => prev.map(x => x.id === r.id ? { ...x, role: e.target.value } : x));
                     }}
-                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none cursor-pointer shrink-0 ${
-                      r.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-400' :
-                      r.role === 'staff' ? 'bg-cyan-950/30 border-cyan-800/50 text-cyan-400' :
-                      'bg-red-950/30 border-red-800/50 text-red-400'
+                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none focus-visible:ring-2 focus-visible:ring-sky-500 cursor-pointer shrink-0 ${
+                      r.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-300' :
+                      r.role === 'staff' ? 'bg-cyan-950/30 border-cyan-800/50 text-cyan-300' :
+                      'bg-red-950/30 border-red-800/50 text-red-300'
                     }`}
                   >
                     <option value="doctor">🩺 ห้องแพทย์</option>

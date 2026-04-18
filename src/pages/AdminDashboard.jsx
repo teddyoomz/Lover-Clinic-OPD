@@ -724,26 +724,58 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [db, appId]);
 
-  // Update bookedSlots in all active schedule docs
+  // Update bookedSlots + doctorBookedSlots in all active schedule docs after
+  // an auto-sync fires. Must re-apply the SAME filter that was persisted on
+  // each doc (doctorId/roomId/noDoctorRequired/assistantIds/doctorRoomIds) —
+  // otherwise "Dr A in exam-1" links would get their bookedSlots wiped with
+  // a global "every appointment" list, causing customers to see legit slots
+  // as busy (and ไม่พบแพทย์ links would carry stale doctorBookedSlots for 24h).
   const updateActiveSchedules = async () => {
     try {
       const activeScheds = schedList.filter(s => s.enabled !== false);
+      if (activeScheds.length === 0) return;
+      // Admin-config sets used by the filter helpers (current, not frozen per-doc).
+      const doctorIds = new Set(practitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
+      const assistantIds = new Set(practitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
+      const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
+
       for (const sched of activeScheds) {
         // Check if not expired (24hr)
         if (sched.createdAt?.toMillis && Date.now() - sched.createdAt.toMillis() > 24 * 60 * 60 * 1000) continue;
+
+        const filterCfg = {
+          noDoctorRequired: !!sched.noDoctorRequired,
+          selectedDoctorId: sched.selectedDoctorId || null,
+          selectedRoomId: sched.selectedRoomId || null,
+          assistantIds,
+        };
+        const doctorSlotCfg = {
+          noDoctorRequired: !!sched.noDoctorRequired,
+          doctorPractitionerIds: doctorIds,
+          doctorRoomIds,
+        };
+
         const months = sched.months || [];
-        const bookedSlots = [];
+        const freshBookedSlots = [];
+        const freshDoctorBookedSlots = [];
         for (const mo of months) {
           const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
           if (snap.exists()) {
             (snap.data().appointments || []).forEach(a => {
-              if (a.date && a.startTime && a.endTime) {
-                bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              if (!a.date || !a.startTime || !a.endTime) return;
+              if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
+                freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+              if (shouldBlockScheduleSlot(a, filterCfg)) {
+                freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
               }
             });
           }
         }
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), { bookedSlots }).catch(e => console.warn('[updateActiveSchedules] write failed:', e.message));
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), {
+          bookedSlots: freshBookedSlots,
+          doctorBookedSlots: sched.noDoctorRequired ? freshDoctorBookedSlots : [],
+        }).catch(e => console.warn('[updateActiveSchedules] write failed:', sched.token, e.message));
       }
     } catch (e) { console.warn('[updateActiveSchedules] failed:', e.message); }
   };
@@ -799,9 +831,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           closedDays: [...closedDays],
           manualBlockedSlots: manualBlocked,
           customDoctorHours: cdh,
-        }).catch(() => {});
+        }).catch(e => console.warn('[schedule-prefs-sync] update failed:', s.token, e.message));
       });
-    }).catch(() => {});
+    }).catch(e => console.warn('[schedule-prefs-sync] save failed:', e.message));
   };
 
   // ── Edit mode helpers for schedule settings ──
@@ -1178,7 +1210,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), {
             bookedSlots: freshBookedSlots,
             doctorBookedSlots: schedNoDoctorRequired ? freshDoctorBookedSlots : [],
-          }).catch(() => {});
+          }).catch(e => console.warn('[schedule-resync] update failed:', token, e.message));
           console.log('[schedule-resync] updated schedule doc with fresh booked slots');
         } catch (e) { console.warn('[schedule-resync] update schedule failed:', e.message); }
       })();
@@ -4663,13 +4695,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 </span>
                               )}
                               {s.selectedRoomName && (
-                                <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold bg-cyan-950/30 border border-cyan-800/40 text-cyan-300" title="ห้องที่เลือก">
-                                  {isDoctor ? '🏥' : '🛏️'} {s.selectedRoomName}
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-full font-bold bg-cyan-950/30 border border-cyan-800/40 text-cyan-300 max-w-[180px] truncate" title={`ห้อง: ${s.selectedRoomName}`}>
+                                  {isDoctor ? '🩺' : '🛏️'} {s.selectedRoomName}
                                 </span>
                               )}
                               {!isDoctor && (
                                 <span
-                                  className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.showDoctorStatus ? 'bg-emerald-950/30 border border-emerald-800/40 text-emerald-300' : 'bg-gray-800/40 border border-gray-700/50 text-gray-500'}`}
+                                  className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.showDoctorStatus ? 'bg-emerald-950/30 border border-emerald-800/40 text-emerald-300' : 'bg-gray-800/40 border border-gray-700/50 text-gray-400'}`}
                                   title={s.showDoctorStatus ? 'ลูกค้าเห็นสถานะหมอว่าง/ไม่ว่าง' : 'ไม่แสดงสถานะหมอให้ลูกค้า'}
                                 >
                                   สถานะหมอ: {s.showDoctorStatus ? 'แสดง' : 'ซ่อน'}
@@ -6405,6 +6437,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const label = `${thaiMo[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
           monthOptions.push({ val, label });
         }
+        // Pre-compute room options for the selector — avoid an IIFE inside JSX
+        // (CLAUDE.md rule 2: Vite OXC parser crashes on inline IIFE JSX).
+        const shownRooms = (clinicSettings.rooms || []).filter(r =>
+          r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
+        );
 
         return (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
@@ -6483,27 +6520,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   )}
                   {/* Room selector — filtered by schedule mode.
                       พบแพทย์ → ห้องแพทย์ ; ไม่พบแพทย์ → ห้องหัตถการทั่วไป.
-                      Rooms configured in ClinicSettingsPanel (`clinicSettings.rooms[]`). */}
-                  {(() => {
-                    const allRooms = clinicSettings.rooms || [];
-                    const wanted = schedNoDoctorRequired ? 'staff' : 'doctor';
-                    const shown = allRooms.filter(r => r.role === wanted);
-                    if (shown.length === 0) return null;
-                    return (
-                      <div>
-                        <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
-                          เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
-                        </label>
-                        <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
-                          className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                          <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
-                          {shown.map(r => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })()}
+                      Rooms configured in ClinicSettingsPanel (`clinicSettings.rooms[]`).
+                      `shownRooms` computed above to avoid IIFE-in-JSX pattern. */}
+                  {shownRooms.length > 0 && (
+                    <div>
+                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
+                        เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
+                      </label>
+                      <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
+                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                        <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
+                        {shownRooms.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {/* Show doctor status toggle — ไม่พบแพทย์ mode only.
                       Default off — admin opts in if they want the customer
                       to see when the doctor is (un)available alongside the
