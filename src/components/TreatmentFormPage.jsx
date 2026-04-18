@@ -1727,6 +1727,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               applyDepositToSale, reverseDepositUsage,
               deductWallet, refundToWallet,
               earnPoints, reversePointsEarned,
+              reverseStockForSale, deductStockForSale,
             } = await import('../lib/backendClient.js');
             const linkedSale = await getSaleByTreatmentId(result.treatmentId || treatmentId || '');
             if (linkedSale && linkedSale.status !== 'cancelled') {
@@ -1754,7 +1755,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               try { await reversePointsEarned(customerId, saleId); }
               catch (e) { console.warn('[TreatmentForm] points reverse (edit) failed:', e); }
 
-              // 4. Build new billing payload + update sale
+              // 3b. Scenario-J: reverse the linked sale's existing stock deductions
+              //     so the ledger can be rebuilt from the new items below. Without
+              //     this step, editing the treatment to remove meds/products left
+              //     the sale's stock still deducted — "ghost" inventory loss.
+              try { await reverseStockForSale(saleId); }
+              catch (e) { console.warn('[TreatmentForm] reverse old stock (edit) failed:', e); }
+
+              // 4. Build new billing + items payload + update sale
               const depositIdsPayload = selectedDeposits
                 .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
                 .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
@@ -1762,7 +1770,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
               const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
               const firstSeller = pmSellers.find(s => s.enabled && s.id);
+              // Rebuild grouped items from current treatment state (mirrors create path).
+              const editGrouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
+              purchasedItems.forEach(p => {
+                const t = p.itemType || 'product';
+                if (t === 'promotion') editGrouped.promotions.push(p);
+                else if (t === 'course') editGrouped.courses.push(p);
+                else editGrouped.products.push(p);
+              });
               await updateBackendSale(saleId, {
+                items: editGrouped,
                 billing: {
                   ...(linkedSale.billing || {}),
                   subtotal: billing.subtotal,
@@ -1778,6 +1795,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 },
                 membershipId: backendActiveMembership?.membershipId || null,
               });
+              // 4b. Re-deduct stock based on the new items. Hard error so we
+              //     don't leave the sale in a half-reversed state silently.
+              try {
+                await deductStockForSale(saleId, editGrouped, {
+                  customerId, branchId: 'main',
+                  user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
+                });
+              } catch (stockErr) {
+                console.error('[TreatmentForm] rededuct stock (edit) failed — stock ledger now out of sync with sale', {
+                  saleId, treatmentId, error: stockErr?.message,
+                });
+                throw new Error(`ตัดสต็อกใหม่ไม่สำเร็จ: ${stockErr.message}`);
+              }
               // 5. Apply new deposits
               for (const d of depositIdsPayload) {
                 try { await applyDepositToSale(d.depositId, saleId, d.amount); }

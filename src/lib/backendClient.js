@@ -497,6 +497,23 @@ export async function generateInvoiceNumber() {
   return `INV-${dateStr}-${String(seq).padStart(4, '0')}`;
 }
 
+/**
+ * M12 ext: writes to `payment.channels` bypass `updateSalePayment` when they
+ * happen through createBackendSale/updateBackendSale, so THB rounding has to
+ * apply at the write site too. Coerce each channel.amount to 2 decimals so a
+ * raw `0.1 + 0.2`-style drift never reaches Firestore.
+ */
+function _normalizeSaleData(data) {
+  if (!data || typeof data !== 'object') return data;
+  const payment = data.payment;
+  if (!payment || !Array.isArray(payment.channels)) return data;
+  const cleaned = payment.channels.map(c => ({
+    ...c,
+    amount: Math.round((parseFloat(c.amount) || 0) * 100) / 100,
+  }));
+  return { ...data, payment: { ...payment, channels: cleaned } };
+}
+
 /** Create a new sale — uses unique saleId, never overwrites existing.
  *  Returns the ACTUAL saleId used (may include a `-<ts>` suffix when the
  *  primary invoice number collides — the doc is stored under `finalId`, so
@@ -510,7 +527,7 @@ export async function createBackendSale(data) {
   const finalId = existing.exists() ? `${saleId}-${Date.now().toString(36)}` : saleId;
   await setDoc(saleDoc(finalId), {
     saleId: finalId,
-    ...data,
+    ..._normalizeSaleData(data),
     status: data.status || 'active',
     createdAt: now,
     updatedAt: now,
@@ -520,7 +537,7 @@ export async function createBackendSale(data) {
 
 /** Update an existing sale */
 export async function updateBackendSale(saleId, data) {
-  await updateDoc(saleDoc(saleId), { ...data, updatedAt: new Date().toISOString() });
+  await updateDoc(saleDoc(saleId), { ..._normalizeSaleData(data), updatedAt: new Date().toISOString() });
   return { success: true };
 }
 
@@ -3074,12 +3091,7 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
   const TS_ENUM = stockUtils.TRANSFER_STATUS;
 
   const ref = stockTransferDoc(transferId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Transfer ${transferId} not found`);
-  const cur = snap.data();
-  const curStatus = Number(cur.status);
   const next = Number(newStatus);
-  const user = opts.user || cur.user || { userId: null, userName: null };
   const now = new Date().toISOString();
 
   // Transition guards
@@ -3090,9 +3102,35 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
     3: [],              // cancelled — terminal
     4: [],              // rejected — terminal
   };
-  if (!(allowed[curStatus] || []).includes(next)) {
-    throw new Error(`Invalid transfer status transition ${curStatus} → ${next}`);
-  }
+
+  // Scenario-I / S12: atomic CAS on the transfer doc. Two concurrent "รับ"
+  // clicks would otherwise both read status=1 here, both walk the loop
+  // creating destination batches, and both updateDoc status=2 — leaving
+  // duplicate orphaned batches. Reading + advancing status in a single
+  // runTransaction makes the second caller's tx retry, see status=2, and
+  // throw invalid-transition.
+  const claim = await runTransaction(db, async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists()) throw new Error(`Transfer ${transferId} not found`);
+    const c = s.data();
+    const curStat = Number(c.status);
+    if (!(allowed[curStat] || []).includes(next)) {
+      throw new Error(`Invalid transfer status transition ${curStat} → ${next}`);
+    }
+    const patch = { status: next, updatedAt: now };
+    if (next === 1) {
+      patch.deliveredTrackingNumber = String(opts.deliveredTrackingNumber || '');
+      patch.deliveredNote = String(opts.deliveredNote || '');
+      patch.deliveredImageUrl = String(opts.deliveredImageUrl || '');
+    }
+    if (next === 3) patch.canceledNote = String(opts.canceledNote || '');
+    if (next === 4) patch.rejectedNote = String(opts.rejectedNote || '');
+    tx.update(ref, patch);
+    return { ...c, _prevStatus: curStat };
+  });
+  const cur = claim;
+  const curStatus = claim._prevStatus;
+  const user = opts.user || cur.user || { userId: null, userName: null };
 
   const docPath = `artifacts/${appId}/public/data/be_stock_transfers/${transferId}`;
 
@@ -3193,14 +3231,11 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
     }
   }
 
-  // Execute the transition
+  // Execute the transition — status is already advanced atomically above.
+  // Heavy work (batch mutations + movement writes) happens after the CAS so
+  // the transfer doc isn't locked for the full duration.
   if (curStatus === 0 && next === 1) {
     for (const it of cur.items) await _exportFromSource(it);
-    await updateDoc(ref, { status: 1, updatedAt: now,
-      deliveredTrackingNumber: String(opts.deliveredTrackingNumber || ''),
-      deliveredNote: String(opts.deliveredNote || ''),
-      deliveredImageUrl: String(opts.deliveredImageUrl || ''),
-    });
   }
   else if (curStatus === 1 && next === 2) {
     const updatedItems = [];
@@ -3208,19 +3243,10 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       const destBatchId = await _receiveAtDestination(it);
       updatedItems.push({ ...it, destinationBatchId: destBatchId });
     }
-    await updateDoc(ref, { status: 2, items: updatedItems, updatedAt: now });
-  }
-  else if (curStatus === 0 && next === 3) {
-    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
+    await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
   }
   else if (curStatus === 1 && (next === 3 || next === 4)) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
-    await updateDoc(ref, {
-      status: next,
-      canceledNote: next === 3 ? String(opts.canceledNote || '') : '',
-      rejectedNote: next === 4 ? String(opts.rejectedNote || '') : '',
-      updatedAt: now,
-    });
   }
   return { transferId, status: next, success: true };
 }
@@ -3325,18 +3351,30 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
   const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric } = stockUtils;
 
   const ref = stockWithdrawalDoc(withdrawalId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error(`Withdrawal ${withdrawalId} not found`);
-  const cur = snap.data();
-  const curStatus = Number(cur.status);
   const next = Number(newStatus);
-  const user = opts.user || cur.user || { userId: null, userName: null };
   const now = new Date().toISOString();
 
   const allowed = { 0: [1, 3], 1: [2, 3], 2: [], 3: [] };
-  if (!(allowed[curStatus] || []).includes(next)) {
-    throw new Error(`Invalid withdrawal status transition ${curStatus} → ${next}`);
-  }
+
+  // Scenario-I / S12: atomic CAS (same pattern as updateStockTransferStatus).
+  // Prevents two concurrent "รับ"/"อนุมัติ" clicks from both creating
+  // destination batches and racing the final updateDoc.
+  const claim = await runTransaction(db, async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists()) throw new Error(`Withdrawal ${withdrawalId} not found`);
+    const c = s.data();
+    const curStat = Number(c.status);
+    if (!(allowed[curStat] || []).includes(next)) {
+      throw new Error(`Invalid withdrawal status transition ${curStat} → ${next}`);
+    }
+    const patch = { status: next, updatedAt: now };
+    if (next === 3) patch.canceledNote = String(opts.canceledNote || '');
+    tx.update(ref, patch);
+    return { ...c, _prevStatus: curStat };
+  });
+  const cur = claim;
+  const curStatus = claim._prevStatus;
+  const user = opts.user || cur.user || { userId: null, userName: null };
 
   const docPath = `artifacts/${appId}/public/data/be_stock_withdrawals/${withdrawalId}`;
 
@@ -3429,9 +3467,9 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
     }
   }
 
+  // Heavy work — status is already advanced atomically in the claim tx above.
   if (curStatus === 0 && next === 1) {
     for (const it of cur.items) await _exportFromSource(it);
-    await updateDoc(ref, { status: 1, updatedAt: now });
   }
   else if (curStatus === 1 && next === 2) {
     const updatedItems = [];
@@ -3439,14 +3477,10 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       const destBatchId = await _receiveAtDestination(it);
       updatedItems.push({ ...it, destinationBatchId: destBatchId });
     }
-    await updateDoc(ref, { status: 2, items: updatedItems, updatedAt: now });
-  }
-  else if (curStatus === 0 && next === 3) {
-    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
+    await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
   }
   else if (curStatus === 1 && next === 3) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
-    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
   }
   return { withdrawalId, status: next, success: true };
 }
