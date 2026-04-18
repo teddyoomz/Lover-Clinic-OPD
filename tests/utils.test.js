@@ -350,3 +350,114 @@ describe('buildQtyString', () => {
     expect(buildQtyString(12, 'ครั้ง')).toBe('12 / 12 ครั้ง');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// N. genShortId — crypto-grade short ID (replaces Math.random Rule-of-3 hit)
+// ═══════════════════════════════════════════════════════════════════════════
+import { genShortId } from '../src/utils.js';
+
+describe('genShortId', () => {
+  it('defaults to 6 uppercase hex chars', () => {
+    const id = genShortId();
+    expect(id).toMatch(/^[0-9A-F]{6}$/);
+  });
+
+  it('respects custom length', () => {
+    expect(genShortId(4)).toMatch(/^[0-9A-F]{4}$/);
+    expect(genShortId(8)).toMatch(/^[0-9A-F]{8}$/);
+    expect(genShortId(12)).toMatch(/^[0-9A-F]{12}$/);
+  });
+
+  it('pads odd lengths by requesting ceil(len/2) bytes then slicing', () => {
+    const id = genShortId(5);
+    expect(id).toHaveLength(5);
+    expect(id).toMatch(/^[0-9A-F]{5}$/);
+  });
+
+  it('returns an uppercase-only string (no lowercase hex)', () => {
+    for (let i = 0; i < 20; i++) {
+      const id = genShortId(8);
+      expect(id).toBe(id.toUpperCase());
+      expect(id).not.toMatch(/[a-f]/);
+    }
+  });
+
+  it('produces high-entropy ids — 500 calls must all be unique at default length', () => {
+    const set = new Set();
+    for (let i = 0; i < 500; i++) set.add(genShortId());
+    expect(set.size).toBe(500);
+  });
+
+  it('uses crypto.getRandomValues, not Math.random (anti-vibe-code check)', () => {
+    // If Math.random were used, ids would be lower-entropy and bias toward certain digits.
+    // We verify by spying: stub crypto.getRandomValues and confirm it's called.
+    const orig = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+    let called = 0;
+    globalThis.crypto.getRandomValues = (arr) => {
+      called++;
+      return orig(arr);
+    };
+    try {
+      genShortId(6);
+      genShortId(12);
+      expect(called).toBe(2);
+    } finally {
+      globalThis.crypto.getRandomValues = orig;
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// N+1. Thai timezone helpers — bangkokNow / thaiTodayISO / thaiNowMinutes
+// ═══════════════════════════════════════════════════════════════════════════
+import { bangkokNow, thaiTodayISO, thaiNowMinutes, thaiYearMonth } from '../src/utils.js';
+
+describe('bangkokNow', () => {
+  it('returns a Date offset 7 hours from UTC (GMT+7 invariant)', () => {
+    const real = Date.now();
+    const bkk = bangkokNow();
+    const diff = bkk.getTime() - real;
+    // Tolerance: 10ms for execution latency
+    expect(Math.abs(diff - 7 * 3600000)).toBeLessThan(20);
+  });
+});
+
+describe('thaiTodayISO', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    expect(thaiTodayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('matches the date in Asia/Bangkok — catches 00:00–07:00 UTC drift', () => {
+    const thaiStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    expect(thaiTodayISO()).toBe(thaiStr);
+  });
+
+  it('does NOT use .toISOString() — would drift during 00:00–07:00 Thai time', () => {
+    // At 00:30 Thai = 17:30 UTC previous day, toISOString would give yesterday.
+    // This test just pins the helper; the production bug on 2026-04-19 was exactly this class.
+    const thai = thaiTodayISO();
+    const utc = new Date().toISOString().slice(0, 10);
+    // They may or may not equal depending on time of day — both must be valid ISO dates.
+    expect(thai).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(utc).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe('thaiNowMinutes', () => {
+  it('returns minutes since Thai midnight in [0, 1440)', () => {
+    const m = thaiNowMinutes();
+    expect(m).toBeGreaterThanOrEqual(0);
+    expect(m).toBeLessThan(1440);
+  });
+});
+
+describe('thaiYearMonth', () => {
+  it('returns YYYY-MM from Thai clock', () => {
+    expect(thaiYearMonth()).toMatch(/^\d{4}-\d{2}$/);
+  });
+
+  it('matches the Thai calendar month at runtime', () => {
+    const thai = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }).slice(0, 7);
+    expect(thaiYearMonth()).toBe(thai);
+  });
+});

@@ -178,14 +178,20 @@ service cloud.firestore {
       }
 
       // ── Presence (online status) ──
+      // Anti-vibe-code AV2: tightened to clinic staff only — admin_presence was
+      // previously readable/writable by any signed-in Firebase user, which is
+      // too permissive (a stray web app signed into our Firebase project could
+      // read the admin tab list). AdminDashboard is the only writer.
       match /admin_presence/{tabId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow read: if isClinicStaff();
+        allow write: if isClinicStaff();
       }
 
-      // ── FCM tokens (push notification) ──
+      // ── FCM tokens (legacy — no code path writes to this collection anymore;
+      //    the real push-subscriber list lives at push_config/tokens).
+      //    Left intentionally locked so the dead collection stays dead. ──
       match /fcm_tokens/{tokenId} {
-        allow read, write: if isSignedIn();
+        allow read, write: if isClinicStaff();
       }
 
       // ── ProClinic cookie relay ──

@@ -20,13 +20,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Wallet, AlertCircle } from 'lucide-react';
 import { getActiveDeposits } from '../../lib/backendClient.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { fmtThaiDate } from '../../lib/dateFormat.js';
 
-const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 function fmtDate(s) {
   if (!s) return '';
-  const [y, m, d] = (s || '').split('-');
-  if (!y || !m || !d) return s;
-  return `${+d} ${THAI_MONTHS_SHORT[(+m) - 1]} ${String((+y) + 543).slice(-2)}`;
+  return fmtThaiDate(s, { yearStyle: 'short' });
 }
 
 export default function DepositPicker({

@@ -12,14 +12,11 @@ import {
   listStockTransfers, createStockTransfer, updateStockTransferStatus,
   listStockLocations, listStockBatches,
 } from '../../lib/backendClient.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import TransferDetailModal from './TransferDetailModal.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
-function fmtDate(iso) {
-  if (!iso) return '-';
-  try { const d = new Date(iso); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
-  catch { return iso; }
-}
+const fmtDate = fmtSlashDateTime;
 
 const STATUS_INFO = {
   0: { label: 'รอส่ง', color: 'amber' },

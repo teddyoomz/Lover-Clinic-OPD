@@ -21,6 +21,7 @@ import {
 // Phase 8f will introduce a UI selector; until then every sale hits "main".
 const BRANCH_ID = 'main';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
+import { fmtThaiDate } from '../../lib/dateFormat.js';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
@@ -45,9 +46,7 @@ function resolveSaleStatus(sale) {
   return PAYMENT_STATUSES.find(s => s.value === sale?.payment?.status)
     || PAYMENT_STATUSES.find(s => s.value === 'draft');
 }
-const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-function fmtDate(s) { if (!s) return '-'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${+d} ${THAI_MONTHS[(+m)-1]} ${(+y)+543}` : s; }
+const fmtDate = fmtThaiDate;
 // DatePickerField removed — shared `DateField` (../DateField.jsx) imported below
 // now drives all three sale/payment date inputs. Styling is identical to the
 // old local component (same default bg/border/padding), so no visual drift.

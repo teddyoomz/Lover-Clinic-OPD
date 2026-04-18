@@ -15,6 +15,7 @@ import {
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 
 // S12: pull the logged-in admin's identity so every stock mutation leaves a
 // real actor on the movement log (MOPH audit).
@@ -32,13 +33,7 @@ import OrderDetailModal from './OrderDetailModal.jsx';
 const BRANCH_ID = 'main';
 
 // fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
-function fmtDate(iso) {
-  if (!iso) return '-';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  } catch { return iso; }
-}
+const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';

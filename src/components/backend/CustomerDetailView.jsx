@@ -16,30 +16,20 @@ import { parseQtyString } from '../../lib/courseUtils.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
+import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
-const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-
+// Short/full Thai-BE formatters delegate to the shared `fmtThaiDate` helper.
+// `formatThaiDateFull` additionally guards against already-formatted strings
+// (defensive: upstream data sometimes arrives already-Thai from ProClinic).
 function formatThaiDateFull(dateStr) {
   if (!dateStr) return '-';
-  // Handle "2026-04-08" or Thai date strings
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return `${d} ${THAI_MONTHS_FULL[m - 1]} ${y + 543}`;
-  }
-  // Already Thai format — return as is
-  if (THAI_MONTHS_FULL.some(mn => dateStr.includes(mn))) return dateStr;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return `${d.getDate()} ${THAI_MONTHS_FULL[d.getMonth()]} ${d.getFullYear() + 543}`;
+  if (typeof dateStr === 'string' && THAI_MONTHS_FULL.some(mn => dateStr.includes(mn))) return dateStr;
+  return fmtThaiDate(dateStr, { monthStyle: 'full' });
 }
 
 function formatThaiDate(dateStr) {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+  return fmtThaiDate(dateStr);
 }
 
 function formatDob(pd) {

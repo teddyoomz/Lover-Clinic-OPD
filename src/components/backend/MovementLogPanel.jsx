@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
 import { listStockMovements, getAllMasterDataItems } from '../../lib/backendClient.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 
 const BRANCH_ID = 'main';
@@ -51,13 +52,8 @@ const TYPE_GROUPS = [
   { id: 'withdrawal', label: 'เบิก', types: [12, 13] },
 ];
 
-function fmtDate(iso) {
-  if (!iso) return '-';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  } catch { return iso; }
-}
+const fmtDate = fmtSlashDateTime;
+
 function fmtQty(n) {
   const num = Number(n || 0);
   return num.toLocaleString('th-TH', { maximumFractionDigits: 2 });

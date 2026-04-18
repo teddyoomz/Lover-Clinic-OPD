@@ -12,6 +12,7 @@ import {
   getAllDeposits, getDeposit, getAllCustomers, getAllMasterDataItems,
 } from '../../lib/backendClient.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
+import { fmtThaiDate } from '../../lib/dateFormat.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
@@ -31,13 +32,6 @@ const STATUS_META = {
   expired:   { label: 'หมดอายุ',    cls: 'bg-orange-900/30 text-orange-400 border-orange-700/40',      lightCls: 'bg-orange-50 text-orange-700 border-orange-200' },
 };
 
-const THAI_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-function fmtThaiDate(s) {
-  if (!s) return '-';
-  const [y, m, d] = (s || '').split('-');
-  if (!y || !m || !d) return s;
-  return `${+d} ${THAI_MONTHS_SHORT[(+m) - 1]} ${(+y) + 543}`;
-}
 function todayStr() { return thaiTodayISO(); }
 function nowTimeStr() {
   const d = bangkokNow();

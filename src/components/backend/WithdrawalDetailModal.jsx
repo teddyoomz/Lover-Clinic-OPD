@@ -6,6 +6,7 @@ import { X, Loader2, ClipboardCheck, AlertCircle, ArrowRightLeft, Package } from
 import {
   getStockWithdrawal, getStockBatch, listStockLocations,
 } from '../../lib/backendClient.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 
 const STATUS_INFO = {
   0: { label: 'รอยืนยัน', color: 'amber' },
@@ -21,13 +22,7 @@ const BADGE_CLS = {
 };
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
-function fmtDateTime(iso) {
-  if (!iso) return '-';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  } catch { return iso; }
-}
+const fmtDateTime = fmtSlashDateTime;
 
 export default function WithdrawalDetailModal({ withdrawalId, onClose }) {
   const [data, setData] = useState(null);

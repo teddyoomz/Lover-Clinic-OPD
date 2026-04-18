@@ -12,6 +12,7 @@ import {
   listStockBatches, createStockAdjustment, getAllMasterDataItems,
   listStockMovements, getStockBatch,
 } from '../../lib/backendClient.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import {
   getFirestore, collection, getDocs, query, where,
 } from 'firebase/firestore';
@@ -27,13 +28,7 @@ function currentAuditUser() {
   };
 }
 
-function fmtDate(iso) {
-  if (!iso) return '-';
-  try {
-    const d = new Date(iso);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  } catch { return iso; }
-}
+const fmtDate = fmtSlashDateTime;
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
