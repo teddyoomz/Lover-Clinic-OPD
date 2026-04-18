@@ -4,7 +4,7 @@
 // Reports progress through a callback: onProgress({ step, label, percent, detail })
 
 import * as broker from './brokerClient.js';
-import { saveCustomer, updateCustomer, saveTreatment, createBackendAppointment, getCustomer, customerExists, getTreatment as getBackendTreatment } from './backendClient.js';
+import { saveCustomer, updateCustomer, saveTreatment, createBackendAppointment, getCustomer, customerExists, getTreatment as getBackendTreatment, findCustomersByField } from './backendClient.js';
 
 // ─── Parse Thai date "8 เมษายน 2026" → "2026-04-08" ────────────────────────
 const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -87,6 +87,33 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
   }
 
   if (signal?.aborted) return { success: false, error: 'Cancelled' };
+
+  // CL1: duplicate detection by HN + phone + national ID. ProClinic can reuse
+  // an HN for a different record after a rename/merge, so relying on the
+  // ProClinic ID alone (customerExists(id) at line 597) misses real-world
+  // duplicates. Query by the natural keys and, if any other customer doc
+  // already owns them, surface a warning in the errors array so the UI can
+  // decide whether to overwrite. We do NOT block the clone — admins
+  // sometimes intentionally re-clone after ProClinic data repair. The
+  // surfaced error lets them see the collision in the clone report.
+  try {
+    const hn = String(profileResult.proClinicHN || '').trim();
+    const phone = String(profileResult.patient?.phone || '').trim();
+    const natId = String(profileResult.patient?.nationalId || '').trim();
+    const dupChecks = [];
+    if (hn) dupChecks.push(['proClinicHN', hn]);
+    if (phone) dupChecks.push(['patientData.phone', phone]);
+    if (natId) dupChecks.push(['patientData.nationalId', natId]);
+    for (const [field, value] of dupChecks) {
+      try {
+        const dups = await findCustomersByField(field, value, String(proClinicId));
+        if (dups.length > 0) {
+          const label = field.replace('patientData.', '');
+          errors.push(`[Duplicate] ${label}=${value} already used by ${dups.map(d => d.proClinicId).join(', ')}`);
+        }
+      } catch { /* index missing or field absent — silent */ }
+    }
+  } catch { /* duplicate-check is best-effort */ }
 
   // Write initial doc
   const customerData = {

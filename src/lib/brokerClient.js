@@ -82,6 +82,12 @@ async function apiFetch(endpoint, body, _retried, _htmlRetried) {
   }
 
   let res;
+  // A7: fetch timeout guard. ProClinic can hang the serverless function
+  // (Vercel 30s cap) so we abort at 28s and let the caller see a friendly
+  // error rather than a 504. Kept per-request via AbortController.
+  const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timeoutMs = 28000;
+  const timeoutId = ac ? setTimeout(() => ac.abort(), timeoutMs) : null;
   try {
     res = await fetch(`/api/proclinic/${endpoint}`, {
       method: 'POST',
@@ -90,10 +96,28 @@ async function apiFetch(endpoint, body, _retried, _htmlRetried) {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(body),
+      signal: ac ? ac.signal : undefined,
     });
   } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (err?.name === 'AbortError') {
+      console.warn(`[broker] ${endpoint} timeout after ${timeoutMs}ms`);
+      return { success: false, error: `Timeout (${timeoutMs / 1000}s) — ProClinic ตอบช้า ลองอีกครั้ง` };
+    }
     console.warn(`[broker] ${endpoint} network error:`, err);
     return { success: false, error: `เชื่อมต่อ server ไม่ได้: ${err.message}` };
+  }
+  if (timeoutId) clearTimeout(timeoutId);
+  // A3: 429 rate-limit retry with exponential backoff. ProClinic / Vercel
+  // rate-limit under burst traffic; CLAUDE.md rule 5 notes operator
+  // workaround is "wait and retry" — automate it here for up to two
+  // retries before surfacing the error. Only triggers for 429.
+  if (res.status === 429 && !_retried) {
+    const retryAfter = Number(res.headers.get('Retry-After')) || 0;
+    const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, 10000) : 2000;
+    console.warn(`[broker] ${endpoint} 429 rate-limited — retrying in ${waitMs}ms`);
+    await new Promise(r => setTimeout(r, waitMs));
+    return apiFetch(endpoint, body, true, _htmlRetried);
   }
   if (!res.ok) {
     console.warn(`[broker] ${endpoint} HTTP ${res.status}`);

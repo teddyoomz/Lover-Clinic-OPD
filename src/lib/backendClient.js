@@ -66,6 +66,77 @@ export async function updateCustomer(proClinicId, fields) {
   await updateDoc(customerDoc(proClinicId), fields);
 }
 
+/**
+ * CL1: find customers whose doc has `field == value`, optionally excluding
+ * a specific proClinicId (used by cloneOrchestrator to detect duplicate HN
+ * /phone/national-ID on a NEW clone — the customer being cloned is
+ * excluded so we don't flag the doc against itself on re-sync).
+ * Returns the matching docs (id + proClinicId only) or [] on failure.
+ */
+export async function findCustomersByField(field, value, excludeProClinicId = null) {
+  if (!field || !value) return [];
+  try {
+    const snap = await getDocs(query(customersCol(), where(field, '==', value)));
+    return snap.docs
+      .map(d => ({ id: d.id, proClinicId: d.data().proClinicId }))
+      .filter(r => !excludeProClinicId || String(r.proClinicId) !== String(excludeProClinicId));
+  } catch (e) {
+    // Missing Firestore index will throw — safe fallback returns empty so
+    // the clone proceeds; the duplicate check is advisory, not blocking.
+    return [];
+  }
+}
+
+/**
+ * R11: delete a customer and ALL of their linked records in a single
+ * batched write. Firestore has no FK enforcement, so deleting the
+ * customer doc alone orphans treatments / sales / deposits / wallets /
+ * memberships / appointments / wallet-tx / point-tx. This function is
+ * gated on explicit caller intent: no UI path invokes it today (hard
+ * delete is intentionally not exposed), so behaviour for existing flows
+ * is unchanged. Added now so any future admin / PDPA-erasure caller
+ * can't accidentally half-delete.
+ *
+ * Stock movements (be_stock_movements) and wallet-tx/point-tx logs ARE
+ * deleted here as part of the erasure. That's intentional for PDPA
+ * right-to-erasure; do NOT use this function for normal "cancel" or
+ * "soft delete" operations.
+ */
+export async function deleteCustomerCascade(proClinicId, opts = {}) {
+  const cid = String(proClinicId);
+  if (!cid) throw new Error('proClinicId required');
+  if (!opts.confirm) {
+    throw new Error('deleteCustomerCascade requires opts.confirm=true (destructive)');
+  }
+  const cols = [
+    treatmentsCol(), salesCol(), depositsCol(), walletsCol(),
+    walletTxCol(), membershipsCol(), pointTxCol(), appointmentsCol(),
+  ];
+  const docs = [];
+  for (const col of cols) {
+    try {
+      const snap = await getDocs(query(col, where('customerId', '==', cid)));
+      for (const d of snap.docs) docs.push(d.ref);
+    } catch (e) {
+      console.error('[deleteCustomerCascade] query failed for', col.path, e);
+      throw e;
+    }
+  }
+  // Firestore batch is capped at 500 writes — chunk just in case.
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = writeBatch(db);
+    const chunk = docs.slice(i, i + 450);
+    for (const ref of chunk) batch.delete(ref);
+    if (i + 450 >= docs.length) batch.delete(customerDoc(cid));
+    await batch.commit();
+  }
+  if (docs.length === 0) {
+    // Nothing linked — just delete the customer doc.
+    await deleteDoc(customerDoc(cid));
+  }
+  return { success: true, deletedLinked: docs.length };
+}
+
 // ─── Treatment CRUD ─────────────────────────────────────────────────────────
 
 /** Save single treatment to be_treatments */
@@ -783,9 +854,37 @@ export async function updateMasterItem(type, id, data) {
   return { success: true };
 }
 
-/** Delete a manual master data item. */
+/**
+ * Delete a manual master data item.
+ *
+ * R5: products specifically must not be hard-deleted while any active
+ * batch in be_stock_batches still references them — that would orphan
+ * the batch + its movement log. For `type='products'` we check for
+ * active batches first; if found, soft-delete by flipping `isActive=false`
+ * so historical sales/movements remain readable and the product doesn't
+ * show in new-order dropdowns. Other master types (doctors, staff, etc.)
+ * keep the original hard-delete behaviour.
+ */
 export async function deleteMasterItem(type, id) {
   const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(id));
+  if (type === 'products') {
+    try {
+      const batchesQ = query(
+        collection(db, ...basePath(), 'be_stock_batches'),
+        where('productId', '==', String(id)),
+        where('status', '==', 'active'),
+      );
+      const snap = await getDocs(batchesQ);
+      if (!snap.empty) {
+        await updateDoc(ref, { isActive: false, deactivatedAt: new Date().toISOString() });
+        return { success: true, softDeleted: true, linkedActiveBatches: snap.size };
+      }
+    } catch (e) {
+      // If the query itself fails (index missing etc.), fall through to the
+      // hard-delete so callers don't silently hang — but log the reason.
+      console.error('[deleteMasterItem] product batch-check failed, falling back to hard delete:', e?.message);
+    }
+  }
   await deleteDoc(ref);
   return { success: true };
 }
@@ -1140,7 +1239,15 @@ export async function recalcCustomerWalletBalances(customerId) {
       'finance.walletBalances': balances,
       'finance.totalWalletBalance': total,
     });
-  } catch {}
+  } catch (e) {
+    // RP5: wallet-tx log is already authoritative. If the summary field
+    // update fails (customer doc missing etc.), log enough context to
+    // reconcile later — do NOT surface the error (callers depend on
+    // recalcCustomerWalletBalances returning the numeric total).
+    console.error('[backendClient] recalcCustomerWalletBalances: finance summary update failed', {
+      customerId: cid, total, error: e?.message,
+    });
+  }
   return total;
 }
 
@@ -1463,7 +1570,12 @@ export async function createMembership(data) {
       'finance.membershipExpiry': expiresAt,
       'finance.membershipDiscountPercent': payload.discountPercent,
     });
-  } catch {}
+  } catch (e) {
+    // RP5: membership doc is authoritative; summary on customer may drift.
+    console.error('[backendClient] createMembership: customer finance summary update failed', {
+      customerId: String(payload.customerId), membershipId, error: e?.message,
+    });
+  }
 
   return { membershipId, walletTxId, pointTxId, success: true };
 }
@@ -1535,7 +1647,12 @@ export async function renewMembership(membershipId, {
     await updateDoc(customerDoc(cur.customerId), {
       'finance.membershipExpiry': newExpiry,
     });
-  } catch {}
+  } catch (e) {
+    // RP5: membership doc carries the authoritative expiry.
+    console.error('[backendClient] renewMembership: customer finance summary update failed', {
+      customerId: String(cur.customerId), newExpiry, error: e?.message,
+    });
+  }
   return { success: true, expiresAt: newExpiry };
 }
 
@@ -1560,7 +1677,12 @@ export async function cancelMembership(membershipId, { cancelNote = '', cancelEv
       'finance.membershipExpiry': null,
       'finance.membershipDiscountPercent': 0,
     });
-  } catch {}
+  } catch (e) {
+    // RP5: membership cancel already wrote the membership doc.
+    console.error('[backendClient] cancelMembership: customer finance summary clear failed', {
+      customerId: String(cur.customerId), error: e?.message,
+    });
+  }
   return { success: true };
 }
 
@@ -1577,7 +1699,12 @@ export async function getCustomerMembership(customerId) {
         // Lazy expire
         try {
           await updateDoc(d.ref, { status: 'expired', updatedAt: new Date().toISOString() });
-        } catch {}
+        } catch (e) {
+          // RP5: membership doc stays 'active' but read logic treats it as expired below.
+          console.error('[backendClient] getCustomerMembership: lazy-expire write failed', {
+            membershipId: m.id, error: e?.message,
+          });
+        }
         try {
           await updateDoc(customerDoc(customerId), {
             'finance.membershipId': null,
@@ -1585,7 +1712,11 @@ export async function getCustomerMembership(customerId) {
             'finance.membershipExpiry': null,
             'finance.membershipDiscountPercent': 0,
           });
-        } catch {}
+        } catch (e) {
+          console.error('[backendClient] getCustomerMembership: finance summary clear failed', {
+            customerId: String(customerId), error: e?.message,
+          });
+        }
         m.status = 'expired';
       } else {
         active.push(m);

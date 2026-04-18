@@ -38,7 +38,26 @@ for (let h = 8; h <= 22; h++) {
   }
 }
 
-function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+// AP3: clinic is Thailand (Asia/Bangkok, UTC+7, no DST). `new Date()` + the
+// local-getters below would be fine for admins in Thailand but drift for
+// anyone using the backend from another TZ (e.g. a developer in UTC picks
+// "2026-04-19" and ends up saving 2026-04-18 because their midnight hasn't
+// hit Bangkok's yet). Render the date in Bangkok's wall-clock time so the
+// calendar always matches what the clinic sees regardless of the viewer's
+// machine clock.
+function dateStr(d) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d).reduce((acc, p) => {
+      if (p.type !== 'literal') acc[p.type] = p.value;
+      return acc;
+    }, {});
+    if (parts.year && parts.month && parts.day) return `${parts.year}-${parts.month}-${parts.day}`;
+  } catch {}
+  // Fallback to local if Intl fails for any reason.
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
 export default function AppointmentTab({ clinicSettings, theme }) {
