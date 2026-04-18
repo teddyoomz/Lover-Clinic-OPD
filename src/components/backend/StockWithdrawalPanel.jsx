@@ -1,0 +1,330 @@
+// ─── StockWithdrawalPanel — branch↔central requisitions (Phase 8g) ──────────
+// State machine: 0 รอยืนยัน → 1 รอส่ง → 2 สำเร็จ ; 0|1 → 3 ยกเลิก
+// Reuses most of TransferPanel's shape + direction selector at top.
+
+import { useState, useEffect, useCallback } from 'react';
+import {
+  ClipboardCheck, Plus, Loader2, AlertCircle, CheckCircle2, ArrowLeft, X,
+  Send, PackageCheck, XCircle, ArrowRightLeft,
+} from 'lucide-react';
+import {
+  listStockWithdrawals, createStockWithdrawal, updateStockWithdrawalStatus,
+  listStockLocations, listStockBatches,
+} from '../../lib/backendClient.js';
+
+function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
+function fmtDate(iso) {
+  if (!iso) return '-';
+  try { const d = new Date(iso); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+  catch { return iso; }
+}
+
+const STATUS_INFO = {
+  0: { label: 'รอยืนยัน', color: 'amber' },
+  1: { label: 'รอส่ง', color: 'sky' },
+  2: { label: 'สำเร็จ', color: 'emerald' },
+  3: { label: 'ยกเลิก', color: 'red' },
+};
+const STATUS_BADGE = {
+  amber: 'bg-amber-900/30 text-amber-400 border-amber-800',
+  sky: 'bg-sky-900/30 text-sky-400 border-sky-800',
+  emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
+  red: 'bg-red-900/30 text-red-400 border-red-800',
+};
+
+export default function StockWithdrawalPanel({ clinicSettings, theme }) {
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [locations, setLocations] = useState([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [list, locs] = await Promise.all([listStockWithdrawals(), listStockLocations()]);
+      setWithdrawals(list); setLocations(locs);
+    } catch (e) { console.error('[Withdrawal]', e); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);
+
+  const handleTransition = async (w, next) => {
+    const labels = { 1: 'อนุมัติและส่ง', 2: 'ยืนยันรับ', 3: 'ยกเลิก' };
+    if (!confirm(`${labels[next]} — withdrawal ${w.withdrawalId}?`)) return;
+    try {
+      const extra = {};
+      if (next === 3) extra.canceledNote = prompt('เหตุผลการยกเลิก (ไม่บังคับ):') || '';
+      await updateStockWithdrawalStatus(w.withdrawalId, next, extra);
+      await load();
+    } catch (e) { alert(e.message); }
+  };
+
+  if (formOpen) {
+    return <WithdrawalCreateForm locations={locations} onClose={() => setFormOpen(false)} onSaved={async () => { setFormOpen(false); await load(); }} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-violet-900/30 border border-violet-800">
+            <ClipboardCheck size={22} className="text-violet-400" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-[var(--tx-heading)]">เบิกสต็อก (Withdrawal)</h2>
+            <p className="text-xs text-[var(--tx-muted)]">สาขาเบิกจากคลังกลาง / คลังกลางส่งให้สาขา — state 0→1→2</p>
+          </div>
+          <button onClick={() => setFormOpen(true)}
+            className="px-4 py-2 rounded-lg text-xs font-bold bg-violet-700 text-white hover:bg-violet-600 flex items-center gap-1.5">
+            <Plus size={14} /> สร้างใบเบิก
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">
+          <Loader2 size={16} className="animate-spin mr-2" /> กำลังโหลด...
+        </div>
+      ) : withdrawals.length === 0 ? (
+        <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)]">
+          <ClipboardCheck size={32} className="mx-auto text-[var(--tx-muted)] mb-2" />
+          <p className="text-xs text-[var(--tx-muted)]">ยังไม่มีใบเบิก — กด "สร้างใบเบิก"</p>
+        </div>
+      ) : (
+        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-lg border border-[var(--bd)]">
+          <table className="w-full text-xs">
+            <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase tracking-wider">
+              <tr>
+                <th className="px-3 py-2 text-left font-bold">เลขที่</th>
+                <th className="px-3 py-2 text-left font-bold">วันที่</th>
+                <th className="px-3 py-2 text-left font-bold">ทิศทาง</th>
+                <th className="px-3 py-2 text-left font-bold">ต้นทาง → ปลายทาง</th>
+                <th className="px-3 py-2 text-center font-bold">รายการ</th>
+                <th className="px-3 py-2 text-center font-bold">สถานะ</th>
+                <th className="px-3 py-2 text-right font-bold">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {withdrawals.map(w => {
+                const s = Number(w.status);
+                const info = STATUS_INFO[s] || { label: '-', color: 'amber' };
+                return (
+                  <tr key={w.withdrawalId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                    <td className="px-3 py-2 font-mono text-violet-400">{w.withdrawalId}</td>
+                    <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(w.createdAt)}</td>
+                    <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">{w.direction === 'branch_to_central' ? 'สาขา→คลัง' : 'คลัง→สาขา'}</td>
+                    <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">
+                      <span>{locationName(w.sourceLocationId)}</span>
+                      <ArrowRightLeft size={10} className="inline mx-1 text-[var(--tx-muted)]" />
+                      <span>{locationName(w.destinationLocationId)}</span>
+                    </td>
+                    <td className="px-3 py-2 text-center">{(w.items || []).length}</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`}>{info.label}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {s === 0 && (
+                        <>
+                          <button onClick={() => handleTransition(w, 1)} className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 inline-flex items-center gap-1 mr-1"><Send size={10} /> อนุมัติ</button>
+                          <button onClick={() => handleTransition(w, 3)} className="px-2 py-1 rounded text-[10px] bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-800 inline-flex items-center gap-1"><XCircle size={10} /> ยกเลิก</button>
+                        </>
+                      )}
+                      {s === 1 && (
+                        <>
+                          <button onClick={() => handleTransition(w, 2)} className="px-2 py-1 rounded text-[10px] bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-800 inline-flex items-center gap-1 mr-1"><PackageCheck size={10} /> รับ</button>
+                          <button onClick={() => handleTransition(w, 3)} className="px-2 py-1 rounded text-[10px] bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-800 inline-flex items-center gap-1"><XCircle size={10} /> ยกเลิก</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WithdrawalCreateForm({ locations, onClose, onSaved }) {
+  const [direction, setDirection] = useState('central_to_branch');
+  // Central → branch: source=central warehouse, dest=branch
+  // Branch → central: source=central warehouse (provides), dest=branch requests
+  // Simpler: always pick source = where stock lives; dest = where stock goes
+  const [src, setSrc] = useState('');
+  const [dst, setDst] = useState('main');
+  const [note, setNote] = useState('');
+  const [batches, setBatches] = useState([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [items, setItems] = useState([{ sourceBatchId: '', qty: '' }]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  // Set defaults based on direction
+  useEffect(() => {
+    if (direction === 'central_to_branch') {
+      // Source = central warehouse, Destination = branch
+      const firstCentral = locations.find(l => l.kind === 'central');
+      setSrc(firstCentral?.id || '');
+      setDst('main');
+    } else {
+      // branch_to_central: Source = branch providing, Destination = central receiving
+      setSrc('main');
+      const firstCentral = locations.find(l => l.kind === 'central');
+      setDst(firstCentral?.id || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [direction]);
+
+  useEffect(() => {
+    if (!src) { setBatches([]); return; }
+    let cancelled = false;
+    setBatchesLoading(true);
+    (async () => {
+      try {
+        const list = await listStockBatches({ branchId: src, status: 'active' });
+        if (!cancelled) setBatches(list);
+      } catch { if (!cancelled) setBatches([]); }
+      finally { if (!cancelled) setBatchesLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [src]);
+
+  const updateItem = (idx, patch) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it));
+  const addItem = () => setItems(prev => [...prev, { sourceBatchId: '', qty: '' }]);
+  const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
+
+  const validItems = items.filter(it => it.sourceBatchId && Number(it.qty) > 0);
+  const canSave = src && dst && src !== dst && validItems.length > 0;
+
+  const handleSave = async () => {
+    if (!canSave) { setError('กรุณากรอกให้ครบ'); return; }
+    setSaving(true); setError('');
+    try {
+      await createStockWithdrawal({
+        direction,
+        sourceLocationId: src,
+        destinationLocationId: dst,
+        note,
+        items: validItems.map(it => ({ sourceBatchId: it.sourceBatchId, qty: Number(it.qty) })),
+      });
+      setSuccess(true);
+      setTimeout(onSaved, 500);
+    } catch (e) { setError(e.message); setSaving(false); }
+  };
+
+  const inputCls = `w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]`;
+  const labelCls = 'block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 bg-[var(--bg-surface)] rounded-2xl p-4 shadow-lg border border-[var(--bd)]">
+        <button onClick={onClose} className="px-3 py-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] border border-[var(--bd)] flex items-center gap-1.5">
+          <ArrowLeft size={14} /> กลับ
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-[var(--tx-heading)]">สร้างใบเบิก</h2>
+          <p className="text-xs text-[var(--tx-muted)]">เลือกทิศทาง + batch ต้นทาง + qty (เริ่มที่ status 0 รอยืนยัน)</p>
+        </div>
+        <button onClick={handleSave} disabled={!canSave || saving} className="px-5 py-2 rounded-lg text-xs font-bold bg-violet-700 text-white hover:bg-violet-600 disabled:opacity-40 flex items-center gap-1.5">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <CheckCircle2 size={14} /> : <Plus size={14} />}
+          {saving ? 'กำลังบันทึก' : success ? 'สำเร็จ' : 'สร้าง'}
+        </button>
+      </div>
+      {error && <div className="bg-red-950/40 border border-red-800 rounded-lg p-3 text-xs text-red-400 flex items-start gap-2"><AlertCircle size={14} className="flex-shrink-0 mt-0.5" /> {error}</div>}
+
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg border border-[var(--bd)] space-y-3">
+        <div>
+          <label className={labelCls}>ทิศทาง *</label>
+          <div className="flex gap-3">
+            <label className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${direction === 'central_to_branch' ? 'bg-violet-900/30 border-violet-700 text-violet-400' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+              <input type="radio" name="dir" value="central_to_branch" checked={direction === 'central_to_branch'} onChange={() => setDirection('central_to_branch')} className="accent-violet-500" />
+              คลังกลาง → สาขา (ส่งให้สาขา)
+            </label>
+            <label className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${direction === 'branch_to_central' ? 'bg-violet-900/30 border-violet-700 text-violet-400' : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+              <input type="radio" name="dir" value="branch_to_central" checked={direction === 'branch_to_central'} onChange={() => setDirection('branch_to_central')} className="accent-violet-500" />
+              สาขา → คลังกลาง (คืนคลัง)
+            </label>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className={labelCls}>ต้นทาง *</label>
+            <select value={src} onChange={e => setSrc(e.target.value)} className={inputCls}>
+              <option value="">—</option>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>ปลายทาง *</label>
+            <select value={dst} onChange={e => setDst(e.target.value)} className={inputCls}>
+              <option value="">—</option>
+              {locations.filter(l => l.id !== src).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>หมายเหตุ</label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg border border-[var(--bd)]">
+        <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">รายการ batch ที่จะเบิก</h3>
+        {batchesLoading ? (
+          <div className="text-[11px] text-[var(--tx-muted)] flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> โหลด batch...</div>
+        ) : batches.length === 0 ? (
+          <div className="text-[11px] text-[var(--tx-muted)]">ต้นทางยังไม่มี batch ที่ active</div>
+        ) : (
+          <>
+            <table className="w-full text-xs">
+              <thead className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)]">
+                <tr>
+                  <th className="px-2 py-2 w-8">#</th>
+                  <th className="px-2 py-2 text-left font-bold">Batch ต้นทาง *</th>
+                  <th className="px-2 py-2 text-left font-bold w-20">จำนวน *</th>
+                  <th className="px-2 py-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, idx) => {
+                  const b = batches.find(x => x.batchId === it.sourceBatchId);
+                  return (
+                    <tr key={idx} className="border-t border-[var(--bd)]">
+                      <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
+                      <td className="px-2 py-2">
+                        <select value={it.sourceBatchId} onChange={e => updateItem(idx, { sourceBatchId: e.target.value })} className={inputCls}>
+                          <option value="">— เลือก batch —</option>
+                          {batches.map(x => (
+                            <option key={x.batchId} value={x.batchId}>
+                              {x.productName} — ...{x.batchId.slice(-8)} ({fmtQty(x.qty.remaining)}/{fmtQty(x.qty.total)} {x.unit})
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
+                        {b && Number(it.qty) > Number(b.qty.remaining) && <div className="text-[9px] text-red-400 mt-0.5">เกินคงเหลือ</div>}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <button onClick={() => removeItem(idx)} disabled={items.length === 1}
+                          className="p-1 rounded text-[var(--tx-muted)] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"><X size={12} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button onClick={addItem} className="mt-3 px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-violet-400 border border-[var(--bd)] hover:border-violet-700 flex items-center gap-1.5">
+              <Plus size={12} /> เพิ่ม batch
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

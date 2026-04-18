@@ -2762,3 +2762,583 @@ export async function analyzeStockImpact({ saleId, treatmentId } = {}) {
     totalQtyToRestore,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8h — Central Warehouses + Stock Locations (master data)
+// ═══════════════════════════════════════════════════════════════════════════
+// Branches are implicit (single-branch='main' for now). Central warehouses are
+// explicit docs under be_central_stock_warehouses/{stockId}. The combined
+// stock_locations master is computed on-read (branches + centrals) — UI picks
+// source/destination from this list for transfers + withdrawals.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const centralWarehousesCol = () => collection(db, ...basePath(), 'be_central_stock_warehouses');
+const centralWarehouseDoc = (id) => doc(db, ...basePath(), 'be_central_stock_warehouses', String(id));
+
+function _genWarehouseId() { return `WH-${Date.now()}-${_rand4()}`; }
+
+/** Create a central warehouse. */
+export async function createCentralWarehouse(data) {
+  const stockId = data.stockId || _genWarehouseId();
+  const now = new Date().toISOString();
+  const name = String(data.stockName || data.name || '').trim();
+  if (!name) throw new Error('stockName required');
+  await setDoc(centralWarehouseDoc(stockId), {
+    stockId,
+    stockName: name,
+    telephoneNumber: String(data.telephoneNumber || data.phone || ''),
+    address: String(data.address || ''),
+    isActive: data.isActive !== false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { stockId, success: true };
+}
+
+/** Update mutable fields on a central warehouse. */
+export async function updateCentralWarehouse(stockId, patch) {
+  const existing = await getDoc(centralWarehouseDoc(stockId));
+  if (!existing.exists()) throw new Error(`Warehouse ${stockId} not found`);
+  const up = { updatedAt: new Date().toISOString() };
+  if (patch.stockName != null) up.stockName = String(patch.stockName).trim();
+  if (patch.telephoneNumber != null) up.telephoneNumber = String(patch.telephoneNumber);
+  if (patch.address != null) up.address = String(patch.address);
+  if (patch.isActive != null) up.isActive = !!patch.isActive;
+  await updateDoc(centralWarehouseDoc(stockId), up);
+  return { success: true };
+}
+
+/** Soft-delete: sets isActive=false (preserves history). Hard-delete blocked if any active batch references this location. */
+export async function deleteCentralWarehouse(stockId) {
+  const q = query(stockBatchesCol(), where('branchId', '==', String(stockId)), where('status', '==', 'active'));
+  const s = await getDocs(q);
+  if (s.size > 0) {
+    throw new Error(`ลบคลังไม่ได้: มีสต็อก ${s.size} batch ค้างอยู่ (เบิก/ย้ายออกก่อน หรือสามารถปิดใช้งานแทนได้)`);
+  }
+  await updateDoc(centralWarehouseDoc(stockId), { isActive: false, updatedAt: new Date().toISOString() });
+  return { success: true };
+}
+
+/** List all warehouses (active + inactive). */
+export async function listCentralWarehouses({ includeInactive = false } = {}) {
+  const snap = await getDocs(centralWarehousesCol());
+  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (!includeInactive) list = list.filter(w => w.isActive !== false);
+  list.sort((a, b) => (a.stockName || '').localeCompare(b.stockName || ''));
+  return list;
+}
+
+/**
+ * Combined branch + warehouse list for Transfer/Withdrawal UI selectors.
+ * Returns: [{id, name, kind: 'branch'|'central'}] — 'main' branch always first.
+ */
+export async function listStockLocations() {
+  const warehouses = await listCentralWarehouses();
+  return [
+    { id: 'main', name: 'สาขาหลัก (main)', kind: 'branch' },
+    ...warehouses.map(w => ({ id: w.stockId, name: w.stockName, kind: 'central', phone: w.telephoneNumber, address: w.address })),
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8f — Stock Transfers (inter-location movement)
+// ═══════════════════════════════════════════════════════════════════════════
+// Status machine (ProClinic parity):
+//   0 = รอส่ง        (created, nothing moved yet — just intent)
+//   1 = รอรับ         (sent — source batches deducted + type=8 movements)
+//   2 = สำเร็จ        (received — destination batches created + type=9)
+//   3 = ยกเลิก         (cancelled — reverse whatever was done so far, idempotent)
+//   4 = ปฏิเสธ         (rejected at destination — reverse source deductions)
+//
+// Transfers create NEW batches at destination (sourceBatchId back-ref) — never
+// re-parent an existing batch. Audit trail stays clean per-location.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const stockTransfersCol = () => collection(db, ...basePath(), 'be_stock_transfers');
+const stockTransferDoc = (id) => doc(db, ...basePath(), 'be_stock_transfers', String(id));
+
+function _genTransferId() { return `TRF-${Date.now()}-${_rand4()}`; }
+
+/**
+ * Create a transfer in status=0 (pending-dispatch). NO stock mutation yet —
+ * source batches remain untouched. User must call updateStockTransferStatus
+ * to move the state forward.
+ *
+ * @param {object} data
+ *   - sourceLocationId: string ('main' or 'WH-...')
+ *   - destinationLocationId: string
+ *   - items: [{ sourceBatchId, productId, productName, qty, unit? }]
+ *   - note?
+ * @param {object} [opts]  { user: {userId, userName} }
+ * @returns { transferId, success }
+ */
+export async function createStockTransfer(data, opts = {}) {
+  const src = String(data.sourceLocationId || '');
+  const dst = String(data.destinationLocationId || '');
+  if (!src || !dst) throw new Error('sourceLocationId + destinationLocationId required');
+  if (src === dst) throw new Error('ต้นทางและปลายทางต้องไม่ใช่ที่เดียวกัน');
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (items.length === 0) throw new Error('Transfer must have at least one item');
+
+  // Validate each item's sourceBatchId exists + has enough remaining
+  for (const [i, it] of items.entries()) {
+    if (!it.sourceBatchId) throw new Error(`Item #${i + 1}: sourceBatchId required`);
+    const qty = Number(it.qty);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Item #${i + 1}: invalid qty`);
+    const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
+    if (!snap.exists()) throw new Error(`Item #${i + 1}: batch ${it.sourceBatchId} not found`);
+    const b = snap.data();
+    if (b.status !== 'active') throw new Error(`Item #${i + 1}: batch ${it.sourceBatchId} is ${b.status}`);
+    if (b.branchId !== src) throw new Error(`Item #${i + 1}: batch belongs to ${b.branchId}, not ${src}`);
+    if (Number(b.qty?.remaining || 0) < qty) {
+      throw new Error(`Item #${i + 1}: insufficient remaining (${b.qty?.remaining}) for transfer qty ${qty}`);
+    }
+  }
+
+  const transferId = _genTransferId();
+  const now = new Date().toISOString();
+  const user = opts.user || { userId: null, userName: null };
+
+  // Resolve item metadata from source batches (cost/expiry inherited on receive)
+  const resolvedItems = [];
+  for (const it of items) {
+    const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
+    const b = snap.data();
+    resolvedItems.push({
+      sourceBatchId: it.sourceBatchId,
+      productId: b.productId,
+      productName: b.productName,
+      qty: Number(it.qty),
+      unit: b.unit || '',
+      cost: Number(b.originalCost || 0),
+      expiresAt: b.expiresAt || null,
+      isPremium: !!b.isPremium,
+      destinationBatchId: null, // filled on receive
+    });
+  }
+
+  await setDoc(stockTransferDoc(transferId), {
+    transferId,
+    sourceLocationId: src,
+    destinationLocationId: dst,
+    items: resolvedItems,
+    status: 0, // PENDING_DISPATCH
+    note: String(data.note || ''),
+    deliveredTrackingNumber: '', deliveredNote: '', deliveredImageUrl: '',
+    canceledNote: '', rejectedNote: '',
+    user, createdAt: now, updatedAt: now,
+  });
+  return { transferId, success: true };
+}
+
+/**
+ * Advance a transfer's status. Valid transitions:
+ *   0 → 1 (send): deduct source batches + emit type=8 EXPORT_TRANSFER movements.
+ *   1 → 2 (receive): create destination batches + emit type=9 RECEIVE movements.
+ *   0 → 3 (cancel before send): clean cancel (no stock mutation).
+ *   1 → 3 (cancel in transit): reverse source deductions.
+ *   1 → 4 (reject): reverse source deductions (same as 1→3 logically).
+ *
+ * Any other transition throws.
+ *
+ * @param {string} transferId
+ * @param {number} newStatus  0..4 per TRANSFER_STATUS enum
+ * @param {object} [opts]
+ *   - user, canceledNote, rejectedNote, deliveredTrackingNumber, deliveredNote, deliveredImageUrl
+ */
+export async function updateStockTransferStatus(transferId, newStatus, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric } = stockUtils;
+  const TS_ENUM = stockUtils.TRANSFER_STATUS;
+
+  const ref = stockTransferDoc(transferId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error(`Transfer ${transferId} not found`);
+  const cur = snap.data();
+  const curStatus = Number(cur.status);
+  const next = Number(newStatus);
+  const user = opts.user || cur.user || { userId: null, userName: null };
+  const now = new Date().toISOString();
+
+  // Transition guards
+  const allowed = {
+    0: [1, 3],          // from pending-dispatch: send or cancel
+    1: [2, 3, 4],       // from pending-receive: receive, cancel, reject
+    2: [],              // completed — terminal
+    3: [],              // cancelled — terminal
+    4: [],              // rejected — terminal
+  };
+  if (!(allowed[curStatus] || []).includes(next)) {
+    throw new Error(`Invalid transfer status transition ${curStatus} → ${next}`);
+  }
+
+  const docPath = `artifacts/${appId}/public/data/be_stock_transfers/${transferId}`;
+
+  // Helper: deduct from source batch + emit EXPORT_TRANSFER movement
+  async function _exportFromSource(item) {
+    return runTransaction(db, async (tx) => {
+      const bRef = stockBatchDoc(item.sourceBatchId);
+      const bSnap = await tx.get(bRef);
+      if (!bSnap.exists()) throw new Error(`Batch ${item.sourceBatchId} vanished`);
+      const b = bSnap.data();
+      if (b.status !== BATCH_STATUS.ACTIVE) throw new Error(`Batch ${item.sourceBatchId} became ${b.status}`);
+      const before = Number(b.qty?.remaining || 0);
+      if (before < item.qty) throw new Error(`Batch ${item.sourceBatchId} short: have ${before}, need ${item.qty}`);
+      const newQty = deductQtyNumeric(b.qty, item.qty);
+      const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+      tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
+      const mvtId = _genMovementId();
+      tx.set(stockMovementDoc(mvtId), {
+        movementId: mvtId,
+        type: MOVEMENT_TYPES.EXPORT_TRANSFER,
+        batchId: item.sourceBatchId,
+        productId: b.productId,
+        productName: b.productName,
+        qty: -item.qty,
+        before,
+        after: newQty.remaining,
+        branchId: b.branchId,
+        sourceDocPath: docPath,
+        linkedTransferId: transferId,
+        revenueImpact: null,
+        costBasis: (Number(b.originalCost) || 0) * item.qty,
+        isPremium: !!item.isPremium,
+        skipped: false,
+        user,
+        note: '',
+        createdAt: now,
+      });
+      return mvtId;
+    });
+  }
+
+  // Helper: create destination batch + emit RECEIVE movement
+  async function _receiveAtDestination(item) {
+    const newBatchId = _genBatchId();
+    await setDoc(stockBatchDoc(newBatchId), {
+      batchId: newBatchId,
+      productId: item.productId,
+      productName: item.productName,
+      branchId: cur.destinationLocationId,
+      orderProductId: `${transferId}-${item.sourceBatchId}`,
+      sourceOrderId: null,
+      sourceBatchId: item.sourceBatchId,
+      receivedAt: now,
+      expiresAt: item.expiresAt,
+      unit: item.unit,
+      qty: buildQtyNumeric(item.qty),
+      originalCost: item.cost,
+      isPremium: item.isPremium,
+      status: BATCH_STATUS.ACTIVE,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const mvtId = _genMovementId();
+    await setDoc(stockMovementDoc(mvtId), {
+      movementId: mvtId,
+      type: MOVEMENT_TYPES.RECEIVE,
+      batchId: newBatchId,
+      productId: item.productId,
+      productName: item.productName,
+      qty: item.qty,
+      before: 0,
+      after: item.qty,
+      branchId: cur.destinationLocationId,
+      sourceDocPath: docPath,
+      linkedTransferId: transferId,
+      revenueImpact: null,
+      costBasis: item.cost * item.qty,
+      isPremium: item.isPremium,
+      skipped: false,
+      user,
+      note: '',
+      createdAt: now,
+    });
+    return newBatchId;
+  }
+
+  // Helper: reverse an export movement (for cancel/reject)
+  async function _reverseExport(sourceBatchId) {
+    const q = query(stockMovementsCol(),
+      where('linkedTransferId', '==', transferId),
+      where('batchId', '==', sourceBatchId),
+      where('type', '==', MOVEMENT_TYPES.EXPORT_TRANSFER));
+    const s = await getDocs(q);
+    for (const d of s.docs) {
+      const m = d.data();
+      if (m.reversedByMovementId || m.reverseOf) continue;
+      await _reverseOneMovement(m.movementId, { user });
+    }
+  }
+
+  // Execute the transition
+  if (curStatus === 0 && next === 1) {
+    for (const it of cur.items) await _exportFromSource(it);
+    await updateDoc(ref, { status: 1, updatedAt: now,
+      deliveredTrackingNumber: String(opts.deliveredTrackingNumber || ''),
+      deliveredNote: String(opts.deliveredNote || ''),
+      deliveredImageUrl: String(opts.deliveredImageUrl || ''),
+    });
+  }
+  else if (curStatus === 1 && next === 2) {
+    const updatedItems = [];
+    for (const it of cur.items) {
+      const destBatchId = await _receiveAtDestination(it);
+      updatedItems.push({ ...it, destinationBatchId: destBatchId });
+    }
+    await updateDoc(ref, { status: 2, items: updatedItems, updatedAt: now });
+  }
+  else if (curStatus === 0 && next === 3) {
+    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
+  }
+  else if (curStatus === 1 && (next === 3 || next === 4)) {
+    for (const it of cur.items) await _reverseExport(it.sourceBatchId);
+    await updateDoc(ref, {
+      status: next,
+      canceledNote: next === 3 ? String(opts.canceledNote || '') : '',
+      rejectedNote: next === 4 ? String(opts.rejectedNote || '') : '',
+      updatedAt: now,
+    });
+  }
+  return { transferId, status: next, success: true };
+}
+
+export async function listStockTransfers({ locationId, status, includeAll } = {}) {
+  const clauses = [];
+  const snap = await getDocs(stockTransfersCol());
+  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (locationId) {
+    list = list.filter(t => t.sourceLocationId === locationId || t.destinationLocationId === locationId);
+  }
+  if (status != null) list = list.filter(t => Number(t.status) === Number(status));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+export async function getStockTransfer(transferId) {
+  const snap = await getDoc(stockTransferDoc(transferId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8g — Stock Withdrawals (branch↔central requisitions)
+// ═══════════════════════════════════════════════════════════════════════════
+// Direction determines source→destination mapping:
+//   'branch_to_central'  (สาขา → เบิกจากคลังกลาง: branch requests from central)
+//     Source = central warehouse (provides), Destination = branch (receives)
+//   'central_to_branch'  (คลังกลาง → ส่งให้สาขา: central ships to branch)
+//     Source = central warehouse, Destination = branch
+//
+// Status: 0=รอยืนยัน | 1=รอส่ง | 2=สำเร็จ | 3=ยกเลิก
+// ═══════════════════════════════════════════════════════════════════════════
+
+const stockWithdrawalsCol = () => collection(db, ...basePath(), 'be_stock_withdrawals');
+const stockWithdrawalDoc = (id) => doc(db, ...basePath(), 'be_stock_withdrawals', String(id));
+
+function _genWithdrawalId() { return `WDR-${Date.now()}-${_rand4()}`; }
+
+export async function createStockWithdrawal(data, opts = {}) {
+  const direction = data.direction;
+  if (direction !== 'branch_to_central' && direction !== 'central_to_branch') {
+    throw new Error('direction must be "branch_to_central" or "central_to_branch"');
+  }
+  const src = String(data.sourceLocationId || '');
+  const dst = String(data.destinationLocationId || '');
+  if (!src || !dst) throw new Error('source + destination location required');
+  if (src === dst) throw new Error('ต้นทางและปลายทางต้องไม่ใช่ที่เดียวกัน');
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (items.length === 0) throw new Error('Withdrawal must have at least one item');
+
+  // Validate each item's source batch
+  for (const [i, it] of items.entries()) {
+    if (!it.sourceBatchId) throw new Error(`Item #${i + 1}: sourceBatchId required`);
+    const qty = Number(it.qty);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Item #${i + 1}: invalid qty`);
+    const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
+    if (!snap.exists()) throw new Error(`Item #${i + 1}: batch ${it.sourceBatchId} not found`);
+    const b = snap.data();
+    if (b.status !== 'active') throw new Error(`Item #${i + 1}: batch is ${b.status}`);
+    if (b.branchId !== src) throw new Error(`Item #${i + 1}: batch belongs to ${b.branchId}, not ${src}`);
+    if (Number(b.qty?.remaining || 0) < qty) {
+      throw new Error(`Item #${i + 1}: insufficient remaining for withdrawal`);
+    }
+  }
+
+  const withdrawalId = _genWithdrawalId();
+  const now = new Date().toISOString();
+  const user = opts.user || { userId: null, userName: null };
+  const resolvedItems = [];
+  for (const it of items) {
+    const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
+    const b = snap.data();
+    resolvedItems.push({
+      sourceBatchId: it.sourceBatchId,
+      productId: b.productId,
+      productName: b.productName,
+      qty: Number(it.qty),
+      unit: b.unit || '',
+      cost: Number(b.originalCost || 0),
+      expiresAt: b.expiresAt || null,
+      isPremium: !!b.isPremium,
+      destinationBatchId: null,
+    });
+  }
+
+  await setDoc(stockWithdrawalDoc(withdrawalId), {
+    withdrawalId,
+    direction,
+    sourceLocationId: src,
+    destinationLocationId: dst,
+    items: resolvedItems,
+    status: 0,
+    note: String(data.note || ''),
+    user, createdAt: now, updatedAt: now,
+  });
+  return { withdrawalId, success: true };
+}
+
+/** Transition: 0→1 (send/approve) | 1→2 (receive) | 0→3 or 1→3 (cancel). */
+export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, buildQtyNumeric } = stockUtils;
+
+  const ref = stockWithdrawalDoc(withdrawalId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error(`Withdrawal ${withdrawalId} not found`);
+  const cur = snap.data();
+  const curStatus = Number(cur.status);
+  const next = Number(newStatus);
+  const user = opts.user || cur.user || { userId: null, userName: null };
+  const now = new Date().toISOString();
+
+  const allowed = { 0: [1, 3], 1: [2, 3], 2: [], 3: [] };
+  if (!(allowed[curStatus] || []).includes(next)) {
+    throw new Error(`Invalid withdrawal status transition ${curStatus} → ${next}`);
+  }
+
+  const docPath = `artifacts/${appId}/public/data/be_stock_withdrawals/${withdrawalId}`;
+
+  async function _exportFromSource(item) {
+    return runTransaction(db, async (tx) => {
+      const bRef = stockBatchDoc(item.sourceBatchId);
+      const bSnap = await tx.get(bRef);
+      if (!bSnap.exists()) throw new Error(`Batch ${item.sourceBatchId} vanished`);
+      const b = bSnap.data();
+      if (b.status !== BATCH_STATUS.ACTIVE) throw new Error(`Batch ${item.sourceBatchId} became ${b.status}`);
+      const before = Number(b.qty?.remaining || 0);
+      if (before < item.qty) throw new Error(`Batch short`);
+      const newQty = deductQtyNumeric(b.qty, item.qty);
+      const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+      tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
+      const mvtId = _genMovementId();
+      tx.set(stockMovementDoc(mvtId), {
+        movementId: mvtId,
+        type: MOVEMENT_TYPES.EXPORT_WITHDRAWAL,
+        batchId: item.sourceBatchId,
+        productId: b.productId,
+        productName: b.productName,
+        qty: -item.qty,
+        before,
+        after: newQty.remaining,
+        branchId: b.branchId,
+        sourceDocPath: docPath,
+        linkedWithdrawalId: withdrawalId,
+        revenueImpact: null,
+        costBasis: (Number(b.originalCost) || 0) * item.qty,
+        isPremium: !!item.isPremium,
+        skipped: false,
+        user, note: '', createdAt: now,
+      });
+      return mvtId;
+    });
+  }
+
+  async function _receiveAtDestination(item) {
+    const newBatchId = _genBatchId();
+    await setDoc(stockBatchDoc(newBatchId), {
+      batchId: newBatchId,
+      productId: item.productId,
+      productName: item.productName,
+      branchId: cur.destinationLocationId,
+      orderProductId: `${withdrawalId}-${item.sourceBatchId}`,
+      sourceOrderId: null,
+      sourceBatchId: item.sourceBatchId,
+      receivedAt: now,
+      expiresAt: item.expiresAt,
+      unit: item.unit,
+      qty: buildQtyNumeric(item.qty),
+      originalCost: item.cost,
+      isPremium: item.isPremium,
+      status: BATCH_STATUS.ACTIVE,
+      createdAt: now, updatedAt: now,
+    });
+    const mvtId = _genMovementId();
+    await setDoc(stockMovementDoc(mvtId), {
+      movementId: mvtId,
+      type: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM,
+      batchId: newBatchId,
+      productId: item.productId,
+      productName: item.productName,
+      qty: item.qty,
+      before: 0,
+      after: item.qty,
+      branchId: cur.destinationLocationId,
+      sourceDocPath: docPath,
+      linkedWithdrawalId: withdrawalId,
+      revenueImpact: null,
+      costBasis: item.cost * item.qty,
+      isPremium: item.isPremium,
+      skipped: false,
+      user, note: '', createdAt: now,
+    });
+    return newBatchId;
+  }
+
+  async function _reverseExport(sourceBatchId) {
+    const q = query(stockMovementsCol(),
+      where('linkedWithdrawalId', '==', withdrawalId),
+      where('batchId', '==', sourceBatchId),
+      where('type', '==', MOVEMENT_TYPES.EXPORT_WITHDRAWAL));
+    const s = await getDocs(q);
+    for (const d of s.docs) {
+      const m = d.data();
+      if (m.reversedByMovementId || m.reverseOf) continue;
+      await _reverseOneMovement(m.movementId, { user });
+    }
+  }
+
+  if (curStatus === 0 && next === 1) {
+    for (const it of cur.items) await _exportFromSource(it);
+    await updateDoc(ref, { status: 1, updatedAt: now });
+  }
+  else if (curStatus === 1 && next === 2) {
+    const updatedItems = [];
+    for (const it of cur.items) {
+      const destBatchId = await _receiveAtDestination(it);
+      updatedItems.push({ ...it, destinationBatchId: destBatchId });
+    }
+    await updateDoc(ref, { status: 2, items: updatedItems, updatedAt: now });
+  }
+  else if (curStatus === 0 && next === 3) {
+    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
+  }
+  else if (curStatus === 1 && next === 3) {
+    for (const it of cur.items) await _reverseExport(it.sourceBatchId);
+    await updateDoc(ref, { status: 3, canceledNote: String(opts.canceledNote || ''), updatedAt: now });
+  }
+  return { withdrawalId, status: next, success: true };
+}
+
+export async function listStockWithdrawals({ locationId, status } = {}) {
+  const snap = await getDocs(stockWithdrawalsCol());
+  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (locationId) list = list.filter(t => t.sourceLocationId === locationId || t.destinationLocationId === locationId);
+  if (status != null) list = list.filter(t => Number(t.status) === Number(status));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+export async function getStockWithdrawal(withdrawalId) {
+  const snap = await getDoc(stockWithdrawalDoc(withdrawalId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}

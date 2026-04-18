@@ -116,7 +116,9 @@ service cloud.firestore {
       }
       match /be_central_stock_warehouses/{stockId} {
         allow read: if isClinicStaff();
-        allow write: if isClinicStaff();
+        allow create, update: if isClinicStaff();
+        // Soft-delete only (isActive=false) — audit trail preserved.
+        allow delete: if false;
       }
 
       // ── Master Data (products, doctors, staff, courses, promotions) ──

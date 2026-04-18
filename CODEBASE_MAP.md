@@ -1,5 +1,5 @@
 # LoverClinic OPD System — Codebase Map
-> อัพเดทล่าสุด: 2026-04-18 (Phase 8d++ StockSeedPanel bulk-import + Balance row quick-actions — ready for realistic testing)
+> อัพเดทล่าสุด: 2026-04-18 (Phase 8f/8g/8h complete — Transfer + Withdrawal + Central warehouses + 7 sub-tabs in StockTab)
 > Stack: React 19 + Vite 8 + Firebase 12 (Firestore + FCM) + Tailwind CSS 3.4 + Cloud Functions v2
 > Firebase Project: `loverclinic-opd-4c39b`
 
@@ -153,6 +153,33 @@ artifacts/{appId}/public/data/
 - Filters: search, "ใกล้หมดอายุ ≤30 วัน", "สต็อกน้อย ≤5"
 - Row tooltip: full batch list with IDs + expiry
 - **Row quick-actions**: ปรับ (→ Adjust form pre-filled) / เพิ่ม (→ Order form pre-filled) — emits via onAdjustProduct/onAddStockForProduct callbacks to parent StockTab
+
+### Phase 8f/8g/8h — multi-location stock (Transfer + Withdrawal + Central)
+
+**backendClient.js additions (+~800 LoC):**
+- Warehouses CRUD: `createCentralWarehouse` / `updateCentralWarehouse` / `deleteCentralWarehouse` (soft) / `listCentralWarehouses` / `getStockWarehouse` — docs in `be_central_stock_warehouses/{WH-ts-rand}`
+- `listStockLocations()` — combined branches + centrals `[{id, name, kind}]` for transfer/withdrawal selectors. 'main' always first.
+- `createStockTransfer` — status=0 at create, validates source batch + remaining; resolves item metadata (cost/expiry inherited for receive)
+- `updateStockTransferStatus` — full state machine 0→1→2, 0|1→3, 1→4; 0→1 deducts source via per-batch tx + type=8 EXPORT_TRANSFER movements; 1→2 creates new dest batches (sourceBatchId back-ref) + type=9 RECEIVE; cancel/reject at status=1 reverses source via idempotent `_reverseOneMovement`
+- `listStockTransfers({locationId, status})`, `getStockTransfer`
+- `createStockWithdrawal` — mirror pattern; direction='branch_to_central'|'central_to_branch'
+- `updateStockWithdrawalStatus` — state machine 0→1→2, 0|1→3; 0→1 deducts source + type=10 EXPORT_WITHDRAWAL; 1→2 creates dest batch + type=13 WITHDRAWAL_CONFIRM
+- `listStockWithdrawals({locationId, status})`, `getStockWithdrawal`
+
+**UI additions:**
+- `StockTransferPanel.jsx` — list transfers w/ state-aware action buttons (ส่ง/รับ/ยกเลิก/ปฏิเสธ) + create form (src→dst location selectors, batch picker, qty per row)
+- `StockWithdrawalPanel.jsx` — similar shape + direction radio (central→branch / branch→central)
+- `CentralWarehousePanel.jsx` — warehouse card grid w/ CRUD (soft-delete), showInactive toggle
+- `StockTab.jsx` — 7 sub-tabs now: Balance / Orders / Adjust / Transfer / Withdrawal / Warehouses / MovementLog
+
+**Schema additions** (in master section):
+```
+be_stock_transfers/{TRF-ts-rand}   transferId, sourceLocationId, destinationLocationId, items: [{sourceBatchId, productId, qty, cost, expiresAt, isPremium, destinationBatchId?}], status 0..4, delivered{TrackingNumber,Note,ImageUrl}, canceledNote?, rejectedNote?, user, createdAt, updatedAt
+be_stock_withdrawals/{WDR-ts-rand} withdrawalId, direction:'branch_to_central'|'central_to_branch', sourceLocationId, destinationLocationId, items[], status 0..3, canceledNote?, user, createdAt, updatedAt
+be_central_stock_warehouses/{WH-ts-rand} stockId, stockName, telephoneNumber, address, isActive, createdAt, updatedAt
+```
+
+**firestore.rules**: new collections allow create/update by staff, DELETE BLOCKED (soft-delete only — audit trail).
 
 ### StockSeedPanel (Phase 8d++) — `src/components/backend/StockSeedPanel.jsx`
 - One-click "opening balance" bulk-import from `master_data/products`

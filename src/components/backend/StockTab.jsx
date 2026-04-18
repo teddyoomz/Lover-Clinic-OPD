@@ -2,16 +2,22 @@
 // Sub-tabs: Balance (ยอดคงเหลือ) / Orders (นำเข้า) / Adjust (ปรับสต็อก) / Movement Log
 
 import { useState } from 'react';
-import { Package, ShoppingBag, SlidersHorizontal, Activity } from 'lucide-react';
+import { Package, ShoppingBag, SlidersHorizontal, Activity, Truck, ClipboardCheck, Warehouse } from 'lucide-react';
 import OrderPanel from './OrderPanel.jsx';
 import StockAdjustPanel from './StockAdjustPanel.jsx';
 import MovementLogPanel from './MovementLogPanel.jsx';
 import StockBalancePanel from './StockBalancePanel.jsx';
+import StockTransferPanel from './StockTransferPanel.jsx';
+import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
+import CentralWarehousePanel from './CentralWarehousePanel.jsx';
 
 const SUB_TABS = [
   { id: 'balance', label: 'ยอดคงเหลือ', icon: <Package size={14} /> },
   { id: 'orders', label: 'นำเข้า', icon: <ShoppingBag size={14} /> },
   { id: 'adjust', label: 'ปรับสต็อก', icon: <SlidersHorizontal size={14} /> },
+  { id: 'transfer', label: 'โอนย้าย', icon: <Truck size={14} /> },
+  { id: 'withdrawal', label: 'เบิก', icon: <ClipboardCheck size={14} /> },
+  { id: 'warehouses', label: 'คลังกลาง', icon: <Warehouse size={14} /> },
   { id: 'log', label: 'Movement Log', icon: <Activity size={14} /> },
 ];
 
@@ -70,6 +76,9 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
           onPrefillConsumed={() => setAdjustPrefill(null)}
         />
       )}
+      {subTab === 'transfer' && <StockTransferPanel clinicSettings={clinicSettings} theme={theme} />}
+      {subTab === 'withdrawal' && <StockWithdrawalPanel clinicSettings={clinicSettings} theme={theme} />}
+      {subTab === 'warehouses' && <CentralWarehousePanel clinicSettings={clinicSettings} theme={theme} />}
       {subTab === 'log' && <MovementLogPanel clinicSettings={clinicSettings} theme={theme} />}
     </div>
   );
