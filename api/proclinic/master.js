@@ -94,6 +94,80 @@ async function handleSyncStaff(req, res) {
   });
 }
 
+// ─── Action: syncWalletTypes — uses /admin/api/wallet JSON endpoint ─────────
+
+async function handleSyncWalletTypes(req, res) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const allItems = [];
+  for (let p = 1; ; p++) {
+    const resp = await session.fetch(`${base}/admin/api/wallet?page=${p}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!resp.ok) throw new Error(`Wallet API error: ${resp.status}`);
+    const data = await resp.json();
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1) || p >= 20) break;
+  }
+  const normalized = allItems.map(item => ({
+    id: item.id,
+    name: item.wallet_name || '',
+    description: item.description || '',
+    status: item.deleted_at ? 'พักใช้งาน' : 'ใช้งาน',
+    _source: 'proclinic',
+  }));
+  return res.status(200).json({
+    success: true,
+    type: 'wallet_types',
+    count: normalized.length,
+    totalPages: 1,
+    items: normalized,
+  });
+}
+
+// ─── Action: syncMembershipTypes — uses /admin/api/membership JSON endpoint ─
+
+async function handleSyncMembershipTypes(req, res) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const allItems = [];
+  for (let p = 1; ; p++) {
+    const resp = await session.fetch(`${base}/admin/api/membership?page=${p}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!resp.ok) throw new Error(`Membership API error: ${resp.status}`);
+    const data = await resp.json();
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1) || p >= 20) break;
+  }
+  const normalized = allItems.map(item => ({
+    id: item.id,
+    name: item.membership_name || '',
+    colorName: item.color || '',
+    credit: Number(item.credit) || 0,
+    price: Number(item.price) || 0,
+    point: Number(item.point) || 0,
+    bahtPerPoint: Number(item.baht_per_point) || 0,
+    discountPercent: Number(item.discount_percent) || 0,
+    expiredInDays: Number(item.expired_in) || 365,
+    // ProClinic membership JSON doesn't include walletTypeId — clinic must set which wallet
+    // credits flow into via the manual edit form. Leave blank on sync; backend edit can attach.
+    walletTypeId: '',
+    walletTypeName: '',
+    status: Number(item.status) === 1 ? 'ใช้งาน' : 'พักใช้งาน',
+    _source: 'proclinic',
+  }));
+  return res.status(200).json({
+    success: true,
+    type: 'membership_types',
+    count: normalized.length,
+    totalPages: 1,
+    items: normalized,
+  });
+}
+
 // ─── Action: syncCourses — uses API (not HTML scraper) to get product qty ───
 
 async function handleSyncCourses(req, res) {
@@ -154,10 +228,12 @@ export default async function handler(req, res) {
 
   try {
     switch (action) {
-      case 'syncProducts': return await handleSyncProducts(req, res);
-      case 'syncDoctors':  return await handleSyncDoctors(req, res);
-      case 'syncStaff':    return await handleSyncStaff(req, res);
-      case 'syncCourses':  return await handleSyncCourses(req, res);
+      case 'syncProducts':        return await handleSyncProducts(req, res);
+      case 'syncDoctors':         return await handleSyncDoctors(req, res);
+      case 'syncStaff':           return await handleSyncStaff(req, res);
+      case 'syncCourses':         return await handleSyncCourses(req, res);
+      case 'syncWalletTypes':     return await handleSyncWalletTypes(req, res);
+      case 'syncMembershipTypes': return await handleSyncMembershipTypes(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

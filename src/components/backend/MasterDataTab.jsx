@@ -9,7 +9,7 @@ import {
   Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
 import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem } from '../../lib/backendClient.js';
-import { syncProducts, syncDoctors, syncStaff, syncCourses, listItems } from '../../lib/brokerClient.js';
+import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
 // Wrapper: listItems('promotion') → format like syncProducts response
@@ -25,9 +25,9 @@ const SYNC_TYPES = [
   { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
   { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
   { key: 'promotions', label: 'โปรโมชัน', fn: syncPromotions, icon: '🏷️', color: 'rose' },
-  // Manual-only (no ProClinic sync API) — CRUD in Backend only
-  { key: 'wallet_types', label: 'กระเป๋าเงิน', fn: null, icon: '💼', color: 'emerald', manualOnly: true },
-  { key: 'membership_types', label: 'บัตรสมาชิก', fn: null, icon: '🎫', color: 'purple', manualOnly: true },
+  // Phase 7 — syncable via /admin/api/wallet + /admin/api/membership, AND manual CRUD for backend-only items
+  { key: 'wallet_types', label: 'กระเป๋าเงิน', fn: syncWalletTypes, icon: '💼', color: 'emerald' },
+  { key: 'membership_types', label: 'บัตรสมาชิก', fn: syncMembershipTypes, icon: '🎫', color: 'purple' },
 ];
 
 const SYNC_COLOR_MAP_DARK = {
@@ -340,7 +340,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     setItName(''); setItDescription('');
     setItColorName(''); setItPrice(''); setItCredit(''); setItDiscountPercent('');
     setItPoint(''); setItBahtPerPoint(''); setItExpiredInDays('365');
-    setItWalletTypeId(''); setItStatus('ใช้งาน'); setItError('');
+    setItWalletTypeId(''); setItStatus('ใช้งาน'); setItemError('');
   };
 
   const openItemCreate = async (type) => {
@@ -355,7 +355,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   };
 
   const openItemEdit = async (type, item) => {
-    setItemFormType(type); setEditingItem(item); setItError('');
+    setItemFormType(type); setEditingItem(item); setItemError('');
     setItName(item.name || '');
     setItDescription(item.description || '');
     setItColorName(item.colorName || '');
@@ -377,8 +377,8 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   };
 
   const handleItemSave = async () => {
-    if (!itName.trim()) { setItError('กรุณากรอกชื่อ'); return; }
-    setItemSaving(true); setItError('');
+    if (!itName.trim()) { setItemError('กรุณากรอกชื่อ'); return; }
+    setItemSaving(true); setItemError('');
     try {
       let data;
       if (itemFormType === 'wallet_types') {
@@ -406,7 +406,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       setItemFormOpen(false);
       const refreshed = await getAllMasterDataItems(itemFormType);
       if (activeSubTab === itemFormType) setItems(refreshed);
-    } catch (e) { setItError(e.message); }
+    } catch (e) { setItemError(e.message); }
     finally { setItemSaving(false); }
   };
 
@@ -624,8 +624,8 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {SYNC_TYPES.filter(st => !st.manualOnly).map(st => {
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {SYNC_TYPES.map(st => {
             const cm = (isDark ? SYNC_COLOR_MAP_DARK : SYNC_COLOR_MAP_LIGHT)[st.color];
             const status = syncStatus[st.key];
             const m = meta[st.key];
@@ -749,10 +749,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           </div>
           <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ยังไม่มีข้อมูล{SYNC_TYPES.find(s => s.key === activeSubTab)?.label || ''}</h3>
           <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-6">
-            {SYNC_TYPES.find(s => s.key === activeSubTab)?.manualOnly
-              ? <>กดปุ่ม <span className="font-bold text-emerald-400">+ สร้าง</span> ด้านบนเพื่อเพิ่มข้อมูลใหม่</>
-              : <>กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic มาเก็บไว้ในระบบ</>
-            }
+            กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic
+            {(activeSubTab === 'wallet_types' || activeSubTab === 'membership_types' || activeSubTab === 'courses') && (
+              <> หรือ <span className="font-bold text-emerald-400">+ สร้าง</span> ใหม่ในระบบ</>
+            )}
           </p>
         </div>
       ) : filtered.length === 0 ? (

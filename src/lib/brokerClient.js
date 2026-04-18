@@ -267,6 +267,16 @@ export function syncCourses() {
   return apiFetch('master', { action: 'syncCourses' });
 }
 
+/** Sync wallet types (กระเป๋าเงิน) from ProClinic — uses /admin/api/wallet JSON API */
+export function syncWalletTypes() {
+  return apiFetch('master', { action: 'syncWalletTypes' });
+}
+
+/** Sync membership card types (บัตรสมาชิก) from ProClinic — uses /admin/api/membership JSON API */
+export function syncMembershipTypes() {
+  return apiFetch('master', { action: 'syncMembershipTypes' });
+}
+
 // ─── Public API — Treatment Records ─────────────────────────────────────────
 
 /** List treatments for a customer → { success, treatments[], page, totalPages } */
