@@ -499,6 +499,41 @@ export async function updateSalePayment(saleId, newChannel) {
   return { success: true, newStatus, totalPaid };
 }
 
+// ─── Manual Master Data (wallet_types + membership_types) ──────────────────
+// These collections have NO ProClinic sync — CRUD only in Backend.
+// Same shape as master_data/{type}/items/{id} used by courses.
+
+/** Create a manual master data item (wallet_types or membership_types). */
+export async function createMasterItem(type, data) {
+  const prefix = type === 'wallet_types' ? 'WT' : type === 'membership_types' ? 'MCT' : 'MI';
+  const id = `${prefix}-${Date.now()}`;
+  const now = new Date().toISOString();
+  const ref = doc(db, ...basePath(), 'master_data', type, 'items', id);
+  await setDoc(ref, {
+    ...data,
+    id,
+    _createdBy: 'backend',
+    _createdAt: now,
+    _syncedAt: now,
+    _source: 'backend',
+  });
+  return { id, success: true };
+}
+
+/** Update a manual master data item. */
+export async function updateMasterItem(type, id, data) {
+  const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(id));
+  await updateDoc(ref, { ...data, _updatedAt: new Date().toISOString() });
+  return { success: true };
+}
+
+/** Delete a manual master data item. */
+export async function deleteMasterItem(type, id) {
+  const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(id));
+  await deleteDoc(ref);
+  return { success: true };
+}
+
 // ─── Master Data Read + Sync ────────────────────────────────────────────────
 
 const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);

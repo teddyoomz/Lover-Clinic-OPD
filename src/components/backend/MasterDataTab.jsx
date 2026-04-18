@@ -8,7 +8,7 @@ import {
   Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info,
   Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
-import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse } from '../../lib/backendClient.js';
+import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem } from '../../lib/backendClient.js';
 import { syncProducts, syncDoctors, syncStaff, syncCourses, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -25,14 +25,17 @@ const SYNC_TYPES = [
   { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
   { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
   { key: 'promotions', label: 'โปรโมชัน', fn: syncPromotions, icon: '🏷️', color: 'rose' },
+  // Manual-only (no ProClinic sync API) — CRUD in Backend only
+  { key: 'wallet_types', label: 'กระเป๋าเงิน', fn: null, icon: '💼', color: 'emerald', manualOnly: true },
+  { key: 'membership_types', label: 'บัตรสมาชิก', fn: null, icon: '🎫', color: 'purple', manualOnly: true },
 ];
 
 const SYNC_COLOR_MAP_DARK = {
-  emerald: { btn: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40', badge: 'bg-emerald-900/40 text-emerald-400' },
-  sky: { btn: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40', badge: 'bg-sky-900/40 text-sky-400' },
-  purple: { btn: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40', badge: 'bg-purple-900/40 text-purple-400' },
-  amber: { btn: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40', badge: 'bg-amber-900/40 text-amber-400' },
-  rose: { btn: 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40', badge: 'bg-rose-900/40 text-rose-400' },
+  emerald: { btn: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40', badge: 'bg-emerald-900/40 text-emerald-400', btnSolid: 'bg-emerald-700 hover:bg-emerald-600' },
+  sky: { btn: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40', badge: 'bg-sky-900/40 text-sky-400', btnSolid: 'bg-sky-700 hover:bg-sky-600' },
+  purple: { btn: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40', badge: 'bg-purple-900/40 text-purple-400', btnSolid: 'bg-purple-700 hover:bg-purple-600' },
+  amber: { btn: 'bg-amber-950/30 border-amber-800 text-amber-400 hover:bg-amber-900/40', badge: 'bg-amber-900/40 text-amber-400', btnSolid: 'bg-amber-700 hover:bg-amber-600' },
+  rose: { btn: 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40', badge: 'bg-rose-900/40 text-rose-400', btnSolid: 'bg-rose-700 hover:bg-rose-600' },
 };
 const SYNC_COLOR_MAP_LIGHT = {
   emerald: { btn: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100', badge: 'bg-emerald-50 text-emerald-700' },
@@ -77,6 +80,21 @@ const COLUMNS = {
     { key: 'name', label: 'ชื่อโปรโมชัน', sticky: true },
     { key: 'price', label: 'ราคา', w: 'w-20', align: 'text-right' },
     { key: 'category', label: 'หมวด', w: 'w-24' },
+  ],
+  wallet_types: [
+    { key: 'name', label: 'ชื่อกระเป๋าเงิน', sticky: true },
+    { key: 'description', label: 'รายละเอียด' },
+  ],
+  membership_types: [
+    { key: 'name', label: 'ชื่อบัตร', sticky: true },
+    { key: 'colorName', label: 'สี', w: 'w-16' },
+    { key: 'price', label: 'ราคา', w: 'w-20', align: 'text-right' },
+    { key: 'credit', label: 'เครดิต', w: 'w-20', align: 'text-right' },
+    { key: 'discountPercent', label: 'ส่วนลด %', w: 'w-16', align: 'text-right' },
+    { key: 'point', label: 'คะแนน', w: 'w-16', align: 'text-right' },
+    { key: 'bahtPerPoint', label: 'บาท/คะแนน', w: 'w-20', align: 'text-right' },
+    { key: 'expiredInDays', label: 'อายุ (วัน)', w: 'w-16', align: 'text-right' },
+    { key: 'status', label: 'สถานะ', w: 'w-16' },
   ],
 };
 
@@ -183,6 +201,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
   // ── Sync handler ──
   const handleSync = useCallback(async (type, fn) => {
+    if (!fn) return; // manual-only types — nothing to sync
     setSyncStatus(prev => ({ ...prev, [type]: 'loading' }));
     setSyncError(prev => ({ ...prev, [type]: null }));
     try {
@@ -207,6 +226,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
   const handleSyncAll = useCallback(async () => {
     for (const st of SYNC_TYPES) {
+      if (!st.fn) continue; // skip manual-only
       await handleSync(st.key, st.fn);
     }
   }, [handleSync]);
@@ -295,11 +315,217 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     } catch (e) { alert(e.message); }
   };
 
+  // ── Generic manual master item CRUD (wallet_types + membership_types) ──
+  const [itemFormOpen, setItemFormOpen] = useState(false);
+  const [itemFormType, setItemFormType] = useState(''); // 'wallet_types' | 'membership_types'
+  const [editingItem, setEditingItem] = useState(null);
+  const [itemSaving, setItemSaving] = useState(false);
+  const [itemError, setItemError] = useState('');
+  // Wallet type fields
+  const [itName, setItName] = useState('');
+  const [itDescription, setItDescription] = useState('');
+  // Membership type fields
+  const [itColorName, setItColorName] = useState('');
+  const [itPrice, setItPrice] = useState('');
+  const [itCredit, setItCredit] = useState('');
+  const [itDiscountPercent, setItDiscountPercent] = useState('');
+  const [itPoint, setItPoint] = useState('');
+  const [itBahtPerPoint, setItBahtPerPoint] = useState('');
+  const [itExpiredInDays, setItExpiredInDays] = useState('365');
+  const [itWalletTypeId, setItWalletTypeId] = useState('');
+  const [itStatus, setItStatus] = useState('ใช้งาน');
+  const [walletTypesCache, setWalletTypesCache] = useState([]);
+
+  const resetItemForm = () => {
+    setItName(''); setItDescription('');
+    setItColorName(''); setItPrice(''); setItCredit(''); setItDiscountPercent('');
+    setItPoint(''); setItBahtPerPoint(''); setItExpiredInDays('365');
+    setItWalletTypeId(''); setItStatus('ใช้งาน'); setItError('');
+  };
+
+  const openItemCreate = async (type) => {
+    setItemFormType(type); setEditingItem(null); resetItemForm();
+    if (type === 'membership_types' && walletTypesCache.length === 0) {
+      try {
+        const wts = await getAllMasterDataItems('wallet_types');
+        setWalletTypesCache(wts);
+      } catch {}
+    }
+    setItemFormOpen(true);
+  };
+
+  const openItemEdit = async (type, item) => {
+    setItemFormType(type); setEditingItem(item); setItError('');
+    setItName(item.name || '');
+    setItDescription(item.description || '');
+    setItColorName(item.colorName || '');
+    setItPrice(String(item.price ?? ''));
+    setItCredit(String(item.credit ?? ''));
+    setItDiscountPercent(String(item.discountPercent ?? ''));
+    setItPoint(String(item.point ?? ''));
+    setItBahtPerPoint(String(item.bahtPerPoint ?? ''));
+    setItExpiredInDays(String(item.expiredInDays ?? '365'));
+    setItWalletTypeId(String(item.walletTypeId ?? ''));
+    setItStatus(item.status || 'ใช้งาน');
+    if (type === 'membership_types' && walletTypesCache.length === 0) {
+      try {
+        const wts = await getAllMasterDataItems('wallet_types');
+        setWalletTypesCache(wts);
+      } catch {}
+    }
+    setItemFormOpen(true);
+  };
+
+  const handleItemSave = async () => {
+    if (!itName.trim()) { setItError('กรุณากรอกชื่อ'); return; }
+    setItemSaving(true); setItError('');
+    try {
+      let data;
+      if (itemFormType === 'wallet_types') {
+        data = { name: itName.trim(), description: itDescription.trim(), status: itStatus };
+      } else {
+        data = {
+          name: itName.trim(),
+          colorName: itColorName.trim(),
+          price: parseFloat(itPrice) || 0,
+          credit: parseFloat(itCredit) || 0,
+          discountPercent: parseFloat(itDiscountPercent) || 0,
+          point: parseInt(itPoint) || 0,
+          bahtPerPoint: parseFloat(itBahtPerPoint) || 0,
+          expiredInDays: parseInt(itExpiredInDays) || 365,
+          walletTypeId: itWalletTypeId || '',
+          walletTypeName: walletTypesCache.find(w => String(w.id) === String(itWalletTypeId))?.name || '',
+          status: itStatus,
+        };
+      }
+      if (editingItem) {
+        await updateMasterItem(itemFormType, editingItem.id, data);
+      } else {
+        await createMasterItem(itemFormType, data);
+      }
+      setItemFormOpen(false);
+      const refreshed = await getAllMasterDataItems(itemFormType);
+      if (activeSubTab === itemFormType) setItems(refreshed);
+    } catch (e) { setItError(e.message); }
+    finally { setItemSaving(false); }
+  };
+
+  const handleItemDelete = async (type, item) => {
+    if (!confirm(`ต้องการลบ "${item.name}"?`)) return;
+    try {
+      await deleteMasterItem(type, item.id);
+      setItems(prev => prev.filter(i => i.id !== item.id));
+    } catch (e) { alert(e.message); }
+  };
+
   const filteredProds = useMemo(() => {
     if (!prodSearch.trim()) return allProducts.slice(0, 30);
     const q = prodSearch.toLowerCase();
     return allProducts.filter(p => (p.name || '').toLowerCase().includes(q)).slice(0, 30);
   }, [allProducts, prodSearch]);
+
+  // ── Render Manual Item Form Overlay (wallet_types / membership_types) ──
+  if (itemFormOpen) {
+    const isWallet = itemFormType === 'wallet_types';
+    const title = isWallet
+      ? (editingItem ? 'แก้ไขกระเป๋าเงิน' : 'สร้างกระเป๋าเงินใหม่')
+      : (editingItem ? 'แก้ไขบัตรสมาชิก' : 'สร้างบัตรสมาชิกใหม่');
+    const accent = isWallet ? 'emerald' : 'purple';
+    const solidBtn = isWallet ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-purple-700 hover:bg-purple-600';
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 mb-2">
+          <button onClick={() => setItemFormOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--tx-muted)]" aria-label="กลับ"><ArrowLeft size={18} /></button>
+          <h2 className={`text-sm font-bold text-${accent}-400`}>{title}</h2>
+        </div>
+        {itemError && <div className={`${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} border rounded-lg px-3 py-2 text-xs`}>{itemError}</div>}
+        <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl p-5 space-y-4">
+          {isWallet ? (
+            <>
+              <div>
+                <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ชื่อกระเป๋าเงิน *</label>
+                <input value={itName} onChange={e => setItName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="เช่น Laser Wallet" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">รายละเอียด</label>
+                <textarea value={itDescription} onChange={e => setItDescription(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)] resize-none" placeholder="สำหรับใช้กับบริการ..." />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">สถานะ</label>
+                <select value={itStatus} onChange={e => setItStatus(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+                  <option value="ใช้งาน">ใช้งาน</option><option value="พักใช้งาน">พักใช้งาน</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ชื่อบัตร *</label>
+                  <input value={itName} onChange={e => setItName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="VIP, GOLD, DIAMOND" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">สีบัตร (ชื่อสี)</label>
+                  <input value={itColorName} onChange={e => setItColorName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="opal, gold, silver" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ราคาบัตร (บาท) *</label>
+                  <input type="number" value={itPrice} onChange={e => setItPrice(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="15000" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เครดิตในบัตร (บาท) *</label>
+                  <input type="number" value={itCredit} onChange={e => setItCredit(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="10000" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ส่วนลด On Top (%) *</label>
+                  <input type="number" value={itDiscountPercent} onChange={e => setItDiscountPercent(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="10" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">คะแนนเริ่มต้น *</label>
+                  <input type="number" value={itPoint} onChange={e => setItPoint(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="500" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">ยอดซื้อต่อ 1 คะแนน *</label>
+                  <input type="number" value={itBahtPerPoint} onChange={e => setItBahtPerPoint(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="100 (0 = ไม่สะสม)" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">อายุบัตร (วัน) *</label>
+                  <input type="number" value={itExpiredInDays} onChange={e => setItExpiredInDays(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]" placeholder="365" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">เครดิตเข้ากระเป๋าเงิน</label>
+                  <select value={itWalletTypeId} onChange={e => setItWalletTypeId(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+                    <option value="">ไม่ระบุ</option>
+                    {walletTypesCache.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[var(--tx-muted)] block mb-1">สถานะ</label>
+                  <select value={itStatus} onChange={e => setItStatus(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)]">
+                    <option value="ใช้งาน">ใช้งาน</option><option value="พักใช้งาน">พักใช้งาน</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setItemFormOpen(false)} className="px-4 py-2.5 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">ยกเลิก</button>
+          <button onClick={handleItemSave} disabled={itemSaving}
+            className={`px-5 py-2.5 rounded-lg text-xs font-bold text-white disabled:opacity-50 flex items-center gap-2 transition-all ${solidBtn}`}>
+            {itemSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            {editingItem ? 'บันทึก' : 'สร้าง'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render Course Form Overlay ──
   if (courseFormOpen) return (
@@ -399,7 +625,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {SYNC_TYPES.map(st => {
+          {SYNC_TYPES.filter(st => !st.manualOnly).map(st => {
             const cm = (isDark ? SYNC_COLOR_MAP_DARK : SYNC_COLOR_MAP_LIGHT)[st.color];
             const status = syncStatus[st.key];
             const m = meta[st.key];
@@ -485,11 +711,23 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         <span className="text-xs text-[var(--tx-muted)] font-bold whitespace-nowrap">
           {filtered.length} / {items.length} รายการ
         </span>
-        {/* Create course button */}
+        {/* Create buttons per sub-tab */}
         {activeSubTab === 'courses' && (
           <button onClick={openCourseCreate}
             className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
             <Plus size={13} /> สร้างคอร์ส
+          </button>
+        )}
+        {activeSubTab === 'wallet_types' && (
+          <button onClick={() => openItemCreate('wallet_types')}
+            className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
+            <Plus size={13} /> สร้างกระเป๋า
+          </button>
+        )}
+        {activeSubTab === 'membership_types' && (
+          <button onClick={() => openItemCreate('membership_types')}
+            className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-purple-700 hover:bg-purple-600 transition-all flex items-center gap-1.5 whitespace-nowrap">
+            <Plus size={13} /> สร้างบัตรสมาชิก
           </button>
         )}
       </div>
@@ -511,7 +749,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
           </div>
           <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ยังไม่มีข้อมูล{SYNC_TYPES.find(s => s.key === activeSubTab)?.label || ''}</h3>
           <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-6">
-            กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic มาเก็บไว้ในระบบ
+            {SYNC_TYPES.find(s => s.key === activeSubTab)?.manualOnly
+              ? <>กดปุ่ม <span className="font-bold text-emerald-400">+ สร้าง</span> ด้านบนเพื่อเพิ่มข้อมูลใหม่</>
+              : <>กดปุ่ม <span className="font-bold text-amber-400">Sync</span> ด้านบนเพื่อดึงข้อมูลจาก ProClinic มาเก็บไว้ในระบบ</>
+            }
           </p>
         </div>
       ) : filtered.length === 0 ? (
@@ -532,7 +773,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                       {col.label}
                     </th>
                   ))}
-                  {activeSubTab === 'courses' && <th scope="col" className="px-2 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs bg-[var(--bg-elevated)] w-16">จัดการ</th>}
+                  {(activeSubTab === 'courses' || activeSubTab === 'wallet_types' || activeSubTab === 'membership_types') && <th scope="col" className="px-2 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs bg-[var(--bg-elevated)] w-16">จัดการ</th>}
                 </tr>
               </thead>
               <tbody>
@@ -561,6 +802,14 @@ export default function MasterDataTab({ clinicSettings, theme }) {
                             <button onClick={() => handleCourseDelete(item)} className={`p-1.5 rounded ${isDark ? 'hover:bg-red-900/20 text-red-400' : 'hover:bg-red-50 text-red-700'}`} aria-label="ลบคอร์ส"><Trash2 size={13} /></button>
                           </div>
                         )}
+                      </td>
+                    )}
+                    {(activeSubTab === 'wallet_types' || activeSubTab === 'membership_types') && (
+                      <td className="px-2 py-2 w-16">
+                        <div className="flex gap-1">
+                          <button onClick={() => openItemEdit(activeSubTab, item)} className={`p-1.5 rounded ${isDark ? 'hover:bg-sky-900/20 text-sky-400' : 'hover:bg-sky-50 text-sky-700'}`} aria-label="แก้ไข"><Edit3 size={13} /></button>
+                          <button onClick={() => handleItemDelete(activeSubTab, item)} className={`p-1.5 rounded ${isDark ? 'hover:bg-red-900/20 text-red-400' : 'hover:bg-red-50 text-red-700'}`} aria-label="ลบ"><Trash2 size={13} /></button>
+                        </div>
                       </td>
                     )}
                   </tr>
