@@ -41,6 +41,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [saleMode, setSaleMode] = useState(false); // true = show SaleTab overlay (from customer detail)
   const [financeInitialCustomer, setFinanceInitialCustomer] = useState(null);
   const [financeSubTab, setFinanceSubTab] = useState(null); // 'deposit' | 'wallet' | ... set when navigating from customer detail
+  const [financeMode, setFinanceMode] = useState(false); // overlay from CustomerDetail, similar to saleMode
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
   // Backend dashboard uses trial ProClinic server (separate from production frontend)
@@ -168,6 +169,20 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCustomerUsed={() => setSaleInitialCustomer(null)}
             onFormClose={() => { setSaleMode(false); setSaleInitialCustomer(null); }}
           />
+        ) : financeMode ? (
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <button onClick={() => { setFinanceMode(false); setFinanceInitialCustomer(null); setFinanceSubTab(null); }}
+                className="flex items-center gap-1.5 text-xs font-bold text-teal-400 hover:text-teal-300 transition-colors">
+                <ArrowLeft size={14} /> กลับไปที่ข้อมูลลูกค้า
+              </button>
+            </div>
+            <FinanceTab clinicSettings={clinicSettings} theme={theme}
+              initialSubTab={financeSubTab}
+              initialCustomer={financeInitialCustomer}
+              onCustomerUsed={() => setFinanceInitialCustomer(null)}
+            />
+          </div>
         ) : viewingCustomer ? (
           <CustomerDetailView
             customer={viewingCustomer}
@@ -224,6 +239,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCreateSale={(cust) => {
               setSaleInitialCustomer(cust);
               setSaleMode(true); // Overlay SaleTab without clearing customer
+            }}
+            onOpenFinance={(subtab, cust) => {
+              setFinanceSubTab(subtab || 'deposit');
+              setFinanceInitialCustomer(cust);
+              setFinanceMode(true);
             }}
           />
         ) : activeTab === 'clone' ? (

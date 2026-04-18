@@ -6,10 +6,14 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown
 } from 'lucide-react';
-import { getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems } from '../../lib/backendClient.js';
+import {
+  getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
+  getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
+} from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
+import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { hexToRgb } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
@@ -60,7 +64,7 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, theme, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale }) {
+export default function CustomerDetailView({ customer, accentColor, theme, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale, onOpenFinance }) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -94,6 +98,31 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
         setTreatmentsError('โหลดประวัติการรักษาไม่สำเร็จ');
       })
       .finally(() => setTreatmentsLoading(false));
+  }, [customer?.proClinicId, customer?.treatmentCount]);
+
+  // Load financial summary (deposit / wallet / points / membership)
+  const [finSummary, setFinSummary] = useState(null);
+  const [finLoading, setFinLoading] = useState(false);
+  useEffect(() => {
+    if (!customer?.proClinicId) return;
+    setFinLoading(true);
+    (async () => {
+      try {
+        const cid = customer.proClinicId;
+        const [deposits, wallets, points, membership] = await Promise.all([
+          getActiveDeposits(cid),
+          getCustomerWallets(cid),
+          getPointBalance(cid),
+          getCustomerMembership(cid),
+        ]);
+        const depositBalance = deposits.reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0);
+        const walletBalance = wallets.reduce((s, w) => s + (Number(w.balance) || 0), 0);
+        setFinSummary({ depositBalance, walletBalance, wallets, points, membership });
+      } catch (e) {
+        console.warn('[CustomerDetailView] finSummary load failed:', e);
+        setFinSummary(null);
+      } finally { setFinLoading(false); }
+    })();
   }, [customer?.proClinicId, customer?.treatmentCount]);
 
   // Load customer sales for purchase history tab
@@ -186,6 +215,90 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
               )}
               {pd.howFoundUs?.length > 0 && (
                 <InfoRow label="ที่มา" value={Array.isArray(pd.howFoundUs) ? pd.howFoundUs.join(', ') : pd.howFoundUs} />
+              )}
+            </div>
+          </div>
+
+          {/* ── Financial Summary Card (Phase 7) ── */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
+              <Wallet size={14} className="text-emerald-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--tx-heading)]">การเงิน</h3>
+              {finLoading && <Loader2 size={11} className="animate-spin text-[var(--tx-muted)] ml-auto" />}
+            </div>
+            <div className="p-3 grid grid-cols-2 gap-2">
+              {/* มัดจำ */}
+              <button onClick={() => onOpenFinance?.('deposit', customer)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-emerald-700/50' : 'bg-gray-50 border-gray-200 hover:border-emerald-300'}`}
+                title="จัดการมัดจำ">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Wallet size={11} className="text-emerald-400" />
+                  <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">มัดจำ</span>
+                </div>
+                <div className="text-sm font-black text-emerald-400 font-mono">
+                  ฿{fmtMoney(finSummary?.depositBalance || 0)}
+                </div>
+              </button>
+              {/* Wallet */}
+              <button onClick={() => onOpenFinance?.('wallet', customer)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-sky-700/50' : 'bg-gray-50 border-gray-200 hover:border-sky-300'}`}
+                title="จัดการ Wallet">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <CreditCard size={11} className="text-sky-400" />
+                  <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">Wallet</span>
+                </div>
+                <div className="text-sm font-black text-sky-400 font-mono">
+                  ฿{fmtMoney(finSummary?.walletBalance || 0)}
+                </div>
+                {finSummary?.wallets?.length > 1 && (
+                  <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{finSummary.wallets.length} กระเป๋า</div>
+                )}
+              </button>
+              {/* Points */}
+              <button onClick={() => onOpenFinance?.('points', customer)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-amber-700/50' : 'bg-gray-50 border-gray-200 hover:border-amber-300'}`}
+                title="คะแนนสะสม">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Star size={11} className="text-amber-400" fill="currentColor" />
+                  <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">คะแนน</span>
+                </div>
+                <div className="text-sm font-black text-amber-400 font-mono">
+                  {fmtPoints(finSummary?.points || 0)}
+                </div>
+              </button>
+              {/* Membership */}
+              <button onClick={() => onOpenFinance?.('membership', customer)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-purple-700/50' : 'bg-gray-50 border-gray-200 hover:border-purple-300'}`}
+                title="บัตรสมาชิก">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Crown size={11} className="text-purple-400" />
+                  <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">สมาชิก</span>
+                </div>
+                {finSummary?.membership ? (
+                  <>
+                    <div className="text-sm font-black text-purple-400 truncate">{finSummary.membership.cardTypeName}</div>
+                    <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">ส่วนลด {finSummary.membership.discountPercent || 0}%</div>
+                  </>
+                ) : (
+                  <div className="text-xs text-[var(--tx-muted)] italic">ไม่มีบัตร</div>
+                )}
+              </button>
+            </div>
+            {/* Action buttons */}
+            <div className="px-3 pb-3 flex gap-1.5 flex-wrap">
+              <button onClick={() => onOpenFinance?.('deposit', customer)}
+                className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isDark ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-400 hover:bg-emerald-900/30' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}>
+                <Plus size={9} /> จ่ายมัดจำ
+              </button>
+              <button onClick={() => onOpenFinance?.('wallet', customer)}
+                className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isDark ? 'bg-sky-900/20 border-sky-700/40 text-sky-400 hover:bg-sky-900/30' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'}`}>
+                <Plus size={9} /> เติมเงิน
+              </button>
+              {!finSummary?.membership && (
+                <button onClick={() => onOpenFinance?.('membership', customer)}
+                  className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isDark ? 'bg-purple-900/20 border-purple-700/40 text-purple-400 hover:bg-purple-900/30' : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'}`}>
+                  <Plus size={9} /> ซื้อบัตร
+                </button>
               )}
             </div>
           </div>
