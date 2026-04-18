@@ -2085,7 +2085,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}>
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={onClose} className={`p-1.5 rounded-lg transition-all ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
+          <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">

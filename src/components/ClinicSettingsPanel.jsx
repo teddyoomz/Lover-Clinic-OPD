@@ -179,7 +179,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   return (
     <div className="w-full max-w-3xl mx-auto animate-in fade-in duration-300">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-base)] border border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] rounded-lg transition-colors"><ArrowLeft size={18}/></button>
+        <button onClick={onBack} aria-label="ย้อนกลับ" className="p-2.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-base)] border border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] rounded-lg transition-colors"><ArrowLeft size={18}/></button>
         <div>
           <h2 className="text-base sm:text-lg font-black text-[var(--tx-heading)] uppercase tracking-widest flex items-center gap-2"><Settings size={20} style={{color: ac}}/> ตั้งค่าระบบ</h2>
           <p className="text-xs text-gray-500 tracking-wider">Clinic Branding & Customization</p>

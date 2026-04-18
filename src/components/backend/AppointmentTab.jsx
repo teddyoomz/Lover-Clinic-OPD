@@ -11,6 +11,7 @@ import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
   getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems
 } from '../../lib/backendClient.js';
+import { bangkokNow } from '../../utils.js';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -65,7 +66,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
 
   // ── State ──
   const [selectedDate, setSelectedDate] = useState(() => dateStr(new Date()));
-  const [calMonth, setCalMonth] = useState(() => { const n=new Date(); return {year:n.getFullYear(),month:n.getMonth()}; });
+  // Thai time (GMT+7): avoid Jan 1 boundary where UTC-negative browsers see last December.
+  const [calMonth, setCalMonth] = useState(() => { const n = bangkokNow(); return { year: n.getUTCFullYear(), month: n.getUTCMonth() }; });
   const [monthAppts, setMonthAppts] = useState({}); // for mini calendar dots
   const [dayAppts, setDayAppts] = useState([]); // appointments for selectedDate
   const [dayLoading, setDayLoading] = useState(false);

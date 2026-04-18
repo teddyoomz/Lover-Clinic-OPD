@@ -600,6 +600,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           {/* Back button (simulation mode) */}
           {isSimulation && (
             <button onClick={onBack}
+              aria-label="ออกจากการจำลอง"
               style={{ position: 'absolute', top: 16, left: 16, padding: '8px', background: heroGlass, border: `1px solid ${heroGlassBd}`, borderRadius: '8px', color: heroMuted, cursor: 'pointer', transition: 'all 0.15s', zIndex: 20 }}
               title="ออกจากการจำลอง">
               <ArrowLeft size={18} />

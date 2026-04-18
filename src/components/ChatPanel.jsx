@@ -333,7 +333,7 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 p-3 border-b border-[var(--bd)]">
-        <button onClick={onBack} className="text-[var(--tx-muted)] hover:text-[var(--tx-heading)]"><ChevronLeft size={20} /></button>
+        <button onClick={onBack} aria-label="ย้อนกลับ" className="text-[var(--tx-muted)] hover:text-[var(--tx-heading)]"><ChevronLeft size={20} /></button>
         {conversation?.pictureUrl ? (
           <img src={conversation.pictureUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
         ) : (

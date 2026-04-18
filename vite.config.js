@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { writeFileSync } from 'fs'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 function versionPlugin() {
   return {
@@ -11,9 +12,17 @@ function versionPlugin() {
   }
 }
 
+// Bundle visualizer — set ANALYZE=1 to generate dist/stats.html for inspection.
+// Off by default so normal builds stay fast + don't commit a 1MB HTML artifact.
+const analyze = process.env.ANALYZE === '1'
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), versionPlugin()],
+  plugins: [
+    react(),
+    versionPlugin(),
+    ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
+  ],
   test: {
     globals: true,
     environment: 'jsdom',

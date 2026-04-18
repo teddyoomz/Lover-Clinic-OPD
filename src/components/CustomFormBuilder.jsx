@@ -5,6 +5,7 @@ import { ArrowLeft, Save, PlusCircle, Edit3, Trash2, X, Plus, LayoutTemplate, Ty
 export default function CustomFormBuilder({ db, appId, user, onBack }) {
   const [templates, setTemplates] = useState([]);
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'form_templates');
@@ -25,7 +26,9 @@ export default function CustomFormBuilder({ db, appId, user, onBack }) {
   };
 
   const handleSave = async () => {
+    if (saving) return; // guard against double-click creating duplicates
     if (!editingTemplate.title.trim()) return alert("กรุณาตั้งชื่อแบบฟอร์ม");
+    setSaving(true);
     try {
       if (editingTemplate.id) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'form_templates', editingTemplate.id), {
@@ -40,6 +43,8 @@ export default function CustomFormBuilder({ db, appId, user, onBack }) {
     } catch (e) {
       console.error(e);
       alert("ไม่สามารถบันทึกแบบฟอร์มได้");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -83,7 +88,7 @@ export default function CustomFormBuilder({ db, appId, user, onBack }) {
             <button onClick={() => setEditingTemplate(null)} className="p-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-base)] rounded-lg border border-[var(--bd-strong)] transition-colors text-[var(--tx-muted)] hover:text-[var(--tx-heading)]"><ArrowLeft size={20}/></button>
             <h2 className="text-lg sm:text-xl font-black text-[var(--tx-heading)] uppercase tracking-widest">{editingTemplate.id ? 'แก้ไขแบบฟอร์ม' : 'สร้างแบบฟอร์มใหม่'}</h2>
           </div>
-          <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors text-sm"><Save size={18}/> บันทึก</button>
+          <button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white px-4 sm:px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors text-sm"><Save size={18}/> {saving ? 'กำลังบันทึก...' : 'บันทึก'}</button>
         </div>
 
         <div className="space-y-6">

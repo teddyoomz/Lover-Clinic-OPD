@@ -11,8 +11,8 @@ export function OfficialOPDPrint({ session, clinicSettings = {} }) {
   const d = session.patientData;
   const formType = session.formType || 'intake';
   const summary = generateClinicalSummary(d, formType, session.customTemplate);
-  const formattedDate = session.createdAt ? session.createdAt.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-  const formattedTime = session.createdAt ? session.createdAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const formattedDate = session.createdAt ? session.createdAt.toDate().toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+  const formattedTime = session.createdAt ? session.createdAt.toDate().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '-';
   const isFollowUp = formType.startsWith('followup_');
   const isCustom = formType === 'custom';
   const ac = cs.accentColor || '#dc2626';
@@ -290,8 +290,8 @@ export function DashboardOPDPrint({ session, clinicSettings = {} }) {
   const showMrs  = (!isFollowUp && !isCustom && goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || formType === 'followup_mrs';
   const isPerf   = (!isFollowUp && !isCustom && reasons.includes('สมรรถภาพทางเพศ')) || formType === 'followup_ed';
 
-  const formattedDate = session.createdAt ? session.createdAt.toDate().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-  const formattedTime = session.createdAt ? session.createdAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const formattedDate = session.createdAt ? session.createdAt.toDate().toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+  const formattedTime = session.createdAt ? session.createdAt.toDate().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) : '-';
   const ac = cs.accentColor || '#dc2626';
 
   /* ── Shared style helpers ── */

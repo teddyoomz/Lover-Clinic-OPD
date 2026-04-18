@@ -378,6 +378,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     visitPurpose: [],
   });
   const [editingDepositData, setEditingDepositData] = useState(null); // null = not editing, object = editing copy
+  const [depositSaving, setDepositSaving] = useState(false); // guards against double-click duplicate ProClinic updates
 
   // ── No-deposit appointment form state ──
   const [showNoDepositForm, setShowNoDepositForm] = useState(false);
@@ -532,7 +533,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // Find furthest month from active sessions (noDeposit + deposit)
       const allActive = [...noDepositSessions, ...depositSessions];
-      let maxMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      // `now` is bangkokNow() (UTC-shifted) — must use getUTC* not getFullYear/getMonth.
+      let maxMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
       for (const s of allActive) {
         const aDate = s.appointmentData?.appointmentDate || s.depositData?.appointmentDate;
         if (aDate) {
@@ -550,7 +552,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       // Build list of months: current → maxMonth
       const months = [];
-      let cursor = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      let cursor = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
       while (cursor <= maxMonth && months.length < 12) {
         months.push(cursor);
         const [cy, cm] = cursor.split('-').map(Number);
@@ -739,6 +741,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const assistantIds = new Set(practitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
 
+      // Batch-read every unique month once across ALL active schedules (was N×M getDocs).
+      // With 5 schedules × 3 months this drops reads from 15 to 3 and keeps filter logic
+      // per-doc. Appointment docs are small so holding them in memory is fine.
+      const uniqueMonths = Array.from(new Set(activeScheds.flatMap(s => s.months || [])));
+      const monthSnaps = await Promise.all(uniqueMonths.map(mo =>
+        getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo))
+      ));
+      const apptsByMonth = {};
+      uniqueMonths.forEach((mo, i) => {
+        apptsByMonth[mo] = monthSnaps[i].exists() ? (monthSnaps[i].data().appointments || []) : [];
+      });
+
       for (const sched of activeScheds) {
         // Check if not expired (24hr)
         if (sched.createdAt?.toMillis && Date.now() - sched.createdAt.toMillis() > 24 * 60 * 60 * 1000) continue;
@@ -759,18 +773,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const freshBookedSlots = [];
         const freshDoctorBookedSlots = [];
         for (const mo of months) {
-          const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
-          if (snap.exists()) {
-            (snap.data().appointments || []).forEach(a => {
-              if (!a.date || !a.startTime || !a.endTime) return;
-              if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
-                freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-              }
-              if (shouldBlockScheduleSlot(a, filterCfg)) {
-                freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-              }
-            });
-          }
+          const appts = apptsByMonth[mo] || [];
+          appts.forEach(a => {
+            if (!a.date || !a.startTime || !a.endTime) return;
+            if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
+              freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+            }
+            if (shouldBlockScheduleSlot(a, filterCfg)) {
+              freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+            }
+          });
         }
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), {
           bookedSlots: freshBookedSlots,
@@ -973,8 +985,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const getDoctorRangesForDate = (dateStr) => {
     const custom = schedCustomDoctorHours[dateStr];
     if (custom) return Array.isArray(custom) ? custom : [custom];
-    const d = new Date(dateStr);
-    const isWknd = d.getDay() === 0 || d.getDay() === 6;
+    // TZ-invariant weekday: parse YYYY-MM-DD at UTC midnight then read UTC day.
+    // `new Date(dateStr).getDay()` is browser-local and wrong in UTC-negative zones.
+    const [yy, mm, dd] = (dateStr || '').split('-').map(Number);
+    const dow = new Date(Date.UTC(yy, (mm || 1) - 1, dd || 1)).getUTCDay();
+    const isWknd = dow === 0 || dow === 6;
     return [{
       start: isWknd ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
       end: isWknd ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
@@ -1011,9 +1026,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const inDoc = isSlotInDoctorHours(dateStr, slotStart);
     const action = forceAction || (inDoc ? 'remove' : 'add');
     setSchedCustomDoctorHours(prev => {
-      // Get all 15-min slots for the day based on clinic hours
-      const bDate = new Date(dateStr);
-      const isWknd = bDate.getDay() === 0 || bDate.getDay() === 6;
+      // Get all 15-min slots for the day based on clinic hours.
+      // TZ-invariant weekday parsing (see getDoctorRangesForDate).
+      const [yy, mm, dd] = (dateStr || '').split('-').map(Number);
+      const dow = new Date(Date.UTC(yy, (mm || 1) - 1, dd || 1)).getUTCDay();
+      const isWknd = dow === 0 || dow === 6;
       const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
       const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
       const allSlots = [];
@@ -1038,8 +1055,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // Check if same as default → remove custom override
       // Default end is actual end time (e.g. "19:00"), adjust by -15 to match new format (last slot start)
       const defRanges = (() => {
-        const d2 = new Date(dateStr);
-        const w = d2.getDay() === 0 || d2.getDay() === 6;
+        // TZ-invariant weekday (UTC-parse).
+        const [yy2, mm2, dd2] = (dateStr || '').split('-').map(Number);
+        const w = [0, 6].includes(new Date(Date.UTC(yy2, (mm2 || 1) - 1, dd2 || 1)).getUTCDay());
         const defEnd = w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00');
         return [{
           start: w ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
@@ -2300,6 +2318,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   const handleSaveDepositData = async (sessionId, newData) => {
+    if (depositSaving) return; // guard double-click: deposit updates round-trip to ProClinic (seconds)
+    setDepositSaving(true);
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
       // Find the session to check if deposit was already synced to ProClinic
@@ -2336,6 +2356,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
     } catch (e) {
       showToast(`ผิดพลาด: ${e.message}`);
+    } finally {
+      setDepositSaving(false);
     }
   };
 
@@ -2383,7 +2405,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     let token = session.patientLinkToken;
     const enabled = session.patientLinkEnabled;
     if (!token || !enabled) {
-      token = Math.random().toString(36).substr(2, 10) + Math.random().toString(36).substr(2, 10);
+      token = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
           patientLinkToken: token, patientLinkEnabled: true,
@@ -2448,7 +2470,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // ─── Patient Link handlers ───────────────────────────────────────────────────
   const handleGeneratePatientLink = async (sessionId) => {
     setPatientLinkLoading(true);
-    const token = Math.random().toString(36).substr(2, 10) + Math.random().toString(36).substr(2, 10);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
         patientLinkToken: token, patientLinkEnabled: true,
@@ -3913,11 +3935,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <h2 className="text-sm sm:text-lg font-bold font-semibold text-sky-400">นัดหมาย</h2>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button onClick={prevMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                    <button onClick={prevMonth} aria-label="เดือนก่อนหน้า" className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
                       <ChevronLeft size={14} />
                     </button>
                     <span className={`text-xs sm:text-sm font-bold ${monthTextColor} min-w-[110px] sm:min-w-[140px] text-center`}>{thaiMonths[m - 1]} {y + 543}</span>
-                    <button onClick={nextMonth} className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
+                    <button onClick={nextMonth} aria-label="เดือนถัดไป" className="p-1.5 sm:p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white transition-colors">
                       <ChevronRight size={14} />
                     </button>
                   </div>
@@ -5527,8 +5549,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </button>
                         ) : (<>
                           <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
-                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 transition-colors flex items-center gap-1">
-                            <CheckCircle2 size={10}/> บันทึก
+                            disabled={depositSaving}
+                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 disabled:bg-emerald-900 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
+                            <CheckCircle2 size={10}/> {depositSaving ? 'กำลังบันทึก...' : 'บันทึก'}
                           </button>
                           <button onClick={() => setEditingDepositData(null)}
                             className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-[var(--bd-strong)] text-gray-400 hover:text-white transition-colors">

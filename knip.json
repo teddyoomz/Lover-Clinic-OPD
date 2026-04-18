@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main.jsx",
+    "src/App.jsx",
+    "api/**/*.js",
+    "functions/index.js",
+    "tests/**/*.test.{js,jsx}",
+    "playwright.config.{js,ts}",
+    "vite.config.js",
+    "eslint.config.js"
+  ],
+  "project": [
+    "src/**/*.{js,jsx}",
+    "api/**/*.js",
+    "functions/**/*.js"
+  ],
+  "ignore": [
+    "dist/**",
+    "broker-extension/**",
+    "cookie-relay/**",
+    "replicated/**"
+  ],
+  "ignoreDependencies": [
+    "autoprefixer",
+    "postcss",
+    "tailwindcss",
+    "rollup-plugin-visualizer"
+  ],
+  "ignoreExportsUsedInFile": true
+}
