@@ -152,7 +152,22 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
   }), [allCourses]);
   const expiredCourses = useMemo(() => [...(customer?.expiredCourses || []), ...usedUpCourses], [customer?.expiredCourses, usedUpCourses]);
   const appointments = customer?.appointments || [];
-  const treatmentSummary = customer?.treatmentSummary || [];
+  // Sort treatments newest-first. `rebuildTreatmentSummary` writes them in desc order
+  // on every backend save, but customers cloned from ProClinic keep ProClinic's ordering
+  // until their next rebuild — defensively re-sort client-side so the latest always tops.
+  const treatmentSummary = useMemo(() => {
+    const list = [...(customer?.treatmentSummary || [])];
+    list.sort((a, b) => {
+      const da = a?.date || '';
+      const db = b?.date || '';
+      if (da === db) {
+        // tie-breaker: treatmentId contains timestamp for backend-created ones
+        return String(b?.id || '').localeCompare(String(a?.id || ''));
+      }
+      return db.localeCompare(da);
+    });
+    return list;
+  }, [customer?.treatmentSummary]);
 
   return (
     <div>
