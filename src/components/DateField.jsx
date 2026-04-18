@@ -14,15 +14,21 @@ import { useRef } from 'react';
 
 /**
  * @param {Object} props
- * @param {string} props.value      — ISO date string "YYYY-MM-DD"
+ * @param {string}  props.value      — ISO date string "YYYY-MM-DD"
  * @param {(v: string) => void} props.onChange
  * @param {'ce'|'be'} [props.locale='ce']  — ce: ค.ศ. (backend/admin), be: พ.ศ. (clinic-facing)
  * @param {string}  [props.placeholder='เลือกวันที่']
- * @param {string}  [props.className='']
- * @param {string}  [props.size='md']  — 'sm' | 'md'
+ * @param {string}  [props.className='']        — EXTRA classes appended to the visible box.
+ * @param {string}  [props.fieldClassName]      — FULL REPLACEMENT for the visible box's default
+ *                                                 styling (bg/border/padding/text-size). Use this
+ *                                                 when the calling form wants its own theme
+ *                                                 (e.g. `focus:border-emerald-600 bg-[var(--bg-card)]`).
+ *                                                 If omitted, the built-in neutral styling is used.
+ * @param {'sm'|'md'} [props.size='md']
  * @param {boolean} [props.disabled=false]
  * @param {string}  [props.min]
  * @param {string}  [props.max]
+ * @param {boolean} [props.showIcon=true]
  */
 export default function DateField({
   value = '',
@@ -30,10 +36,12 @@ export default function DateField({
   locale = 'ce',
   placeholder = 'เลือกวันที่',
   className = '',
+  fieldClassName,
   size = 'md',
   disabled = false,
   min,
   max,
+  showIcon = true,
 }) {
   const inputRef = useRef(null);
 
@@ -46,7 +54,13 @@ export default function DateField({
   })();
 
   const padY = size === 'sm' ? 'py-1.5' : 'py-2';
-  const text = size === 'sm' ? 'text-[11px]' : 'text-xs';
+  const textSz = size === 'sm' ? 'text-[11px]' : 'text-xs';
+
+  // Default visible styling — used when the caller doesn't opt into a custom look.
+  // Callers that pass `fieldClassName` fully replace this (so their focus/border/bg
+  // wins instead of getting layered on top of the defaults).
+  const defaultField = `w-full rounded-lg px-3 ${padY} ${textSz} border bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)]`;
+  const boxClass = `${fieldClassName || defaultField} ${className} flex items-center justify-between cursor-pointer`;
 
   // Open the native picker from any click on the field (Chrome would otherwise
   // only open on the calendar icon). Fall back silently if showPicker throws.
@@ -58,7 +72,7 @@ export default function DateField({
 
   return (
     <div
-      className={`relative w-full ${disabled ? 'opacity-50 pointer-events-none' : 'cursor-pointer'} ${className}`}
+      className={`relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
       onClick={openPicker}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } }}
       role="button"
@@ -77,12 +91,14 @@ export default function DateField({
         aria-label={placeholder}
         tabIndex={-1}
       />
-      <div className={`w-full rounded-lg px-3 ${padY} ${text} border bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] flex items-center justify-between`}>
+      <div className={boxClass}>
         <span className={value ? '' : 'text-[var(--tx-muted)]'}>{display}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--tx-muted)] flex-shrink-0 ml-2">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <path d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
+        {showIcon && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--tx-muted)] flex-shrink-0 ml-2">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+        )}
       </div>
     </div>
   );

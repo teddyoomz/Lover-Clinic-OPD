@@ -24,6 +24,7 @@ import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
+import DateField from '../DateField.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n }));
 const PAYMENT_STATUSES = [
@@ -47,21 +48,9 @@ function resolveSaleStatus(sale) {
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function fmtDate(s) { if (!s) return '-'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${+d} ${THAI_MONTHS[(+m)-1]} ${(+y)+543}` : s; }
-function fmtDateDisplay(s) { if (!s) return 'เลือกวันที่'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${d}/${m}/${y}` : s; }
-
-/** Date picker: shows dd/mm/yyyy text + hidden native date input for calendar popup */
-function DatePickerField({ value, onChange, className = '' }) {
-  return (
-    <div className={`relative ${className}`}>
-      <input type="date" value={value} onChange={e => onChange(e.target.value)}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-      <div className={`w-full rounded-lg px-3 py-2 text-xs border bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] flex items-center justify-between`}>
-        <span>{fmtDateDisplay(value)}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--tx-muted)]"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      </div>
-    </div>
-  );
-}
+// DatePickerField removed — shared `DateField` (../DateField.jsx) imported below
+// now drives all three sale/payment date inputs. Styling is identical to the
+// old local component (same default bg/border/padding), so no visual drift.
 function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '0.00'; }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
@@ -1050,7 +1039,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>จำนวน (บาท)</label><input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inputCls} placeholder="0.00" /></div>
-                <div><label className={labelCls}>วันที่</label><DatePickerField value={payDate} onChange={setPayDate} /></div>
+                <div><label className={labelCls}>วันที่</label><DateField value={payDate} onChange={setPayDate} /></div>
               </div>
               <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={payRefNo} onChange={e => setPayRefNo(e.target.value)} className={inputCls} placeholder="REF-..." /></div>
             </div>
@@ -1122,7 +1111,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               )}
               <div className="mt-2">
                 <label className={labelCls}>วันที่ขาย *</label>
-                <DatePickerField value={saleDate} onChange={setSaleDate} className="max-w-[200px]" />
+                <DateField value={saleDate} onChange={setSaleDate} className="max-w-[200px]" />
               </div>
             </div>
 
@@ -1260,7 +1249,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div><label className={labelCls}>วันที่ชำระ</label><DatePickerField value={paymentDate} onChange={setPaymentDate} /></div>
+                <div><label className={labelCls}>วันที่ชำระ</label><DateField value={paymentDate} onChange={setPaymentDate} /></div>
                 <div><label className={labelCls}>เวลา</label><input type="time" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="REF-001" /></div>
               </div>

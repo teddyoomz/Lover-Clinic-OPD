@@ -8,6 +8,7 @@ import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
 import ChartSection from './ChartSection.jsx';
+import DateField from './DateField.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,25 +40,10 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
   );
 }
 
-function ThaiDatePicker({ value, onChange, isDark, inputCls }) {
-  // Display dd/mm/yyyy (พ.ศ.) but use native date picker
-  const display = (() => {
-    if (!value) return 'เลือกวันที่';
-    const [y, m, d] = value.split('-');
-    if (!d || !m) return value;
-    return `${d}/${m}/${Number(y) + 543}`;
-  })();
-  return (
-    <div className="relative">
-      <input type="date" value={value} onChange={e => onChange(e.target.value)}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-      <div className={`${inputCls} flex items-center justify-between cursor-pointer`}>
-        <span>{display}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={isDark ? 'text-gray-500' : 'text-gray-400'}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      </div>
-    </div>
-  );
-}
+// ThaiDatePicker removed — shared `DateField` (./DateField.jsx, imported
+// below) now drives all treatment/sale/payment date inputs here. Locale
+// `be` keeps the พ.ศ. display; `fieldClassName={inputCls}` preserves the
+// form's theme-aware bg/border/focus ring per callsite.
 
 function LabPriceSummary({ price, discount, discountType, vat, isDark }) {
   const p = parseFloat(price) || 0;
@@ -2147,7 +2133,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
                 <div data-field="treatmentDate">
                   <label className={labelCls}>วันที่รักษา *</label>
-                  <ThaiDatePicker value={treatmentDate} onChange={setTreatmentDate} isDark={isDark} inputCls={inputCls} />
+                  <DateField value={treatmentDate} onChange={setTreatmentDate} locale="be" fieldClassName={inputCls} />
                 </div>
               </div>
             </FormSection>
@@ -3620,7 +3606,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               </div>
               <div className="w-48">
                 <label className={labelCls}>วันที่ขาย *</label>
-                <ThaiDatePicker value={saleDate} onChange={setSaleDate} isDark={isDark} inputCls={inputCls} />
+                <DateField value={saleDate} onChange={setSaleDate} locale="be" fieldClassName={inputCls} />
               </div>
             </div>
           </FormSection>
@@ -3646,7 +3632,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className={labelCls}>วันที่ชำระเงิน *</label>
-                <ThaiDatePicker value={paymentDate} onChange={setPaymentDate} isDark={isDark} inputCls={inputCls} />
+                <DateField value={paymentDate} onChange={setPaymentDate} locale="be" fieldClassName={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>เวลา</label>

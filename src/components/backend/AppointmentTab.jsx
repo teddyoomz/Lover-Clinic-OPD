@@ -12,6 +12,7 @@ import {
   getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
+import DateField from '../DateField.jsx';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -562,8 +563,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
               <div className="grid grid-cols-3 gap-3">
                 <div data-field="apptDate">
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData(p => ({...p, date:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                  <DateField value={formData.date} onChange={v => setFormData(p => ({...p, date:v}))}
+                    fieldClassName="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
                 </div>
                 <div data-field="apptStartTime">
                   <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>

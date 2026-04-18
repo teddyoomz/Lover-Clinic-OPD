@@ -26,6 +26,7 @@ import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPane
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
+import DateField from '../components/DateField.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
 function toThaiDate(isoDate) {
@@ -47,32 +48,9 @@ function fromThaiDate(thaiDate) {
 const bangkokNow = bangkokNowUtil;
 const todayISO = thaiTodayISO;
 
-// ── DatePickerThai — shows DD/MM/YYYY + opens native calendar picker on click
-function DatePickerThai({ value, onChange, className = '', placeholder = 'DD/MM/YYYY' }) {
-  const hiddenRef = useRef(null);
-  const display = value ? toThaiDate(value) : '';
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        readOnly
-        value={display}
-        placeholder={placeholder}
-        onClick={() => { try { hiddenRef.current?.showPicker(); } catch { hiddenRef.current?.click(); } }}
-        className={`${className} cursor-pointer pr-8`}
-      />
-      <Calendar size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-      <input
-        ref={hiddenRef}
-        type="date"
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        className="absolute inset-0 opacity-0 cursor-pointer [color-scheme:dark]"
-        tabIndex={-1}
-      />
-    </div>
-  );
-}
+// DatePickerThai removed — shared `DateField` (imported below) replaces all
+// 5 use sites. Each caller's custom `className` (bg/border/focus color) is
+// now passed as `fieldClassName` to preserve the original visual concept.
 function nowTime() {
   const d = bangkokNow();
   return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
@@ -4168,14 +4146,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                         <div>
                           <label className="text-[11px] font-bold text-gray-500 uppercase">วันที่</label>
-                          <div className="relative">
-                            <input type="date" value={apptFormData.date || ''}
-                              onChange={e => setApptFormData(p => ({ ...p, date: e.target.value }))}
-                              className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-transparent cursor-pointer" />
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-[var(--tx-normal)] pointer-events-none">
-                              {apptFormData.date ? (() => { const [y,m,d] = apptFormData.date.split('-'); return `${d}/${m}/${y}`; })() : 'dd/mm/yyyy'}
-                            </span>
-                          </div>
+                          <DateField value={apptFormData.date || ''}
+                            onChange={v => setApptFormData(p => ({ ...p, date: v }))}
+                            fieldClassName="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)]" />
                         </div>
                         <div>
                           <label className="text-[11px] font-bold text-gray-500 uppercase">เวลาเริ่ม</label>
@@ -5633,7 +5606,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <label className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
-                          <DatePickerThai value={dep.depositDate || ''} onChange={v => setEditingDepositData(p => ({...p, depositDate: v}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                          <DateField value={dep.depositDate || ''} onChange={v => setEditingDepositData(p => ({...p, depositDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                         </div>
                         <div>
                           <label className="text-xs text-gray-500 uppercase block mb-1">เวลา</label>
@@ -5664,7 +5637,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {dep.hasAppointment && (<>
                           <div>
                             <label className="text-xs text-gray-500 uppercase block mb-1">วันนัด</label>
-                            <DatePickerThai value={dep.appointmentDate || ''} onChange={v => setEditingDepositData(p => ({...p, appointmentDate: v}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+                            <DateField value={dep.appointmentDate || ''} onChange={v => setEditingDepositData(p => ({...p, appointmentDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -5913,7 +5886,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 font-semibold block mb-1">วันที่จ่ายมัดจำ</label>
-                      <DatePickerThai value={depositFormData.depositDate} onChange={v => setDepositFormData(p => ({...p, depositDate: v}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                      <DateField value={depositFormData.depositDate} onChange={v => setDepositFormData(p => ({...p, depositDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 font-semibold block mb-1">เวลา</label>
@@ -5943,7 +5916,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-gray-500 block mb-1">วันนัด</label>
-                          <DatePickerThai value={depositFormData.appointmentDate} onChange={v => setDepositFormData(p => ({...p, appointmentDate: v}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
+                          <DateField value={depositFormData.appointmentDate} onChange={v => setDepositFormData(p => ({...p, appointmentDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
                         </div>
                         <div className="grid grid-cols-2 gap-1">
                           <div>
@@ -6050,7 +6023,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-500 block mb-1">วันนัด <span className="text-red-500">*</span></label>
-                      <DatePickerThai value={noDepositFormData.appointmentDate} onChange={v => setNoDepositFormData(p => ({...p, appointmentDate: v}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
+                      <DateField value={noDepositFormData.appointmentDate} onChange={v => setNoDepositFormData(p => ({...p, appointmentDate: v}))} fieldClassName={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
                     </div>
                     <div className="grid grid-cols-2 gap-1">
                       <div>
