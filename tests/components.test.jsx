@@ -785,6 +785,49 @@ describe('financeUtils — membership', () => {
   });
 });
 
+// Inline copy of SaleTab's PAYMENT_STATUSES + resolveSaleStatus — kept in sync
+// with the source so this regression test can't drift.
+const SALE_PAYMENT_STATUSES = [
+  { value: 'paid', label: 'ชำระแล้ว', color: 'emerald' },
+  { value: 'split', label: 'แบ่งชำระ', color: 'sky' },
+  { value: 'unpaid', label: 'ค้างชำระ', color: 'amber' },
+  { value: 'deferred', label: 'ชำระภายหลัง', color: 'purple' },
+  { value: 'draft', label: 'แบบร่าง', color: 'gray' },
+  { value: 'cancelled', label: 'ยกเลิก', color: 'red' },
+];
+function resolveSaleStatus(sale) {
+  if (sale?.status === 'cancelled') return SALE_PAYMENT_STATUSES.find(s => s.value === 'cancelled');
+  return SALE_PAYMENT_STATUSES.find(s => s.value === sale?.payment?.status)
+    || SALE_PAYMENT_STATUSES.find(s => s.value === 'draft');
+}
+
+describe('SaleTab status resolution — regression', () => {
+  it('cancelled sale shows "ยกเลิก" (NOT "ชำระภายหลัง")', () => {
+    const st = resolveSaleStatus({ status: 'cancelled', payment: { status: 'cancelled' } });
+    expect(st.label).toBe('ยกเลิก');
+    expect(st.color).toBe('red');
+  });
+  it('cancelled sale with lingering paid payment.status still shows ยกเลิก', () => {
+    // sale.status=cancelled takes precedence over payment.status
+    const st = resolveSaleStatus({ status: 'cancelled', payment: { status: 'paid' } });
+    expect(st.label).toBe('ยกเลิก');
+  });
+  it('normal paid sale shows ชำระแล้ว', () => {
+    const st = resolveSaleStatus({ status: 'active', payment: { status: 'paid' } });
+    expect(st.label).toBe('ชำระแล้ว');
+  });
+  it('unknown payment status falls back to draft (not deferred)', () => {
+    const st = resolveSaleStatus({ status: 'active', payment: { status: 'nonsense' } });
+    expect(st.label).toBe('แบบร่าง');
+    // Regression: previously defaulted to PAYMENT_STATUSES[3]=ชำระภายหลัง
+    expect(st.label).not.toBe('ชำระภายหลัง');
+  });
+  it('missing payment object → falls back to draft', () => {
+    const st = resolveSaleStatus({ status: 'active' });
+    expect(st.label).toBe('แบบร่าง');
+  });
+});
+
 describe('financeUtils — formatting', () => {
   it('fmtMoney — formats with thousand separators', () => {
     expect(fmtMoney(1000)).toContain('1,000');

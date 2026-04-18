@@ -27,7 +27,18 @@ const PAYMENT_STATUSES = [
   { value: 'unpaid', label: 'ค้างชำระ', color: 'amber' },
   { value: 'deferred', label: 'ชำระภายหลัง', color: 'purple' },
   { value: 'draft', label: 'แบบร่าง', color: 'gray' },
+  { value: 'cancelled', label: 'ยกเลิก', color: 'red' },
 ];
+
+/** Resolve the display status for a sale row. Cancelled is top-level
+ *  (sale.status), so it beats payment.status in the label. */
+function resolveSaleStatus(sale) {
+  if (sale?.status === 'cancelled') {
+    return PAYMENT_STATUSES.find(s => s.value === 'cancelled');
+  }
+  return PAYMENT_STATUSES.find(s => s.value === sale?.payment?.status)
+    || PAYMENT_STATUSES.find(s => s.value === 'draft');
+}
 const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const THAI_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function fmtDate(s) { if (!s) return '-'; const [y,m,d]=(s||'').split('-'); return d&&m ? `${+d} ${THAI_MONTHS[(+m)-1]} ${(+y)+543}` : s; }
@@ -677,7 +688,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               </thead>
               <tbody>
                 {filtered.map((sale, i) => {
-                  const st = PAYMENT_STATUSES.find(s => s.value === sale.payment?.status) || PAYMENT_STATUSES[3];
+                  const st = resolveSaleStatus(sale);
                   return (
                     <tr key={sale.saleId || sale.id || i} className={`border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}>
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
@@ -771,7 +782,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               </div>
               {/* Payment */}
               <div>
-                <h4 className={labelCls}>การชำระเงิน — {(PAYMENT_STATUSES.find(s => s.value===viewingSale.payment?.status)||{}).label || viewingSale.payment?.status}</h4>
+                <h4 className={labelCls}>การชำระเงิน — {resolveSaleStatus(viewingSale)?.label || viewingSale.payment?.status || '-'}</h4>
                 {(viewingSale.payment?.channels||[]).filter(c=>c.enabled).map((ch,i) => (
                   <div key={i} className="flex justify-between py-0.5">
                     <span>{ch.method || 'ไม่ระบุ'}</span><span className="font-mono">{fmtMoney(ch.amount)} บาท</span>
