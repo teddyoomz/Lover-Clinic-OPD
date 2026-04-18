@@ -189,17 +189,30 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             })}
             onDeleteTreatment={async (treatmentId) => {
               if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
-              // Phase 7: reverse any deposits that were applied via the linked sale
+              // Phase 7: reverse deposits + refund wallet + reverse points on the linked sale
               try {
-                const { getSaleByTreatmentId, reverseDepositUsage } = await import('../lib/backendClient.js');
+                const { getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned } = await import('../lib/backendClient.js');
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
                 if (linkedSale && linkedSale.status !== 'cancelled') {
                   const saleId = linkedSale.saleId || linkedSale.id;
+                  const cid = linkedSale.customerId;
                   const deps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
                   for (const d of deps) {
                     try { await reverseDepositUsage(d.depositId, saleId); }
                     catch (e) { console.warn('[BackendDashboard] reverse deposit on treatment delete failed:', e); }
                   }
+                  if (linkedSale.billing?.walletTypeId && Number(linkedSale.billing?.walletApplied) > 0) {
+                    try {
+                      await refundToWallet(cid, linkedSale.billing.walletTypeId, {
+                        amount: Number(linkedSale.billing.walletApplied),
+                        walletTypeName: linkedSale.billing.walletTypeName || '',
+                        note: `ลบ treatment — คืน wallet บน ${saleId}`,
+                        referenceType: 'sale', referenceId: saleId,
+                      });
+                    } catch (e) { console.warn('[BackendDashboard] wallet refund on treatment delete failed:', e); }
+                  }
+                  try { await reversePointsEarned(cid, saleId); }
+                  catch (e) { console.warn('[BackendDashboard] points reverse on treatment delete failed:', e); }
                 }
               } catch (e) { console.warn('[BackendDashboard] linked sale lookup failed:', e); }
               await deleteBackendTreatment(treatmentId);

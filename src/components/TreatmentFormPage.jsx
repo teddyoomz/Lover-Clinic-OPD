@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import DepositPicker from './backend/DepositPicker.jsx';
+import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
@@ -283,6 +284,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Backend mode: multi-deposit selection via DepositPicker
   const [selectedDeposits, setSelectedDeposits] = useState([]);
   const [depositReloadKey, setDepositReloadKey] = useState(0);
+  // Backend mode: single wallet selection via WalletPicker
+  const [selectedWallet, setSelectedWallet] = useState(null); // { walletTypeId, amount, walletTypeName } | null
+  const [walletReloadKey, setWalletReloadKey] = useState(0);
+  // Backend mode: cached active membership (for discount % + bahtPerPoint)
+  const [backendActiveMembership, setBackendActiveMembership] = useState(null);
   const isBackend = saveTarget === 'backend';
   const [useWallet, setUseWallet] = useState(false);
   const [walletId, setWalletId] = useState('');
@@ -354,17 +360,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       : parseFloat(billDiscount) || 0;
     const afterDiscount = Math.max(0, afterMedDisc - billDiscAmt);
     const insDed = isInsuranceClaimed ? (parseFloat(insuranceClaimAmount) || 0) : 0;
+    // Membership discount (backend mode only)
+    const memPct = isBackend ? (Number(backendActiveMembership?.discountPercent) || 0) : 0;
+    const afterIns = Math.max(0, afterDiscount - insDed);
+    const membershipDisc = afterIns * memPct / 100;
+    const afterMembership = Math.max(0, afterIns - membershipDisc);
     const backendDepDed = isBackend
       ? selectedDeposits.reduce((s, d) => s + (Number(d.amount) || 0), 0)
       : 0;
     const legacyDepDed = useDeposit ? (parseFloat(depositAmount) || 0) : 0;
     const depDed = isBackend ? backendDepDed : legacyDepDed;
-    const walDed = useWallet ? (parseFloat(walletAmount) || 0) : 0;
-    const netTotal = Math.max(0, afterDiscount - insDed - depDed - walDed);
-    return { lines, subtotal, medSubtotal, medDiscPct, medDisc, billDiscAmt, afterDiscount, insDed, depDed, walDed, netTotal };
+    const afterDepDed = isBackend ? Math.max(0, afterMembership - depDed) : Math.max(0, afterDiscount - insDed - depDed);
+    const backendWalDed = isBackend ? Math.min(Number(selectedWallet?.amount) || 0, afterDepDed) : 0;
+    const legacyWalDed = useWallet ? (parseFloat(walletAmount) || 0) : 0;
+    const walDed = isBackend ? backendWalDed : legacyWalDed;
+    const netTotal = isBackend
+      ? Math.max(0, afterDepDed - walDed)
+      : Math.max(0, afterDiscount - insDed - depDed - walDed);
+    return { lines, subtotal, medSubtotal, medDiscPct, medDisc, billDiscAmt, afterDiscount, insDed, membershipDisc, memPct, afterMembership, depDed, walDed, netTotal };
   }, [purchasedItems, medications, consumables, medDiscountOverride, billDiscount, billDiscountType,
       isInsuranceClaimed, insuranceClaimAmount, useDeposit, depositAmount, useWallet, walletAmount,
-      isBackend, selectedDeposits, options]);
+      isBackend, selectedDeposits, selectedWallet, backendActiveMembership, options]);
+
+  // ── Backend mode: load active membership when customer changes ───────
+  useEffect(() => {
+    if (!isBackend || !customerId) { setBackendActiveMembership(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getCustomerMembership } = await import('../lib/backendClient.js');
+        const m = await getCustomerMembership(customerId);
+        if (!cancelled) setBackendActiveMembership(m || null);
+      } catch (e) {
+        if (!cancelled) setBackendActiveMembership(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isBackend, customerId]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -479,7 +511,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.payment?.channels?.length) setPmChannels(prev => prev.map((ch, i) => t.payment.channels[i] ? { ...ch, ...t.payment.channels[i], enabled: true } : ch));
               if (t.sellers?.length) setPmSellers(prev => prev.map((s, i) => t.sellers[i] ? { ...s, ...t.sellers[i], enabled: true } : s));
               if (t.payment?.saleNote) setSaleNote(t.payment.saleNote);
-              // Phase 7: Restore deposit selection from linked sale (if exists)
+              // Phase 7: Restore deposit + wallet selection from linked sale (if exists)
               try {
                 const { getSaleByTreatmentId } = await import('../lib/backendClient.js');
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
@@ -487,7 +519,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 if (deps.length > 0) {
                   setSelectedDeposits(deps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
                 }
-              } catch (e) { console.warn('[TreatmentForm] restore deposits failed:', e); }
+                if (linkedSale?.billing?.walletTypeId && Number(linkedSale.billing.walletApplied) > 0) {
+                  setSelectedWallet({
+                    walletTypeId: linkedSale.billing.walletTypeId,
+                    walletTypeName: linkedSale.billing.walletTypeName || '',
+                    amount: Number(linkedSale.billing.walletApplied) || 0,
+                  });
+                }
+              } catch (e) { console.warn('[TreatmentForm] restore deposits/wallet failed:', e); }
               // Phase 6: Restore courseItems for deduction reversal + checkbox restore
               if (t.courseItems?.length) {
                 setExistingCourseItems(t.courseItems);
@@ -1515,7 +1554,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         // Auto-create sale invoice when treatment has billing items (hasSale)
         if (hasSale && !isEdit) {
           try {
-            const { createBackendSale, assignCourseToCustomer, applyDepositToSale } = await import('../lib/backendClient.js');
+            const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints } = await import('../lib/backendClient.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
             purchasedItems.forEach(p => {
               const t = p.itemType || 'product';
@@ -1527,6 +1566,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             const depositIdsPayload = selectedDeposits
               .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
               .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+            const walletAppliedValue = Number(billing.walDed) || 0;
+            const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
+            const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
+            const firstSeller = pmSellers.find(s => s.enabled && s.id);
             const createRes = await createBackendSale(clean({
               customerId, customerName: patientName, customerHN: '',
               saleDate: treatmentDate, saleNote: '',
@@ -1534,10 +1577,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               billing: {
                 subtotal: billing.subtotal,
                 billDiscount: billing.billDiscAmt,
+                membershipDiscount: billing.membershipDisc,
+                membershipDiscountPercent: billing.memPct,
                 depositApplied: billing.depDed,
                 depositIds: depositIdsPayload,
+                walletApplied: walletAppliedValue,
+                walletTypeId: walletTypeIdPayload,
+                walletTypeName: walletTypeNamePayload,
                 netTotal: billing.netTotal,
               },
+              membershipId: backendActiveMembership?.membershipId || null,
               payment: { status: pmStatusMap[paymentStatus] || 'paid', channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
               sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
               source: 'treatment',
@@ -1547,6 +1596,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             for (const d of depositIdsPayload) {
               try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }
               catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
+            }
+            // Deduct wallet if any
+            if (walletTypeIdPayload && walletAppliedValue > 0) {
+              try {
+                await deductWallet(customerId, walletTypeIdPayload, {
+                  amount: walletAppliedValue,
+                  walletTypeName: walletTypeNamePayload,
+                  note: `หัก wallet จากใบเสร็จ ${createRes.saleId}`,
+                  referenceType: 'sale', referenceId: createRes.saleId,
+                  staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                });
+              } catch (e) { console.warn('[TreatmentForm] wallet deduct failed:', e); }
+            }
+            // Earn points
+            const bpp = Number(backendActiveMembership?.bahtPerPoint) || 0;
+            if (bpp > 0 && billing.netTotal > 0) {
+              try {
+                await earnPoints(customerId, {
+                  purchaseAmount: billing.netTotal,
+                  bahtPerPoint: bpp,
+                  referenceType: 'sale', referenceId: createRes.saleId,
+                  note: `สะสมจาก treatment ${result.treatmentId || treatmentId}`,
+                  staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                });
+              } catch (e) { console.warn('[TreatmentForm] earnPoints failed:', e); }
             }
             // Auto-assign purchased courses + promotions to customer
             // purchased qty multiplies master product qty
@@ -1580,40 +1654,97 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
         }
 
-        // Phase 7: On EDIT, if a linked sale exists, reverse & reapply deposits to that sale
+        // Phase 7: On EDIT, if a linked sale exists, reverse & reapply deposits + wallet + points
         if (hasSale && isEdit) {
           try {
-            const { getSaleByTreatmentId, updateBackendSale, applyDepositToSale, reverseDepositUsage } = await import('../lib/backendClient.js');
+            const {
+              getSaleByTreatmentId, updateBackendSale,
+              applyDepositToSale, reverseDepositUsage,
+              deductWallet, refundToWallet,
+              earnPoints, reversePointsEarned,
+            } = await import('../lib/backendClient.js');
             const linkedSale = await getSaleByTreatmentId(result.treatmentId || treatmentId || '');
             if (linkedSale && linkedSale.status !== 'cancelled') {
               const saleId = linkedSale.saleId || linkedSale.id;
-              // 1. Reverse existing deposits on that sale
+              // 1. Reverse existing deposits
               const oldDeps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
               for (const od of oldDeps) {
                 try { await reverseDepositUsage(od.depositId, saleId); }
                 catch (e) { console.warn('[TreatmentForm] reverse old deposit failed:', e); }
               }
-              // 2. Update sale billing with new selection
+              // 2. Refund old wallet
+              const oldWalletTypeId = linkedSale.billing?.walletTypeId || '';
+              const oldWalletApplied = Number(linkedSale.billing?.walletApplied) || 0;
+              if (oldWalletTypeId && oldWalletApplied > 0) {
+                try {
+                  await refundToWallet(customerId, oldWalletTypeId, {
+                    amount: oldWalletApplied,
+                    walletTypeName: linkedSale.billing?.walletTypeName || '',
+                    note: `แก้ไข treatment — คืนยอด wallet เดิมบน ${saleId}`,
+                    referenceType: 'sale', referenceId: saleId,
+                  });
+                } catch (e) { console.warn('[TreatmentForm] wallet refund (edit) failed:', e); }
+              }
+              // 3. Reverse old earned points
+              try { await reversePointsEarned(customerId, saleId); }
+              catch (e) { console.warn('[TreatmentForm] points reverse (edit) failed:', e); }
+
+              // 4. Build new billing payload + update sale
               const depositIdsPayload = selectedDeposits
                 .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
                 .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+              const walletAppliedValue = Number(billing.walDed) || 0;
+              const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
+              const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
+              const firstSeller = pmSellers.find(s => s.enabled && s.id);
               await updateBackendSale(saleId, {
                 billing: {
                   ...(linkedSale.billing || {}),
                   subtotal: billing.subtotal,
                   billDiscount: billing.billDiscAmt,
+                  membershipDiscount: billing.membershipDisc,
+                  membershipDiscountPercent: billing.memPct,
                   depositApplied: billing.depDed,
                   depositIds: depositIdsPayload,
+                  walletApplied: walletAppliedValue,
+                  walletTypeId: walletTypeIdPayload,
+                  walletTypeName: walletTypeNamePayload,
                   netTotal: billing.netTotal,
                 },
+                membershipId: backendActiveMembership?.membershipId || null,
               });
-              // 3. Apply new deposits
+              // 5. Apply new deposits
               for (const d of depositIdsPayload) {
                 try { await applyDepositToSale(d.depositId, saleId, d.amount); }
                 catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
               }
+              // 6. Deduct new wallet
+              if (walletTypeIdPayload && walletAppliedValue > 0) {
+                try {
+                  await deductWallet(customerId, walletTypeIdPayload, {
+                    amount: walletAppliedValue,
+                    walletTypeName: walletTypeNamePayload,
+                    note: `แก้ไข treatment — หัก wallet บน ${saleId}`,
+                    referenceType: 'sale', referenceId: saleId,
+                    staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                  });
+                } catch (e) { console.warn('[TreatmentForm] wallet deduct (edit) failed:', e); }
+              }
+              // 7. Earn new points
+              const bpp = Number(backendActiveMembership?.bahtPerPoint) || 0;
+              if (bpp > 0 && billing.netTotal > 0) {
+                try {
+                  await earnPoints(customerId, {
+                    purchaseAmount: billing.netTotal,
+                    bahtPerPoint: bpp,
+                    referenceType: 'sale', referenceId: saleId,
+                    note: `แก้ไข treatment — สะสมใหม่`,
+                    staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+                  });
+                } catch (e) { console.warn('[TreatmentForm] earnPoints (edit) failed:', e); }
+              }
             }
-          } catch (e) { console.warn('[TreatmentForm] edit deposit sync failed:', e); }
+          } catch (e) { console.warn('[TreatmentForm] edit deposit/wallet/points sync failed:', e); }
         }
 
         // Deduct purchased courses that were USED in this treatment (after assign)
@@ -3179,6 +3310,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   </div>
                 </div>
               )}
+              {/* Membership discount (backend mode, auto-apply) */}
+              {isBackend && backendActiveMembership && billing.memPct > 0 && (
+                <div className="flex justify-between items-center py-0.5">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                    ส่วนลดสมาชิก <span className="text-purple-400 font-bold">({backendActiveMembership.cardTypeName} {billing.memPct}%)</span>
+                  </span>
+                  <span className="font-mono text-purple-400">-{formatBaht(billing.membershipDisc)} บาท</span>
+                </div>
+              )}
               {/* Deposit */}
               {isBackend ? (
                 <div className="py-1">
@@ -3186,7 +3326,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                     customerId={customerId}
                     value={selectedDeposits}
                     onChange={setSelectedDeposits}
-                    maxAmount={Math.max(0, billing.afterDiscount - billing.insDed)}
+                    maxAmount={Math.max(0, billing.afterMembership - billing.insDed)}
                     isDark={isDark}
                     reloadKey={depositReloadKey}
                   />
@@ -3209,8 +3349,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   </div>
                 </div>
               )}
-              {/* Wallet */}
-              {wallets.length > 0 && (
+              {/* Wallet — backend mode uses WalletPicker */}
+              {isBackend && (
+                <div className="py-1">
+                  <WalletPicker
+                    customerId={customerId}
+                    value={selectedWallet}
+                    onChange={setSelectedWallet}
+                    maxAmount={Math.max(0, billing.afterMembership - billing.insDed - billing.depDed)}
+                    isDark={isDark}
+                    reloadKey={walletReloadKey}
+                  />
+                  {billing.walDed > 0 && (
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>หัก Wallet</span>
+                      <span className="font-mono text-sky-400">-{formatBaht(billing.walDed)} บาท</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Wallet — legacy ProClinic mode only */}
+              {!isBackend && wallets.length > 0 && (
                 <div className="flex justify-between items-center py-0.5">
                   <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>Wallet</span>
                   <div className="flex items-center gap-1">

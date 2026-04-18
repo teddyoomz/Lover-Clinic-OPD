@@ -12,10 +12,12 @@ import {
   getAllSales, getAllCustomers, getAllMasterDataItems,
   cancelBackendSale, updateSalePayment, assignCourseToCustomer,
   applyDepositToSale, reverseDepositUsage,
+  deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
+import WalletPicker from './WalletPicker.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n }));
 const PAYMENT_STATUSES = [
@@ -117,6 +119,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // Deposit selection — [{ depositId, amount }]
   const [selectedDeposits, setSelectedDeposits] = useState([]);
   const [depositReloadKey, setDepositReloadKey] = useState(0);
+  // Wallet selection — { walletTypeId, amount, walletTypeName } | null
+  const [selectedWallet, setSelectedWallet] = useState(null);
+  const [walletReloadKey, setWalletReloadKey] = useState(0);
+  // Active membership for this customer (loaded on customer select)
+  const [activeMembership, setActiveMembership] = useState(null);
 
   // Buy modal
   const [buyModalOpen, setBuyModalOpen] = useState(false);
@@ -151,6 +158,21 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   }, []);
   useEffect(() => { loadSales(); }, [loadSales]);
 
+  // Load active membership + apply to billing (auto-discount)
+  useEffect(() => {
+    if (!customerId) { setActiveMembership(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const m = await getCustomerMembership(customerId);
+        if (!cancelled) setActiveMembership(m || null);
+      } catch (e) {
+        if (!cancelled) setActiveMembership(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customerId]);
+
   // Auto-open form when initialCustomer is provided (from CustomerDetailView)
   useEffect(() => {
     if (initialCustomer) {
@@ -166,6 +188,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
       setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
       setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
+    setSelectedWallet(null); setWalletReloadKey(k => k + 1);
       setError(''); setSuccess(false); setFormOpen(true);
       if (onCustomerUsed) onCustomerUsed();
     }
@@ -178,10 +201,15 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     medications.forEach(m => { if (m.name) subtotal += (parseFloat(m.unitPrice) || 0) * (parseInt(m.qty) || 1); });
     const disc = billDiscountType === 'percent' ? subtotal * (parseFloat(billDiscount) || 0) / 100 : (parseFloat(billDiscount) || 0);
     const afterDiscount = Math.max(0, subtotal - disc);
+    const memPercent = Number(activeMembership?.discountPercent) || 0;
+    const membershipDiscount = afterDiscount * memPercent / 100;
+    const afterMembership = Math.max(0, afterDiscount - membershipDiscount);
     const depositApplied = selectedDeposits.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-    const netTotal = Math.max(0, afterDiscount - depositApplied);
-    return { subtotal, discount: disc, afterDiscount, depositApplied, netTotal };
-  }, [purchasedItems, medications, billDiscount, billDiscountType, selectedDeposits]);
+    const afterDeposit = Math.max(0, afterMembership - depositApplied);
+    const walletApplied = Math.min(Number(selectedWallet?.amount) || 0, afterDeposit);
+    const netTotal = Math.max(0, afterDeposit - walletApplied);
+    return { subtotal, discount: disc, afterDiscount, membershipDiscount, membershipDiscountPercent: memPercent, afterMembership, depositApplied, walletApplied, netTotal };
+  }, [purchasedItems, medications, billDiscount, billDiscountType, selectedDeposits, selectedWallet, activeMembership]);
 
   // ── Auto-fill payment amount when "ชำระเต็ม" + billing changes ──
   useEffect(() => {
@@ -278,6 +306,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
     setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
     setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
+    setSelectedWallet(null); setWalletReloadKey(k => k + 1);
     setError(''); setSuccess(false); setFormOpen(true);
   };
 
@@ -301,6 +330,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     const existingDeps = Array.isArray(sale.billing?.depositIds) ? sale.billing.depositIds : [];
     setSelectedDeposits(existingDeps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
     setDepositReloadKey(k => k + 1);
+    // Restore wallet selection from existing sale
+    if (sale.billing?.walletTypeId && Number(sale.billing?.walletApplied) > 0) {
+      setSelectedWallet({
+        walletTypeId: sale.billing.walletTypeId,
+        walletTypeName: sale.billing.walletTypeName || '',
+        amount: Number(sale.billing.walletApplied) || 0,
+      });
+    } else {
+      setSelectedWallet(null);
+    }
+    setWalletReloadKey(k => k + 1);
     setError(''); setSuccess(false); setFormOpen(true);
   };
 
@@ -332,6 +372,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       const depositIdsPayload = selectedDeposits
         .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
         .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+      const walletApplied = Number(billing.walletApplied) || 0;
+      const walletTypeIdPayload = selectedWallet?.walletTypeId && walletApplied > 0 ? String(selectedWallet.walletTypeId) : '';
+      const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet.walletTypeName || '') : '';
+      const firstSeller = pmSellers.find(s => s.enabled && s.id);
       const data = clean({
         customerId, customerName, customerHN, saleDate, saleNote,
         couponCode: couponCode || null,
@@ -341,36 +385,86 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
           subtotal: billing.subtotal,
           billDiscount: billing.discount,
           discountType: billDiscountType,
+          membershipDiscount: billing.membershipDiscount,
+          membershipDiscountPercent: billing.membershipDiscountPercent,
           depositApplied: billing.depositApplied,
           depositIds: depositIdsPayload,
+          walletApplied,
+          walletTypeId: walletTypeIdPayload,
+          walletTypeName: walletTypeNamePayload,
           netTotal: billing.netTotal,
         },
+        membershipId: activeMembership?.membershipId || null,
         payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo, note: paymentNote || '', evidenceUrl: paymentEvidenceUrl || null, evidencePath: paymentEvidencePath || null },
         sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, name: s.name, percent: s.percent, total: s.total })),
       });
       let newSaleId;
+      const oldDeps = editingSale ? (Array.isArray(editingSale.billing?.depositIds) ? editingSale.billing.depositIds : []) : [];
+      const oldWalletTypeId = editingSale?.billing?.walletTypeId || '';
+      const oldWalletApplied = Number(editingSale?.billing?.walletApplied) || 0;
+      const oldNetTotal = Number(editingSale?.billing?.netTotal) || 0;
+      const oldBahtPerPoint = Number(editingSale?.bahtPerPointSnapshot) || 0;
       if (editingSale) {
         const saleId = editingSale.saleId || editingSale.id;
         newSaleId = saleId;
-        // Reverse previously-applied deposits before re-applying the (possibly changed) selection
-        const oldDeps = Array.isArray(editingSale.billing?.depositIds) ? editingSale.billing.depositIds : [];
+        // Reverse previously-applied deposits before re-applying
         for (const od of oldDeps) {
           try { await reverseDepositUsage(od.depositId, saleId); }
           catch (e) { console.warn('[SaleTab] reverse old deposit failed:', e); }
         }
+        // Refund previously-deducted wallet (if any)
+        if (oldWalletTypeId && oldWalletApplied > 0) {
+          try {
+            await refundToWallet(customerId, oldWalletTypeId, {
+              amount: oldWalletApplied,
+              walletTypeName: editingSale.billing?.walletTypeName || '',
+              note: `แก้ไขใบเสร็จ ${saleId} — คืนยอด wallet เดิม`,
+              referenceType: 'sale', referenceId: saleId,
+            });
+          } catch (e) { console.warn('[SaleTab] wallet refund (edit) failed:', e); }
+        }
+        // Reverse previously-earned points
+        try { await reversePointsEarned(customerId, saleId); }
+        catch (e) { console.warn('[SaleTab] points reverse (edit) failed:', e); }
+
         await updateBackendSale(saleId, data);
-        // Apply new selection
+
+        // Apply new deposits
         for (const nd of depositIdsPayload) {
           try { await applyDepositToSale(nd.depositId, saleId, nd.amount); }
           catch (e) { console.warn('[SaleTab] apply deposit failed:', e); throw new Error(`หักมัดจำ ${nd.depositId} ไม่สำเร็จ: ${e.message}`); }
         }
+        // Deduct new wallet
+        if (walletTypeIdPayload && walletApplied > 0) {
+          try {
+            await deductWallet(customerId, walletTypeIdPayload, {
+              amount: walletApplied,
+              walletTypeName: walletTypeNamePayload,
+              note: `แก้ไขใบเสร็จ ${saleId}`,
+              referenceType: 'sale', referenceId: saleId,
+              staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+            });
+          } catch (e) { console.warn('[SaleTab] wallet deduct (edit) failed:', e); throw new Error(`หัก wallet ไม่สำเร็จ: ${e.message}`); }
+        }
       } else {
         const createRes = await createBackendSale(data);
         newSaleId = createRes.saleId;
-        // Apply selected deposits to this newly-created sale
+        // Apply deposits
         for (const nd of depositIdsPayload) {
           try { await applyDepositToSale(nd.depositId, newSaleId, nd.amount); }
           catch (e) { console.warn('[SaleTab] apply deposit failed:', e); throw new Error(`หักมัดจำ ${nd.depositId} ไม่สำเร็จ: ${e.message}`); }
+        }
+        // Deduct wallet
+        if (walletTypeIdPayload && walletApplied > 0) {
+          try {
+            await deductWallet(customerId, walletTypeIdPayload, {
+              amount: walletApplied,
+              walletTypeName: walletTypeNamePayload,
+              note: `หัก wallet จากใบเสร็จ ${newSaleId}`,
+              referenceType: 'sale', referenceId: newSaleId,
+              staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+            });
+          } catch (e) { console.warn('[SaleTab] wallet deduct failed:', e); throw new Error(`หัก wallet ไม่สำเร็จ: ${e.message}`); }
         }
         // Auto-assign purchased courses + promotions to customer
         // Key: purchased qty (user-entered) multiplies master product qty
@@ -404,10 +498,25 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
           }
         }
       }
+      // Earn loyalty points if customer has a membership with bahtPerPoint > 0
+      const bpp = Number(activeMembership?.bahtPerPoint) || 0;
+      if (bpp > 0 && billing.netTotal > 0) {
+        try {
+          await earnPoints(customerId, {
+            purchaseAmount: billing.netTotal,
+            bahtPerPoint: bpp,
+            referenceType: 'sale',
+            referenceId: newSaleId,
+            note: `สะสมจากใบเสร็จ ${newSaleId}`,
+            staffId: firstSeller?.id || '', staffName: firstSeller?.name || '',
+          });
+        } catch (e) { console.warn('[SaleTab] earnPoints failed:', e); }
+      }
       setSuccess(true);
       setTimeout(() => {
         setFormOpen(false); setSuccess(false); loadSales();
         setDepositReloadKey(k => k + 1);
+        setWalletReloadKey(k => k + 1);
       }, 800);
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
@@ -416,12 +525,27 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const handleDelete = async (sale) => {
     if (!confirm('ต้องการลบใบเสร็จนี้?')) return;
     const saleId = sale.saleId || sale.id;
-    // Reverse any applied deposits first so their remainingAmount is restored
+    const cid = sale.customerId;
+    // Reverse applied deposits
     const deps = Array.isArray(sale.billing?.depositIds) ? sale.billing.depositIds : [];
     for (const d of deps) {
       try { await reverseDepositUsage(d.depositId, saleId); }
       catch (e) { console.warn('[SaleTab] reverse deposit on delete failed:', e); }
     }
+    // Refund wallet
+    if (sale.billing?.walletTypeId && Number(sale.billing?.walletApplied) > 0) {
+      try {
+        await refundToWallet(cid, sale.billing.walletTypeId, {
+          amount: Number(sale.billing.walletApplied),
+          walletTypeName: sale.billing.walletTypeName || '',
+          note: `ลบใบเสร็จ ${saleId} — คืนยอด wallet`,
+          referenceType: 'sale', referenceId: saleId,
+        });
+      } catch (e) { console.warn('[SaleTab] wallet refund on delete failed:', e); }
+    }
+    // Reverse earned points
+    try { await reversePointsEarned(cid, saleId); }
+    catch (e) { console.warn('[SaleTab] points reverse on delete failed:', e); }
     await deleteBackendSale(saleId);
     loadSales();
   };
@@ -586,6 +710,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <div className={`p-3 rounded-lg ${isDark ? 'bg-[var(--bg-elevated)]' : 'bg-gray-50'}`}>
                 <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ยอดรวม</span><span className="font-mono">{fmtMoney(viewingSale.billing?.subtotal)} บาท</span></div>
                 {viewingSale.billing?.billDiscount > 0 && <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ส่วนลด</span><span className="font-mono text-red-400">-{fmtMoney(viewingSale.billing.billDiscount)} บาท</span></div>}
+                {viewingSale.billing?.membershipDiscount > 0 && (
+                  <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ส่วนลดสมาชิก ({viewingSale.billing.membershipDiscountPercent || 0}%)</span><span className="font-mono text-purple-400">-{fmtMoney(viewingSale.billing.membershipDiscount)} บาท</span></div>
+                )}
                 {viewingSale.billing?.depositApplied > 0 && (
                   <div className="flex justify-between"><span className="text-[var(--tx-muted)]">หักมัดจำ</span><span className="font-mono text-emerald-400">-{fmtMoney(viewingSale.billing.depositApplied)} บาท</span></div>
                 )}
@@ -595,6 +722,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     <span className="font-mono">{fmtMoney(d.amount)} บาท</span>
                   </div>
                 ))}
+                {viewingSale.billing?.walletApplied > 0 && (
+                  <div className="flex justify-between"><span className="text-[var(--tx-muted)]">หัก Wallet {viewingSale.billing.walletTypeName && `(${viewingSale.billing.walletTypeName})`}</span><span className="font-mono text-sky-400">-{fmtMoney(viewingSale.billing.walletApplied)} บาท</span></div>
+                )}
                 <div className="flex justify-between pt-1 border-t border-[var(--bd)] font-bold"><span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(viewingSale.billing?.netTotal)} บาท</span></div>
               </div>
               {/* Payment */}
@@ -659,12 +789,27 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <button onClick={async () => {
                 setCancelSaving(true);
                 const saleId = cancelModal.saleId || cancelModal.id;
+                const cid = cancelModal.customerId;
                 // Reverse applied deposits so the customer can use them again
                 const deps = Array.isArray(cancelModal.billing?.depositIds) ? cancelModal.billing.depositIds : [];
                 for (const d of deps) {
                   try { await reverseDepositUsage(d.depositId, saleId); }
                   catch (e) { console.warn('[SaleTab] reverse deposit on cancel failed:', e); }
                 }
+                // Refund wallet
+                if (cancelModal.billing?.walletTypeId && Number(cancelModal.billing?.walletApplied) > 0) {
+                  try {
+                    await refundToWallet(cid, cancelModal.billing.walletTypeId, {
+                      amount: Number(cancelModal.billing.walletApplied),
+                      walletTypeName: cancelModal.billing.walletTypeName || '',
+                      note: `ยกเลิกใบเสร็จ ${saleId} — คืนยอด wallet`,
+                      referenceType: 'sale', referenceId: saleId,
+                    });
+                  } catch (e) { console.warn('[SaleTab] wallet refund on cancel failed:', e); }
+                }
+                // Reverse earned points
+                try { await reversePointsEarned(cid, saleId); }
+                catch (e) { console.warn('[SaleTab] points reverse on cancel failed:', e); }
                 await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
                 setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
               }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50">
@@ -835,13 +980,21 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   <span>ยอดหลังส่วนลด</span>
                   <span className="font-mono">{fmtMoney(billing.afterDiscount)} บาท</span>
                 </div>
+                {activeMembership && billing.membershipDiscountPercent > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--tx-muted)]">
+                      ส่วนลดสมาชิก <span className="text-purple-400 font-bold">({activeMembership.cardTypeName} {billing.membershipDiscountPercent}%)</span>
+                    </span>
+                    <span className="font-mono text-purple-400">-{fmtMoney(billing.membershipDiscount)} บาท</span>
+                  </div>
+                )}
                 {/* Deposit picker */}
                 <div className="pt-1">
                   <DepositPicker
                     customerId={customerId}
                     value={selectedDeposits}
                     onChange={setSelectedDeposits}
-                    maxAmount={billing.afterDiscount}
+                    maxAmount={billing.afterMembership}
                     isDark={isDark}
                     reloadKey={depositReloadKey}
                   />
@@ -852,9 +1005,31 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     <span className="font-mono text-emerald-400">-{fmtMoney(billing.depositApplied)} บาท</span>
                   </div>
                 )}
+                {/* Wallet picker */}
+                <div className="pt-1">
+                  <WalletPicker
+                    customerId={customerId}
+                    value={selectedWallet}
+                    onChange={setSelectedWallet}
+                    maxAmount={Math.max(0, billing.afterMembership - billing.depositApplied)}
+                    isDark={isDark}
+                    reloadKey={walletReloadKey}
+                  />
+                </div>
+                {billing.walletApplied > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--tx-muted)]">หัก Wallet</span>
+                    <span className="font-mono text-sky-400">-{fmtMoney(billing.walletApplied)} บาท</span>
+                  </div>
+                )}
                 <div className="flex justify-between pt-2 border-t border-[var(--bd)] font-bold text-sm">
                   <span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(billing.netTotal)} บาท</span>
                 </div>
+                {Number(activeMembership?.bahtPerPoint) > 0 && billing.netTotal > 0 && (
+                  <div className="text-[10px] text-amber-400 flex items-center justify-end gap-1">
+                    ⭐ จะสะสม {Math.floor(billing.netTotal / activeMembership.bahtPerPoint)} คะแนน (อัตรา ฿{activeMembership.bahtPerPoint}/คะแนน)
+                  </div>
+                )}
               </div>
             </div>
 
