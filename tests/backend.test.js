@@ -1,9 +1,20 @@
 // ─── Backend System Vitest — ครอบคลุมทุกการใช้งาน ─────────────────────────
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, query, where } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, query, where, runTransaction } from 'firebase/firestore';
 
-const app = initializeApp({ apiKey: 'AIzaSyDrUal7dR9eweWQKgi4ZhDK7k0hiF9tx20', projectId: 'loverclinic-opd-4c39b', appId: '1:841626867498:web:07d226722602a082eae3b8' });
+// Match src/firebase.js config EXACTLY (including measurementId) so dynamic
+// imports of src/lib/backendClient.js don't conflict with our default app.
+const firebaseConfig = {
+  apiKey: 'AIzaSyDrUal7dR9eweWQKgi4ZhDK7k0hiF9tx20',
+  authDomain: 'loverclinic-opd-4c39b.firebaseapp.com',
+  projectId: 'loverclinic-opd-4c39b',
+  storageBucket: 'loverclinic-opd-4c39b.firebasestorage.app',
+  messagingSenderId: '653911776503',
+  appId: '1:653911776503:web:9e23f723d3ed877962c7f2',
+  measurementId: 'G-TB3Q9BZ8R5',
+};
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const P = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data'];
 const clean = (o) => JSON.parse(JSON.stringify(o));
@@ -1553,5 +1564,234 @@ describe('Sale Retrieval — no limit', () => {
     const found = snap.docs.filter(d => d.data().saleId?.startsWith(prefix));
     // customers 0, 3, 6, 9 → 4 sales for CUST-BULK-0
     expect(found.length).toBe(4);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPOSIT CRUD — Phase 7 be_deposits
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Deposit CRUD', () => {
+  const CUST_ID = `DEP-CUST-${TS}`;
+  const depRef = (id) => doc(db, ...P, 'be_deposits', id);
+  const custRef = () => doc(db, ...P, 'be_customers', CUST_ID);
+  let createdId = null;
+
+  beforeAll(async () => {
+    await setDoc(custRef(), clean({
+      proClinicId: CUST_ID, proClinicHN: 'HN-DEP', patientData: { firstName: 'Dep', lastName: 'Test' },
+      finance: { depositBalance: 0 }, courses: [], treatmentSummary: [],
+    }));
+  });
+
+  afterAll(async () => {
+    try { await deleteDoc(custRef()); } catch {}
+    // Clean up any deposit docs that reference this customer
+    const q = query(collection(db, ...P, 'be_deposits'), where('customerId', '==', CUST_ID));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) { try { await deleteDoc(d.ref); } catch {} }
+  });
+
+  it('createDeposit — sets remainingAmount = amount, status = active', async () => {
+    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const res = await createDeposit({
+      customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP',
+      amount: 5000, paymentChannel: 'เงินสด', paymentDate: '2026-04-18',
+      sellers: [{ id: 's1', name: 'Staff', percent: '100', total: '5000' }],
+      note: 'test',
+    });
+    createdId = res.depositId;
+    expect(res.success).toBe(true);
+    const d = (await getDoc(depRef(createdId))).data();
+    expect(d.amount).toBe(5000);
+    expect(d.usedAmount).toBe(0);
+    expect(d.remainingAmount).toBe(5000);
+    expect(d.status).toBe('active');
+    expect(d.usageHistory).toEqual([]);
+    expect(d.sellers).toHaveLength(1);
+  });
+
+  it('createDeposit — updates customer finance.depositBalance', async () => {
+    const c = (await getDoc(custRef())).data();
+    expect(c.finance?.depositBalance).toBe(5000);
+  });
+
+  it('updateDeposit — change amount recalculates remainingAmount', async () => {
+    const { updateDeposit } = await import('../src/lib/backendClient.js');
+    await updateDeposit(createdId, { amount: 7000, note: 'bumped' });
+    const d = (await getDoc(depRef(createdId))).data();
+    expect(d.amount).toBe(7000);
+    expect(d.usedAmount).toBe(0);
+    expect(d.remainingAmount).toBe(7000);
+    expect(d.note).toBe('bumped');
+  });
+
+  it('updateDeposit — ignores direct usedAmount override', async () => {
+    const { updateDeposit } = await import('../src/lib/backendClient.js');
+    await updateDeposit(createdId, { usedAmount: 999 });
+    const d = (await getDoc(depRef(createdId))).data();
+    expect(d.usedAmount).toBe(0); // unchanged
+  });
+
+  it('getAllDeposits — returns our deposit', async () => {
+    const { getAllDeposits } = await import('../src/lib/backendClient.js');
+    const list = await getAllDeposits();
+    const found = list.find(d => d.depositId === createdId);
+    expect(found).toBeTruthy();
+  });
+
+  it('getCustomerDeposits — filters by customer', async () => {
+    const { getCustomerDeposits } = await import('../src/lib/backendClient.js');
+    const list = await getCustomerDeposits(CUST_ID);
+    expect(list.length).toBeGreaterThanOrEqual(1);
+    expect(list[0].customerId).toBe(CUST_ID);
+  });
+
+  it('getActiveDeposits — includes active status', async () => {
+    const { getActiveDeposits } = await import('../src/lib/backendClient.js');
+    const list = await getActiveDeposits(CUST_ID);
+    expect(list.length).toBeGreaterThanOrEqual(1);
+    expect(list.every(d => d.status === 'active' || d.status === 'partial')).toBe(true);
+  });
+
+  it('cancelDeposit — sets status=cancelled, clears remaining, updates customer', async () => {
+    const { cancelDeposit } = await import('../src/lib/backendClient.js');
+    // Create a fresh one to cancel (so apply tests can reuse createdId)
+    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const fresh = await createDeposit({
+      customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP',
+      amount: 2000, paymentChannel: 'เงินสด',
+    });
+    await cancelDeposit(fresh.depositId, { cancelNote: 'no reason' });
+    const d = (await getDoc(depRef(fresh.depositId))).data();
+    expect(d.status).toBe('cancelled');
+    expect(d.cancelNote).toBe('no reason');
+    expect(d.remainingAmount).toBe(0);
+    expect(d.cancelledAt).toBeTruthy();
+    try { await deleteDoc(depRef(fresh.depositId)); } catch {}
+  });
+
+  it('refundDeposit — partial refund reduces remaining', async () => {
+    const { refundDeposit, createDeposit } = await import('../src/lib/backendClient.js');
+    const fresh = await createDeposit({
+      customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP', amount: 3000,
+    });
+    await refundDeposit(fresh.depositId, { refundAmount: 1000, refundChannel: 'โอน' });
+    const d = (await getDoc(depRef(fresh.depositId))).data();
+    expect(d.refundAmount).toBe(1000);
+    expect(d.remainingAmount).toBe(2000);
+    expect(d.status).not.toBe('refunded'); // partial only
+    try { await deleteDoc(depRef(fresh.depositId)); } catch {}
+  });
+
+  it('refundDeposit — full refund sets status=refunded', async () => {
+    const { refundDeposit, createDeposit } = await import('../src/lib/backendClient.js');
+    const fresh = await createDeposit({
+      customerId: CUST_ID, customerName: 'Dep Test', customerHN: 'HN-DEP', amount: 1500,
+    });
+    await refundDeposit(fresh.depositId, { refundAmount: 1500, refundChannel: 'เงินสด' });
+    const d = (await getDoc(depRef(fresh.depositId))).data();
+    expect(d.refundAmount).toBe(1500);
+    expect(d.remainingAmount).toBe(0);
+    expect(d.status).toBe('refunded');
+    try { await deleteDoc(depRef(fresh.depositId)); } catch {}
+  });
+
+  it('refundDeposit — throws when amount > remaining', async () => {
+    const { refundDeposit } = await import('../src/lib/backendClient.js');
+    await expect(refundDeposit(createdId, { refundAmount: 999999 })).rejects.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPOSIT APPLY + REVERSE — transactional usage tracking
+// ═══════════════════════════════════════════════════════════════════════════
+describe('Deposit Apply + Reverse', () => {
+  const CUST_ID = `DEP-APPLY-${TS}`;
+  const depRef = (id) => doc(db, ...P, 'be_deposits', id);
+  const custRef = () => doc(db, ...P, 'be_customers', CUST_ID);
+  let DEP_ID = null;
+
+  beforeAll(async () => {
+    await setDoc(custRef(), clean({
+      proClinicId: CUST_ID, patientData: { firstName: 'Apply' },
+      finance: { depositBalance: 0 },
+    }));
+    const { createDeposit } = await import('../src/lib/backendClient.js');
+    const res = await createDeposit({
+      customerId: CUST_ID, customerName: 'Apply Test', customerHN: 'HN-AP',
+      amount: 10000, paymentChannel: 'โอน',
+    });
+    DEP_ID = res.depositId;
+  });
+
+  afterAll(async () => {
+    try { if (DEP_ID) await deleteDoc(depRef(DEP_ID)); } catch {}
+    try { await deleteDoc(custRef()); } catch {}
+  });
+
+  it('apply deposit to sale — partial usage → status=partial', async () => {
+    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    const res = await applyDepositToSale(DEP_ID, 'INV-TEST-1', 3000);
+    expect(res.success).toBe(true);
+    const d = (await getDoc(depRef(DEP_ID))).data();
+    expect(d.usedAmount).toBe(3000);
+    expect(d.remainingAmount).toBe(7000);
+    expect(d.status).toBe('partial');
+    expect(d.usageHistory).toHaveLength(1);
+    expect(d.usageHistory[0].saleId).toBe('INV-TEST-1');
+    expect(d.usageHistory[0].amount).toBe(3000);
+  });
+
+  it('apply another sale — cumulative usage', async () => {
+    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    await applyDepositToSale(DEP_ID, 'INV-TEST-2', 2000);
+    const d = (await getDoc(depRef(DEP_ID))).data();
+    expect(d.usedAmount).toBe(5000);
+    expect(d.remainingAmount).toBe(5000);
+    expect(d.usageHistory).toHaveLength(2);
+  });
+
+  it('apply exceeding remaining — throws', async () => {
+    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    await expect(applyDepositToSale(DEP_ID, 'INV-TEST-X', 999999)).rejects.toThrow();
+  });
+
+  it('apply fully — status becomes used', async () => {
+    const { applyDepositToSale } = await import('../src/lib/backendClient.js');
+    await applyDepositToSale(DEP_ID, 'INV-TEST-FULL', 5000);
+    const d = (await getDoc(depRef(DEP_ID))).data();
+    expect(d.remainingAmount).toBe(0);
+    expect(d.status).toBe('used');
+  });
+
+  it('reverseDepositUsage — restores used amount + removes entry', async () => {
+    const { reverseDepositUsage } = await import('../src/lib/backendClient.js');
+    const res = await reverseDepositUsage(DEP_ID, 'INV-TEST-1');
+    expect(res.restored).toBe(3000);
+    const d = (await getDoc(depRef(DEP_ID))).data();
+    expect(d.usedAmount).toBe(7000);
+    expect(d.remainingAmount).toBe(3000);
+    expect(d.status).toBe('partial');
+    expect(d.usageHistory.find(u => u.saleId === 'INV-TEST-1')).toBeUndefined();
+  });
+
+  it('reverseDepositUsage — non-existent sale → no change', async () => {
+    const { reverseDepositUsage } = await import('../src/lib/backendClient.js');
+    const before = (await getDoc(depRef(DEP_ID))).data();
+    const res = await reverseDepositUsage(DEP_ID, 'INV-NONEXISTENT');
+    expect(res.restored).toBe(0);
+    const after = (await getDoc(depRef(DEP_ID))).data();
+    expect(after.usedAmount).toBe(before.usedAmount);
+  });
+
+  it('cannot cancel deposit with usage', async () => {
+    const { cancelDeposit } = await import('../src/lib/backendClient.js');
+    await expect(cancelDeposit(DEP_ID, { cancelNote: 'nope' })).rejects.toThrow();
+  });
+
+  it('customer finance.depositBalance reflects current state', async () => {
+    const c = (await getDoc(custRef())).data();
+    // After all apply/reverse: used = 7000, remaining = 3000 (status = partial → counted)
+    expect(c.finance?.depositBalance).toBe(3000);
   });
 });

@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction } from 'firebase/firestore';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -506,6 +506,279 @@ export async function getMasterDataMeta(type) {
 export async function getAllMasterDataItems(type) {
   const snap = await getDocs(masterDataItemsCol(type));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// ─── Deposit CRUD (Phase 7) ────────────────────────────────────────────────
+
+const depositsCol = () => collection(db, ...basePath(), 'be_deposits');
+const depositDoc = (id) => doc(db, ...basePath(), 'be_deposits', String(id));
+
+/** Recalc customer's deposit balance from active/partial deposits and write to finance.depositBalance.
+ *  Safe to call after any deposit mutation. */
+export async function recalcCustomerDepositBalance(customerId) {
+  const cid = String(customerId || '');
+  if (!cid) return 0;
+  const q = query(depositsCol(), where('customerId', '==', cid));
+  const snap = await getDocs(q);
+  let total = 0;
+  snap.docs.forEach(d => {
+    const x = d.data();
+    if (x.status === 'active' || x.status === 'partial') {
+      total += Number(x.remainingAmount) || 0;
+    }
+  });
+  try {
+    await updateDoc(customerDoc(cid), { 'finance.depositBalance': total });
+  } catch {
+    // customer doc may not exist in tests — don't fail caller
+  }
+  return total;
+}
+
+/**
+ * Create a new deposit. Sets remainingAmount = amount, usedAmount = 0, status = 'active'.
+ * Returns { depositId, success }.
+ */
+export async function createDeposit(data) {
+  const depositId = `DEP-${Date.now()}`;
+  const now = new Date().toISOString();
+  const amount = Number(data.amount) || 0;
+  const payload = {
+    depositId,
+    customerId: String(data.customerId || ''),
+    customerName: data.customerName || '',
+    customerHN: data.customerHN || '',
+    amount,
+    usedAmount: 0,
+    remainingAmount: amount,
+    paymentChannel: data.paymentChannel || '',
+    paymentDate: data.paymentDate || now.slice(0, 10),
+    paymentTime: data.paymentTime || '',
+    refNo: data.refNo || '',
+    sellers: Array.isArray(data.sellers) ? data.sellers : [],
+    customerSource: data.customerSource || '',
+    sourceDetail: data.sourceDetail || '',
+    hasAppointment: !!data.hasAppointment,
+    appointment: data.hasAppointment ? (data.appointment || null) : null,
+    note: data.note || '',
+    status: 'active',
+    cancelNote: '',
+    cancelEvidenceUrl: data.cancelEvidenceUrl || '',
+    cancelledAt: null,
+    refundAmount: 0,
+    refundChannel: '',
+    refundDate: null,
+    paymentEvidenceUrl: data.paymentEvidenceUrl || '',
+    paymentEvidencePath: data.paymentEvidencePath || '',
+    proClinicDepositId: data.proClinicDepositId || null,
+    usageHistory: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  await setDoc(depositDoc(depositId), payload);
+  await recalcCustomerDepositBalance(payload.customerId);
+  return { depositId, success: true };
+}
+
+/**
+ * Update deposit. Recalculates remainingAmount if `amount` changes.
+ * Caller should NOT pass usedAmount directly (use apply/reverse instead).
+ */
+export async function updateDeposit(depositId, data) {
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Deposit not found');
+  const current = snap.data();
+  const updates = { ...data, updatedAt: new Date().toISOString() };
+  // If amount changes, recalc remainingAmount (preserve usedAmount)
+  if (data.amount != null && Number(data.amount) !== current.amount) {
+    const newAmount = Number(data.amount) || 0;
+    const used = Number(current.usedAmount) || 0;
+    updates.amount = newAmount;
+    updates.remainingAmount = Math.max(0, newAmount - used);
+    // Keep status consistent with new amount/used
+    if (current.status === 'active' || current.status === 'partial' || current.status === 'used') {
+      updates.status = used >= newAmount && newAmount > 0 ? 'used' : used > 0 ? 'partial' : 'active';
+    }
+  }
+  // Never allow direct override of usedAmount / usageHistory via this function
+  delete updates.usedAmount;
+  delete updates.usageHistory;
+  await updateDoc(ref, updates);
+  await recalcCustomerDepositBalance(current.customerId);
+  return { success: true };
+}
+
+/** Cancel a deposit. Only allowed when no usage exists (usedAmount === 0). */
+export async function cancelDeposit(depositId, { cancelNote = '', cancelEvidenceUrl = '' } = {}) {
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Deposit not found');
+  const cur = snap.data();
+  if ((Number(cur.usedAmount) || 0) > 0) {
+    throw new Error('มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถยกเลิกได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน');
+  }
+  await updateDoc(ref, {
+    status: 'cancelled',
+    cancelNote,
+    cancelEvidenceUrl,
+    cancelledAt: new Date().toISOString(),
+    remainingAmount: 0,
+    updatedAt: new Date().toISOString(),
+  });
+  await recalcCustomerDepositBalance(cur.customerId);
+  return { success: true };
+}
+
+/** Refund a deposit (partial or full). */
+export async function refundDeposit(depositId, { refundAmount, refundChannel = '', refundDate = null, note = '' } = {}) {
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Deposit not found');
+  const cur = snap.data();
+  const amt = Number(refundAmount) || 0;
+  if (amt <= 0) throw new Error('จำนวนคืนต้องมากกว่า 0');
+  const remaining = Number(cur.remainingAmount) || 0;
+  if (amt > remaining) throw new Error(`จำนวนคืนต้องไม่เกินยอดคงเหลือ (${remaining})`);
+  const newRemaining = Math.max(0, remaining - amt);
+  const fullRefund = newRemaining === 0;
+  await updateDoc(ref, {
+    status: fullRefund ? 'refunded' : cur.status === 'partial' ? 'partial' : 'active',
+    refundAmount: (Number(cur.refundAmount) || 0) + amt,
+    refundChannel,
+    refundDate: refundDate || new Date().toISOString(),
+    refundNote: note,
+    remainingAmount: newRemaining,
+    updatedAt: new Date().toISOString(),
+  });
+  await recalcCustomerDepositBalance(cur.customerId);
+  return { success: true };
+}
+
+/** Delete a deposit (hard delete). Only when active and unused. */
+export async function deleteDeposit(depositId) {
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const cur = snap.data();
+    if ((Number(cur.usedAmount) || 0) > 0) {
+      throw new Error('ลบไม่ได้ — มัดจำถูกใช้ไปบางส่วนแล้ว');
+    }
+    await deleteDoc(ref);
+    await recalcCustomerDepositBalance(cur.customerId);
+  }
+  return { success: true };
+}
+
+/** Get all deposits (sorted by createdAt desc). */
+export async function getAllDeposits() {
+  const snap = await getDocs(depositsCol());
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+/** Get single deposit. */
+export async function getDeposit(depositId) {
+  const snap = await getDoc(depositDoc(depositId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+/** Get all deposits for a specific customer (sorted by createdAt desc). */
+export async function getCustomerDeposits(customerId) {
+  const q = query(depositsCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list;
+}
+
+/** Get only active/partial deposits (available for use) — for SaleTab. */
+export async function getActiveDeposits(customerId) {
+  const all = await getCustomerDeposits(customerId);
+  return all.filter(d => d.status === 'active' || d.status === 'partial');
+}
+
+/**
+ * Apply a deposit to a sale atomically.
+ * Reads deposit → validates remainingAmount >= amount → updates usedAmount/remainingAmount/status
+ * → appends to usageHistory. Throws if insufficient.
+ */
+export async function applyDepositToSale(depositId, saleId, amount) {
+  const amt = Number(amount) || 0;
+  if (amt <= 0) throw new Error('จำนวนต้องมากกว่า 0');
+  const ref = depositDoc(depositId);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Deposit not found');
+    const cur = snap.data();
+    if (cur.status === 'cancelled' || cur.status === 'refunded' || cur.status === 'expired') {
+      throw new Error(`มัดจำสถานะ ${cur.status} ไม่สามารถใช้ได้`);
+    }
+    const remaining = Number(cur.remainingAmount) || 0;
+    if (remaining < amt) {
+      throw new Error(`ยอดมัดจำคงเหลือไม่พอ (มี ${remaining} บาท ต้องการ ${amt} บาท)`);
+    }
+    const newUsed = (Number(cur.usedAmount) || 0) + amt;
+    const newRemaining = Math.max(0, remaining - amt);
+    const newStatus = newRemaining === 0 ? 'used' : 'partial';
+    const usage = {
+      saleId: String(saleId),
+      amount: amt,
+      date: new Date().toISOString(),
+    };
+    tx.update(ref, {
+      usedAmount: newUsed,
+      remainingAmount: newRemaining,
+      status: newStatus,
+      usageHistory: [...(cur.usageHistory || []), usage],
+      updatedAt: new Date().toISOString(),
+    });
+    return { customerId: cur.customerId, newUsed, newRemaining, newStatus };
+  });
+
+  await recalcCustomerDepositBalance(result.customerId);
+  return { success: true, ...result };
+}
+
+/**
+ * Reverse a deposit's usage for a specific sale (called on sale edit / cancel).
+ * Finds all usage entries matching saleId and restores them.
+ */
+export async function reverseDepositUsage(depositId, saleId) {
+  const ref = depositDoc(depositId);
+  const sid = String(saleId);
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Deposit not found');
+    const cur = snap.data();
+    const history = Array.isArray(cur.usageHistory) ? cur.usageHistory : [];
+    const matching = history.filter(u => String(u.saleId) === sid);
+    if (matching.length === 0) return { customerId: cur.customerId, restored: 0 };
+    const restoreAmt = matching.reduce((s, u) => s + (Number(u.amount) || 0), 0);
+    const newUsed = Math.max(0, (Number(cur.usedAmount) || 0) - restoreAmt);
+    const newRemaining = (Number(cur.amount) || 0) - newUsed;
+    const remainingHistory = history.filter(u => String(u.saleId) !== sid);
+    // Re-derive status (don't override cancelled/refunded)
+    let newStatus = cur.status;
+    if (cur.status === 'used' || cur.status === 'partial' || cur.status === 'active') {
+      newStatus = newUsed >= cur.amount && cur.amount > 0 ? 'used' : newUsed > 0 ? 'partial' : 'active';
+    }
+    tx.update(ref, {
+      usedAmount: newUsed,
+      remainingAmount: Math.max(0, newRemaining),
+      status: newStatus,
+      usageHistory: remainingHistory,
+      updatedAt: new Date().toISOString(),
+    });
+    return { customerId: cur.customerId, restored: restoreAmt };
+  });
+
+  await recalcCustomerDepositBalance(result.customerId);
+  return { success: true, ...result };
 }
 
 /** Run sync: call broker function → write metadata + items to Firestore.

@@ -620,3 +620,184 @@ describe('scrollToError behavior', () => {
     expect(msg.split('\n')).toHaveLength(3);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// financeUtils — Phase 7 pure calc functions
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  calcDepositRemaining, calcDepositStatus, calcSaleBilling,
+  calcPointsEarned, calcPointsValue,
+  calcMembershipExpiry, isMembershipExpired,
+  fmtMoney, fmtPoints,
+} from '../src/lib/financeUtils.js';
+
+describe('financeUtils — deposit', () => {
+  it('calcDepositRemaining — basic', () => {
+    expect(calcDepositRemaining(5000, 2000)).toBe(3000);
+    expect(calcDepositRemaining(5000, 0)).toBe(5000);
+    expect(calcDepositRemaining(5000, 5000)).toBe(0);
+  });
+
+  it('calcDepositRemaining — used exceeds amount → 0 (not negative)', () => {
+    expect(calcDepositRemaining(1000, 5000)).toBe(0);
+  });
+
+  it('calcDepositRemaining — null/undefined → 0', () => {
+    expect(calcDepositRemaining(null, null)).toBe(0);
+    expect(calcDepositRemaining(undefined, undefined)).toBe(0);
+  });
+
+  it('calcDepositStatus — 0 used → active', () => {
+    expect(calcDepositStatus(5000, 0)).toBe('active');
+  });
+
+  it('calcDepositStatus — partial used → partial', () => {
+    expect(calcDepositStatus(5000, 2000)).toBe('partial');
+  });
+
+  it('calcDepositStatus — fully used → used', () => {
+    expect(calcDepositStatus(5000, 5000)).toBe('used');
+    expect(calcDepositStatus(5000, 6000)).toBe('used'); // overuse still "used"
+  });
+
+  it('calcDepositStatus — amount=0 → active', () => {
+    expect(calcDepositStatus(0, 0)).toBe('active');
+  });
+});
+
+describe('financeUtils — billing calc', () => {
+  it('all deductions applied in order', () => {
+    const r = calcSaleBilling({
+      subtotal: 10000,
+      billDiscount: 500,
+      billDiscountType: 'amount',
+      membershipDiscountPercent: 10,
+      depositApplied: 2000,
+      walletApplied: 1000,
+    });
+    expect(r.subtotal).toBe(10000);
+    expect(r.discount).toBe(500);
+    expect(r.afterDiscount).toBe(9500);
+    expect(r.membershipDiscount).toBe(950); // 10% of 9500
+    expect(r.afterMembership).toBe(8550);
+    expect(r.depositApplied).toBe(2000);
+    expect(r.walletApplied).toBe(1000);
+    expect(r.netTotal).toBe(5550);
+  });
+
+  it('percent discount applied correctly', () => {
+    const r = calcSaleBilling({
+      subtotal: 1000,
+      billDiscount: 10,
+      billDiscountType: 'percent',
+    });
+    expect(r.discount).toBe(100);
+    expect(r.afterDiscount).toBe(900);
+    expect(r.netTotal).toBe(900);
+  });
+
+  it('no membership → no membership discount', () => {
+    const r = calcSaleBilling({ subtotal: 5000 });
+    expect(r.membershipDiscount).toBe(0);
+    expect(r.afterMembership).toBe(5000);
+    expect(r.netTotal).toBe(5000);
+  });
+
+  it('deposit capped at afterMembership', () => {
+    const r = calcSaleBilling({
+      subtotal: 1000,
+      depositApplied: 5000,
+    });
+    expect(r.depositApplied).toBe(1000); // capped
+    expect(r.netTotal).toBe(0);
+  });
+
+  it('wallet capped at remaining after deposit', () => {
+    const r = calcSaleBilling({
+      subtotal: 1000,
+      depositApplied: 500,
+      walletApplied: 5000,
+    });
+    expect(r.depositApplied).toBe(500);
+    expect(r.walletApplied).toBe(500); // capped at remaining
+    expect(r.netTotal).toBe(0);
+  });
+
+  it('netTotal never negative', () => {
+    const r = calcSaleBilling({
+      subtotal: 100,
+      billDiscount: 500,
+      depositApplied: 1000,
+    });
+    expect(r.netTotal).toBeGreaterThanOrEqual(0);
+  });
+
+  it('empty input → all zeros', () => {
+    const r = calcSaleBilling({});
+    expect(r.subtotal).toBe(0);
+    expect(r.netTotal).toBe(0);
+  });
+});
+
+describe('financeUtils — points', () => {
+  it('calcPointsEarned — normal case', () => {
+    expect(calcPointsEarned(5000, 100)).toBe(50);
+    expect(calcPointsEarned(550, 100)).toBe(5); // floor
+  });
+
+  it('calcPointsEarned — bahtPerPoint 0 → 0 (disabled)', () => {
+    expect(calcPointsEarned(5000, 0)).toBe(0);
+  });
+
+  it('calcPointsEarned — negative or invalid → 0', () => {
+    expect(calcPointsEarned(5000, -100)).toBe(0);
+    expect(calcPointsEarned(-100, 100)).toBe(0);
+  });
+
+  it('calcPointsValue — multiplies', () => {
+    expect(calcPointsValue(50, 10)).toBe(500);
+    expect(calcPointsValue(0, 10)).toBe(0);
+  });
+});
+
+describe('financeUtils — membership', () => {
+  it('calcMembershipExpiry — 365 days', () => {
+    const iso = calcMembershipExpiry('2026-01-01T00:00:00.000Z', 365);
+    const date = new Date(iso);
+    expect(date.getUTCFullYear()).toBe(2027);
+    expect(date.getUTCMonth()).toBe(0);
+    expect(date.getUTCDate()).toBe(1);
+  });
+
+  it('isMembershipExpired — past date → true', () => {
+    const past = new Date(Date.now() - 86400000).toISOString();
+    expect(isMembershipExpired(past)).toBe(true);
+  });
+
+  it('isMembershipExpired — future date → false', () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    expect(isMembershipExpired(future)).toBe(false);
+  });
+
+  it('isMembershipExpired — null → false (no membership)', () => {
+    expect(isMembershipExpired(null)).toBe(false);
+    expect(isMembershipExpired('')).toBe(false);
+  });
+});
+
+describe('financeUtils — formatting', () => {
+  it('fmtMoney — formats with thousand separators', () => {
+    expect(fmtMoney(1000)).toContain('1,000');
+    expect(fmtMoney(1234567)).toContain('1,234,567');
+  });
+
+  it('fmtMoney — null/undefined → 0', () => {
+    expect(fmtMoney(null)).toBe('0');
+    expect(fmtMoney(undefined)).toBe('0');
+  });
+
+  it('fmtPoints — integer format', () => {
+    expect(fmtPoints(1000)).toContain('1,000');
+    expect(fmtPoints(0)).toBe('0');
+  });
+});

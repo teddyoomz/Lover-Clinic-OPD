@@ -37,10 +37,15 @@ src/
 │       ├── CloneTab.jsx        — Tab "Clone ลูกค้า": search ProClinic + clone progress UI
 │       ├── CustomerCard.jsx    — Reusable card: customer info display (search/cloned modes)
 │       ├── CustomerListTab.jsx — Tab "ข้อมูลลูกค้า": card grid of cloned customers + filter
-│       └── MasterDataTab.jsx   — Tab "ข้อมูลพื้นฐาน": sync buttons + 4 sub-tabs (Products/Doctors/Staff/Courses) + data table + search/filter
+│       ├── MasterDataTab.jsx   — Tab "ข้อมูลพื้นฐาน": sync buttons + 5 sub-tabs (Products/Doctors/Staff/Courses/Promotions) + data table + search/filter
+│       ├── AppointmentTab.jsx  — Tab "นัดหมาย": resource time grid (room columns × time rows) + create/edit modal
+│       ├── SaleTab.jsx         — Tab "ขาย/ใบเสร็จ": invoice list + create/edit form (buy modals, billing, sellers, payment)
+│       ├── FinanceTab.jsx      — Tab "การเงิน" (Phase 7): 4 sub-tabs (Deposit/Wallet/Membership/Points) — only Deposit wired
+│       └── DepositPanel.jsx    — Deposit CRUD: list + create/edit form overlay (with optional appointment sub-form) + cancel/refund/detail modals
 ├── lib/
 │   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
-│   ├── backendClient.js        — Firestore CRUD for be_customers, be_treatments + master data read/sync (getMasterDataMeta, getAllMasterDataItems, runMasterDataSync)
+│   ├── backendClient.js        — Firestore CRUD for be_* collections + master data read/sync + Phase 7 deposit CRUD (create/update/cancel/refund/delete + apply/reverse to sale + recalcCustomerDepositBalance)
+│   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, fmtMoney, fmtPoints (Phase 7)
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
@@ -79,8 +84,9 @@ artifacts/{appId}/public/data/
 │             appointmentData, appointmentProClinicId, appointmentSyncStatus, appointmentSyncError
 ├── clinic_settings/main        — Clinic config (clinicName, accentColor, logoUrl, clinicSubtitle)
 ├── form_templates/{id}         — Custom form templates
-├── be_customers/{proClinicId}  — Backend: cloned customer data (patientData, courses, appointments, treatmentSummary)
-└── be_treatments/{treatmentId} — Backend: cloned treatment details (customerId, detail with vitals/OPD/meds/images)
+├── be_customers/{proClinicId}  — Backend: cloned customer data (patientData, courses, appointments, treatmentSummary, finance.depositBalance)
+├── be_treatments/{treatmentId} — Backend: cloned treatment details (customerId, detail with vitals/OPD/meds/images)
+└── be_deposits/{depositId}     — Phase 7: DEP-<ts> docs — amount, usedAmount, remainingAmount, status, sellers[], usageHistory[{saleId, amount, date}], optional appointment sub-doc
 ```
 
 ### Chat Firestore path
