@@ -1816,7 +1816,9 @@ export async function listStockMovements(filters = {}) {
   const snap = await getDocs(q);
   let mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   if (!filters.includeReversed) {
-    mvts = mvts.filter(m => !m.reversedByMovementId);
+    // Hide both sides of a reversed pair: the original (reversedByMovementId set)
+    // AND the compensating reverse entry (reverseOf set). Default view = live, un-reversed activity only.
+    mvts = mvts.filter(m => !m.reversedByMovementId && !m.reverseOf);
   }
   mvts.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
   return mvts;
@@ -2196,4 +2198,535 @@ async function _stockLib() {
   const mod = await import('./stockUtils.js');
   __stockLibCache = { stockUtils: mod };
   return __stockLibCache;
+}
+
+// ─── Master product stockConfig lookup ──────────────────────────────────────
+// Returns { trackStock: bool, unit: string, ... } or null if product not found.
+// Default when lookup fails OR stockConfig missing: trackStock=true, empty unit.
+async function _getProductStockConfig(productId) {
+  if (!productId) return null;
+  try {
+    const ref = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return data.stockConfig || null;
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 8b — Sale/Treatment stock integration
+// ═══════════════════════════════════════════════════════════════════════════
+// deductStockForSale / reverseStockForSale / analyzeStockImpact —
+// the bridge between retail sales and the batch FIFO ledger.
+// Treatment equivalents (deductStockForTreatment / reverseStockForTreatment)
+// are thin wrappers that reuse the same core logic with different movementType.
+//
+// Contract (non-negotiable):
+//   1. Stock failures are HARD ERRORS — caller must be prepared to roll back.
+//   2. Reverse is idempotent — movements already reversed are skipped.
+//   3. Every movement carries sourceDocPath + linkedSaleId/linkedTreatmentId
+//      so analyzeStockImpact can reconstruct impact from audit log alone.
+//   4. Per-batch runTransaction (never wrap a full sale in one tx — 500-op limit).
+//   5. Products flagged stockConfig.trackStock === false are silently skipped
+//      but still emit a movement with skipped:true for audit continuity.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Normalize mixed items (products + medications + consumables + treatmentItems)
+ * into a flat list with a canonical key set.
+ *
+ * Accepts either:
+ *   - { products: [...], medications: [...] }   (SaleTab items)
+ *   - [{ productId?, productName, qty, unit?, itemType? }, ...]  (already flat)
+ *
+ * Returns: [{ productId, productName, qty, unit, itemType, isPremium }]
+ * Items without productId are returned with productId=null — caller decides
+ * whether to skip (manual sale item, no stock) or error.
+ */
+function _normalizeStockItems(items) {
+  if (!items) return [];
+  if (Array.isArray(items)) {
+    return items.map(it => ({
+      productId: it.productId ? String(it.productId) : (it.id != null ? String(it.id) : null),
+      productName: String(it.productName || it.name || ''),
+      qty: Number(it.qty) || 0,
+      unit: String(it.unit || ''),
+      itemType: it.itemType || 'product',
+      isPremium: !!it.isPremium,
+    }));
+  }
+  if (typeof items === 'object') {
+    const out = [];
+    for (const p of items.products || []) {
+      out.push({
+        productId: p.productId ? String(p.productId) : (p.id != null ? String(p.id) : null),
+        productName: String(p.productName || p.name || ''),
+        qty: Number(p.qty) || 0,
+        unit: String(p.unit || ''),
+        itemType: 'product',
+        isPremium: !!p.isPremium,
+      });
+    }
+    for (const m of items.medications || []) {
+      out.push({
+        productId: m.productId ? String(m.productId) : (m.id != null ? String(m.id) : null),
+        productName: String(m.productName || m.name || ''),
+        qty: Number(m.qty) || 0,
+        unit: String(m.unit || ''),
+        itemType: 'medication',
+        isPremium: !!m.isPremium,
+      });
+    }
+    for (const c of items.consumables || []) {
+      out.push({
+        productId: c.productId ? String(c.productId) : (c.id != null ? String(c.id) : null),
+        productName: String(c.productName || c.name || ''),
+        qty: Number(c.qty) || 0,
+        unit: String(c.unit || ''),
+        itemType: 'consumable',
+        isPremium: !!c.isPremium,
+      });
+    }
+    for (const t of items.treatmentItems || []) {
+      out.push({
+        productId: t.productId ? String(t.productId) : (t.id != null ? String(t.id) : null),
+        productName: String(t.productName || t.name || ''),
+        qty: Number(t.qty) || 0,
+        unit: String(t.unit || ''),
+        itemType: 'treatmentItem',
+        isPremium: !!t.isPremium,
+      });
+    }
+    return out;
+  }
+  return [];
+}
+
+/**
+ * Internal: deduct one item across its FIFO batches. Each batch consumed
+ * runs in its own runTransaction (read → verify → mutate → write movement).
+ * On mid-flight failure, compensating reversals are emitted for any batches
+ * already committed before re-throwing.
+ */
+async function _deductOneItem({
+  item, saleId, treatmentId, branchId, movementType, customerId, user, preferNewest, extraLink,
+}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric } = stockUtils;
+
+  if (!item.productId) {
+    // Manual/one-off item — emit a skipped movement for audit continuity.
+    return { productId: null, skipped: true, reason: 'no-productId', movements: [] };
+  }
+  if (item.qty <= 0) {
+    return { productId: item.productId, skipped: true, reason: 'zero-qty', movements: [] };
+  }
+
+  // Honour trackStock flag on master product
+  const cfg = await _getProductStockConfig(item.productId);
+  if (cfg && cfg.trackStock === false) {
+    const movementId = _genMovementId();
+    const now = new Date().toISOString();
+    const baseDocPath = saleId
+      ? `artifacts/${appId}/public/data/be_sales/${saleId}`
+      : treatmentId
+        ? `artifacts/${appId}/public/data/be_treatments/${treatmentId}`
+        : '';
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: movementType,
+      batchId: null,
+      productId: item.productId,
+      productName: item.productName,
+      qty: -item.qty,
+      before: null,
+      after: null,
+      branchId,
+      sourceDocPath: baseDocPath,
+      linkedSaleId: saleId || null,
+      linkedTreatmentId: treatmentId || null,
+      ...(extraLink || {}),
+      revenueImpact: 0,
+      costBasis: 0,
+      isPremium: item.isPremium,
+      skipped: true,
+      user,
+      note: 'trackStock=false — no batch mutation',
+      customerId: customerId || null,
+      createdAt: now,
+    });
+    return { productId: item.productId, skipped: true, reason: 'trackStock-false', movements: [{ movementId }] };
+  }
+
+  // Fetch candidate batches
+  const batches = await listStockBatches({ productId: item.productId, branchId, status: BATCH_STATUS.ACTIVE });
+  const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, branchId, preferNewest });
+
+  if (plan.shortfall > 0) {
+    throw new Error(
+      `Stock insufficient for ${item.productName} (${item.productId}): need ${item.qty}, allocated ${item.qty - plan.shortfall}, shortfall ${plan.shortfall}`
+    );
+  }
+
+  const committedMovements = [];
+  const baseDocPath = saleId
+    ? `artifacts/${appId}/public/data/be_sales/${saleId}`
+    : treatmentId
+      ? `artifacts/${appId}/public/data/be_treatments/${treatmentId}`
+      : '';
+
+  try {
+    for (const a of plan.allocations) {
+      const batchRef = stockBatchDoc(a.batchId);
+      const movementId = _genMovementId();
+
+      const txResult = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(batchRef);
+        if (!snap.exists()) throw new Error(`Batch ${a.batchId} vanished mid-deduct`);
+        const b = snap.data();
+        if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) {
+          throw new Error(`Batch ${a.batchId} became ${b.status} mid-deduct`);
+        }
+        const beforeRemaining = Number(b.qty?.remaining) || 0;
+        if (beforeRemaining < a.takeQty) {
+          throw new Error(
+            `Batch ${a.batchId} raced: available ${beforeRemaining}, need ${a.takeQty}`
+          );
+        }
+        const newQty = deductQtyNumeric(b.qty, a.takeQty);
+        const afterRemaining = newQty.remaining;
+        const newStatus = afterRemaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+        const now = new Date().toISOString();
+
+        tx.update(batchRef, {
+          qty: newQty,
+          status: newStatus,
+          updatedAt: now,
+        });
+
+        tx.set(stockMovementDoc(movementId), {
+          movementId,
+          type: movementType,
+          batchId: a.batchId,
+          productId: b.productId,
+          productName: b.productName,
+          qty: -a.takeQty,
+          before: beforeRemaining,
+          after: afterRemaining,
+          branchId: b.branchId,
+          sourceDocPath: baseDocPath,
+          linkedSaleId: saleId || null,
+          linkedTreatmentId: treatmentId || null,
+          ...(extraLink || {}),
+          // isPremium → revenueImpact=0; otherwise null (sale billing owns revenue for reports)
+          revenueImpact: item.isPremium ? 0 : null,
+          costBasis: (Number(b.originalCost) || 0) * a.takeQty,
+          isPremium: !!item.isPremium,
+          skipped: false,
+          user,
+          note: '',
+          customerId: customerId || null,
+          createdAt: now,
+        });
+
+        return { batchId: a.batchId, qty: a.takeQty, movementId, before: beforeRemaining, after: afterRemaining };
+      });
+
+      committedMovements.push(txResult);
+    }
+  } catch (err) {
+    // Compensate: reverse everything committed so far for THIS item
+    for (const m of committedMovements) {
+      try {
+        await _reverseOneMovement(m.movementId);
+      } catch (rollbackErr) {
+        console.error('[deductStockForSale] compensation failed for movement', m.movementId, rollbackErr);
+      }
+    }
+    throw err;
+  }
+
+  return { productId: item.productId, skipped: false, movements: committedMovements };
+}
+
+/**
+ * Internal: reverse ONE movement. Adds qty back to batch + writes a compensating
+ * movement entry + flags the original as reversedByMovementId.
+ * Idempotent — no-op if already reversed.
+ */
+async function _reverseOneMovement(movementId, { user } = {}) {
+  const { stockUtils } = await _stockLib();
+  const { BATCH_STATUS, reverseQtyNumeric } = stockUtils;
+
+  const movRef = stockMovementDoc(movementId);
+  const movSnap = await getDoc(movRef);
+  if (!movSnap.exists()) throw new Error(`Movement ${movementId} not found`);
+  const m = movSnap.data();
+  if (m.reversedByMovementId) {
+    return { skipped: true, reason: 'already-reversed', reverseMovementId: m.reversedByMovementId };
+  }
+  if (m.skipped) {
+    // trackStock=false movement has no batch to restore — just flag it.
+    const now = new Date().toISOString();
+    const reverseMovementId = _genMovementId();
+    await setDoc(stockMovementDoc(reverseMovementId), {
+      ...m,
+      movementId: reverseMovementId,
+      qty: -Number(m.qty) || 0,
+      before: null,
+      after: null,
+      note: `reversal of ${m.movementId} (skipped original)`,
+      reversedByMovementId: null,
+      reverseOf: m.movementId,
+      createdAt: now,
+      user: user || m.user,
+    });
+    await updateDoc(movRef, { reversedByMovementId: reverseMovementId });
+    return { skipped: true, reverseMovementId };
+  }
+  if (!m.batchId) {
+    throw new Error(`Movement ${movementId} has no batchId — cannot reverse`);
+  }
+
+  const reverseMovementId = _genMovementId();
+  const result = await runTransaction(db, async (tx) => {
+    const batchRef = stockBatchDoc(m.batchId);
+    const bSnap = await tx.get(batchRef);
+    if (!bSnap.exists()) throw new Error(`Batch ${m.batchId} vanished before reverse`);
+    const b = bSnap.data();
+    const qtyReturn = Math.abs(Number(m.qty) || 0);
+    const beforeRemaining = Number(b.qty?.remaining) || 0;
+    const newQty = reverseQtyNumeric(b.qty, qtyReturn);
+    const afterRemaining = newQty.remaining;
+    const newStatus = b.status === BATCH_STATUS.DEPLETED && afterRemaining > 0
+      ? BATCH_STATUS.ACTIVE
+      : b.status;
+    const now = new Date().toISOString();
+
+    tx.update(batchRef, { qty: newQty, status: newStatus, updatedAt: now });
+
+    tx.set(stockMovementDoc(reverseMovementId), {
+      ...m,
+      movementId: reverseMovementId,
+      qty: qtyReturn, // positive = returning to stock
+      before: beforeRemaining,
+      after: afterRemaining,
+      note: `reversal of ${m.movementId}`,
+      reversedByMovementId: null,
+      reverseOf: m.movementId,
+      createdAt: now,
+      user: user || m.user,
+    });
+
+    tx.update(movRef, { reversedByMovementId: reverseMovementId });
+
+    return { reverseMovementId, before: beforeRemaining, after: afterRemaining };
+  });
+
+  return { skipped: false, ...result };
+}
+
+/**
+ * Deduct stock for a retail sale. One movement per batch per item.
+ * Products flagged stockConfig.trackStock=false emit a skipped movement
+ * (no batch mutation).
+ *
+ * @param {string} saleId
+ * @param {object|Array} items — SaleTab `items` object or flat array
+ * @param {{
+ *   customerId?: string,
+ *   branchId?: string,
+ *   user?: {userId, userName},
+ *   movementType?: number, // defaults to MOVEMENT_TYPES.SALE (2)
+ *   preferNewest?: boolean,
+ * }} [opts]
+ * @returns {{ allocations: Array, skippedItems: Array }}
+ * @throws when any item has insufficient stock (after emitting compensations for prior items)
+ */
+export async function deductStockForSale(saleId, items, opts = {}) {
+  if (!saleId) throw new Error('saleId required');
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, DEFAULT_BRANCH_ID } = stockUtils;
+
+  const branchId = opts.branchId || DEFAULT_BRANCH_ID;
+  const user = opts.user || { userId: null, userName: null };
+  const movementType = Number(opts.movementType) || MOVEMENT_TYPES.SALE;
+  const preferNewest = !!opts.preferNewest;
+  const customerId = opts.customerId ? String(opts.customerId) : null;
+
+  const flat = _normalizeStockItems(items);
+  const allocations = [];
+  const skipped = [];
+
+  for (const item of flat) {
+    try {
+      const r = await _deductOneItem({
+        item, saleId,
+        branchId, movementType, customerId, user, preferNewest,
+      });
+      if (r.skipped) skipped.push(r);
+      else allocations.push(r);
+    } catch (err) {
+      // Roll back everything we've committed for prior items — whole sale-deduct atomic from caller POV
+      try { await reverseStockForSale(saleId, { user }); } catch (rbErr) {
+        console.error('[deductStockForSale] rollback failed:', rbErr);
+      }
+      throw err;
+    }
+  }
+
+  return { allocations, skippedItems: skipped };
+}
+
+/**
+ * Deduct stock for a treatment (consumables/meds used during treatment).
+ * Equivalent to deductStockForSale but links via treatmentId + uses
+ * MOVEMENT_TYPES.TREATMENT (6) by default. Pass opts.movementType=7 for
+ * take-home medications.
+ *
+ * @param {string} treatmentId
+ * @param {object|Array} items
+ * @param {object} [opts]
+ */
+export async function deductStockForTreatment(treatmentId, items, opts = {}) {
+  if (!treatmentId) throw new Error('treatmentId required');
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, DEFAULT_BRANCH_ID } = stockUtils;
+
+  const branchId = opts.branchId || DEFAULT_BRANCH_ID;
+  const user = opts.user || { userId: null, userName: null };
+  const movementType = Number(opts.movementType) || MOVEMENT_TYPES.TREATMENT;
+  const preferNewest = !!opts.preferNewest;
+  const customerId = opts.customerId ? String(opts.customerId) : null;
+
+  const flat = _normalizeStockItems(items);
+  const allocations = [];
+  const skipped = [];
+
+  for (const item of flat) {
+    try {
+      const r = await _deductOneItem({
+        item, treatmentId,
+        branchId, movementType, customerId, user, preferNewest,
+      });
+      if (r.skipped) skipped.push(r);
+      else allocations.push(r);
+    } catch (err) {
+      try { await reverseStockForTreatment(treatmentId, { user }); } catch (rbErr) {
+        console.error('[deductStockForTreatment] rollback failed:', rbErr);
+      }
+      throw err;
+    }
+  }
+
+  return { allocations, skippedItems: skipped };
+}
+
+/**
+ * Reverse every non-reversed movement linked to a sale. Idempotent — second
+ * call is a no-op. Used by sale cancel / edit / delete + failure compensation.
+ *
+ * @param {string} saleId
+ * @param {{ user?: object }} [opts]
+ * @returns { reversedCount, skippedCount }
+ */
+export async function reverseStockForSale(saleId, opts = {}) {
+  if (!saleId) throw new Error('saleId required');
+  const mvts = await listStockMovements({ linkedSaleId: String(saleId), includeReversed: false });
+  let reversedCount = 0;
+  let skippedCount = 0;
+  for (const m of mvts) {
+    const r = await _reverseOneMovement(m.movementId, opts);
+    if (r.skipped) skippedCount++;
+    else reversedCount++;
+  }
+  return { reversedCount, skippedCount, success: true };
+}
+
+/**
+ * Reverse every non-reversed movement linked to a treatment. Idempotent.
+ */
+export async function reverseStockForTreatment(treatmentId, opts = {}) {
+  if (!treatmentId) throw new Error('treatmentId required');
+  const mvts = await listStockMovements({ linkedTreatmentId: String(treatmentId), includeReversed: false });
+  let reversedCount = 0;
+  let skippedCount = 0;
+  for (const m of mvts) {
+    const r = await _reverseOneMovement(m.movementId, opts);
+    if (r.skipped) skippedCount++;
+    else reversedCount++;
+  }
+  return { reversedCount, skippedCount, success: true };
+}
+
+/**
+ * Inspect what reversing a sale/treatment would do. Shows movements,
+ * batch states, warnings — feeds the cancel/delete confirmation modal.
+ *
+ * @param {{saleId?: string, treatmentId?: string}} params
+ * @returns {{
+ *   movements: Array,
+ *   batchesAffected: Array<{batchId, productName, currentRemaining, willRestore}>,
+ *   warnings: string[],
+ *   canReverseFully: boolean,
+ *   totalQtyToRestore: number,
+ * }}
+ */
+export async function analyzeStockImpact({ saleId, treatmentId } = {}) {
+  if (!saleId && !treatmentId) throw new Error('saleId or treatmentId required');
+
+  const filters = {};
+  if (saleId) filters.linkedSaleId = String(saleId);
+  if (treatmentId) filters.linkedTreatmentId = String(treatmentId);
+
+  const movements = await listStockMovements({ ...filters, includeReversed: false });
+  const batchesSeen = new Map();
+  const warnings = [];
+  let canReverseFully = true;
+  let totalQtyToRestore = 0;
+
+  for (const m of movements) {
+    if (m.skipped) {
+      warnings.push(`${m.productName} skipped (trackStock=false) — no batch to restore`);
+      continue;
+    }
+    if (!m.batchId) {
+      warnings.push(`Movement ${m.movementId} has no batchId — cannot restore`);
+      canReverseFully = false;
+      continue;
+    }
+
+    let info = batchesSeen.get(m.batchId);
+    if (!info) {
+      const b = await getStockBatch(m.batchId);
+      info = {
+        batchId: m.batchId,
+        productName: m.productName,
+        currentRemaining: b ? Number(b.qty?.remaining) || 0 : 0,
+        currentStatus: b ? b.status : 'missing',
+        willRestore: 0,
+      };
+      batchesSeen.set(m.batchId, info);
+      if (!b) {
+        warnings.push(`Batch ${m.batchId} not found — cannot restore ${m.productName}`);
+        canReverseFully = false;
+      } else if (b.status === 'cancelled') {
+        warnings.push(`Batch ${m.batchId} cancelled — restoration will mutate cancelled batch`);
+      }
+    }
+    const qtyReturn = Math.abs(Number(m.qty) || 0);
+    info.willRestore += qtyReturn;
+    totalQtyToRestore += qtyReturn;
+  }
+
+  return {
+    movements,
+    batchesAffected: Array.from(batchesSeen.values()),
+    warnings,
+    canReverseFully,
+    totalQtyToRestore,
+  };
 }
