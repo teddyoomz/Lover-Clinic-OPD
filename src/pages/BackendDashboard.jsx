@@ -50,22 +50,47 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     return () => setUseTrialServer(false);
   }, []);
 
+  const [hydrated, setHydrated] = useState(false);
+
   // Deep link: ?backend=1&customer=ID → auto-load customer detail
   // Deep link: ?backend=1&tab=finance&subtab=deposit → switch to finance tab
+  // Runs once on mount; after this, state drives the URL (see next effect).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const customerId = params.get('customer');
     const tab = params.get('tab');
     const subtab = params.get('subtab');
     if (customerId) {
-      getCustomer(customerId).then(c => {
-        if (c) { setViewingCustomer(c); setActiveTab('customers'); }
-      }).catch(() => {});
-    } else if (tab && ['clone','customers','masterdata','appointments','sales','finance'].includes(tab)) {
-      setActiveTab(tab);
-      if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
+      getCustomer(customerId)
+        .then(c => { if (c) { setViewingCustomer(c); setActiveTab('customers'); } })
+        .catch(() => {})
+        .finally(() => setHydrated(true));
+    } else {
+      if (tab && ['clone','customers','masterdata','appointments','sales','finance'].includes(tab)) {
+        setActiveTab(tab);
+        if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
+      }
+      setHydrated(true);
     }
   }, []);
+
+  // Keep the URL in sync with state — so switching to another tab removes
+  // ?customer=X from the address bar, bookmarks reflect the actual view, etc.
+  useEffect(() => {
+    if (!hydrated) return;
+    const params = new URLSearchParams();
+    params.set('backend', '1');
+    if (viewingCustomer) {
+      params.set('customer', String(viewingCustomer.proClinicId || viewingCustomer.id));
+    } else {
+      if (activeTab && activeTab !== 'clone') params.set('tab', activeTab);
+      if (activeTab === 'finance' && financeSubTab) params.set('subtab', financeSubTab);
+    }
+    const newSearch = `?${params.toString()}`;
+    if (window.location.search !== newSearch) {
+      window.history.replaceState(null, '', `${window.location.pathname}${newSearch}`);
+    }
+  }, [hydrated, activeTab, viewingCustomer, financeSubTab, financeMode]);
 
   // Subscribe to clinic settings (same pattern as App.jsx)
   useEffect(() => {

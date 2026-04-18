@@ -28,20 +28,48 @@ function todayStr() { return new Date().toISOString().split('T')[0]; }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
 const COLOR_MAP = {
-  gold:    { bg: 'from-amber-600 to-yellow-500',  text: 'text-amber-900' },
-  opal:    { bg: 'from-sky-400 to-cyan-300',       text: 'text-sky-900' },
-  silver:  { bg: 'from-gray-400 to-gray-300',      text: 'text-gray-900' },
-  diamond: { bg: 'from-cyan-300 to-indigo-400',    text: 'text-indigo-900' },
-  platinum:{ bg: 'from-gray-500 to-slate-300',     text: 'text-gray-900' },
-  emerald: { bg: 'from-emerald-500 to-teal-400',   text: 'text-emerald-900' },
-  vip:     { bg: 'from-rose-600 to-rose-400',      text: 'text-white' },
-  vvip:    { bg: 'from-purple-700 to-purple-400',  text: 'text-white' },
-  prestige:{ bg: 'from-zinc-800 to-zinc-500',      text: 'text-white' },
+  gold:     { bg: 'from-amber-600 to-yellow-500',  text: 'text-amber-900' },
+  opal:     { bg: 'from-sky-400 to-cyan-300',       text: 'text-sky-900' },
+  silver:   { bg: 'from-gray-400 to-gray-300',      text: 'text-gray-900' },
+  diamond:  { bg: 'from-cyan-300 to-indigo-400',    text: 'text-indigo-900' },
+  citrine:  { bg: 'from-yellow-400 to-orange-400',  text: 'text-orange-900' },
+  platinum: { bg: 'from-gray-500 to-slate-300',     text: 'text-gray-900' },
+  emerald:  { bg: 'from-emerald-500 to-teal-400',   text: 'text-emerald-900' },
+  ruby:     { bg: 'from-rose-600 to-rose-400',      text: 'text-white' },
+  vip:      { bg: 'from-rose-600 to-rose-400',      text: 'text-white' },
+  vvip:     { bg: 'from-purple-700 to-purple-400',  text: 'text-white' },
+  prestige: { bg: 'from-zinc-800 to-zinc-500',      text: 'text-white' },
 };
-function cardGradient(colorName) {
-  const key = (colorName || '').toLowerCase().trim();
-  if (COLOR_MAP[key]) return COLOR_MAP[key];
-  return { bg: 'from-purple-600 to-purple-400', text: 'text-white' };
+// Text-only colors for use on neutral backgrounds (e.g. customer-detail membership tile).
+// Uses brighter -400 shades so labels pop on both light and dark surfaces.
+export const CARD_TEXT_COLOR = {
+  gold:     'text-amber-400',
+  opal:     'text-sky-400',
+  silver:   'text-gray-300',
+  diamond:  'text-indigo-300',
+  citrine:  'text-yellow-400',
+  platinum: 'text-slate-300',
+  emerald:  'text-emerald-400',
+  ruby:     'text-rose-400',
+  vip:      'text-rose-400',
+  vvip:     'text-purple-400',
+  prestige: 'text-zinc-400',
+};
+function cardGradient(colorName, cardName) {
+  const k1 = (colorName || '').toLowerCase().trim();
+  const k2 = (cardName || '').toLowerCase().trim();
+  return COLOR_MAP[k1] || COLOR_MAP[k2] || { bg: 'from-purple-600 to-purple-400', text: 'text-white' };
+}
+
+/**
+ * Resolve the text-only color class for a membership card so badges/labels on
+ * neutral surfaces match the physical card's color. Falls back to card-name
+ * lookup if `colorName` is empty (e.g. clinic-created card with just the name).
+ */
+export function cardTextClass(colorName, cardName) {
+  const k1 = (colorName || '').toLowerCase().trim();
+  const k2 = (cardName || '').toLowerCase().trim();
+  return CARD_TEXT_COLOR[k1] || CARD_TEXT_COLOR[k2] || 'text-purple-400';
 }
 
 export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed }) {
@@ -147,7 +175,7 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {cardTypes.map(ct => {
-              const grad = cardGradient(ct.colorName);
+              const grad = cardGradient(ct.colorName, ct.name);
               const disabled = ct.status === 'พักใช้งาน';
               return (
                 <div key={ct.id} className={`rounded-xl p-3 bg-gradient-to-br ${grad.bg} shadow-lg ${grad.text} relative ${disabled ? 'opacity-40' : ''}`}>
@@ -482,7 +510,7 @@ function SellMembershipForm({ initialCustomer, customers, cardTypes, isDark, inp
               </select>
             </div>
             {selectedCard && (
-              <div className={`rounded-lg p-3 bg-gradient-to-br ${cardGradient(selectedCard.colorName).bg} ${cardGradient(selectedCard.colorName).text}`}>
+              <div className={`rounded-lg p-3 bg-gradient-to-br ${cardGradient(selectedCard.colorName, selectedCard.name).bg} ${cardGradient(selectedCard.colorName, selectedCard.name).text}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[10px] opacity-80 font-bold uppercase">Preview</div>

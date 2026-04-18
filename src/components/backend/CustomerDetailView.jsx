@@ -14,6 +14,7 @@ import {
 } from '../../lib/backendClient.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
+import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb } from '../../utils.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
@@ -266,17 +267,19 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                   {fmtPoints(finSummary?.points || 0)}
                 </div>
               </button>
-              {/* Membership */}
+              {/* Membership — text color mirrors the actual card color (e.g. GOLD → amber) */}
               <button onClick={() => onOpenFinance?.('membership', customer)}
                 className={`text-left rounded-lg px-3 py-2 border transition-all ${isDark ? 'bg-[var(--bg-elevated)] border-[var(--bd)] hover:border-purple-700/50' : 'bg-gray-50 border-gray-200 hover:border-purple-300'}`}
                 title="บัตรสมาชิก">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Crown size={11} className="text-purple-400" />
+                  <Crown size={11} className={finSummary?.membership ? cardTextClass(finSummary.membership.colorName, finSummary.membership.cardTypeName) : 'text-purple-400'} />
                   <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase">สมาชิก</span>
                 </div>
                 {finSummary?.membership ? (
                   <>
-                    <div className="text-sm font-black text-purple-400 truncate">{finSummary.membership.cardTypeName}</div>
+                    <div className={`text-sm font-black truncate ${cardTextClass(finSummary.membership.colorName, finSummary.membership.cardTypeName)}`}>
+                      {finSummary.membership.cardTypeName}
+                    </div>
                     <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">ส่วนลด {finSummary.membership.discountPercent || 0}%</div>
                   </>
                 ) : (
