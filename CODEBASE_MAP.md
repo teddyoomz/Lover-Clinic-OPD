@@ -41,7 +41,8 @@ src/
 │       ├── AppointmentTab.jsx  — Tab "นัดหมาย": resource time grid (room columns × time rows) + create/edit modal
 │       ├── SaleTab.jsx         — Tab "ขาย/ใบเสร็จ": invoice list + create/edit form (buy modals, billing, sellers, payment)
 │       ├── FinanceTab.jsx      — Tab "การเงิน" (Phase 7): 4 sub-tabs (Deposit/Wallet/Membership/Points) — only Deposit wired
-│       └── DepositPanel.jsx    — Deposit CRUD: list + create/edit form overlay (with optional appointment sub-form) + cancel/refund/detail modals
+│       ├── DepositPanel.jsx    — Deposit CRUD: list + create/edit form overlay (with optional appointment sub-form) + cancel/refund/detail modals
+│       └── DepositPicker.jsx   — Reusable picker (reads real `be_deposits` balance via getActiveDeposits) + multi-select with per-deposit amount + max cap — used in SaleTab + TreatmentFormPage billing
 ├── lib/
 │   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
 │   ├── backendClient.js        — Firestore CRUD for be_* collections + master data read/sync + Phase 7 deposit CRUD (create/update/cancel/refund/delete + apply/reverse to sale + recalcCustomerDepositBalance)

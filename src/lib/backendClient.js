@@ -461,6 +461,15 @@ export async function getCustomerSales(customerId) {
   return sales;
 }
 
+/** Get the sale auto-created from a treatment (by linkedTreatmentId). */
+export async function getSaleByTreatmentId(treatmentId) {
+  const q = query(salesCol(), where('linkedTreatmentId', '==', String(treatmentId)));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() };
+}
+
 /** Cancel a sale with reason + refund tracking */
 export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount, evidenceUrl) {
   await updateDoc(saleDoc(saleId), {

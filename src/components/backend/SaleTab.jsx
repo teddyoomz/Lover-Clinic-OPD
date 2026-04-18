@@ -10,10 +10,12 @@ import {
 import {
   createBackendSale, updateBackendSale, deleteBackendSale,
   getAllSales, getAllCustomers, getAllMasterDataItems,
-  cancelBackendSale, updateSalePayment, assignCourseToCustomer
+  cancelBackendSale, updateSalePayment, assignCourseToCustomer,
+  applyDepositToSale, reverseDepositUsage,
 } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import FileUploadField from './FileUploadField.jsx';
+import DepositPicker from './DepositPicker.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n }));
 const PAYMENT_STATUSES = [
@@ -112,6 +114,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     { enabled: false, id: '', name: '', percent: '0', total: '' },
   ]);
 
+  // Deposit selection — [{ depositId, amount }]
+  const [selectedDeposits, setSelectedDeposits] = useState([]);
+  const [depositReloadKey, setDepositReloadKey] = useState(0);
+
   // Buy modal
   const [buyModalOpen, setBuyModalOpen] = useState(false);
   const [buyModalType, setBuyModalType] = useState('course');
@@ -159,6 +165,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       setPaymentStatus('paid'); setPaymentDate(new Date().toISOString().split('T')[0]); setPaymentTime(''); setRefNo('');
       setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
       setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
+      setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
       setError(''); setSuccess(false); setFormOpen(true);
       if (onCustomerUsed) onCustomerUsed();
     }
@@ -170,9 +177,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     purchasedItems.forEach(p => { subtotal += (parseFloat(p.unitPrice) || 0) * (parseInt(p.qty) || 1); });
     medications.forEach(m => { if (m.name) subtotal += (parseFloat(m.unitPrice) || 0) * (parseInt(m.qty) || 1); });
     const disc = billDiscountType === 'percent' ? subtotal * (parseFloat(billDiscount) || 0) / 100 : (parseFloat(billDiscount) || 0);
-    const netTotal = Math.max(0, subtotal - disc);
-    return { subtotal, discount: disc, netTotal };
-  }, [purchasedItems, medications, billDiscount, billDiscountType]);
+    const afterDiscount = Math.max(0, subtotal - disc);
+    const depositApplied = selectedDeposits.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const netTotal = Math.max(0, afterDiscount - depositApplied);
+    return { subtotal, discount: disc, afterDiscount, depositApplied, netTotal };
+  }, [purchasedItems, medications, billDiscount, billDiscountType, selectedDeposits]);
 
   // ── Auto-fill payment amount when "ชำระเต็ม" + billing changes ──
   useEffect(() => {
@@ -268,6 +277,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     setPaymentStatus('paid'); setPaymentDate(new Date().toISOString().split('T')[0]); setPaymentTime(''); setRefNo('');
     setPmChannels([{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
     setPmSellers([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
+    setSelectedDeposits([]); setDepositReloadKey(k => k + 1);
     setError(''); setSuccess(false); setFormOpen(true);
   };
 
@@ -287,6 +297,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       : [{ enabled: true, method: '', amount: '' }, { enabled: false, method: '', amount: '' }, { enabled: false, method: '', amount: '' }]);
     setPmSellers(sale.sellers?.length ? sale.sellers.map(s => ({ ...s, enabled: true })).concat([...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' }))).slice(0, 5)
       : [...Array(5)].map(() => ({ enabled: false, id: '', name: '', percent: '0', total: '' })));
+    // Restore deposit selection from existing sale
+    const existingDeps = Array.isArray(sale.billing?.depositIds) ? sale.billing.depositIds : [];
+    setSelectedDeposits(existingDeps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
+    setDepositReloadKey(k => k + 1);
     setError(''); setSuccess(false); setFormOpen(true);
   };
 
@@ -315,19 +329,49 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         else if (t === 'course') grouped.courses.push(p);
         else grouped.products.push(p);
       });
+      const depositIdsPayload = selectedDeposits
+        .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
+        .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
       const data = clean({
         customerId, customerName, customerHN, saleDate, saleNote,
         couponCode: couponCode || null,
         appointmentId: appointmentId || null,
         items: grouped,
-        billing: { subtotal: billing.subtotal, billDiscount: billing.discount, discountType: billDiscountType, netTotal: billing.netTotal },
+        billing: {
+          subtotal: billing.subtotal,
+          billDiscount: billing.discount,
+          discountType: billDiscountType,
+          depositApplied: billing.depositApplied,
+          depositIds: depositIdsPayload,
+          netTotal: billing.netTotal,
+        },
         payment: { status: paymentStatus, channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo, note: paymentNote || '', evidenceUrl: paymentEvidenceUrl || null, evidencePath: paymentEvidencePath || null },
         sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, name: s.name, percent: s.percent, total: s.total })),
       });
+      let newSaleId;
       if (editingSale) {
-        await updateBackendSale(editingSale.saleId || editingSale.id, data);
+        const saleId = editingSale.saleId || editingSale.id;
+        newSaleId = saleId;
+        // Reverse previously-applied deposits before re-applying the (possibly changed) selection
+        const oldDeps = Array.isArray(editingSale.billing?.depositIds) ? editingSale.billing.depositIds : [];
+        for (const od of oldDeps) {
+          try { await reverseDepositUsage(od.depositId, saleId); }
+          catch (e) { console.warn('[SaleTab] reverse old deposit failed:', e); }
+        }
+        await updateBackendSale(saleId, data);
+        // Apply new selection
+        for (const nd of depositIdsPayload) {
+          try { await applyDepositToSale(nd.depositId, saleId, nd.amount); }
+          catch (e) { console.warn('[SaleTab] apply deposit failed:', e); throw new Error(`หักมัดจำ ${nd.depositId} ไม่สำเร็จ: ${e.message}`); }
+        }
       } else {
-        await createBackendSale(data);
+        const createRes = await createBackendSale(data);
+        newSaleId = createRes.saleId;
+        // Apply selected deposits to this newly-created sale
+        for (const nd of depositIdsPayload) {
+          try { await applyDepositToSale(nd.depositId, newSaleId, nd.amount); }
+          catch (e) { console.warn('[SaleTab] apply deposit failed:', e); throw new Error(`หักมัดจำ ${nd.depositId} ไม่สำเร็จ: ${e.message}`); }
+        }
         // Auto-assign purchased courses + promotions to customer
         // Key: purchased qty (user-entered) multiplies master product qty
         if (customerId) {
@@ -361,14 +405,24 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         }
       }
       setSuccess(true);
-      setTimeout(() => { setFormOpen(false); setSuccess(false); loadSales(); }, 800);
+      setTimeout(() => {
+        setFormOpen(false); setSuccess(false); loadSales();
+        setDepositReloadKey(k => k + 1);
+      }, 800);
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (sale) => {
     if (!confirm('ต้องการลบใบเสร็จนี้?')) return;
-    await deleteBackendSale(sale.saleId || sale.id);
+    const saleId = sale.saleId || sale.id;
+    // Reverse any applied deposits first so their remainingAmount is restored
+    const deps = Array.isArray(sale.billing?.depositIds) ? sale.billing.depositIds : [];
+    for (const d of deps) {
+      try { await reverseDepositUsage(d.depositId, saleId); }
+      catch (e) { console.warn('[SaleTab] reverse deposit on delete failed:', e); }
+    }
+    await deleteBackendSale(saleId);
     loadSales();
   };
 
@@ -532,6 +586,15 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <div className={`p-3 rounded-lg ${isDark ? 'bg-[var(--bg-elevated)]' : 'bg-gray-50'}`}>
                 <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ยอดรวม</span><span className="font-mono">{fmtMoney(viewingSale.billing?.subtotal)} บาท</span></div>
                 {viewingSale.billing?.billDiscount > 0 && <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ส่วนลด</span><span className="font-mono text-red-400">-{fmtMoney(viewingSale.billing.billDiscount)} บาท</span></div>}
+                {viewingSale.billing?.depositApplied > 0 && (
+                  <div className="flex justify-between"><span className="text-[var(--tx-muted)]">หักมัดจำ</span><span className="font-mono text-emerald-400">-{fmtMoney(viewingSale.billing.depositApplied)} บาท</span></div>
+                )}
+                {(viewingSale.billing?.depositIds || []).map((d, i) => (
+                  <div key={i} className="flex justify-between text-[10px] text-[var(--tx-muted)] pl-3">
+                    <span className="font-mono">· {d.depositId}</span>
+                    <span className="font-mono">{fmtMoney(d.amount)} บาท</span>
+                  </div>
+                ))}
                 <div className="flex justify-between pt-1 border-t border-[var(--bd)] font-bold"><span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(viewingSale.billing?.netTotal)} บาท</span></div>
               </div>
               {/* Payment */}
@@ -595,7 +658,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <button onClick={() => setCancelModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
               <button onClick={async () => {
                 setCancelSaving(true);
-                await cancelBackendSale(cancelModal.saleId || cancelModal.id, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
+                const saleId = cancelModal.saleId || cancelModal.id;
+                // Reverse applied deposits so the customer can use them again
+                const deps = Array.isArray(cancelModal.billing?.depositIds) ? cancelModal.billing.depositIds : [];
+                for (const d of deps) {
+                  try { await reverseDepositUsage(d.depositId, saleId); }
+                  catch (e) { console.warn('[SaleTab] reverse deposit on cancel failed:', e); }
+                }
+                await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
                 setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
               }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50">
                 {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : 'ยืนยันยกเลิก'}
@@ -761,6 +831,27 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   </select>
                   <span className="ml-auto font-mono text-red-400">-{fmtMoney(billing.discount)}</span>
                 </div>
+                <div className="flex justify-between text-[var(--tx-muted)]">
+                  <span>ยอดหลังส่วนลด</span>
+                  <span className="font-mono">{fmtMoney(billing.afterDiscount)} บาท</span>
+                </div>
+                {/* Deposit picker */}
+                <div className="pt-1">
+                  <DepositPicker
+                    customerId={customerId}
+                    value={selectedDeposits}
+                    onChange={setSelectedDeposits}
+                    maxAmount={billing.afterDiscount}
+                    isDark={isDark}
+                    reloadKey={depositReloadKey}
+                  />
+                </div>
+                {billing.depositApplied > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--tx-muted)]">หักมัดจำ</span>
+                    <span className="font-mono text-emerald-400">-{fmtMoney(billing.depositApplied)} บาท</span>
+                  </div>
+                )}
                 <div className="flex justify-between pt-2 border-t border-[var(--bd)] font-bold text-sm">
                   <span>ยอดสุทธิ</span><span className="text-emerald-400 font-mono">{fmtMoney(billing.netTotal)} บาท</span>
                 </div>

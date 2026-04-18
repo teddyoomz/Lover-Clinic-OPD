@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import DepositPicker from './backend/DepositPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
@@ -279,6 +280,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Deposit & Wallet
   const [useDeposit, setUseDeposit] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
+  // Backend mode: multi-deposit selection via DepositPicker
+  const [selectedDeposits, setSelectedDeposits] = useState([]);
+  const [depositReloadKey, setDepositReloadKey] = useState(0);
+  const isBackend = saveTarget === 'backend';
   const [useWallet, setUseWallet] = useState(false);
   const [walletId, setWalletId] = useState('');
   const [walletAmount, setWalletAmount] = useState('');
@@ -349,12 +354,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
       : parseFloat(billDiscount) || 0;
     const afterDiscount = Math.max(0, afterMedDisc - billDiscAmt);
     const insDed = isInsuranceClaimed ? (parseFloat(insuranceClaimAmount) || 0) : 0;
-    const depDed = useDeposit ? (parseFloat(depositAmount) || 0) : 0;
+    const backendDepDed = isBackend
+      ? selectedDeposits.reduce((s, d) => s + (Number(d.amount) || 0), 0)
+      : 0;
+    const legacyDepDed = useDeposit ? (parseFloat(depositAmount) || 0) : 0;
+    const depDed = isBackend ? backendDepDed : legacyDepDed;
     const walDed = useWallet ? (parseFloat(walletAmount) || 0) : 0;
     const netTotal = Math.max(0, afterDiscount - insDed - depDed - walDed);
     return { lines, subtotal, medSubtotal, medDiscPct, medDisc, billDiscAmt, afterDiscount, insDed, depDed, walDed, netTotal };
   }, [purchasedItems, medications, consumables, medDiscountOverride, billDiscount, billDiscountType,
-      isInsuranceClaimed, insuranceClaimAmount, useDeposit, depositAmount, useWallet, walletAmount, options]);
+      isInsuranceClaimed, insuranceClaimAmount, useDeposit, depositAmount, useWallet, walletAmount,
+      isBackend, selectedDeposits, options]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -469,6 +479,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.payment?.channels?.length) setPmChannels(prev => prev.map((ch, i) => t.payment.channels[i] ? { ...ch, ...t.payment.channels[i], enabled: true } : ch));
               if (t.sellers?.length) setPmSellers(prev => prev.map((s, i) => t.sellers[i] ? { ...s, ...t.sellers[i], enabled: true } : s));
               if (t.payment?.saleNote) setSaleNote(t.payment.saleNote);
+              // Phase 7: Restore deposit selection from linked sale (if exists)
+              try {
+                const { getSaleByTreatmentId } = await import('../lib/backendClient.js');
+                const linkedSale = await getSaleByTreatmentId(treatmentId);
+                const deps = Array.isArray(linkedSale?.billing?.depositIds) ? linkedSale.billing.depositIds : [];
+                if (deps.length > 0) {
+                  setSelectedDeposits(deps.map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 })));
+                }
+              } catch (e) { console.warn('[TreatmentForm] restore deposits failed:', e); }
               // Phase 6: Restore courseItems for deduction reversal + checkbox restore
               if (t.courseItems?.length) {
                 setExistingCourseItems(t.courseItems);
@@ -1496,7 +1515,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         // Auto-create sale invoice when treatment has billing items (hasSale)
         if (hasSale && !isEdit) {
           try {
-            const { createBackendSale, assignCourseToCustomer } = await import('../lib/backendClient.js');
+            const { createBackendSale, assignCourseToCustomer, applyDepositToSale } = await import('../lib/backendClient.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
             purchasedItems.forEach(p => {
               const t = p.itemType || 'product';
@@ -1505,16 +1524,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               else grouped.products.push(p);
             });
             const pmStatusMap = { '2': 'paid', '4': 'split', '0': 'unpaid' };
-            await createBackendSale(clean({
+            const depositIdsPayload = selectedDeposits
+              .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
+              .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+            const createRes = await createBackendSale(clean({
               customerId, customerName: patientName, customerHN: '',
               saleDate: treatmentDate, saleNote: '',
               items: grouped,
-              billing: { subtotal: billing.subtotal, billDiscount: billing.billDiscAmt, netTotal: billing.netTotal },
+              billing: {
+                subtotal: billing.subtotal,
+                billDiscount: billing.billDiscAmt,
+                depositApplied: billing.depDed,
+                depositIds: depositIdsPayload,
+                netTotal: billing.netTotal,
+              },
               payment: { status: pmStatusMap[paymentStatus] || 'paid', channels: pmChannels.filter(c => c.enabled), date: paymentDate, time: paymentTime, refNo },
               sellers: pmSellers.filter(s => s.enabled).map(s => ({ id: s.id, percent: s.percent, total: s.total })),
               source: 'treatment',
               linkedTreatmentId: result.treatmentId || treatmentId || '',
             }));
+            // Apply each selected deposit to this new sale
+            for (const d of depositIdsPayload) {
+              try { await applyDepositToSale(d.depositId, createRes.saleId, d.amount); }
+              catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
+            }
             // Auto-assign purchased courses + promotions to customer
             // purchased qty multiplies master product qty
             for (const course of grouped.courses) {
@@ -1545,6 +1578,42 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               } catch (e) { console.error('[TreatmentForm] promo assign error:', e); }
             }
           } catch (e) { console.warn('[TreatmentForm] auto sale creation failed:', e); }
+        }
+
+        // Phase 7: On EDIT, if a linked sale exists, reverse & reapply deposits to that sale
+        if (hasSale && isEdit) {
+          try {
+            const { getSaleByTreatmentId, updateBackendSale, applyDepositToSale, reverseDepositUsage } = await import('../lib/backendClient.js');
+            const linkedSale = await getSaleByTreatmentId(result.treatmentId || treatmentId || '');
+            if (linkedSale && linkedSale.status !== 'cancelled') {
+              const saleId = linkedSale.saleId || linkedSale.id;
+              // 1. Reverse existing deposits on that sale
+              const oldDeps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
+              for (const od of oldDeps) {
+                try { await reverseDepositUsage(od.depositId, saleId); }
+                catch (e) { console.warn('[TreatmentForm] reverse old deposit failed:', e); }
+              }
+              // 2. Update sale billing with new selection
+              const depositIdsPayload = selectedDeposits
+                .filter(d => d.depositId && (Number(d.amount) || 0) > 0)
+                .map(d => ({ depositId: d.depositId, amount: Number(d.amount) || 0 }));
+              await updateBackendSale(saleId, {
+                billing: {
+                  ...(linkedSale.billing || {}),
+                  subtotal: billing.subtotal,
+                  billDiscount: billing.billDiscAmt,
+                  depositApplied: billing.depDed,
+                  depositIds: depositIdsPayload,
+                  netTotal: billing.netTotal,
+                },
+              });
+              // 3. Apply new deposits
+              for (const d of depositIdsPayload) {
+                try { await applyDepositToSale(d.depositId, saleId, d.amount); }
+                catch (e) { console.warn('[TreatmentForm] apply deposit failed:', e); }
+              }
+            }
+          } catch (e) { console.warn('[TreatmentForm] edit deposit sync failed:', e); }
         }
 
         // Deduct purchased courses that were USED in this treatment (after assign)
@@ -3111,16 +3180,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
               )}
               {/* Deposit */}
-              <div className="flex justify-between items-center py-0.5">
-                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                  ยอดนัดจำ ({formatBaht(options?.depositBalance || 0)} บาท)
-                </span>
-                <div className="flex items-center gap-1">
-                  <input type="checkbox" checked={useDeposit} onChange={e => setUseDeposit(e.target.checked)} className="w-3 h-3 accent-purple-500" />
-                  <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
-                  <span className="text-xs">บาท</span>
+              {isBackend ? (
+                <div className="py-1">
+                  <DepositPicker
+                    customerId={customerId}
+                    value={selectedDeposits}
+                    onChange={setSelectedDeposits}
+                    maxAmount={Math.max(0, billing.afterDiscount - billing.insDed)}
+                    isDark={isDark}
+                    reloadKey={depositReloadKey}
+                  />
+                  {billing.depDed > 0 && (
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>หักมัดจำ</span>
+                      <span className="font-mono text-emerald-400">-{formatBaht(billing.depDed)} บาท</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="flex justify-between items-center py-0.5">
+                  <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                    ยอดนัดจำ ({formatBaht(options?.depositBalance || 0)} บาท)
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <input type="checkbox" checked={useDeposit} onChange={e => setUseDeposit(e.target.checked)} className="w-3 h-3 accent-purple-500" />
+                    <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
+                    <span className="text-xs">บาท</span>
+                  </div>
+                </div>
+              )}
               {/* Wallet */}
               {wallets.length > 0 && (
                 <div className="flex justify-between items-center py-0.5">

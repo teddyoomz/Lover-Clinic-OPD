@@ -189,6 +189,19 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             })}
             onDeleteTreatment={async (treatmentId) => {
               if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
+              // Phase 7: reverse any deposits that were applied via the linked sale
+              try {
+                const { getSaleByTreatmentId, reverseDepositUsage } = await import('../lib/backendClient.js');
+                const linkedSale = await getSaleByTreatmentId(treatmentId);
+                if (linkedSale && linkedSale.status !== 'cancelled') {
+                  const saleId = linkedSale.saleId || linkedSale.id;
+                  const deps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
+                  for (const d of deps) {
+                    try { await reverseDepositUsage(d.depositId, saleId); }
+                    catch (e) { console.warn('[BackendDashboard] reverse deposit on treatment delete failed:', e); }
+                  }
+                }
+              } catch (e) { console.warn('[BackendDashboard] linked sale lookup failed:', e); }
               await deleteBackendTreatment(treatmentId);
               await rebuildTreatmentSummary(viewingCustomer.proClinicId);
               const refreshed = await getCustomer(viewingCustomer.proClinicId);
