@@ -44,7 +44,10 @@ Run these in order (17 total):
 **Tier 6 — legal/compliance (7 invariants)**:
 18. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
 
-**Total: 182 invariants**. Do NOT write report to disk — chat output only.
+**Tier 7 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
+19. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
+
+**Total: 197 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 

@@ -1,5 +1,46 @@
 // ─── Report compute helpers — pure functions used across Phase 10 tabs ──────
 // All ops are non-mutating. Inputs treated as read-only.
+//
+// ⚠️ MONEY MATH: see /audit-reports-accuracy AR4–AR7. All currency arithmetic
+// in aggregators MUST end with `roundTHB(n)` to prevent floating-point drift
+// (0.1 + 0.2 = 0.30000000000000004 → bookkeeper sees discrepancy at month-end).
+// Convention: Math.round(n*100)/100 (half-up to match Excel's default visual).
+
+/** Round any number to 2-decimal THB. Half-up. NaN/non-finite → 0. */
+export function roundTHB(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(v * 100) / 100;
+}
+
+/**
+ * Reconciliation assertion (AR5): for an aggregator output `{ rows, totals }`,
+ * verify that for each numeric key on `totals`, the sum of `rows[i][key]`
+ * equals `totals[key]` within 0.01 THB tolerance.
+ *
+ * Returns array of { key, expected, actual, drift } for every mismatch.
+ * Empty array = clean reconciliation.
+ *
+ * Usage: tests should `expect(assertReconcile(out)).toEqual([])`.
+ * Aggregators may also call this in dev mode and console.warn on mismatch.
+ */
+export function assertReconcile(out, keys = null) {
+  const errors = [];
+  const rows = out?.rows || [];
+  const totals = out?.totals || {};
+  const checkKeys = Array.isArray(keys) && keys.length > 0
+    ? keys
+    : Object.keys(totals).filter(k => typeof totals[k] === 'number');
+  for (const key of checkKeys) {
+    const expected = roundTHB(totals[key]);
+    const actual = roundTHB(rows.reduce((s, r) => s + (Number(r?.[key]) || 0), 0));
+    const drift = roundTHB(actual - expected);
+    if (Math.abs(drift) > 0.005) {
+      errors.push({ key, expected, actual, drift });
+    }
+  }
+  return errors;
+}
 
 /**
  * Filter array by an ISO date field within [fromISO, toISO] inclusive.
