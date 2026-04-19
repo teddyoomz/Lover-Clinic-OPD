@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
+import { flushSync } from 'react-dom';
 import DepositPicker from './backend/DepositPicker.jsx';
 import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
@@ -122,17 +123,65 @@ const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputC
   );
 });
 
-// Memo'd. Callers pass `field` (string, stable) + `onFieldChange(field,val)`
-// (stable useCallback). Without this pattern each keystroke in ONE OPD
-// textarea re-renders ALL SEVEN siblings (symptoms / exam / diagnosis / ...)
-// + their "ใช้ข้อมูลครั้งก่อน" copy panels.
+// OPD textarea with local state — critical perf fix for TreatmentFormPage.
+//
+// Problem: the parent has 119 useState calls. Any `setState` re-renders the
+// whole 3200-LOC tree. With `value={opd.symptoms} onChange={setOpd}` every
+// keystroke fires a full parent reconcile, which feels laggy enough that
+// a single typed character appears ~100-200ms after the key press on
+// older tablets.
+//
+// Solution: the textarea owns its own local state while the user types.
+// Parent `opd` state is only updated in two places:
+//   1. `onBlur` — tab / click away commits via flushSync so the next event
+//      (e.g. a submit click) sees the latest value.
+//   2. 150ms debounce — backup in case the user submits without blurring
+//      (edge case; blur usually fires before click on the submit button).
+//
+// External changes to `value` (edit-mode restore, "ใช้ข้อมูลครั้งก่อน"
+// button) sync back into local via the `[value]` effect below so the UI
+// stays in sync with parent state.
 const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, value, onFieldChange, prevValue, isDark, inputCls, labelCls }) {
+  const [local, setLocal] = useState(value || '');
+  const committed = useRef(value || '');
   const [copied, setCopied] = useState(false);
   const hasPrev = !!(prevValue && prevValue.trim());
 
+  // Sync IN — external value changes (edit-mode restore, copy button).
+  useEffect(() => {
+    const v = value || '';
+    setLocal(v);
+    committed.current = v;
+  }, [value]);
+
+  const commit = useCallback((next) => {
+    if (next !== committed.current) {
+      committed.current = next;
+      onFieldChange(field, next);
+    }
+  }, [field, onFieldChange]);
+
+  // Debounce backup — 150ms after last keystroke. Only commits if still dirty.
+  useEffect(() => {
+    if (local === committed.current) return undefined;
+    const t = setTimeout(() => commit(local), 150);
+    return () => clearTimeout(t);
+  }, [local, commit]);
+
+  const handleBlur = () => {
+    // flushSync so a following submit-button click sees the new parent state.
+    // Native event ordering: blur fires before click; React 18 batching may
+    // defer our setOpd to render after click, so we force a sync flush.
+    if (local !== committed.current) {
+      flushSync(() => commit(local));
+    }
+  };
+
   const handleCopyAndFill = () => {
     navigator.clipboard.writeText(prevValue).catch(() => {});
+    setLocal(prevValue);
     onFieldChange(field, prevValue);
+    committed.current = prevValue;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -157,7 +206,13 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
           <p className={`text-[11px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{prevValue}</p>
         </div>
       )}
-      <textarea value={value} onChange={e => onFieldChange(field, e.target.value)} rows={rows} className={`${inputCls} resize-none`} />
+      <textarea
+        value={local}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={handleBlur}
+        rows={rows}
+        className={`${inputCls} resize-none`}
+      />
     </div>
   );
 });
