@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[HOOK after Edit/Write] (1) CODEBASE_MAP if backend files (2) npm test before commit (3) Backend files = commit only, NO vercel --prod (4) bug → audit skill invariant (5) Rule of 3 / crypto tokens / no uid leaks / no premature collection (6) 🆕 if edit is src/components/backend/** or BackendDashboard.jsx — grep for brokerClient import; only MasterDataTab may have it. /audit-backend-firestore-only for verification.\"}'"
+            "command": "echo '{\"additionalContext\": \"[HOOK after Edit/Write] 🔥 PRE-COMMIT CHECKLIST (after 2026-04-19 handleSyncCoupons runtime crash): (a) npm test -- --run ALL PASS (b) npm run build clean — catches Edit silent-fail that tests miss (c) area audit: backend file → /audit-backend-firestore-only; api/proclinic/*.js → grep-pair every `case x:` has `async function handleX`; new collection → /audit-anti-vibe-code (d) end-to-end trace for mutation paths (e) CODEBASE_MAP if backend files touched. [EDIT-TOOL TRAP] a parameter typo errors silently — every Edit success must be paired with a grep confirming the text landed. [RULE E] backend UI ห้าม import brokerClient ยกเว้น MasterDataTab. Backend = commit-only. vercel --prod รอ user สั่ง THIS TURN.\"}'"
           }
         ]
       }

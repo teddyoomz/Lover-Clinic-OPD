@@ -1,6 +1,28 @@
 <important if="committing, pushing, deploying, running tests, or editing src/ api/ files">
 ## Workflow — Commit · Push · Deploy · Test
 
+### 🔥 Pre-Commit Checklist — RUN BEFORE EVERY `git commit` (no exceptions)
+Added after 2026-04-19 `handleSyncCoupons is not defined` runtime crash — router cases referenced functions that were never actually defined because an Edit call errored silently and I didn't verify. Mechanical checks only; each takes seconds.
+
+1. **TEST**: `npm test -- --run` → ALL PASS (41+ known PERMISSION_DENIED integration fails are OK per tests/setup.js limitation). If you wrote new tests, verify they RAN and passed (not silently skipped).
+2. **VERIFY**: `npm run build` → clean. Catches syntax / import / unreachable-code errors the REPL doesn't.
+3. **AUDIT (area-specific)** — run the skill matching what you touched:
+   - `src/components/backend/**` or `BackendDashboard.jsx` → `/audit-backend-firestore-only` (BF1-BF7)
+   - `api/proclinic/*.js` → grep-pair verify: every `case '<action>':` has matching `async function handle<Action>` definition in same file
+   - new collection / rule → `/audit-anti-vibe-code` + `/audit-firestore-correctness`
+   - money/stock → `/audit-money-flow` / `/audit-stock-flow`
+   - forms → `/audit-frontend-forms`
+   - whole-stack pre-release → `/audit-all`
+4. **GREP-PAIR for API router files**: after editing `api/proclinic/*.js` with new `case '<x>':` handlers, run:
+   ```bash
+   grep "case '" api/proclinic/<file>.js  # list cases
+   grep "^async function handle" api/proclinic/<file>.js  # list defs
+   ```
+   Every case must have a matching def. If not → Edit failed silently (possibly via parameter typo). Reopen + fix.
+5. **END-TO-END on mutation paths**: if you added/changed a function that writes to Firestore or POSTs to ProClinic, trace at least ONE real caller to verify the shape it receives matches what you write. Grep the function name + look at call sites.
+
+Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after only reading the diff. `claude tracks the intent not the output` — Edit tool can silently fail on param typos. Treat every "Edit succeeded" as unverified until grep confirms both sides of a pair exist.
+
 ### Commit + Push
 1. `git add <files>` → `git commit` → `git push origin master` → **stop**
 2. **ทุก commit ต้อง push ทันที** — ห้ามค้าง local. User ทำงานหลายเครื่อง, unpushed = invisible work.

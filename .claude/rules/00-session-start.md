@@ -74,6 +74,11 @@ User types in Thai. I respond in Thai for chat, English for code/comments. User 
 - Collapsed 8 rule files → 4. Removed anti-examples. I forgot rule 05-backend because the condensed summary line didn't include "no broker import in non-MasterDataTab" anti-pattern.
 - Root cause: simplification without anti-examples. Fix: THIS file + expanded `03-stack.md` Backend section + audit skill.
 
+### V6 — 2026-04-19 — Edit silent-fail + skipped verification
+- Added two cases (`syncCoupons`, `syncVouchers`) to `api/proclinic/master.js` router, then tried to insert the corresponding `handleSyncCoupons` / `handleSyncVouchers` function bodies via Edit. The Edit call had a parameter typo (`old_str_DUMMY_NO`) and errored silently — function bodies never landed. I claimed "committed" and user hit `handleSyncCoupons is not defined` at runtime in production.
+- Root cause: I read the router case diff and assumed the handler insert "also succeeded" without grepping. `npm run build` would have caught the undefined reference.
+- Fix: rule 02 Pre-Commit Checklist now mandates `npm run build` + area audit + grep-pair verification. PostToolUse hook broadcasts this.
+
 ---
 
 ## 3. TOOLS — WHEN TO REACH FOR WHICH
@@ -113,13 +118,23 @@ User types in Thai. I respond in Thai for chat, English for code/comments. User 
 - [ ] Rule of 3: grep for existing helper before adding new one
 - [ ] Security: tokens use `crypto.getRandomValues`; no uid leaks; rules not `if true` for non-pc_*
 - [ ] Adversarial tests: ≥5 nasty inputs, not 1 happy-path
-- [ ] `npm test` full pass (integration PERMISSION_DENIED allowed per tests/setup.js limitation)
-- [ ] `npm run build` clean
+
+### 🔥 PRE-COMMIT VERIFICATION (mandatory, after 2026-04-19 handleSyncCoupons crash)
+- [ ] `npm test -- --run` → ALL PASS (41+ PERMISSION_DENIED is OK per setup.js)
+- [ ] `npm run build` → clean (catches Edit silent-fail that tests can't, e.g. a reference to an undefined function)
+- [ ] AREA AUDIT ran — match skill to files touched:
+  - `src/components/backend/**` → `/audit-backend-firestore-only`
+  - `api/proclinic/*.js` → grep-pair: every `case 'x'` has `async function handleX`
+  - new Firestore collection/rule → `/audit-anti-vibe-code` + `/audit-firestore-correctness`
+  - whole-stack release → `/audit-all`
+- [ ] END-TO-END mutation trace: if this change writes Firestore or POSTs ProClinic, grep a caller and verify shape matches
 - [ ] CODEBASE_MAP.md updated if files added/renamed/deleted
 - [ ] **Commit → push** immediately (never leave local)
-- [ ] `vercel --prod` ONLY if user explicitly says "deploy" this turn
+- [ ] `vercel --prod` ONLY if user explicitly says "deploy" THIS TURN
 - [ ] `firebase deploy --only firestore:rules` ONLY after probe-deploy-probe
 - [ ] End of session: new skill/rule/test committed alongside code (iron-clad D)
+
+**Edit-tool silent-fail trap**: a parameter typo on the Edit tool produces an `InputValidationError` that I can miss if the conversation is busy. Every "Edit succeeded" message must be paired with a grep that confirms the expected text is now in the file. For router/handler pairs, API actions, rule lists, etc — run the grep explicitly.
 
 ## 6. HOW TO RESPOND
 
