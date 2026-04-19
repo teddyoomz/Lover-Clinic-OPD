@@ -30,6 +30,39 @@ function fmtDateCE(iso) {
   return `${d}/${m}/${y}`;
 }
 
+// Mirror of AppointmentTab STATUSES — keep in sync if that source changes.
+const STATUS_LABELS = {
+  pending:   'รอยืนยัน',
+  confirmed: 'ยืนยันแล้ว',
+  done:      'เสร็จแล้ว',
+  cancelled: 'ยกเลิก',
+  completed: 'เสร็จแล้ว',    // legacy / ProClinic-synced alias
+  มาตามนัด:  'มาตามนัด',     // legacy / synced passthrough
+};
+const STATUS_STYLES = {
+  pending:   'bg-orange-900/30 text-orange-300 border-orange-700/50',
+  confirmed: 'bg-sky-900/30 text-sky-300 border-sky-700/50',
+  done:      'bg-emerald-900/30 text-emerald-300 border-emerald-700/50',
+  completed: 'bg-emerald-900/30 text-emerald-300 border-emerald-700/50',
+  cancelled: 'bg-red-900/30 text-red-300 border-red-700/50',
+};
+function renderStatusChip(raw) {
+  const key = (raw || '').trim();
+  const label = STATUS_LABELS[key] || key || '-';
+  const cls = STATUS_STYLES[key] || 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]';
+  return (
+    <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border whitespace-nowrap ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+const SALE_PAYMENT_LABELS = {
+  paid:   'ชำระแล้ว',
+  unpaid: 'ค้างชำระ',
+  split:  'ชำระบางส่วน',
+};
+
 export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
@@ -304,7 +337,7 @@ function AppointmentDrillTable({ rows, onOpenCustomer }) {
               <td className="px-3 py-2 text-[var(--tx-secondary)]">{r.advisorName}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.expectedSales > 0 ? fmtMoney(r.expectedSales) : '-'}</td>
               <td className={`px-3 py-2 text-right tabular-nums font-bold ${r.actualSales > 0 ? 'text-emerald-400' : 'text-[var(--tx-muted)]'}`}>{r.actualSales > 0 ? fmtMoney(r.actualSales) : '-'}</td>
-              <td className="px-3 py-2"><span className="text-[10px] text-[var(--tx-muted)]">{r.status}</span></td>
+              <td className="px-3 py-2">{renderStatusChip(r.status)}</td>
             </tr>
           ))}
         </tbody>
@@ -339,7 +372,16 @@ function UnexpectedSalesTable({ rows, onOpenCustomer }) {
               <td className="px-3 py-2 whitespace-nowrap tabular-nums">{fmtDateCE(r.saleDate)}</td>
               <td className="px-3 py-2 text-[var(--tx-secondary)]">{r.advisorName}</td>
               <td className="px-3 py-2 text-right tabular-nums font-bold text-emerald-400">{fmtMoney(r.actualSales)}</td>
-              <td className="px-3 py-2 text-[var(--tx-muted)] text-[10px]">{r.status}</td>
+              <td className="px-3 py-2 text-[10px] whitespace-nowrap">
+                <span className={`uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${
+                  r.status === 'paid' ? 'bg-emerald-900/30 text-emerald-300 border-emerald-700/50' :
+                  r.status === 'unpaid' ? 'bg-rose-900/30 text-rose-300 border-rose-700/50' :
+                  r.status === 'split' ? 'bg-amber-900/30 text-amber-300 border-amber-700/50' :
+                  'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]'
+                }`}>
+                  {SALE_PAYMENT_LABELS[r.status] || r.status || '-'}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
