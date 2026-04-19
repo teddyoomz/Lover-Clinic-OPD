@@ -29,6 +29,7 @@ import VoucherTab from '../components/backend/VoucherTab.jsx';
 import ReportsHomeTab from '../components/backend/reports/ReportsHomeTab.jsx';
 import SaleReportTab from '../components/backend/reports/SaleReportTab.jsx';
 import CustomerReportTab from '../components/backend/reports/CustomerReportTab.jsx';
+import AppointmentReportTab from '../components/backend/reports/AppointmentReportTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -309,6 +310,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <SaleReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-customer' ? (
           <CustomerReportTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-appointment' ? (
+          <AppointmentReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : null}
