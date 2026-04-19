@@ -5,12 +5,19 @@
 export function validateCoupon(form) {
   if (!form || typeof form !== 'object') return ['form', 'missing form'];
 
-  if (!String(form.coupon_name || '').trim()) return ['coupon_name', 'กรุณากรอกชื่อคูปอง'];
-  if (!String(form.coupon_code || '').trim()) return ['coupon_code', 'กรุณากรอกโค้ดส่วนลด'];
+  if (typeof form.coupon_name !== 'string' || !form.coupon_name.trim()) {
+    return ['coupon_name', 'กรุณากรอกชื่อคูปอง'];
+  }
+  if (typeof form.coupon_code !== 'string' || !form.coupon_code.trim()) {
+    return ['coupon_code', 'กรุณากรอกโค้ดส่วนลด'];
+  }
 
   const d = Number(form.discount);
   if (!Number.isFinite(d) || d < 0.01) return ['discount', 'ส่วนลดต้อง ≥ 0.01'];
-  if (form.discount_type === 'percent' && d > 100) {
+  // Apply percent upper bound when type is 'percent' OR unknown. Only skip
+  // the cap for explicit 'baht' to avoid silently allowing 200% discounts
+  // if the type string is typo'd or missing.
+  if (form.discount_type !== 'baht' && d > 100) {
     return ['discount', 'ส่วนลด % ต้อง ≤ 100'];
   }
 

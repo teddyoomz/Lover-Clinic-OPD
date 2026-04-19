@@ -6,10 +6,14 @@
 export function validatePromotion(form) {
   if (!form || typeof form !== 'object') return ['form', 'missing form'];
 
-  if (!String(form.promotion_name || '').trim()) {
+  // Type-safe check: rejects non-strings (null, undefined, object, function,
+  // number, boolean). Test P7/P8/P15/MF8/MF15 depended on this.
+  if (typeof form.promotion_name !== 'string' || !form.promotion_name.trim()) {
     return ['promotion_name', 'กรุณากรอกชื่อโปรโมชัน'];
   }
 
+  // sale_price: numeric coercion OK for string-digits like "123"; Number()
+  // of non-numerics returns NaN which is rejected below.
   const sp = Number(form.sale_price);
   if (!Number.isFinite(sp) || sp < 0) {
     return ['sale_price', 'ราคาขายต้อง ≥ 0'];

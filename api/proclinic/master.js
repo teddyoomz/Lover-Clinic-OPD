@@ -137,7 +137,8 @@ async function handleSyncWalletTypes(req, res) {
 // This is a best-effort scrape — shape is minimal (id, name, optional
 // discount/price/code). Manual CRUD in backend fills in the full schema.
 
-function extractCouponLikeRows(html, entity /* 'coupon' | 'voucher' */) {
+export function extractCouponLikeRows(html, entity /* 'coupon' | 'voucher' */) {
+  if (!html) return [];
   const $ = cheerio.load(html);
   const items = [];
   const seen = new Set();

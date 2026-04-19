@@ -5,7 +5,9 @@ export const VOUCHER_PLATFORMS = ['HDmall', 'GoWabi', 'SkinX', 'Shopee', 'Tiktok
 export function validateVoucher(form) {
   if (!form || typeof form !== 'object') return ['form', 'missing form'];
 
-  if (!String(form.voucher_name || '').trim()) return ['voucher_name', 'กรุณากรอกชื่อ Voucher'];
+  if (typeof form.voucher_name !== 'string' || !form.voucher_name.trim()) {
+    return ['voucher_name', 'กรุณากรอกชื่อ Voucher'];
+  }
 
   const sp = Number(form.sale_price);
   if (!Number.isFinite(sp) || sp < 0) return ['sale_price', 'ราคาขายต้อง ≥ 0'];
