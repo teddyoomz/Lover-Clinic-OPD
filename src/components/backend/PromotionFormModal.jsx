@@ -103,7 +103,18 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     if (!course) return;
     setForm(prev => {
       if (prev.courses.some(c => String(c.id) === String(course.id))) return prev;
-      return { ...prev, courses: [...prev.courses, { id: course.id, name: course.name, qty: 1, price: Number(course.price) || 0 }] };
+      // Preserve nested products[] from master_data/courses — downstream
+      // (SaleTab buy modal, stock deduction) expects `course.products`.
+      const nestedProducts = Array.isArray(course.products) ? course.products.map(p => ({
+        id: p.id, name: p.name || '', qty: Number(p.qty) || 1, unit: p.unit || '',
+      })) : [];
+      return { ...prev, courses: [...prev.courses, {
+        id: course.id,
+        name: course.name,
+        qty: 1,
+        price: Number(course.price) || 0,
+        products: nestedProducts,
+      }] };
     });
     setCourseQuery('');
   };

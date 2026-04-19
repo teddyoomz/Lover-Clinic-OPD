@@ -411,3 +411,10 @@ export function listItems(itemType, query) {
 // be_vouchers and must NOT POST to ProClinic. An earlier implementation
 // added broker wrappers here which violated the rule and was reverted
 // 2026-04-19.
+
+// ─── One-way SYNC from ProClinic for master_data/coupons + vouchers ────────
+// Only called by MasterDataTab (sanctioned sync point per rule E). Populates
+// master_data/{coupons,vouchers}/items; MasterDataTab's migrate button then
+// writes to be_coupons / be_vouchers.
+export function syncCoupons() { return apiFetch('master', { action: 'syncCoupons' }); }
+export function syncVouchers() { return apiFetch('master', { action: 'syncVouchers' }); }

@@ -9,7 +9,7 @@ import {
   Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
 import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem, migrateMasterPromotionsToBe, migrateMasterCouponsToBe, migrateMasterVouchersToBe } from '../../lib/backendClient.js';
-import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, listItems } from '../../lib/brokerClient.js';
+import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, syncCoupons, syncVouchers, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
 // Wrapper: listItems('promotion') → format like syncProducts response
@@ -25,6 +25,8 @@ const SYNC_TYPES = [
   { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
   { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
   { key: 'promotions', label: 'โปรโมชัน', fn: syncPromotions, icon: '🏷️', color: 'rose' },
+  { key: 'coupons', label: 'คูปอง', fn: syncCoupons, icon: '🎟️', color: 'rose' },
+  { key: 'vouchers', label: 'Voucher', fn: syncVouchers, icon: '🎁', color: 'rose' },
   // Phase 7 — syncable via /admin/api/wallet + /admin/api/membership, AND manual CRUD for backend-only items
   { key: 'wallet_types', label: 'กระเป๋าเงิน', fn: syncWalletTypes, icon: '💼', color: 'emerald' },
   { key: 'membership_types', label: 'บัตรสมาชิก', fn: syncMembershipTypes, icon: '🎫', color: 'purple' },

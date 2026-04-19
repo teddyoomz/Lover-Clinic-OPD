@@ -1,5 +1,5 @@
 // ─── Master Data Sync API ────────────────────────────────────────────────────
-// Actions: syncProducts, syncDoctors, syncStaff, syncCourses
+// Actions: syncProducts, syncDoctors, syncStaff, syncCourses, syncCoupons, syncVouchers
 // Scrapes ProClinic list pages and returns structured JSON for caching.
 
 import { createSession, getSession, handleCors } from './_lib/session.js';
@@ -8,6 +8,7 @@ import {
   extractListPagination
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
+import * as cheerio from 'cheerio';
 
 // ─── Parallel paginated scraping ────────────────────────────────────────────
 // Fetches page 1, detects max page, then fetches remaining pages in parallel.
@@ -234,6 +235,8 @@ export default async function handler(req, res) {
       case 'syncCourses':         return await handleSyncCourses(req, res);
       case 'syncWalletTypes':     return await handleSyncWalletTypes(req, res);
       case 'syncMembershipTypes': return await handleSyncMembershipTypes(req, res);
+      case 'syncCoupons':         return await handleSyncCoupons(req, res);
+      case 'syncVouchers':        return await handleSyncVouchers(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
