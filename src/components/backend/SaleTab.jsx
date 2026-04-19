@@ -15,7 +15,7 @@ import {
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
   analyzeSaleCancel, removeLinkedSaleCourses,
   deductStockForSale, reverseStockForSale, analyzeStockImpact,
-  findCouponByCode,
+  findCouponByCode, listPromotions,
 } from '../../lib/backendClient.js';
 
 // Single-branch scaffold — matches DEFAULT_BRANCH_ID in src/lib/stockUtils.js.
@@ -282,14 +282,30 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     if (buyItems[type]?.length > 0) return;
     setBuyLoading(true);
     try {
-      const all = await getAllMasterDataItems(type === 'product' ? 'products' : type === 'course' ? 'courses' : 'promotions');
       let items, cats;
-      if (type === 'product') {
+      if (type === 'promotion') {
+        // Read OUR promotions from be_promotions (not master_data) so the
+        // CRUD'd + migrated promotions are visible here. Filter to active
+        // ones only so "พักใช้งาน" don't show in buy modal.
+        const all = await listPromotions();
+        items = all
+          .filter(p => (p.status || 'active') === 'active')
+          .map(p => ({
+            id: p.promotionId || p.id,
+            name: p.promotion_name || '',
+            price: p.sale_price || 0,
+            category: p.category_name || '',
+            itemType: 'promotion',
+            courses: p.courses || [],
+            products: p.products || [],
+          }));
+      } else if (type === 'product') {
+        const all = await getAllMasterDataItems('products');
         items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, itemType: 'product' }));
-      } else if (type === 'course') {
-        items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, itemType: 'course', products: c.products }));
       } else {
-        items = all.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, itemType: 'promotion', courses: p.courses, products: p.products }));
+        // 'course'
+        const all = await getAllMasterDataItems('courses');
+        items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, itemType: 'course', products: c.products }));
       }
       cats = [...new Set(items.map(i => i.category).filter(Boolean))].sort();
       setBuyItems(prev => ({ ...prev, [type]: items }));

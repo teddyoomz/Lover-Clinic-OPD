@@ -8,7 +8,7 @@ import {
   Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info,
   Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
-import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem } from '../../lib/backendClient.js';
+import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem, migrateMasterPromotionsToBe, migrateMasterCouponsToBe, migrateMasterVouchersToBe } from '../../lib/backendClient.js';
 import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -169,6 +169,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   const [syncStatus, setSyncStatus] = useState({}); // { products: 'idle'|'loading'|'done'|'error' }
   const [syncError, setSyncError] = useState({});
 
+  // Migrate-to-be_* state (promotion/coupon/voucher one-time imports)
+  const [migrateStatus, setMigrateStatus] = useState({}); // { promotions: 'idle'|'loading'|'done'|'error' }
+  const [migrateResult, setMigrateResult] = useState({}); // { promotions: { imported, skipped, total } }
+
   // ── Load metadata for all types on mount ──
   useEffect(() => {
     const loadMeta = async () => {
@@ -230,6 +234,25 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       await handleSync(st.key, st.fn);
     }
   }, [handleSync]);
+
+  // One-time migrations: master_data/{type} → be_{entity} for Phase 9 CRUD tabs
+  const MIGRATE_TARGETS = [
+    { key: 'promotions', label: 'โปรโมชัน → be_promotions', icon: '🏷️', fn: migrateMasterPromotionsToBe },
+    { key: 'coupons',    label: 'คูปอง → be_coupons',       icon: '🎟️', fn: migrateMasterCouponsToBe },
+    { key: 'vouchers',   label: 'Voucher → be_vouchers',     icon: '🎁', fn: migrateMasterVouchersToBe },
+  ];
+
+  const handleMigrate = useCallback(async (target) => {
+    setMigrateStatus(prev => ({ ...prev, [target.key]: 'loading' }));
+    try {
+      const r = await target.fn();
+      setMigrateStatus(prev => ({ ...prev, [target.key]: r.total === 0 ? 'empty' : 'done' }));
+      setMigrateResult(prev => ({ ...prev, [target.key]: r }));
+    } catch (e) {
+      setMigrateStatus(prev => ({ ...prev, [target.key]: 'error' }));
+      setMigrateResult(prev => ({ ...prev, [target.key]: { error: e.message || 'นำเข้าไม่สำเร็จ' } }));
+    }
+  }, []);
 
   // ── Filter logic ──
   const filterOptions = useMemo(() => {
@@ -660,6 +683,49 @@ export default function MasterDataTab({ clinicSettings, theme }) {
             <AlertCircle size={12} /> <span className="font-bold">{key}:</span> {err}
           </div>
         ))}
+      </div>
+
+      {/* ═══ [A2] Import master_data → be_* (Phase 9 CRUD) ═══ */}
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(244,63,94,0.15)` }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-bold text-[var(--tx-heading)] uppercase tracking-wider flex items-center gap-2">
+            <Download size={14} className="text-rose-400" /> นำเข้า master_data → backend (be_*)
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {MIGRATE_TARGETS.map(t => {
+            const status = migrateStatus[t.key];
+            const result = migrateResult[t.key];
+            return (
+              <button key={t.key} onClick={() => handleMigrate(t)}
+                disabled={status === 'loading'}
+                className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-start gap-1.5 disabled:opacity-60 hover:shadow-lg active:scale-[0.98] ${
+                  isDark ? 'bg-rose-950/30 border-rose-800 text-rose-400 hover:bg-rose-900/40' : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                }`}>
+                <div className="flex items-center gap-1.5 w-full">
+                  <span className="text-base">{t.icon}</span>
+                  <span className="truncate flex-1 text-left">{t.label}</span>
+                  {status === 'loading' && <Loader2 size={12} className="animate-spin flex-shrink-0" />}
+                  {status === 'done' && <CheckCircle2 size={12} className="text-emerald-400 flex-shrink-0" />}
+                  {status === 'empty' && <Info size={12} className="text-[var(--tx-muted)] flex-shrink-0" />}
+                  {status === 'error' && <AlertCircle size={12} className="text-red-400 flex-shrink-0" />}
+                </div>
+                <div className="text-[11px] opacity-70">
+                  {status === 'idle' || !status ? 'กดเพื่อนำเข้า' :
+                   status === 'loading' ? 'กำลังนำเข้า…' :
+                   status === 'done' ? `นำเข้า ${result?.imported || 0} รายการ` :
+                   status === 'empty' ? 'ไม่มีข้อมูลใน master_data' :
+                   status === 'error' ? (result?.error || 'error') : ''}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+          <Info size={12} /> คัดลอก master_data/{'{type}'}/items/* → be_{'{entity}'}/* พร้อมคอร์ส/สินค้าในโปรโมชัน. รัน 1 ครั้งพอ — แก้ไขหลังนำเข้าที่แถบ โปรโมชัน/คูปอง/Voucher ใน backend
+        </p>
       </div>
 
       {/* ═══ [B] Sub-Tab Navigation ═══ */}

@@ -3688,6 +3688,96 @@ export async function deletePromotion(promotionId) {
   await deleteDoc(promotionDoc(id));
 }
 
+/**
+ * Bulk-import promotions from master_data/promotions/items/* into
+ * be_promotions/*. Preserves the source ProClinic id, copies name/price/
+ * category/courses/products into our full 27-field schema with sensible
+ * defaults for fields master_data doesn't carry (usage_type=clinic,
+ * status=active, promotion_type=fixed, etc). Idempotent — re-running
+ * overwrites the same doc ids. Returns { imported, skipped }.
+ *
+ * This is a one-way, one-time (or on-demand) migration. After running,
+ * be_promotions/* becomes the source of truth for OUR CRUD UI.
+ */
+export async function migrateMasterPromotionsToBe() {
+  const masterSnap = await getDocs(masterDataItemsCol('promotions'));
+  if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
+
+  const now = new Date().toISOString();
+  let imported = 0;
+  let skipped = 0;
+
+  for (const d of masterSnap.docs) {
+    const src = d.data();
+    const id = String(d.id || src.id || '');
+    if (!id) { skipped++; continue; }
+    if (!String(src.name || '').trim()) { skipped++; continue; }
+
+    // Check existing be_promotions doc to preserve its createdAt.
+    let existingCreatedAt = null;
+    try {
+      const existing = await getDoc(promotionDoc(id));
+      if (existing.exists()) existingCreatedAt = existing.data().createdAt || null;
+    } catch {}
+
+    const salePrice = Number(src.price) || 0;
+    const courses = Array.isArray(src.courses) ? src.courses.map(c => ({
+      id: c.id,
+      name: c.name || '',
+      qty: Number(c.qty) || 1,
+      price: Number(c.price) || 0,
+      // Preserve nested products inside each course (master_data shape from
+      // treatment.js listItems — each course carries its own products[]).
+      products: Array.isArray(c.products) ? c.products.map(p => ({
+        id: p.id, name: p.name || '', qty: Number(p.qty) || 1, unit: p.unit || '',
+      })) : [],
+    })) : [];
+    const products = Array.isArray(src.products) ? src.products.map(p => ({
+      id: p.id, name: p.name || '', qty: Number(p.qty) || 1,
+      price: Number(p.price) || 0, unit: p.unit || '',
+    })) : [];
+
+    const doc_ = {
+      promotionId: id,
+      proClinicSourceId: id,
+      usage_type: 'clinic',
+      promotion_name: String(src.name || ''),
+      receipt_promotion_name: '',
+      promotion_code: '',
+      category_name: String(src.category || ''),
+      procedure_type_name: '',
+      deposit_price: 0,
+      sale_price: salePrice,
+      is_vat_included: Number(src.isVatIncluded) === 1,
+      sale_price_incl_vat: salePrice,
+      promotion_type: 'fixed',
+      min_course_chosen_count: 1,
+      max_course_chosen_count: 1,
+      min_course_chosen_qty: 1,
+      max_course_chosen_qty: 1,
+      has_promotion_period: false,
+      promotion_period_start: '',
+      promotion_period_end: '',
+      description: '',
+      status: 'active',
+      enable_line_oa_display: false,
+      is_price_line_display: true,
+      button_label: '',
+      cover_image: '',
+      courses,
+      products,
+      createdAt: existingCreatedAt || now,
+      updatedAt: now,
+      migratedAt: now,
+      migratedFromMasterData: true,
+    };
+    await setDoc(promotionDoc(id), doc_, { merge: false });
+    imported++;
+  }
+
+  return { imported, skipped, total: masterSnap.size };
+}
+
 // ─── Coupon CRUD (Phase 9 Marketing) ───────────────────────────────────────
 
 const couponsCol = () => collection(db, ...basePath(), 'be_coupons');
@@ -3725,6 +3815,41 @@ export async function deleteCoupon(couponId) {
   const id = String(couponId || '');
   if (!id) throw new Error('couponId required');
   await deleteDoc(couponDoc(id));
+}
+
+/** Bulk-import from master_data/coupons → be_coupons. Same pattern as promotion. */
+export async function migrateMasterCouponsToBe() {
+  const masterSnap = await getDocs(masterDataItemsCol('coupons'));
+  if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
+  const now = new Date().toISOString();
+  let imported = 0, skipped = 0;
+  for (const d of masterSnap.docs) {
+    const src = d.data();
+    const id = String(d.id || src.id || '');
+    if (!id || !String(src.name || src.coupon_name || '').trim()) { skipped++; continue; }
+    let createdAt = null;
+    try { const ex = await getDoc(couponDoc(id)); if (ex.exists()) createdAt = ex.data().createdAt; } catch {}
+    await setDoc(couponDoc(id), {
+      couponId: id,
+      proClinicSourceId: id,
+      coupon_name: String(src.name || src.coupon_name || ''),
+      coupon_code: String(src.coupon_code || src.code || ''),
+      discount: Number(src.discount) || 0,
+      discount_type: src.discount_type === 'baht' ? 'baht' : 'percent',
+      max_qty: Number(src.max_qty) || 0,
+      is_limit_per_user: !!src.is_limit_per_user,
+      start_date: String(src.start_date || ''),
+      end_date: String(src.end_date || ''),
+      description: String(src.description || ''),
+      branch_ids: Array.isArray(src.branch_ids) ? src.branch_ids : [],
+      createdAt: createdAt || now,
+      updatedAt: now,
+      migratedAt: now,
+      migratedFromMasterData: true,
+    }, { merge: false });
+    imported++;
+  }
+  return { imported, skipped, total: masterSnap.size };
 }
 
 /** Look up a coupon by code (for SaleTab apply flow). Returns null if not found/expired. */
@@ -3775,4 +3900,39 @@ export async function deleteVoucher(voucherId) {
   const id = String(voucherId || '');
   if (!id) throw new Error('voucherId required');
   await deleteDoc(voucherDoc(id));
+}
+
+/** Bulk-import from master_data/vouchers → be_vouchers. Same pattern as promotion. */
+export async function migrateMasterVouchersToBe() {
+  const masterSnap = await getDocs(masterDataItemsCol('vouchers'));
+  if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
+  const now = new Date().toISOString();
+  let imported = 0, skipped = 0;
+  for (const d of masterSnap.docs) {
+    const src = d.data();
+    const id = String(d.id || src.id || '');
+    if (!id || !String(src.name || src.voucher_name || '').trim()) { skipped++; continue; }
+    let createdAt = null;
+    try { const ex = await getDoc(voucherDoc(id)); if (ex.exists()) createdAt = ex.data().createdAt; } catch {}
+    await setDoc(voucherDoc(id), {
+      voucherId: id,
+      proClinicSourceId: id,
+      usage_type: 'clinic',
+      voucher_name: String(src.name || src.voucher_name || ''),
+      sale_price: Number(src.price || src.sale_price) || 0,
+      commission_percent: Number(src.commission_percent) || 0,
+      platform: String(src.platform || ''),
+      has_period: !!(src.period_start || src.period_end || src.has_period),
+      period_start: String(src.period_start || ''),
+      period_end: String(src.period_end || ''),
+      description: String(src.description || ''),
+      status: src.status === 'suspended' ? 'suspended' : 'active',
+      createdAt: createdAt || now,
+      updatedAt: now,
+      migratedAt: now,
+      migratedFromMasterData: true,
+    }, { merge: false });
+    imported++;
+  }
+  return { imported, skipped, total: masterSnap.size };
 }

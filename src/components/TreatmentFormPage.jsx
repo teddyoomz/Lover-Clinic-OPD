@@ -1090,9 +1090,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     if (buyItems[type]?.length > 0) return;
     setBuyLoading(true);
     try {
-      // Backend mode: load from master_data (Firestore) — NEVER fetch ProClinic directly
+      // Backend mode: load from Firestore — NEVER fetch ProClinic directly.
+      // Promotions come from be_promotions (our CRUD); courses/products from master_data.
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const { getAllMasterDataItems, listPromotions } = await import('../lib/backendClient.js');
         let items = [];
         let categories = [];
         if (type === 'product') {
@@ -1104,8 +1105,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', itemType: 'course', courseType: c.courseType, products: c.products || [] }));
           categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
         } else if (type === 'promotion') {
-          const all = await getAllMasterDataItems('promotions');
-          items = all.map(p => ({ id: p.id, name: p.name, price: p.price, category: p.category, type: 'promotion', itemType: 'promotion', courses: p.courses || [], products: p.products || [] }));
+          const all = await listPromotions();
+          items = all
+            .filter(p => (p.status || 'active') === 'active')
+            .map(p => ({
+              id: p.promotionId || p.id,
+              name: p.promotion_name || '',
+              price: p.sale_price || 0,
+              category: p.category_name || '',
+              type: 'promotion',
+              itemType: 'promotion',
+              courses: p.courses || [],
+              products: p.products || [],
+            }));
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         }
         setBuyItems(prev => ({ ...prev, [type]: items }));
