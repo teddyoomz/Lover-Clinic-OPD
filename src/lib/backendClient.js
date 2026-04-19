@@ -3666,41 +3666,26 @@ export async function listPromotions() {
   return items;
 }
 
-export async function savePromotion(proClinicId, data) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function savePromotion(promotionId, data) {
+  const id = String(promotionId || '');
+  if (!id) throw new Error('promotionId required');
   if (!data || typeof data !== 'object') throw new Error('data object required');
   if (!String(data.promotion_name || '').trim()) throw new Error('promotion_name required');
   if (!(Number(data.sale_price) >= 0)) throw new Error('sale_price must be >= 0');
 
   const now = new Date().toISOString();
-  const fullDoc = {
+  await setDoc(promotionDoc(id), {
     ...data,
-    proClinicId: id,
+    promotionId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
-  };
-  await setDoc(promotionDoc(id), fullDoc, { merge: false });
-
-  const mirrorRef = doc(db, ...basePath(), 'master_data', 'promotions', 'items', id);
-  await setDoc(mirrorRef, {
-    id,
-    name: data.promotion_name || '',
-    price: Number(data.sale_price) || 0,
-    category: data.category_name || '',
-    itemType: 'promotion',
-    _mirroredAt: now,
-  }, { merge: true });
+  }, { merge: false });
 }
 
-export async function deletePromotion(proClinicId) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function deletePromotion(promotionId) {
+  const id = String(promotionId || '');
+  if (!id) throw new Error('promotionId required');
   await deleteDoc(promotionDoc(id));
-  try {
-    const mirrorRef = doc(db, ...basePath(), 'master_data', 'promotions', 'items', id);
-    await deleteDoc(mirrorRef);
-  } catch (_) { /* mirror delete non-fatal */ }
 }
 
 // ─── Coupon CRUD (Phase 9 Marketing) ───────────────────────────────────────
@@ -3720,26 +3705,25 @@ export async function listCoupons() {
   return items;
 }
 
-export async function saveCoupon(proClinicId, data) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function saveCoupon(couponId, data) {
+  const id = String(couponId || '');
+  if (!id) throw new Error('couponId required');
   if (!data || typeof data !== 'object') throw new Error('data object required');
   if (!String(data.coupon_name || '').trim()) throw new Error('coupon_name required');
   if (!String(data.coupon_code || '').trim()) throw new Error('coupon_code required');
 
   const now = new Date().toISOString();
-  const fullDoc = {
+  await setDoc(couponDoc(id), {
     ...data,
-    proClinicId: id,
+    couponId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
-  };
-  await setDoc(couponDoc(id), fullDoc, { merge: false });
+  }, { merge: false });
 }
 
-export async function deleteCoupon(proClinicId) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function deleteCoupon(couponId) {
+  const id = String(couponId || '');
+  if (!id) throw new Error('couponId required');
   await deleteDoc(couponDoc(id));
 }
 
@@ -3773,22 +3757,22 @@ export async function listVouchers() {
   return items;
 }
 
-export async function saveVoucher(proClinicId, data) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function saveVoucher(voucherId, data) {
+  const id = String(voucherId || '');
+  if (!id) throw new Error('voucherId required');
   if (!data || typeof data !== 'object') throw new Error('data object required');
   if (!String(data.voucher_name || '').trim()) throw new Error('voucher_name required');
   if (!(Number(data.sale_price) >= 0)) throw new Error('sale_price must be >= 0');
 
   const now = new Date().toISOString();
   await setDoc(voucherDoc(id), {
-    ...data, proClinicId: id,
+    ...data, voucherId: id,
     createdAt: data.createdAt || now, updatedAt: now,
   }, { merge: false });
 }
 
-export async function deleteVoucher(proClinicId) {
-  const id = String(proClinicId || '');
-  if (!id) throw new Error('proClinicId required');
+export async function deleteVoucher(voucherId) {
+  const id = String(voucherId || '');
+  if (!id) throw new Error('voucherId required');
   await deleteDoc(voucherDoc(id));
 }

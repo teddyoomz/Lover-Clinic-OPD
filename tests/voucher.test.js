@@ -1,7 +1,6 @@
-// ─── Voucher CRUD — adversarial unit tests (Phase 9) ────────────────────────
+// ─── Voucher validation — adversarial unit tests (Phase 9, Firestore-only) ─
 import { describe, it, expect } from 'vitest';
 import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../src/lib/voucherValidation.js';
-import { buildVoucherFormData } from '../api/proclinic/voucher.js';
 
 const base = () => ({
   ...emptyVoucherForm(),
@@ -41,36 +40,6 @@ describe('validateVoucher', () => {
   });
   it('VV10: commission 0 allowed (free voucher)', () => {
     expect(validateVoucher({ ...base(), commission_percent: 0 })).toBeNull();
-  });
-});
-
-describe('buildVoucherFormData', () => {
-  const CSRF = 'csrf-vv';
-  it('VF1: sets _token', () => expect(buildVoucherFormData(base(), CSRF).get('_token')).toBe(CSRF));
-  it('VF2: maps voucher_name + prices + platform', () => {
-    const fd = buildVoucherFormData(base(), CSRF);
-    expect(fd.get('voucher_name')).toBe('HDmall ส่วนลด 500');
-    expect(fd.get('sale_price')).toBe('1500');
-    expect(fd.get('commission_percent')).toBe('15');
-    expect(fd.get('platform')).toBe('HDmall');
-  });
-  it('VF3: status=suspended serializes', () => {
-    expect(buildVoucherFormData({ ...base(), status: 'suspended' }, CSRF).get('status')).toBe('suspended');
-  });
-  it('VF4: has_period=true → period set', () => {
-    const fd = buildVoucherFormData({ ...base(), has_period: true, period_start: '2026-01-01', period_end: '2026-12-31' }, CSRF);
-    expect(fd.get('has_period')).toBe('1');
-    expect(fd.get('period')).toBe('2026-01-01 to 2026-12-31');
-  });
-  it('VF5: has_period=false → period key absent', () => {
-    const fd = buildVoucherFormData({ ...base(), has_period: false, period_start: '2026-01-01', period_end: '2026-12-31' }, CSRF);
-    expect(fd.has('has_period')).toBe(false);
-    expect(fd.has('period')).toBe(false);
-  });
-  it('VF6: defaults merge preserves unknown ProClinic fields', () => {
-    const fd = buildVoucherFormData(base(), CSRF, { user_id: '42' });
-    expect(fd.get('user_id')).toBe('42');
-    expect(fd.get('voucher_name')).toBe('HDmall ส่วนลด 500');
   });
 });
 

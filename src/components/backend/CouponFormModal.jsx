@@ -1,11 +1,19 @@
-// ─── Coupon Form Modal — Phase 9 Marketing ──────────────────────────────────
+// ─── Coupon Form Modal — Phase 9 Marketing (Firestore-only) ────────────────
+// Per CLAUDE.md rule 03: Backend ใช้ Firestore เท่านั้น — no broker/ProClinic
+// coupling. Coupons are OUR own entities stored in be_coupons/{id}.
+
 import { useState, useEffect, useRef } from 'react';
 import { X, Save, Loader2, AlertCircle } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { createCoupon, updateCoupon } from '../../lib/brokerClient.js';
 import { saveCoupon } from '../../lib/backendClient.js';
 import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../../lib/couponValidation.js';
 import { hexToRgb } from '../../utils.js';
+
+function generateCouponId() {
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  return `COUP-${Date.now()}-${rand}`;
+}
 
 function scrollToField(name) {
   if (typeof document === 'undefined') return;
@@ -57,22 +65,15 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
       max_qty: Number(form.max_qty) || 0,
     };
     try {
-      const r = isEdit
-        ? await updateCoupon(coupon.proClinicId, payload)
-        : await createCoupon(payload);
-      if (!r?.success) throw new Error(r?.error || (isEdit ? 'อัพเดท ProClinic ล้มเหลว' : 'สร้างใน ProClinic ล้มเหลว'));
-      const proClinicId = isEdit ? coupon.proClinicId : r.proClinicId;
-      if (!proClinicId) throw new Error('ไม่ได้รับ proClinicId');
-
-      await saveCoupon(proClinicId, {
+      const id = isEdit ? (coupon.couponId || coupon.id) : generateCouponId();
+      await saveCoupon(id, {
         ...payload,
-        proClinicId,
+        couponId: id,
         createdAt: isEdit ? (coupon.createdAt || new Date().toISOString()) : new Date().toISOString(),
       });
       onSaved?.();
-    } catch (e) {
-      setError(e.message || 'บันทึกไม่สำเร็จ');
-    } finally { setSaving(false); }
+    } catch (e) { setError(e.message || 'บันทึกไม่สำเร็จ'); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -95,8 +96,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
             <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
               ชื่อคูปอง <span className="text-red-500">*</span>
             </label>
-            <input type="text" value={form.coupon_name}
-              onChange={(e) => update('coupon_name', e.target.value)}
+            <input type="text" value={form.coupon_name} onChange={(e) => update('coupon_name', e.target.value)}
               placeholder="กรอกชื่อคูปอง"
               className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
           </div>
@@ -118,11 +118,9 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
               </label>
               <div className="flex items-stretch gap-0">
                 <input type="number" min="0.01" step="0.01" value={form.discount}
-                  onChange={(e) => update('discount', e.target.value)}
-                  placeholder="0.00"
+                  onChange={(e) => update('discount', e.target.value)} placeholder="0.00"
                   className="flex-1 px-3 py-2 rounded-l-lg text-sm bg-[var(--bg-hover)] border border-r-0 border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
-                <select value={form.discount_type}
-                  onChange={(e) => update('discount_type', e.target.value)}
+                <select value={form.discount_type} onChange={(e) => update('discount_type', e.target.value)}
                   className="px-3 py-2 rounded-r-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] font-bold min-w-[70px]">
                   <option value="percent">%</option>
                   <option value="baht">บาท</option>
@@ -134,8 +132,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
                 จำนวนใช้งานได้ <span className="text-red-500">*</span>
               </label>
               <input type="number" min="0" step="1" value={form.max_qty}
-                onChange={(e) => update('max_qty', e.target.value)}
-                placeholder="0"
+                onChange={(e) => update('max_qty', e.target.value)} placeholder="0"
                 className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
             </div>
           </div>

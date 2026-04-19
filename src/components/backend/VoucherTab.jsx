@@ -1,8 +1,7 @@
 // ─── Voucher Tab — Phase 9 Marketing ────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Search, Edit2, Trash2, Gift, Calendar, Loader2 } from 'lucide-react';
-import { listVouchers, deleteVoucher as deleteVoucherDoc } from '../../lib/backendClient.js';
-import { deleteVoucherInProClinic } from '../../lib/brokerClient.js';
+import { listVouchers, deleteVoucher } from '../../lib/backendClient.js';
 import VoucherFormModal from './VoucherFormModal.jsx';
 import { VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { hexToRgb } from '../../utils.js';
@@ -39,12 +38,11 @@ export default function VoucherTab({ clinicSettings, theme }) {
   }, [items, query, filterPlatform]);
 
   const handleDelete = async (v) => {
-    if (!window.confirm(`ลบ "${v.voucher_name}" ?\n\nลบทั้งใน Firestore และ ProClinic — ย้อนไม่ได้`)) return;
-    setDeleting(v.proClinicId); setError('');
+    const id = v.voucherId || v.id;
+    if (!window.confirm(`ลบ "${v.voucher_name}" ?\n\nลบจาก Firestore — ย้อนไม่ได้`)) return;
+    setDeleting(id); setError('');
     try {
-      const r = await deleteVoucherInProClinic(v.proClinicId);
-      if (r?.success === false && !r.notFound) throw new Error(r.error || 'ProClinic ลบไม่สำเร็จ');
-      await deleteVoucherDoc(v.proClinicId);
+      await deleteVoucher(id);
       await reload();
     } catch (e) { setError(e.message || 'ลบไม่สำเร็จ'); }
     finally { setDeleting(null); }
@@ -93,9 +91,9 @@ export default function VoucherTab({ clinicSettings, theme }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(v => {
-            const busy = deleting === v.proClinicId;
+            const busy = deleting === (v.voucherId || v.id);
             return (
-              <div key={v.proClinicId} className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all">
+              <div key={(v.voucherId || v.id)} className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-bold text-[var(--tx-heading)] flex-1 truncate">{v.voucher_name || '(ไม่มีชื่อ)'}</h3>
                   {v.platform && (

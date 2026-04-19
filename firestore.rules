@@ -235,18 +235,9 @@ service cloud.firestore {
         allow read: if isClinicStaff();
         allow write: if true;
       }
-      match /pc_promotions/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_coupons/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_vouchers/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
+      // NOTE: Phase 9 marketing (promotion/coupon/voucher) is backend-only
+      // per rule 03 — no ProClinic sync needed. pc_promotions/coupons/vouchers
+      // collections intentionally removed.
 
       // ── Chat config ──
       match /chat_config/{docId} {

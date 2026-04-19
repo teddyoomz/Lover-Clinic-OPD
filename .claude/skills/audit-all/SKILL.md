@@ -37,13 +37,14 @@ Run these in order (17 total):
 14. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
 15. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
 
-**Tier 5 — hygiene / anti-vibe-code (12 invariants — session 2026-04-19)**:
+**Tier 5 — hygiene / anti-vibe-code (19 invariants — session 2026-04-19)**:
 16. `/audit-anti-vibe-code` (AV1–AV12) — Rule of 3 duplication, `Math.random` tokens, leaked uids in world-readable docs, open Firestore/Storage rules, orphan collections, over-normalized schema
+17. `/audit-backend-firestore-only` (BF1–BF7) — backend UI ห้าม import brokerClient หรือเรียก /api/proclinic/* ยกเว้น MasterDataTab (rule 03-stack.md). Phase 9 violation 2026-04-19.
 
 **Tier 6 — legal/compliance (7 invariants)**:
-17. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+18. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
 
-**Total: 175 invariants**. Do NOT write report to disk — chat output only.
+**Total: 182 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 

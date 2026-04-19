@@ -406,47 +406,8 @@ export function listItems(itemType, query) {
   return apiFetch('treatment', { action: 'listItems', itemType, query });
 }
 
-// ─── Promotion CRUD (Phase 9) ──────────────────────────────────────────────
-
-/** Create a promotion in ProClinic → { success, proClinicId } */
-export function createPromotion(data) {
-  return apiFetch('promotion', { action: 'create', data });
-}
-
-/** Update a promotion in ProClinic → { success } */
-export function updatePromotion(proClinicId, data) {
-  return apiFetch('promotion', { action: 'update', proClinicId, data });
-}
-
-/** Delete a promotion in ProClinic → { success } */
-export function deletePromotionInProClinic(proClinicId) {
-  return apiFetch('promotion', { action: 'delete', proClinicId });
-}
-
-// ─── Coupon CRUD (Phase 9) ─────────────────────────────────────────────────
-
-export function createCoupon(data) {
-  return apiFetch('coupon', { action: 'create', data });
-}
-
-export function updateCoupon(proClinicId, data) {
-  return apiFetch('coupon', { action: 'update', proClinicId, data });
-}
-
-export function deleteCouponInProClinic(proClinicId) {
-  return apiFetch('coupon', { action: 'delete', proClinicId });
-}
-
-// ─── Voucher CRUD (Phase 9) ────────────────────────────────────────────────
-
-export function createVoucher(data) {
-  return apiFetch('voucher', { action: 'create', data });
-}
-
-export function updateVoucher(proClinicId, data) {
-  return apiFetch('voucher', { action: 'update', proClinicId, data });
-}
-
-export function deleteVoucherInProClinic(proClinicId) {
-  return apiFetch('voucher', { action: 'delete', proClinicId });
-}
+// NOTE: Phase 9 marketing (promotion/coupon/voucher) is Firestore-only per
+// CLAUDE.md rule 03 — those entities live in be_promotions/be_coupons/
+// be_vouchers and must NOT POST to ProClinic. An earlier implementation
+// added broker wrappers here which violated the rule and was reverted
+// 2026-04-19.

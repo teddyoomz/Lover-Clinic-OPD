@@ -5,25 +5,25 @@
 
 ---
 
-## 🔥 Rules — อ่านก่อนทำอะไรเสมอ
+## 🔥 Rules — อ่านก่อนทำอะไรเสมอ (START HERE)
 
-กฎทั้งหมดอยู่ใน `.claude/rules/` (4 ไฟล์ — auto-loaded ตาม context):
+**⭐ MANDATORY FIRST READ**: [`.claude/rules/00-session-start.md`](.claude/rules/00-session-start.md) — character, expectations, all iron-clad rules, past violations, tool/skill decision tree, workflow checklist. Read every new session + after any compaction.
 
 | ไฟล์ | ใช้เมื่อ |
 |---|---|
-| [`01-iron-clad.md`](.claude/rules/01-iron-clad.md) | **ทุก turn** — A: bug-blast revert / B: Probe-Deploy-Probe firestore:rules / C: Anti-vibe-code / D: Continuous improvement |
+| [`00-session-start.md`](.claude/rules/00-session-start.md) | **ทุก session start** — single-source summary of everything |
+| [`01-iron-clad.md`](.claude/rules/01-iron-clad.md) | ทุก turn — A/B/C/D (+ E backend-firestore-only referenced from 00) |
 | [`02-workflow.md`](.claude/rules/02-workflow.md) | Commit / push / deploy / test |
 | [`03-stack.md`](.claude/rules/03-stack.md) | Firestore / Vite / React / Backend / ProClinic / Chat gotchas |
 | [`04-thai-ui.md`](.claude/rules/04-thai-ui.md) | UI / colors / dates / Thai culture |
 
-**Iron-clad ย่อ (4 ข้อ):**
+**Iron-clad ย่อ (6 ข้อ ห้ามลืม):**
 - **A.** ทำ X แล้ว Y พัง → ถอด X ทันที ไม่ต้องถาม
 - **B.** `firebase deploy --only firestore:rules` ต้อง probe webhook + sync writes ก่อน/หลัง — 403 = revert ทันที
 - **C.** Rule of 3 / crypto tokens / ห้าม uid ใน public doc / ห้าม `allow:if true` ยกเว้น pc_* + chat_conversations
 - **D.** ทุก bug → adversarial test + audit skill invariant + register ใน `audit-all`
-
-**Triangle Rule (feedback memory `feedback_triangulate_proclinic_plan_code.md`):**
-ก่อน/ระหว่างทุก feature → triangulate 3 แหล่งพร้อมกัน: (1) ProClinic ต้นฉบับ (ผ่าน `opd.js intel`) + (2) plan memory (`project_phase*_plan.md`) + (3) โค้ดเรา (Grep ที่มีอยู่). ขาดตัวใดตัวหนึ่ง = เสี่ยง drift.
+- **E. 🆕 Backend = Firestore ONLY** — `src/components/backend/**` + `BackendDashboard.jsx` ห้าม import `brokerClient` หรือใช้ `/api/proclinic/*` ยกเว้น `MasterDataTab.jsx` (sanctioned one-way sync). `be_*` = OUR data, ไม่ mirror เป็น `pc_*`. **ละเมิดใน Phase 9 2026-04-19 — anti-example ใน `00-session-start.md`**
+- **F. Triangle Rule** — ก่อน/ระหว่างทุก feature: (1) ProClinic จริงผ่าน `opd.js intel|click|fill|network` (2) plan memory (3) grep โค้ดเรา. ขาด 1 = drift. ห้ามเดา URL/method ถ้าไม่ได้ capture.
 
 ---
 

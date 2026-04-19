@@ -1,18 +1,15 @@
-// ─── Promotion Form Modal — Phase 9 Marketing (v9.1b) ──────────────────────
-// 27-field form mirroring ProClinic /admin/promotion. Flow on submit:
-// 1) brokerClient.createPromotion|updatePromotion → POST ProClinic
-// 2) backendClient.savePromotion → write be_promotions + master_data mirror
+// ─── Promotion Form Modal — Phase 9 Marketing ──────────────────────────────
+// Firestore-only CRUD (per CLAUDE.md rule 03: Backend ใช้ข้อมูลจาก Firestore
+// เท่านั้น ยกเว้น tab ข้อมูลพื้นฐาน). No broker / ProClinic coupling.
 //
-// v9.1b: cover_image URL (Firebase Storage) + courses/products sub-items
-// picker. ProClinic-side multipart push of image binary and course/product
-// sub-items still out of scope (need opd.js network capture to map the AJAX
-// endpoints used by ProClinic JS) — sub-items live in Firestore for now.
+// Sub-items (courses/products) are picked FROM master_data — which is the
+// sync mirror of ProClinic items written by MasterDataTab. This is reading,
+// not writing to ProClinic, so it respects the one-way rule.
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { X, Save, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
-import { createPromotion, updatePromotion } from '../../lib/brokerClient.js';
 import { savePromotion, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
 import { hexToRgb } from '../../utils.js';
@@ -31,6 +28,13 @@ const PROMOTION_TYPE_OPTIONS = [
   { v: 'fixed', t: 'ระบุคอร์สและจำนวนคอร์ส', d: 'คอร์ส/จำนวนคงที่' },
   { v: 'flexible', t: 'เลือกคอร์สตามจริง', d: 'ลูกค้าเลือกคอร์สได้' },
 ];
+
+/** Generate a new promotion id. Uses crypto per rule C2 (no Math.random on IDs). */
+function generatePromotionId() {
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  return `PROMO-${Date.now()}-${rand}`;
+}
 
 function scrollToField(name) {
   if (typeof document === 'undefined') return;
@@ -56,7 +60,9 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
   const [error, setError] = useState('');
   const closeBtnRef = useRef(null);
 
-  // Master data for course/product pickers
+  // Master data for course/product pickers — read-only consume of
+  // ProClinic-synced items (master_data/{type}/items/*). Populated by
+  // MasterDataTab's sync buttons.
   const [masterCourses, setMasterCourses] = useState([]);
   const [masterProducts, setMasterProducts] = useState([]);
   const [masterLoading, setMasterLoading] = useState(false);
@@ -78,7 +84,6 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
-  // ESC-to-close accessibility
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !saving) onClose?.(); };
     window.addEventListener('keydown', onKey);
@@ -87,7 +92,6 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // Auto-compute sale_price_incl_vat when VAT toggle or sale_price changes
   const computedVatPrice = useMemo(() => {
     const p = Number(form.sale_price) || 0;
     if (!form.is_vat_included) return p;
@@ -141,24 +145,16 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     return pool.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)).slice(0, 30);
   }, [masterProducts, productQuery, form.products]);
 
-  // Storage path for cover image — uses proClinicId in edit mode, temp id on create
-  const coverStoragePath = useMemo(() => {
-    const id = promotion?.proClinicId || `draft-${Date.now()}`;
-    return `uploads/be_promotions/${id}`;
-  }, [promotion?.proClinicId]);
+  const promotionIdForStorage = useMemo(() => {
+    return promotion?.promotionId || `draft-${Date.now()}`;
+  }, [promotion?.promotionId]);
 
   const handleSave = async () => {
     const err = validatePromotion(form);
-    if (err) {
-      setError(err[1]);
-      scrollToField(err[0]);
-      return;
-    }
+    if (err) { setError(err[1]); scrollToField(err[0]); return; }
 
-    setSaving(true);
-    setError('');
+    setSaving(true); setError('');
 
-    // Normalize numeric strings before sending
     const payload = {
       ...form,
       deposit_price: Number(form.deposit_price) || 0,
@@ -171,25 +167,12 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     };
 
     try {
-      // 1. Push to ProClinic
-      const r = isEdit
-        ? await updatePromotion(promotion.proClinicId, payload)
-        : await createPromotion(payload);
-
-      if (!r?.success) {
-        throw new Error(r?.error || (isEdit ? 'อัพเดท ProClinic ล้มเหลว' : 'สร้างใน ProClinic ล้มเหลว'));
-      }
-
-      const proClinicId = isEdit ? promotion.proClinicId : r.proClinicId;
-      if (!proClinicId) throw new Error('ไม่ได้รับ proClinicId กลับจาก ProClinic');
-
-      // 2. Mirror to Firestore be_promotions (+ master_data/promotions/items)
-      await savePromotion(proClinicId, {
+      const id = isEdit ? (promotion.promotionId || promotion.id) : generatePromotionId();
+      await savePromotion(id, {
         ...payload,
-        proClinicId,
+        promotionId: id,
         createdAt: isEdit ? (promotion.createdAt || new Date().toISOString()) : new Date().toISOString(),
       });
-
       onSaved?.();
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');
@@ -204,7 +187,6 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
       <div className="w-full max-w-3xl max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)]"
         style={{ boxShadow: `0 0 40px rgba(${acRgb},0.2)` }}>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--bd)]">
           <h2 className="text-lg font-black tracking-wider uppercase" style={{ color: ac }}>
             {isEdit ? 'แก้ไขโปรโมชัน' : 'สร้างโปรโมชันใหม่'}
@@ -215,10 +197,9 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
-          {/* Section: ข้อมูลพื้นฐาน */}
+          {/* ข้อมูลพื้นฐาน */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">ข้อมูลพื้นฐาน</h3>
 
@@ -243,8 +224,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
               <input type="text" value={form.promotion_name}
                 onChange={(e) => update('promotion_name', e.target.value)}
                 placeholder="กรอกชื่อโปรโมชัน"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-              />
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
             </div>
 
             <div data-field="receipt_promotion_name">
@@ -252,8 +232,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
               <input type="text" value={form.receipt_promotion_name}
                 onChange={(e) => update('receipt_promotion_name', e.target.value)}
                 placeholder="เว้นว่าง = ใช้ชื่อด้านบน"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-              />
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -262,29 +241,26 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                 <input type="text" value={form.promotion_code}
                   onChange={(e) => update('promotion_code', e.target.value)}
                   placeholder="กรอกรหัส"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
               </div>
               <div data-field="category_name">
                 <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">หมวดหมู่</label>
                 <input type="text" value={form.category_name}
                   onChange={(e) => update('category_name', e.target.value)}
                   placeholder="เช่น CHA01, picosure"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
               </div>
               <div data-field="procedure_type_name">
                 <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">ประเภทหัตถการ</label>
                 <input type="text" value={form.procedure_type_name}
                   onChange={(e) => update('procedure_type_name', e.target.value)}
                   placeholder="เช่น laser"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
               </div>
             </div>
           </section>
 
-          {/* Section: ราคา */}
+          {/* ราคา */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">ราคา</h3>
 
@@ -294,8 +270,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                 <input type="number" min="0" value={form.deposit_price}
                   onChange={(e) => update('deposit_price', e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
               </div>
               <div data-field="sale_price">
                 <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
@@ -304,17 +279,14 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                 <input type="number" min="0" value={form.sale_price}
                   onChange={(e) => update('sale_price', e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                />
+                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <input id="vat" type="checkbox" checked={form.is_vat_included}
                 onChange={(e) => update('is_vat_included', e.target.checked)} />
-              <label htmlFor="vat" className="text-sm text-[var(--tx-primary)] cursor-pointer">
-                มีภาษีมูลค่าเพิ่ม (VAT 7%)
-              </label>
+              <label htmlFor="vat" className="text-sm cursor-pointer">มีภาษีมูลค่าเพิ่ม (VAT 7%)</label>
               {form.is_vat_included && (
                 <span className="text-xs text-[var(--tx-muted)] ml-auto">
                   Inc. VAT: <span className="font-mono font-bold text-[var(--tx-primary)]">{computedVatPrice.toLocaleString('th-TH')}</span> ฿
@@ -323,7 +295,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
             </div>
           </section>
 
-          {/* Section: โหมด */}
+          {/* โหมด */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">โหมดโปรโมชัน</h3>
 
@@ -354,15 +326,13 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                     <label className="block text-[11px] font-semibold text-[var(--tx-muted)] mb-1">จำนวนคอร์ส ต่ำสุด</label>
                     <input type="number" min="1" value={form.min_course_chosen_count}
                       onChange={(e) => update('min_course_chosen_count', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
+                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
                   </div>
                   <div data-field="max_course_chosen_count">
                     <label className="block text-[11px] font-semibold text-[var(--tx-muted)] mb-1">จำนวนคอร์ส สูงสุด</label>
                     <input type="number" min="1" value={form.max_course_chosen_count}
                       onChange={(e) => update('max_course_chosen_count', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
+                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -370,22 +340,20 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                     <label className="block text-[11px] font-semibold text-[var(--tx-muted)] mb-1">จำนวนครั้ง ต่ำสุด</label>
                     <input type="number" min="1" value={form.min_course_chosen_qty}
                       onChange={(e) => update('min_course_chosen_qty', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
+                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
                   </div>
                   <div data-field="max_course_chosen_qty">
                     <label className="block text-[11px] font-semibold text-[var(--tx-muted)] mb-1">จำนวนครั้ง สูงสุด</label>
                     <input type="number" min="1" value={form.max_course_chosen_qty}
                       onChange={(e) => update('max_course_chosen_qty', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
+                      className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
                   </div>
                 </div>
               </div>
             )}
           </section>
 
-          {/* Section: ช่วงเวลา */}
+          {/* ช่วงเวลา */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">ช่วงเวลา</h3>
 
@@ -414,7 +382,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
             )}
           </section>
 
-          {/* Section: การแสดงผล */}
+          {/* การแสดงผล */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">การแสดงผล</h3>
 
@@ -423,8 +391,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
               <textarea value={form.description}
                 onChange={(e) => update('description', e.target.value)}
                 placeholder="กรอกรายละเอียดโปรโมชัน" rows={3}
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)] resize-y"
-              />
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)] resize-y" />
             </div>
 
             <div data-field="status">
@@ -469,18 +436,17 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                   <input type="text" value={form.button_label}
                     onChange={(e) => update('button_label', e.target.value)}
                     placeholder="เช่น จองเลย / สนใจ"
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  />
+                    className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
                 </div>
               </div>
             )}
           </section>
 
-          {/* Section: รูปปก */}
+          {/* รูปปก */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">รูปปก</h3>
             <FileUploadField
-              storagePath={coverStoragePath}
+              storagePath={`uploads/be_promotions/${promotionIdForStorage}`}
               fieldName="cover"
               value={form.cover_image || ''}
               onUploadComplete={({ url }) => update('cover_image', url)}
@@ -490,12 +456,9 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
               maxSizeMB={5}
               label={null}
             />
-            <p className="text-[11px] text-[var(--tx-muted)] leading-relaxed">
-              รูปเก็บใน Firebase Storage — ProClinic เดิมยังคงใช้รูปที่อัพโหลดจากฝั่งโน้นอยู่ (binary multipart push รอเฟสถัดไป)
-            </p>
           </section>
 
-          {/* Section: คอร์สในโปรโมชัน */}
+          {/* คอร์สในโปรโมชัน */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
               คอร์สในโปรโมชัน <span className="text-[var(--tx-muted)] font-normal normal-case">({form.courses.length})</span>
@@ -539,12 +502,12 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                 </div>
               )}
               {!masterLoading && masterCourses.length === 0 && (
-                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีคอร์สใน master_data/courses — sync จากหน้า "ข้อมูลพื้นฐาน" ก่อน</p>
+                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีคอร์สใน master_data/courses — ไปหน้า "ข้อมูลพื้นฐาน" → sync คอร์สก่อน</p>
               )}
             </div>
           </section>
 
-          {/* Section: สินค้าในโปรโมชัน */}
+          {/* สินค้าในโปรโมชัน */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
               สินค้าในโปรโมชัน <span className="text-[var(--tx-muted)] font-normal normal-case">({form.products.length})</span>
@@ -588,12 +551,11 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
                 </div>
               )}
               {!masterLoading && masterProducts.length === 0 && (
-                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีสินค้าใน master_data/products — sync จากหน้า "ข้อมูลพื้นฐาน" ก่อน</p>
+                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีสินค้าใน master_data/products — ไปหน้า "ข้อมูลพื้นฐาน" → sync สินค้าก่อน</p>
               )}
             </div>
           </section>
 
-          {/* Error banner */}
           {error && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/30 border border-red-700/50 text-sm text-red-300">
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
@@ -602,18 +564,14 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[var(--bd)]">
           <button onClick={() => !saving && onClose?.()} disabled={saving}
-            className="px-4 py-2 rounded-lg text-sm font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-[var(--tx-muted)] transition-all disabled:opacity-50">
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-[var(--bg-hover)] border border-[var(--bd)] disabled:opacity-50">
             ยกเลิก
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-2 transition-all disabled:opacity-50"
-            style={{
-              background: `linear-gradient(135deg, rgba(${acRgb},0.95), rgba(${acRgb},0.75))`,
-              boxShadow: `0 0 15px rgba(${acRgb},0.4)`,
-            }}>
+            className="px-5 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-2 disabled:opacity-50"
+            style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.95), rgba(${acRgb},0.75))`, boxShadow: `0 0 15px rgba(${acRgb},0.4)` }}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'บันทึก' : 'สร้าง'}
           </button>

@@ -1,34 +1,10 @@
-// ─── Promotion CRUD — adversarial unit tests (Phase 9) ──────────────────────
-// Focuses on pure functions so the suite runs at master without Firebase
-// signin (integration tests would hit PERMISSION_DENIED — see rules/02).
-//
-// Invariants covered:
-//  V1  empty promotion_name → rejected
-//  V2  whitespace-only promotion_name → rejected
-//  V3  sale_price NaN / non-numeric → rejected
-//  V4  sale_price negative → rejected
-//  V5  flexible mode, min_course_chosen_count > max_course_chosen_count → rejected
-//  V6  flexible mode, min_course_chosen_qty > max_course_chosen_qty → rejected
-//  V7  fixed mode ignores course-count bounds (they're irrelevant)
-//  V8  has_promotion_period with missing start → rejected
-//  V9  has_promotion_period with missing end → rejected
-//  V10 has_promotion_period with end before start → rejected
-//  V11 valid minimal promotion (fixed mode, no period) → passes
-//  V12 valid flexible + valid period → passes
-//  F1  buildPromotionFormData sets _token from csrf
-//  F2  buildPromotionFormData sets promotion_name + sale_price from data
-//  F3  is_vat_included=true → encoded as "1"
-//  F4  is_vat_included=false → key omitted (Laravel convention)
-//  F5  promotion_period_start/end → promotion_period = "YYYY-MM-DD to YYYY-MM-DD"
-//  F6  has_promotion_period=false → promotion_period key deleted
-//  F7  defaults merge preserves unknown ProClinic-side fields (e.g. user_id)
-//  F8  promotion_type = "flexible" serializes min/max bounds
-//  F9  status = "suspended" serializes correctly
-//  F10 emptyPromotionForm contains all 23 expected keys with sane defaults
+// ─── Promotion validation — adversarial unit tests (Phase 9) ───────────────
+// Firestore-only entity per rule 03. No ProClinic POST anymore — so the
+// buildPromotionFormData / HTTP tests were removed with the API deletion.
+// Invariants here are for the pure validator + emptyForm shape.
 
 import { describe, it, expect } from 'vitest';
 import { validatePromotion, emptyPromotionForm } from '../src/lib/promotionValidation.js';
-import { buildPromotionFormData } from '../api/proclinic/promotion.js';
 
 describe('validatePromotion — V1…V12', () => {
   const base = () => ({ ...emptyPromotionForm(), promotion_name: 'ชื่อ', sale_price: 100 });
@@ -72,7 +48,6 @@ describe('validatePromotion — V1…V12', () => {
   });
 
   it('V7: fixed mode skips course-count inverted-bound check', () => {
-    // Same inverted bounds as V5 but fixed mode should let it pass.
     const r = validatePromotion({
       ...base(), promotion_type: 'fixed',
       min_course_chosen_count: 5, max_course_chosen_count: 2,
@@ -138,141 +113,6 @@ describe('validatePromotion — V1…V12', () => {
   });
 });
 
-describe('buildPromotionFormData — F1…F10', () => {
-  const baseData = () => ({ ...emptyPromotionForm(), promotion_name: 'โปรฯ ทดสอบ', sale_price: 1500 });
-  const CSRF = 'abc123-csrf-token';
-
-  it('F1: sets _token from csrf argument', () => {
-    const fd = buildPromotionFormData(baseData(), CSRF);
-    expect(fd.get('_token')).toBe(CSRF);
-  });
-
-  it('F2: maps promotion_name + sale_price', () => {
-    const fd = buildPromotionFormData(baseData(), CSRF);
-    expect(fd.get('promotion_name')).toBe('โปรฯ ทดสอบ');
-    expect(fd.get('sale_price')).toBe('1500');
-  });
-
-  it('F3: is_vat_included=true → encoded as "1"', () => {
-    const fd = buildPromotionFormData({ ...baseData(), is_vat_included: true }, CSRF);
-    expect(fd.get('is_vat_included')).toBe('1');
-  });
-
-  it('F4: is_vat_included=false → key omitted (Laravel checkbox convention)', () => {
-    const fd = buildPromotionFormData({ ...baseData(), is_vat_included: false }, CSRF);
-    expect(fd.has('is_vat_included')).toBe(false);
-  });
-
-  it('F5: period set → promotion_period = "YYYY-MM-DD to YYYY-MM-DD"', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      has_promotion_period: true,
-      promotion_period_start: '2026-04-01',
-      promotion_period_end: '2026-04-30',
-    }, CSRF);
-    expect(fd.get('has_promotion_period')).toBe('1');
-    expect(fd.get('promotion_period')).toBe('2026-04-01 to 2026-04-30');
-  });
-
-  it('F6: has_promotion_period=false → promotion_period key absent', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      has_promotion_period: false,
-      promotion_period_start: '2026-04-01',  // even with start set, we should still delete
-      promotion_period_end: '2026-04-30',
-    }, CSRF);
-    expect(fd.has('has_promotion_period')).toBe(false);
-    expect(fd.has('promotion_period')).toBe(false);
-  });
-
-  it('F7: defaults merge preserves unknown ProClinic-side fields', () => {
-    const defaults = { user_id: '42', branch_id: '28', weirdLaravelField: 'keep_me' };
-    const fd = buildPromotionFormData(baseData(), CSRF, defaults);
-    expect(fd.get('user_id')).toBe('42');
-    expect(fd.get('branch_id')).toBe('28');
-    expect(fd.get('weirdLaravelField')).toBe('keep_me');
-    // But our explicit data must still win:
-    expect(fd.get('promotion_name')).toBe('โปรฯ ทดสอบ');
-    expect(fd.get('_token')).toBe(CSRF);
-  });
-
-  it('F8: flexible mode serializes min/max bounds', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      promotion_type: 'flexible',
-      min_course_chosen_count: 2, max_course_chosen_count: 8,
-      min_course_chosen_qty: 3, max_course_chosen_qty: 12,
-    }, CSRF);
-    expect(fd.get('promotion_type')).toBe('flexible');
-    expect(fd.get('min_course_chosen_count')).toBe('2');
-    expect(fd.get('max_course_chosen_count')).toBe('8');
-    expect(fd.get('min_course_chosen_qty')).toBe('3');
-    expect(fd.get('max_course_chosen_qty')).toBe('12');
-  });
-
-  it('F9: status=suspended serializes correctly', () => {
-    const fd = buildPromotionFormData({ ...baseData(), status: 'suspended' }, CSRF);
-    expect(fd.get('status')).toBe('suspended');
-  });
-
-  it('F10: is_price_line_display=false → "0" (not omitted — radio must be explicit)', () => {
-    const fd = buildPromotionFormData({ ...baseData(), is_price_line_display: false }, CSRF);
-    expect(fd.get('is_price_line_display')).toBe('0');
-  });
-
-  // Sub-items: confirmed via `opd.js click "เพิ่มข้อมูล"` on 2026-04-19 —
-  // modal uses `temp_course_id[]` + `temp_product_id[]` multi-checkboxes.
-  it('F11: courses → temp_course_id[] array entries', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      courses: [{ id: 1, name: 'C1', qty: 3 }, { id: 7, name: 'C7', qty: 1 }],
-    }, CSRF);
-    expect(fd.getAll('temp_course_id[]')).toEqual(['1', '7']);
-  });
-
-  it('F12: products → temp_product_id[] array entries', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      products: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
-    }, CSRF);
-    expect(fd.getAll('temp_product_id[]')).toEqual(['p1', 'p2']);
-  });
-
-  it('F13: empty courses/products → no array entries (does not clobber with blanks)', () => {
-    const fd = buildPromotionFormData({ ...baseData(), courses: [], products: [] }, CSRF);
-    expect(fd.getAll('temp_course_id[]')).toEqual([]);
-    expect(fd.getAll('temp_product_id[]')).toEqual([]);
-  });
-
-  it('F14: defaults with existing temp_course_id[] get cleared before our append', () => {
-    // Simulate ProClinic list-page HTML that had residual temp_course_id[]
-    // from another promotion's modal state — ensure we don't mix them.
-    const defaults = { 'temp_course_id[]': '999' };
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      courses: [{ id: 5, name: 'ours' }],
-    }, CSRF, defaults);
-    expect(fd.getAll('temp_course_id[]')).toEqual(['5']);
-  });
-
-  it('F15: course id coerced to string', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      courses: [{ id: 42 }],
-    }, CSRF);
-    // URLSearchParams stores strings; getAll returns string
-    expect(fd.getAll('temp_course_id[]')).toEqual(['42']);
-  });
-
-  it('F16: null id in courses is skipped (defensive)', () => {
-    const fd = buildPromotionFormData({
-      ...baseData(),
-      courses: [{ id: 1 }, { id: null }, { id: 2 }, {}],
-    }, CSRF);
-    expect(fd.getAll('temp_course_id[]')).toEqual(['1', '2']);
-  });
-});
-
 describe('emptyPromotionForm — baseline integrity', () => {
   it('returns all 23 expected keys with sane defaults', () => {
     const f = emptyPromotionForm();
@@ -293,11 +133,5 @@ describe('emptyPromotionForm — baseline integrity', () => {
     expect(f.has_promotion_period).toBe(false);
     expect(f.is_vat_included).toBe(false);
     expect(f.is_price_line_display).toBe(true);
-  });
-
-  it('spreading over empty form preserves original defaults when override is empty', () => {
-    const merged = { ...emptyPromotionForm(), ...{} };
-    expect(merged.promotion_type).toBe('fixed');
-    expect(merged.status).toBe('active');
   });
 });

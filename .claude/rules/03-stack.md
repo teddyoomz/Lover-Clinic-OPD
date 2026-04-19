@@ -23,12 +23,33 @@
 5. **Payment status map**: `'2'` → `'paid'`, `'4'` → `'split'`, `'0'` → `'unpaid'`
 6. **Buy modal**: max 50 items + "โหลดเพิ่ม" (performance)
 
-### Backend Dashboard (กฎเหล็ก)
-1. **Backend ใช้ข้อมูลจาก Firestore เท่านั้น** — ห้าม fetch ProClinic ขณะใช้งาน
-2. Sync ทุกอย่างผ่านหน้า **ข้อมูลพื้นฐาน** หน้าเดียว (ปุ่ม sync ใหม่ → หน้านี้)
-3. **Flow ทางเดียว**: ProClinic → sync/clone → Firestore (`be_*`, `master_data/*`) → Backend UI
-4. ข้อมูลไม่มี → ไป sync มาเก็บก่อน → แล้วค่อยใช้จากที่ดูดมา
-5. **Fully replicate ProClinic** — ห้าม simplified version
+### Backend Dashboard (🚨 กฎเหล็ก — ละเมิดใน Phase 9 ครั้งก่อน)
+1. **Backend ใช้ข้อมูลจาก Firestore เท่านั้น** — ห้าม fetch/POST ProClinic ขณะใช้งาน
+2. **ยกเว้นเฉพาะ** tab "ข้อมูลพื้นฐาน" (`MasterDataTab`) ที่เรียก `brokerClient` เพื่อ sync one-way **เข้า** Firestore (`master_data/*`). ทุก tab อื่น **ห้าม import brokerClient / api/proclinic/***
+3. **Flow ทางเดียว**: ProClinic → MasterDataTab sync → Firestore (`master_data/*`) → Backend UI reads from Firestore
+4. `be_*` collections (be_customers, be_sales, be_promotions, be_coupons, be_vouchers, …) = **OUR OWN** data — stored in Firestore, created in our UI, NEVER pushed to ProClinic
+5. ข้อมูลไม่มีใน master_data → ไป MasterDataTab sync ก่อน → แล้วค่อยใช้
+6. **Fully replicate ProClinic UI** (look + fields) แต่ backend storage = **OURS**
+
+#### 🚨 ANTI-EXAMPLE — Phase 9 violation 2026-04-19
+**What I did wrong** (commits `fc3400e`, `0fd1643`, `c31c817`):
+- Created `api/proclinic/promotion.js` + `coupon.js` + `voucher.js` to POST ProClinic
+- Imported `brokerClient.createPromotion/updatePromotion/deletePromotionInProClinic` in PromotionFormModal/CouponFormModal/VoucherFormModal
+- Added `pc_promotions`, `pc_coupons`, `pc_vouchers` Firestore rules
+
+**Why this violated rule**: promotion/coupon/voucher are OUR backend entities (like be_sales), not synced-from-ProClinic data (like master_data/*). They must stay Firestore-only.
+
+**Fix** (commit post-2026-04-19): Removed all three API files, stripped broker wrappers, dropped `pc_*` rules, ID generation moved to client via `crypto.getRandomValues` → `PROMO-{ts}-{hex}` / `COUP-...` / `VOUC-...`. Sub-items (courses/products) are picked **from** `master_data/*` (read = OK) and stored in `be_*.courses[]` / `.products[]` arrays.
+
+#### Red flags to grep before commit
+```
+# Any backend UI importing brokerClient = violation (except MasterDataTab + treatment auto-sync).
+grep -rn "from '../../lib/brokerClient" src/components/backend/ | grep -v MasterDataTab
+
+# New api/proclinic/* files that don't match existing customer/appointment/treatment/etc patterns
+ls api/proclinic/ | grep -Ev "^(customer|deposit|connection|appointment|courses|treatment|master|_lib)"
+```
+Anything that greps non-empty → review + remove the violation.
 
 ### ProClinic integration
 1. **Credentials**: Vercel env vars (`PROCLINIC_ORIGIN`, `PROCLINIC_EMAIL`, `PROCLINIC_PASSWORD`) — ห้ามอยู่ใน source

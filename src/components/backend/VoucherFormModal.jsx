@@ -1,11 +1,18 @@
-// ─── Voucher Form Modal — Phase 9 Marketing ─────────────────────────────────
+// ─── Voucher Form Modal — Phase 9 Marketing (Firestore-only) ───────────────
+// Per CLAUDE.md rule 03: Backend ใช้ Firestore เท่านั้น.
+
 import { useState, useEffect, useRef } from 'react';
 import { X, Save, Loader2, AlertCircle } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { createVoucher, updateVoucher } from '../../lib/brokerClient.js';
 import { saveVoucher } from '../../lib/backendClient.js';
 import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { hexToRgb } from '../../utils.js';
+
+function generateVoucherId() {
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  return `VOUC-${Date.now()}-${rand}`;
+}
 
 function scrollToField(name) {
   if (typeof document === 'undefined') return;
@@ -47,12 +54,9 @@ export default function VoucherFormModal({ voucher, onClose, onSaved, clinicSett
       commission_percent: Number(form.commission_percent) || 0,
     };
     try {
-      const r = isEdit ? await updateVoucher(voucher.proClinicId, payload) : await createVoucher(payload);
-      if (!r?.success) throw new Error(r?.error || (isEdit ? 'อัพเดท ProClinic ล้มเหลว' : 'สร้างใน ProClinic ล้มเหลว'));
-      const proClinicId = isEdit ? voucher.proClinicId : r.proClinicId;
-      if (!proClinicId) throw new Error('ไม่ได้รับ proClinicId');
-      await saveVoucher(proClinicId, {
-        ...payload, proClinicId,
+      const id = isEdit ? (voucher.voucherId || voucher.id) : generateVoucherId();
+      await saveVoucher(id, {
+        ...payload, voucherId: id,
         createdAt: isEdit ? (voucher.createdAt || new Date().toISOString()) : new Date().toISOString(),
       });
       onSaved?.();

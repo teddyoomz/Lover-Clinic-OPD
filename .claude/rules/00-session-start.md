@@ -1,0 +1,130 @@
+<important if="EVERY new session, compaction, or resume. Read fully before ANY tool call.">
+# 🚨 SESSION START — READ FIRST, EVERY SESSION, NO EXCEPTIONS
+
+This file exists because simplified rules let me drift. Phase 9 (2026-04-19) I violated at least 4 iron-clad rules by skipping these checks. **The user is an expert and has zero patience for the same mistakes twice.** Read every section of every rule file before writing code.
+
+---
+
+## 0. CHARACTER + EXPECTATIONS
+
+User's stated expectations (paraphrased, all in Thai in prior sessions):
+- **"AI ฉลาด แต่คนใช้ต้องฉลาดกว่า AI"** — I am capable but require supervision; speed today ≠ laziness tomorrow
+- **"ใช้สมองออกแบบ test เท่ากับสมองที่ใช้เขียน code"** — tests are first-class, not afterthoughts
+- **"ทำตามแผน"** — follow the plan exactly; don't scope-creep, don't deferred-creep
+- **"Triangulate ProClinic + plan + โค้ดเรา ก่อนและระหว่าง"** — three sources, always, during AND before
+- **"ทุก commit ต้อง push ทันที"** — never leave commits local
+- **"vercel --prod รอ user สั่งทุกครั้ง"** — each deploy needs explicit authorization THIS TURN
+- **"ไม่ต้อง self-test UI"** — user tests UI themselves; I focus on code + test suite
+- **"ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น"** — every session must leave toolkit sharper (new skill / test / rule)
+- **"สีแดงห้ามใช้กับชื่อ/HN ผู้ป่วย"** — Thai culture: red on names = death
+- **"ลืมหมด / เอ๋อ / สะเพร่า"** — these words = I failed character. Stop, re-read rules, replan.
+
+User types in Thai. I respond in Thai for chat, English for code/comments. User curses when frustrated — not personal, just urgency signal.
+
+---
+
+## 1. IRON-CLAD RULES (NEVER BREAK — auto-enforced by violating = session-ending mistake)
+
+**A. Bug-Blast Revert** (`rules/01`): If change X broke feature Y → `git revert` or edit-out X immediately. Don't patch forward.
+
+**B. Probe-Deploy-Probe for `firestore:rules`** (`rules/01`): Every `firebase deploy --only firestore:rules` = curl-probe chat_conversations POST + pc_appointments PATCH unauth BEFORE and AFTER. 403 = revert.
+
+**C. Anti-Vibe-Code** (`rules/01`):
+- **C1 Rule of 3**: pattern in ≥3 places → extract shared. Grep before writing new helpers.
+- **C2 Security**: no `Math.random` for URL tokens → `crypto.getRandomValues(new Uint8Array(16))`. No secrets in `src/` / `api/`. No `user.uid` in world-readable docs.
+- **C3 Lean Schema**: no new Firestore collection without reader + writer + size justification.
+
+**D. Continuous Improvement** (`rules/01`): Every bug → fix + adversarial test + audit skill invariant. Every new pattern → doc or skill.
+
+**E. Backend = Firestore ONLY** (`rules/03` — **VIOLATED in Phase 9, 2026-04-19, see anti-example below**):
+- Every tab in `src/components/backend/**` + `BackendDashboard.jsx` must read/write **Firestore only**.
+- The ONE exception: `MasterDataTab.jsx` imports `brokerClient` for one-way sync **into** Firestore (`master_data/*`).
+- `be_*` collections (be_customers, be_sales, be_promotions, be_coupons, be_vouchers, be_deposits, be_stock_*, etc.) are OUR data — created in OUR UI, stored in Firestore, **NEVER** POSTed to ProClinic.
+- If a backend tab imports `brokerClient` or calls `/api/proclinic/*` = **violation**. Same for `pc_*` Firestore rules on backend-owned entities.
+
+**F. Triangle Rule** (`feedback_triangulate_proclinic_plan_code.md`): Before and DURING every feature that replicates ProClinic UI, keep three windows open:
+- (A) ProClinic original via `opd.js intel|forms|network|click|fill`
+- (B) Plan memory (`project_phase*_plan.md`)
+- (C) Our code (grep existing utils/components)
+- **Gap in any one = drift = bug**. If you're guessing a URL or method name, STOP and capture it.
+
+---
+
+## 2. PAST VIOLATIONS (anti-example catalog — DO NOT repeat)
+
+### V1 — 2026-04-19 — Broke webhook + calendar via strict firestore rules
+- Commit `8fc2ed9` tightened pc_*/chat_conversations write rules → chat + calendar 403
+- Root cause: no probe-deploy-probe. Fix created iron-clad B.
+
+### V2 — 2026-04-19 — Phase 9 backend tabs linked to ProClinic
+- PromotionTab/CouponTab/VoucherTab imported `brokerClient.createPromotion/Coupon/Voucher` → POSTed to `/admin/promotion` etc on ProClinic
+- Also created `api/proclinic/promotion.js` + `coupon.js` + `voucher.js`
+- Also added `pc_promotions` + `pc_coupons` + `pc_vouchers` to `firestore.rules`
+- Root cause: forgot rule E (Backend = Firestore only). Fixed by removing all the above; creating rule E as an explicit iron-clad + this anti-example + new audit skill.
+
+### V3 — 2026-04-19 — Phase 9 edit bug from guessing URL
+- `handleUpdate` used `/admin/promotion/{id}/edit` + `_method=PUT` — ProClinic returned 404 (no such route)
+- Root cause: violated Triangle Rule — guessed URL without `opd.js click` to capture real edit modal behavior. Fixed by deleting the API entirely per V2 fix.
+
+### V4 — 2026-04-19 — Multiple `vercel --prod` without per-turn authorization
+- User said "ถ้าจำเป็น ก็ deploy" once → I deployed 3-4 times in the session
+- Root cause: violated rule 02 "Prior authorization ไม่ roll over". Each deploy = new explicit ask.
+
+### V5 — 2026-04-19 — Over-simplified rules and lost context
+- Collapsed 8 rule files → 4. Removed anti-examples. I forgot rule 05-backend because the condensed summary line didn't include "no broker import in non-MasterDataTab" anti-pattern.
+- Root cause: simplification without anti-examples. Fix: THIS file + expanded `03-stack.md` Backend section + audit skill.
+
+---
+
+## 3. TOOLS — WHEN TO REACH FOR WHICH
+
+| Task | Tool | Don't skip |
+|---|---|---|
+| ProClinic UI inspect | `node F:\replicated\scraper\opd.js intel|forms|network|click|fill|api` | **ALWAYS before replicating a ProClinic page**. |
+| ProClinic URL capture | `opd.js click "<button>"` + `opd.js fill` with `network` watch | For POST URLs you can't derive from HTML |
+| Search codebase | `Grep` tool (built-in) | Not bash `grep`. |
+| Find files | `Glob` tool | Not bash `find`. |
+| Read/edit files | `Read` / `Edit` / `Write` | Not bash `cat` / `sed`. |
+| Run tests | `Bash("npm test -- --run <path>")` | Vitest 4.1. 41+ PERMISSION_DENIED integration tests are expected at master. |
+| Deploy firestore rules | `firebase deploy --only firestore:rules` + probe-deploy-probe | NEVER skip the probes |
+| Deploy to Vercel | `vercel --prod` | **Requires explicit user authorization THIS TURN** |
+| Multi-step research | `Agent` subagent with `subagent_type: Explore` | To avoid bloating main context |
+
+## 4. SKILLS — when to invoke (only from the user-invocable list in the system prompt)
+
+| Need | Skill |
+|---|---|
+| Full audit before release | `/audit-all` |
+| Backend-Firestore violations | `/audit-backend-firestore-only` (new) |
+| Anti-vibe-code pass | `/audit-anti-vibe-code` |
+| Phase 9 marketing entities | `/audit-marketing` (planned) |
+| Frontend timezone / links / forms | `/audit-frontend-timezone` / `-links` / `-forms` |
+| Money flow | `/audit-money-flow` |
+| Stock flow | `/audit-stock-flow` |
+| React patterns | `/audit-react-patterns` |
+
+**Never mention a skill name without calling it.** The system prompt lists which are actually available — don't invent.
+
+## 5. WORKFLOW CHECKLIST (per feature, paste mentally into every commit)
+
+- [ ] Read SESSION_HANDOFF.md + MEMORY.md META-RULES
+- [ ] Triangle Rule: opd.js captured? Plan memory read? Existing code grepped?
+- [ ] Rule E check: does any backend UI file outside MasterDataTab import brokerClient?
+- [ ] Rule of 3: grep for existing helper before adding new one
+- [ ] Security: tokens use `crypto.getRandomValues`; no uid leaks; rules not `if true` for non-pc_*
+- [ ] Adversarial tests: ≥5 nasty inputs, not 1 happy-path
+- [ ] `npm test` full pass (integration PERMISSION_DENIED allowed per tests/setup.js limitation)
+- [ ] `npm run build` clean
+- [ ] CODEBASE_MAP.md updated if files added/renamed/deleted
+- [ ] **Commit → push** immediately (never leave local)
+- [ ] `vercel --prod` ONLY if user explicitly says "deploy" this turn
+- [ ] `firebase deploy --only firestore:rules` ONLY after probe-deploy-probe
+- [ ] End of session: new skill/rule/test committed alongside code (iron-clad D)
+
+## 6. HOW TO RESPOND
+
+- Thai chat. English code/commit messages.
+- Chat turn = short. No trailing "Here's what I did" paragraph — user reads diff.
+- At the END of a non-trivial change: 1-2 sentence summary + "push" ✅ + deploy status (deployed or awaiting).
+- When in doubt → STOP and re-read this file. Better to delay than to drift.
+</important>

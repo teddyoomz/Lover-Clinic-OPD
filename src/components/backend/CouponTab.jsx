@@ -1,8 +1,7 @@
 // ─── Coupon Tab — Phase 9 Marketing ─────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Search, Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
-import { listCoupons, deleteCoupon as deleteCouponDoc } from '../../lib/backendClient.js';
-import { deleteCouponInProClinic } from '../../lib/brokerClient.js';
+import { listCoupons, deleteCoupon } from '../../lib/backendClient.js';
 import CouponFormModal from './CouponFormModal.jsx';
 import { hexToRgb } from '../../utils.js';
 
@@ -44,12 +43,11 @@ export default function CouponTab({ clinicSettings, theme }) {
 
   const handleDelete = async (c) => {
     const name = c.coupon_name || 'คูปอง';
-    if (!window.confirm(`ลบ "${name}" ?\n\nจะลบทั้งใน Firestore และ ProClinic — ย้อนไม่ได้`)) return;
-    setDeleting(c.proClinicId); setError('');
+    const id = c.couponId || c.id;
+    if (!window.confirm(`ลบ "${name}" ?\n\nลบจาก Firestore — ย้อนไม่ได้`)) return;
+    setDeleting(id); setError('');
     try {
-      const r = await deleteCouponInProClinic(c.proClinicId);
-      if (r?.success === false && !r.notFound) throw new Error(r.error || 'ProClinic ลบไม่สำเร็จ');
-      await deleteCouponDoc(c.proClinicId);
+      await deleteCoupon(id);
       await reload();
     } catch (e) { setError(e.message || 'ลบไม่สำเร็จ'); }
     finally { setDeleting(null); }
@@ -104,10 +102,10 @@ export default function CouponTab({ clinicSettings, theme }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(c => {
-            const busy = deleting === c.proClinicId;
+            const busy = deleting === (c.couponId || c.id);
             const expired = c.end_date && c.end_date < new Date().toISOString().slice(0, 10);
             return (
-              <div key={c.proClinicId}
+              <div key={(c.couponId || c.id)}
                 className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex-1 min-w-0">

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[HOOK REMINDER after Edit/Write] (1) Update CODEBASE_MAP.md if backend files touched (2) npm test before commit (3) Backend files = commit only, no deploy (4) META-RULE: did this edit expose a new bug class? Add audit skill invariant. (5) ANTI-VIBE: same pattern already exists 3+ places? → extract to shared. Used Math.random for a URL token? → crypto.getRandomValues. Wrote to a public doc? → no user.uid/admin field. Added a new Firestore collection? → verify reader AND writer AND size-justification.\"}'"
+            "command": "echo '{\"additionalContext\": \"[HOOK after Edit/Write] (1) CODEBASE_MAP if backend files (2) npm test before commit (3) Backend files = commit only, NO vercel --prod (4) bug → audit skill invariant (5) Rule of 3 / crypto tokens / no uid leaks / no premature collection (6) 🆕 if edit is src/components/backend/** or BackendDashboard.jsx — grep for brokerClient import; only MasterDataTab may have it. /audit-backend-firestore-only for verification.\"}'"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[IRON-CLAD 2026-04-19, NEVER FORGET] A. ทำ X แล้ว Y พัง → ถอด X ทันที. B. firebase deploy --only firestore:rules ต้อง probe webhook (chat_conversations POST) + sync (pc_appointments PATCH) ก่อน/หลัง — 403 = revert ทันที (root cause ของ 2026-04-19 chat+calendar outage). C. Rule of 3 / crypto.getRandomValues (NOT Math.random) / NO user.uid in public docs / NO allow:if-true ยกเว้น pc_* + chat_conversations (server REST no admin SDK) / NO new Firestore collection without reader+writer+size-reason. D. bug → adversarial test + audit skill invariant + register in /audit-all. See .claude/rules/01-iron-clad.md, 02-workflow.md, 03-stack.md, 04-thai-ui.md. Audit: /audit-all (17 skills / 175 invariants). [SESSION CONTEXT] Phase 8/12 DONE. 1054 tests pass. PDPA PV1-PV7 REVERTED — do NOT re-add. Triangle Rule: before any feature → opd.js intel + plan memory + grep our code.\"}'"
+            "command": "echo '{\"additionalContext\": \"[🚨 MANDATORY FIRST READ: .claude/rules/00-session-start.md — character, expectations, iron-clad, past violations, workflow checklist.] [IRON-CLAD 2026-04-19] A. ทำ X แล้ว Y พัง → ถอด X ทันที. B. firebase deploy --only firestore:rules ต้อง probe webhook + sync unauth writes ก่อน/หลัง — 403 = revert ทันที. C. Rule of 3 / crypto.getRandomValues / NO user.uid in public docs / NO allow:if-true ยกเว้น pc_* + chat_conversations / NO premature Firestore collection. D. bug → adversarial test + audit skill invariant + /audit-all registration. E. 🆕 BACKEND = FIRESTORE ONLY — src/components/backend/** + BackendDashboard.jsx ห้าม import brokerClient หรือ fetch /api/proclinic/* ยกเว้น MasterDataTab.jsx. Phase 9 ละเมิดด้วยการให้ PromotionTab/CouponTab/VoucherTab POST ProClinic — REVERTED. Audit: /audit-backend-firestore-only. F. Triangle Rule: ห้ามเดา URL/method — opd.js intel|click|fill|network capture จริง ก่อน/ระหว่างทำ. [SESSION CONTEXT] Phase 8/12 DONE. PDPA PV1-PV7 REVERTED. Phase 9 Firestore-only rework in progress. [DEPLOY] vercel --prod รอ user สั่ง THIS TURN ทุกครั้ง — prior auth ไม่ roll over.\"}'"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[IRON-CLAD] A: bug → revert immediately. B: firestore:rules ต้อง probe-deploy-probe. C: Rule of 3 / crypto tokens / no uid in public docs / no allow:if-true. D: bug → test + skill invariant. Triangle: opd.js + plan + code before coding. (.claude/rules/01-iron-clad.md)\"}'"
+            "command": "echo '{\"additionalContext\": \"[IRON-CLAD PRE-PROMPT] A: bug → revert. B: firestore:rules probe-deploy-probe. C: Rule of 3 / crypto tokens / no uid in public docs / no allow:if-true. D: bug → test + skill. E: backend = Firestore only (no brokerClient in non-MasterDataTab). F: Triangle — opd.js capture before guessing URL/method. Deploy wait for user per-turn. See .claude/rules/00-session-start.md first.\"}'"
           }
         ]
       }

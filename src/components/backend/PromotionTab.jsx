@@ -5,8 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Search, Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
-import { listPromotions, deletePromotion as deletePromotionDoc } from '../../lib/backendClient.js';
-import { deletePromotionInProClinic } from '../../lib/brokerClient.js';
+import { listPromotions, deletePromotion } from '../../lib/backendClient.js';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import { hexToRgb } from '../../utils.js';
 
@@ -76,15 +75,12 @@ export default function PromotionTab({ clinicSettings, theme }) {
 
   const handleDelete = async (p) => {
     const name = p.promotion_name || 'โปรโมชัน';
-    if (!window.confirm(`ลบ "${name}" ?\n\nจะลบทั้งใน Firestore และ ProClinic — ย้อนไม่ได้`)) return;
-    setDeleting(p.proClinicId);
+    const id = p.promotionId || p.id;
+    if (!window.confirm(`ลบ "${name}" ?\n\nลบจาก Firestore — ย้อนไม่ได้`)) return;
+    setDeleting(id);
     setError('');
     try {
-      const r = await deletePromotionInProClinic(p.proClinicId);
-      if (r?.success === false && !r.notFound) {
-        throw new Error(r.error || 'ProClinic ลบไม่สำเร็จ');
-      }
-      await deletePromotionDoc(p.proClinicId);
+      await deletePromotion(id);
       await reload();
     } catch (e) {
       setError(e.message || 'ลบไม่สำเร็จ');
@@ -168,9 +164,9 @@ export default function PromotionTab({ clinicSettings, theme }) {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(p => {
             const statusCfg = STATUS_BADGE[p.status || 'active'] || STATUS_BADGE.active;
-            const busy = deleting === p.proClinicId;
+            const busy = deleting === (p.promotionId || p.id);
             return (
-              <div key={p.proClinicId}
+              <div key={(p.promotionId || p.id)}
                 className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all group">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex-1 min-w-0">
