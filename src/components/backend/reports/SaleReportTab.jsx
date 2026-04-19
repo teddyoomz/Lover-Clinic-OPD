@@ -4,9 +4,10 @@
 // columns array fed to the table (AR11).
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, Eye } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
+import SaleDetailModal from './SaleDetailModal.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
@@ -47,6 +48,13 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // viewingSaleId is just the saleId; we look up the raw doc from `allSales`
+  // when rendering so the modal stays in sync if the source list re-fetches.
+  const [viewingSaleId, setViewingSaleId] = useState(null);
+  const viewingSale = useMemo(
+    () => (viewingSaleId ? allSales.find(s => (s.saleId || s.id) === viewingSaleId) : null),
+    [viewingSaleId, allSales]
+  );
 
   // Load sales for the range. AR3: include cancelled at LOAD level only when toggled
   useEffect(() => {
@@ -84,6 +92,16 @@ export default function SaleReportTab({ clinicSettings, theme }) {
 
   const handleRefresh = useCallback(() => setReloadKey(k => k + 1), []);
 
+  // Open customer detail in a NEW tab — same pattern as CustomerListTab so
+  // the user keeps the report context. Customer ID === ProClinic ID for be_*.
+  const handleOpenCustomer = useCallback((customerId) => {
+    if (!customerId || typeof window === 'undefined') return;
+    window.open(`${window.location.origin}?backend=1&customer=${customerId}`, '_blank');
+  }, []);
+
+  const handleViewSale = useCallback((saleId) => setViewingSaleId(saleId), []);
+  const handleCloseDetail = useCallback(() => setViewingSaleId(null), []);
+
   return (
     <ReportShell
       icon={Receipt}
@@ -111,7 +129,20 @@ export default function SaleReportTab({ clinicSettings, theme }) {
         />
       }
     >
-      <SaleReportTable rows={out.rows} totals={out.totals} columns={columns} />
+      <SaleReportTable
+        rows={out.rows}
+        totals={out.totals}
+        columns={columns}
+        onOpenCustomer={handleOpenCustomer}
+        onViewSale={handleViewSale}
+      />
+      {viewingSale && (
+        <SaleDetailModal
+          sale={viewingSale}
+          onClose={handleCloseDetail}
+          onOpenCustomer={handleOpenCustomer}
+        />
+      )}
     </ReportShell>
   );
 }
@@ -162,16 +193,18 @@ function FiltersRow({
   );
 }
 
-function SaleReportTable({ rows, totals, columns }) {
+function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) {
   // Right-align currency columns; otherwise left/center contextual
   const isCurrency = (key) => [
     'netTotal', 'depositApplied', 'walletApplied', 'refundAmount',
     'insuranceClaim', 'paidAmount', 'outstandingAmount',
   ].includes(key);
+  // Cells we render with custom interaction (link/button), bypassing default format
+  const isInteractive = (key) => key === 'customerHN' || key === 'customerName';
 
   return (
     <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
-      <table className="w-full text-xs min-w-[1400px]">
+      <table className="w-full text-xs min-w-[1500px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider">
           <tr>
             {columns.map(c => (
@@ -182,6 +215,7 @@ function SaleReportTable({ rows, totals, columns }) {
                 {c.label}
               </th>
             ))}
+            <th className="px-2 py-2 font-bold text-center w-16">ดู</th>
           </tr>
         </thead>
         <tbody>
@@ -195,6 +229,21 @@ function SaleReportTable({ rows, totals, columns }) {
               {columns.map(c => {
                 const raw = r[c.key];
                 const display = typeof c.format === 'function' ? c.format(raw, r) : raw;
+                if (isInteractive(c.key) && r.customerId) {
+                  return (
+                    <td key={c.key} className="px-2 py-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
+                        className="text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 transition-colors"
+                        data-testid={`customer-link-${r.saleId}-${c.key}`}
+                        title="เปิดข้อมูลลูกค้าในแท็บใหม่"
+                      >
+                        {display}
+                      </button>
+                    </td>
+                  );
+                }
                 return (
                   <td
                     key={c.key}
@@ -204,6 +253,18 @@ function SaleReportTable({ rows, totals, columns }) {
                   </td>
                 );
               })}
+              <td className="px-2 py-2 text-center">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onViewSale?.(r.saleId); }}
+                  className="p-1.5 rounded hover:bg-cyan-900/30 text-cyan-400 transition-colors"
+                  data-testid={`view-sale-${r.saleId}`}
+                  title="ดูรายละเอียดการขาย"
+                  aria-label={`ดูรายละเอียด ${r.saleId}`}
+                >
+                  <Eye size={13} />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -222,6 +283,7 @@ function SaleReportTable({ rows, totals, columns }) {
             <td />
             <td className="px-2 py-2 text-right tabular-nums" data-testid="footer-outstanding">{fmtMoney(totals.outstandingAmount)}</td>
             <td colSpan={3} />
+            <td />
           </tr>
         </tfoot>
       </table>

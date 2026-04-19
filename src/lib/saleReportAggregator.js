@@ -114,6 +114,7 @@ export function buildSaleReportRow(sale) {
   return {
     saleDate: s.saleDate || '',
     saleId: s.saleId || s.id || '',
+    customerId: s.customerId ? String(s.customerId) : '',
     customerHN: s.customerHN || '',
     customerName: s.customerName || '',
     saleType: deriveSaleType(s),
