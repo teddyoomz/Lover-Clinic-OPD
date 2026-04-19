@@ -115,22 +115,18 @@ async function handleUpdate(req, res) {
 
   const session = await getSession(req.body);
   const base = session.origin;
-  const editHtml = await session.fetchText(`${base}/admin/coupon/${proClinicId}/edit`);
-  const isEditPage = editHtml.includes(`coupon/${proClinicId}`) && editHtml.includes('name="coupon_name"');
-  if (!isEditPage) {
-    const err = new Error(`Coupon ID ${proClinicId} ไม่พบใน ProClinic`);
-    err.notFound = true;
-    throw err;
-  }
 
-  const csrf = extractCSRF(editHtml);
-  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า coupon/edit');
+  // ProClinic has no /admin/coupon/{id}/edit — edit uses modal on list page
+  // with hidden coupon_id to signal update.
+  const listHtml = await session.fetchText(`${base}/admin/coupon`);
+  const csrf = extractCSRF(listHtml);
+  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า coupon');
 
-  const existingFields = extractFormFields(editHtml);
-  const formData = buildCouponFormData(data, csrf, existingFields);
-  formData.set('_method', 'PUT');
+  const defaults = extractFormFields(listHtml);
+  const formData = buildCouponFormData(data, csrf, defaults);
+  formData.set('coupon_id', String(proClinicId));
 
-  const updateRes = await session.fetch(`${base}/admin/coupon/${proClinicId}`, {
+  const updateRes = await session.fetch(`${base}/admin/coupon`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-TOKEN': csrf },
     body: formData.toString(),
@@ -142,7 +138,8 @@ async function handleUpdate(req, res) {
   const bodyHtml = await updateRes.text();
   const errors = extractValidationErrors(bodyHtml);
   if (errors) throw new Error(errors);
-  return res.status(200).json({ success: true });
+  if (status === 200 || status === 201) return res.status(200).json({ success: true });
+  throw new Error(`อัพเดทคูปองไม่สำเร็จ — status=${status}`);
 }
 
 async function handleDelete(req, res) {

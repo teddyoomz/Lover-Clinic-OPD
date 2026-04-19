@@ -219,6 +219,58 @@ describe('buildPromotionFormData — F1…F10', () => {
     const fd = buildPromotionFormData({ ...baseData(), is_price_line_display: false }, CSRF);
     expect(fd.get('is_price_line_display')).toBe('0');
   });
+
+  // Sub-items: confirmed via `opd.js click "เพิ่มข้อมูล"` on 2026-04-19 —
+  // modal uses `temp_course_id[]` + `temp_product_id[]` multi-checkboxes.
+  it('F11: courses → temp_course_id[] array entries', () => {
+    const fd = buildPromotionFormData({
+      ...baseData(),
+      courses: [{ id: 1, name: 'C1', qty: 3 }, { id: 7, name: 'C7', qty: 1 }],
+    }, CSRF);
+    expect(fd.getAll('temp_course_id[]')).toEqual(['1', '7']);
+  });
+
+  it('F12: products → temp_product_id[] array entries', () => {
+    const fd = buildPromotionFormData({
+      ...baseData(),
+      products: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
+    }, CSRF);
+    expect(fd.getAll('temp_product_id[]')).toEqual(['p1', 'p2']);
+  });
+
+  it('F13: empty courses/products → no array entries (does not clobber with blanks)', () => {
+    const fd = buildPromotionFormData({ ...baseData(), courses: [], products: [] }, CSRF);
+    expect(fd.getAll('temp_course_id[]')).toEqual([]);
+    expect(fd.getAll('temp_product_id[]')).toEqual([]);
+  });
+
+  it('F14: defaults with existing temp_course_id[] get cleared before our append', () => {
+    // Simulate ProClinic list-page HTML that had residual temp_course_id[]
+    // from another promotion's modal state — ensure we don't mix them.
+    const defaults = { 'temp_course_id[]': '999' };
+    const fd = buildPromotionFormData({
+      ...baseData(),
+      courses: [{ id: 5, name: 'ours' }],
+    }, CSRF, defaults);
+    expect(fd.getAll('temp_course_id[]')).toEqual(['5']);
+  });
+
+  it('F15: course id coerced to string', () => {
+    const fd = buildPromotionFormData({
+      ...baseData(),
+      courses: [{ id: 42 }],
+    }, CSRF);
+    // URLSearchParams stores strings; getAll returns string
+    expect(fd.getAll('temp_course_id[]')).toEqual(['42']);
+  });
+
+  it('F16: null id in courses is skipped (defensive)', () => {
+    const fd = buildPromotionFormData({
+      ...baseData(),
+      courses: [{ id: 1 }, { id: null }, { id: 2 }, {}],
+    }, CSRF);
+    expect(fd.getAll('temp_course_id[]')).toEqual(['1', '2']);
+  });
 });
 
 describe('emptyPromotionForm — baseline integrity', () => {

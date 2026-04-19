@@ -77,6 +77,24 @@ export function buildPromotionFormData(data, csrf, defaults = {}) {
   fd.set('is_price_line_display', data.is_price_line_display === false ? '0' : '1');
   fd.set('button_label', String(data.button_label || ''));
 
+  // Sub-items: ProClinic modal uses `temp_course_id[]` + `temp_product_id[]`
+  // multi-checkboxes (confirmed via opd.js click "เพิ่มข้อมูล" 2026-04-19).
+  // Send array of IDs. Qty per item is OUR Firestore metadata, ProClinic
+  // modal doesn't have a per-item qty field.
+  for (const k of Array.from(fd.keys())) {
+    if (k === 'temp_course_id[]' || k === 'temp_product_id[]') fd.delete(k);
+  }
+  if (Array.isArray(data.courses)) {
+    for (const c of data.courses) {
+      if (c?.id != null) fd.append('temp_course_id[]', String(c.id));
+    }
+  }
+  if (Array.isArray(data.products)) {
+    for (const p of data.products) {
+      if (p?.id != null) fd.append('temp_product_id[]', String(p.id));
+    }
+  }
+
   // NOTE: cover_image is a multipart file upload in ProClinic — we store
   // our copy in Firebase Storage (via UI) and skip the ProClinic binary
   // push for v1. If cover_image field exists in defaults (existing upload),
@@ -189,23 +207,18 @@ async function handleUpdate(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
 
-  const editHtml = await session.fetchText(`${base}/admin/promotion/${proClinicId}/edit`);
-  const isEditPage = editHtml.includes(`promotion/${proClinicId}`) && editHtml.includes('name="promotion_name"');
-  if (!isEditPage) {
-    const err = new Error(`Promotion ID ${proClinicId} ไม่พบใน ProClinic (อาจถูกลบไปแล้ว)`);
-    err.notFound = true;
-    throw err;
-  }
+  // ProClinic has NO /admin/promotion/{id}/edit page — edit is a modal on the
+  // list page (/admin/promotion). Same URL for create and update; update is
+  // signalled by setting the `promotion_id` hidden field to the target id.
+  const listHtml = await session.fetchText(`${base}/admin/promotion`);
+  const csrf = extractCSRF(listHtml);
+  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า promotion');
 
-  const csrf = extractCSRF(editHtml);
-  if (!csrf) throw new Error('ไม่พบ CSRF token ในหน้า promotion/edit');
+  const defaults = extractFormFields(listHtml);
+  const formData = buildPromotionFormData(data, csrf, defaults);
+  formData.set('promotion_id', String(proClinicId));
 
-  const existingFields = extractFormFields(editHtml);
-  const formData = buildPromotionFormData(data, csrf, existingFields);
-  // Laravel's `@method('PUT')` = POST with _method=PUT
-  formData.set('_method', 'PUT');
-
-  const updateRes = await session.fetch(`${base}/admin/promotion/${proClinicId}`, {
+  const updateRes = await session.fetch(`${base}/admin/promotion`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -224,7 +237,8 @@ async function handleUpdate(req, res) {
   const errors = extractValidationErrors(bodyHtml);
   if (errors) throw new Error(errors);
 
-  return res.status(200).json({ success: true });
+  if (status === 200 || status === 201) return res.status(200).json({ success: true });
+  throw new Error(`อัพเดทโปรโมชันไม่สำเร็จ — status=${status}`);
 }
 
 // ─── Action: delete ─────────────────────────────────────────────────────────

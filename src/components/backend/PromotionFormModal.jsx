@@ -1,16 +1,19 @@
-// ─── Promotion Form Modal — Phase 9 Marketing ──────────────────────────────
+// ─── Promotion Form Modal — Phase 9 Marketing (v9.1b) ──────────────────────
 // 27-field form mirroring ProClinic /admin/promotion. Flow on submit:
 // 1) brokerClient.createPromotion|updatePromotion → POST ProClinic
 // 2) backendClient.savePromotion → write be_promotions + master_data mirror
 //
-// Courses/products sub-items + cover_image multipart push are deferred to
-// a follow-up pass (9.1b) — UI leaves a "เพิ่มภายหลังในโหมดแก้ไข" note.
+// v9.1b: cover_image URL (Firebase Storage) + courses/products sub-items
+// picker. ProClinic-side multipart push of image binary and course/product
+// sub-items still out of scope (need opd.js network capture to map the AJAX
+// endpoints used by ProClinic JS) — sub-items live in Firestore for now.
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Save, Loader2, AlertCircle, Info } from 'lucide-react';
+import { X, Save, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
+import FileUploadField from './FileUploadField.jsx';
 import { createPromotion, updatePromotion } from '../../lib/brokerClient.js';
-import { savePromotion } from '../../lib/backendClient.js';
+import { savePromotion, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -42,10 +45,35 @@ function scrollToField(name) {
 
 export default function PromotionFormModal({ promotion, onClose, onSaved, clinicSettings, isDark }) {
   const isEdit = !!promotion;
-  const [form, setForm] = useState(() => ({ ...emptyPromotionForm(), ...(promotion || {}) }));
+  const [form, setForm] = useState(() => {
+    const base = { ...emptyPromotionForm(), ...(promotion || {}) };
+    base.courses = Array.isArray(base.courses) ? base.courses : [];
+    base.products = Array.isArray(base.products) ? base.products : [];
+    base.cover_image = base.cover_image || '';
+    return base;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const closeBtnRef = useRef(null);
+
+  // Master data for course/product pickers
+  const [masterCourses, setMasterCourses] = useState([]);
+  const [masterProducts, setMasterProducts] = useState([]);
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [courseQuery, setCourseQuery] = useState('');
+  const [productQuery, setProductQuery] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setMasterLoading(true);
+    Promise.all([
+      getAllMasterDataItems('courses').catch(() => []),
+      getAllMasterDataItems('products').catch(() => []),
+    ])
+      .then(([c, p]) => { if (!cancelled) { setMasterCourses(c || []); setMasterProducts(p || []); } })
+      .finally(() => { if (!cancelled) setMasterLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -65,6 +93,59 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     if (!form.is_vat_included) return p;
     return Math.round(p * 1.07 * 100) / 100;
   }, [form.sale_price, form.is_vat_included]);
+
+  // Sub-item helpers
+  const addCourse = (course) => {
+    if (!course) return;
+    setForm(prev => {
+      if (prev.courses.some(c => String(c.id) === String(course.id))) return prev;
+      return { ...prev, courses: [...prev.courses, { id: course.id, name: course.name, qty: 1, price: Number(course.price) || 0 }] };
+    });
+    setCourseQuery('');
+  };
+  const updateCourseQty = (id, qty) => {
+    setForm(prev => ({ ...prev, courses: prev.courses.map(c => String(c.id) === String(id) ? { ...c, qty: Math.max(1, Number(qty) || 1) } : c) }));
+  };
+  const removeCourse = (id) => {
+    setForm(prev => ({ ...prev, courses: prev.courses.filter(c => String(c.id) !== String(id)) }));
+  };
+
+  const addProduct = (product) => {
+    if (!product) return;
+    setForm(prev => {
+      if (prev.products.some(p => String(p.id) === String(product.id))) return prev;
+      return { ...prev, products: [...prev.products, { id: product.id, name: product.name, qty: 1, price: Number(product.price) || 0 }] };
+    });
+    setProductQuery('');
+  };
+  const updateProductQty = (id, qty) => {
+    setForm(prev => ({ ...prev, products: prev.products.map(p => String(p.id) === String(id) ? { ...p, qty: Math.max(1, Number(qty) || 1) } : p) }));
+  };
+  const removeProduct = (id) => {
+    setForm(prev => ({ ...prev, products: prev.products.filter(p => String(p.id) !== String(id)) }));
+  };
+
+  const filteredCourses = useMemo(() => {
+    const q = courseQuery.trim().toLowerCase();
+    const selected = new Set(form.courses.map(c => String(c.id)));
+    const pool = masterCourses.filter(c => !selected.has(String(c.id)));
+    if (!q) return pool.slice(0, 30);
+    return pool.filter(c => (c.name || '').toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q)).slice(0, 30);
+  }, [masterCourses, courseQuery, form.courses]);
+
+  const filteredProducts = useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    const selected = new Set(form.products.map(p => String(p.id)));
+    const pool = masterProducts.filter(p => !selected.has(String(p.id)));
+    if (!q) return pool.slice(0, 30);
+    return pool.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)).slice(0, 30);
+  }, [masterProducts, productQuery, form.products]);
+
+  // Storage path for cover image — uses proClinicId in edit mode, temp id on create
+  const coverStoragePath = useMemo(() => {
+    const id = promotion?.proClinicId || `draft-${Date.now()}`;
+    return `uploads/be_promotions/${id}`;
+  }, [promotion?.proClinicId]);
 
   const handleSave = async () => {
     const err = validatePromotion(form);
@@ -395,14 +476,122 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
             )}
           </section>
 
-          {/* Deferred features note */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-sky-900/20 border border-sky-800/40 text-xs text-sky-300">
-            <Info size={14} className="flex-shrink-0 mt-0.5" />
-            <span>
-              รูปปก (cover image) + รายการคอร์ส/สินค้าในโปรโมชัน จะเพิ่มในเฟสถัดไป
-              (v9.1b) — ตอนนี้สร้างโปรโมชันเปล่าได้ แล้วแก้ไขใน ProClinic เดิมสำหรับ sub-items.
-            </span>
-          </div>
+          {/* Section: รูปปก */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">รูปปก</h3>
+            <FileUploadField
+              storagePath={coverStoragePath}
+              fieldName="cover"
+              value={form.cover_image || ''}
+              onUploadComplete={({ url }) => update('cover_image', url)}
+              onDelete={() => update('cover_image', '')}
+              isDark={isDark}
+              accept="image/jpeg,image/png,image/webp"
+              maxSizeMB={5}
+              label={null}
+            />
+            <p className="text-[11px] text-[var(--tx-muted)] leading-relaxed">
+              รูปเก็บใน Firebase Storage — ProClinic เดิมยังคงใช้รูปที่อัพโหลดจากฝั่งโน้นอยู่ (binary multipart push รอเฟสถัดไป)
+            </p>
+          </section>
+
+          {/* Section: คอร์สในโปรโมชัน */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
+              คอร์สในโปรโมชัน <span className="text-[var(--tx-muted)] font-normal normal-case">({form.courses.length})</span>
+            </h3>
+
+            {form.courses.length > 0 && (
+              <div className="space-y-1.5">
+                {form.courses.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)]">
+                    <span className="flex-1 text-sm truncate">{c.name}</span>
+                    <span className="text-[11px] text-[var(--tx-muted)] font-mono">{Number(c.price).toLocaleString('th-TH')} ฿</span>
+                    <input type="number" min="1" value={c.qty}
+                      onChange={(e) => updateCourseQty(c.id, e.target.value)}
+                      className="w-16 px-2 py-1 rounded text-xs text-center bg-[var(--bg-surface)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
+                    <button type="button" onClick={() => removeCourse(c.id)}
+                      className="p-1 rounded text-[var(--tx-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <input type="text" value={courseQuery}
+                onChange={(e) => setCourseQuery(e.target.value)}
+                placeholder={masterLoading ? 'กำลังโหลดรายการคอร์ส…' : 'ค้นหาคอร์ส (ชื่อ / หมวดหมู่)'}
+                disabled={masterLoading}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50" />
+              {filteredCourses.length > 0 && (
+                <div className="max-h-48 overflow-y-auto border border-[var(--bd)] rounded-lg bg-[var(--bg-surface)]">
+                  {filteredCourses.map(c => (
+                    <button key={c.id} type="button" onClick={() => addCourse(c)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--bg-hover)] transition-colors">
+                      <Plus size={12} className="text-[var(--accent)] flex-shrink-0" />
+                      <span className="flex-1 truncate">{c.name}</span>
+                      {c.category && <span className="text-[10px] text-[var(--tx-muted)] truncate">{c.category}</span>}
+                      <span className="text-[11px] text-[var(--tx-muted)] font-mono">{Number(c.price || 0).toLocaleString('th-TH')} ฿</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!masterLoading && masterCourses.length === 0 && (
+                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีคอร์สใน master_data/courses — sync จากหน้า "ข้อมูลพื้นฐาน" ก่อน</p>
+              )}
+            </div>
+          </section>
+
+          {/* Section: สินค้าในโปรโมชัน */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--tx-muted)]">
+              สินค้าในโปรโมชัน <span className="text-[var(--tx-muted)] font-normal normal-case">({form.products.length})</span>
+            </h3>
+
+            {form.products.length > 0 && (
+              <div className="space-y-1.5">
+                {form.products.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)]">
+                    <span className="flex-1 text-sm truncate">{p.name}</span>
+                    <span className="text-[11px] text-[var(--tx-muted)] font-mono">{Number(p.price).toLocaleString('th-TH')} ฿</span>
+                    <input type="number" min="1" value={p.qty}
+                      onChange={(e) => updateProductQty(p.id, e.target.value)}
+                      className="w-16 px-2 py-1 rounded text-xs text-center bg-[var(--bg-surface)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]" />
+                    <button type="button" onClick={() => removeProduct(p.id)}
+                      className="p-1 rounded text-[var(--tx-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <input type="text" value={productQuery}
+                onChange={(e) => setProductQuery(e.target.value)}
+                placeholder={masterLoading ? 'กำลังโหลดรายการสินค้า…' : 'ค้นหาสินค้า (ชื่อ / หมวดหมู่)'}
+                disabled={masterLoading}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50" />
+              {filteredProducts.length > 0 && (
+                <div className="max-h-48 overflow-y-auto border border-[var(--bd)] rounded-lg bg-[var(--bg-surface)]">
+                  {filteredProducts.map(p => (
+                    <button key={p.id} type="button" onClick={() => addProduct(p)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--bg-hover)] transition-colors">
+                      <Plus size={12} className="text-[var(--accent)] flex-shrink-0" />
+                      <span className="flex-1 truncate">{p.name}</span>
+                      {p.category && <span className="text-[10px] text-[var(--tx-muted)] truncate">{p.category}</span>}
+                      <span className="text-[11px] text-[var(--tx-muted)] font-mono">{Number(p.price || 0).toLocaleString('th-TH')} ฿</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!masterLoading && masterProducts.length === 0 && (
+                <p className="text-[11px] text-[var(--tx-muted)]">ยังไม่มีสินค้าใน master_data/products — sync จากหน้า "ข้อมูลพื้นฐาน" ก่อน</p>
+              )}
+            </div>
+          </section>
 
           {/* Error banner */}
           {error && (
