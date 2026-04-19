@@ -14,6 +14,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
+import FancyDonut from './FancyDonut.jsx';
+import { RadialBars } from './FancyCharts.jsx';
 import {
   aggregateRevenueByProcedure,
   buildRevenueColumns,
@@ -147,8 +149,14 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
       }
     >
       <div className="space-y-4">
-        <SummaryBars title="สัดส่วนตามประเภทหัตถการ" summary={out.meta.typeSummary.slice(0, 8)} labelKey="type" />
-        <SummaryBars title="สัดส่วนตามหมวดหมู่"      summary={out.meta.categorySummary.slice(0, 8)} labelKey="category" />
+        <ChartSection
+          typeSummary={out.meta.typeSummary}
+          categorySummary={out.meta.categorySummary}
+          onPickType={setProcedureTypeFilter}
+          onPickCategory={setCategoryFilter}
+          activeType={procedureTypeFilter}
+          activeCategory={categoryFilter}
+        />
         <MobileSortBar sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
         <RevenueMobileList rows={sortedRows} />
         <RevenueDesktopTable rows={sortedRows} totals={out.totals} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -197,8 +205,57 @@ function FiltersRow({
   );
 }
 
-/** Horizontal bar chart replacement for deferred pie charts — shows top-N
- *  slices of paidAmount per type/category. */
+/** Dual-chart section: FancyDonut (procedure type) + RadialBars (category).
+ *  Clicking a slice/bar sets the corresponding filter — interactive drill. */
+function ChartSection({ typeSummary, categorySummary, onPickType, onPickCategory, activeType, activeCategory }) {
+  const safeTypes = (typeSummary || []).filter(t => t.paidAmount > 0).slice(0, 12);
+  const safeCats = (categorySummary || []).filter(c => c.paidAmount > 0).slice(0, 10);
+
+  if (safeTypes.length === 0 && safeCats.length === 0) return null;
+
+  const donutData = safeTypes.map(t => ({ label: t.type, value: t.paidAmount, pct: t.pct }));
+  const radialData = safeCats.map(c => ({ label: c.category, value: c.paidAmount, pct: c.pct }));
+
+  const totalPaid = safeTypes.reduce((s, t) => s + t.paidAmount, 0)
+                 || safeCats.reduce((s, c) => s + c.paidAmount, 0);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 rounded-xl border border-[var(--bd)] bg-[var(--bg-card)]">
+      {safeTypes.length > 0 && (
+        <div className="flex flex-col items-center" data-testid="revenue-chart-type">
+          <FancyDonut
+            data={donutData}
+            size={260}
+            innerRadius={72}
+            outerRadius={115}
+            title="สัดส่วนตามประเภทหัตถการ"
+            centerLabel="ยอดชำระเงิน"
+            centerValue={`${fmtMoney(totalPaid)} ฿`}
+            formatValue={(v) => `${fmtMoney(v)} ฿`}
+            onSegmentClick={(seg) => {
+              onPickType(activeType === seg.label ? 'all' : seg.label);
+            }}
+          />
+        </div>
+      )}
+      {safeCats.length > 0 && (
+        <div className="flex flex-col items-center" data-testid="revenue-chart-category">
+          <RadialBars
+            data={radialData}
+            size={260}
+            title="สัดส่วนตามหมวดหมู่ (Top 10)"
+            formatValue={(v) => `${fmtMoney(v)} ฿`}
+            onBarClick={(bar) => {
+              onPickCategory(activeCategory === bar.label ? 'all' : bar.label);
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Horizontal bar chart (legacy summary row — kept for reference; unused). */
 function SummaryBars({ title, summary, labelKey }) {
   if (!summary || summary.length === 0) return null;
   const max = Math.max(...summary.map(s => s.paidAmount), 1);

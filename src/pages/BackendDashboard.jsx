@@ -34,6 +34,8 @@ import StockReportTab from '../components/backend/reports/StockReportTab.jsx';
 import CRMInsightTab from '../components/backend/reports/CRMInsightTab.jsx';
 import RevenueAnalysisTab from '../components/backend/reports/RevenueAnalysisTab.jsx';
 import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAnalysisTab.jsx';
+import DailyRevenueTab from '../components/backend/reports/DailyRevenueTab.jsx';
+import StaffSalesTab from '../components/backend/reports/StaffSalesTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -324,6 +326,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <RevenueAnalysisTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-appt-analysis' ? (
           <AppointmentAnalysisTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-daily-revenue' ? (
+          <DailyRevenueTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-staff-sales' ? (
+          <StaffSalesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : null}
@@ -367,6 +373,8 @@ const REPORT_LABELS = {
   'reports-rfm':           'CRM Insight',
   'reports-revenue':       'วิเคราะห์รายได้',
   'reports-appt-analysis': 'วิเคราะห์นัด',
+  'reports-daily-revenue': 'รายรับประจำวัน',
+  'reports-staff-sales':   'ยอดขายรายพนักงาน',
 };
 
 function ReportComingSoon({ tabId, onBack, clinicSettings }) {

@@ -19,6 +19,7 @@ import {
   loadAppointmentsByDateRange,
   loadSalesByDateRange,
 } from '../../../lib/reportsLoaders.js';
+import { getAllMasterDataItems } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
@@ -72,6 +73,7 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
   const [activeSection, setActiveSection] = useState('overview'); // overview | expected | unexpected
   const [appointments, setAppointments] = useState([]);
   const [sales, setSales] = useState([]);
+  const [staffMaster, setStaffMaster] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -83,8 +85,12 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
     Promise.all([
       loadAppointmentsByDateRange({ from, to }),
       loadSalesByDateRange({ from, to }),
+      getAllMasterDataItems('staff').catch(() => []),
     ])
-      .then(([a, s]) => { if (!abort) { setAppointments(a); setSales(s); } })
+      .then(([a, s, st]) => {
+        if (abort) return;
+        setAppointments(a); setSales(s); setStaffMaster(st);
+      })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
@@ -92,9 +98,9 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
 
   const out = useMemo(
     () => aggregateAppointmentAnalysis(appointments, sales, {
-      asOfISO, from, to, advisorFilter,
+      asOfISO, from, to, advisorFilter, staffMasterList: staffMaster,
     }),
-    [appointments, sales, asOfISO, from, to, advisorFilter]
+    [appointments, sales, staffMaster, asOfISO, from, to, advisorFilter]
   );
 
   const advisorOptions = useMemo(() => {

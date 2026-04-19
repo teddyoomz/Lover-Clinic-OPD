@@ -94,6 +94,8 @@ export const NAV_SECTIONS = [
       { id: 'reports-rfm',           label: 'CRM Insight',       icon: Sparkles,        color: 'amber', palette: 'rfm crm insight ลูกค้าคุณภาพ champion loyalty segment' },
       { id: 'reports-revenue',       label: 'วิเคราะห์รายได้',    icon: TrendingUp,      color: 'amber', palette: 'revenue analysis procedure category รายได้ หัตถการ' },
       { id: 'reports-appt-analysis', label: 'วิเคราะห์นัด',       icon: Activity,        color: 'amber', palette: 'appointment analysis kpi performance วิเคราะห์ นัด' },
+      { id: 'reports-daily-revenue', label: 'รายรับประจำวัน',     icon: CalendarDays,    color: 'sky',   palette: 'daily revenue รายรับ ประจำวัน daily-briefing per-day' },
+      { id: 'reports-staff-sales',   label: 'ยอดขายรายพนักงาน',   icon: Users,           color: 'sky',   palette: 'staff sales doctor seller ยอดขาย รายแพทย์ พนักงาน' },
     ],
   },
   {

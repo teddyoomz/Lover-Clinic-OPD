@@ -1,6 +1,7 @@
 // Phase 10.9 — Wiring crosscut tests.
 // Verifies navigation + URL deep-link + cmdk palette + ReportsHomeTab card
-// click fires setActiveTab(...) correctly for all 8 Phase 10 report tabs.
+// click fires setActiveTab(...) correctly for all 10 Phase 10 report tabs
+// (original 8 + Phase 10.X1 daily-revenue + 10.X2 staff-sales).
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -21,13 +22,15 @@ const REPORT_TAB_IDS = [
   'reports-rfm',
   'reports-revenue',
   'reports-appt-analysis',
+  'reports-daily-revenue',  // 10.X1
+  'reports-staff-sales',    // 10.X2
 ];
 
-describe('navConfig — all 8 Phase 10 report items present', () => {
-  it('reports section exists with all 8 items', () => {
+describe('navConfig — all 10 Phase 10 report items present', () => {
+  it('reports section exists with all 10 items (8 original + 2 orphan-cards added)', () => {
     const reportsSection = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reportsSection).toBeDefined();
-    expect(reportsSection.items.length).toBe(8);
+    expect(reportsSection.items.length).toBe(10);
   });
 
   it('every report tab id is in ALL_ITEM_IDS whitelist (URL deep-link support)', () => {

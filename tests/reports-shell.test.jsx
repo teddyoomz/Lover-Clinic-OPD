@@ -147,10 +147,10 @@ describe('DateRangePicker.buildPresets', () => {
 });
 
 describe('navConfig — Phase 10 reports section wired', () => {
-  it('reports section exists with 8 items', () => {
+  it('reports section exists with 10 items (8 original + 10.X1 daily-revenue + 10.X2 staff-sales)', () => {
     const reports = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reports).toBeDefined();
-    expect(reports.items).toHaveLength(8);
+    expect(reports.items).toHaveLength(10);
   });
 
   it('all 8 report tab IDs are in ALL_ITEM_IDS whitelist (URL deep-link)', () => {

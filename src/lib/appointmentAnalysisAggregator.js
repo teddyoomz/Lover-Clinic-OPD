@@ -32,9 +32,27 @@ function advisorKey(a) {
   return name ? `name:${name}` : 'unknown';
 }
 
-function advisorDisplay(a) {
+/** Display name: prefer stored advisorName → staffMap lookup → '#id' → 'ไม่ระบุ'. */
+function advisorDisplay(a, staffMap) {
   const name = String(a?.advisorName || '').trim();
-  return name || (a?.advisorId ? `#${a.advisorId}` : 'ไม่ระบุ');
+  if (name) return name;
+  const id = String(a?.advisorId || '').trim();
+  if (id && staffMap) {
+    const m = staffMap.get(id);
+    const resolved = (m?.name || '').trim();
+    if (resolved) return resolved;
+  }
+  return id ? `#${id}` : 'ไม่ระบุ';
+}
+
+function buildMasterMap(items) {
+  const map = new Map();
+  if (!Array.isArray(items)) return map;
+  for (const it of items) {
+    const id = String(it?.id || it?.proClinicId || '').trim();
+    if (id) map.set(id, it);
+  }
+  return map;
 }
 
 function daysBetween(d1, d2) {
@@ -128,7 +146,7 @@ export function matchSalesToAppointments(sales, appointments) {
  * @param {Map<string,string>} linkage — saleId → apptId (from matchSalesToAppointments)
  * @param {string} asOfISO
  */
-function buildAdvisorKPIs(appointments, sales, linkage, asOfISO) {
+function buildAdvisorKPIs(appointments, sales, linkage, asOfISO, staffMap) {
   const apptsByAdvisor = new Map();
   const attendedByAdvisor = new Map();
   const expectedByAdvisor = new Map();
@@ -142,7 +160,7 @@ function buildAdvisorKPIs(appointments, sales, linkage, asOfISO) {
   for (const a of appointments) {
     if (!a || isCancelledAppt(a)) continue;
     const key = advisorKey(a);
-    displayByKey.set(key, advisorDisplay(a));
+    displayByKey.set(key, advisorDisplay(a, staffMap));
     const expected = Number(a.expectedSales) || 0;
     if (isFutureAppt(a, asOfISO)) {
       expectedRemainingByAdvisor.set(key, (expectedRemainingByAdvisor.get(key) || 0) + expected);
@@ -246,10 +264,14 @@ function buildAdvisorKPIs(appointments, sales, linkage, asOfISO) {
  * @param {string} [opts.advisorFilter='all']
  */
 export function aggregateAppointmentAnalysis(appointments, sales, opts = {}) {
-  const { asOfISO = '', from = '', to = '', advisorFilter = 'all' } = opts;
+  const {
+    asOfISO = '', from = '', to = '', advisorFilter = 'all',
+    staffMasterList = [],
+  } = opts;
 
   const safeAppts = Array.isArray(appointments) ? appointments : [];
   const safeSales = Array.isArray(sales) ? sales : [];
+  const staffLookup = buildMasterMap(staffMasterList);
 
   // Date narrow
   const inRangeAppts = (from || to) ? dateRangeFilter(safeAppts, 'date', from, to) : safeAppts;
@@ -259,7 +281,7 @@ export function aggregateAppointmentAnalysis(appointments, sales, opts = {}) {
   const linkage = matchSalesToAppointments(inRangeSales, inRangeAppts);
 
   // Per-advisor KPI (Table 0)
-  let advisorRows = buildAdvisorKPIs(inRangeAppts, inRangeSales, linkage, asOfISO);
+  let advisorRows = buildAdvisorKPIs(inRangeAppts, inRangeSales, linkage, asOfISO, staffLookup);
   if (advisorFilter && advisorFilter !== 'all') {
     advisorRows = advisorRows.filter(r => r.advisorKey === advisorFilter || r.advisorName === advisorFilter);
   }
@@ -282,7 +304,7 @@ export function aggregateAppointmentAnalysis(appointments, sales, opts = {}) {
       customerHN: a.customerHN || '',
       appointmentTo: a.appointmentTo || '-',
       doctorName: a.doctorName || '-',
-      advisorName: advisorDisplay(a),
+      advisorName: advisorDisplay(a, staffLookup),
       expectedSales: roundTHB(Number(a.expectedSales) || 0),
       actualSales: linkedSale ? roundTHB(Number(linkedSale?.billing?.netTotal) || 0) : 0,
       status: a.status || 'pending',
