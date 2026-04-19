@@ -214,6 +214,67 @@ describe('AR11 — CSV columns match table columns 1:1', () => {
   });
 });
 
+/* ─── HN backfill — legacy sales with empty customerHN ──────────────────── */
+
+describe('HN backfill — legacy sales (pre-2026-04-19 fix) resolve HN from customers', () => {
+  const legacySale = {
+    saleId: 'INV-LEGACY-001',
+    customerId: 'CUST_LEGACY',
+    customerHN: '',          // ← empty (the bug)
+    customerName: '',         // ← also empty
+    saleDate: '2026-04-15',
+    status: 'active',
+    items: { courses: [{ name: 'X' }], products: [], medications: [] },
+    billing: { netTotal: 1000 },
+    payment: { status: 'paid', channels: [{ name: 'cash', amount: 1000 }] },
+  };
+  const customers = [
+    {
+      proClinicId: 'CUST_LEGACY',
+      proClinicHN: 'HN67XXX',
+      patientData: { prefix: 'คุณ', firstName: 'สมชาย', lastName: 'ใจดี' },
+    },
+  ];
+
+  it('without customers list: HN remains empty (no backfill, backwards-compatible)', () => {
+    const out = aggregateSaleReport([legacySale], { from: '2026-04-15', to: '2026-04-15' });
+    expect(out.rows[0].customerHN).toBe('');
+    expect(out.rows[0].customerName).toBe('');
+  });
+
+  it('with customers list: HN + name backfilled from customer doc', () => {
+    const out = aggregateSaleReport([legacySale], {
+      from: '2026-04-15', to: '2026-04-15', customers,
+    });
+    expect(out.rows[0].customerHN).toBe('HN67XXX');
+    expect(out.rows[0].customerName).toBe('คุณ สมชาย ใจดี');
+  });
+
+  it('does NOT overwrite when sale already has HN', () => {
+    const sale = { ...legacySale, customerHN: 'HN_EXPLICIT' };
+    const out = aggregateSaleReport([sale], {
+      from: '2026-04-15', to: '2026-04-15', customers,
+    });
+    expect(out.rows[0].customerHN).toBe('HN_EXPLICIT');
+  });
+
+  it('falls back gracefully when customer not in lookup', () => {
+    const sale = { ...legacySale, customerId: 'GHOST' };
+    const out = aggregateSaleReport([sale], {
+      from: '2026-04-15', to: '2026-04-15', customers,
+    });
+    expect(out.rows[0].customerHN).toBe('');
+  });
+
+  it('uses customer.hn fallback when proClinicHN missing', () => {
+    const out = aggregateSaleReport([legacySale], {
+      from: '2026-04-15', to: '2026-04-15',
+      customers: [{ proClinicId: 'CUST_LEGACY', hn: 'HN-FALLBACK', patientData: { firstName: 'X' } }],
+    });
+    expect(out.rows[0].customerHN).toBe('HN-FALLBACK');
+  });
+});
+
 /* ─── AR14 — Defensive field access (legacy schemas) ──────────────────────── */
 
 describe('AR14 — backward-compatible with legacy Phase 6 sales (missing fields)', () => {

@@ -9,7 +9,7 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
-import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
+import { loadSalesByDateRange, loadAllCustomersForReport } from '../../../lib/reportsLoaders.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -45,6 +45,7 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const [includeCancelled, setIncludeCancelled] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [allSales, setAllSales] = useState([]);
+  const [allCustomers, setAllCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -56,12 +57,17 @@ export default function SaleReportTab({ clinicSettings, theme }) {
     [viewingSaleId, allSales]
   );
 
-  // Load sales for the range. AR3: include cancelled at LOAD level only when toggled
+  // Load sales + customers in parallel. Customers list enables HN/name
+  // backfill for legacy sales that were written with empty customerHN
+  // (TreatmentFormPage auto-sale bug pre-2026-04-19 fix).
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
-    loadSalesByDateRange({ from, to, includeCancelled })
-      .then(s => { if (!abort) setAllSales(s); })
+    Promise.all([
+      loadSalesByDateRange({ from, to, includeCancelled }),
+      loadAllCustomersForReport(),
+    ])
+      .then(([s, c]) => { if (!abort) { setAllSales(s); setAllCustomers(c); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
@@ -71,8 +77,9 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const out = useMemo(
     () => aggregateSaleReport(allSales, {
       from, to, statusFilter, saleTypeFilter, includeCancelled, searchText,
+      customers: allCustomers,
     }),
-    [allSales, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
+    [allSales, allCustomers, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
   );
 
   // Single columns array — SAME for table + CSV (AR11)

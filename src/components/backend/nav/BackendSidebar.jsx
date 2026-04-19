@@ -154,42 +154,64 @@ export default function BackendSidebar({
         </ul>
       )}
 
-      {/* Sections */}
-      <ul className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-3 space-y-0.5 [scrollbar-width:thin]" role="list">
+      {/* Sections — visual hierarchy:
+          - Section HEADER: uppercase, smaller (10px), accent-tinted text,
+            colored icon, gradient bg-tint when active section, left-border
+            indicator. Looks like a "group label" not an item.
+          - Items: regular case, larger (12px), indented under header with a
+            left rail (border-l) so the visual grouping is unmistakable. */}
+      <ul className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-3 space-y-1 [scrollbar-width:thin]" role="list">
         {NAV_SECTIONS.map((section) => {
           const Icon = section.icon;
           const isExpanded = !!expandedSections[section.id];
           const activeInThisSection = section.items.some(it => it.id === activeTabId);
 
           return (
-            <li key={section.id}>
-              {/* Section header — click to expand/collapse. When sidebar is
-                  collapsed, the header is hidden + items shown with just
-                  their icons. */}
+            <li key={section.id} className="relative">
+              {/* Section HEADER — distinctly styled vs items. */}
               {!effectiveCollapsed && (
                 <button
                   onClick={() => toggleSection(section.id)}
                   aria-expanded={isExpanded}
                   aria-controls={`nav-section-${section.id}`}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[10px] font-black uppercase tracking-[0.12em] transition-all ${
                     activeInThisSection
                       ? 'text-[var(--tx-primary)]'
-                      : 'text-[var(--tx-muted)] hover:text-[var(--tx-primary)]'
+                      : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                   }`}
+                  style={activeInThisSection ? {
+                    background: `linear-gradient(90deg, rgba(${acRgb},0.12), rgba(${acRgb},0.02))`,
+                    borderLeft: `3px solid rgba(${acRgb},0.7)`,
+                    paddingLeft: 'calc(0.625rem - 3px)', // compensate for border so text doesn't shift
+                  } : {
+                    borderLeft: '3px solid transparent',
+                    paddingLeft: 'calc(0.625rem - 3px)',
+                  }}
                 >
-                  <Icon size={14} className="flex-shrink-0" />
+                  <Icon
+                    size={13}
+                    className="flex-shrink-0"
+                    style={activeInThisSection ? { color: ac } : undefined}
+                  />
                   <span className="flex-1 text-left truncate">{section.label}</span>
                   <ChevronDown
-                    size={12}
-                    className={`flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                    size={11}
+                    className={`flex-shrink-0 opacity-60 transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
                   />
                 </button>
               )}
 
-              {/* Items */}
+              {/* Items — indented under header with a left rail (border-l) so
+                  the visual grouping is unmistakable. */}
               <ul
                 id={`nav-section-${section.id}`}
-                className={`space-y-0.5 ${effectiveCollapsed ? '' : (isExpanded ? 'mt-0.5 mb-2' : 'hidden')}`}
+                className={`${
+                  effectiveCollapsed
+                    ? 'space-y-0.5'
+                    : (isExpanded
+                      ? 'mt-1 mb-2 ml-3 pl-2 space-y-0.5 border-l border-[var(--bd)]'
+                      : 'hidden')
+                }`}
                 role="list"
               >
                 {section.items.map(item => {
@@ -212,7 +234,7 @@ export default function BackendSidebar({
                         }`}
                         style={isActive ? { boxShadow: cm.activeGlow } : undefined}
                       >
-                        <ItemIcon size={16} className="flex-shrink-0" />
+                        <ItemIcon size={15} className="flex-shrink-0 opacity-90" />
                         {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
                       </button>
                     </li>

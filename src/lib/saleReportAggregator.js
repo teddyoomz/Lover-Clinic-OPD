@@ -95,8 +95,14 @@ function deriveInsuranceClaim(sale) {
 /**
  * Build display row for one sale doc. All currency fields are roundTHB.
  * Pure: same input → same output.
+ *
+ * @param {object} sale — be_sale doc
+ * @param {Object<string, object>} [customerLookup] — optional Map / object
+ *   keyed by customerId for HN/name backfill when the sale doc has empty
+ *   denormalized values (legacy sales pre-2026-04-19 fix where the
+ *   treatment-page auto-sale wrote customerHN: '').
  */
-export function buildSaleReportRow(sale) {
+export function buildSaleReportRow(sale, customerLookup = null) {
   const s = sale || {};
   const billing = s.billing || {};
   const payment = s.payment || {};
@@ -111,12 +117,31 @@ export function buildSaleReportRow(sale) {
   const outstandingAmount = roundTHB(Math.max(0, netTotal - paidAmount));
   const isCancelled = s.status === 'cancelled';
 
+  const cid = s.customerId ? String(s.customerId) : '';
+  // Backfill HN/name from customer lookup when sale doc has empty fields —
+  // self-healing for legacy data. Lookup is optional so unit tests stay pure.
+  let resolvedHN = s.customerHN || '';
+  let resolvedName = s.customerName || '';
+  if ((!resolvedHN || !resolvedName) && cid && customerLookup) {
+    const c = typeof customerLookup.get === 'function'
+      ? customerLookup.get(cid)
+      : customerLookup[cid];
+    if (c) {
+      if (!resolvedHN) resolvedHN = c.proClinicHN || c.hn || '';
+      if (!resolvedName) {
+        const pd = c.patientData || {};
+        const composed = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim();
+        resolvedName = composed || pd.nickname || c.name || '';
+      }
+    }
+  }
+
   return {
     saleDate: s.saleDate || '',
     saleId: s.saleId || s.id || '',
-    customerId: s.customerId ? String(s.customerId) : '',
-    customerHN: s.customerHN || '',
-    customerName: s.customerName || '',
+    customerId: cid,
+    customerHN: resolvedHN,
+    customerName: resolvedName,
     saleType: deriveSaleType(s),
     saleTypeKey: deriveSaleTypeKey(s),
     itemsSummary: deriveItemSummary(s),
@@ -150,6 +175,9 @@ export function buildSaleReportRow(sale) {
  * @param {string} [filters.saleTypeFilter]  — 'all' | 'course' | 'product' | 'medication' | 'membership'
  * @param {boolean} [filters.includeCancelled=false] — show cancelled rows; AR3: still excluded from totals
  * @param {string} [filters.searchText]      — case-insensitive contains on saleId / HN / customerName
+ * @param {Array<object>} [filters.customers] — optional be_customers list for HN/name backfill
+ *   on legacy sales that were written with empty customerHN. When provided,
+ *   each row resolves missing HN/name from the customer doc keyed by customerId.
  *
  * @returns {{
  *   rows: Array,
@@ -166,7 +194,13 @@ export function aggregateSaleReport(sales, filters = {}) {
     saleTypeFilter = 'all',
     includeCancelled = false,
     searchText = '',
+    customers = null,
   } = filters;
+
+  // Build O(1) lookup once per aggregation if customers list provided.
+  const customerLookup = Array.isArray(customers)
+    ? new Map(customers.map(c => [String(c?.proClinicId || c?.id || ''), c]))
+    : null;
 
   const allSales = Array.isArray(sales) ? sales : [];
 
@@ -200,7 +234,7 @@ export function aggregateSaleReport(sales, filters = {}) {
 
   // 6) Build display rows + sort newest first by (saleDate desc, saleId desc)
   const rows = filtered
-    .map(buildSaleReportRow)
+    .map(s => buildSaleReportRow(s, customerLookup))
     .sort((a, b) => {
       const c = (b.saleDate || '').localeCompare(a.saleDate || '');
       if (c !== 0) return c;

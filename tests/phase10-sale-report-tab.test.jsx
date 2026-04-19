@@ -7,6 +7,7 @@ import { FIXTURE_SALES, EXPECTED_APRIL_RANGE_TOTALS, EXPECTED_YEAR_2026_TOTALS }
 
 vi.mock('../src/lib/reportsLoaders.js', () => ({
   loadSalesByDateRange: vi.fn(async () => FIXTURE_SALES),
+  loadAllCustomersForReport: vi.fn(async () => []), // 10.3 backfill — empty by default
 }));
 
 vi.mock('../src/firebase.js', () => ({

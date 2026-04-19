@@ -236,7 +236,7 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   const inputCls = `w-full rounded-lg px-3 py-2.5 text-sm outline-none border transition-all ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
@@ -1786,7 +1786,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
             const firstSeller = pmSellers.find(s => s.enabled && s.id);
             const createRes = await createBackendSale(clean({
-              customerId, customerName: patientName, customerHN: '',
+              customerId, customerName: patientName,
+              // 2026-04-19 fix — was hard-coded '' so all auto-sales had no
+              // HN in รายการขาย. Now flows from BackendDashboard via the
+              // customerHN prop (read from viewingCustomer.proClinicHN).
+              customerHN: customerHNProp || patientData?.proClinicHN || patientData?.hn || '',
               saleDate: treatmentDate, saleNote: '',
               items: grouped,
               billing: {
@@ -1930,7 +1934,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
                 const firstSeller = pmSellers.find(s => s.enabled && s.id);
                 const createRes = await createBackendSale(clean({
-                  customerId, customerName: patientName, customerHN: '',
+                  customerId, customerName: patientName,
+              // 2026-04-19 fix — was hard-coded '' so all auto-sales had no
+              // HN in รายการขาย. Now flows from BackendDashboard via the
+              // customerHN prop (read from viewingCustomer.proClinicHN).
+              customerHN: customerHNProp || patientData?.proClinicHN || patientData?.hn || '',
                   saleDate: treatmentDate, saleNote: '',
                   items: newGrouped,
                   billing: {

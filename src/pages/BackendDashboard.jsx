@@ -196,12 +196,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onCreateTreatment={() => setTreatmentFormMode({
               mode: 'create',
               customerId: viewingCustomer.proClinicId,
+              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || '',
               patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
               patientData: viewingCustomer.patientData,
             })}
             onEditTreatment={(treatmentId) => setTreatmentFormMode({
               mode: 'edit',
               customerId: viewingCustomer.proClinicId,
+              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || '',
               treatmentId,
               patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
               patientData: viewingCustomer.patientData,
@@ -322,6 +324,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         <TreatmentFormPage
           mode={treatmentFormMode.mode}
           customerId={treatmentFormMode.customerId}
+          customerHN={treatmentFormMode.customerHN}
           treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
           patientData={treatmentFormMode.patientData}
