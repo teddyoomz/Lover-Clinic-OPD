@@ -158,17 +158,71 @@ service cloud.firestore {
       }
 
       // ── Chat conversations ──
+      // Webhook (api/webhook/facebook.js + line.js) writes new messages from
+      // FB Messenger / LINE without Firebase auth — Vercel serverless has no
+      // firebase-admin SDK on this path. Reads are staff-only; create/update
+      // is open so the unauthenticated webhook can land messages.
+      // Delete stays staff-only so internet randos can't wipe history.
       match /chat_conversations/{convId} {
-        allow read, write: if isClinicStaff();
+        allow read: if isClinicStaff();
+        allow create, update: if true;
+        allow delete: if isClinicStaff();
 
         match /messages/{messageId} {
-          allow read, write: if isClinicStaff();
+          allow read: if isClinicStaff();
+          allow create: if true;
+          allow update, delete: if isClinicStaff();
         }
       }
 
       // ── Chat history (archived) ──
       match /chat_history/{histId} {
         allow read, write: if isClinicStaff();
+      }
+
+      // ── ProClinic mirror (sync cache — written by api/proclinic/* REST) ──
+      // Same rationale as chat_conversations: server-side syncers have no
+      // Firebase auth context. Staff-only read keeps PII out of public access;
+      // open write is the trade until api/_lib gets a service-account helper.
+      match /pc_appointments/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_customers/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_customer_appointments/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_courses/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_doctors/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_treatments/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_treatment_history/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_chart_templates/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_form_options/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_inventory/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
       }
 
       // ── Chat config ──
