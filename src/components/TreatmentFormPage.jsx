@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import DepositPicker from './backend/DepositPicker.jsx';
 import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
@@ -11,8 +11,16 @@ import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+//
+// Perf note (2026-04-19): every helper in this file is wrapped in React.memo.
+// The parent TreatmentFormPage has 119 useState calls, so ANY state change
+// re-renders the whole 3200-LOC tree. Memoizing these leaf components
+// isolates keystroke re-renders to just the one component being edited.
+// Callers pass stable refs (useCallback handlers, primitive props) so the
+// memo check actually rejects re-renders; see setOpdField / setVitalField
+// in the parent for the pattern.
 
-function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
+const SectionHeader = memo(function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
   return (
     <div className="flex items-center flex-wrap gap-2 mb-3">
       <Icon size={15} style={{ color: accent }} />
@@ -20,17 +28,17 @@ function SectionHeader({ icon: Icon, title, isDark, accent, children }) {
       {children}
     </div>
   );
-}
+});
 
-function FormSection({ isDark, children, className = '' }) {
+const FormSection = memo(function FormSection({ isDark, children, className = '' }) {
   return (
     <div className={`rounded-xl border p-5 ${isDark ? 'border-[#1a1a1a] bg-[#0a0a0a]' : 'border-gray-200 bg-white'} ${className}`}>
       {children}
     </div>
   );
-}
+});
 
-function ActionBtn({ children, color, isDark, onClick, className = '' }) {
+const ActionBtn = memo(function ActionBtn({ children, color, isDark, onClick, className = '' }) {
   return (
     <button onClick={onClick}
       className={`text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 ${className}`}
@@ -38,23 +46,23 @@ function ActionBtn({ children, color, isDark, onClick, className = '' }) {
       {children}
     </button>
   );
-}
+});
 
 // ThaiDatePicker removed — shared `DateField` (./DateField.jsx, imported
 // below) now drives all treatment/sale/payment date inputs here. Locale
 // `be` keeps the พ.ศ. display; `fieldClassName={inputCls}` preserves the
 // form's theme-aware bg/border/focus ring per callsite.
 
-function LabPriceSummary({ price, discount, discountType, vat, isDark }) {
+const LabPriceSummary = memo(function LabPriceSummary({ price, discount, discountType, vat, isDark }) {
   const p = parseFloat(price) || 0;
   const d = parseFloat(discount) || 0;
   const afterDisc = discountType === 'percent' ? p * (1 - d / 100) : p - d;
   const vatAmt = vat ? afterDisc * 0.07 : 0;
   const total = afterDisc + vatAmt;
   return <div className={`text-xs font-bold text-right ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ราคาสุทธิ: {total.toFixed(2)} บาท</div>;
-}
+});
 
-function MedPriceSummary({ price, discount, discountType, vat, onVatChange, premium, isDark }) {
+const MedPriceSummary = memo(function MedPriceSummary({ price, discount, discountType, vat, onVatChange, premium, isDark }) {
   const p = parseFloat(price) || 0;
   const d = parseFloat(discount) || 0;
   const afterDisc = discountType === 'percent' ? p * (1 - d / 100) : p - d;
@@ -75,15 +83,56 @@ function MedPriceSummary({ price, discount, discountType, vat, onVatChange, prem
       </div>
     </div>
   );
-}
+});
 
-function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inputCls, labelCls }) {
+// VitalsGrid — 8 input fields (weight, height, temperature, pulseRate,
+// respiratoryRate, systolicBP, diastolicBP, oxygenSaturation) + BMI display.
+// Memo'd so keystrokes in OPD textareas / meds / billing don't force an
+// 8-input reconcile here. BMI is passed in as prop so the parent's
+// useMemo([weight,height]) result doesn't require recomputation here.
+const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputCls, labelCls }) {
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-2">
+        {[['weight', 'น้ำหนัก (kg)'], ['height', 'ส่วนสูง (cm)']].map(([key, label]) => (
+          <div key={key}>
+            <label className={labelCls}>{label}</label>
+            <input value={vitals[key]} onChange={e => onFieldChange(key, e.target.value)} className={`${inputCls} text-center`} placeholder="-" />
+          </div>
+        ))}
+        <div>
+          <label className={labelCls}>BMI</label>
+          <input value={bmi} readOnly className={`${inputCls} text-center opacity-60`} placeholder="-" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+        {[['temperature', 'BT (°C)'], ['pulseRate', 'PR (bpm)'], ['respiratoryRate', 'RR'],
+          ['systolicBP', 'SBP (mmHg)'], ['diastolicBP', 'DBP (mmHg)']].map(([key, label]) => (
+          <div key={key}>
+            <label className={labelCls}>{label}</label>
+            <input value={vitals[key]} onChange={e => onFieldChange(key, e.target.value)} className={`${inputCls} text-center`} placeholder="-" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2">
+        <label className={labelCls}>O₂ Sat (%)</label>
+        <input value={vitals.oxygenSaturation} onChange={e => onFieldChange('oxygenSaturation', e.target.value)} className={`${inputCls} text-center w-24`} placeholder="-" />
+      </div>
+    </>
+  );
+});
+
+// Memo'd. Callers pass `field` (string, stable) + `onFieldChange(field,val)`
+// (stable useCallback). Without this pattern each keystroke in ONE OPD
+// textarea re-renders ALL SEVEN siblings (symptoms / exam / diagnosis / ...)
+// + their "ใช้ข้อมูลครั้งก่อน" copy panels.
+const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, value, onFieldChange, prevValue, isDark, inputCls, labelCls }) {
   const [copied, setCopied] = useState(false);
   const hasPrev = !!(prevValue && prevValue.trim());
 
   const handleCopyAndFill = () => {
     navigator.clipboard.writeText(prevValue).catch(() => {});
-    onChange(prevValue);
+    onFieldChange(field, prevValue);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -108,10 +157,10 @@ function OPDFieldWithPrev({ label, rows, value, onChange, prevValue, isDark, inp
           <p className={`text-[11px] leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{prevValue}</p>
         </div>
       )}
-      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} className={`${inputCls} resize-none`} />
+      <textarea value={value} onChange={e => onFieldChange(field, e.target.value)} rows={rows} className={`${inputCls} resize-none`} />
     </div>
   );
-}
+});
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
@@ -158,6 +207,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
     symptoms: '', physicalExam: '', diagnosis: '',
     treatmentInfo: '', treatmentPlan: '', treatmentNote: '', additionalNote: '',
   });
+  // Stable per-field updater — keeps the memo'd OPDFieldWithPrev from
+  // re-rendering all 7 siblings on every keystroke in one of them.
+  const setOpdField = useCallback((field, value) => {
+    setOpd(prev => ({ ...prev, [field]: value }));
+  }, []);
+  // Stable per-field updater for vitals (8 fields under one object).
+  const setVitalField = useCallback((field, value) => {
+    setVitals(prev => ({ ...prev, [field]: value }));
+  }, []);
 
   // Consent & Med Cert
   const [medCertActuallyCome, setMedCertActuallyCome] = useState(false);
@@ -2195,31 +2253,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             {/* Vital Signs */}
             <FormSection isDark={isDark}>
               <SectionHeader icon={Thermometer} title="ข้อมูลซักประวัติ (Vital Signs)" isDark={isDark} accent="#f59e0b" />
-              <div className="grid grid-cols-3 gap-2">
-                {[['weight', 'น้ำหนัก (kg)'], ['height', 'ส่วนสูง (cm)']].map(([key, label]) => (
-                  <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <input value={vitals[key]} onChange={e => setVitals(v => ({ ...v, [key]: e.target.value }))} className={`${inputCls} text-center`} placeholder="-" />
-                  </div>
-                ))}
-                <div>
-                  <label className={labelCls}>BMI</label>
-                  <input value={bmi} readOnly className={`${inputCls} text-center opacity-60`} placeholder="-" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-                {[['temperature', 'BT (°C)'], ['pulseRate', 'PR (bpm)'], ['respiratoryRate', 'RR'],
-                  ['systolicBP', 'SBP (mmHg)'], ['diastolicBP', 'DBP (mmHg)']].map(([key, label]) => (
-                  <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <input value={vitals[key]} onChange={e => setVitals(v => ({ ...v, [key]: e.target.value }))} className={`${inputCls} text-center`} placeholder="-" />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2">
-                <label className={labelCls}>O₂ Sat (%)</label>
-                <input value={vitals.oxygenSaturation} onChange={e => setVitals(v => ({ ...v, oxygenSaturation: e.target.value }))} className={`${inputCls} text-center w-24`} placeholder="-" />
-              </div>
+              <VitalsGrid vitals={vitals} onFieldChange={setVitalField} bmi={bmi} inputCls={inputCls} labelCls={labelCls} />
             </FormSection>
 
             {/* Consent & Med Cert */}
@@ -2273,8 +2307,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   ['treatmentNote', 'Note — หมายเหตุการรักษา', 2],
                   ['additionalNote', 'หมายเหตุเพิ่มเติม', 2],
                 ].map(([key, label, rows]) => (
-                  <OPDFieldWithPrev key={key} label={label} rows={rows}
-                    value={opd[key]} onChange={val => setOpd(prev => ({ ...prev, [key]: val }))}
+                  // field+onFieldChange (vs inline onChange) lets React.memo
+                  // reject re-renders for the other 6 siblings on keystroke.
+                  <OPDFieldWithPrev key={key} field={key} label={label} rows={rows}
+                    value={opd[key]} onFieldChange={setOpdField}
                     prevValue={prevTreatment?.[key] || ''} isDark={isDark} inputCls={inputCls} labelCls={labelCls} />
                 ))}
               </div>
