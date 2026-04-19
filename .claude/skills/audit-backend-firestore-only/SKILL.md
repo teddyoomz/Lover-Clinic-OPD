@@ -13,14 +13,20 @@ allowed-tools: "Read, Grep, Glob, Bash"
 **Anti-example**: `.claude/rules/00-session-start.md` V2 (Phase 9 violation).
 **Scope**: `src/components/backend/**/*.{js,jsx}`, `src/pages/BackendDashboard.jsx`.
 
-Only `MasterDataTab.jsx` may import `brokerClient` to do one-way sync from ProClinic → Firestore (`master_data/*`). Every other backend file must stay Firestore-only.
+Only these files may import `brokerClient` — both are one-way sync points (ProClinic → Firestore):
+- `MasterDataTab.jsx` — pulls products/doctors/staff/courses/promotions into `master_data/*`
+- `CloneTab.jsx` — pulls customer list into `be_customers/*` via `cloneOrchestrator`
+- `CustomerDetailView.jsx` — triggers per-customer resync (same pattern)
+
+Every other backend file must stay Firestore-only.
 
 ## Invariants (run on any change to src/components/backend/**)
 
-### BF1 — No `brokerClient` import in non-MasterDataTab backend files
+### BF1 — No `brokerClient` import in non-sync backend files
+Whitelist: `MasterDataTab.jsx`, `CloneTab.jsx`, `CustomerDetailView.jsx` (sync flows only).
 ```bash
 grep -rn "from ['\"]\\.\\./\\.\\./lib/brokerClient" src/components/backend/ \
-  | grep -v "MasterDataTab.jsx"
+  | grep -vE "MasterDataTab\\.jsx|CloneTab\\.jsx|CustomerDetailView\\.jsx"
 ```
 **Expected**: empty. Any match = **violation** → delete the import + refactor to use `backendClient` directly.
 
