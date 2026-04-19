@@ -121,16 +121,31 @@ async function handleCreate(req, res) {
   const location = submitRes.headers?.get?.('location') || '';
 
   let proClinicId = null;
-  // Success usually redirects to /admin/promotion/{id}/edit — pick the id out.
+
+  // Case A: redirect to /admin/promotion/{id}/edit (rare — Laravel usually doesn't do this)
   const locMatch = location.match(/\/admin\/promotion\/(\d+)/);
   if (locMatch) proClinicId = locMatch[1];
 
+  // Case B: body contains id (legacy fallback)
   if (!proClinicId && (status === 200 || status === 201)) {
     const bodyHtml = await submitRes.text();
     const errors = extractValidationErrors(bodyHtml);
     if (errors) throw new Error(errors);
     const bodyMatch = bodyHtml.match(/\/admin\/promotion\/(\d+)/);
     if (bodyMatch) proClinicId = bodyMatch[1];
+  }
+
+  // Case C: redirect to list page (most common — ProClinic's default). Fetch
+  // list filtered by name, grab the newest matching id.
+  if (!proClinicId && status >= 300 && status < 400 && /\/admin\/promotion\/?$/.test(location)) {
+    try {
+      const q = encodeURIComponent(data.promotion_name);
+      const listHtml = await session.fetchText(`${base}/admin/promotion?q=${q}&order_by=`);
+      // Scan for any /admin/promotion/{id} reference; pick the first one
+      // (list usually sorted newest-first, so our freshly-created row is on top).
+      const matches = [...listHtml.matchAll(/\/admin\/promotion\/(\d+)(?:\/edit)?/g)];
+      if (matches.length > 0) proClinicId = matches[0][1];
+    } catch (_) { /* keep proClinicId null, fall through to error */ }
   }
 
   if (!proClinicId) {

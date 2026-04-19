@@ -74,6 +74,16 @@ async function handleCreate(req, res) {
     if (bodyMatch) proClinicId = bodyMatch[1];
   }
 
+  // Redirect-to-list fallback: query by name, pick first match
+  if (!proClinicId && status >= 300 && status < 400 && /\/admin\/coupon\/?$/.test(location)) {
+    try {
+      const q = encodeURIComponent(data.coupon_name);
+      const listHtml = await session.fetchText(`${base}/admin/coupon?q=${q}`);
+      const matches = [...listHtml.matchAll(/\/admin\/coupon\/(\d+)(?:\/edit)?/g)];
+      if (matches.length > 0) proClinicId = matches[0][1];
+    } catch (_) {}
+  }
+
   if (!proClinicId) {
     let snippet = '';
     try { snippet = (await submitRes.text()).substring(0, 300); } catch {}

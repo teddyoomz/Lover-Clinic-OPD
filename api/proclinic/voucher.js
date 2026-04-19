@@ -67,6 +67,16 @@ async function handleCreate(req, res) {
     if (bodyMatch) proClinicId = bodyMatch[1];
   }
 
+  // Redirect-to-list fallback
+  if (!proClinicId && status >= 300 && status < 400 && /\/admin\/voucher\/?$/.test(location)) {
+    try {
+      const q = encodeURIComponent(data.voucher_name);
+      const listHtml = await session.fetchText(`${base}/admin/voucher?q=${q}`);
+      const matches = [...listHtml.matchAll(/\/admin\/voucher\/(\d+)(?:\/edit)?/g)];
+      if (matches.length > 0) proClinicId = matches[0][1];
+    } catch (_) {}
+  }
+
   if (!proClinicId) {
     let snippet = '';
     try { snippet = (await submitRes.text()).substring(0, 300); } catch {}
