@@ -206,7 +206,10 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
               channels.map((c, i) => (
                 <div key={i} className="flex justify-between py-1 border-b border-[var(--bd)]/50 last:border-0">
                   <span>
-                    {c.name || '-'}
+                    {/* Bug fix 2026-04-19: SaleTab/Treatment write channel as
+                        {method, amount}; some older paths use {name, amount}.
+                        Read both so the channel label always shows. */}
+                    {c.name || c.method || '-'}
                     {c.refNo && <span className="text-[10px] text-[var(--tx-muted)] ml-2">Ref: {c.refNo}</span>}
                   </span>
                   <span className="font-mono">{fmtMoney(c.amount)} บาท</span>

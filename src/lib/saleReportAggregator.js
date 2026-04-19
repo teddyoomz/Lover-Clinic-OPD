@@ -60,12 +60,15 @@ function deriveSellersLabel(sale) {
   return sellers.map(s => (s?.name || '').trim()).filter(Boolean).join(', ') || '-';
 }
 
-/** "ช่องทางชำระเงิน" — payment.channels[].name joined for paid/split sales. */
+/** "ช่องทางชำระเงิน" — payment.channels[].name joined for paid/split sales.
+ *  Bug fix 2026-04-19: SaleTab + TreatmentFormPage write channels with key
+ *  `method` (e.g. {method:'บัตรเครดิต', amount:2500}); some legacy paths
+ *  use `name`. Read both so the report never shows "-" for actual paid sales. */
 function derivePaymentChannelsLabel(sale) {
   const channels = Array.isArray(sale?.payment?.channels) ? sale.payment.channels : [];
   return channels
     .filter(c => Number(c?.amount) > 0)
-    .map(c => (c?.name || '').trim())
+    .map(c => (c?.name || c?.method || '').trim())
     .filter(Boolean)
     .join(' + ') || '-';
 }

@@ -168,64 +168,80 @@ export default function BackendSidebar({
 
           return (
             <li key={section.id} className="relative">
-              {/* Section HEADER — distinctly styled vs items.
-                  Four visual states:
-                    1) Active (contains current page): strong accent gradient
-                       + 3px accent left-rail + accent-colored icon + primary
-                       text. Looks "lit up".
-                    2) Hover (mouse over inactive): mid-strength accent
-                       gradient + accent left-rail. Visual preview of
-                       "what active looks like".
-                    3) Idle (no hover, not active): a SUBTLE always-on
-                       accent tint (icon + chevron + faint left-rail) so
-                       headers READ as category labels at a glance \u2014 even
-                       when un-touched they're visually distinct from
-                       neutral items below them.
-                    4) Items below: pure neutral grey text + dim icon \u2014
-                       the contrast against any tinted-headers above makes
-                       the hierarchy obvious. */}
+              {/* Section HEADER — typography redesigned per typeset/frontend-design.
+                  Type rules for Thai-primary UI:
+                    - DROP uppercase + wide tracking. Thai script has no case
+                      and applying tracking to Thai pushes characters apart in
+                      ways the reader perceives as "broken". Headers were
+                      reading as small + weak partly because the tracking
+                      was visually shrinking each glyph.
+                    - BUMP size 10px → 14px (text-sm) — same scale as the
+                      breadcrumb chrome up top, gives clear "category" mass.
+                    - BUMP weight font-black (900) — full extrabold on a
+                      Thai headline reads with confidence; items stay
+                      font-medium (500) for an unambiguous 400-pt weight gap.
+                    - BUMP icon 13 → 17 — proportional to the new text size.
+                    - py-2 → py-2.5 — slightly more vertical real estate so
+                      the header feels like a section, not a row.
+                    - Tracking: -0.005em (subtly tight) — Thai prefers tight
+                      spacing; default tracking would feel sluggish at the
+                      heavier weight.
+                    - Accent ramp on text: 0.85 idle / full primary active.
+                      Fire-hued tint (per .impeccable.md "Dark+Powerful+
+                      Fire") even when un-touched. */}
               {!effectiveCollapsed && (
                 <button
                   onClick={() => toggleSection(section.id)}
                   aria-expanded={isExpanded}
                   aria-controls={`nav-section-${section.id}`}
-                  className={`group w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[10px] font-black uppercase tracking-[0.12em] transition-all border-l-[3px] ${
+                  className={`group w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md text-sm font-black transition-all border-l-[3px] ${
                     activeInThisSection
-                      ? 'text-[var(--tx-primary)]'
-                      : 'hover:text-[var(--tx-primary)]'
+                      ? 'text-white'
+                      : 'hover:text-white'
                   }`}
                   style={{
-                    paddingLeft: 'calc(0.625rem - 3px)', // compensate for border so text never shifts
+                    paddingLeft: 'calc(0.625rem - 3px)',
+                    letterSpacing: '-0.005em',
                     background: activeInThisSection
-                      ? `linear-gradient(90deg, rgba(${acRgb},0.18), rgba(${acRgb},0.04))`
+                      ? `linear-gradient(90deg, rgba(${acRgb},0.20), rgba(${acRgb},0.04))`
                       : undefined,
                     borderLeftColor: activeInThisSection
-                      ? `rgba(${acRgb},0.75)`
-                      : `rgba(${acRgb},0.20)`, // always-on faint hint of the accent
-                    // Inactive idle: tint TEXT + ICON with a desaturated
-                    // accent so the header reads as "category" not "item".
-                    color: activeInThisSection ? undefined : `rgba(${acRgb},0.75)`,
+                      ? `rgba(${acRgb},0.85)`
+                      : `rgba(${acRgb},0.22)`,
+                    // 2026-04-19: dark accent (default red #dc2626) was too
+                    // dim on the dark sidebar. Mix accent with warm cream
+                    // via color-mix(in oklab) → ember/fire glow that stays
+                    // on-theme for any clinic accent color (red→coral,
+                    // sky→sky-bright, emerald→mint, etc.). Falls back to
+                    // straight rgba on browsers without color-mix support.
+                    color: activeInThisSection ? undefined : `color-mix(in oklab, ${ac} 65%, #fff5e6)`,
+                    boxShadow: activeInThisSection ? `inset 0 -1px 0 0 rgba(${acRgb},0.15)` : undefined,
                   }}
                   onMouseEnter={(e) => {
                     if (activeInThisSection) return;
-                    e.currentTarget.style.background = `linear-gradient(90deg, rgba(${acRgb},0.12), rgba(${acRgb},0.03))`;
-                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.55)`;
+                    e.currentTarget.style.background = `linear-gradient(90deg, rgba(${acRgb},0.13), rgba(${acRgb},0.03))`;
+                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.60)`;
                   }}
                   onMouseLeave={(e) => {
                     if (activeInThisSection) return;
                     e.currentTarget.style.background = '';
-                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.20)`;
+                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.22)`;
                   }}
                 >
                   <Icon
-                    size={13}
+                    size={17}
+                    strokeWidth={2.25}
                     className="flex-shrink-0 transition-colors"
-                    style={{ color: activeInThisSection ? ac : `rgba(${acRgb},0.70)` }}
+                    style={{
+                      color: activeInThisSection
+                        ? `color-mix(in oklab, ${ac} 50%, #fff5e6)`
+                        : `color-mix(in oklab, ${ac} 60%, #fff5e6)`,
+                    }}
                   />
                   <span className="flex-1 text-left truncate">{section.label}</span>
                   <ChevronDown
-                    size={11}
-                    className="flex-shrink-0 opacity-60 transition-transform duration-200"
+                    size={13}
+                    className="flex-shrink-0 opacity-50 transition-transform duration-200"
                     style={{
                       transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
                     }}
