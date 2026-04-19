@@ -23,6 +23,7 @@ import {
 const BRANCH_ID = 'main';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
+import { LocalInput, LocalTextarea } from '../form/LocalField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
@@ -972,7 +973,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </div>
               )}
 
-              <div><label className={labelCls}>เหตุผลการยกเลิก</label><textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="ระบุเหตุผล..." /></div>
+              <div><label className={labelCls}>เหตุผลการยกเลิก</label><LocalTextarea value={cancelReason} onCommit={setCancelReason} rows={2} className={`${inputCls} resize-none`} placeholder="ระบุเหตุผล..." /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>วิธีคืนเงิน</label>
                   <select value={cancelRefundMethod} onChange={e => setCancelRefundMethod(e.target.value)} className={inputCls}>
@@ -981,7 +982,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </div>
                 <div>
                   <label className={labelCls}>เงินสดที่ต้องคืน (บาท)</label>
-                  <input type="number" value={cancelRefundAmount} onChange={e => setCancelRefundAmount(e.target.value)} className={inputCls} />
+                  <LocalInput type="number" value={cancelRefundAmount} onCommit={setCancelRefundAmount} className={inputCls} />
                   <p className="text-[10px] text-[var(--tx-muted)] mt-0.5">ไม่รวมมัดจำ/Wallet ที่ระบบคืนให้อัตโนมัติ</p>
                 </div>
               </div>
@@ -1058,10 +1059,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={labelCls}>จำนวน (บาท)</label><input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className={inputCls} placeholder="0.00" /></div>
+                <div><label className={labelCls}>จำนวน (บาท)</label><LocalInput type="number" value={payAmount} onCommit={setPayAmount} className={inputCls} placeholder="0.00" /></div>
                 <div><label className={labelCls}>วันที่</label><DateField value={payDate} onChange={setPayDate} /></div>
               </div>
-              <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={payRefNo} onChange={e => setPayRefNo(e.target.value)} className={inputCls} placeholder="REF-..." /></div>
+              <div><label className={labelCls}>เลขอ้างอิง</label><LocalInput type="text" value={payRefNo} onCommit={setPayRefNo} className={inputCls} placeholder="REF-..." /></div>
             </div>
             <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <button onClick={() => setPayModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
@@ -1218,7 +1219,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--tx-muted)]">ส่วนลด</span>
-                  <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} !w-20 !py-1 text-center`} placeholder="0" />
+                  <LocalInput type="number" value={billDiscount} onCommit={setBillDiscount} className={`${inputCls} !w-20 !py-1 text-center`} placeholder="0" />
                   <select value={billDiscountType} onChange={e => setBillDiscountType(e.target.value)} className={`${inputCls} !w-16 !py-1`}>
                     <option value="amount">฿</option><option value="percent">%</option>
                   </select>
@@ -1297,7 +1298,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <div><label className={labelCls}>วันที่ชำระ</label><DateField value={paymentDate} onChange={setPaymentDate} /></div>
                 <div><label className={labelCls}>เวลา</label><input type="time" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>เลขอ้างอิง</label><input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} placeholder="REF-001" /></div>
+                <div><label className={labelCls}>เลขอ้างอิง</label><LocalInput type="text" value={refNo} onCommit={setRefNo} className={inputCls} placeholder="REF-001" /></div>
               </div>
               <label className={labelCls}>ช่องทางชำระเงิน</label>
               {pmChannels.map((ch, i) => (
@@ -1307,7 +1308,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     <option value="">เลือกช่องทาง</option>
                     {PAYMENT_CHANNELS.map(pc => <option key={pc.id} value={pc.name}>{pc.name}</option>)}
                   </select>
-                  <input type="number" value={ch.amount} onChange={e => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: e.target.value} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} />
+                  <LocalInput type="number" value={ch.amount} onCommit={v => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: v} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} />
                   <span className="text-xs text-[var(--tx-muted)] shrink-0">บาท</span>
                 </div>
               ))}
@@ -1334,7 +1335,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                     <option value="">เลือกพนักงาน</option>
                     {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
                   </select>
-                  <input type="number" value={s.percent} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, percent: e.target.value} : x))} className={`${inputCls} !w-16 text-center`} placeholder="%" disabled={!s.enabled} />
+                  <LocalInput type="number" value={s.percent} onCommit={v => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, percent: v} : x))} className={`${inputCls} !w-16 text-center`} placeholder="%" disabled={!s.enabled} />
                   <span className="text-xs text-[var(--tx-muted)]">%</span>
                 </div>
               ))}
@@ -1343,9 +1344,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             {/* Notes */}
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
               <label className={labelCls}>หมายเหตุการขาย</label>
-              <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none mb-2`} placeholder="หมายเหตุเกี่ยวกับรายการขาย" />
+              <LocalTextarea value={saleNote} onCommit={setSaleNote} rows={2} className={`${inputCls} resize-none mb-2`} placeholder="หมายเหตุเกี่ยวกับรายการขาย" />
               <label className={labelCls}>หมายเหตุการชำระเงิน</label>
-              <textarea value={paymentNote} onChange={e => setPaymentNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุเกี่ยวกับการชำระ" />
+              <LocalTextarea value={paymentNote} onCommit={setPaymentNote} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุเกี่ยวกับการชำระ" />
             </div>
 
             {/* Error + Submit */}
@@ -1460,7 +1461,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className={labelCls}>จำนวน</label>
-                    <input type="number" value={medModalQty} onChange={e => setMedModalQty(e.target.value)} min="1" className={`${inputCls} text-center`} />
+                    <LocalInput type="number" value={medModalQty} onCommit={setMedModalQty} min="1" className={`${inputCls} text-center`} />
                   </div>
                   <div>
                     <label className={labelCls}>หน่วย</label>
@@ -1480,7 +1481,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </label>
                 <div>
                   <label className={labelCls}>วิธีรับประทาน</label>
-                  <input type="text" value={medModalDosage} onChange={e => setMedModalDosage(e.target.value)} className={inputCls} placeholder="เช่น ครั้งละ 1 เม็ด วันละ 3 ครั้ง หลังอาหาร" />
+                  <LocalInput type="text" value={medModalDosage} onCommit={setMedModalDosage} className={inputCls} placeholder="เช่น ครั้งละ 1 เม็ด วันละ 3 ครั้ง หลังอาหาร" />
                 </div>
               </div>
               <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
