@@ -5,6 +5,7 @@
 //   3. fetchText auto-detects login page → re-login + retry transparently
 
 import { extractCSRF } from './scraper.js';
+import { parseRetryAfterMs } from './retry.js';
 
 // Custom error class for session expiry detection (fallback when re-login also fails)
 export class SessionExpiredError extends Error {
@@ -12,6 +13,50 @@ export class SessionExpiredError extends Error {
     super(message);
     this.name = 'SessionExpiredError';
     this.sessionExpired = true;
+  }
+}
+
+// HTTP-status-carrying error — thrown only when callers opt into `strictHttp`.
+// withRetry() inspects `.status` + `.retryAfterMs` to decide retry behavior.
+export class HttpStatusError extends Error {
+  constructor(status, statusText, url, retryAfterMs) {
+    super(`HTTP ${status} ${statusText || ''}${url ? ` — ${url}` : ''}`.trim());
+    this.name = 'HttpStatusError';
+    this.status = status;
+    this.statusText = statusText || '';
+    this.url = url || '';
+    if (retryAfterMs != null) this.retryAfterMs = retryAfterMs;
+  }
+}
+
+// A7: AbortController-based fetch timeout. `timeoutMs=0` = no timeout (default).
+// Emits an Error with `.timeout=true` on abort — withRetry treats that as
+// retriable (no `.status` set, not sessionExpired).
+async function fetchWithTimeout(url, options = {}, timeoutMs = 0) {
+  if (!timeoutMs || timeoutMs <= 0) return fetch(url, options);
+
+  // Merge caller's signal with our timeout signal. If the caller aborts, we
+  // abort too; if we time out, we don't fight the caller's abort either.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const callerSignal = options.signal;
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      const err = new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+      err.timeout = true;
+      err.cause = e;
+      throw err;
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -219,58 +264,70 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
     sessionState.cookies = result.cookies;
   }
 
+  // Shared cookie-merge helper for all 3 methods below.
+  function mergeResCookies(res) {
+    const newC = parseSetCookies(res);
+    if (!newC.length) return;
+    for (const c of newC) {
+      const name = c.split('=')[0].trim();
+      const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
+      if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
+    }
+  }
+
   // Return session object (origin exposed so API routes can build URLs)
   return {
     origin,
     cookies: sessionState.cookies,
     fetch: async (url, options = {}) => {
+      const { timeoutMs = 0, ...fetchOpts } = options;
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        ...options.headers,
+        ...fetchOpts.headers,
         'Cookie': cookiesToHeader(sessionState.cookies),
       };
-      const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'manual' });
-      const newC = parseSetCookies(res);
-      if (newC.length) {
-        for (const c of newC) {
-          const name = c.split('=')[0].trim();
-          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
-          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
-        }
-      }
+      const res = await fetchWithTimeout(url, { ...fetchOpts, headers, redirect: fetchOpts.redirect || 'manual' }, timeoutMs);
+      mergeResCookies(res);
       return res;
     },
     fetchText: async (url, options = {}) => {
+      // A7: timeoutMs adds AbortController timeout; 0 = off (default).
+      // A3 helper: strictHttp=true throws HttpStatusError on non-2xx so
+      // withRetry() can retry on 429/5xx.
+      const { timeoutMs = 0, strictHttp = false, ...fetchOpts } = options;
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        ...options.headers,
+        ...fetchOpts.headers,
         'Cookie': cookiesToHeader(sessionState.cookies),
       };
-      const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'follow' });
-      const newC = parseSetCookies(res);
-      if (newC.length) {
-        for (const c of newC) {
-          const name = c.split('=')[0].trim();
-          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
-          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
-        }
+      const res = await fetchWithTimeout(url, { ...fetchOpts, headers, redirect: fetchOpts.redirect || 'follow' }, timeoutMs);
+      mergeResCookies(res);
+
+      if (strictHttp && res.status >= 400) {
+        const retryAfterMs = parseRetryAfterMs(res.headers.get('retry-after'));
+        throw new HttpStatusError(res.status, res.statusText, url, retryAfterMs);
       }
+
       const text = await res.text();
 
-      // Auto re-login if response is the LOGIN page specifically
-      // Detection: login page has action="/login" — customer pages don't
+      // Auto re-login if response is the LOGIN page specifically.
+      // Detection: login page has action="/login" — customer pages don't.
       const isLoginPage = text.includes('action="/login"') || (text.includes('/login') && text.includes('name="password"') && !text.includes('admin/customer'));
       if (isLoginPage) {
         dbg('[session] fetchText got login page — auto re-login & retry');
         try {
           await reLogin();
-          // Retry the original request with new cookies
+          // Retry the original request with new cookies.
           const retryHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            ...options.headers,
+            ...fetchOpts.headers,
             'Cookie': cookiesToHeader(sessionState.cookies),
           };
-          const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+          const retryRes = await fetchWithTimeout(url, { ...fetchOpts, headers: retryHeaders, redirect: fetchOpts.redirect || 'follow' }, timeoutMs);
+          if (strictHttp && retryRes.status >= 400) {
+            const retryAfterMs = parseRetryAfterMs(retryRes.headers.get('retry-after'));
+            throw new HttpStatusError(retryRes.status, retryRes.statusText, url, retryAfterMs);
+          }
           const retryText = await retryRes.text();
           if (retryText.includes('action="/login"') || (retryText.includes('/login') && retryText.includes('name="password"') && !retryText.includes('admin/customer'))) {
             throw new SessionExpiredError('Re-login สำเร็จแต่ session ยังใช้ไม่ได้ — ตรวจสอบ email/password');
@@ -278,6 +335,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
           return retryText;
         } catch (e) {
           if (e instanceof SessionExpiredError) throw e;
+          if (e instanceof HttpStatusError) throw e; // let withRetry decide
           const err = new SessionExpiredError(`Auto re-login ล้มเหลว: ${e.message}`);
           err.extensionNeeded = true;
           throw err;
@@ -286,26 +344,20 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
       return text;
     },
     fetchJSON: async (url, options = {}) => {
+      const { timeoutMs = 0, ...fetchOpts } = options;
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        ...options.headers,
+        ...fetchOpts.headers,
         'Cookie': cookiesToHeader(sessionState.cookies),
       };
-      const res = await fetch(url, { ...options, headers, redirect: options.redirect || 'follow' });
-      const newC = parseSetCookies(res);
-      if (newC.length) {
-        for (const c of newC) {
-          const name = c.split('=')[0].trim();
-          const idx = sessionState.cookies.findIndex(x => x.split('=')[0].trim() === name);
-          if (idx >= 0) sessionState.cookies[idx] = c; else sessionState.cookies.push(c);
-        }
-      }
+      const res = await fetchWithTimeout(url, { ...fetchOpts, headers, redirect: fetchOpts.redirect || 'follow' }, timeoutMs);
+      mergeResCookies(res);
       // Check if redirected to login page
       if (res.redirected && res.url.includes('/login')) {
         dbg('[session] fetchJSON redirected to login — auto re-login & retry');
         await reLogin();
         const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
-        const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+        const retryRes = await fetchWithTimeout(url, { ...fetchOpts, headers: retryHeaders, redirect: fetchOpts.redirect || 'follow' }, timeoutMs);
         return retryRes.json();
       }
       // Check content-type: if ProClinic returns HTML instead of JSON, session is likely expired
@@ -316,7 +368,7 @@ export async function createSession(originArg, emailArg, passwordArg, _sessionDo
           dbg('[session] fetchJSON got HTML login page — auto re-login & retry');
           await reLogin();
           const retryHeaders = { ...headers, 'Cookie': cookiesToHeader(sessionState.cookies) };
-          const retryRes = await fetch(url, { ...options, headers: retryHeaders, redirect: options.redirect || 'follow' });
+          const retryRes = await fetchWithTimeout(url, { ...fetchOpts, headers: retryHeaders, redirect: fetchOpts.redirect || 'follow' }, timeoutMs);
           return retryRes.json();
         }
         // Not JSON and not login page — try parsing anyway

@@ -7,15 +7,24 @@ import {
   extractProductList, extractDoctorList, extractStaffList, extractCourseList,
   extractListPagination
 } from './_lib/scraper.js';
+import { withRetry } from './_lib/retry.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
+
+// A3/A7: centralized retry + timeout budget for all sync scrapes.
+// Each fetch hard-capped at 20s; up to 3 retries with exp backoff on
+// 429/5xx/timeout/network errors. Total worst-case per URL: 20s + 0.5s +
+// 20s + 1s + 20s + 2s + 20s ≈ 84s, which exceeds Vercel 60s — so we choose
+// conservative values and trust that the first retry usually succeeds.
+const FETCH_OPTS = { timeoutMs: 20000, strictHttp: true };
+const RETRY_OPTS = { retries: 3, baseMs: 500, maxMs: 8000 };
 
 // ─── Parallel paginated scraping ────────────────────────────────────────────
 // Fetches page 1, detects max page, then fetches remaining pages in parallel.
 
 async function scrapePaginated(session, baseUrl, extractFn, maxPages = 50) {
-  // Fetch page 1
-  const page1Html = await session.fetchText(baseUrl);
+  // Fetch page 1 (retryable + timeout per A3/A7)
+  const page1Html = await withRetry(() => session.fetchText(baseUrl, FETCH_OPTS), RETRY_OPTS);
   const page1Items = extractFn(page1Html);
   const { maxPage } = extractListPagination(page1Html);
   const totalPages = Math.min(maxPage, maxPages);
@@ -31,10 +40,11 @@ async function scrapePaginated(session, baseUrl, extractFn, maxPages = 50) {
     const promises = [];
     for (let p = batch; p <= end; p++) {
       const sep = baseUrl.includes('?') ? '&' : '?';
+      const pageUrl = `${baseUrl}${sep}page=${p}`;
       promises.push(
-        session.fetchText(`${baseUrl}${sep}page=${p}`)
+        withRetry(() => session.fetchText(pageUrl, FETCH_OPTS), RETRY_OPTS)
           .then(html => extractFn(html))
-          .catch(() => []) // skip failed pages
+          .catch(() => []) // skip failed pages after retries exhausted
       );
     }
     const results = await Promise.all(promises);
@@ -102,11 +112,18 @@ async function handleSyncWalletTypes(req, res) {
   const base = session.origin;
   const allItems = [];
   for (let p = 1; ; p++) {
-    const resp = await session.fetch(`${base}/admin/api/wallet?page=${p}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    if (!resp.ok) throw new Error(`Wallet API error: ${resp.status}`);
-    const data = await resp.json();
+    const data = await withRetry(async () => {
+      const resp = await session.fetch(`${base}/admin/api/wallet?page=${p}`, {
+        headers: { 'Accept': 'application/json' },
+        timeoutMs: FETCH_OPTS.timeoutMs,
+      });
+      if (!resp.ok) {
+        const err = new Error(`Wallet API error: ${resp.status}`);
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
+    }, RETRY_OPTS);
     const items = data.data || [];
     allItems.push(...items);
     if (p >= (data.last_page || 1) || p >= 20) break;
@@ -190,7 +207,8 @@ async function handleSyncCoupons(req, res) {
   const allItems = [];
   for (let p = 1; p <= 20; p++) {
     const url = p === 1 ? `${base}/admin/coupon` : `${base}/admin/coupon?page=${p}`;
-    const html = await session.fetchText(url);
+    // A3/A7: retry on 429/5xx/timeout with exp backoff; each fetch capped at 20s.
+    const html = await withRetry(() => session.fetchText(url, FETCH_OPTS), RETRY_OPTS);
     const rows = extractCouponLikeRows(html, 'coupon');
     if (rows.length === 0) break;
     for (const r of rows) {
@@ -220,7 +238,8 @@ async function handleSyncVouchers(req, res) {
   const allItems = [];
   for (let p = 1; p <= 20; p++) {
     const url = p === 1 ? `${base}/admin/voucher` : `${base}/admin/voucher?page=${p}`;
-    const html = await session.fetchText(url);
+    // A3/A7: retry on 429/5xx/timeout with exp backoff; each fetch capped at 20s.
+    const html = await withRetry(() => session.fetchText(url, FETCH_OPTS), RETRY_OPTS);
     const rows = extractCouponLikeRows(html, 'voucher');
     if (rows.length === 0) break;
     for (const r of rows) {
@@ -249,11 +268,18 @@ async function handleSyncMembershipTypes(req, res) {
   const base = session.origin;
   const allItems = [];
   for (let p = 1; ; p++) {
-    const resp = await session.fetch(`${base}/admin/api/membership?page=${p}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    if (!resp.ok) throw new Error(`Membership API error: ${resp.status}`);
-    const data = await resp.json();
+    const data = await withRetry(async () => {
+      const resp = await session.fetch(`${base}/admin/api/membership?page=${p}`, {
+        headers: { 'Accept': 'application/json' },
+        timeoutMs: FETCH_OPTS.timeoutMs,
+      });
+      if (!resp.ok) {
+        const err = new Error(`Membership API error: ${resp.status}`);
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
+    }, RETRY_OPTS);
     const items = data.data || [];
     allItems.push(...items);
     if (p >= (data.last_page || 1) || p >= 20) break;
@@ -295,9 +321,18 @@ async function handleSyncCourses(req, res) {
   const allItems = [];
   for (let p = 1; ; p++) {
     const apiUrl = `${base}/admin/api/item/course?page=${p}`;
-    const resp = await session.fetch(apiUrl, { headers: { 'Accept': 'application/json' } });
-    if (!resp.ok) throw new Error(`Course API error: ${resp.status}`);
-    const data = await resp.json();
+    const data = await withRetry(async () => {
+      const resp = await session.fetch(apiUrl, {
+        headers: { 'Accept': 'application/json' },
+        timeoutMs: FETCH_OPTS.timeoutMs,
+      });
+      if (!resp.ok) {
+        const err = new Error(`Course API error: ${resp.status}`);
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
+    }, RETRY_OPTS);
     const items = data.data || [];
     allItems.push(...items);
     if (p >= (data.last_page || 1) || p >= 30) break;
