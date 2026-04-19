@@ -528,19 +528,44 @@ export async function deleteBackendAppointment(appointmentId) {
   return { success: true };
 }
 
+/**
+ * Normalise an appointment `date` field to YYYY-MM-DD, tolerating legacy/
+ * drifted formats ("2026-04-30T00:00:00.000Z", "2026-04-30 ", Firestore
+ * Timestamp fallback via toDate()).
+ * Returns '' if unrecognisable.
+ */
+function normalizeApptDate(rawDate) {
+  if (!rawDate) return '';
+  if (typeof rawDate === 'string') {
+    return rawDate.trim().slice(0, 10);
+  }
+  if (rawDate && typeof rawDate.toDate === 'function') {
+    const d = rawDate.toDate();
+    if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+    return rawDate.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
 /** Get all appointments for a month (YYYY-MM) */
 export async function getAppointmentsByMonth(yearMonth) {
   const snap = await getDocs(appointmentsCol());
   const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  // Filter by month prefix (date field is "YYYY-MM-DD")
-  const filtered = all.filter(a => a.date && a.date.startsWith(yearMonth));
-  // Group by date
+  // Normalize `date` on every row so the month-level bubble count matches
+  // the day-level list (bug 2026-04-20: drifted dates like
+  // "2026-04-30T00:00:00" passed month .startsWith() but failed day
+  // where('date','==','2026-04-30'), so bubble showed count but day was empty).
   const grouped = {};
-  filtered.forEach(a => {
-    if (!grouped[a.date]) grouped[a.date] = [];
-    grouped[a.date].push(a);
-  });
-  // Sort each day by startTime
+  for (const a of all) {
+    const iso = normalizeApptDate(a.date);
+    if (!iso || iso.slice(0, 7) !== yearMonth) continue;
+    // Store with normalized date so UI keys match getAppointmentsByDate output
+    const normalized = { ...a, date: iso };
+    if (!grouped[iso]) grouped[iso] = [];
+    grouped[iso].push(normalized);
+  }
   Object.values(grouped).forEach(arr => arr.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')));
   return grouped;
 }
@@ -554,11 +579,20 @@ export async function getCustomerAppointments(customerId) {
   return appts;
 }
 
-/** Get all appointments for a specific date (YYYY-MM-DD) */
+/** Get all appointments for a specific date (YYYY-MM-DD).
+ *
+ * Client-side filter via normalizeApptDate to tolerate drifted date formats
+ * (timestamps, trailing whitespace, Firestore Timestamp values). Without
+ * this, Firestore where('date','==',x) misses docs that the month-level
+ * bubble counts include — producing "bubble says 1 but day is empty". */
 export async function getAppointmentsByDate(dateStr) {
-  const q = query(appointmentsCol(), where('date', '==', dateStr));
-  const snap = await getDocs(q);
-  const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const target = normalizeApptDate(dateStr);
+  if (!target) return [];
+  const snap = await getDocs(appointmentsCol());
+  const appts = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(a => normalizeApptDate(a.date) === target)
+    .map(a => ({ ...a, date: target })); // normalize outbound shape too
   appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
   return appts;
 }

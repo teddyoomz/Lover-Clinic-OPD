@@ -29,6 +29,7 @@ const STATUSES = [
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
 const FALLBACK_ROOMS = []; // no fallback — show only rooms that have appointments
+const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav
 const SLOT_H = 36; // px per 30-min slot
 
 // Generate time slots 08:30 - 22:30 (30-min)
@@ -104,14 +105,28 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   useEffect(() => { if (selectedDate) loadDay(selectedDate); }, [selectedDate, loadDay]);
 
   // ── Derived: rooms, doctors for the day ──
-  // Collect all known rooms from month data + day data
-  const [allKnownRooms, setAllKnownRooms] = useState([]);
+  // Cumulative across month navigation + persistent via localStorage. Bug
+  // 2026-04-20: previously REPLACED rooms on every month change → months
+  // with 1 booking showed only 1 room column, blocking new bookings into
+  // other rooms. Fix: only ADD, never remove, seeded from prior sessions.
+  const [allKnownRooms, setAllKnownRooms] = useState(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(ROOMS_CACHE_KEY) : null;
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(r => typeof r === 'string' && r.trim()).slice(0, 50) : [];
+    } catch { return []; }
+  });
   useEffect(() => {
-    // Gather rooms from all appointments across the month
-    const roomSet = new Set();
-    Object.values(monthAppts).forEach(arr => arr.forEach(a => { if (a.roomName) roomSet.add(a.roomName); }));
-    dayAppts.forEach(a => { if (a.roomName) roomSet.add(a.roomName); });
-    if (roomSet.size > 0) setAllKnownRooms([...roomSet].sort());
+    setAllKnownRooms(prev => {
+      const roomSet = new Set(prev);
+      Object.values(monthAppts).forEach(arr => arr.forEach(a => { if (a.roomName) roomSet.add(a.roomName); }));
+      dayAppts.forEach(a => { if (a.roomName) roomSet.add(a.roomName); });
+      const next = [...roomSet].sort();
+      // Early-exit if identical to avoid redundant localStorage writes
+      if (next.length === prev.length && next.every((r, i) => r === prev[i])) return prev;
+      try { window.localStorage?.setItem(ROOMS_CACHE_KEY, JSON.stringify(next)); } catch { /* quota or no-window: ignore */ }
+      return next;
+    });
   }, [monthAppts, dayAppts]);
 
   const rooms = useMemo(() => {
