@@ -139,3 +139,157 @@ describe('CustomerReportTab — render + interactions', () => {
     expect(goldRow.textContent).toContain('40,000');
   });
 });
+
+/* ─── SORTABLE COLUMNS ───────────────────────────────────────────────────── */
+
+describe('CustomerReportTab — sortable columns', () => {
+  // Helper: read the customerId from each visible row in display order
+  const getRowOrder = () =>
+    Array.from(document.querySelectorAll('[data-testid^="customer-row-"]'))
+      .map(r => r.getAttribute('data-testid').replace('customer-row-', ''));
+
+  it('renders all 9 column headers as sortable buttons', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-report-table'));
+    const expectedKeys = ['customerName', 'genderBirth', 'occupationIncome', 'source',
+      'depositBalance', 'walletBalance', 'points', 'purchaseTotal', 'registeredDate'];
+    for (const k of expectedKeys) {
+      expect(screen.getByTestId(`sort-${k}`)).toBeInTheDocument();
+    }
+  });
+
+  it('default sort = registeredDate desc (matches aggregator default)', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_NEW'));
+    // CUST_NEW (2026-04-15) is the newest — should be first
+    expect(getRowOrder()[0]).toBe('CUST_NEW');
+    // CUST_PLAT (2024-12-01) is the oldest — should be last
+    expect(getRowOrder().at(-1)).toBe('CUST_PLAT');
+  });
+
+  it('clicking depositBalance header sorts numeric desc (default for numbers)', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-depositBalance'));
+    await waitFor(() => {
+      const order = getRowOrder();
+      // Top deposit = PLAT(15000), then GOLD(5000), REG(2000), BUSY(100.33), DIA(0), NEW(0)
+      expect(order[0]).toBe('CUST_PLAT');
+      expect(order[1]).toBe('CUST_GOLD');
+      expect(order[2]).toBe('CUST_REG');
+    });
+  });
+
+  it('clicking depositBalance again toggles to asc', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-depositBalance')); // desc
+    await waitFor(() => expect(getRowOrder()[0]).toBe('CUST_PLAT'));
+    fireEvent.click(screen.getByTestId('sort-depositBalance')); // asc
+    await waitFor(() => {
+      const order = getRowOrder();
+      // Asc: 0-deposit customers (NEW + DIA) first, then BUSY 100.33, REG 2000, GOLD 5000, PLAT 15000
+      expect(order.at(-1)).toBe('CUST_PLAT');
+      expect(order.at(-2)).toBe('CUST_GOLD');
+    });
+  });
+
+  it('clicking walletBalance sorts by wallet desc', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-walletBalance'));
+    await waitFor(() => {
+      // Top wallet = DIA(50000), GOLD(12000), PLAT(8500.5), then 0s
+      const order = getRowOrder();
+      expect(order[0]).toBe('CUST_DIA');
+      expect(order[1]).toBe('CUST_GOLD');
+      expect(order[2]).toBe('CUST_PLAT');
+    });
+  });
+
+  it('clicking points sorts by points desc', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-points'));
+    await waitFor(() => {
+      // Top points = PLAT(9999), DIA(1200), GOLD(320), BUSY(50)
+      const order = getRowOrder();
+      expect(order[0]).toBe('CUST_PLAT');
+      expect(order[1]).toBe('CUST_DIA');
+      expect(order[2]).toBe('CUST_GOLD');
+    });
+  });
+
+  it('clicking purchaseTotal sorts by total purchase desc', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-purchaseTotal'));
+    await waitFor(() => {
+      // Top = PLAT(175000.5), DIA(100000), GOLD(40000), BUSY(7777), then 0s
+      const order = getRowOrder();
+      expect(order[0]).toBe('CUST_PLAT');
+      expect(order[1]).toBe('CUST_DIA');
+      expect(order[2]).toBe('CUST_GOLD');
+    });
+  });
+
+  it('clicking customerName sorts strings asc (Thai locale)', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-customerName'));
+    await waitFor(() => {
+      // Strings sort asc by default. Just verify the order changed from the
+      // default (registeredDate desc) to a different one — a deterministic
+      // localeCompare result is environment-dependent for Thai chars.
+      const order = getRowOrder();
+      expect(order[0]).not.toBe('CUST_NEW'); // default first row, no longer
+    });
+  });
+
+  it('clicking source sorts strings (asc default)', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-source'));
+    await waitFor(() => {
+      const order = getRowOrder();
+      // Sources: เพื่อนแนะนำ, Facebook, เดินผ่าน, '', Google Ads, TikTok
+      // Asc localeCompare in Thai locale puts Thai chars before/after Latin
+      // depending on env. Just verify the order CHANGED from default.
+      expect(order).not.toEqual(['CUST_NEW', 'CUST_BUSY', 'CUST_REG', 'CUST_DIA', 'CUST_GOLD', 'CUST_PLAT']);
+    });
+  });
+
+  it('aria-sort attribute reflects active column', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    // Default: registeredDate desc → that <th> should have aria-sort="descending"
+    const regHeader = screen.getByTestId('sort-registeredDate').closest('th');
+    expect(regHeader.getAttribute('aria-sort')).toBe('descending');
+    // Other headers: aria-sort="none"
+    const depHeader = screen.getByTestId('sort-depositBalance').closest('th');
+    expect(depHeader.getAttribute('aria-sort')).toBe('none');
+    // Click depositBalance → its aria-sort flips to "descending"
+    fireEvent.click(screen.getByTestId('sort-depositBalance'));
+    await waitFor(() => {
+      expect(depHeader.getAttribute('aria-sort')).toBe('descending');
+      expect(regHeader.getAttribute('aria-sort')).toBe('none');
+    });
+  });
+
+  it('sort persists across filter changes (state independent)', async () => {
+    render(<CustomerReportTab clinicSettings={{}} />);
+    await waitFor(() => screen.getByTestId('customer-row-CUST_GOLD'));
+    fireEvent.click(screen.getByTestId('sort-depositBalance'));
+    await waitFor(() => expect(getRowOrder()[0]).toBe('CUST_PLAT'));
+    // Apply membership filter — sort should still be deposit desc
+    fireEvent.change(screen.getByTestId('customer-filter-membership'), { target: { value: 'GOLD' } });
+    await waitFor(() => {
+      const order = getRowOrder();
+      expect(order.length).toBe(1);
+      expect(order[0]).toBe('CUST_GOLD');
+      // header still shows descending
+      const depHeader = screen.getByTestId('sort-depositBalance').closest('th');
+      expect(depHeader.getAttribute('aria-sort')).toBe('descending');
+    });
+  });
+});

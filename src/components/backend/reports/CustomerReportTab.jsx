@@ -7,13 +7,28 @@
 // backend tab uses, so the report can never disagree with the source UI.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Users, Star } from 'lucide-react';
+import { Users, Star, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { aggregateCustomerReport, buildCustomerReportColumns } from '../../../lib/customerReportAggregator.js';
 import { loadAllCustomersForReport, loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
+import { sortBy } from '../../../lib/reportsUtils.js';
+
+// Sortable columns — each maps to a key on the aggregator row.
+// Composite columns (ลูกค้า, การสั่งซื้อ) use a sub-key for the underlying value.
+const SORTABLE = {
+  customerName:    { key: 'customerName',         type: 'string', label: 'ลูกค้า' },
+  genderBirth:     { key: 'genderBirth',          type: 'string', label: 'เพศ / วันเกิด' },
+  occupationIncome:{ key: 'occupationIncome',     type: 'string', label: 'อาชีพ / รายได้' },
+  source:          { key: 'source',               type: 'string', label: 'ที่มา' },
+  depositBalance:  { key: 'depositBalance',       type: 'number', label: 'เงินมัดจำ',  align: 'right' },
+  walletBalance:   { key: 'walletBalance',        type: 'number', label: 'Wallet',     align: 'right' },
+  points:          { key: 'points',               type: 'number', label: 'คะแนน',      align: 'right' },
+  purchaseTotal:   { key: 'purchaseTotal',        type: 'number', label: 'การสั่งซื้อ' },
+  registeredDate:  { key: 'registeredDate',       type: 'string', label: 'วันที่ลงทะเบียน' },
+};
 
 const MEMBERSHIP_OPTIONS = [
   { v: 'all',      t: 'ทุกประเภท' },
@@ -53,6 +68,10 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
   const [marketingConsentOnly, setMarketingConsentOnly] = useState(false);
   const [membershipFilter, setMembershipFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  // Default sort: registered date desc (matches the aggregator's default order
+  // and ProClinic's UI). Click a header to override.
+  const [sortKey, setSortKey] = useState('registeredDate');
+  const [sortDir, setSortDir] = useState('desc');
   const [allCustomers, setAllCustomers] = useState([]);
   const [allSales, setAllSales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +101,19 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
     [allCustomers, allSales, from, to, searchText, marketingConsentOnly, membershipFilter, sourceFilter]
   );
 
+  // Apply column sort AFTER aggregation. Aggregator's default order is
+  // already registeredDate desc; for any other sortKey, override.
+  const sortedRows = useMemo(() => {
+    if (sortKey === 'registeredDate' && sortDir === 'desc') return out.rows; // no-op
+    const meta = SORTABLE[sortKey];
+    if (!meta) return out.rows;
+    return sortBy(out.rows, r => {
+      const v = r?.[meta.key];
+      if (meta.type === 'number') return Number(v) || 0;
+      return v || '';
+    }, sortDir);
+  }, [out.rows, sortKey, sortDir]);
+
   // Derive source dropdown from actual data
   const sourceOptions = useMemo(() => {
     const set = new Set();
@@ -107,6 +139,20 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
   }, [out.rows, columns, from, to]);
 
   const handleRefresh = useCallback(() => setReloadKey(k => k + 1), []);
+
+  // Click a header → if same column, toggle dir; if new, default by type:
+  // strings asc, numbers desc (most users want "biggest first" for money).
+  const handleSort = useCallback((key) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
+      const defaultDir = SORTABLE[key]?.type === 'number' ? 'desc' : 'asc';
+      setSortDir(defaultDir);
+      return key;
+    });
+  }, []);
 
   const handleOpenCustomer = useCallback((customerId) => {
     if (!customerId || typeof window === 'undefined') return;
@@ -142,11 +188,41 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
       }
     >
       <CustomerReportTable
-        rows={out.rows}
+        rows={sortedRows}
         totals={out.totals}
         onOpenCustomer={handleOpenCustomer}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
       />
     </ReportShell>
+  );
+}
+
+/** Sortable column header — click to toggle, shows arrow indicator. */
+function SortHeader({ sortKey, currentKey, currentDir, onSort, align = 'left', children }) {
+  const isActive = currentKey === sortKey;
+  const Arrow = isActive ? (currentDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const ariaSort = isActive ? (currentDir === 'asc' ? 'ascending' : 'descending') : 'none';
+  return (
+    <th
+      scope="col"
+      aria-sort={ariaSort}
+      className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'} font-bold whitespace-nowrap`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 select-none transition-colors ${
+          isActive ? 'text-cyan-300' : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+        }`}
+        data-testid={`sort-${sortKey}`}
+        title={`เรียงตาม${SORTABLE[sortKey]?.label || sortKey}`}
+      >
+        <span>{children}</span>
+        <Arrow size={11} className={isActive ? '' : 'opacity-40'} />
+      </button>
+    </th>
   );
 }
 
@@ -197,21 +273,22 @@ function FiltersRow({
   );
 }
 
-function CustomerReportTable({ rows, totals, onOpenCustomer }) {
+function CustomerReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir, onSort }) {
+  const headerProps = { currentKey: sortKey, currentDir: sortDir, onSort };
   return (
     <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="customer-report-table">
       <table className="w-full text-xs min-w-[1200px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>
-            <th className="px-3 py-2 text-left font-bold">ลูกค้า</th>
-            <th className="px-3 py-2 text-left font-bold">เพศ / วันเกิด</th>
-            <th className="px-3 py-2 text-left font-bold">อาชีพ / รายได้</th>
-            <th className="px-3 py-2 text-left font-bold">ที่มา</th>
-            <th className="px-3 py-2 text-right font-bold">เงินมัดจำ</th>
-            <th className="px-3 py-2 text-right font-bold">Wallet</th>
-            <th className="px-3 py-2 text-right font-bold">คะแนน</th>
-            <th className="px-3 py-2 text-left font-bold">การสั่งซื้อ</th>
-            <th className="px-3 py-2 text-left font-bold">วันที่ลงทะเบียน</th>
+            <SortHeader sortKey="customerName"     {...headerProps}>ลูกค้า</SortHeader>
+            <SortHeader sortKey="genderBirth"      {...headerProps}>เพศ / วันเกิด</SortHeader>
+            <SortHeader sortKey="occupationIncome" {...headerProps}>อาชีพ / รายได้</SortHeader>
+            <SortHeader sortKey="source"           {...headerProps}>ที่มา</SortHeader>
+            <SortHeader sortKey="depositBalance"   align="right" {...headerProps}>เงินมัดจำ</SortHeader>
+            <SortHeader sortKey="walletBalance"    align="right" {...headerProps}>Wallet</SortHeader>
+            <SortHeader sortKey="points"           align="right" {...headerProps}>คะแนน</SortHeader>
+            <SortHeader sortKey="purchaseTotal"    {...headerProps}>การสั่งซื้อ</SortHeader>
+            <SortHeader sortKey="registeredDate"   {...headerProps}>วันที่ลงทะเบียน</SortHeader>
           </tr>
         </thead>
         <tbody>
