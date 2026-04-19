@@ -19,7 +19,28 @@ const analyze = process.env.ANALYZE === '1'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      // React Compiler (stable 1.0.0, 2026-04) — auto-memoizes components,
+      // hooks, and JSX expressions so we don't need manual `memo` /
+      // `useMemo` / `useCallback` everywhere. Critical for
+      // TreatmentFormPage (119 useState) + SaleTab (76 useState) where
+      // every keystroke otherwise reconciles thousands of LOC.
+      //
+      // Compiler refuses to compile components that violate React rules
+      // (state mutation during render, stale closures in effects, etc.)
+      // and silently skips them — runtime behavior is never changed, only
+      // optimized when safe. If lag returns on a specific component, run
+      // `eslint-plugin-react-compiler` to find the opt-out reason.
+      babel: {
+        plugins: [
+          ['babel-plugin-react-compiler', {
+            // target: '19' defaults correctly when React 19 is in
+            // package.json. Keep explicit for clarity + future upgrades.
+            target: '19',
+          }],
+        ],
+      },
+    }),
     versionPlugin(),
     ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
   ],
