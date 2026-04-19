@@ -56,15 +56,34 @@ export default function MarketingTabShell({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header — typeset 2026-04-19: white title at 24px, accent in the
+          chip (left) + counts (numbers semibold). Same pattern as
+          ReportShell so all backend tabs read with consistent rhythm. */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black tracking-wider uppercase" style={{ color: ac }}>
-            {Icon ? <Icon size={20} className="inline mr-2" /> : null} {title}
-          </h2>
-          <p className="text-xs text-[var(--tx-muted)] mt-0.5">
-            จำนวน {totalCount} รายการ · แสดง {filteredCount} รายการ
-          </p>
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {Icon && (
+            <span
+              className="flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl mt-0.5"
+              style={{
+                background: `linear-gradient(135deg, rgba(${acRgb},0.20), rgba(${acRgb},0.06))`,
+                border: `1px solid rgba(${acRgb},0.30)`,
+                boxShadow: `0 0 16px -4px rgba(${acRgb},0.30)`,
+              }}
+            >
+              <Icon size={20} strokeWidth={2.25} style={{ color: ac }} />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2
+              className="text-2xl font-black text-[var(--tx-heading)] leading-tight"
+              style={{ letterSpacing: '-0.015em' }}
+            >
+              {title}
+            </h2>
+            <p className="text-sm text-[var(--tx-muted)] mt-1">
+              จำนวน {totalCount} รายการ · แสดง {filteredCount} รายการ
+            </p>
+          </div>
         </div>
         <button
           onClick={onCreate}

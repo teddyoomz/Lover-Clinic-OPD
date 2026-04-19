@@ -94,10 +94,14 @@ describe('MarketingTabShell', () => {
     expect(screen.getByText('โหลดล้มเหลว')).toBeInTheDocument();
   });
 
-  it('T10 title color uses accent from clinicSettings (Thai culture: red on names banned, not on tab titles)', () => {
+  it('T10 accent from clinicSettings propagates to header chrome (typography redesign 2026-04-19: title is white, accent now lives on the icon chip)', () => {
+    // Old assertion (h2 color = accent) is gone — title is intentionally
+    // var(--tx-heading) for max readability. The accent still propagates
+    // through the icon chip's gradient bg + border + box-shadow.
     const { container } = render(<MarketingTabShell {...baseProps} clinicSettings={{ accentColor: '#3b82f6' }} />);
-    const title = container.querySelector('h2');
-    expect(title).toHaveStyle({ color: '#3b82f6' });
+    const accentBearing = Array.from(container.querySelectorAll('[style]'))
+      .filter(el => el.getAttribute('style')?.includes('59, 130, 246'));
+    expect(accentBearing.length).toBeGreaterThan(0);
   });
 
   it('T11 empty state still renders when no Icon supplied', () => {

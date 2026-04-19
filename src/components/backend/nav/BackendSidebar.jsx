@@ -80,24 +80,32 @@ export default function BackendSidebar({
       aria-label="เมนูระบบหลังบ้าน"
       className={`${widthClass} shrink-0 flex flex-col bg-[var(--bg-surface)] border-r border-[var(--bd)] transition-[width] duration-200 ease-out h-full`}
     >
-      {/* Header: icon + clinic name (hidden when collapsed) */}
-      <div className="px-3 py-3.5 border-b border-[var(--bd)] flex items-center gap-2.5 flex-shrink-0">
+      {/* Header: icon chip + clinic name. Typeset 2026-04-19 — h1 bumped
+          11→16px font-black white text (was tiny accent-color tracking-wider
+          uppercase = unreadable Thai). Clinic name subtitle moved to text-xs
+          weight 500 muted for clear secondary info. */}
+      <div className="px-3 py-4 border-b border-[var(--bd)] flex items-center gap-3 flex-shrink-0">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
           style={{
-            background: `linear-gradient(135deg, rgba(${acRgb},0.25), rgba(${acRgb},0.1))`,
-            border: `1px solid rgba(${acRgb},0.35)`,
-            boxShadow: `0 0 20px rgba(${acRgb},0.15)`,
+            background: `linear-gradient(135deg, rgba(${acRgb},0.30), rgba(${acRgb},0.10))`,
+            border: `1px solid rgba(${acRgb},0.40)`,
+            boxShadow: `0 0 22px -4px rgba(${acRgb},0.40)`,
           }}
         >
-          <Database size={18} style={{ color: ac }} />
+          <Database size={20} strokeWidth={2.25} style={{ color: ac }} />
         </div>
         {!effectiveCollapsed && (
           <div className="min-w-0">
-            <h1 className="text-[11px] font-black tracking-wider uppercase truncate" style={{ color: ac }}>
+            <h1
+              className="text-base font-black text-[var(--tx-heading)] truncate leading-tight"
+              style={{ letterSpacing: '-0.01em' }}
+            >
               ระบบหลังบ้าน
             </h1>
-            <p className="text-[10px] text-[var(--tx-muted)] truncate">{clinicSettings?.clinicName || 'Clinic'}</p>
+            <p className="text-xs font-medium text-[var(--tx-muted)] truncate mt-0.5">
+              {clinicSettings?.clinicName || 'Clinic'}
+            </p>
           </div>
         )}
       </div>
@@ -189,61 +197,70 @@ export default function BackendSidebar({
                     - Accent ramp on text: 0.85 idle / full primary active.
                       Fire-hued tint (per .impeccable.md "Dark+Powerful+
                       Fire") even when un-touched. */}
+              {/* SECTION HEADER — WHITE text, accent-decorated chrome.
+                  Per-user 2026-04-19: text in white reads cleanest on the
+                  dark theme; accent color carries through the icon, the
+                  always-on left-rail, and the active-state gradient — so
+                  the "Dark + Powerful + Fire" identity is preserved through
+                  the chrome, NOT through dim-tinted text. */}
               {!effectiveCollapsed && (
                 <button
                   onClick={() => toggleSection(section.id)}
                   aria-expanded={isExpanded}
                   aria-controls={`nav-section-${section.id}`}
-                  className={`group w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md text-sm font-black transition-all border-l-[3px] ${
-                    activeInThisSection
-                      ? 'text-white'
-                      : 'hover:text-white'
-                  }`}
+                  className="group w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-md text-sm font-black text-[var(--tx-heading)] transition-all border-l-[3px]"
                   style={{
                     paddingLeft: 'calc(0.625rem - 3px)',
                     letterSpacing: '-0.005em',
                     background: activeInThisSection
-                      ? `linear-gradient(90deg, rgba(${acRgb},0.20), rgba(${acRgb},0.04))`
+                      ? `linear-gradient(90deg, rgba(${acRgb},0.22), rgba(${acRgb},0.06) 60%, transparent)`
                       : undefined,
                     borderLeftColor: activeInThisSection
-                      ? `rgba(${acRgb},0.85)`
-                      : `rgba(${acRgb},0.22)`,
-                    // 2026-04-19: dark accent (default red #dc2626) was too
-                    // dim on the dark sidebar. Mix accent with warm cream
-                    // via color-mix(in oklab) → ember/fire glow that stays
-                    // on-theme for any clinic accent color (red→coral,
-                    // sky→sky-bright, emerald→mint, etc.). Falls back to
-                    // straight rgba on browsers without color-mix support.
-                    color: activeInThisSection ? undefined : `color-mix(in oklab, ${ac} 65%, #fff5e6)`,
-                    boxShadow: activeInThisSection ? `inset 0 -1px 0 0 rgba(${acRgb},0.15)` : undefined,
+                      ? `rgba(${acRgb},0.95)`
+                      : `rgba(${acRgb},0.28)`,
+                    boxShadow: activeInThisSection
+                      ? `inset 0 -1px 0 0 rgba(${acRgb},0.30), 0 0 24px -8px rgba(${acRgb},0.35)`
+                      : undefined,
                   }}
                   onMouseEnter={(e) => {
                     if (activeInThisSection) return;
-                    e.currentTarget.style.background = `linear-gradient(90deg, rgba(${acRgb},0.13), rgba(${acRgb},0.03))`;
-                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.60)`;
+                    e.currentTarget.style.background = `linear-gradient(90deg, rgba(${acRgb},0.14), rgba(${acRgb},0.03) 60%, transparent)`;
+                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.65)`;
                   }}
                   onMouseLeave={(e) => {
                     if (activeInThisSection) return;
                     e.currentTarget.style.background = '';
-                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.22)`;
+                    e.currentTarget.style.borderLeftColor = `rgba(${acRgb},0.28)`;
                   }}
                 >
-                  <Icon
-                    size={17}
-                    strokeWidth={2.25}
-                    className="flex-shrink-0 transition-colors"
+                  {/* Icon in a small accent-tinted "chip" — the visual
+                      mark that distinguishes header from item. Inactive:
+                      faint chip. Active: glowing chip. */}
+                  <span
+                    className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md transition-all"
                     style={{
-                      color: activeInThisSection
-                        ? `color-mix(in oklab, ${ac} 50%, #fff5e6)`
-                        : `color-mix(in oklab, ${ac} 60%, #fff5e6)`,
+                      background: activeInThisSection
+                        ? `linear-gradient(135deg, rgba(${acRgb},0.32), rgba(${acRgb},0.12))`
+                        : `rgba(${acRgb},0.10)`,
+                      border: activeInThisSection
+                        ? `1px solid rgba(${acRgb},0.45)`
+                        : `1px solid rgba(${acRgb},0.18)`,
+                      boxShadow: activeInThisSection ? `0 0 12px -2px rgba(${acRgb},0.45)` : undefined,
                     }}
-                  />
+                  >
+                    <Icon
+                      size={14}
+                      strokeWidth={2.5}
+                      style={{ color: activeInThisSection ? `color-mix(in oklab, ${ac} 30%, #fff)` : ac }}
+                    />
+                  </span>
                   <span className="flex-1 text-left truncate">{section.label}</span>
                   <ChevronDown
                     size={13}
-                    className="flex-shrink-0 opacity-50 transition-transform duration-200"
+                    className="flex-shrink-0 transition-transform duration-200"
                     style={{
                       transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      color: activeInThisSection ? `rgba(${acRgb},0.90)` : `rgba(${acRgb},0.45)`,
                     }}
                   />
                 </button>

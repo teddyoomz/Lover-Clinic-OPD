@@ -56,28 +56,52 @@ export default function ReportShell({
 
   return (
     <div className="space-y-4" data-testid="report-shell">
-      {/* Header */}
+      {/* Header — typeset 2026-04-19:
+          - Title: text-2xl (24px) font-black, NO uppercase / NO wide tracking
+            (both wreck Thai script). Color: white (--tx-heading) for max
+            readability — accent color carries through the icon chip + title
+            underline accent.
+          - Icon in an accent-tinted chip on the LEFT (mass + visual mark).
+          - Subtitle: text-sm muted, comma-separated facts.
+          - 1px accent underline below the chip+title block ties chrome to
+            the body table that follows. */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black tracking-wider uppercase" style={{ color: ac }}>
-            {Icon ? <Icon size={20} className="inline mr-2" /> : null}
-            {title}
-          </h2>
-          {(subtitle || showCounts) && (
-            <p className="text-xs text-[var(--tx-muted)] mt-0.5">
-              {showCounts && (
-                <>
-                  จำนวน {totalCount.toLocaleString('th-TH')} รายการ
-                  {filteredCount !== totalCount && (
-                    <> · แสดง {filteredCount.toLocaleString('th-TH')} รายการ</>
-                  )}
-                </>
-              )}
-              {subtitle && (
-                <>{showCounts ? ' · ' : ''}{subtitle}</>
-              )}
-            </p>
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {Icon && (
+            <span
+              className="flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl mt-0.5"
+              style={{
+                background: `linear-gradient(135deg, rgba(${acRgb},0.20), rgba(${acRgb},0.06))`,
+                border: `1px solid rgba(${acRgb},0.30)`,
+                boxShadow: `0 0 16px -4px rgba(${acRgb},0.30)`,
+              }}
+            >
+              <Icon size={20} strokeWidth={2.25} style={{ color: ac }} />
+            </span>
           )}
+          <div className="min-w-0 flex-1">
+            <h2
+              className="text-2xl font-black text-[var(--tx-heading)] leading-tight"
+              style={{ letterSpacing: '-0.015em' }}
+            >
+              {title}
+            </h2>
+            {(subtitle || showCounts) && (
+              <p className="text-sm text-[var(--tx-muted)] mt-1">
+                {showCounts && (
+                  <>
+                    จำนวน {totalCount.toLocaleString('th-TH')} รายการ
+                    {filteredCount !== totalCount && (
+                      <> · แสดง {filteredCount.toLocaleString('th-TH')} รายการ</>
+                    )}
+                  </>
+                )}
+                {subtitle && (
+                  <>{showCounts ? ' · ' : ''}{subtitle}</>
+                )}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onRefresh && (
