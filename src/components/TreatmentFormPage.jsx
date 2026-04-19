@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 
@@ -1376,6 +1377,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name }],
         }));
       }
+      // Purchased promotion's STANDALONE products → consumables (so they
+      // appear in "สินค้าสิ้นเปลือง" UI AND get deducted from stock via
+      // deductStockForTreatment which iterates items.consumables[]).
+      // Bug fix 2026-04-19 — previously dropped on the floor → inventory drift.
+      if (item.itemType === 'promotion' && item.products?.length) {
+        const promoConsumables = mapPromotionProductsToConsumables(item);
+        if (promoConsumables.length > 0) {
+          setConsumables(prev => [...prev, ...promoConsumables]);
+        }
+      }
     });
     setBuyModalOpen(false);
   };
@@ -1409,6 +1420,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
         }
         return next;
       });
+    }
+    // Also remove consumables that were added by this promotion's standalone
+    // products (symmetric with confirmBuyModal — bug fix 2026-04-19).
+    if (item.itemType === 'promotion') {
+      setConsumables(prev => filterOutConsumablesForPromotion(prev, item.id));
     }
   };
   // Group purchased items by type for display
