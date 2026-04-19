@@ -135,16 +135,34 @@ export default function PromotionTab({ clinicSettings, theme }) {
             return (
               <div key={(p.promotionId || p.id)}
                 className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all group">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-[var(--tx-heading)] truncate">{p.promotion_name || '(ไม่มีชื่อ)'}</h3>
-                    {p.promotion_code && (
-                      <p className="text-[11px] text-[var(--tx-muted)] font-mono">#{p.promotion_code}</p>
-                    )}
+                <div className="flex items-start gap-3 mb-2">
+                  {/* Cover thumbnail — 48x48, rounded. Firebase Storage URL or fallback icon. */}
+                  <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center justify-center">
+                    {p.cover_image ? (
+                      <img src={p.cover_image} alt="" loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Broken URL → hide image, show fallback icon via sibling.
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }} />
+                    ) : null}
+                    {/* Fallback icon — shown when no cover_image OR when img fails to load */}
+                    <Tag size={18} className={p.cover_image ? 'hidden text-[var(--tx-muted)]' : 'text-[var(--tx-muted)]'} />
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider ${statusCfg.cls}`}>
-                    {statusCfg.label}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-[var(--tx-heading)] truncate">{p.promotion_name || '(ไม่มีชื่อ)'}</h3>
+                        {p.promotion_code && (
+                          <p className="text-[11px] text-[var(--tx-muted)] font-mono">#{p.promotion_code}</p>
+                        )}
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider shrink-0 ${statusCfg.cls}`}>
+                        {statusCfg.label}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-baseline gap-1 mb-2">

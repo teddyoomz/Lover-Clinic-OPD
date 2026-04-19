@@ -296,6 +296,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             price: p.sale_price || 0,
             category: p.category_name || '',
             itemType: 'promotion',
+            cover_image: p.cover_image || '',
             courses: p.courses || [],
             products: p.products || [],
           }));
@@ -1396,6 +1397,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                           setBuyChecked(prev => { const n = new Set(prev); checked ? n.delete(item.id) : n.add(item.id); return n; });
                           if (!buyQtyMap[item.id]) setBuyQtyMap(prev => ({...prev, [item.id]: '1'}));
                         }} className="accent-rose-500" />
+                        {/* Cover thumbnail — only for promotion items with cover_image. */}
+                        {buyModalType === 'promotion' && item.cover_image && (
+                          <img src={item.cover_image} alt="" loading="lazy"
+                            className="w-6 h-6 rounded object-cover flex-shrink-0 border border-[var(--bd)]"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        )}
                         <span className={`text-xs truncate ${checked ? 'font-bold text-rose-400' : ''}`}>{item.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">

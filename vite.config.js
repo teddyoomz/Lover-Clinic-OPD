@@ -23,6 +23,44 @@ export default defineConfig({
     versionPlugin(),
     ...(analyze ? [visualizer({ filename: 'dist/stats.html', gzipSize: true, brotliSize: true, open: false })] : []),
   ],
+  server: {
+    // Pre-compile common entry points at dev server start so the first
+    // navigation to these routes/tabs doesn't pay the ESM-transform cost.
+    // Cuts cold-start "click tab → see content" time from ~10s to ~1s in
+    // practice (measured with Claude Preview MCP 2026-04-19).
+    warmup: {
+      clientFiles: [
+        './src/App.jsx',
+        './src/pages/AdminDashboard.jsx',
+        './src/pages/BackendDashboard.jsx',
+        './src/components/backend/PromotionTab.jsx',
+        './src/components/backend/CouponTab.jsx',
+        './src/components/backend/VoucherTab.jsx',
+        './src/components/backend/MarketingTabShell.jsx',
+        './src/components/backend/MarketingFormShell.jsx',
+        './src/components/backend/SaleTab.jsx',
+        './src/components/backend/AppointmentTab.jsx',
+        './src/components/backend/StockTab.jsx',
+        './src/components/backend/FinanceTab.jsx',
+        './src/components/backend/MasterDataTab.jsx',
+        './src/components/backend/CustomerListTab.jsx',
+        './src/components/backend/CloneTab.jsx',
+      ],
+    },
+  },
+  optimizeDeps: {
+    // Pre-bundle heavy deps so Firestore/auth calls during cold start don't
+    // stall on per-module ESM conversion.
+    include: [
+      'react',
+      'react-dom',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/storage',
+      'lucide-react',
+    ],
+  },
   test: {
     globals: true,
     environment: 'jsdom',

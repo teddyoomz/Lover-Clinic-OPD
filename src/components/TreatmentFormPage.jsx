@@ -1129,6 +1129,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               category: p.category_name || '',
               type: 'promotion',
               itemType: 'promotion',
+              cover_image: p.cover_image || '',
               courses: p.courses || [],
               products: p.products || [],
             }));
@@ -3226,7 +3227,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                                       <input type="checkbox" checked={checked} onChange={() => toggleBuyCheck(item.id)}
                                         className="w-3.5 h-3.5 rounded accent-teal-500" />
                                     </td>
-                                    <td className="py-2 px-2 font-medium">{item.name}</td>
+                                    <td className="py-2 px-2 font-medium">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        {buyModalType === 'promotion' && item.cover_image && (
+                                          <img src={item.cover_image} alt="" loading="lazy"
+                                            className="w-6 h-6 rounded object-cover flex-shrink-0 border border-[var(--bd)]"
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        )}
+                                        <span className="truncate">{item.name}</span>
+                                      </div>
+                                    </td>
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyQtyMap[item.id] || ''} min="0"
                                         onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
