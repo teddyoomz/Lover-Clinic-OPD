@@ -78,21 +78,58 @@ export async function loadAppointmentsByDateRange({ from = '', to = '' } = {}) {
 /**
  * Load all available stock batches (status === 'available' & qty > 0).
  * Used by Stock Report 10.5; aggregates per productId happen client-side.
+ *
+ * NOTE: batch.qty shape is `{ remaining, total }` (buildQtyNumeric). A bare
+ * `Number(b.qty) > 0` returns NaN > 0 = false for every real batch, so this
+ * loader must look at `qty.remaining`. Legacy path where qty was a scalar
+ * is still handled via Number(b.qty) fallback.
  */
 export async function loadStockBatches({ branchId = '' } = {}) {
+  const getRemaining = (b) => {
+    const r = Number(b?.qty?.remaining);
+    if (Number.isFinite(r)) return r;
+    const s = Number(b?.qty);
+    return Number.isFinite(s) ? s : 0;
+  };
   try {
     const conds = [where('status', '==', 'available')];
     if (branchId) conds.push(where('branchId', '==', branchId));
     const q = query(stockBatchesCol(), ...conds);
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => Number(b.qty) > 0);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => getRemaining(b) > 0);
   } catch (e) {
     const snap = await getDocs(stockBatchesCol());
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(b => b.status === 'available' && Number(b.qty) > 0)
+      .filter(b => b.status === 'available' && getRemaining(b) > 0)
       .filter(b => !branchId || b.branchId === branchId);
   }
+}
+
+/**
+ * Load ALL stock batches for the Stock Report (status in active/expired, any qty).
+ * Unlike loadStockBatches, this does NOT filter out expired batches — the report
+ * needs to show "หมดอายุ" qty broken out per product. Cancelled/depleted batches
+ * (qty.remaining === 0) ARE filtered since they carry no stock value.
+ *
+ * @param {{branchId?: string}} [opts]
+ */
+export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
+  const getRemaining = (b) => {
+    const r = Number(b?.qty?.remaining);
+    if (Number.isFinite(r)) return r;
+    const s = Number(b?.qty);
+    return Number.isFinite(s) ? s : 0;
+  };
+  const snap = await getDocs(stockBatchesCol());
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(b => {
+      if (getRemaining(b) <= 0) return false;
+      if (b.status === 'cancelled' || b.status === 'depleted') return false;
+      if (branchId && b.branchId !== branchId) return false;
+      return true;
+    });
 }
 
 /**
