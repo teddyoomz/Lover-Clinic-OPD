@@ -13,6 +13,7 @@ const salesCol = () => collection(db, ...basePath(), 'be_sales');
 const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 const stockBatchesCol = () => collection(db, ...basePath(), 'be_stock_batches');
 const stockMovementsCol = () => collection(db, ...basePath(), 'be_stock_movements');
+const customersCol = () => collection(db, ...basePath(), 'be_customers');
 
 /**
  * Load sales whose `saleDate` falls in [fromISO, toISO] (YYYY-MM-DD inclusive).
@@ -92,6 +93,23 @@ export async function loadStockBatches({ branchId = '' } = {}) {
       .filter(b => b.status === 'available' && Number(b.qty) > 0)
       .filter(b => !branchId || b.branchId === branchId);
   }
+}
+
+/**
+ * Load all customers for the Customer Report (10.3). Sorted by clonedAt desc.
+ * No date filter at the customer level — Customer Report shows ALL customers
+ * by default; the date range narrows the embedded purchase-summary subquery
+ * inside the aggregator (see aggregateCustomerReport).
+ *
+ * Returns plain be_customers docs; finance.* summary fields are read directly
+ * by the aggregator (recalcCustomerDepositBalance + recalcCustomerWalletBalances
+ * + earnPoints keep them fresh on every mutation).
+ */
+export async function loadAllCustomersForReport() {
+  const snap = await getDocs(customersCol());
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  list.sort((a, b) => (b.clonedAt || '').localeCompare(a.clonedAt || ''));
+  return list;
 }
 
 /**

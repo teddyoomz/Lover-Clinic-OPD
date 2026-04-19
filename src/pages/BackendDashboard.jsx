@@ -28,6 +28,7 @@ import CouponTab from '../components/backend/CouponTab.jsx';
 import VoucherTab from '../components/backend/VoucherTab.jsx';
 import ReportsHomeTab from '../components/backend/reports/ReportsHomeTab.jsx';
 import SaleReportTab from '../components/backend/reports/SaleReportTab.jsx';
+import CustomerReportTab from '../components/backend/reports/CustomerReportTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -206,39 +207,47 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               patientData: viewingCustomer.patientData,
             })}
             onDeleteTreatment={async (treatmentId) => {
-              // Business rule (2026-04-19, user directive): deleting a treatment
-              // ONLY reverses treatment-side effects (course usage refund +
-              // treatment-side stock). The linked sale stays alive intact —
-              // its money flows (deposit, wallet, points), its assigned
-              // courses, and its product stock are NOT touched here. If the
-              // user wants to remove the sale, they go to "การขาย" → cancel/
-              // delete which has its own full reversal cascade.
-              if (!confirm('ต้องการลบประวัติการรักษานี้?\n\nหมายเหตุ: ใบเสร็จที่เกิดจากการรักษานี้จะยังอยู่ในรายการขาย หากต้องการยกเลิกใบเสร็จด้วย ให้ไปที่ "การขาย"')) return;
+              // Business rule (2026-04-19, user directive): treatment delete is
+              // PARTIAL — not a full undo of everything that happened during
+              // the treatment.
+              //
+              // What it DOES:
+              //   - Refunds COURSE-CREDIT usages back to the customer (so the
+              //     customer's courses go back to "เหลือ" count). Applies to
+              //     both customer's existing courses AND courses purchased
+              //     via the buy modal in this same treatment (the latter
+              //     means the customer keeps the purchased course at FULL
+              //     count — they cancelled the treatment, not the purchase).
+              //
+              // What it DOES NOT touch:
+              //   - Linked sale doc — stays alive in รายการขาย
+              //   - Sale's money flows: deposit usage / wallet / points
+              //   - Sale-side product stock (the products on the sale)
+              //   - Treatment-side product stock: consumables, treatmentItems,
+              //     take-home meds. User explicitly said: "สินค้าที่เป็นชิ้นๆ
+              //     จะไม่คืนกลับสต็อค จะต้องไปยกเลิกที่หน้าการขายเท่านั้น".
+              //
+              // To undo a sale (and put physical stock back), the user goes
+              // to "การขาย" → cancel/delete which has its own full reversal
+              // cascade including stock + deposit + wallet + points.
+              if (!confirm('ต้องการลบประวัติการรักษานี้?\n\nระบบจะคืน "การใช้คอร์ส" กลับเข้าหาลูกค้า แต่จะไม่คืนสินค้ากลับสต็อค และไม่ยกเลิกใบเสร็จที่เกิดในการรักษานี้\n\nหากต้องการยกเลิกใบเสร็จและคืนสินค้ากลับสต็อค ให้ไปที่ "การขาย"')) return;
               const cid = viewingCustomer.proClinicId;
               try {
                 const {
-                  getTreatment, reverseCourseDeduction, reverseStockForTreatment,
+                  getTreatment, reverseCourseDeduction,
                 } = await import('../lib/backendClient.js');
                 try {
                   const t = await getTreatment(treatmentId);
                   const courseItems = t?.detail?.courseItems || [];
                   const oldExisting = courseItems.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
                   const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
-                  // Refund the course-credit USAGES (the courses themselves
-                  // stay owned by the customer — those came from the sale,
-                  // which is untouched here).
                   if (oldExisting.length > 0) await reverseCourseDeduction(cid, oldExisting);
                   if (oldPurchased.length > 0) await reverseCourseDeduction(cid, oldPurchased, { preferNewest: true });
                 } catch (e) { console.warn('[BackendDashboard] reverse course deduction on treatment delete failed:', e); }
-                // Treatment-side stock (consumables + treatmentItems +
-                // take-home meds when no auto-sale). Sale-side stock is NOT
-                // reversed here — it belongs to the linked sale, which stays.
-                try { await reverseStockForTreatment(treatmentId); }
-                catch (e) {
-                  console.error('[BackendDashboard] reverse treatment stock failed:', e);
-                  alert(`คืนสต็อกการรักษาล้มเหลว: ${e.message}\nยกเลิกการลบ`);
-                  return;
-                }
+                // NO stock reversal here — sale is untouched, so its products
+                // stay sold. Treatment-side consumables/treatmentItems/meds
+                // also stay deducted (per user directive). To put any of that
+                // stock back, user must cancel the linked sale via "การขาย".
               } catch (e) { console.warn('[BackendDashboard] treatment delete reverse failed:', e); }
               await deleteBackendTreatment(treatmentId);
               await rebuildTreatmentSummary(cid);
@@ -296,6 +305,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <ReportsHomeTab onNavigate={handleNavigate} clinicSettings={clinicSettings} />
         ) : activeTab === 'reports-sale' ? (
           <SaleReportTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-customer' ? (
+          <CustomerReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : null}
