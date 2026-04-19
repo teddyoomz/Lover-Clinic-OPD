@@ -33,6 +33,7 @@ import AppointmentReportTab from '../components/backend/reports/AppointmentRepor
 import StockReportTab from '../components/backend/reports/StockReportTab.jsx';
 import CRMInsightTab from '../components/backend/reports/CRMInsightTab.jsx';
 import RevenueAnalysisTab from '../components/backend/reports/RevenueAnalysisTab.jsx';
+import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAnalysisTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -321,6 +322,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <CRMInsightTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-revenue' ? (
           <RevenueAnalysisTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-appt-analysis' ? (
+          <AppointmentAnalysisTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : null}
