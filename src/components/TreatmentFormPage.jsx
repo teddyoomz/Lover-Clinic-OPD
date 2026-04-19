@@ -260,6 +260,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
   // Discounts
   const [medDiscountOverride, setMedDiscountOverride] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [couponInfo, setCouponInfo] = useState(null);
+  const [couponLookupError, setCouponLookupError] = useState('');
+  const [couponLookingUp, setCouponLookingUp] = useState(false);
   const [billDiscount, setBillDiscount] = useState('');
   const [billDiscountType, setBillDiscountType] = useState('amount');
 
@@ -482,6 +485,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               if (t.medCertOtherDetail) setMedCertOtherDetail(t.medCertOtherDetail);
               // Billing & Payment (Phase 5A)
               if (t.purchasedItems?.length) setPurchasedItems(t.purchasedItems);
+              // Discounts (edit-mode restore — FF6)
+              if (t.discount) setBillDiscount(String(t.discount));
+              if (t.discountType) setBillDiscountType(t.discountType === '%' ? 'percent' : 'amount');
+              if (t.couponCode) {
+                setCouponCode(t.couponCode);
+                try {
+                  const { findCouponByCode } = await import('../lib/backendClient.js');
+                  const c = await findCouponByCode(t.couponCode);
+                  if (c) setCouponInfo(c);
+                } catch { /* coupon expired / deleted — keep code string, skip badge */ }
+              }
               if (t.payment?.paymentStatus) setPaymentStatus(t.payment.paymentStatus);
               if (t.payment?.paymentDate) setPaymentDate(t.payment.paymentDate);
               if (t.payment?.paymentTime) setPaymentTime(t.payment.paymentTime);
@@ -3493,10 +3507,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </div>
               </div>
               {/* Coupon */}
-              <div className="flex justify-between items-center py-0.5">
+              <div className="flex justify-between items-center py-0.5 flex-wrap gap-1">
                 <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>คูปองส่วนลด</span>
-                <div className="flex items-center gap-1">
-                  <input type="text" value={couponCode} onChange={e => setCouponCode(e.target.value)} className={`${inputCls} w-32 py-1`} placeholder="กรอกรหัสคูปอง" />
+                <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <input type="text" value={couponCode}
+                    onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponInfo(null); setCouponLookupError(''); }}
+                    className={`${inputCls} w-32 py-1 font-mono`} placeholder="กรอกรหัสคูปอง" />
+                  <button type="button" disabled={!couponCode || couponLookingUp}
+                    onClick={async () => {
+                      setCouponLookingUp(true); setCouponLookupError('');
+                      try {
+                        const { findCouponByCode } = await import('../lib/backendClient.js');
+                        const c = await findCouponByCode(couponCode);
+                        if (!c) { setCouponInfo(null); setCouponLookupError('ไม่พบคูปอง หรือหมดอายุ'); return; }
+                        setCouponInfo(c);
+                        setBillDiscount(String(c.discount || 0));
+                        setBillDiscountType(c.discount_type === 'baht' ? 'amount' : 'percent');
+                      } catch (e) { setCouponLookupError(e.message || 'ตรวจสอบคูปองล้มเหลว'); }
+                      finally { setCouponLookingUp(false); }
+                    }}
+                    className="px-2 py-1 text-[11px] font-bold rounded bg-emerald-700/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-700/50 disabled:opacity-40 transition-colors">
+                    {couponLookingUp ? '...' : 'ใช้'}
+                  </button>
+                  {couponInfo && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-700/30 border border-emerald-700/50 text-emerald-300 font-bold">
+                      ✓ {couponInfo.coupon_name || 'ใช้ได้'}
+                    </span>
+                  )}
+                  {couponLookupError && (
+                    <span className="text-[10px] text-red-400">{couponLookupError}</span>
+                  )}
                 </div>
               </div>
               {/* Bill-end discount */}
