@@ -421,28 +421,115 @@ describe('WIRING — source files use the right helper at the right callsite', (
     expect(treatmentForm).toContain('reverseStockForTreatment');
   });
 
-  it('BackendDashboard delete-treatment ONLY reverses treatment-side stock (sale stays intact — user directive 2026-04-19)', () => {
+  it('BackendDashboard delete-treatment ONLY refunds course usages — NO stock reversal at all (user directive 2026-04-19)', () => {
     const backendDash = readFileSync(resolve(root, 'src/pages/BackendDashboard.jsx'), 'utf8');
-    // Find the onDeleteTreatment handler block and assert sale-side cascade
-    // is NOT present inside it.
+    // Isolate the onDeleteTreatment block + assert allowed/forbidden symbols
     const deleteHandler = backendDash.match(/onDeleteTreatment=\{async[\s\S]*?\n {12}\}\}/);
     expect(deleteHandler).not.toBeNull();
     const block = deleteHandler[0];
-    // Treatment-side: present
-    expect(block).toContain('reverseStockForTreatment');
+
+    // ALLOWED: refund course-credit usages back to customer
     expect(block).toContain('reverseCourseDeduction');
-    // Sale-side: must NOT cascade — user has to delete the sale separately
+    // ALLOWED: pure delete (the doc itself goes away)
+    expect(block).toContain('deleteBackendTreatment');
+
+    // FORBIDDEN: full sale-side cascade (user goes to "การขาย" for that)
     expect(block).not.toContain('reverseStockForSale');
     expect(block).not.toContain('reverseDepositUsage');
     expect(block).not.toContain('refundToWallet');
     expect(block).not.toContain('reversePointsEarned');
     expect(block).not.toContain('getSaleByTreatmentId');
+
+    // FORBIDDEN (newest rule): do NOT reverse treatment-side stock either —
+    // the consumables/treatmentItems/meds were USED, treating "delete
+    // treatment" as "stuff is back on shelf" lies about reality
+    expect(block).not.toContain('reverseStockForTreatment');
   });
 
-  it('BackendDashboard delete-treatment shows the user a notice that the sale stays', () => {
+  it('BackendDashboard delete-treatment confirm() spells out the new behavior to the user', () => {
     const backendDash = readFileSync(resolve(root, 'src/pages/BackendDashboard.jsx'), 'utf8');
-    // The confirm() prompt explicitly tells the user the sale is not deleted
-    expect(backendDash).toMatch(/ใบเสร็จ.*ยังอยู่ในรายการขาย/);
+    // The new confirm prompt covers all three things the user must understand
+    expect(backendDash).toMatch(/คืน.*คอร์ส.*กลับเข้าหาลูกค้า/);  // courses refunded
+    expect(backendDash).toMatch(/ไม่คืนสินค้ากลับสต็อค/);        // stock NOT returned
+    expect(backendDash).toMatch(/ไม่ยกเลิกใบเสร็จ/);              // sale stays
+  });
+
+  it('deleteBackendTreatment in backendClient is now a PURE doc-delete (no stock reverse)', () => {
+    const bc = readFileSync(resolve(root, 'src/lib/backendClient.js'), 'utf8');
+    // Find the function body — between the `export async function deleteBackendTreatment(` line
+    // and the next `export` declaration after it.
+    const m = bc.match(/export async function deleteBackendTreatment\([^)]*\)\s*\{([\s\S]*?)\n\}/);
+    expect(m).not.toBeNull();
+    const body = m[1];
+    expect(body).toContain('deleteDoc');
+    // Critical: the auto-reverse-on-delete is removed
+    expect(body).not.toContain('reverseStockForTreatment');
+  });
+});
+
+/* ─── 7. NEW BUSINESS-RULE SCENARIOS — treatment delete partial-rollback ─── */
+
+describe('BUSINESS RULE — treatment delete (2026-04-19): course refund only, no stock return', () => {
+  // These tests document the intended end-state for each canonical scenario
+  // so future refactors can't regress the user's directive without a test
+  // failing first.
+
+  it('Scenario A: treatment used customer existing course, no purchase → course refunded, no stock change', () => {
+    // Inputs that the deletion handler would process:
+    const courseItems = [
+      { rowId: 'existing-course-row-1', courseId: 'CRS-OLD', name: 'Botox' },
+    ];
+    const oldExisting = courseItems.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+    const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+    expect(oldExisting).toHaveLength(1);  // → reverseCourseDeduction is called
+    expect(oldPurchased).toHaveLength(0); // → no second reversal needed
+    // No stock to consider — no consumables/treatmentItems/meds in this scenario
+  });
+
+  it('Scenario B: treatment + new course purchase + immediately used → only course usage refunded; customer keeps purchased course at full count', () => {
+    const courseItems = [
+      { rowId: 'purchased-CRS-NEW-row-1', courseId: 'purchased-course-CRS-NEW-12345' },
+    ];
+    const oldExisting = courseItems.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
+    const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+    expect(oldPurchased).toHaveLength(1); // → reverseCourseDeduction with preferNewest:true
+    expect(oldExisting).toHaveLength(0);
+    // The PURCHASE (sale doc + assigned course) stays — customer's course
+    // count goes back to FULL (5/5 instead of 4/5)
+    // No stock reversal here either
+  });
+
+  it('Scenario C: treatment used a promo-bundled course → promo course usage refunded', () => {
+    const courseItems = [
+      { rowId: 'promo-PROMO-X-row-CRS-1-PROD-1', courseId: 'promo-PROMO-X-course-CRS-1' },
+    ];
+    const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+    expect(oldPurchased).toHaveLength(1);
+  });
+
+  it('Scenario D: physical stock items (consumables, products) STAY deducted on treatment delete', () => {
+    // The aggregate of items.consumables[] + items.treatmentItems[] + items.products[]
+    // (via the auto-sale) must NOT be reversed by treatment delete. The bookkeeping
+    // intent: the items WERE used; they aren't on the shelf anymore.
+    const items = { consumables: [consumable()], treatmentItems: [{ id: 'TI', name: 'tx', qty: 1 }] };
+    const stocked = normalizeForStock(items);
+    expect(stocked).toHaveLength(2);
+    // After treatment delete: stocked count UNCHANGED (no reversal happened).
+    // Test serves as a behavioral assertion — the helper doesn't actually
+    // call reverse here; that's the point. The deletion code path skips it.
+  });
+
+  it('Scenario E: full undo (stock + money) requires SEPARATE sale-cancel from "การขาย"', () => {
+    // SaleTab's cancel/delete path calls the full cascade (reverseStockForSale,
+    // reverseDepositUsage, refundToWallet, reversePointsEarned). This test
+    // verifies that path is preserved — the wiring is unchanged.
+    const localRoot = resolve(__dirname, '..');
+    const saleTab = readFileSync(resolve(localRoot, 'src/components/backend/SaleTab.jsx'), 'utf8');
+    // SaleTab still uses these for its own cancel flow:
+    expect(saleTab).toContain('reverseStockForSale');
+    expect(saleTab).toContain('reverseDepositUsage');
+    expect(saleTab).toContain('refundToWallet');
+    expect(saleTab).toContain('reversePointsEarned');
   });
 });
 

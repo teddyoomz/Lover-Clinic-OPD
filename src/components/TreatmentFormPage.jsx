@@ -1723,20 +1723,45 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
 
-        // Phase 8b — Stock: deduct treatment-side items (consumables + treatmentItems).
-        // Medications: only when hasSale=false (else auto-sale deducts them via grouped.medications)
-        // to avoid double-deduct. purchasedItems: handled by auto-sale hook (never treatment-side).
+        // Phase 8b — Stock: deduct treatment-side items.
+        //
+        // Splitting into two calls so the movement log shows the right type:
+        //   - consumables + treatmentItems → MOVEMENT_TYPES.TREATMENT (6)
+        //     ("ใช้ในการรักษา" — supplies/instruments used during the visit)
+        //   - take-home medications        → MOVEMENT_TYPES.TREATMENT_MED (7)
+        //     ("จ่ายยาในการรักษา" — meds dispensed for home use)
+        // ProClinic uses these as distinct codes so the log is filterable
+        // (group "รักษา" = both 6+7; pharmacist needs the 7-only view).
+        //
+        // Take-home meds bypass this path when hasSale=true: the auto-sale
+        // owns them via deductStockForSale (movement type 2 SALE) so they
+        // appear under that sale's saleId in the audit trail. Either way
+        // every dispensed med yields exactly one movement entry.
+        const newTreatmentId = result.treatmentId || treatmentId;
+        const { deductStockForTreatment } = await import('../lib/backendClient.js');
+        const stockUtilsMod = await import('../lib/stockUtils.js');
+        const TREATMENT_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT;       // 6
+        const TREATMENT_MED_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT_MED; // 7
         try {
-          const newTreatmentId = result.treatmentId || treatmentId;
-          const { deductStockForTreatment } = await import('../lib/backendClient.js');
+          // 1) consumables + treatmentItems → type 6
           await deductStockForTreatment(newTreatmentId, {
             consumables: backendDetail.consumables || [],
             treatmentItems: backendDetail.treatmentItems || [],
-            ...(hasSale ? {} : { medications: backendDetail.medications || [] }),
           }, {
             customerId, branchId: 'main',
+            movementType: TREATMENT_TYPE,
             user: { userId: '', userName: '' },
           });
+          // 2) take-home meds → type 7 (only when no auto-sale takes them)
+          if (!hasSale && (backendDetail.medications || []).length > 0) {
+            await deductStockForTreatment(newTreatmentId, {
+              medications: backendDetail.medications || [],
+            }, {
+              customerId, branchId: 'main',
+              movementType: TREATMENT_MED_TYPE,
+              user: { userId: '', userName: '' },
+            });
+          }
         } catch (stockErr) {
           throw new Error(`ตัดสต็อกการรักษาไม่สำเร็จ: ${stockErr.message}`);
         }

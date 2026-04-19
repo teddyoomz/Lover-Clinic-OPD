@@ -191,17 +191,24 @@ export async function updateBackendTreatment(treatmentId, detail) {
 /**
  * Delete a backend treatment.
  *
- * C3: before hard-deleting the treatment doc, we must reverse any stock
- * movements it caused (medications/consumables/treatmentItems). Without
- * this, the movement log keeps the deductions but the treatment doc is
- * gone — orphaned inventory that silently leaks from physical stock.
+ * Business rule (2026-04-19, user directive): treatment delete is
+ * INTENTIONALLY a partial-rollback, not a full undo:
+ *   - Course-credit USAGES are refunded by the caller (BackendDashboard
+ *     onDeleteTreatment wraps this via reverseCourseDeduction)
+ *   - Physical stock (consumables / treatmentItems / take-home meds)
+ *     IS NOT REVERSED — the items were used; treating "delete treatment"
+ *     as "stuff is back on the shelf" lies about reality. The user must
+ *     go to "การขาย" → cancel/delete the linked sale to put product
+ *     stock back. That's where the full reversal cascade lives.
+ *   - Linked sale doc + its money flows (deposit, wallet, points) are
+ *     untouched here. See BackendDashboard.onDeleteTreatment for the
+ *     business-rule comment.
  *
- * reverseStockForTreatment is idempotent (filters by `includeReversed:
- * false`), so callers that already reversed (BackendDashboard's onDelete
- * wrapper) will see a no-op second call — safe.
+ * Edit-treatment is different: TreatmentFormPage.handleSubmit explicitly
+ * calls reverseStockForTreatment BEFORE re-deducting the new state. That
+ * path stays correct because edit replaces the treatment in-place.
  */
 export async function deleteBackendTreatment(treatmentId) {
-  await reverseStockForTreatment(treatmentId);
   await deleteDoc(treatmentDoc(treatmentId));
   return { success: true };
 }
