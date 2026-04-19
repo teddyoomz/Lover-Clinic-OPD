@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { flushSync } from 'react-dom';
+import { LocalInput, LocalTextarea } from './form/LocalField.jsx';
 import DepositPicker from './backend/DepositPicker.jsx';
 import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
@@ -92,13 +93,28 @@ const MedPriceSummary = memo(function MedPriceSummary({ price, discount, discoun
 // 8-input reconcile here. BMI is passed in as prop so the parent's
 // useMemo([weight,height]) result doesn't require recomputation here.
 const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputCls, labelCls }) {
+  // Stable per-field committers — LocalInput's memo check compares onCommit
+  // by ref, so inline arrows would defeat the whole point on every commit
+  // bubble. These 8 useCallbacks are one-per-field, re-created only if the
+  // parent's `onFieldChange` ref changes (which it shouldn't — it's already
+  // a stable useCallback in the parent).
+  const commit = useMemo(() => ({
+    weight:            (v) => onFieldChange('weight', v),
+    height:            (v) => onFieldChange('height', v),
+    temperature:       (v) => onFieldChange('temperature', v),
+    pulseRate:         (v) => onFieldChange('pulseRate', v),
+    respiratoryRate:   (v) => onFieldChange('respiratoryRate', v),
+    systolicBP:        (v) => onFieldChange('systolicBP', v),
+    diastolicBP:       (v) => onFieldChange('diastolicBP', v),
+    oxygenSaturation:  (v) => onFieldChange('oxygenSaturation', v),
+  }), [onFieldChange]);
   return (
     <>
       <div className="grid grid-cols-3 gap-2">
         {[['weight', 'น้ำหนัก (kg)'], ['height', 'ส่วนสูง (cm)']].map(([key, label]) => (
           <div key={key}>
             <label className={labelCls}>{label}</label>
-            <input value={vitals[key]} onChange={e => onFieldChange(key, e.target.value)} className={`${inputCls} text-center`} placeholder="-" />
+            <LocalInput value={vitals[key]} onCommit={commit[key]} className={`${inputCls} text-center`} placeholder="-" />
           </div>
         ))}
         <div>
@@ -111,13 +127,13 @@ const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputC
           ['systolicBP', 'SBP (mmHg)'], ['diastolicBP', 'DBP (mmHg)']].map(([key, label]) => (
           <div key={key}>
             <label className={labelCls}>{label}</label>
-            <input value={vitals[key]} onChange={e => onFieldChange(key, e.target.value)} className={`${inputCls} text-center`} placeholder="-" />
+            <LocalInput value={vitals[key]} onCommit={commit[key]} className={`${inputCls} text-center`} placeholder="-" />
           </div>
         ))}
       </div>
       <div className="mt-2">
         <label className={labelCls}>O₂ Sat (%)</label>
-        <input value={vitals.oxygenSaturation} onChange={e => onFieldChange('oxygenSaturation', e.target.value)} className={`${inputCls} text-center w-24`} placeholder="-" />
+        <LocalInput value={vitals.oxygenSaturation} onCommit={commit.oxygenSaturation} className={`${inputCls} text-center w-24`} placeholder="-" />
       </div>
     </>
   );
@@ -2299,7 +2315,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 ].map(([key, label, val, setter]) => (
                   <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <textarea value={val} onChange={e => setter(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder={label} />
+                    <LocalTextarea value={val} onCommit={setter} rows={2} className={`${inputCls} resize-none`} placeholder={label} />
                   </div>
                 ))}
               </div>
@@ -2326,7 +2342,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 {medCertIsRest && (
                   <div className="ml-6">
                     <label className={labelCls}>ระยะเวลาหยุดพัก</label>
-                    <input value={medCertPeriod} onChange={e => setMedCertPeriod(e.target.value)} className={inputCls} placeholder="เช่น 3 วัน" />
+                    <LocalInput value={medCertPeriod} onCommit={setMedCertPeriod} className={inputCls} placeholder="เช่น 3 วัน" />
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -2335,7 +2351,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 </label>
                 {medCertIsOther && (
                   <div className="ml-6">
-                    <textarea value={medCertOtherDetail} onChange={e => setMedCertOtherDetail(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="รายละเอียด" />
+                    <LocalTextarea value={medCertOtherDetail} onCommit={setMedCertOtherDetail} rows={2} className={`${inputCls} resize-none`} placeholder="รายละเอียด" />
                   </div>
                 )}
               </div>
@@ -3603,7 +3619,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               <div className="flex justify-between items-center py-0.5">
                 <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ส่วนลดค่ายา ({billing.medDiscPct}%)</span>
                 <div className="flex items-center gap-1">
-                  <input type="number" value={medDiscountOverride} onChange={e => setMedDiscountOverride(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder={billing.medDisc.toFixed(2)} min="0" step="0.01" />
+                  <LocalInput type="number" value={medDiscountOverride} onCommit={setMedDiscountOverride} className={`${inputCls} w-24 text-right py-1`} placeholder={billing.medDisc.toFixed(2)} min="0" step="0.01" />
                   <span className="text-xs">บาท</span>
                 </div>
               </div>
@@ -3644,7 +3660,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
               <div className="flex justify-between items-center py-0.5">
                 <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ส่วนลดท้ายบิล</span>
                 <div className="flex items-center gap-1">
-                  <input type="number" value={billDiscount} onChange={e => setBillDiscount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
+                  <LocalInput type="number" value={billDiscount} onCommit={setBillDiscount} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
                   <button onClick={() => setBillDiscountType(p => p === 'amount' ? 'percent' : 'amount')}
                     className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${isDark ? 'border-[#444] text-gray-300' : 'border-gray-300 text-gray-600'}`}>
                     {billDiscountType === 'percent' ? '%' : '฿'}
@@ -3662,7 +3678,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                 <div className="flex justify-between items-center py-0.5">
                   <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>ยอดเบิกประกัน</span>
                   <div className="flex items-center gap-1">
-                    <input type="number" value={insuranceClaimAmount} onChange={e => setInsuranceClaimAmount(e.target.value)} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
+                    <LocalInput type="number" value={insuranceClaimAmount} onCommit={setInsuranceClaimAmount} className={`${inputCls} w-24 text-right py-1`} placeholder="0" min="0" step="0.01" />
                     <span className="text-xs">บาท</span>
                   </div>
                 </div>
@@ -3701,7 +3717,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                   </span>
                   <div className="flex items-center gap-1">
                     <input type="checkbox" checked={useDeposit} onChange={e => setUseDeposit(e.target.checked)} className="w-3 h-3 accent-purple-500" />
-                    <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
+                    <LocalInput type="number" value={depositAmount} onCommit={setDepositAmount} disabled={!useDeposit} className={`${inputCls} w-24 text-right py-1 ${!useDeposit ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
                     <span className="text-xs">บาท</span>
                   </div>
                 </div>
@@ -3735,7 +3751,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
                       <option value="">เลือกกระเป๋า</option>
                       {wallets.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
-                    <input type="number" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} disabled={!useWallet} className={`${inputCls} w-20 text-right py-1 ${!useWallet ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
+                    <LocalInput type="number" value={walletAmount} onCommit={setWalletAmount} disabled={!useWallet} className={`${inputCls} w-20 text-right py-1 ${!useWallet ? 'opacity-40' : ''}`} placeholder="0" min="0" step="0.01" />
                     <span className="text-xs">บาท</span>
                   </div>
                 </div>
@@ -3755,7 +3771,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <div className="space-y-3">
               <div>
                 <label className={labelCls}>หมายเหตุการขาย</label>
-                <textarea value={saleNote} onChange={e => setSaleNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="กรอกหมายเหตุการขาย" />
+                <LocalTextarea value={saleNote} onCommit={setSaleNote} rows={2} className={`${inputCls} resize-none`} placeholder="กรอกหมายเหตุการขาย" />
               </div>
               <div className="w-48">
                 <label className={labelCls}>วันที่ขาย *</label>
@@ -3816,11 +3832,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, treatme
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>เลขที่อ้างอิงใบเสร็จหน้าร้าน</label>
-                <input type="text" value={refNo} onChange={e => setRefNo(e.target.value)} className={inputCls} />
+                <LocalInput type="text" value={refNo} onCommit={setRefNo} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>หมายเหตุ</label>
-                <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุ" />
+                <LocalTextarea value={note} onCommit={setNote} rows={2} className={`${inputCls} resize-none`} placeholder="หมายเหตุ" />
               </div>
             </div>
           </FormSection>
