@@ -153,7 +153,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           </div>
 
           {/* Tabs OR Breadcrumb */}
-          <div className="flex items-center gap-1.5 flex-1 justify-center">
+          <div className="flex items-center gap-1 flex-1 justify-center overflow-x-auto"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {viewingCustomer ? (
               /* Breadcrumb: ข้อมูลลูกค้า > ชื่อลูกค้า */
               <div className="flex items-center gap-2 text-xs">
@@ -179,7 +180,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
                 const cm = TAB_COLOR_MAP[tab.color];
                 return (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)} role="tab" aria-selected={isActive}
-                    className={`px-4 py-3 rounded-lg font-bold tracking-wider uppercase text-xs transition-all flex items-center gap-2 ${
+                    className={`shrink-0 px-3 py-2 rounded-lg font-bold tracking-wider uppercase text-[11px] transition-all flex items-center gap-1.5 whitespace-nowrap ${
                       isActive ? cm.active : `bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] ${cm.hover}`
                     }`}>
                     {tab.icon} {tab.label}
