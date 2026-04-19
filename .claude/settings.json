@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[META-RULES 2026-04-19 iron-clad, NEVER FORGET] (1) ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น — every bug → add test + audit skill invariant; every new pattern → document + skill-ify; every session leaves .claude/skills/** sharper. (2) ANTI-VIBE-CODE: Rule of 3 (pattern ≥ 3 places → extract shared) / NO Math.random for URL tokens — crypto.getRandomValues / NO user.uid in world-readable docs / NO allow:if-true Firestore or Storage rules / NO new Firestore collection without real reader+writer+size-reason. See .claude/rules/07-continuous-improvement.md, 08-anti-vibe-code.md + memory/feedback_*. Audit: /audit-all (17 skills / 175 invariants). [SESSION CONTEXT] Phase 8/12 DONE. 1054 tests pass. Rules: Backend files = commit only / npm test ALL PASS before commit / Update CODEBASE_MAP.md / Thai red NOT on patient names / No IIFE in JSX / Firestore REST PATCH needs updateMask / Thai time via bangkokNow+thaiTodayISO / Schedule-link resync uses shouldBlockScheduleSlot.\"}'"
+            "command": "echo '{\"additionalContext\": \"[IRON-CLAD 2026-04-19, NEVER FORGET] A. ทำ X แล้ว Y พัง → ถอด X ทันที. B. firebase deploy --only firestore:rules ต้อง probe webhook (chat_conversations POST) + sync (pc_appointments PATCH) ก่อน/หลัง — 403 = revert ทันที (root cause ของ 2026-04-19 chat+calendar outage). C. Rule of 3 / crypto.getRandomValues (NOT Math.random) / NO user.uid in public docs / NO allow:if-true ยกเว้น pc_* + chat_conversations (server REST no admin SDK) / NO new Firestore collection without reader+writer+size-reason. D. bug → adversarial test + audit skill invariant + register in /audit-all. See .claude/rules/01-iron-clad.md, 02-workflow.md, 03-stack.md, 04-thai-ui.md. Audit: /audit-all (17 skills / 175 invariants). [SESSION CONTEXT] Phase 8/12 DONE. 1054 tests pass. PDPA PV1-PV7 REVERTED — do NOT re-add. Triangle Rule: before any feature → opd.js intel + plan memory + grep our code.\"}'"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[META-RULES] (1) Fix a bug this turn → add/extend audit skill invariant. New pattern → skill-ify. (2) ANTI-VIBE: Rule of 3 before new helper (grep existing first). No Math.random tokens. No user.uid in public docs. No premature Firestore collection. (.claude/rules/07, 08)\"}'"
+            "command": "echo '{\"additionalContext\": \"[IRON-CLAD] A: bug → revert immediately. B: firestore:rules ต้อง probe-deploy-probe. C: Rule of 3 / crypto tokens / no uid in public docs / no allow:if-true. D: bug → test + skill invariant. Triangle: opd.js + plan + code before coding. (.claude/rules/01-iron-clad.md)\"}'"
           }
         ]
       }
