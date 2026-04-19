@@ -23,10 +23,11 @@
 
 import {
   // section icons
-  UsersRound, Briefcase, Package, Wallet, Megaphone, Settings,
+  UsersRound, Briefcase, Package, Wallet, Megaphone, Settings, BarChart3,
   // tab icons
   Download, Users, Database, CalendarDays, ShoppingCart,
   Package as PackageIcon, Tag, Ticket, Gift, Wallet as WalletIcon,
+  LayoutDashboard, Receipt, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -78,6 +79,21 @@ export const NAV_SECTIONS = [
       { id: 'promotions',  label: 'โปรโมชัน',       icon: Tag,    color: 'orange', palette: 'promotion โปรโมชัน โปร discount' },
       { id: 'coupons',     label: 'คูปอง',          icon: Ticket, color: 'orange', palette: 'coupon คูปอง โค้ด code discount' },
       { id: 'vouchers',    label: 'Voucher',         icon: Gift,   color: 'orange', palette: 'voucher hdmall grabhealth platform' },
+    ],
+  },
+  {
+    id: 'reports',
+    label: 'รายงาน',
+    icon: BarChart3,
+    items: [
+      { id: 'reports',               label: 'หน้ารายงาน',      icon: LayoutDashboard, color: 'sky',   palette: 'reports home รายงาน หน้ารายงาน landing dashboard' },
+      { id: 'reports-sale',          label: 'รายการขาย',        icon: Receipt,         color: 'sky',   palette: 'sale report รายการขาย ใบเสร็จ revenue invoice' },
+      { id: 'reports-customer',      label: 'ลูกค้าสาขา',         icon: Users,           color: 'sky',   palette: 'customer report ลูกค้า สาขา patient' },
+      { id: 'reports-appointment',   label: 'นัดหมาย (รายงาน)',  icon: CalendarCheck,   color: 'sky',   palette: 'appointment report นัด นัดหมาย booking schedule' },
+      { id: 'reports-stock',         label: 'สต็อค (รายงาน)',    icon: Boxes,           color: 'sky',   palette: 'stock report สต็อค balance inventory' },
+      { id: 'reports-rfm',           label: 'CRM Insight',       icon: Sparkles,        color: 'amber', palette: 'rfm crm insight ลูกค้าคุณภาพ champion loyalty segment' },
+      { id: 'reports-revenue',       label: 'วิเคราะห์รายได้',    icon: TrendingUp,      color: 'amber', palette: 'revenue analysis procedure category รายได้ หัตถการ' },
+      { id: 'reports-appt-analysis', label: 'วิเคราะห์นัด',       icon: Activity,        color: 'amber', palette: 'appointment analysis kpi performance วิเคราะห์ นัด' },
     ],
   },
   {

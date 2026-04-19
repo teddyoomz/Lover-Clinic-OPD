@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ArrowLeft, ChevronRight, Users, Link2, Check } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3 } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor } from '../utils.js';
@@ -26,6 +26,7 @@ import StockTab from '../components/backend/StockTab.jsx';
 import PromotionTab from '../components/backend/PromotionTab.jsx';
 import CouponTab from '../components/backend/CouponTab.jsx';
 import VoucherTab from '../components/backend/VoucherTab.jsx';
+import ReportsHomeTab from '../components/backend/reports/ReportsHomeTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -306,8 +307,17 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <CouponTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'vouchers' ? (
           <VoucherTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports' ? (
+          <ReportsHomeTab onNavigate={handleNavigate} clinicSettings={clinicSettings} />
+        ) : activeTab.startsWith('reports-') ? (
+          <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : null}
       </div>
+
+      {/* ── Phase 10 placeholder for individual report tabs not yet shipped ── */}
+      {/* (defined inline so 10.2-10.8 commits can swap each one without
+          touching this file again — they'll add their own case branch above
+          and remove the matching tabId from this stub.) */}
 
       {/* ── Treatment Form Overlay ── */}
       {treatmentFormMode && (
@@ -330,5 +340,40 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         />
       )}
     </BackendNav>
+  );
+}
+
+const REPORT_LABELS = {
+  'reports-sale':          'รายการขาย',
+  'reports-customer':      'ลูกค้าสาขา',
+  'reports-appointment':   'นัดหมาย',
+  'reports-stock':         'สต็อค',
+  'reports-rfm':           'CRM Insight',
+  'reports-revenue':       'วิเคราะห์รายได้',
+  'reports-appt-analysis': 'วิเคราะห์นัด',
+};
+
+function ReportComingSoon({ tabId, onBack, clinicSettings }) {
+  const ac = clinicSettings?.accentColor || '#06b6d4';
+  const label = REPORT_LABELS[tabId] || tabId;
+  return (
+    <div className="space-y-4" data-testid="report-coming-soon">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5"
+      >
+        <ArrowLeft size={14} /> กลับไปหน้ารายงาน
+      </button>
+      <div className="rounded-xl border border-dashed border-[var(--bd)] bg-[var(--bg-card)] p-12 text-center">
+        <BarChart3 size={48} className="inline mb-3 opacity-40" style={{ color: ac }} />
+        <h2 className="text-xl font-black tracking-wider uppercase mb-2" style={{ color: ac }}>
+          {label}
+        </h2>
+        <p className="text-sm text-[var(--tx-muted)] flex items-center justify-center gap-2">
+          <Construction size={14} /> รายงานนี้อยู่ระหว่างพัฒนา — จะปล่อยใน Phase 10 task ถัดไป
+        </p>
+      </div>
+    </div>
   );
 }
