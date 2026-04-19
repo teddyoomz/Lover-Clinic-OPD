@@ -1284,3 +1284,57 @@ ensureExtensionHasCredentials()                        // fetch credentials → 
 | Auto-sync รัวๆ หลังกด Report | Firestore อาจ batch snapshot (isUnread=false + broker update) ทำให้ prevRef stale | `lastAutoSyncedStrRef` track patientData ที่ sync แล้ว → skip ถ้า data เดิม |
 | กดปุ่มแดง (retry) → สร้างคนใหม่ใน ProClinic | `handleOpdClick` ส่ง `LC_FILL_PROCLINIC` เสมอ แม้ผู้ป่วยมี HN อยู่แล้ว | ถ้า `brokerProClinicId \|\| brokerProClinicHN` มีอยู่ → ส่ง `LC_UPDATE_PROCLINIC` แทน |
 | กดปุ่มแดง retry → spinner ไม่หาย | `LC_UPDATE_RESULT` handler ไม่ clear `brokerPending` / timeout | เพิ่ม `clearTimeout` + `setBrokerPending(...)` ใน `LC_UPDATE_RESULT` handler |
+
+---
+
+## Phase 9 Marketing — Promotion CRUD (Task 9.1, 2026-04-19)
+
+Triangle-Rule verified: `opd.js forms /admin/promotion` = 27 form fields (2 modes).
+
+**New files:**
+- `src/components/backend/PromotionTab.jsx` — list + search + category/status filter + card grid. Reads `listPromotions()`, deletes via `brokerClient.deletePromotionInProClinic` then `deletePromotion` Firestore
+- `src/components/backend/PromotionFormModal.jsx` — 27-field form: usage_type / name / receipt_name / code / category / procedure_type / deposit_price / sale_price / VAT toggle / promotion_type mode (fixed vs flexible, conditional min/max course+qty) / period toggle+DateField range / description / status / enable_line_oa_display (with is_price_line_display + button_label conditional) / scrollToError via data-field attrs. Deferred for 9.1b: cover_image multipart + courses/products sub-items.
+- `src/lib/promotionValidation.js` — pure `validatePromotion(form)` + `emptyPromotionForm()` (extracted for unit-testing; consumed by PromotionFormModal)
+- `api/proclinic/promotion.js` — POST /admin/promotion (create redirect captures id), POST /{id} with `_method=PUT` (update), POST /{id} with `_method=DELETE`. `buildPromotionFormData(data, csrf, defaults)` exported for tests. Mirrors successful writes to `pc_promotions/{id}` via Firestore REST PATCH with `updateMask.fieldPaths` (iron-clad rule B compliance).
+- `tests/promotion.test.js` — 26 adversarial unit tests (V1-V12 + extras + F1-F10 + emptyForm baseline). Covers: name+whitespace, NaN/negative price, inverted min/max bounds (flexible only), period inverted/missing, fixed-mode skip, Laravel checkbox convention, defaults merge preserves unknown keys, etc.
+
+**Existing files extended:**
+- `src/lib/backendClient.js` (+55 LoC): `savePromotion(id, data)` / `deletePromotion(id)` / `listPromotions()` / `getPromotion(id)`. Write also mirrors 5 display fields to `master_data/promotions/items/{id}` so SaleTab's buy modal sees the new promotion without waiting for next ProClinic sync
+- `src/lib/brokerClient.js` (+14 LoC): `createPromotion(data)` / `updatePromotion(id, data)` / `deletePromotionInProClinic(id)` wrappers around `apiFetch('promotion', {...})`
+- `src/pages/BackendDashboard.jsx`: added `orange` to TAB_COLOR_MAP, `promotions` tab with Tag icon, routing branch, URL allowlist
+- `firestore.rules`:
+  - `be_promotions/{promotionId}` → `allow read, write: if isClinicStaff();`
+  - `pc_promotions/{docId}` → `allow read: if isClinicStaff(); allow write: if true;` (matches pc_* pattern; server REST mirror writes without Firebase auth)
+  - ⚠️ **Not deployed** — rules file updated but `firebase deploy --only firestore:rules` requires probe-deploy-probe per iron-clad B, awaiting user OK
+
+**Firestore schema `be_promotions/{proClinicId}`** (full 27 core fields + audit):
+```
+proClinicId, usage_type ('clinic'|'branch'), promotion_name*, receipt_promotion_name,
+promotion_code, category_name, procedure_type_name,
+deposit_price, sale_price*, is_vat_included, sale_price_incl_vat,
+promotion_type ('fixed'|'flexible'),
+min/max_course_chosen_count, min/max_course_chosen_qty,
+has_promotion_period, promotion_period_start, promotion_period_end,
+description, status ('active'|'suspended'),
+enable_line_oa_display, is_price_line_display, button_label,
+createdAt (ISO), updatedAt (ISO)
+```
+(* = required; full 29 ProClinic fields minus cover_image multipart + courses/products subcollections — deferred.)
+
+**Data flow — create**:
+1. UI → `createPromotion(payload)` → Vercel serverless scrapes CSRF from `/admin/promotion` + POSTs form data → ProClinic returns 302 to `/admin/promotion/{id}/edit` → we capture `id`
+2. Returns `{success, proClinicId}` to UI
+3. UI → `savePromotion(proClinicId, payload)` → writes `be_promotions/{id}` + mirrors to `master_data/promotions/items/{id}`
+4. `PromotionTab.reload()` → fresh list
+
+**Data flow — delete**:
+1. UI → `deletePromotionInProClinic(id)` → ProClinic DELETE
+2. UI → `deletePromotion(id)` → removes Firestore doc + mirror
+
+**Unknowns / follow-ups (v9.1b):**
+- Actual encoding of `promotion_type` radio (`'fixed'|'flexible'` guess — need `opd.js network` capture on real submit)
+- `status` serialization (`'active'|'suspended'` guess)
+- `promotion_period` daterange format (`"YYYY-MM-DD to YYYY-MM-DD"` guess — Flatpickr default)
+- Cover image multipart upload (current UI stores to Firebase Storage only, ProClinic image not pushed)
+- Courses + products sub-items (need course/product picker modal — extract shared with SaleTab's picker)
+- `MarketingFormModal` extraction (Rule of 3): after Task 9.2 (coupon) + 9.3 (voucher), common form shell should be extracted

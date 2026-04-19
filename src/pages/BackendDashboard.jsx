@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet, Package } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet, Package, Tag } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -19,6 +19,7 @@ const TAB_COLOR_MAP = {
   sky: { active: 'bg-sky-700 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]', hover: 'hover:text-sky-400 hover:border-sky-900/50' },
   rose: { active: 'bg-rose-700 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]', hover: 'hover:text-rose-400 hover:border-rose-900/50' },
   emerald: { active: 'bg-emerald-700 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]', hover: 'hover:text-emerald-400 hover:border-emerald-800/50' },
+  orange: { active: 'bg-orange-700 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]', hover: 'hover:text-orange-400 hover:border-orange-800/50' },
 };
 import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
@@ -28,6 +29,7 @@ import AppointmentTab from '../components/backend/AppointmentTab.jsx';
 import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
 import StockTab from '../components/backend/StockTab.jsx';
+import PromotionTab from '../components/backend/PromotionTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -67,7 +69,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         .catch(() => {})
         .finally(() => setHydrated(true));
     } else {
-      if (tab && ['clone','customers','masterdata','appointments','sales','finance','stock'].includes(tab)) {
+      if (tab && ['clone','customers','masterdata','appointments','sales','finance','stock','promotions'].includes(tab)) {
         setActiveTab(tab);
         if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
       }
@@ -124,6 +126,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     { id: 'sales', icon: <ShoppingCart size={16} />, label: 'ขาย/ใบเสร็จ', color: 'rose' },
     { id: 'finance', icon: <Wallet size={16} />, label: 'การเงิน', color: 'emerald' },
     { id: 'stock', icon: <Package size={16} />, label: 'สต็อก', color: 'rose' },
+    { id: 'promotions', icon: <Tag size={16} />, label: 'โปรโมชัน', color: 'orange' },
   ];
 
   return (
@@ -333,6 +336,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'stock' ? (
           <StockTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'promotions' ? (
+          <PromotionTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
 

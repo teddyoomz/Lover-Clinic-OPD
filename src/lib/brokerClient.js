@@ -405,3 +405,20 @@ export function getMedicationGroups(productType) {
 export function listItems(itemType, query) {
   return apiFetch('treatment', { action: 'listItems', itemType, query });
 }
+
+// ─── Promotion CRUD (Phase 9) ──────────────────────────────────────────────
+
+/** Create a promotion in ProClinic → { success, proClinicId } */
+export function createPromotion(data) {
+  return apiFetch('promotion', { action: 'create', data });
+}
+
+/** Update a promotion in ProClinic → { success } */
+export function updatePromotion(proClinicId, data) {
+  return apiFetch('promotion', { action: 'update', proClinicId, data });
+}
+
+/** Delete a promotion in ProClinic → { success } */
+export function deletePromotionInProClinic(proClinicId) {
+  return apiFetch('promotion', { action: 'delete', proClinicId });
+}

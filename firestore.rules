@@ -87,6 +87,11 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Backend: Phase 9 Marketing (Promotions) ──
+      match /be_promotions/{promotionId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();
@@ -221,6 +226,10 @@ service cloud.firestore {
         allow write: if true;
       }
       match /pc_inventory/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_promotions/{docId} {
         allow read: if isClinicStaff();
         allow write: if true;
       }

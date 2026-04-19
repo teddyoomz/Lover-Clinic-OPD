@@ -3644,3 +3644,61 @@ export async function getStockWithdrawal(withdrawalId) {
   const snap = await getDoc(stockWithdrawalDoc(withdrawalId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
+
+// ─── Promotion CRUD (Phase 9 Marketing) ────────────────────────────────────
+// ProClinic `/admin/promotion` mirror. Full 27-field record lives in
+// be_promotions; a denormalized 5-field copy is mirrored to
+// master_data/promotions/items so the existing SaleTab buy modal can
+// pick it up without waiting for the next ProClinic sync.
+
+const promotionsCol = () => collection(db, ...basePath(), 'be_promotions');
+const promotionDoc = (id) => doc(db, ...basePath(), 'be_promotions', String(id));
+
+export async function getPromotion(proClinicId) {
+  const snap = await getDoc(promotionDoc(proClinicId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listPromotions() {
+  const snap = await getDocs(promotionsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  return items;
+}
+
+export async function savePromotion(proClinicId, data) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  if (!data || typeof data !== 'object') throw new Error('data object required');
+  if (!String(data.promotion_name || '').trim()) throw new Error('promotion_name required');
+  if (!(Number(data.sale_price) >= 0)) throw new Error('sale_price must be >= 0');
+
+  const now = new Date().toISOString();
+  const fullDoc = {
+    ...data,
+    proClinicId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  };
+  await setDoc(promotionDoc(id), fullDoc, { merge: false });
+
+  const mirrorRef = doc(db, ...basePath(), 'master_data', 'promotions', 'items', id);
+  await setDoc(mirrorRef, {
+    id,
+    name: data.promotion_name || '',
+    price: Number(data.sale_price) || 0,
+    category: data.category_name || '',
+    itemType: 'promotion',
+    _mirroredAt: now,
+  }, { merge: true });
+}
+
+export async function deletePromotion(proClinicId) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  await deleteDoc(promotionDoc(id));
+  try {
+    const mirrorRef = doc(db, ...basePath(), 'master_data', 'promotions', 'items', id);
+    await deleteDoc(mirrorRef);
+  } catch (_) { /* mirror delete non-fatal */ }
+}
