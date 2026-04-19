@@ -92,8 +92,8 @@ export default function StockWithdrawalPanel({ clinicSettings, theme }) {
           <p className="text-xs text-[var(--tx-muted)]">ยังไม่มีใบเบิก — กด "สร้างใบเบิก"</p>
         </div>
       ) : (
-        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-lg border border-[var(--bd)]">
-          <table className="w-full text-xs">
+        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-x-auto shadow-lg border border-[var(--bd)]">
+          <table className="w-full text-xs min-w-[1000px]">
             <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-2 text-left font-bold">เลขที่</th>
@@ -287,7 +287,8 @@ function WithdrawalCreateForm({ locations, onClose, onSaved }) {
           <div className="text-[11px] text-[var(--tx-muted)]">ต้นทางยังไม่มี batch ที่ active</div>
         ) : (
           <>
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[500px]">
               <thead className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)]">
                 <tr>
                   <th className="px-2 py-2 w-8">#</th>
@@ -325,6 +326,7 @@ function WithdrawalCreateForm({ locations, onClose, onSaved }) {
                 })}
               </tbody>
             </table>
+            </div>
             <button onClick={addItem} className="mt-3 px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-violet-400 border border-[var(--bd)] hover:border-violet-700 flex items-center gap-1.5">
               <Plus size={12} /> เพิ่ม batch
             </button>

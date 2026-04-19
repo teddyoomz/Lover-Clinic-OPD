@@ -256,8 +256,8 @@ export default function StockSeedPanel({ onClose, onSaved }) {
           <p className="text-xs text-[var(--tx-muted)]">{search ? 'ไม่พบสินค้าตามคำค้น' : 'ไม่มีสินค้าในข้อมูลพื้นฐาน — sync products ก่อน'}</p>
         </div>
       ) : (
-        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-lg border border-[var(--bd)]">
-          <table className="w-full text-xs">
+        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-x-auto shadow-lg border border-[var(--bd)]">
+          <table className="w-full text-xs min-w-[900px]">
             <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase tracking-wider sticky top-0">
               <tr>
                 <th className="px-2 py-2 w-10"></th>

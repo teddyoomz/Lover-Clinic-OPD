@@ -182,8 +182,8 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
           )}
         </div>
       ) : (
-        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-hidden shadow-lg border border-[var(--bd)]">
-          <table className="w-full text-xs">
+        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-x-auto shadow-lg border border-[var(--bd)]">
+          <table className="w-full text-xs min-w-[900px]">
             <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-2 text-left font-bold">เลขที่</th>
