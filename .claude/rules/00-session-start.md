@@ -48,6 +48,17 @@ User types in Thai. I respond in Thai for chat, English for code/comments. User 
 - (C) Our code (grep existing utils/components)
 - **Gap in any one = drift = bug**. If you're guessing a URL or method name, STOP and capture it.
 
+**G. Dynamic Capability Expansion — ALLOWED, RULES A–F STILL APPLY** (added 2026-04-19):
+- **Deferred tools** listed in `<system-reminder>` → load via `ToolSearch query:"select:<name>[,<name>,...]"` as needed. NO ask. Bulk-load related sets in one query (e.g. `query:"computer-use", max_results:30`).
+- **Missing capability** → check the user-invocable skill list in the system prompt first. If no fit, build one via `/skill-creator` (scope: user-level if reusable across sessions, project-level if LoverClinic-specific).
+- **New audit skill** → must include grep patterns + numbered invariants (per rule D). Register in `/audit-all` if pre-release relevant.
+- **HARD CONSTRAINTS** — new tool/skill calls still pass rules A–F:
+  - Loaded `WebFetch` ≠ license to fetch ProClinic admin URLs from `src/components/backend/**` (rule E).
+  - Loaded `Write` ≠ license to create `api/proclinic/<entity>.js` for be_* entities (rule E).
+  - New collections / rules via any tool still need reader+writer+size justification (rule C3).
+  - Dynamic tool call that bypasses iron-clad = same severity as any other violation.
+- **Ask user ONLY for**: paid API integrations, new Anthropic Plugin install, anything writing shared external state (Slack/email/push notifications outside our own FCM, cross-account cloud resources).
+
 ---
 
 ## 2. PAST VIOLATIONS (anti-example catalog — DO NOT repeat)
@@ -100,6 +111,7 @@ User types in Thai. I respond in Thai for chat, English for code/comments. User 
 | Deploy firestore rules | `firebase deploy --only firestore:rules` + probe-deploy-probe | NEVER skip the probes |
 | Deploy to Vercel | `vercel --prod` | **Requires explicit user authorization THIS TURN** |
 | Multi-step research | `Agent` subagent with `subagent_type: Explore` | To avoid bloating main context |
+| Load deferred tool | `ToolSearch` with `select:<name>` or keyword | Per rule G — auto-load, no ask |
 
 ## 4. SKILLS — when to invoke (only from the user-invocable list in the system prompt)
 
@@ -115,6 +127,8 @@ User types in Thai. I respond in Thai for chat, English for code/comments. User 
 | React patterns | `/audit-react-patterns` |
 
 **Never mention a skill name without calling it.** The system prompt lists which are actually available — don't invent.
+
+**If a task needs a skill we don't have** (per rule G): build via `/skill-creator` (user scope if reusable, project scope if LoverClinic-specific). Register new audit skills in `/audit-all` Tier tables.
 
 ## 5. WORKFLOW CHECKLIST (per feature, paste mentally into every commit)
 
