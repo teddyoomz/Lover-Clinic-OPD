@@ -3788,14 +3788,20 @@ export async function migrateMasterCouponsToBe() {
   return { imported, skipped, total: masterSnap.size };
 }
 
-/** Look up a coupon by code (for SaleTab apply flow). Returns null if not found/expired. */
+/** Look up a coupon by code (for SaleTab apply flow). Returns null if not found/expired.
+ *  Uses Bangkok-local date for expiry compare — UTC drift at 00:00-06:59 GMT+7
+ *  would mark yesterday's coupons as still-valid. */
 export async function findCouponByCode(code, { today } = {}) {
   if (!code) return null;
   const q = query(couponsCol(), where('coupon_code', '==', String(code).trim()));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const coupon = { id: snap.docs[0].id, ...snap.docs[0].data() };
-  const todayStr = today || new Date().toISOString().slice(0, 10);
+  let todayStr = today;
+  if (!todayStr) {
+    const { thaiTodayISO } = await import('../utils.js');
+    todayStr = thaiTodayISO();
+  }
   if (coupon.start_date && coupon.start_date > todayStr) return null;
   if (coupon.end_date && coupon.end_date < todayStr) return null;
   return coupon;

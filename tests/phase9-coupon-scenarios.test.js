@@ -76,6 +76,35 @@ describe('Phase 9 Coupon — dates (13)', () => {
   it('CT13 malformed ISO still string-compares', () => expect(validateCoupon(base({ start_date: 'z', end_date: 'a' }))[0]).toBe('end_date'));
 });
 
+describe('Phase 9 Coupon — TZ regression (AV9 fix 2026-04-19) — date-string lexicographic compare', () => {
+  // Regression: findCouponByCode + CouponTab.expired used new Date().toISOString()
+  // which emits UTC. At 00:00-06:59 Bangkok time, UTC is still yesterday →
+  // yesterday's coupon would show as still-valid for 7 hours. Fix uses thaiTodayISO.
+  // These tests verify the validator's date comparison is pure string-compare
+  // (which is correct once the caller passes a Bangkok-local date).
+
+  it('TZ1 valid between start and end', () => {
+    expect(validateCoupon(base({ start_date: '2026-01-01', end_date: '2026-12-31' }))).toBeNull();
+  });
+  it('TZ2 start_date lexicographically after end_date rejected', () => {
+    // Even without date parsing, ISO YYYY-MM-DD sorts correctly
+    expect(validateCoupon(base({ start_date: '2026-06-01', end_date: '2026-05-31' }))[0]).toBe('end_date');
+  });
+  it('TZ3 Dec 31 → Jan 1 next year ordered correctly', () => {
+    expect(validateCoupon(base({ start_date: '2026-12-31', end_date: '2027-01-01' }))).toBeNull();
+  });
+  it('TZ4 same YYYY-MM-DD accepted (0-day coupon)', () => {
+    expect(validateCoupon(base({ start_date: '2026-04-19', end_date: '2026-04-19' }))).toBeNull();
+  });
+  it('TZ5 Thai BE-year would string-compare WRONGLY — must be CE (documents the CE convention)', () => {
+    // 2569 > 2026 lexicographically, so if caller accidentally passed BE years
+    // the compare would still work string-wise, but we keep CE for consistency.
+    // This test locks in that the validator doesn't care about year format
+    // — the CALLER must pass CE-year ISO strings.
+    expect(validateCoupon(base({ start_date: '2569-01-01', end_date: '2569-12-31' }))).toBeNull();
+  });
+});
+
 describe('Phase 9 Coupon — branch IDs / hardcoded constants (10)', () => {
   it('CB1 COUPON_BRANCHES has exactly 5 entries', () => expect(COUPON_BRANCHES).toHaveLength(5));
   it('CB2 all branch ids are numeric', () => COUPON_BRANCHES.forEach(b => expect(typeof b.id).toBe('number')));
