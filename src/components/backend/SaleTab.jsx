@@ -763,12 +763,27 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 {filtered.map((sale, i) => {
                   const st = resolveSaleStatus(sale);
                   return (
-                    <tr key={sale.saleId || sale.id || i} className={`border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}>
+                    <tr
+                      key={sale.saleId || sale.id || i}
+                      onClick={() => setViewingSale(sale)}
+                      className={`border-b border-[var(--bd)]/50 cursor-pointer hover:bg-violet-900/15 transition-colors ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}
+                      title="คลิกเพื่อดูรายละเอียด"
+                      data-testid={`saletab-row-${sale.saleId || sale.id || i}`}
+                    >
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
+                        {/* stopPropagation so opening the customer page in a
+                            new tab doesn't ALSO trigger the row's detail modal */}
                         {sale.customerId ? (
-                          <a href={`/?backend=1&customer=${sale.customerId}`} target="_blank" rel="noopener noreferrer"
-                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors">{sale.customerName || '-'}</a>
+                          <a
+                            href={`/?backend=1&customer=${sale.customerId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
+                          >
+                            {sale.customerName || '-'}
+                          </a>
                         ) : (sale.customerName || '-')}
                         {sale.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{sale.customerHN}</span>}
                       </td>
@@ -782,7 +797,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       </td>
                       <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
                       <td className="px-3 py-2">
-                        <div className="flex gap-1">
+                        {/* Action buttons MUST stopPropagation so they don't
+                            also trigger the row-click detail modal. */}
+                        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                           <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
                           <button onClick={() => openEdit(sale)} className="p-2.5 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           {(sale.payment?.status === 'unpaid' || sale.payment?.status === 'split') && (
