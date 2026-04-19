@@ -125,8 +125,14 @@ export default function StockReportTab({ clinicSettings, theme }) {
 
   const handleRefresh = useCallback(() => setReloadKey(k => k + 1), []);
 
-  const handleSort = useCallback((key) => {
+  // Unified sort handler. `forceToggle=true` flips direction without
+  // changing the sort key (used by mobile sort-dir button).
+  const handleSort = useCallback((key, forceToggle = false) => {
     setSortKey(prev => {
+      if (forceToggle) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
       if (prev === key) {
         setSortDir(d => d === 'asc' ? 'desc' : 'asc');
         return prev;
@@ -162,6 +168,9 @@ export default function StockReportTab({ clinicSettings, theme }) {
         />
       }
     >
+      <MobileSortBar sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+      <StockMobileList rows={sortedRows} />
+      <StockMobileFooter totals={out.totals} />
       <StockReportTable
         rows={sortedRows}
         totals={out.totals}
@@ -207,6 +216,10 @@ function FiltersRow({
   showZeroQty, setShowZeroQty,
   categoryOptions,
 }) {
+  // On mobile: each field = full-width block, stacked. On ≥sm: inline with
+  // a reasonable min-width so the search input dominates the row.
+  const inputCls = "px-2 py-2 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] w-full sm:w-auto";
+  const selectCls = `${inputCls} sm:min-w-[140px]`;
   return (
     <>
       <input
@@ -214,39 +227,41 @@ function FiltersRow({
         value={searchText}
         onChange={e => setSearchText(e.target.value)}
         placeholder="ค้นหา รหัส / ชื่อสินค้า"
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] min-w-[220px]"
+        className={`${inputCls} sm:min-w-[220px] sm:flex-1`}
         data-testid="stock-filter-search"
       />
-      <select
-        value={productCategory}
-        onChange={e => setProductCategory(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="stock-filter-category"
-      >
-        {categoryOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={productType}
-        onChange={e => setProductType(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="stock-filter-type"
-      >
-        {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={productStatus}
-        onChange={e => setProductStatus(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="stock-filter-status"
-      >
-        {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <label className="flex items-center gap-1.5 text-xs text-[var(--tx-muted)] cursor-pointer">
+      <div className="grid grid-cols-2 sm:flex sm:flex-none gap-2 sm:gap-3">
+        <select
+          value={productCategory}
+          onChange={e => setProductCategory(e.target.value)}
+          className={selectCls}
+          data-testid="stock-filter-category"
+        >
+          {categoryOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={productType}
+          onChange={e => setProductType(e.target.value)}
+          className={selectCls}
+          data-testid="stock-filter-type"
+        >
+          {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={productStatus}
+          onChange={e => setProductStatus(e.target.value)}
+          className={selectCls}
+          data-testid="stock-filter-status"
+        >
+          {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-[var(--tx-muted)] cursor-pointer select-none min-h-[32px] sm:min-h-0">
         <input
           type="checkbox"
           checked={showZeroQty}
           onChange={e => setShowZeroQty(e.target.checked)}
-          className="accent-cyan-600"
+          className="accent-cyan-600 w-4 h-4"
           data-testid="stock-filter-zero-qty"
         />
         แสดงสินค้าที่จำนวนเป็น 0
@@ -255,10 +270,177 @@ function FiltersRow({
   );
 }
 
+/**
+ * Mobile sort bar — surfaces sort controls on a <select> since table headers
+ * are hidden on the card view. Single source of truth with the desktop
+ * SortHeader buttons (shares sortKey/sortDir state).
+ */
+function MobileSortBar({ sortKey, sortDir, onSort }) {
+  return (
+    <div className="lg:hidden flex items-center gap-2 px-1">
+      <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold shrink-0">
+        เรียงตาม
+      </label>
+      <select
+        value={sortKey}
+        onChange={e => onSort(e.target.value, /* toggle */ false)}
+        className="flex-1 px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+        data-testid="mobile-sort-key"
+      >
+        {Object.entries(SORTABLE).map(([k, v]) => (
+          <option key={k} value={k}>{v.label}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey, /* forceToggle */ true)}
+        className="px-2.5 py-1.5 rounded text-xs font-bold border border-[var(--bd)] bg-[var(--bg-hover)] text-cyan-300 hover:bg-cyan-900/30 transition-colors"
+        aria-label={sortDir === 'asc' ? 'เรียงจากน้อยไปมาก' : 'เรียงจากมากไปน้อย'}
+        data-testid="mobile-sort-dir"
+      >
+        {sortDir === 'asc' ? (
+          <ArrowUp size={12} className="inline" />
+        ) : (
+          <ArrowDown size={12} className="inline" />
+        )}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Mobile card list — one product per card, stacked vertically. Primary qty +
+ * value are prominent; near-expiry / expired chips only appear when > 0 so
+ * the layout stays calm for healthy stock.
+ */
+function StockMobileList({ rows }) {
+  return (
+    <div className="lg:hidden space-y-2" data-testid="stock-report-mobile-list">
+      {rows.map((r, i) => {
+        const paused = r.productStatus === 'พักใช้งาน';
+        const hasNear = r.nearExpiryQty > 0;
+        const hasExpired = r.expiredQty > 0;
+        return (
+          <div
+            key={`${r.productId || i}`}
+            className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] p-3.5 shadow-sm hover:border-cyan-800/50 transition-colors"
+            data-testid={`stock-mobile-row-${r.productId || i}`}
+          >
+            {/* Head: code + name (wraps) + paused badge */}
+            <div className="flex items-start gap-2 justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--tx-muted)] mb-0.5">
+                  <span>#{r.productCode || '-'}</span>
+                  {r.productType && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <span className="not-italic">{r.productType}</span>
+                    </>
+                  )}
+                  {r.productCategory && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <span className="not-italic truncate">{r.productCategory}</span>
+                    </>
+                  )}
+                </div>
+                <h3 className="text-sm font-bold text-[var(--tx-primary)] leading-snug break-words">
+                  {r.productName}
+                </h3>
+              </div>
+              {paused && (
+                <span className="flex-shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-amber-900/30 text-amber-300 border-amber-700/50">
+                  พักใช้งาน
+                </span>
+              )}
+            </div>
+
+            {/* Primary metrics: qty + value (big, bold) */}
+            <div className="mt-3 grid grid-cols-2 gap-2 pt-2 border-t border-[var(--bd)]">
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)] mb-0.5">จำนวน</div>
+                <div className="text-base font-black tabular-nums text-[var(--tx-primary)] truncate" title={fmtQty(r.totalQty, r.unit)}>
+                  {fmtQty(r.totalQty, r.unit)}
+                </div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)] mb-0.5">มูลค่ารวม</div>
+                <div className="text-base font-black tabular-nums text-emerald-400 truncate">
+                  {fmtMoney(r.totalValue)} <span className="text-[9px] text-[var(--tx-muted)]">฿</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Secondary: cost per unit + expiry chips */}
+            <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
+              <div className="text-[var(--tx-muted)]">
+                ต้นทุน/หน่วย: <span className="text-[var(--tx-secondary)] font-bold tabular-nums">{fmtMoney(r.weightedAvgCost)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {hasNear && (
+                  <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-amber-900/30 text-amber-300 border-amber-700/50">
+                    ใกล้หมด {fmtQty(r.nearExpiryQty, r.unit)}
+                  </span>
+                )}
+                {hasExpired && (
+                  <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-red-900/30 text-red-300 border-red-700/50">
+                    หมดอายุ {fmtQty(r.expiredQty, r.unit)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Mobile footer — sticky summary banner at bottom of the card list.
+ */
+function StockMobileFooter({ totals }) {
+  return (
+    <div
+      className="lg:hidden sticky bottom-0 z-[5] mt-3 -mx-1 px-3 py-2.5 rounded-xl border border-[var(--bd)] bg-[var(--bg-hover)]/95 backdrop-blur-sm shadow-lg"
+      data-testid="stock-report-footer-mobile"
+    >
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <div className="text-[var(--tx-muted)]">
+          รวม <span className="text-[var(--tx-primary)] font-bold tabular-nums">{totals.productCount.toLocaleString('th-TH')}</span> รายการ
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">มูลค่ารวม</div>
+          <div className="font-black tabular-nums text-emerald-400">
+            {fmtMoney(totals.totalValue)} <span className="text-[9px] opacity-70">฿</span>
+          </div>
+        </div>
+      </div>
+      {(totals.nearExpiryQty > 0 || totals.expiredQty > 0) && (
+        <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex items-center gap-2 text-[10px] justify-end">
+          {totals.nearExpiryQty > 0 && (
+            <span className="text-amber-400 font-bold">
+              ใกล้หมด {totals.nearExpiryQty.toLocaleString('th-TH', { maximumFractionDigits: 2 })}
+            </span>
+          )}
+          {totals.expiredQty > 0 && (
+            <>
+              {totals.nearExpiryQty > 0 && <span className="opacity-50">·</span>}
+              <span className="text-red-400 font-bold">
+                หมดอายุ {totals.expiredQty.toLocaleString('th-TH', { maximumFractionDigits: 2 })}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StockReportTable({ rows, totals, sortKey, sortDir, onSort }) {
   const headerProps = { currentKey: sortKey, currentDir: sortDir, onSort };
   return (
-    <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="stock-report-table">
+    <div className="hidden lg:block overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="stock-report-table">
       <table className="w-full text-xs min-w-[1200px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>

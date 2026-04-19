@@ -65,29 +65,30 @@ export default function ReportShell({
           - Subtitle: text-sm muted, comma-separated facts.
           - 1px accent underline below the chip+title block ties chrome to
             the body table that follows. */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-start gap-3 min-w-0 flex-1">
           {Icon && (
             <span
-              className="flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl mt-0.5"
+              className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl mt-0.5"
               style={{
                 background: `linear-gradient(135deg, rgba(${acRgb},0.20), rgba(${acRgb},0.06))`,
                 border: `1px solid rgba(${acRgb},0.30)`,
                 boxShadow: `0 0 16px -4px rgba(${acRgb},0.30)`,
               }}
             >
-              <Icon size={20} strokeWidth={2.25} style={{ color: ac }} />
+              <Icon size={18} strokeWidth={2.25} style={{ color: ac }} className="sm:hidden" />
+              <Icon size={20} strokeWidth={2.25} style={{ color: ac }} className="hidden sm:block" />
             </span>
           )}
           <div className="min-w-0 flex-1">
             <h2
-              className="text-2xl font-black text-[var(--tx-heading)] leading-tight"
+              className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] leading-tight"
               style={{ letterSpacing: '-0.015em' }}
             >
               {title}
             </h2>
             {(subtitle || showCounts) && (
-              <p className="text-sm text-[var(--tx-muted)] mt-1">
+              <p className="text-[11px] sm:text-sm text-[var(--tx-muted)] mt-1 leading-snug">
                 {showCounts && (
                   <>
                     จำนวน {totalCount.toLocaleString('th-TH')} รายการ
@@ -103,7 +104,7 @@ export default function ReportShell({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-start">
           {onRefresh && (
             <button
               type="button"
@@ -112,6 +113,7 @@ export default function ReportShell({
               className="px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all border border-[var(--bd)] bg-[var(--bg-hover)] text-[var(--tx-secondary)] hover:text-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="report-refresh"
               title="โหลดข้อมูลใหม่"
+              aria-label="โหลดข้อมูลใหม่"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">รีเฟรช</span>
@@ -122,22 +124,22 @@ export default function ReportShell({
               type="button"
               onClick={onExport}
               disabled={exportDisabled || loading}
-              className="px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 sm:px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all text-white disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               style={{
                 background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.7))`,
                 boxShadow: `0 0 15px rgba(${acRgb},0.35)`,
               }}
               data-testid="report-export"
             >
-              <Download size={14} /> Export CSV
+              <Download size={14} /> <span className="hidden xs:inline sm:inline">Export CSV</span><span className="xs:hidden sm:hidden">CSV</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter row */}
+      {/* Filter row — stacks vertically on mobile, full-width inputs */}
       {(dateRangeSlot || filtersSlot) && (
-        <div className="flex items-center gap-3 flex-wrap p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] report-filter-bar">
           {dateRangeSlot}
           {filtersSlot}
         </div>

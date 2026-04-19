@@ -142,8 +142,13 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
 
   // Click a header → if same column, toggle dir; if new, default by type:
   // strings asc, numbers desc (most users want "biggest first" for money).
-  const handleSort = useCallback((key) => {
+  // `forceToggle=true` flips direction keeping key (mobile sort-dir button).
+  const handleSort = useCallback((key, forceToggle = false) => {
     setSortKey(prev => {
+      if (forceToggle) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
       if (prev === key) {
         setSortDir(d => d === 'asc' ? 'desc' : 'asc');
         return prev;
@@ -187,6 +192,9 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
         />
       }
     >
+      <MobileSortBar sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+      <CustomerMobileList rows={sortedRows} onOpenCustomer={handleOpenCustomer} />
+      <CustomerMobileFooter totals={out.totals} />
       <CustomerReportTable
         rows={sortedRows}
         totals={out.totals}
@@ -233,6 +241,8 @@ function FiltersRow({
   sourceFilter, setSourceFilter,
   sourceOptions,
 }) {
+  const inputCls = "px-2 py-2 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] w-full sm:w-auto";
+  const selectCls = `${inputCls} sm:min-w-[150px]`;
   return (
     <>
       <input
@@ -240,31 +250,33 @@ function FiltersRow({
         value={searchText}
         onChange={e => setSearchText(e.target.value)}
         placeholder="ค้นหา HN / ชื่อ / เบอร์โทร"
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] min-w-[220px]"
+        className={`${inputCls} sm:min-w-[220px] sm:flex-1`}
         data-testid="customer-filter-search"
       />
-      <select
-        value={membershipFilter}
-        onChange={e => setMembershipFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="customer-filter-membership"
-      >
-        {MEMBERSHIP_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={sourceFilter}
-        onChange={e => setSourceFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="customer-filter-source"
-      >
-        {sourceOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <label className="flex items-center gap-1.5 text-xs text-[var(--tx-muted)] cursor-pointer">
+      <div className="grid grid-cols-2 sm:flex sm:flex-none gap-2 sm:gap-3">
+        <select
+          value={membershipFilter}
+          onChange={e => setMembershipFilter(e.target.value)}
+          className={selectCls}
+          data-testid="customer-filter-membership"
+        >
+          {MEMBERSHIP_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          className={selectCls}
+          data-testid="customer-filter-source"
+        >
+          {sourceOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-[var(--tx-muted)] cursor-pointer select-none min-h-[32px] sm:min-h-0">
         <input
           type="checkbox"
           checked={marketingConsentOnly}
           onChange={e => setMarketingConsentOnly(e.target.checked)}
-          className="accent-cyan-600"
+          className="accent-cyan-600 w-4 h-4"
           data-testid="customer-filter-marketing"
         />
         เฉพาะลูกค้าที่ยินยอมให้ทำการตลาด
@@ -273,10 +285,170 @@ function FiltersRow({
   );
 }
 
+/** Mobile sort bar — surfaces sort via select/toggle button. */
+function MobileSortBar({ sortKey, sortDir, onSort }) {
+  return (
+    <div className="lg:hidden flex items-center gap-2 px-1">
+      <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold shrink-0">เรียงตาม</label>
+      <select
+        value={sortKey}
+        onChange={e => onSort(e.target.value, false)}
+        className="flex-1 px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+        data-testid="mobile-sort-key"
+      >
+        {Object.entries(SORTABLE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      </select>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey, true)}
+        className="px-2.5 py-1.5 rounded text-xs font-bold border border-[var(--bd)] bg-[var(--bg-hover)] text-cyan-300 hover:bg-cyan-900/30 transition-colors"
+        aria-label={sortDir === 'asc' ? 'เรียงจากน้อยไปมาก' : 'เรียงจากมากไปน้อย'}
+        data-testid="mobile-sort-dir"
+      >
+        {sortDir === 'asc' ? <ArrowUp size={12} className="inline" /> : <ArrowDown size={12} className="inline" />}
+      </button>
+    </div>
+  );
+}
+
+/** Mobile customer card — headline identity + finance grid + purchase summary. */
+function CustomerMobileList({ rows, onOpenCustomer }) {
+  return (
+    <div className="lg:hidden space-y-2" data-testid="customer-report-mobile-list">
+      {rows.map((r, i) => {
+        const badge = BADGE_COLORS[r.membership.type] || BADGE_COLORS.default;
+        return (
+          <div
+            key={`${r.customerId}-${i}`}
+            className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] p-3.5 shadow-sm hover:border-cyan-800/50 transition-colors cursor-pointer"
+            data-testid={`customer-mobile-row-${r.customerId}`}
+            onClick={() => onOpenCustomer?.(r.customerId)}
+          >
+            {/* Head: badge + HN + name */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--tx-muted)] mb-0.5">
+                  {r.customerHN && <span>{r.customerHN}</span>}
+                  {r.phone && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <span className="not-italic">{r.phone}</span>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
+                  className="text-sm font-bold text-cyan-400 hover:text-cyan-300 leading-snug text-left break-words"
+                  data-testid={`customer-mobile-link-${r.customerId}`}
+                >
+                  {r.customerName}
+                </button>
+              </div>
+              <span className={`flex-shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${badge}`}>
+                {r.membership.type ? (
+                  <><Star size={9} className="inline mr-0.5" />{r.membershipBadge}</>
+                ) : r.membershipBadge}
+              </span>
+            </div>
+
+            {/* Demographics (only if present) */}
+            {(r.genderBirth !== '--' || r.occupationIncome !== '--' || r.source !== '-') && (
+              <div className="mt-2 text-[10px] text-[var(--tx-muted)] leading-relaxed">
+                {r.genderBirth !== '--' && <div><span className="text-[var(--tx-muted)]/70">เพศ/เกิด:</span> <span className="text-[var(--tx-secondary)]">{r.genderBirth}</span></div>}
+                {r.occupationIncome !== '--' && <div><span className="text-[var(--tx-muted)]/70">อาชีพ:</span> <span className="text-[var(--tx-secondary)]">{r.occupationIncome}</span></div>}
+                {r.source !== '-' && <div><span className="text-[var(--tx-muted)]/70">ที่มา:</span> <span className="text-[var(--tx-secondary)]">{r.source}</span></div>}
+              </div>
+            )}
+
+            {/* Finance grid */}
+            <div className="mt-3 pt-2 border-t border-[var(--bd)] grid grid-cols-3 gap-2 text-[10px]">
+              <div>
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">เงินมัดจำ</div>
+                <div className="text-xs font-bold tabular-nums text-[var(--tx-primary)]">
+                  {r.depositBalance > 0 ? fmtMoney(r.depositBalance) : '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">Wallet</div>
+                <div className="text-xs font-bold tabular-nums text-[var(--tx-primary)]">
+                  {r.walletBalance > 0 ? fmtMoney(r.walletBalance) : '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">คะแนน</div>
+                <div className="text-xs font-bold tabular-nums text-[var(--tx-primary)]">
+                  {r.points > 0 ? fmtPoints(r.points) : '-'}
+                </div>
+              </div>
+            </div>
+
+            {/* Purchase summary */}
+            {r.purchaseCount > 0 ? (
+              <div className="mt-2 pt-2 border-t border-[var(--bd)] text-[10px]">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[var(--tx-muted)]">ยอดสั่งซื้อ</span>
+                  <span className="font-bold text-emerald-400 tabular-nums text-xs">{fmtMoney(r.purchaseTotal)} ฿</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 mt-0.5 text-[var(--tx-muted)]">
+                  <span>ล่าสุด: {fmtDateCE(r.purchaseLastDate)}</span>
+                  {r.purchaseUnpaidCount > 0 && (
+                    <span className="text-rose-400 font-bold">ค้าง: {r.purchaseUnpaidCount} ใบ</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Registered */}
+            <div className="mt-2 pt-2 border-t border-[var(--bd)] text-[10px] text-[var(--tx-muted)] flex items-center justify-between">
+              <span>ลงทะเบียน: {fmtDateCE(r.registeredDate)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Mobile footer summary. */
+function CustomerMobileFooter({ totals }) {
+  return (
+    <div
+      className="lg:hidden sticky bottom-0 z-[5] mt-3 -mx-1 px-3 py-2.5 rounded-xl border border-[var(--bd)] bg-[var(--bg-hover)]/95 backdrop-blur-sm shadow-lg"
+      data-testid="customer-report-footer-mobile"
+    >
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <div className="text-[var(--tx-muted)]">
+          รวม <span className="text-[var(--tx-primary)] font-bold tabular-nums">{totals.count.toLocaleString('th-TH')}</span> ราย
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">ยอดสั่งซื้อรวม</div>
+          <div className="font-black tabular-nums text-emerald-400">
+            {fmtMoney(totals.purchaseTotal)} <span className="text-[9px] opacity-70">฿</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] justify-end">
+        <span className="text-[var(--tx-muted)]">มัดจำรวม <span className="text-[var(--tx-secondary)] font-bold">{fmtMoney(totals.depositBalance)}</span></span>
+        <span className="opacity-50">·</span>
+        <span className="text-[var(--tx-muted)]">Wallet <span className="text-[var(--tx-secondary)] font-bold">{fmtMoney(totals.walletBalance)}</span></span>
+        <span className="opacity-50">·</span>
+        <span className="text-[var(--tx-muted)]">คะแนน <span className="text-[var(--tx-secondary)] font-bold">{fmtPoints(totals.points)}</span></span>
+        {totals.purchaseUnpaidCount > 0 && (
+          <>
+            <span className="opacity-50">·</span>
+            <span className="text-rose-400 font-bold">ค้าง {totals.purchaseUnpaidCount}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CustomerReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir, onSort }) {
   const headerProps = { currentKey: sortKey, currentDir: sortDir, onSort };
   return (
-    <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="customer-report-table">
+    <div className="hidden lg:block overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="customer-report-table">
       <table className="w-full text-xs min-w-[1200px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>

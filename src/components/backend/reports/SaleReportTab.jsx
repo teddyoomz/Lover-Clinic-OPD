@@ -136,6 +136,8 @@ export default function SaleReportTab({ clinicSettings, theme }) {
         />
       }
     >
+      <SaleMobileList rows={out.rows} onOpenCustomer={handleOpenCustomer} onViewSale={handleViewSale} />
+      <SaleMobileFooter totals={out.totals} />
       <SaleReportTable
         rows={out.rows}
         totals={out.totals}
@@ -160,43 +162,204 @@ function FiltersRow({
   searchText, setSearchText,
   includeCancelled, setIncludeCancelled,
 }) {
+  const inputCls = "px-2 py-2 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] w-full sm:w-auto";
+  const selectCls = `${inputCls} sm:min-w-[150px]`;
   return (
     <>
-      <select
-        value={statusFilter}
-        onChange={e => setStatusFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="filter-status"
-      >
-        {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={saleTypeFilter}
-        onChange={e => setSaleTypeFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="filter-saletype"
-      >
-        {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
       <input
         type="text"
         value={searchText}
         onChange={e => setSearchText(e.target.value)}
         placeholder="ค้นหา HN / ชื่อ / เลขที่ขาย"
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] min-w-[200px]"
+        className={`${inputCls} sm:min-w-[200px] sm:flex-1`}
         data-testid="filter-search"
       />
-      <label className="flex items-center gap-1.5 text-xs text-[var(--tx-muted)] cursor-pointer">
+      <div className="grid grid-cols-2 sm:flex sm:flex-none gap-2 sm:gap-3">
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className={selectCls}
+          data-testid="filter-status"
+        >
+          {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={saleTypeFilter}
+          onChange={e => setSaleTypeFilter(e.target.value)}
+          className={selectCls}
+          data-testid="filter-saletype"
+        >
+          {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-[var(--tx-muted)] cursor-pointer select-none min-h-[32px] sm:min-h-0">
         <input
           type="checkbox"
           checked={includeCancelled}
           onChange={e => setIncludeCancelled(e.target.checked)}
-          className="accent-rose-600"
+          className="accent-rose-600 w-4 h-4"
           data-testid="filter-include-cancelled"
         />
         แสดงที่ยกเลิก
       </label>
     </>
+  );
+}
+
+const STATUS_BADGE = {
+  paid:   'bg-emerald-900/30 text-emerald-300 border-emerald-700/50',
+  split:  'bg-amber-900/30   text-amber-300   border-amber-700/50',
+  unpaid: 'bg-rose-900/30    text-rose-300    border-rose-700/50',
+};
+
+function SaleMobileList({ rows, onOpenCustomer, onViewSale }) {
+  return (
+    <div className="lg:hidden space-y-2" data-testid="sale-report-mobile-list">
+      {rows.map((r, i) => {
+        const statusClass = STATUS_BADGE[r.paymentStatus] || 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]';
+        return (
+          <div
+            key={`${r.saleId}-${i}`}
+            onClick={() => onViewSale?.(r.saleId)}
+            className={`rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] p-3.5 shadow-sm hover:border-cyan-800/50 transition-colors cursor-pointer ${
+              r.isCancelled ? 'opacity-60' : ''
+            }`}
+            data-testid={`mobile-row-${r.saleId}`}
+            data-cancelled={r.isCancelled ? 'true' : 'false'}
+            title="แตะเพื่อดูรายละเอียด"
+          >
+            {/* Head: date + saleId + status badge */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[10px] text-[var(--tx-muted)] mb-0.5">
+                  <span className="font-bold tabular-nums">{fmtDateCE(r.saleDate)}</span>
+                  <span className="opacity-50">·</span>
+                  <span className="font-mono truncate">{r.saleId}</span>
+                </div>
+                {r.saleType && r.saleType !== '-' && (
+                  <span className="inline-block text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-cyan-900/30 text-cyan-300 border-cyan-700/50">
+                    {r.saleType}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${statusClass}`}>
+                  {r.paymentStatusLabel || r.paymentStatus}
+                </span>
+                {r.isCancelled && (
+                  <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border bg-red-900/30 text-red-300 border-red-700/50">
+                    ยกเลิก
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Customer */}
+            {(r.customerHN || r.customerName) && (
+              <div className="mt-2 pt-2 border-t border-[var(--bd)] flex items-center gap-2 flex-wrap">
+                {r.customerHN && <span className="font-mono text-[10px] text-[var(--tx-muted)]">{r.customerHN}</span>}
+                {r.customerId ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenCustomer?.(r.customerId); }}
+                    className="text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 text-left"
+                    data-testid={`mobile-customer-link-${r.saleId}`}
+                  >
+                    {r.customerName || '-'}
+                  </button>
+                ) : (
+                  <span className="text-sm font-bold text-[var(--tx-primary)]">{r.customerName || '-'}</span>
+                )}
+              </div>
+            )}
+
+            {/* Items summary */}
+            {r.itemsSummary && r.itemsSummary !== '-' && (
+              <div className="mt-2 text-[11px] text-[var(--tx-secondary)] leading-snug line-clamp-2" title={r.itemsSummary}>
+                {r.itemsSummary}
+              </div>
+            )}
+
+            {/* Financial grid */}
+            <div className="mt-3 pt-2 border-t border-[var(--bd)] grid grid-cols-2 gap-2">
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">ราคาหลังหักส่วนลด</div>
+                <div className="text-sm font-black tabular-nums text-[var(--tx-primary)] truncate">{fmtMoney(r.netTotal)}</div>
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">ยอดที่ชำระ</div>
+                <div className="text-sm font-black tabular-nums text-emerald-400 truncate">
+                  {fmtMoney(r.paidAmount)} <span className="text-[9px] text-[var(--tx-muted)]">฿</span>
+                </div>
+              </div>
+              {r.outstandingAmount > 0 && (
+                <div className="col-span-2 flex items-baseline justify-between text-[10px] text-rose-400 font-bold">
+                  <span>ค้างชำระ</span>
+                  <span className="tabular-nums">{fmtMoney(r.outstandingAmount)} ฿</span>
+                </div>
+              )}
+            </div>
+
+            {/* Secondary: deposit/wallet/refund/channel (only non-zero) */}
+            {(r.depositApplied > 0 || r.walletApplied > 0 || r.refundAmount > 0 || r.paymentChannels) && (
+              <div className="mt-2 pt-2 border-t border-[var(--bd)] flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-[var(--tx-muted)]">
+                {r.depositApplied > 0 && <span>มัดจำ <span className="text-[var(--tx-secondary)] font-bold tabular-nums">{fmtMoney(r.depositApplied)}</span></span>}
+                {r.walletApplied > 0 && <span>Wallet <span className="text-[var(--tx-secondary)] font-bold tabular-nums">{fmtMoney(r.walletApplied)}</span></span>}
+                {r.refundAmount > 0 && <span>คืน <span className="text-rose-400 font-bold tabular-nums">{fmtMoney(r.refundAmount)}</span></span>}
+                {r.paymentChannels && r.paymentChannels !== '-' && (
+                  <span className="w-full sm:w-auto truncate" title={r.paymentChannels}>ช่องทาง: <span className="text-[var(--tx-secondary)]">{r.paymentChannels}</span></span>
+                )}
+              </div>
+            )}
+
+            {/* Seller */}
+            {r.sellersLabel && r.sellersLabel !== '-' && (
+              <div className="mt-1.5 text-[10px] text-[var(--tx-muted)]">
+                พนักงานขาย: <span className="text-[var(--tx-secondary)]">{r.sellersLabel}</span>
+              </div>
+            )}
+
+            <div className="mt-2 text-[10px] text-cyan-400/70 text-right flex items-center justify-end gap-1">
+              <span>ดูรายละเอียด</span>
+              <ChevronRight size={11} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SaleMobileFooter({ totals }) {
+  return (
+    <div
+      className="lg:hidden sticky bottom-0 z-[5] mt-3 -mx-1 px-3 py-2.5 rounded-xl border border-[var(--bd)] bg-[var(--bg-hover)]/95 backdrop-blur-sm shadow-lg"
+      data-testid="sale-report-footer-mobile"
+    >
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <div className="text-[var(--tx-muted)]">
+          รวม <span className="text-[var(--tx-primary)] font-bold tabular-nums">{totals.count.toLocaleString('th-TH')}</span> รายการ
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">ยอดที่ชำระ</div>
+          <div className="font-black tabular-nums text-emerald-400">
+            {fmtMoney(totals.paidAmount)} <span className="text-[9px] opacity-70">฿</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] justify-end">
+        <span className="text-[var(--tx-muted)]">สุทธิ <span className="text-[var(--tx-secondary)] font-bold">{fmtMoney(totals.netTotal)}</span></span>
+        {totals.depositApplied > 0 && (
+          <><span className="opacity-50">·</span><span className="text-[var(--tx-muted)]">มัดจำ <span className="text-[var(--tx-secondary)] font-bold">{fmtMoney(totals.depositApplied)}</span></span></>
+        )}
+        {totals.walletApplied > 0 && (
+          <><span className="opacity-50">·</span><span className="text-[var(--tx-muted)]">Wallet <span className="text-[var(--tx-secondary)] font-bold">{fmtMoney(totals.walletApplied)}</span></span></>
+        )}
+        {totals.outstandingAmount > 0 && (
+          <><span className="opacity-50">·</span><span className="text-rose-400 font-bold">ค้าง <span className="tabular-nums">{fmtMoney(totals.outstandingAmount)}</span></span></>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -210,7 +373,7 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
   const isInteractive = (key) => key === 'customerHN' || key === 'customerName';
 
   return (
-    <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
+    <div className="hidden lg:block overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
       <table className="w-full text-xs min-w-[1400px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>

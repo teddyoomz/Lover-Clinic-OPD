@@ -159,8 +159,13 @@ export default function AppointmentReportTab({ clinicSettings, theme }) {
 
   const handleRefresh = useCallback(() => setReloadKey(k => k + 1), []);
 
-  const handleSort = useCallback((key) => {
+  // `forceToggle=true` flips direction keeping key (mobile sort-dir button).
+  const handleSort = useCallback((key, forceToggle = false) => {
     setSortKey(prev => {
+      if (forceToggle) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return prev;
+      }
       if (prev === key) {
         setSortDir(d => d === 'asc' ? 'desc' : 'asc');
         return prev;
@@ -203,6 +208,9 @@ export default function AppointmentReportTab({ clinicSettings, theme }) {
         />
       }
     >
+      <MobileSortBar sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+      <AppointmentMobileList rows={sortedRows} onOpenCustomer={handleOpenCustomer} />
+      <AppointmentMobileFooter totals={out.totals} />
       <AppointmentReportTable
         rows={sortedRows}
         totals={out.totals}
@@ -248,6 +256,8 @@ function FiltersRow({
   typeFilter, setTypeFilter,
   customerTypeOptions,
 }) {
+  const inputCls = "px-2 py-2 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] w-full sm:w-auto";
+  const selectCls = `${inputCls} sm:min-w-[150px]`;
   return (
     <>
       <input
@@ -255,41 +265,190 @@ function FiltersRow({
         value={searchText}
         onChange={e => setSearchText(e.target.value)}
         placeholder="ค้นหา HN / ชื่อ / หมอ / นัดมาเพื่อ"
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] min-w-[240px]"
+        className={`${inputCls} sm:min-w-[240px] sm:flex-1`}
         data-testid="appt-filter-search"
       />
-      <select
-        value={customerTypeFilter}
-        onChange={e => setCustomerTypeFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="appt-filter-customer-type"
-      >
-        {customerTypeOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={statusFilter}
-        onChange={e => setStatusFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="appt-filter-status"
-      >
-        {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
-      <select
-        value={typeFilter}
-        onChange={e => setTypeFilter(e.target.value)}
-        className="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-        data-testid="appt-filter-type"
-      >
-        {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
-      </select>
+      <div className="grid grid-cols-2 sm:flex sm:flex-none gap-2 sm:gap-3">
+        <select
+          value={customerTypeFilter}
+          onChange={e => setCustomerTypeFilter(e.target.value)}
+          className={selectCls}
+          data-testid="appt-filter-customer-type"
+        >
+          {customerTypeOptions.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className={selectCls}
+          data-testid="appt-filter-status"
+        >
+          {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          className={selectCls}
+          data-testid="appt-filter-type"
+        >
+          {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+      </div>
     </>
+  );
+}
+
+/** Mobile sort bar — surfaces sort on <select>; card view hides table headers. */
+function MobileSortBar({ sortKey, sortDir, onSort }) {
+  return (
+    <div className="lg:hidden flex items-center gap-2 px-1">
+      <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold shrink-0">เรียงตาม</label>
+      <select
+        value={sortKey}
+        onChange={e => onSort(e.target.value, false)}
+        className="flex-1 px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+        data-testid="mobile-sort-key"
+      >
+        {Object.entries(SORTABLE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      </select>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey, true)}
+        className="px-2.5 py-1.5 rounded text-xs font-bold border border-[var(--bd)] bg-[var(--bg-hover)] text-cyan-300 hover:bg-cyan-900/30 transition-colors"
+        aria-label={sortDir === 'asc' ? 'เรียงจากน้อยไปมาก' : 'เรียงจากมากไปน้อย'}
+        data-testid="mobile-sort-dir"
+      >
+        {sortDir === 'asc' ? <ArrowUp size={12} className="inline" /> : <ArrowDown size={12} className="inline" />}
+      </button>
+    </div>
+  );
+}
+
+/** Mobile card list for appointments — emphasises date + time + customer, with
+ *  status/type badges and doctor/advisor folded under. */
+function AppointmentMobileList({ rows, onOpenCustomer }) {
+  return (
+    <div className="lg:hidden space-y-2" data-testid="appointment-report-mobile-list">
+      {rows.map((r, i) => {
+        const statusBadge = STATUS_BADGE[r.status] || 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]';
+        const typeBadge = TYPE_BADGE[r.appointmentType] || 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border-[var(--bd)]';
+        const hasCustomer = !!(r.customerHN || r.customerName);
+        return (
+          <div
+            key={`${r.appointmentId || i}`}
+            className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] p-3.5 shadow-sm hover:border-cyan-800/50 transition-colors"
+            data-testid={`appt-mobile-row-${r.appointmentId || i}`}
+          >
+            {/* Head: date/time | status+type */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-[var(--tx-primary)] text-sm leading-tight">{fmtDateCE(r.date)}</div>
+                <div className="text-[10px] text-[var(--tx-muted)] tabular-nums">
+                  {r.startTime}{r.endTime && r.endTime !== r.startTime ? ` – ${r.endTime}` : ''}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${statusBadge}`}>
+                  {r.statusLabel}
+                </span>
+                <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold border ${typeBadge}`}>
+                  {r.appointmentTypeLabel}
+                </span>
+              </div>
+            </div>
+
+            {/* Customer */}
+            <div className="mt-2.5 pt-2 border-t border-[var(--bd)]">
+              {hasCustomer ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {r.customerHN && <span className="font-mono text-[10px] text-[var(--tx-muted)]">{r.customerHN}</span>}
+                  <button
+                    type="button"
+                    onClick={() => onOpenCustomer?.(r.customerId)}
+                    className="text-sm font-bold text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 text-left"
+                    data-testid={`appt-mobile-customer-link-${r.appointmentId || i}`}
+                  >
+                    {r.customerName || '-'}
+                  </button>
+                  {r.customerType && r.customerType !== 'ลูกค้าทั่วไป' && (
+                    <span className="text-[10px] text-[var(--tx-muted)] italic">· {r.customerType}</span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-[var(--tx-muted)] italic text-xs">ยังไม่ได้เลือกลูกค้า</span>
+              )}
+            </div>
+
+            {/* Detail chips */}
+            <div className="mt-2 grid gap-1 text-[10px] text-[var(--tx-secondary)]">
+              {r.roomName && (
+                <div><span className="text-[var(--tx-muted)]">ห้อง: </span>{r.roomName}</div>
+              )}
+              {r.appointmentTo && (
+                <div><span className="text-[var(--tx-muted)]">นัดมาเพื่อ: </span>{r.appointmentTo}</div>
+              )}
+              {r.preparation && (
+                <div><span className="text-[var(--tx-muted)]">เตรียมตัว: </span>{r.preparation}</div>
+              )}
+            </div>
+
+            {/* Staff line */}
+            <div className="mt-2 pt-2 border-t border-[var(--bd)] flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--tx-muted)]">
+              <span>แพทย์: <span className="text-[var(--tx-secondary)] font-bold">{r.doctorName}</span></span>
+              {r.advisorName && r.advisorName !== '-' && (
+                <span>ที่ปรึกษา: <span className="text-[var(--tx-secondary)] font-bold">{r.advisorName}</span></span>
+              )}
+              {r.assistantNames && r.assistantNames !== '-' && (
+                <span className="w-full sm:w-auto truncate" title={r.assistantNames}>
+                  ผู้ช่วย: <span className="text-[var(--tx-secondary)]">{r.assistantNames}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Mobile footer — sticky summary. */
+function AppointmentMobileFooter({ totals }) {
+  return (
+    <div
+      className="lg:hidden sticky bottom-0 z-[5] mt-3 -mx-1 px-3 py-2.5 rounded-xl border border-[var(--bd)] bg-[var(--bg-hover)]/95 backdrop-blur-sm shadow-lg"
+      data-testid="appointment-report-footer-mobile"
+    >
+      <div className="flex items-center justify-between gap-3 text-[11px]">
+        <div className="text-[var(--tx-muted)]">
+          รวม <span className="text-[var(--tx-primary)] font-bold tabular-nums">{totals.count.toLocaleString('th-TH')}</span> นัด
+        </div>
+        {totals.expectedSalesTotal > 0 && (
+          <div className="text-right text-[10px] text-[var(--tx-muted)]">
+            ยอดคาดหวัง <span className="text-emerald-400 font-bold tabular-nums">{totals.expectedSalesTotal.toLocaleString('th-TH')}</span> ฿
+          </div>
+        )}
+      </div>
+      <div className="mt-1.5 pt-1.5 border-t border-[var(--bd)] flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] justify-end">
+        <span className="text-orange-400">รอยืนยัน {totals.pendingCount}</span>
+        <span className="opacity-50">·</span>
+        <span className="text-sky-400">ยืนยันแล้ว {totals.confirmedCount}</span>
+        <span className="opacity-50">·</span>
+        <span className="text-emerald-400">เสร็จแล้ว {totals.doneCount}</span>
+        {totals.cancelledCount > 0 && (
+          <>
+            <span className="opacity-50">·</span>
+            <span className="text-red-400">ยกเลิก {totals.cancelledCount}</span>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
 function AppointmentReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir, onSort }) {
   const headerProps = { currentKey: sortKey, currentDir: sortDir, onSort };
   return (
-    <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="appointment-report-table">
+    <div className="hidden lg:block overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="appointment-report-table">
       <table className="w-full text-xs min-w-[1400px]">
         <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>
