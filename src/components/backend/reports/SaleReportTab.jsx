@@ -4,7 +4,7 @@
 // columns array fed to the table (AR11).
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Receipt, Eye } from 'lucide-react';
+import { Receipt, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
@@ -204,8 +204,8 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
 
   return (
     <div className="overflow-auto rounded-lg border border-[var(--bd)] bg-[var(--bg-card)]" data-testid="sale-report-table">
-      <table className="w-full text-xs min-w-[1500px]">
-        <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider">
+      <table className="w-full text-xs min-w-[1400px]">
+        <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase text-[10px] tracking-wider sticky top-0 z-[5]">
           <tr>
             {columns.map(c => (
               <th
@@ -215,16 +215,19 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
                 {c.label}
               </th>
             ))}
-            <th className="px-2 py-2 font-bold text-center w-16">ดู</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr
               key={`${r.saleId}-${i}`}
-              className={`border-t border-[var(--bd)] ${r.isCancelled ? 'opacity-50 line-through' : 'hover:bg-[var(--bg-hover)]'}`}
+              onClick={() => onViewSale?.(r.saleId)}
+              className={`border-t border-[var(--bd)] cursor-pointer transition-colors ${
+                r.isCancelled ? 'opacity-50 line-through hover:bg-red-900/10' : 'hover:bg-cyan-900/15'
+              }`}
               data-testid={`row-${r.saleId}`}
               data-cancelled={r.isCancelled ? 'true' : 'false'}
+              title="คลิกเพื่อดูรายละเอียดการขาย"
             >
               {columns.map(c => {
                 const raw = r[c.key];
@@ -253,23 +256,11 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
                   </td>
                 );
               })}
-              <td className="px-2 py-2 text-center">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onViewSale?.(r.saleId); }}
-                  className="p-1.5 rounded hover:bg-cyan-900/30 text-cyan-400 transition-colors"
-                  data-testid={`view-sale-${r.saleId}`}
-                  title="ดูรายละเอียดการขาย"
-                  aria-label={`ดูรายละเอียด ${r.saleId}`}
-                >
-                  <Eye size={13} />
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
         {/* Footer total row — AR3: cancelled excluded, AR5: reconciles to row sums */}
-        <tfoot className="bg-[var(--bg-hover)] font-bold text-[var(--tx-primary)] border-t-2 border-[var(--bd)]" data-testid="sale-report-footer">
+        <tfoot className="bg-[var(--bg-hover)] font-bold text-[var(--tx-primary)] border-t-2 border-[var(--bd)] sticky bottom-0 z-[5]" data-testid="sale-report-footer">
           <tr>
             <td className="px-2 py-2 text-left" colSpan={7}>
               รวม {totals.count.toLocaleString('th-TH')} รายการ
@@ -283,7 +274,6 @@ function SaleReportTable({ rows, totals, columns, onOpenCustomer, onViewSale }) 
             <td />
             <td className="px-2 py-2 text-right tabular-nums" data-testid="footer-outstanding">{fmtMoney(totals.outstandingAmount)}</td>
             <td colSpan={3} />
-            <td />
           </tr>
         </tfoot>
       </table>

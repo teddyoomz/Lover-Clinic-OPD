@@ -37,13 +37,11 @@ describe('SaleReportTab — render + interaction', () => {
     });
   });
 
-  it('renders 18 ProClinic columns + 1 action column = 19 headers total', async () => {
+  it('renders 18 ProClinic column headers (no separate action col — whole row is clickable)', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => screen.getByTestId('sale-report-table'));
     const ths = screen.getByTestId('sale-report-table').querySelectorAll('th');
-    expect(ths.length).toBe(19);
-    // Last header is the action "ดู" column
-    expect(ths[ths.length - 1].textContent.trim()).toBe('ดู');
+    expect(ths.length).toBe(18);
   });
 
   it('renders rows from loader after mount', async () => {
@@ -173,35 +171,44 @@ describe('SaleReportTab — customer link + sale detail interactions', () => {
     expect(window.open.mock.calls[0][1]).toBe('_blank');
   });
 
-  it('every row renders an Eye action button', async () => {
+  it('every row is clickable (cursor-pointer + onClick handler)', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
     await waitFor(() => {
       // 5 active April + 1 March = 6 rows by default (no cancelled)
-      const eyes = screen.getAllByTestId(/^view-sale-/);
-      expect(eyes.length).toBe(6);
+      const rows = screen.getAllByTestId(/^row-INV-/);
+      expect(rows.length).toBe(6);
+      rows.forEach(r => expect(r.className).toMatch(/cursor-pointer/));
     });
   });
 
-  it('clicking Eye opens SaleDetailModal with correct sale ID', async () => {
+  it('clicking anywhere on a row opens SaleDetailModal with correct sale ID', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
-    await waitFor(() => screen.getByTestId('view-sale-INV-20260416-0001'));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260416-0001'));
+    await waitFor(() => screen.getByTestId('row-INV-20260416-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260416-0001'));
     await waitFor(() => {
       const modal = screen.getByTestId('sale-detail-modal');
       expect(modal).toBeInTheDocument();
-      // Sale ID appears in the modal header (not the table row, which the
-      // modal overlays). Scope query to the modal to avoid row collisions.
       expect(modal.querySelector('#sale-detail-title')?.textContent).toContain('INV-20260416-0001');
     });
+  });
+
+  it('clicking customer link does NOT also open the row detail modal (stopPropagation)', async () => {
+    render(<SaleReportTab clinicSettings={{}} />);
+    await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
+    await waitFor(() => screen.getByTestId('customer-link-INV-20260415-0001-customerName'));
+    fireEvent.click(screen.getByTestId('customer-link-INV-20260415-0001-customerName'));
+    // window.open fires once for the customer link, modal stays closed
+    expect(window.open).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('sale-detail-modal')).not.toBeInTheDocument();
   });
 
   it('SaleDetailModal renders item names + payment channels for split-payment sale', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
-    await waitFor(() => screen.getByTestId('view-sale-INV-20260416-0001'));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260416-0001'));
+    await waitFor(() => screen.getByTestId('row-INV-20260416-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260416-0001'));
     await waitFor(() => {
       const modal = screen.getByTestId('sale-detail-modal');
       // Sale #2 from fixture: courses Botox + Filler, product ครีมกันแดด, channels SCB + เงินสด
@@ -216,8 +223,8 @@ describe('SaleReportTab — customer link + sale detail interactions', () => {
   it('SaleDetailModal close button dismisses the modal', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
-    await waitFor(() => screen.getByTestId('view-sale-INV-20260415-0001'));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260415-0001'));
+    await waitFor(() => screen.getByTestId('row-INV-20260415-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260415-0001'));
     await waitFor(() => screen.getByTestId('sale-detail-modal'));
     fireEvent.click(screen.getByTestId('close-modal'));
     await waitFor(() => {
@@ -228,8 +235,8 @@ describe('SaleReportTab — customer link + sale detail interactions', () => {
   it('SaleDetailModal "ดูข้อมูลลูกค้า" footer link opens customer in new tab', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
-    await waitFor(() => screen.getByTestId('view-sale-INV-20260415-0001'));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260415-0001'));
+    await waitFor(() => screen.getByTestId('row-INV-20260415-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260415-0001'));
     await waitFor(() => screen.getByTestId('footer-open-customer'));
     fireEvent.click(screen.getByTestId('footer-open-customer'));
     expect(window.open).toHaveBeenCalledTimes(1);
@@ -239,7 +246,7 @@ describe('SaleReportTab — customer link + sale detail interactions', () => {
   it('SaleDetailModal Esc key closes modal', async () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260415-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260415-0001'));
     await waitFor(() => screen.getByTestId('sale-detail-modal'));
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => {
@@ -251,8 +258,8 @@ describe('SaleReportTab — customer link + sale detail interactions', () => {
     render(<SaleReportTab clinicSettings={{}} />);
     await waitFor(() => fireEvent.click(screen.getByText('ปีนี้')));
     fireEvent.click(screen.getByTestId('filter-include-cancelled'));
-    await waitFor(() => screen.getByTestId('view-sale-INV-20260418-0001'));
-    fireEvent.click(screen.getByTestId('view-sale-INV-20260418-0001'));
+    await waitFor(() => screen.getByTestId('row-INV-20260418-0001'));
+    fireEvent.click(screen.getByTestId('row-INV-20260418-0001'));
     await waitFor(() => {
       const modal = screen.getByTestId('sale-detail-modal');
       expect(modal.textContent).toContain('ยกเลิก');

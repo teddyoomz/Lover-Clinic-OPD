@@ -166,7 +166,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       setTheme={setTheme}
       topBarSlot={breadcrumbSlot}
     >
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6`}>
         {saleMode ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer}
             onCustomerUsed={() => setSaleInitialCustomer(null)}
