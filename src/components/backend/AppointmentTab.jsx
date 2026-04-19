@@ -332,10 +332,13 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const selThaiDate = `วัน${THAI_DAYS_FULL[selDow]}ที่ ${selD.getDate()} ${THAI_MONTHS[selD.getMonth()]} ${selD.getFullYear()+543}`;
 
   return (
-    <div className="flex gap-4 min-h-[600px]">
+    // Desktop (≥lg): time grid LEFT, calendar+doctor RIGHT (per user 2026-04-19).
+    // Mobile (<lg): stack calendar on top (already matches current UX).
+    // Source order is preserved; visual flip handled by Tailwind `order-*`.
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[600px]">
 
-      {/* ════════════ LEFT SIDEBAR ════════════ */}
-      <div className="w-64 flex-shrink-0 space-y-3">
+      {/* ════════════ CALENDAR + DOCTOR — right on desktop, top on mobile ════ */}
+      <div className="w-full lg:w-64 flex-shrink-0 space-y-3 order-1 lg:order-2">
 
         {/* Mini Calendar */}
         <div className="bg-[var(--bg-surface)] rounded-xl p-3 shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.2)' }}>
@@ -391,8 +394,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         </div>
       </div>
 
-      {/* ════════════ MAIN AREA ════════════ */}
-      <div className="flex-1 min-w-0 space-y-3">
+      {/* ════════════ TIME GRID — left on desktop, bottom on mobile ══════════ */}
+      <div className="flex-1 min-w-0 space-y-3 order-2 lg:order-1">
 
         {/* Week Navigation Strip */}
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.15)' }}>
