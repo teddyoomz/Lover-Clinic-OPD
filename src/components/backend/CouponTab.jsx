@@ -1,9 +1,12 @@
 // ─── Coupon Tab — Phase 9 Marketing ─────────────────────────────────────────
+// Shell + empty/loading chrome extracted to MarketingTabShell (AV10).
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
 import { listCoupons, deleteCoupon } from '../../lib/backendClient.js';
 import CouponFormModal from './CouponFormModal.jsx';
-import { hexToRgb, thaiTodayISO } from '../../utils.js';
+import MarketingTabShell from './MarketingTabShell.jsx';
+import { resolveIsDark } from '../../lib/marketingUiUtils.js';
+import { thaiTodayISO } from '../../utils.js';
 
 function fmtDateRange(s, e) { return (s && e) ? `${s} — ${e}` : ''; }
 
@@ -18,8 +21,7 @@ export default function CouponTab({ clinicSettings, theme }) {
   const [error, setError] = useState('');
 
   const ac = clinicSettings?.accentColor || '#dc2626';
-  const acRgb = hexToRgb(ac);
-  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  const isDark = resolveIsDark(theme);
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
@@ -53,53 +55,34 @@ export default function CouponTab({ clinicSettings, theme }) {
     finally { setDeleting(null); }
   };
 
+  const extraFilters = (
+    <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+      className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+      <option value="">ประเภททั้งหมด</option>
+      <option value="percent">% ส่วนลด</option>
+      <option value="baht">บาท</option>
+    </select>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black tracking-wider uppercase" style={{ color: ac }}>
-            <Ticket size={20} className="inline mr-2" /> คูปอง
-          </h2>
-          <p className="text-xs text-[var(--tx-muted)] mt-0.5">จำนวน {items.length} · แสดง {filtered.length}</p>
-        </div>
-        <button onClick={() => { setEditing(null); setFormOpen(true); }}
-          className="px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all text-white"
-          style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.7))`, boxShadow: `0 0 15px rgba(${acRgb},0.35)` }}>
-          <Plus size={16} /> สร้างคูปอง
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ค้นหาชื่อ / โค้ด"
-            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]"
-          />
-        </div>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-          <option value="">ประเภททั้งหมด</option>
-          <option value="percent">% ส่วนลด</option>
-          <option value="baht">บาท</option>
-        </select>
-      </div>
-
-      {error && <div className="px-4 py-3 rounded-lg bg-red-900/30 border border-red-700/50 text-red-300 text-sm">{error}</div>}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-[var(--tx-muted)]">
-          <Loader2 size={24} className="animate-spin mr-2" /> กำลังโหลด…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-[var(--tx-muted)] border border-dashed border-[var(--bd)] rounded-lg">
-          {items.length === 0 ? (
-            <>
-              <Ticket size={32} className="inline mb-2 opacity-50" />
-              <p className="text-sm">ยังไม่มีคูปอง — กด "สร้างคูปอง" เพื่อเริ่มต้น</p>
-            </>
-          ) : <p className="text-sm">ไม่พบคูปองที่ตรงกับตัวกรอง</p>}
-        </div>
-      ) : (
+    <>
+      <MarketingTabShell
+        icon={Ticket}
+        title="คูปอง"
+        totalCount={items.length}
+        filteredCount={filtered.length}
+        createLabel="สร้างคูปอง"
+        onCreate={() => { setEditing(null); setFormOpen(true); }}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="ค้นหาชื่อ / โค้ด"
+        extraFilters={extraFilters}
+        error={error}
+        loading={loading}
+        emptyText='ยังไม่มีคูปอง — กด "สร้างคูปอง" เพื่อเริ่มต้น'
+        notFoundText="ไม่พบคูปองที่ตรงกับตัวกรอง"
+        clinicSettings={clinicSettings}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(c => {
             const busy = deleting === (c.couponId || c.id);
@@ -149,13 +132,13 @@ export default function CouponTab({ clinicSettings, theme }) {
             );
           })}
         </div>
-      )}
+      </MarketingTabShell>
 
       {formOpen && (
         <CouponFormModal coupon={editing} onClose={() => { setFormOpen(false); setEditing(null); }}
           onSaved={async () => { setFormOpen(false); setEditing(null); await reload(); }}
           clinicSettings={clinicSettings} isDark={isDark} />
       )}
-    </div>
+    </>
   );
 }

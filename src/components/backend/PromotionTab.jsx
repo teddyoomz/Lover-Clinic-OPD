@@ -1,13 +1,16 @@
 // ─── Promotion Tab — Phase 9 Marketing ──────────────────────────────────────
 // Lists be_promotions (Firestore), supports search / category / status
-// filtering, and drives PromotionFormModal for create / edit. Delete goes
-// through brokerClient so ProClinic stays in sync.
+// filtering, and drives PromotionFormModal for create / edit. Delete is
+// Firestore-only per rule E (Backend = Firestore ONLY).
+//
+// Shell + empty/loading chrome extracted to MarketingTabShell (AV10).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
 import { listPromotions, deletePromotion } from '../../lib/backendClient.js';
 import PromotionFormModal from './PromotionFormModal.jsx';
-import { hexToRgb } from '../../utils.js';
+import MarketingTabShell from './MarketingTabShell.jsx';
+import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 
 const STATUS_BADGE = {
   active: { label: 'ใช้งาน', cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -31,8 +34,7 @@ export default function PromotionTab({ clinicSettings, theme }) {
   const [error, setError] = useState('');
 
   const ac = clinicSettings?.accentColor || '#dc2626';
-  const acRgb = hexToRgb(ac);
-  const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  const isDark = resolveIsDark(theme);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -91,76 +93,41 @@ export default function PromotionTab({ clinicSettings, theme }) {
 
   const handleSaved = async () => { setFormOpen(false); setEditingPromotion(null); await reload(); };
 
+  const extraFilters = (
+    <>
+      <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
+        className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+        <option value="">หมวดหมู่ทั้งหมด</option>
+        {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+        className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+        <option value="">สถานะทั้งหมด</option>
+        <option value="active">ใช้งาน</option>
+        <option value="suspended">พักใช้งาน</option>
+      </select>
+    </>
+  );
+
   return (
-    <div className="space-y-4">
-
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black tracking-wider uppercase" style={{ color: ac }}>
-            <Tag size={20} className="inline mr-2" /> โปรโมชัน
-          </h2>
-          <p className="text-xs text-[var(--tx-muted)] mt-0.5">
-            จำนวน {items.length} รายการ · แสดง {filtered.length} รายการ
-          </p>
-        </div>
-        <button onClick={handleCreate}
-          className="px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all"
-          style={{
-            background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.7))`,
-            color: '#fff',
-            boxShadow: `0 0 15px rgba(${acRgb},0.35)`,
-          }}>
-          <Plus size={16} /> สร้างโปรโมชัน
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="ค้นหาชื่อ / รหัส / หมวดหมู่"
-            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
-          />
-        </div>
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-          <option value="">หมวดหมู่ทั้งหมด</option>
-          {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-          <option value="">สถานะทั้งหมด</option>
-          <option value="active">ใช้งาน</option>
-          <option value="suspended">พักใช้งาน</option>
-        </select>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="px-4 py-3 rounded-lg bg-red-900/30 border border-red-700/50 text-red-300 text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* List */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-[var(--tx-muted)]">
-          <Loader2 size={24} className="animate-spin mr-2" /> กำลังโหลด…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-[var(--tx-muted)] border border-dashed border-[var(--bd)] rounded-lg">
-          {items.length === 0 ? (
-            <>
-              <Tag size={32} className="inline mb-2 opacity-50" />
-              <p className="text-sm">ยังไม่มีโปรโมชัน — กด "สร้างโปรโมชัน" เพื่อเริ่มต้น</p>
-            </>
-          ) : (
-            <p className="text-sm">ไม่พบโปรโมชันที่ตรงกับตัวกรอง</p>
-          )}
-        </div>
-      ) : (
+    <>
+      <MarketingTabShell
+        icon={Tag}
+        title="โปรโมชัน"
+        totalCount={items.length}
+        filteredCount={filtered.length}
+        createLabel="สร้างโปรโมชัน"
+        onCreate={handleCreate}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="ค้นหาชื่อ / รหัส / หมวดหมู่"
+        extraFilters={extraFilters}
+        error={error}
+        loading={loading}
+        emptyText='ยังไม่มีโปรโมชัน — กด "สร้างโปรโมชัน" เพื่อเริ่มต้น'
+        notFoundText="ไม่พบโปรโมชันที่ตรงกับตัวกรอง"
+        clinicSettings={clinicSettings}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(p => {
             const statusCfg = STATUS_BADGE[p.status || 'active'] || STATUS_BADGE.active;
@@ -215,7 +182,7 @@ export default function PromotionTab({ clinicSettings, theme }) {
             );
           })}
         </div>
-      )}
+      </MarketingTabShell>
 
       {formOpen && (
         <PromotionFormModal
@@ -226,6 +193,7 @@ export default function PromotionTab({ clinicSettings, theme }) {
           isDark={isDark}
         />
       )}
-    </div>
+    </>
   );
 }
+
