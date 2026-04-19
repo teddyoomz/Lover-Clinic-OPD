@@ -15,6 +15,7 @@ import {
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
   analyzeSaleCancel, removeLinkedSaleCourses,
   deductStockForSale, reverseStockForSale, analyzeStockImpact,
+  findCouponByCode,
 } from '../../lib/backendClient.js';
 
 // Single-branch scaffold — matches DEFAULT_BRANCH_ID in src/lib/stockUtils.js.
@@ -107,6 +108,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [billDiscount, setBillDiscount] = useState('');
   const [billDiscountType, setBillDiscountType] = useState('amount');
   const [couponCode, setCouponCode] = useState('');
+  const [couponInfo, setCouponInfo] = useState(null);        // { id, discount, discount_type, ... } on successful lookup
+  const [couponLookupError, setCouponLookupError] = useState('');
+  const [couponLookingUp, setCouponLookingUp] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('paid');
   const [paymentDate, setPaymentDate] = useState(() => thaiTodayISO());
   const [paymentTime, setPaymentTime] = useState('');
@@ -1167,7 +1171,33 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 <div className="flex justify-between"><span className="text-[var(--tx-muted)]">ยอดรวม</span><span className="font-mono">{fmtMoney(billing.subtotal)} บาท</span></div>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--tx-muted)] shrink-0">คูปอง</span>
-                  <input type="text" value={couponCode} onChange={e => setCouponCode(e.target.value)} className={`${inputCls} !w-32 !py-1`} placeholder="รหัสคูปอง" />
+                  <input type="text" value={couponCode}
+                    onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponInfo(null); setCouponLookupError(''); }}
+                    className={`${inputCls} !w-32 !py-1 font-mono`} placeholder="รหัสคูปอง" />
+                  <button type="button" disabled={!couponCode || couponLookingUp}
+                    onClick={async () => {
+                      setCouponLookingUp(true); setCouponLookupError('');
+                      try {
+                        const c = await findCouponByCode(couponCode);
+                        if (!c) { setCouponInfo(null); setCouponLookupError('ไม่พบคูปอง หรือหมดอายุ'); return; }
+                        setCouponInfo(c);
+                        // Apply: pre-fill billDiscount + billDiscountType from coupon
+                        setBillDiscount(String(c.discount || 0));
+                        setBillDiscountType(c.discount_type === 'baht' ? 'amount' : 'percent');
+                      } catch (e) { setCouponLookupError(e.message || 'ตรวจสอบคูปองล้มเหลว'); }
+                      finally { setCouponLookingUp(false); }
+                    }}
+                    className="px-2 py-1 text-[11px] font-bold rounded bg-emerald-700/30 border border-emerald-700/50 text-emerald-400 hover:bg-emerald-700/50 disabled:opacity-40 transition-colors">
+                    {couponLookingUp ? '...' : 'ใช้'}
+                  </button>
+                  {couponInfo && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-700/30 border border-emerald-700/50 text-emerald-300 font-bold">
+                      ✓ {couponInfo.coupon_name || 'ใช้ได้'}
+                    </span>
+                  )}
+                  {couponLookupError && (
+                    <span className="text-[10px] text-red-400">{couponLookupError}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--tx-muted)]">ส่วนลด</span>

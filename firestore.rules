@@ -87,8 +87,14 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      // ── Backend: Phase 9 Marketing (Promotions) ──
+      // ── Backend: Phase 9 Marketing (Promotions / Coupons / Vouchers) ──
       match /be_promotions/{promotionId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_coupons/{couponId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_vouchers/{voucherId} {
         allow read, write: if isClinicStaff();
       }
 
@@ -230,6 +236,14 @@ service cloud.firestore {
         allow write: if true;
       }
       match /pc_promotions/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_coupons/{docId} {
+        allow read: if isClinicStaff();
+        allow write: if true;
+      }
+      match /pc_vouchers/{docId} {
         allow read: if isClinicStaff();
         allow write: if true;
       }

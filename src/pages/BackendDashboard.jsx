@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet, Package, Tag } from 'lucide-react';
+import { Database, Download, Users, ArrowLeft, ChevronRight, CalendarDays, ShoppingCart, Link2, Check, Wallet, Package, Tag, Ticket, Gift } from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor, hexToRgb } from '../utils.js';
@@ -30,6 +30,8 @@ import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
 import StockTab from '../components/backend/StockTab.jsx';
 import PromotionTab from '../components/backend/PromotionTab.jsx';
+import CouponTab from '../components/backend/CouponTab.jsx';
+import VoucherTab from '../components/backend/VoucherTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -69,7 +71,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         .catch(() => {})
         .finally(() => setHydrated(true));
     } else {
-      if (tab && ['clone','customers','masterdata','appointments','sales','finance','stock','promotions'].includes(tab)) {
+      if (tab && ['clone','customers','masterdata','appointments','sales','finance','stock','promotions','coupons','vouchers'].includes(tab)) {
         setActiveTab(tab);
         if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
       }
@@ -127,6 +129,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     { id: 'finance', icon: <Wallet size={16} />, label: 'การเงิน', color: 'emerald' },
     { id: 'stock', icon: <Package size={16} />, label: 'สต็อก', color: 'rose' },
     { id: 'promotions', icon: <Tag size={16} />, label: 'โปรโมชัน', color: 'orange' },
+    { id: 'coupons', icon: <Ticket size={16} />, label: 'คูปอง', color: 'orange' },
+    { id: 'vouchers', icon: <Gift size={16} />, label: 'Voucher', color: 'orange' },
   ];
 
   return (
@@ -338,6 +342,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <StockTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'promotions' ? (
           <PromotionTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'coupons' ? (
+          <CouponTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'vouchers' ? (
+          <VoucherTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </main>
 

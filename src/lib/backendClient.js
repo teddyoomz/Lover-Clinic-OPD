@@ -3702,3 +3702,93 @@ export async function deletePromotion(proClinicId) {
     await deleteDoc(mirrorRef);
   } catch (_) { /* mirror delete non-fatal */ }
 }
+
+// ─── Coupon CRUD (Phase 9 Marketing) ───────────────────────────────────────
+
+const couponsCol = () => collection(db, ...basePath(), 'be_coupons');
+const couponDoc = (id) => doc(db, ...basePath(), 'be_coupons', String(id));
+
+export async function getCoupon(proClinicId) {
+  const snap = await getDoc(couponDoc(proClinicId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listCoupons() {
+  const snap = await getDocs(couponsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  return items;
+}
+
+export async function saveCoupon(proClinicId, data) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  if (!data || typeof data !== 'object') throw new Error('data object required');
+  if (!String(data.coupon_name || '').trim()) throw new Error('coupon_name required');
+  if (!String(data.coupon_code || '').trim()) throw new Error('coupon_code required');
+
+  const now = new Date().toISOString();
+  const fullDoc = {
+    ...data,
+    proClinicId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  };
+  await setDoc(couponDoc(id), fullDoc, { merge: false });
+}
+
+export async function deleteCoupon(proClinicId) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  await deleteDoc(couponDoc(id));
+}
+
+/** Look up a coupon by code (for SaleTab apply flow). Returns null if not found/expired. */
+export async function findCouponByCode(code, { today } = {}) {
+  if (!code) return null;
+  const q = query(couponsCol(), where('coupon_code', '==', String(code).trim()));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const coupon = { id: snap.docs[0].id, ...snap.docs[0].data() };
+  const todayStr = today || new Date().toISOString().slice(0, 10);
+  if (coupon.start_date && coupon.start_date > todayStr) return null;
+  if (coupon.end_date && coupon.end_date < todayStr) return null;
+  return coupon;
+}
+
+// ─── Voucher CRUD (Phase 9 Marketing) ──────────────────────────────────────
+
+const vouchersCol = () => collection(db, ...basePath(), 'be_vouchers');
+const voucherDoc = (id) => doc(db, ...basePath(), 'be_vouchers', String(id));
+
+export async function getVoucher(proClinicId) {
+  const snap = await getDoc(voucherDoc(proClinicId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listVouchers() {
+  const snap = await getDocs(vouchersCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  return items;
+}
+
+export async function saveVoucher(proClinicId, data) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  if (!data || typeof data !== 'object') throw new Error('data object required');
+  if (!String(data.voucher_name || '').trim()) throw new Error('voucher_name required');
+  if (!(Number(data.sale_price) >= 0)) throw new Error('sale_price must be >= 0');
+
+  const now = new Date().toISOString();
+  await setDoc(voucherDoc(id), {
+    ...data, proClinicId: id,
+    createdAt: data.createdAt || now, updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteVoucher(proClinicId) {
+  const id = String(proClinicId || '');
+  if (!id) throw new Error('proClinicId required');
+  await deleteDoc(voucherDoc(id));
+}

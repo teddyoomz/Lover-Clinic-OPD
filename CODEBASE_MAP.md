@@ -1337,4 +1337,48 @@ createdAt (ISO), updatedAt (ISO)
 - `promotion_period` daterange format (`"YYYY-MM-DD to YYYY-MM-DD"` guess — Flatpickr default)
 - Cover image multipart upload (current UI stores to Firebase Storage only, ProClinic image not pushed)
 - Courses + products sub-items (need course/product picker modal — extract shared with SaleTab's picker)
-- `MarketingFormModal` extraction (Rule of 3): after Task 9.2 (coupon) + 9.3 (voucher), common form shell should be extracted
+
+---
+
+## Phase 9 Task 9.2 Coupon CRUD (2026-04-19)
+
+Triangle-verified: `opd.js forms /admin/coupon` — 10 fields + 5 branches.
+
+**New files:**
+- `src/components/backend/CouponTab.jsx` + `CouponFormModal.jsx` — list, search, type filter, expiry badge; create/edit form with `coupon_code` uppercase-locked, discount + type toggle (%/baht), max_qty, per-user limit, start/end dates, branch multi-select chips
+- `src/lib/couponValidation.js` — `validateCoupon` / `emptyCouponForm` / `COUPON_BRANCHES` (5 entries — IDs 28/29/30/31/32 pending live verify)
+- `api/proclinic/coupon.js` — CRUD + `buildCouponFormData` exported for tests; `branch_id[]` multi-append with default-merge clearing
+- `tests/coupon.test.js` — 22 cases: CV1–CV10 validation + extra bounds + CF1–CF8 form-data + baseline
+
+**Extensions:** `backendClient.js` adds `saveCoupon/deleteCoupon/listCoupons/getCoupon/findCouponByCode(code)` (for SaleTab apply flow — checks start/end window). `brokerClient.js` adds create/update/delete wrappers. `firestore.rules` gets `be_coupons` (admin) + `pc_coupons` (server-open). `BackendDashboard.jsx` adds `coupons` tab with Ticket icon.
+
+## Phase 9 Task 9.3 Voucher CRUD (2026-04-19)
+
+Triangle-verified: `opd.js forms /admin/voucher` — 5 platforms (HDmall/GoWabi/SkinX/Shopee/Tiktok), 10 fields.
+
+**New files:**
+- `src/components/backend/VoucherTab.jsx` + `VoucherFormModal.jsx` — cards with platform badge, commission %, period range; form with usage_type toggle, sale_price (Inc. VAT), commission %, platform select, period picker, status
+- `src/lib/voucherValidation.js` — `validateVoucher` + `emptyVoucherForm` + `VOUCHER_PLATFORMS` constant (5 entries, intel showed 5 not 6 as prep memory guessed)
+- `api/proclinic/voucher.js` — CRUD + `buildVoucherFormData` exported for tests; period serializes "YYYY-MM-DD to YYYY-MM-DD" same as promotion
+- `tests/voucher.test.js` — 18 cases: VV1–VV10 validation (incl. platform whitelist) + VF1–VF6 form-data + baseline
+
+**Extensions:** `backendClient.js` adds voucher CRUD. `brokerClient.js` adds wrappers. `firestore.rules` gets `be_vouchers` + `pc_vouchers`. `BackendDashboard.jsx` adds `vouchers` tab with Gift icon.
+
+## Phase 9 Task 9.4 (deferred to 9.4b)
+
+`opd.js forms /admin/online-sale` inspected 2026-04-19 — payment LIFECYCLE (pending → paid → completed) with slip upload + bank_account_id FK, not a simple CRUD. `master_data/bank_accounts` dropdown shows 2 trial accounts (IDs 11, 104). Task reduced for this cycle — deferred to a follow-up where the status machine + Storage slip push can be done properly alongside a matching `be_online_sales` collection.
+
+## Phase 9 Task 9.5 SaleTab coupon apply (2026-04-19)
+
+`src/components/backend/SaleTab.jsx` — existing `couponCode` input gets a "ใช้" button. On click:
+1. `findCouponByCode(code)` — queries `be_coupons` where `coupon_code == code`, filters expired via start/end dates
+2. Sets `billDiscount` + `billDiscountType` from coupon so existing billing math (`afterDiscount → afterMembership → afterDeposit → afterWallet → grandTotal`) picks it up automatically
+3. Shows `✓ coupon_name` badge when applied; inline red message when not found
+
+No refactor of billing math — coupon simply feeds the manual discount inputs.
+
+---
+
+## Phase 9 Rule of 3 opportunity (deferred)
+
+After Task 9.3 there are 3 near-identical `*Tab.jsx` (PromotionTab/CouponTab/VoucherTab) and 3 near-identical `*FormModal.jsx` shells. Extraction candidate: `src/components/backend/MarketingTabBase.jsx` (list + search + filter + card grid) + a `MarketingFormShell.jsx` (header/footer/save button/error banner). Deferred to a post-merge refactor — current cost of 3 tab copies is tolerable given per-entity fields differ.

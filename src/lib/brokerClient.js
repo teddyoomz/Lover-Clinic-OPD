@@ -422,3 +422,31 @@ export function updatePromotion(proClinicId, data) {
 export function deletePromotionInProClinic(proClinicId) {
   return apiFetch('promotion', { action: 'delete', proClinicId });
 }
+
+// ─── Coupon CRUD (Phase 9) ─────────────────────────────────────────────────
+
+export function createCoupon(data) {
+  return apiFetch('coupon', { action: 'create', data });
+}
+
+export function updateCoupon(proClinicId, data) {
+  return apiFetch('coupon', { action: 'update', proClinicId, data });
+}
+
+export function deleteCouponInProClinic(proClinicId) {
+  return apiFetch('coupon', { action: 'delete', proClinicId });
+}
+
+// ─── Voucher CRUD (Phase 9) ────────────────────────────────────────────────
+
+export function createVoucher(data) {
+  return apiFetch('voucher', { action: 'create', data });
+}
+
+export function updateVoucher(proClinicId, data) {
+  return apiFetch('voucher', { action: 'update', proClinicId, data });
+}
+
+export function deleteVoucherInProClinic(proClinicId) {
+  return apiFetch('voucher', { action: 'delete', proClinicId });
+}
