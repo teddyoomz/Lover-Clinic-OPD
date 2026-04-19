@@ -393,8 +393,67 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
+        {/* Mobile: card-per-item (labels + stacked inputs) */}
+        <div className="lg:hidden space-y-3" data-testid="order-items-mobile">
+          {items.map((it, idx) => {
+            const lineTotal = (Number(it.qty) || 0) * (Number(it.cost) || 0);
+            return (
+              <div key={idx} className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] p-3 space-y-2" data-testid={`order-item-mobile-${idx}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-[var(--tx-muted)] uppercase tracking-wider">รายการ #{idx + 1}</span>
+                  <button onClick={() => removeItem(idx)} disabled={items.length === 1}
+                    className="p-1.5 rounded text-[var(--tx-muted)] hover:text-red-400 hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                    aria-label="ลบรายการ">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">สินค้า *</label>
+                  <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)} className={inputCls}>
+                    <option value="">— เลือกสินค้า —</option>
+                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">จำนวน *</label>
+                    <input type="number" min="0" step="0.01" value={it.qty}
+                      onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">หน่วย</label>
+                    <input type="text" value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className={inputCls} placeholder="U" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">ต้นทุน/หน่วย</label>
+                    <input type="number" min="0" step="0.01" value={it.cost}
+                      onChange={e => updateItem(idx, { cost: e.target.value })} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">วันหมดอายุ</label>
+                    <DateField value={it.expiresAt || ''} onChange={v => updateItem(idx, { expiresAt: v })} locale="ce" size="sm" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--bd)]">
+                  <label className="flex items-center gap-2 text-xs text-[var(--tx-muted)] cursor-pointer select-none">
+                    <input type="checkbox" checked={it.isPremium}
+                      onChange={e => updateItem(idx, { isPremium: e.target.checked })}
+                      className="w-4 h-4 accent-rose-500" />
+                    ของแถม (premium)
+                  </label>
+                  <div className="text-right">
+                    <div className="text-[9px] uppercase tracking-wider text-[var(--tx-muted)]">รวม</div>
+                    <div className="font-mono font-bold text-orange-400 text-sm tabular-nums">{fmtMoney(lineTotal)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop: table (≥lg) */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-xs border-collapse min-w-[900px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)]">
                 <th className="px-2 py-2 text-left font-bold w-8">#</th>
