@@ -136,7 +136,6 @@ export default function FancyDonut({
               <g
                 key={seg.idx}
                 transform={transform}
-                transform-origin={`${cx}px ${cy}px`}
                 style={{
                   transition: 'transform 600ms cubic-bezier(0.22, 1, 0.36, 1)',
                   cursor: onSegmentClick ? 'pointer' : 'default',
