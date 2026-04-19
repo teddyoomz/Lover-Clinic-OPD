@@ -127,6 +127,120 @@ async function handleSyncWalletTypes(req, res) {
   });
 }
 
+// ─── Action: syncCoupons / syncVouchers — scrape list-page HTML rows ────────
+//
+// ProClinic has no JSON API for coupons/vouchers (/admin/api/coupon 404,
+// /admin/api/item/coupon 404). The HTML list is rendered partly server-side
+// in a table; each row has actions with `/admin/{entity}/{id}` links we can
+// regex out + sibling text for the visible fields.
+//
+// This is a best-effort scrape — shape is minimal (id, name, optional
+// discount/price/code). Manual CRUD in backend fills in the full schema.
+
+function extractCouponLikeRows(html, entity /* 'coupon' | 'voucher' */) {
+  const $ = cheerio.load(html);
+  const items = [];
+  const seen = new Set();
+  const idRe = new RegExp(`/admin/${entity}/(\\d+)`);
+
+  // Pattern 1: delete/edit button with data-url / data-*-url
+  $('button[data-url], a[data-url], button[data-id], [data-delete-url], [data-edit-url]').each((_, el) => {
+    const attrs = el.attribs || {};
+    const candidateUrls = [
+      attrs['data-url'], attrs['data-delete-url'], attrs['data-edit-url'],
+      attrs['href'],
+    ].filter(Boolean);
+    for (const u of candidateUrls) {
+      const m = u.match(idRe);
+      if (m && !seen.has(m[1])) {
+        const id = m[1];
+        seen.add(id);
+        let row = $(el).parent();
+        for (let i = 0; i < 12; i++) {
+          if (!row.length) break;
+          if (row.prop('tagName')?.toLowerCase() === 'tr') break;
+          row = row.parent();
+        }
+        const text = row.length ? row.text().replace(/\s+/g, ' ').trim() : '';
+        items.push({ id, _rowText: text });
+        break;
+      }
+    }
+  });
+
+  // Pattern 2: anchor links to edit page
+  $(`a[href*="/admin/${entity}/"]`).each((_, el) => {
+    const href = $(el).attr('href') || '';
+    const m = href.match(idRe);
+    if (m && !seen.has(m[1])) {
+      const id = m[1];
+      seen.add(id);
+      const text = $(el).text().trim() || $(el).closest('tr').text().replace(/\s+/g, ' ').trim();
+      items.push({ id, _rowText: text });
+    }
+  });
+
+  return items;
+}
+
+async function handleSyncCoupons(req, res) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const allItems = [];
+  for (let p = 1; p <= 20; p++) {
+    const url = p === 1 ? `${base}/admin/coupon` : `${base}/admin/coupon?page=${p}`;
+    const html = await session.fetchText(url);
+    const rows = extractCouponLikeRows(html, 'coupon');
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      const text = r._rowText || '';
+      const codeMatch = text.match(/\b([A-Z][A-Z0-9_-]{2,})\b/);
+      const discMatch = text.match(/(\d+(?:\.\d+)?)\s*(%|บาท)/);
+      allItems.push({
+        id: r.id,
+        name: (text.split(/[\u200b\s]{2,}/)[0] || '').trim().slice(0, 80),
+        coupon_code: codeMatch ? codeMatch[1] : '',
+        discount: discMatch ? Number(discMatch[1]) : 0,
+        discount_type: discMatch && discMatch[2] === 'บาท' ? 'baht' : 'percent',
+      });
+    }
+    const $ = cheerio.load(html);
+    const hasNext = $(`a[href*="?page=${p + 1}"]`).length > 0;
+    if (!hasNext) break;
+  }
+  return res.status(200).json({
+    success: true, type: 'coupons', count: allItems.length, totalPages: 1, items: allItems,
+  });
+}
+
+async function handleSyncVouchers(req, res) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const allItems = [];
+  for (let p = 1; p <= 20; p++) {
+    const url = p === 1 ? `${base}/admin/voucher` : `${base}/admin/voucher?page=${p}`;
+    const html = await session.fetchText(url);
+    const rows = extractCouponLikeRows(html, 'voucher');
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      const text = r._rowText || '';
+      const priceMatch = text.match(/(\d+(?:[,\d]*)(?:\.\d+)?)\s*(บาท|฿)/);
+      allItems.push({
+        id: r.id,
+        name: (text.split(/[\u200b\s]{2,}/)[0] || '').trim().slice(0, 80),
+        price: priceMatch ? Number(String(priceMatch[1]).replace(/,/g, '')) : 0,
+        platform: '',
+      });
+    }
+    const $ = cheerio.load(html);
+    const hasNext = $(`a[href*="?page=${p + 1}"]`).length > 0;
+    if (!hasNext) break;
+  }
+  return res.status(200).json({
+    success: true, type: 'vouchers', count: allItems.length, totalPages: 1, items: allItems,
+  });
+}
+
 // ─── Action: syncMembershipTypes — uses /admin/api/membership JSON endpoint ─
 
 async function handleSyncMembershipTypes(req, res) {
