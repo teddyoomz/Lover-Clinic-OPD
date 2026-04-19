@@ -206,56 +206,40 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               patientData: viewingCustomer.patientData,
             })}
             onDeleteTreatment={async (treatmentId) => {
-              if (!confirm('ต้องการลบบันทึกการรักษานี้?')) return;
+              // Business rule (2026-04-19, user directive): deleting a treatment
+              // ONLY reverses treatment-side effects (course usage refund +
+              // treatment-side stock). The linked sale stays alive intact —
+              // its money flows (deposit, wallet, points), its assigned
+              // courses, and its product stock are NOT touched here. If the
+              // user wants to remove the sale, they go to "การขาย" → cancel/
+              // delete which has its own full reversal cascade.
+              if (!confirm('ต้องการลบประวัติการรักษานี้?\n\nหมายเหตุ: ใบเสร็จที่เกิดจากการรักษานี้จะยังอยู่ในรายการขาย หากต้องการยกเลิกใบเสร็จด้วย ให้ไปที่ "การขาย"')) return;
               const cid = viewingCustomer.proClinicId;
               try {
                 const {
-                  getSaleByTreatmentId, reverseDepositUsage, refundToWallet, reversePointsEarned,
-                  getTreatment, reverseCourseDeduction,
-                  reverseStockForTreatment, reverseStockForSale,
+                  getTreatment, reverseCourseDeduction, reverseStockForTreatment,
                 } = await import('../lib/backendClient.js');
                 try {
                   const t = await getTreatment(treatmentId);
                   const courseItems = t?.detail?.courseItems || [];
                   const oldExisting = courseItems.filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
                   const oldPurchased = courseItems.filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+                  // Refund the course-credit USAGES (the courses themselves
+                  // stay owned by the customer — those came from the sale,
+                  // which is untouched here).
                   if (oldExisting.length > 0) await reverseCourseDeduction(cid, oldExisting);
                   if (oldPurchased.length > 0) await reverseCourseDeduction(cid, oldPurchased, { preferNewest: true });
                 } catch (e) { console.warn('[BackendDashboard] reverse course deduction on treatment delete failed:', e); }
-                const linkedSale = await getSaleByTreatmentId(treatmentId);
-                if (linkedSale && linkedSale.status !== 'cancelled') {
-                  const saleId = linkedSale.saleId || linkedSale.id;
-                  const deps = Array.isArray(linkedSale.billing?.depositIds) ? linkedSale.billing.depositIds : [];
-                  for (const d of deps) {
-                    try { await reverseDepositUsage(d.depositId, saleId); }
-                    catch (e) { console.warn('[BackendDashboard] reverse deposit on treatment delete failed:', e); }
-                  }
-                  if (linkedSale.billing?.walletTypeId && Number(linkedSale.billing?.walletApplied) > 0) {
-                    try {
-                      await refundToWallet(cid, linkedSale.billing.walletTypeId, {
-                        amount: Number(linkedSale.billing.walletApplied),
-                        walletTypeName: linkedSale.billing.walletTypeName || '',
-                        note: `ลบ treatment — คืน wallet บน ${saleId}`,
-                        referenceType: 'sale', referenceId: saleId,
-                      });
-                    } catch (e) { console.warn('[BackendDashboard] wallet refund on treatment delete failed:', e); }
-                  }
-                  try { await reversePointsEarned(cid, saleId); }
-                  catch (e) { console.warn('[BackendDashboard] points reverse on treatment delete failed:', e); }
-                  try { await reverseStockForSale(saleId); }
-                  catch (e) {
-                    console.error('[BackendDashboard] reverse linked sale stock failed:', e);
-                    alert(`คืนสต็อก auto-sale ล้มเหลว: ${e.message}\nยกเลิกการลบ`);
-                    return;
-                  }
-                }
+                // Treatment-side stock (consumables + treatmentItems +
+                // take-home meds when no auto-sale). Sale-side stock is NOT
+                // reversed here — it belongs to the linked sale, which stays.
                 try { await reverseStockForTreatment(treatmentId); }
                 catch (e) {
                   console.error('[BackendDashboard] reverse treatment stock failed:', e);
                   alert(`คืนสต็อกการรักษาล้มเหลว: ${e.message}\nยกเลิกการลบ`);
                   return;
                 }
-              } catch (e) { console.warn('[BackendDashboard] linked sale lookup failed:', e); }
+              } catch (e) { console.warn('[BackendDashboard] treatment delete reverse failed:', e); }
               await deleteBackendTreatment(treatmentId);
               await rebuildTreatmentSummary(cid);
               const refreshed = await getCustomer(cid);
