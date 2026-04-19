@@ -15,6 +15,9 @@ import {
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
   analyzeSaleCancel, removeLinkedSaleCourses,
   deductStockForSale, reverseStockForSale, analyzeStockImpact,
+} from '../../lib/backendClient.js';
+import { flattenPromotionsForStockDeduction } from '../../lib/treatmentBuyHelpers.js';
+import {
   findCouponByCode, listPromotions,
 } from '../../lib/backendClient.js';
 
@@ -489,8 +492,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         // are reversed and sale doc has new items. We roll back any partial new
         // deductions via reverseStockForSale (idempotent) and re-throw so the user
         // sees the actual cause. They can cancel the sale and recreate.
+        // Bug fix 2026-04-19: flatten promotion's standalone products[] into
+        // products[] before deduction — otherwise _normalizeStockItems would
+        // skip them entirely and inventory drifts on every promo sale.
         try {
-          await deductStockForSale(saleId, data.items, {
+          await deductStockForSale(saleId, flattenPromotionsForStockDeduction(data.items), {
             branchId: BRANCH_ID, customerId,
             user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
           });
@@ -523,8 +529,10 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         // STEP 1b — Deduct stock right after sale creation. On failure, delete the
         // just-created sale so there's nothing dangling. Fail fast BEFORE any
         // deposits/wallet/courses/points are committed.
+        // Bug fix 2026-04-19: flatten promotion.products[] into products[]
+        // before deduction (see flattenPromotionsForStockDeduction docstring).
         try {
-          await deductStockForSale(newSaleId, data.items, {
+          await deductStockForSale(newSaleId, flattenPromotionsForStockDeduction(data.items), {
             branchId: BRANCH_ID, customerId,
             user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
           });

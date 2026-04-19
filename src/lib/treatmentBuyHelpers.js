@@ -63,3 +63,69 @@ export function filterOutConsumablesForPromotion(consumables, promotionId) {
   const next = consumables.filter(c => String(c?.promotionId || '') !== target);
   return next.length === consumables.length ? consumables : next;
 }
+
+/**
+ * Sale-side stock-deduction flatten: when selling a promotion bundle that
+ * contains standalone products (the freebies / takeaway items, NOT the
+ * sub-courses' own products), expand them into items.products[] so
+ * deductStockForSale → _normalizeStockItems will iterate and deduct them.
+ *
+ * Why this is needed: _normalizeStockItems intentionally does NOT iterate
+ * items.promotions[] — promotions are bundles holding course-credits, and
+ * course-credits are NOT physical stock. But the promotion's TOP-LEVEL
+ * products[] (e.g. "buy a Filler 3900 promo, get 2 sunscreens free") ARE
+ * physical inventory and must decrement.
+ *
+ * This helper runs ONLY at sale-side (SaleTab + future direct-sale callers).
+ * TreatmentFormPage does NOT use this — it routes promo.products into
+ * consumables via mapPromotionProductsToConsumables (treatment-side),
+ * because those products may be consumed during the visit. Calling both
+ * helpers on the same purchase would DOUBLE-deduct.
+ *
+ * Notes:
+ *   - Each flattened product is qty-multiplied by the promotion's own qty
+ *     (selling 2× promo → 2× each freebie product).
+ *   - Each flattened product carries `sourcePromotionId` + `sourceType:
+ *     'promotion-product'` for audit-trail clarity in be_stock_movements.
+ *   - The original `items.promotions[]` array is preserved (the receipt /
+ *     report still wants to show "1× Filler 3900 promo" — not "1 promo +
+ *     2 sunscreens"). Only items.products[] is mutated (extended).
+ *   - Sub-courses inside the promotion (promo.courses[].products[]) are
+ *     NEVER flattened — those are credit checkbox items consumed during
+ *     treatment, tracked via customerCourses, not physical stock.
+ *
+ * @param {object|null} items — { promotions, courses, products, medications }
+ * @returns {object} new items object with products[] extended
+ */
+export function flattenPromotionsForStockDeduction(items) {
+  if (!items || typeof items !== 'object' || Array.isArray(items)) return items;
+  const promos = Array.isArray(items.promotions) ? items.promotions : [];
+  if (promos.length === 0) return items;
+  const baseProducts = Array.isArray(items.products) ? items.products : [];
+  const expanded = [];
+  for (const promo of promos) {
+    if (!promo || typeof promo !== 'object') continue;
+    const promoProducts = Array.isArray(promo.products) ? promo.products : [];
+    if (promoProducts.length === 0) continue;
+    const promoQty = Math.max(1, Number(promo.qty) || 1);
+    const promoId = promo.id != null ? String(promo.id) : '';
+    const promoName = String(promo.name || promo.promotion_name || '');
+    for (const p of promoProducts) {
+      if (!p || (!p.name && !p.productName)) continue;
+      const baseQty = Number(p.qty) || 1;
+      expanded.push({
+        id: p.id != null ? String(p.id) : (p.productId != null ? String(p.productId) : null),
+        productId: p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : null),
+        name: String(p.name || p.productName || ''),
+        productName: String(p.productName || p.name || ''),
+        qty: baseQty * promoQty,
+        unit: String(p.unit || ''),
+        sourceType: 'promotion-product',
+        sourcePromotionId: promoId,
+        sourcePromotionName: promoName,
+      });
+    }
+  }
+  if (expanded.length === 0) return items;
+  return { ...items, products: [...baseProducts, ...expanded] };
+}
