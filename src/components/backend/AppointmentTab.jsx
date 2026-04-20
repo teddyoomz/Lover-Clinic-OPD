@@ -5,13 +5,15 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Edit3, Trash2,
   Search, Loader2, X, Clock, User, MapPin, Stethoscope,
-  CheckCircle2, AlertCircle, CalendarDays
+  CheckCircle2, AlertCircle, CalendarDays, CalendarX,
 } from 'lucide-react';
 import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
-  getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems
+  getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems,
+  listHolidays,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
+import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import DateField from '../DateField.jsx';
 
 
@@ -86,6 +88,20 @@ export default function AppointmentTab({ clinicSettings, theme }) {
 
   const today = dateStr(new Date());
   const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
+
+  // Phase 11.8 wiring: load holidays once; use pure `isDateHoliday` to decide
+  // whether the currently-viewed date falls on a clinic closure. Banner renders
+  // above the time grid so admins see it before creating new appointments.
+  // Silent-fail on load (permission denied or network hiccup) = no banner,
+  // existing booking flow untouched.
+  const [holidays, setHolidays] = useState([]);
+  useEffect(() => {
+    listHolidays().then(setHolidays).catch(() => setHolidays([]));
+  }, []);
+  const currentHoliday = useMemo(
+    () => isDateHoliday(selectedDate, holidays),
+    [selectedDate, holidays],
+  );
 
   // ── Load month appointment counts (for mini calendar) ──
   useEffect(() => {
@@ -455,6 +471,27 @@ export default function AppointmentTab({ clinicSettings, theme }) {
             <Plus size={14} /> เพิ่มนัดหมาย
           </button>
         </div>
+
+        {/* Phase 11.8 wiring: Holiday banner. Warns admin that the selected
+            date is a clinic closure (specific-date or weekly day-of-week).
+            Non-blocking — bookings still allowed but flagged. */}
+        {currentHoliday && (
+          <div data-testid="appt-holiday-banner"
+            className="flex items-center gap-2 px-4 py-3 rounded-lg bg-rose-700/15 border border-rose-600/40">
+            <CalendarX size={18} className="flex-shrink-0 text-rose-300" />
+            <div className="flex-1 text-xs text-rose-200">
+              <span className="font-bold">วันหยุดคลินิก — {' '}
+                {currentHoliday.type === 'weekly'
+                  ? `ทุกวัน${DAY_OF_WEEK_LABELS[Number(currentHoliday.dayOfWeek) || 0]}`
+                  : (currentHoliday.note || 'วันหยุดเฉพาะ')}
+              </span>
+              {currentHoliday.note && currentHoliday.type === 'weekly' && (
+                <span className="ml-2 text-rose-300/80">({currentHoliday.note})</span>
+              )}
+              <span className="ml-2 text-[11px] opacity-75">· ระบบยังเปิดให้จองได้ แต่แนะนำตรวจสอบอีกครั้ง</span>
+            </div>
+          </div>
+        )}
 
         {/* Resource Time Grid */}
         {rooms.length === 0 && !dayLoading ? (
