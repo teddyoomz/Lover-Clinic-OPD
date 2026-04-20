@@ -1049,13 +1049,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
-        // Phase 11.9: single canonical source — be_product_groups filtered
-        // by productType='ยากลับบ้าน', enriched with be_products lookup.
-        // Legacy master_data/medication_groups fallback for pre-migration data.
-        const { listProductGroupsForTreatment, getAllMasterDataItems } = await import('../lib/backendClient.js');
-        let beGroups = [];
-        try { beGroups = await listProductGroupsForTreatment('ยากลับบ้าน'); } catch { beGroups = []; }
-        const cached = beGroups.length > 0 ? beGroups : await getAllMasterDataItems('medication_groups');
+        // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
+        // No master_data fallback — if user deletes all groups, they see
+        // empty state (Rule H: be_ = canonical, master_data is DEV-ONLY cache).
+        const { listProductGroupsForTreatment } = await import('../lib/backendClient.js');
+        const cached = await listProductGroupsForTreatment('ยากลับบ้าน');
         if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
         const data = await broker.getMedicationGroups('ยากลับบ้าน');
@@ -1176,12 +1174,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
-        // Phase 11.9: single canonical source — be_product_groups filtered
-        // by productType='สินค้าสิ้นเปลือง', enriched with be_products lookup.
-        const { listProductGroupsForTreatment, getAllMasterDataItems } = await import('../lib/backendClient.js');
-        let beGroups = [];
-        try { beGroups = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง'); } catch { beGroups = []; }
-        const cached = beGroups.length > 0 ? beGroups : await getAllMasterDataItems('consumable_groups');
+        // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
+        // No master_data fallback — delete-in-tab must propagate here.
+        const { listProductGroupsForTreatment } = await import('../lib/backendClient.js');
+        const cached = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง');
         if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
         const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');
