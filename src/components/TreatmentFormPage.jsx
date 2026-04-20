@@ -3403,8 +3403,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                         onChange={e => setBuyQtyMap(prev => ({ ...prev, [item.id]: e.target.value }))}
                                         className={`${inputCls} text-center !py-1 !text-xs !w-20`} />
                                     </td>
-                                    <td className="py-2 px-2 text-center text-gray-500">{item.unit}</td>
-                                    <td className="py-2 px-2 text-center">{parseFloat(item.price).toFixed(2)}</td>
+                                    <td className="py-2 px-2 text-center text-gray-500">{item.unit || (buyModalType === 'course' ? 'คอร์ส' : buyModalType === 'promotion' ? 'โปรโมชัน' : '-')}</td>
+                                    <td className="py-2 px-2 text-center">{(Number(item.price) || 0).toFixed(2)}</td>
                                     <td className="py-2 px-2">
                                       <input type="number" value={buyDiscMap[item.id] || ''} min="0"
                                         onChange={e => setBuyDiscMap(prev => ({ ...prev, [item.id]: e.target.value }))}

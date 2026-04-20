@@ -5164,18 +5164,25 @@ export async function deleteCourse(courseId) {
 
 function mapMasterToProduct(src, id, now, existingCreatedAt) {
   if (!id) return null;
-  const pt = src.productType || src.product_type || 'ยา';
+  // ProClinic master_data may store productType as 'ยากลับบ้าน' when coming
+  // from the product-group enriched sync (Phase 11.9 switched to JSON API
+  // which exposes 'ยากลับบ้าน' as a product-group type). Normalize back to
+  // the 4-option product enum used by ProductFormModal.
+  const ptRaw = src.productType || src.product_type || 'ยา';
+  const ptNormalized = ptRaw === 'ยากลับบ้าน' ? 'ยา' : ptRaw;
   return {
     productId: id,
     productName: String(src.productName || src.product_name || src.name || '').trim() || '(imported)',
     productCode: String(src.productCode || src.product_code || '').trim(),
-    productType: ['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ'].includes(pt) ? pt : 'ยา',
+    productType: ['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ'].includes(ptNormalized) ? ptNormalized : 'ยา',
     serviceType: String(src.serviceType || src.service_type || '').trim(),
     genericName: String(src.genericName || src.generic_name || '').trim(),
     categoryName: String(src.categoryName || src.category_name || src.category || '').trim(),
     subCategoryName: String(src.subCategoryName || src.sub_category_name || '').trim(),
     mainUnitName: String(src.mainUnitName || src.unit_name || src.unit || '').trim(),
-    price: src.price != null ? Number(src.price) : null,
+    // ProClinic 'price' may arrive as string ("10.00") — coerce to Number.
+    // Accept sale_price + selling_price as legacy fallbacks.
+    price: src.price != null ? Number(src.price) : (src.sale_price != null ? Number(src.sale_price) : (src.selling_price != null ? Number(src.selling_price) : null)),
     priceInclVat: src.priceInclVat != null ? Number(src.priceInclVat) : (src.price_incl_vat != null ? Number(src.price_incl_vat) : null),
     isVatIncluded: !!(src.isVatIncluded || src.is_vat_included),
     isClaimDrugDiscount: !!(src.isClaimDrugDiscount || src.is_claim_drug_discount),
@@ -5205,6 +5212,21 @@ function mapMasterToCourse(src, id, now, existingCreatedAt) {
   if (!id) return null;
   const products = Array.isArray(src.courseProducts) ? src.courseProducts
                  : Array.isArray(src.products) ? src.products : [];
+  // ProClinic master_data sync writes plain `price` / `price_incl_vat`, not
+  // `salePrice`. Previous migrate left salePrice=null → buy modal showed
+  // NaN. Accept all 3 names (Phase 11.9 fix 2026-04-20).
+  const resolvePrice = () => {
+    if (src.salePrice != null) return Number(src.salePrice);
+    if (src.sale_price != null) return Number(src.sale_price);
+    if (src.price != null) return Number(src.price);
+    return null;
+  };
+  const resolvePriceInclVat = () => {
+    if (src.salePriceInclVat != null) return Number(src.salePriceInclVat);
+    if (src.sale_price_incl_vat != null) return Number(src.sale_price_incl_vat);
+    if (src.price_incl_vat != null) return Number(src.price_incl_vat);
+    return null;
+  };
   return {
     courseId: id,
     courseName: String(src.courseName || src.course_name || src.name || '').trim() || '(imported)',
@@ -5214,8 +5236,8 @@ function mapMasterToCourse(src, id, now, existingCreatedAt) {
     courseType: String(src.courseType || src.course_type || '').trim(),
     usageType: String(src.usageType || src.usage_type || '').trim(),
     time: src.time != null ? Number(src.time) : null,
-    salePrice: src.salePrice != null ? Number(src.salePrice) : (src.sale_price != null ? Number(src.sale_price) : null),
-    salePriceInclVat: src.salePriceInclVat != null ? Number(src.salePriceInclVat) : (src.sale_price_incl_vat != null ? Number(src.sale_price_incl_vat) : null),
+    salePrice: resolvePrice(),
+    salePriceInclVat: resolvePriceInclVat(),
     isVatIncluded: !!(src.isVatIncluded || src.is_vat_included),
     courseProducts: products.map(p => ({
       productId: String(p.productId || p.product_id || p.id || '').trim(),
