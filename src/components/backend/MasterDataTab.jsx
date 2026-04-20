@@ -29,6 +29,8 @@ import {
   migrateMasterStaffToBe, migrateMasterDoctorsToBe,
   // Phase 12.2: catalog entities
   migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
+  // Phase 12.11: debug helper for verifying be_* wiring
+  clearMasterDataItems, getBeBackedMasterTypes,
 } from '../../lib/backendClient.js';
 import {
   syncProducts, syncDoctors, syncStaff, syncCourses,
@@ -208,6 +210,9 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   // Migrate-to-be_* state (promotion/coupon/voucher one-time imports)
   const [migrateStatus, setMigrateStatus] = useState({}); // { promotions: 'idle'|'loading'|'done'|'error' }
   const [migrateResult, setMigrateResult] = useState({}); // { promotions: { imported, skipped, total } }
+  // Phase 12.11: per-type "ล้าง master_data" state
+  const [clearStatus, setClearStatus] = useState({}); // { products: 'idle'|'loading'|'done'|'error' }
+  const [clearResult, setClearResult] = useState({}); // { products: { deleted } | { error } }
 
   // ── Load metadata for all types on mount ──
   useEffect(() => {
@@ -270,6 +275,34 @@ export default function MasterDataTab({ clinicSettings, theme }) {
       await handleSync(st.key, st.fn);
     }
   }, [handleSync]);
+
+  // ── Phase 12.11: Clear master_data/{type}/items (debug — verify be_* wiring) ──
+  const BE_BACKED = useMemo(() => new Set(getBeBackedMasterTypes()), []);
+
+  const handleClear = useCallback(async (type, label) => {
+    const isBeBacked = BE_BACKED.has(type);
+    const warning = isBeBacked
+      ? `ลบข้อมูลใน master_data/${type}/items ทั้งหมด?\n\n✅ Type "${label}" มี be_* canonical (Phase 12.11) — consumers จะอ่าน be_${type} แทน\n⚠️  ถ้ายังไม่กด "นำเข้า" → UI จะว่าง\n\nใช้เพื่อ debug ยืนยันว่า backend ใช้ be_* จริง`
+      : `⚠️ ลบข้อมูลใน master_data/${type}/items ทั้งหมด?\n\n❌ Type "${label}" ยังไม่มี be_* — consumers ยังอ่าน master_data ตรงๆ → UI ที่ใช้ ${type} จะว่างหมด\n\nการ rewire เลื่อนไว้ Phase 16 Polish`;
+    if (!window.confirm(warning)) return;
+    setClearStatus(prev => ({ ...prev, [type]: 'loading' }));
+    setClearResult(prev => ({ ...prev, [type]: null }));
+    try {
+      const r = await clearMasterDataItems(type);
+      setClearStatus(prev => ({ ...prev, [type]: 'done' }));
+      setClearResult(prev => ({ ...prev, [type]: r }));
+      // Refresh items if the deleted type is the active sub-tab
+      if (activeSubTab === type) {
+        const data = await getAllMasterDataItems(type);
+        setItems(data);
+      }
+      // Refresh meta count
+      setMeta(prev => ({ ...prev, [type]: { ...(prev[type] || {}), count: 0 } }));
+    } catch (err) {
+      setClearStatus(prev => ({ ...prev, [type]: 'error' }));
+      setClearResult(prev => ({ ...prev, [type]: { error: err.message } }));
+    }
+  }, [activeSubTab, BE_BACKED]);
 
   // One-time migrations: master_data/{type} → be_{entity}
   // Phase 9 + Phase 11.8b (added 6 Phase-11 entities). Runs AFTER a fresh
@@ -780,6 +813,53 @@ export default function MasterDataTab({ clinicSettings, theme }) {
 
         <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
           <Info size={12} /> คัดลอก master_data/{'{type}'}/items/* → be_{'{entity}'}/*. รันหลัง Sync ProClinic ให้ข้อมูลเข้า master_data ก่อน. Idempotent — รันซ้ำได้ · แก้ไขต่อใน CRUD tab ของ entity นั้น
+        </p>
+      </div>
+
+      {/* ═══ [A3] Clear master_data (Phase 12.11 — debug verify be_* wiring) ═══ */}
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(220,38,38,0.20)` }} data-testid="masterdata-clear-section">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-bold text-[var(--tx-heading)] uppercase tracking-wider flex items-center gap-2">
+            <Trash2 size={14} className="text-red-400" /> ล้าง master_data (debug)
+          </h3>
+          <span className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider">Phase 12.11</span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="masterdata-clear-grid">
+          {SYNC_TYPES.map(st => {
+            const status = clearStatus[st.key];
+            const result = clearResult[st.key];
+            const isBeBacked = BE_BACKED.has(st.key);
+            return (
+              <button key={st.key} onClick={() => handleClear(st.key, st.label)}
+                disabled={status === 'loading'}
+                data-testid={`masterdata-clear-${st.key}`}
+                className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-start gap-1.5 disabled:opacity-60 hover:shadow-lg active:scale-[0.98] ${
+                  isDark
+                    ? 'bg-red-950/20 border-red-900/40 text-red-300 hover:bg-red-900/30'
+                    : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                }`}>
+                <div className="flex items-center gap-1.5 w-full">
+                  <span className="text-base">{st.icon}</span>
+                  <span className="truncate flex-1 text-left">{st.label}</span>
+                  {isBeBacked && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-700/30 text-emerald-300 font-bold flex-shrink-0">be_*</span>}
+                  {status === 'loading' && <Loader2 size={12} className="animate-spin flex-shrink-0" />}
+                  {status === 'done' && <CheckCircle2 size={12} className="text-emerald-400 flex-shrink-0" />}
+                  {status === 'error' && <AlertCircle size={12} className="text-red-400 flex-shrink-0" />}
+                </div>
+                <div className="text-[11px] opacity-80">
+                  {status === 'loading' ? 'กำลังลบ…' :
+                   status === 'done' ? `ลบแล้ว ${result?.deleted || 0} รายการ` :
+                   status === 'error' ? (result?.error || 'error') :
+                   isBeBacked ? 'ปลอดภัย — มี be_* สำรอง' : '⚠️ ยังไม่มี be_* (เลื่อน P16)'}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
+          <Info size={12} /> ใช้เพื่อตรวจสอบว่า backend อ่านจาก be_* จริงหลัง migrate. ชนิดที่มี label <span className="text-emerald-400 font-bold">be_*</span> = Phase 12.11 wire แล้ว (consumers อ่าน be_{'{type}'} แทน master_data อัตโนมัติ). ชนิดอื่น = ยังอ่าน master_data ตรงๆ — rewire เลื่อน Phase 16.
         </p>
       </div>
 

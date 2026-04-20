@@ -2011,4 +2011,35 @@ Closing audit skill for the Phase 12 financial foundation. FC1-FC20 invariants e
 
 Build clean. Ready for Phase 13.
 
+---
+
+## Phase 12.11 — be_* → master_data adapter (partial rewire) + debug delete button (2026-04-20)
+
+**Context:** Phase 11.8 closeout deferred the wiring of master_data consumers (SaleTab, TreatmentFormPage, AppointmentTab, 14 other files) to be_* — targeted for Phase 16 Polish. User wanted a way to verify that Phase 12 migration actually works empirically. This sub-task lands a **dual-read adapter** for the 4 types Phase 12 already migrated, plus a per-type "ล้าง master_data" debug button.
+
+**New files:**
+- `tests/phase12-11-be-shape-adapters.test.js` — 13 tests (BE1-13). Covers getBeBackedMasterTypes list, clearMasterDataItems batched-delete, 4 adapter shape mappings (products/courses/staff/doctors), and the 3 fallback paths (empty be_* → master_data, non-be-backed type, be_* read error).
+
+**Edits:**
+- `src/lib/backendClient.js`:
+  - Added 4 adapters — `beProductToMasterShape`, `beCourseToMasterShape`, `beStaffToMasterShape`, `beDoctorToMasterShape`. Each maps be_* doc → legacy master_data shape callers expect (p.id / p.name / p.price / p.unit / p.type / p.category / p.category_name / p.code / p.status 1|0). Preserves `...p` spread so any other fields survive.
+  - Added `BE_BACKED_MASTER_TYPES` map + `readBeForMasterType(type)` helper.
+  - Refactored `getAllMasterDataItems(type)` — for {products, courses, staff, doctors}, reads be_* first; if non-empty returns mapped items; falls back to master_data on empty or error. Non-be-backed types (wallet_types, membership_types, medication_groups, consumable_groups) still read master_data directly — Phase 16 will migrate those.
+  - Added `getBeBackedMasterTypes()` test hook returning the 4 wired types.
+  - Added `clearMasterDataItems(type)` — batched-delete of all docs in master_data/{type}/items (chunks of 400 per writeBatch, under Firestore's 500-op limit). Preserves the root master_data/{type} meta doc.
+- `src/components/backend/MasterDataTab.jsx`:
+  - Added [A3] section "ล้าง master_data (debug)" — 15 buttons (one per SYNC_TYPES entry). Each shows `be_*` label badge when wired (4 types), warning text otherwise.
+  - Per-button confirm prompt differentiates safe (be_* backed → consumers still work) vs risky (will break consumers) cases.
+  - Clear status/result per type, refreshes items on the active sub-tab after clear.
+
+**Verification workflow user can run:**
+1. Sync ProClinic → master_data (existing buttons in [A1])
+2. Import master_data → be_* (existing buttons in [A2])
+3. Click [A3] "ล้าง master_data" for `products` / `courses` / `staff` / `doctors` → UI consumers should continue working (they now read be_*)
+4. Click [A3] for `wallet_types` etc → those consumers break — expected, Phase 16 rewires
+
+**Remaining work for Phase 16**: rewire direct consumers (SaleTab, TreatmentFormPage, AppointmentTab, reports, panels) to import from be_* collections directly instead of going through `getAllMasterDataItems`. The current adapter is a bridge, not a final solution — it still pays a cross-collection scan cost on every picker load.
+
+Tests: 2837 → 2850 (+13). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

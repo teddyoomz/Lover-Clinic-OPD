@@ -955,10 +955,159 @@ export async function getMasterDataMeta(type) {
   return snap.data();
 }
 
-/** Read all items from master_data/{type}/items */
+// ─── Phase 12.11: be_* shape adapters ──────────────────────────────────────
+// For types that now have a be_* canonical collection, map the be_* doc shape
+// back to the legacy master_data shape callers expect (p.id / p.name / p.price
+// / p.unit / p.type / p.category / p.category_name / p.status 1|0).
+// Phase 16 will do the inverse refactor — rewire every caller to read be_*
+// directly and drop these adapters.
+
+function beProductToMasterShape(p) {
+  return {
+    ...p,
+    id: p.productId || p.id,
+    name: p.productName || '',
+    price: p.price ?? null,
+    price_incl_vat: p.priceInclVat ?? null,
+    unit: p.mainUnitName || '',
+    unit_name: p.mainUnitName || '',
+    type: p.productType || '',
+    product_type: p.productType || '',
+    category: p.categoryName || '',
+    category_name: p.categoryName || '',
+    code: p.productCode || '',
+    product_code: p.productCode || '',
+    generic_name: p.genericName || '',
+    status: p.status === 'พักใช้งาน' ? 0 : 1,
+  };
+}
+
+function beCourseToMasterShape(c) {
+  return {
+    ...c,
+    id: c.courseId || c.id,
+    name: c.courseName || '',
+    course_name: c.courseName || '',
+    receipt_course_name: c.receiptCourseName || '',
+    sale_price: c.salePrice ?? null,
+    price: c.salePrice ?? null,
+    sale_price_incl_vat: c.salePriceInclVat ?? null,
+    code: c.courseCode || '',
+    course_code: c.courseCode || '',
+    time: c.time ?? null,
+    course_category: c.courseCategory || '',
+    category: c.courseCategory || '',
+    status: c.status === 'พักใช้งาน' ? 0 : 1,
+  };
+}
+
+function beStaffToMasterShape(s) {
+  const fullName = [s.firstname || '', s.lastname || ''].map(x => String(x).trim()).filter(Boolean).join(' ');
+  return {
+    ...s,
+    id: s.staffId || s.id,
+    name: fullName || s.nickname || '',
+    firstname: s.firstname || '',
+    lastname: s.lastname || '',
+    email: s.email || '',
+    color: s.color || '',
+    position: s.position || '',
+    branches: Array.isArray(s.branchIds) ? s.branchIds : [],
+    status: s.status === 'พักใช้งาน' ? 0 : 1,
+  };
+}
+
+function beDoctorToMasterShape(d) {
+  const fullName = [d.firstname || '', d.lastname || ''].map(x => String(x).trim()).filter(Boolean).join(' ');
+  return {
+    ...d,
+    id: d.doctorId || d.id,
+    name: fullName || d.nickname || '',
+    firstname: d.firstname || '',
+    lastname: d.lastname || '',
+    firstname_en: d.firstnameEn || '',
+    lastname_en: d.lastnameEn || '',
+    email: d.email || '',
+    color: d.color || '',
+    position: d.position || '',
+    branches: Array.isArray(d.branchIds) ? d.branchIds : [],
+    hourlyRate: d.hourlyIncome ?? null,
+    status: d.status === 'พักใช้งาน' ? 0 : 1,
+  };
+}
+
+// Types that have be_* canonical backing as of Phase 12.11.
+// Phase 13+ can extend as more master_data entities migrate to be_*.
+const BE_BACKED_MASTER_TYPES = Object.freeze({
+  products: { col: 'be_products',  map: beProductToMasterShape },
+  courses:  { col: 'be_courses',   map: beCourseToMasterShape  },
+  staff:    { col: 'be_staff',     map: beStaffToMasterShape   },
+  doctors:  { col: 'be_doctors',   map: beDoctorToMasterShape  },
+});
+
+async function readBeForMasterType(type) {
+  const conf = BE_BACKED_MASTER_TYPES[type];
+  if (!conf) return null;
+  const snap = await getDocs(collection(db, ...basePath(), conf.col));
+  return snap.docs.map(d => conf.map({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Read all items from master_data/{type}/items.
+ *
+ * Phase 12.11 (2026-04-20): for types in BE_BACKED_MASTER_TYPES (products/
+ * courses/staff/doctors), prefer the canonical be_* collection mapped back
+ * to master_data shape. Falls back to master_data when be_* is empty (seed
+ * phase) or unsupported type.
+ *
+ * This lets the user delete master_data/{type}/items after migrate and have
+ * UI consumers still work — empirical proof that Phase 12 migration is
+ * wired for the 4 types we covered. Other types (wallet_types,
+ * membership_types, medication_groups, consumable_groups) still read
+ * master_data until Phase 16 Polish.
+ */
 export async function getAllMasterDataItems(type) {
+  if (BE_BACKED_MASTER_TYPES[type]) {
+    try {
+      const beItems = await readBeForMasterType(type);
+      if (Array.isArray(beItems) && beItems.length > 0) return beItems;
+    } catch {
+      // fall through to master_data
+    }
+  }
   const snap = await getDocs(masterDataItemsCol(type));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Test hook — expose adapter list so tests + /audit-master-data-ownership
+// can enumerate what's wired without duplicating the constant.
+export function getBeBackedMasterTypes() {
+  return Object.keys(BE_BACKED_MASTER_TYPES);
+}
+
+/**
+ * Phase 12.11 debug helper: delete every doc in master_data/{type}/items.
+ * Used to verify that UI consumers for `type` have migrated off master_data
+ * and onto be_*. Batched in chunks of 400 ops (under Firestore's 500-op
+ * writeBatch limit). Preserves the master_data/{type} root meta doc so the
+ * sync UI still shows the type as "ever-synced".
+ */
+export async function clearMasterDataItems(type) {
+  const t = String(type || '').trim();
+  if (!t) throw new Error('type required');
+  const colRef = masterDataItemsCol(t);
+  let totalDeleted = 0;
+  while (true) {
+    const snap = await getDocs(colRef);
+    if (snap.empty) break;
+    const docs = snap.docs.slice(0, 400);
+    const batch = writeBatch(db);
+    for (const d of docs) batch.delete(d.ref);
+    await batch.commit();
+    totalDeleted += docs.length;
+    if (snap.docs.length <= 400) break;
+  }
+  return { type: t, deleted: totalDeleted };
 }
 
 // ─── Deposit CRUD (Phase 7) ────────────────────────────────────────────────
