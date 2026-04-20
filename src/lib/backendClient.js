@@ -4051,3 +4051,58 @@ export async function findProductUnitGroupByName(groupName) {
   }
   return null;
 }
+
+// ─── Medical Instrument CRUD (Phase 11.4 Master Data Suite) ────────────────
+// Equipment registry with maintenance scheduling. `maintenanceLog` entries
+// accumulate forever (user trims manually); validator caps at MAX_LOG_ENTRIES
+// to keep doc < 1MB.
+
+const medicalInstrumentsCol = () => collection(db, ...basePath(), 'be_medical_instruments');
+const medicalInstrumentDoc = (id) => doc(db, ...basePath(), 'be_medical_instruments', String(id));
+
+export async function getMedicalInstrument(instrumentId) {
+  const id = String(instrumentId || '');
+  if (!id) return null;
+  const snap = await getDoc(medicalInstrumentDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listMedicalInstruments() {
+  const snap = await getDocs(medicalInstrumentsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveMedicalInstrument(instrumentId, data) {
+  const id = String(instrumentId || '');
+  if (!id) throw new Error('instrumentId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeMedicalInstrument, validateMedicalInstrument } = await import('./medicalInstrumentValidation.js');
+
+  const normalized = normalizeMedicalInstrument(data);
+  const fail = validateMedicalInstrument(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(medicalInstrumentDoc(id), {
+    ...normalized,
+    instrumentId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteMedicalInstrument(instrumentId) {
+  const id = String(instrumentId || '');
+  if (!id) throw new Error('instrumentId required');
+  await deleteDoc(medicalInstrumentDoc(id));
+}

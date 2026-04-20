@@ -247,6 +247,7 @@ vi.mock('../src/components/backend/reports/StaffSalesTab.jsx', () => ({ default:
 // Mock them here so this scaffold test stays independent of their internals.
 vi.mock('../src/components/backend/ProductGroupsTab.jsx', () => ({ default: () => <div data-testid="t-product-groups" /> }));
 vi.mock('../src/components/backend/ProductUnitsTab.jsx', () => ({ default: () => <div data-testid="t-product-units" /> }));
+vi.mock('../src/components/backend/MedicalInstrumentsTab.jsx', () => ({ default: () => <div data-testid="t-medical-instruments" /> }));
 vi.mock('../src/components/TreatmentFormPage.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/nav/BackendNav.jsx', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -275,11 +276,9 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-product-units')).toBeInTheDocument();
   });
 
-  it('R3 ?tab=medical-instruments renders ComingSoon with "เครื่องหัตถการ"', async () => {
+  it('R3 ?tab=medical-instruments renders MedicalInstrumentsTab (Phase 11.4 shipped 2026-04-20)', async () => {
     await renderWith('medical-instruments');
-    await screen.findByTestId('coming-soon');
-    expect(screen.getByText('เครื่องหัตถการ')).toBeInTheDocument();
-    expect(screen.getByText('Phase 11.4')).toBeInTheDocument();
+    expect(await screen.findByTestId('t-medical-instruments')).toBeInTheDocument();
   });
 
   it('R4 ?tab=holidays renders ComingSoon with "วันหยุด"', async () => {

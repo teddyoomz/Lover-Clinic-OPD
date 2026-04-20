@@ -1504,3 +1504,51 @@ Conversion-group model — Triangle (Rule F) captured via fresh `opd.js forms /a
 - **H**: OUR canonical data; no write-back to ProClinic; master_data unaffected
 
 Tests: 2157 → 2208 PASS (+51).
+
+---
+
+## Phase 11.4 Medical Instruments CRUD (2026-04-20)
+
+Equipment registry with maintenance scheduling. Fields match ProClinic (Triangle via `opd.js forms /admin/medical-instrument`) + extensions (status enum, note, maintenanceLog).
+
+**Schema (`be_medical_instruments`):**
+- `instrumentId` — `INST-{ts}-{8hex}` via `generateMarketingId('INST')`
+- `name` — trimmed, ≤ 120, required
+- `code` — ≤ 40, optional
+- `costPrice` — number ≥ 0 or null, optional
+- `purchaseDate` — `YYYY-MM-DD` via DateField (rule 04 Thai-UI), optional
+- `maintenanceIntervalMonths` — integer ≥ 0 or null, optional
+- `nextMaintenanceDate` — `YYYY-MM-DD` via DateField, must be ≥ `purchaseDate` when both set
+- `maintenanceLog[]` — array ≤ 50, each entry `{date, cost?, note?, performedBy?}`
+- `status` — enum 3: `ใช้งาน | พักใช้งาน | ซ่อมบำรุง`
+- `note`, `createdAt`, `updatedAt`
+
+**Helper:** `daysUntilMaintenance(nextDate, today) → number | null` — negative = overdue. Used in tab card to render a traffic-light badge (overdue red / ≤30d amber / > 30d neutral).
+
+**New files:**
+- `src/lib/medicalInstrumentValidation.js` — validator (null form, blank name, bounds, numeric/date formats, cross-field rule, log array shape, per-entry shape, 50-entry cap), normalizer (trim, coerce to null on empty, drop log entries w/o date), `daysUntilMaintenance` helper, 4 frozen constants
+- `src/components/backend/MedicalInstrumentFormModal.jsx` — 8 top-level fields + nested maintenanceLog editor with add/remove rows; 2 DateField pickers (purchaseDate, nextMaintenanceDate); 4 sub-fields per log entry (date, cost, note, performedBy)
+- `src/components/backend/MedicalInstrumentsTab.jsx` — 6th reuse of MarketingTabShell; card shows cost (Thai locale) + maintenance badge + log count
+
+**Edits:**
+- `src/lib/backendClient.js` — +4 CRUD fns (no `findByName` — code/name dedup would need fuzzy match; deferred); `saveMedicalInstrument` dynamically imports validator+normalizer
+- `src/pages/BackendDashboard.jsx` — swap ComingSoon → MedicalInstrumentsTab
+- `tests/phase11-master-data-scaffold.test.jsx` — R3 updated + mock added
+
+**New tests — `tests/medicalInstrument.test.jsx` — 43 adversarial:**
+- MIV1-MIV16 validator (minimal pass, null/array form, name rules + bound, code optional+bound, costPrice optional+negative+0+positive, purchaseDate ISO strict, maintenance interval integer+≥0, nextMaintenanceDate format + cross-field ≥ purchaseDate, status enum, log array + entries + cap)
+- MIN1-MIN5 normalizer (trim, coerce number, default status, drop date-less entries, trim log entries)
+- MID1-MID5 `daysUntilMaintenance` (null, future, today=0, overdue negative, cross-month boundary)
+- E1-E2 Rule E import-only greps
+- MIT1-MIT7 Tab (empty, cards with Thai-locale cost, search note, status filter, delete yes, load error, log count badge)
+- MIM1-MIM8 Modal (create/edit modes, validation block, crypto id, add log row, remove log row, edit id preserve, ESC close)
+
+**Rule compliance:**
+- **C1**: 6th reuse of shell chrome; DateField is canonical per iron-clad rule 04
+- **C2**: INST-prefix crypto id
+- **D**: 43 adversarial
+- **E**: E1/E2 import-only greps
+- **F**: Fresh Triangle verified field set — confirmed all 6 ProClinic fields + validated cross-field rule (nextMaintenanceDate ≥ purchaseDate)
+- **H**: OUR canonical; maintenanceLog array is OUR extension (not in ProClinic)
+
+Tests: 2208 → 2251 PASS (+43).
