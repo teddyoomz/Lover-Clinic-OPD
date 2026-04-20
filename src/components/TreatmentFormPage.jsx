@@ -1049,8 +1049,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
-        const cached = await getAllMasterDataItems('medication_groups');
+        // Phase 11.9: single canonical source — be_product_groups filtered
+        // by productType='ยากลับบ้าน', enriched with be_products lookup.
+        // Legacy master_data/medication_groups fallback for pre-migration data.
+        const { listProductGroupsForTreatment, getAllMasterDataItems } = await import('../lib/backendClient.js');
+        let beGroups = [];
+        try { beGroups = await listProductGroupsForTreatment('ยากลับบ้าน'); } catch { beGroups = []; }
+        const cached = beGroups.length > 0 ? beGroups : await getAllMasterDataItems('medication_groups');
         if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
         const data = await broker.getMedicationGroups('ยากลับบ้าน');
@@ -1171,8 +1176,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
-        const cached = await getAllMasterDataItems('consumable_groups');
+        // Phase 11.9: single canonical source — be_product_groups filtered
+        // by productType='สินค้าสิ้นเปลือง', enriched with be_products lookup.
+        const { listProductGroupsForTreatment, getAllMasterDataItems } = await import('../lib/backendClient.js');
+        let beGroups = [];
+        try { beGroups = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง'); } catch { beGroups = []; }
+        const cached = beGroups.length > 0 ? beGroups : await getAllMasterDataItems('consumable_groups');
         if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
         const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');

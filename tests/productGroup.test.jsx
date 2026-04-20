@@ -1,11 +1,13 @@
-// ─── Product Group — Phase 11.2 adversarial tests ──────────────────────────
-// Pure validator + UI flows (mocked backendClient). Covers PV1-PV15 (validator),
+// ─── Product Group — Phase 11.2 + 11.9 adversarial tests ───────────────────
+// Pure validator + UI flows (mocked backendClient). Covers PV1-PV18 (validator),
 // PC1-PC5 (constants), PE1-PE2 (empty form), PU1-PU10 (tab), PM1-PM10 (modal).
 //
 // Iron-clad:
 //   - Rule E: validator + UI must not import brokerClient — static grep (E1, E2)
 //   - Rule C2: ID via crypto-random — guarded by reusing generateMarketingId
 //   - Rule D: every branch of validateProductGroup has an adversarial case
+//   - Rule F: Triangle verified 2026-04-20 — 2 product_type options only
+//     (Phase 11.2 wrongly claimed 4 — corrected in 11.9)
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -13,6 +15,8 @@ import fs from 'fs';
 import {
   validateProductGroup,
   emptyProductGroupForm,
+  normalizeProductType,
+  migrateProductIdsToProducts,
   PRODUCT_TYPES,
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,
@@ -20,10 +24,10 @@ import {
 
 /* ─── PV: validateProductGroup adversarial ──────────────────────────────── */
 
-describe('validateProductGroup — PV1..PV15', () => {
+describe('validateProductGroup — PV1..PV18', () => {
   const good = () => ({ ...emptyProductGroupForm(), name: 'Botox' });
 
-  it('PV1: passes minimal valid form (name + productType=default)', () => {
+  it('PV1: passes minimal valid form (name + productType default)', () => {
     expect(validateProductGroup(good())).toBeNull();
   });
 
@@ -43,7 +47,7 @@ describe('validateProductGroup — PV1..PV15', () => {
   });
 
   it('PV5: rejects missing name (undefined)', () => {
-    expect(validateProductGroup({ productType: 'ยา' })?.[0]).toBe('name');
+    expect(validateProductGroup({ productType: 'ยากลับบ้าน' })?.[0]).toBe('name');
   });
 
   it('PV6: rejects blank / whitespace-only name', () => {
@@ -69,15 +73,18 @@ describe('validateProductGroup — PV1..PV15', () => {
     expect(validateProductGroup({ ...good(), name: ok })).toBeNull();
   });
 
-  it('PV10: rejects productType outside enum (case-sensitive)', () => {
+  it('PV10: rejects productType outside enum (including legacy 4-opts + case variants)', () => {
     expect(validateProductGroup({ ...good(), productType: 'xxx' })?.[0]).toBe('productType');
-    expect(validateProductGroup({ ...good(), productType: 'ยา ' })?.[0]).toBe('productType'); // trailing space
     expect(validateProductGroup({ ...good(), productType: '' })?.[0]).toBe('productType');
     expect(validateProductGroup({ ...good(), productType: null })?.[0]).toBe('productType');
     expect(validateProductGroup({ ...good(), productType: undefined })?.[0]).toBe('productType');
+    // Legacy 4-option values no longer valid (must normalize on read first)
+    expect(validateProductGroup({ ...good(), productType: 'ยา' })?.[0]).toBe('productType');
+    expect(validateProductGroup({ ...good(), productType: 'สินค้าหน้าร้าน' })?.[0]).toBe('productType');
+    expect(validateProductGroup({ ...good(), productType: 'บริการ' })?.[0]).toBe('productType');
   });
 
-  it('PV11: accepts every enum value for productType', () => {
+  it('PV11: accepts every 2-option enum value', () => {
     for (const t of PRODUCT_TYPES) {
       expect(validateProductGroup({ ...good(), productType: t })).toBeNull();
     }
@@ -85,7 +92,7 @@ describe('validateProductGroup — PV1..PV15', () => {
 
   it('PV12: rejects status outside enum (when provided)', () => {
     expect(validateProductGroup({ ...good(), status: 'xxx' })?.[0]).toBe('status');
-    expect(validateProductGroup({ ...good(), status: 'active' })?.[0]).toBe('status'); // Phase 9 English leaks
+    expect(validateProductGroup({ ...good(), status: 'active' })?.[0]).toBe('status');
   });
 
   it('PV13: accepts null/undefined status (defaults apply downstream)', () => {
@@ -93,28 +100,110 @@ describe('validateProductGroup — PV1..PV15', () => {
     expect(validateProductGroup({ ...good(), status: undefined })).toBeNull();
   });
 
-  it('PV14: productIds must be array if provided', () => {
-    expect(validateProductGroup({ ...good(), productIds: 'x' })?.[0]).toBe('productIds');
-    expect(validateProductGroup({ ...good(), productIds: 42 })?.[0]).toBe('productIds');
-    expect(validateProductGroup({ ...good(), productIds: {} })?.[0]).toBe('productIds');
-    expect(validateProductGroup({ ...good(), productIds: [] })).toBeNull();
-    expect(validateProductGroup({ ...good(), productIds: ['P1', 'P2'] })).toBeNull();
+  it('PV14: products must be array if provided', () => {
+    expect(validateProductGroup({ ...good(), products: 'x' })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: 42 })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: {} })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [] })).toBeNull();
   });
 
-  it('PV15: trims name before length check', () => {
+  it('PV15: products[i] must be object with productId + positive qty', () => {
+    expect(validateProductGroup({ ...good(), products: [null] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: ['P1'] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [{}] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [{ productId: 'P1' }] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [{ productId: 'P1', qty: 0 }] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [{ productId: 'P1', qty: -1 }] })?.[0]).toBe('products');
+    expect(validateProductGroup({ ...good(), products: [{ productId: '', qty: 1 }] })?.[0]).toBe('products');
+  });
+
+  it('PV16: duplicate productId in products[] rejected', () => {
+    expect(validateProductGroup({ ...good(), products: [
+      { productId: 'P1', qty: 1 },
+      { productId: 'P1', qty: 2 },
+    ]})?.[0]).toBe('products');
+  });
+
+  it('PV17: trims name before length check', () => {
     const padded = '  ' + 'a'.repeat(NAME_MAX_LENGTH) + '  ';
     expect(validateProductGroup({ ...good(), name: padded })).toBeNull();
     const tooLongTrimmed = '  ' + 'a'.repeat(NAME_MAX_LENGTH + 1);
     expect(validateProductGroup({ ...good(), name: tooLongTrimmed })?.[0]).toBe('name');
+  });
+
+  it('PV18: accepts fractional qty (e.g. 12.5 cc)', () => {
+    expect(validateProductGroup({ ...good(), products: [
+      { productId: 'P1', qty: 12.5 },
+      { productId: 'P2', qty: 0.01 },
+    ]})).toBeNull();
+  });
+});
+
+/* ─── PN: normalizeProductType ─────────────────────────────────────────── */
+
+describe('normalizeProductType — PN1..PN4', () => {
+  it('PN1: passes through valid 2-option values', () => {
+    expect(normalizeProductType('ยากลับบ้าน')).toBe('ยากลับบ้าน');
+    expect(normalizeProductType('สินค้าสิ้นเปลือง')).toBe('สินค้าสิ้นเปลือง');
+  });
+
+  it('PN2: maps legacy 4-option values to closest 2-option match', () => {
+    expect(normalizeProductType('ยา')).toBe('ยากลับบ้าน');
+    expect(normalizeProductType('สินค้าหน้าร้าน')).toBe('สินค้าสิ้นเปลือง');
+    expect(normalizeProductType('บริการ')).toBe('สินค้าสิ้นเปลือง');
+  });
+
+  it('PN3: defaults unknown values to ยากลับบ้าน', () => {
+    expect(normalizeProductType('xyz')).toBe('ยากลับบ้าน');
+    expect(normalizeProductType('')).toBe('ยากลับบ้าน');
+    expect(normalizeProductType(null)).toBe('ยากลับบ้าน');
+    expect(normalizeProductType(undefined)).toBe('ยากลับบ้าน');
+  });
+
+  it('PN4: is idempotent (double-normalize = single-normalize)', () => {
+    for (const v of ['ยา', 'บริการ', 'สินค้าหน้าร้าน', 'xyz', 'ยากลับบ้าน']) {
+      expect(normalizeProductType(normalizeProductType(v))).toBe(normalizeProductType(v));
+    }
+  });
+});
+
+/* ─── PMG: migrateProductIdsToProducts ─────────────────────────────────── */
+
+describe('migrateProductIdsToProducts — PMG1..PMG4', () => {
+  it('PMG1: converts legacy productIds[] → products[{productId, qty:1}]', () => {
+    const r = migrateProductIdsToProducts({ productIds: ['P1', 'P2'] });
+    expect(r.products).toEqual([
+      { productId: 'P1', qty: 1 },
+      { productId: 'P2', qty: 1 },
+    ]);
+  });
+
+  it('PMG2: idempotent — if products[] already populated, leaves unchanged', () => {
+    const existing = [{ productId: 'P1', qty: 5 }];
+    const r = migrateProductIdsToProducts({ products: existing, productIds: ['P2'] });
+    expect(r.products).toBe(existing);  // same reference
+  });
+
+  it('PMG3: handles empty / missing productIds', () => {
+    expect(migrateProductIdsToProducts({}).products).toBeUndefined();
+    expect(migrateProductIdsToProducts({ productIds: [] }).products).toBeUndefined();
+  });
+
+  it('PMG4: filters out blank/non-string productIds', () => {
+    const r = migrateProductIdsToProducts({ productIds: ['P1', '', null, 'P2', 42] });
+    expect(r.products).toEqual([
+      { productId: 'P1', qty: 1 },
+      { productId: 'P2', qty: 1 },
+    ]);
   });
 });
 
 /* ─── PC: Constants shape ───────────────────────────────────────────────── */
 
 describe('Constants — PC1..PC5', () => {
-  it('PC1: PRODUCT_TYPES has exactly 4 entries matching ProClinic', () => {
-    expect(PRODUCT_TYPES).toHaveLength(4);
-    expect(PRODUCT_TYPES).toEqual(['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ']);
+  it('PC1: PRODUCT_TYPES has exactly 2 entries matching ProClinic Triangle (Phase 11.9 correction)', () => {
+    expect(PRODUCT_TYPES).toHaveLength(2);
+    expect(PRODUCT_TYPES).toEqual(['ยากลับบ้าน', 'สินค้าสิ้นเปลือง']);
   });
 
   it('PC2: PRODUCT_TYPES is frozen (prevent accidental mutation)', () => {
@@ -140,31 +229,27 @@ describe('Constants — PC1..PC5', () => {
 /* ─── PE: emptyProductGroupForm shape ───────────────────────────────────── */
 
 describe('emptyProductGroupForm — PE1..PE2', () => {
-  it('PE1: returns a valid starting form (passes validator as-is after name set)', () => {
+  it('PE1: returns a valid starting form', () => {
     const form = emptyProductGroupForm();
-    expect(form.productType).toBeTruthy();
     expect(PRODUCT_TYPES).toContain(form.productType);
     expect(STATUS_OPTIONS).toContain(form.status);
-    expect(Array.isArray(form.productIds)).toBe(true);
-    expect(form.productIds).toHaveLength(0);
+    expect(Array.isArray(form.products)).toBe(true);
+    expect(form.products).toHaveLength(0);
   });
 
   it('PE2: each call returns a NEW object (no shared mutation)', () => {
     const a = emptyProductGroupForm();
     const b = emptyProductGroupForm();
     a.name = 'mutated';
-    a.productIds.push('x');
+    a.products.push({ productId: 'X', qty: 1 });
     expect(b.name).toBe('');
-    expect(b.productIds).toHaveLength(0);
+    expect(b.products).toHaveLength(0);
   });
 });
 
 /* ─── Rule E compliance ─────────────────────────────────────────────────── */
 
-describe('Phase 11.2 — Rule E (Firestore ONLY) compliance', () => {
-  // Match import/require statements only — comments mentioning "brokerClient"
-  // as a rule name are fine. Regex captures any form of `from '...brokerClient...'`
-  // or `require('...brokerClient...')`.
+describe('Phase 11.2 + 11.9 — Rule E (Firestore ONLY) compliance', () => {
   const IMPORT_BROKER_RE = /(?:from\s+['"][^'"]*brokerClient|require\(\s*['"][^'"]*brokerClient)/;
   const FETCH_PROCLINIC_RE = /(?:from\s+['"][^'"]*\/api\/proclinic\/|fetch\s*\(\s*['"`][^'"`]*\/api\/proclinic\/)/;
 
@@ -186,7 +271,6 @@ describe('Phase 11.2 — Rule E (Firestore ONLY) compliance', () => {
   it('E3: firestore.rules has be_product_groups entry with clinicStaff gate (Rule B trigger)', () => {
     const rules = fs.readFileSync('firestore.rules', 'utf-8');
     expect(rules).toMatch(/match \/be_product_groups\/\{groupId\}/);
-    // Same line or next must reference isClinicStaff (not `if true`, not uid).
     const block = rules.split(/match \/be_product_groups\/\{groupId\}/)[1].split('}')[0];
     expect(block).toMatch(/isClinicStaff\(\)/);
     expect(block).not.toMatch(/if true/);
@@ -206,17 +290,17 @@ beforeAll(() => {
   }
 });
 
-// Firebase stub (setup.js loads real firebase which would fail without signed-in user).
 vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 
-// backendClient — mock only the fns Tab/Modal use.
 const mockList = vi.fn();
 const mockSave = vi.fn();
 const mockDelete = vi.fn();
+const mockListProducts = vi.fn();
 vi.mock('../src/lib/backendClient.js', () => ({
   listProductGroups:   (...a) => mockList(...a),
   saveProductGroup:    (...a) => mockSave(...a),
   deleteProductGroup:  (...a) => mockDelete(...a),
+  listProducts:        (...a) => mockListProducts(...a),
   getProductGroup:     vi.fn(),
   findProductGroupByName: vi.fn(),
 }));
@@ -228,9 +312,9 @@ function makeGroup(over = {}) {
   return {
     groupId: 'GRP-1',
     name: 'Botox',
-    productType: 'ยา',
+    productType: 'ยากลับบ้าน',
     status: 'ใช้งาน',
-    productIds: [],
+    products: [],
     note: '',
     createdAt: '2026-04-20T10:00:00Z',
     updatedAt: '2026-04-20T10:00:00Z',
@@ -239,7 +323,13 @@ function makeGroup(over = {}) {
 }
 
 describe('ProductGroupsTab — PU1..PU10', () => {
-  beforeEach(() => { mockList.mockReset(); mockSave.mockReset(); mockDelete.mockReset(); });
+  beforeEach(() => {
+    mockList.mockReset();
+    mockSave.mockReset();
+    mockDelete.mockReset();
+    mockListProducts.mockReset();
+    mockListProducts.mockResolvedValue([]);
+  });
 
   it('PU1: renders title + empty state when no groups', async () => {
     mockList.mockResolvedValueOnce([]);
@@ -249,10 +339,10 @@ describe('ProductGroupsTab — PU1..PU10', () => {
   });
 
   it('PU2: renders cards when groups load', async () => {
-    mockList.mockResolvedValueOnce([makeGroup(), makeGroup({ groupId: 'GRP-2', name: 'Filler', productType: 'บริการ' })]);
+    mockList.mockResolvedValueOnce([makeGroup(), makeGroup({ groupId: 'GRP-2', name: 'ผ่าตัด', productType: 'สินค้าสิ้นเปลือง' })]);
     render(<ProductGroupsTab clinicSettings={{ accentColor: '#dc2626' }} />);
     await waitFor(() => expect(screen.getByText('Botox')).toBeInTheDocument());
-    expect(screen.getByText('Filler')).toBeInTheDocument();
+    expect(screen.getByText('ผ่าตัด')).toBeInTheDocument();
   });
 
   it('PU3: search filters by name (case-insensitive)', async () => {
@@ -266,14 +356,14 @@ describe('ProductGroupsTab — PU1..PU10', () => {
 
   it('PU4: type filter narrows the list', async () => {
     mockList.mockResolvedValueOnce([
-      makeGroup({ productType: 'ยา' }),
-      makeGroup({ groupId: 'GRP-2', name: 'Consult', productType: 'บริการ' }),
+      makeGroup({ productType: 'ยากลับบ้าน' }),
+      makeGroup({ groupId: 'GRP-2', name: 'Consumables', productType: 'สินค้าสิ้นเปลือง' }),
     ]);
     render(<ProductGroupsTab clinicSettings={{}} />);
     await waitFor(() => screen.getByText('Botox'));
-    fireEvent.change(screen.getByDisplayValue('ประเภททั้งหมด'), { target: { value: 'บริการ' } });
+    fireEvent.change(screen.getByDisplayValue('ประเภททั้งหมด'), { target: { value: 'สินค้าสิ้นเปลือง' } });
     expect(screen.queryByText('Botox')).not.toBeInTheDocument();
-    expect(screen.getByText('Consult')).toBeInTheDocument();
+    expect(screen.getByText('Consumables')).toBeInTheDocument();
   });
 
   it('PU5: status filter hides พักใช้งาน when filter=ใช้งาน', async () => {
@@ -290,7 +380,7 @@ describe('ProductGroupsTab — PU1..PU10', () => {
 
   it('PU6: delete asks confirm + calls deleteProductGroup on accept', async () => {
     mockList.mockResolvedValueOnce([makeGroup()]);
-    mockList.mockResolvedValueOnce([]); // reload after delete
+    mockList.mockResolvedValueOnce([]);
     mockDelete.mockResolvedValueOnce(undefined);
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
@@ -330,11 +420,14 @@ describe('ProductGroupsTab — PU1..PU10', () => {
     await waitFor(() => expect(screen.getByText('network')).toBeInTheDocument());
   });
 
-  it('PU10: displays product count badge from productIds array', async () => {
-    mockList.mockResolvedValueOnce([makeGroup({ productIds: ['P1', 'P2', 'P3'] })]);
+  it('PU10: displays product count badge from products[] array', async () => {
+    mockList.mockResolvedValueOnce([makeGroup({ products: [
+      { productId: 'P1', qty: 12 },
+      { productId: 'P2', qty: 1 },
+      { productId: 'P3', qty: 2 },
+    ]})]);
     render(<ProductGroupsTab clinicSettings={{}} />);
     await waitFor(() => screen.getByText('Botox'));
-    // "3 สินค้าในกลุ่ม" with the number bolded separately — verify by testid
     const card = screen.getByTestId('group-card-GRP-1');
     expect(card.textContent).toMatch(/3.*สินค้าในกลุ่ม/);
   });
@@ -343,28 +436,33 @@ describe('ProductGroupsTab — PU1..PU10', () => {
 /* ─── PM: ProductGroupFormModal flow ───────────────────────────────────── */
 
 describe('ProductGroupFormModal — PM1..PM10', () => {
-  beforeEach(() => { mockSave.mockReset(); });
+  beforeEach(() => {
+    mockSave.mockReset();
+    mockListProducts.mockReset();
+    mockListProducts.mockResolvedValue([]);
+  });
 
   it('PM1: opens in create mode with blank defaults', () => {
     render(<ProductGroupFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    expect(screen.getByText('สร้างกลุ่มสินค้า')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Botox/)).toHaveValue('');
+    expect(screen.getByText('เพิ่มกลุ่มสินค้า')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/กรอกชื่อ/)).toHaveValue('');
   });
 
-  it('PM2: opens in edit mode with prefilled data', () => {
+  it('PM2: opens in edit mode with prefilled name + normalized type', () => {
+    // Legacy 4-option 'บริการ' should normalize → 'สินค้าสิ้นเปลือง'
     render(<ProductGroupFormModal
-      productGroup={makeGroup({ name: 'Filler', productType: 'บริการ', status: 'พักใช้งาน', note: 'hello' })}
+      productGroup={makeGroup({ name: 'Legacy', productType: 'บริการ' })}
       onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
     expect(screen.getByText('แก้ไขกลุ่มสินค้า')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Botox/)).toHaveValue('Filler');
-    expect(screen.getByDisplayValue('บริการ')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('พักใช้งาน')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/บันทึกเพิ่มเติม|เงื่อนไข/)).toHaveValue('hello');
+    expect(screen.getByPlaceholderText(/กรอกชื่อ/)).toHaveValue('Legacy');
+    // Radio for สินค้าสิ้นเปลือง is checked (normalized from 'บริการ')
+    const consumableRadio = screen.getByDisplayValue('สินค้าสิ้นเปลือง');
+    expect(consumableRadio).toBeChecked();
   });
 
   it('PM3: save with empty name → error banner + no save call', async () => {
     render(<ProductGroupFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    fireEvent.click(screen.getByText('สร้าง'));
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
     await waitFor(() => expect(screen.getByText(/กรุณากรอกชื่อ/)).toBeInTheDocument());
     expect(mockSave).not.toHaveBeenCalled();
   });
@@ -373,21 +471,21 @@ describe('ProductGroupFormModal — PM1..PM10', () => {
     mockSave.mockResolvedValueOnce(undefined);
     const onSaved = vi.fn();
     render(<ProductGroupFormModal onClose={() => {}} onSaved={onSaved} clinicSettings={{}} />);
-    fireEvent.change(screen.getByPlaceholderText(/Botox/), { target: { value: 'New Group' } });
-    fireEvent.click(screen.getByText('สร้าง'));
+    fireEvent.change(screen.getByPlaceholderText(/กรอกชื่อ/), { target: { value: 'New Group' } });
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
     await waitFor(() => expect(mockSave).toHaveBeenCalled());
     const [id, payload] = mockSave.mock.calls[0];
-    expect(id).toMatch(/^GRP-/);                // crypto-random prefix
+    expect(id).toMatch(/^GRP-/);
     expect(payload.name).toBe('New Group');
-    expect(payload.productType).toBe('ยา');
-    expect(payload.status).toBe('ใช้งาน');
+    expect(payload.productType).toBe('ยากลับบ้าน');
+    expect(Array.isArray(payload.products)).toBe(true);
     expect(onSaved).toHaveBeenCalled();
   });
 
   it('PM5: edit mode preserves existing groupId (no new id)', async () => {
     mockSave.mockResolvedValueOnce(undefined);
     render(<ProductGroupFormModal productGroup={makeGroup()} onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    fireEvent.click(screen.getByText('บันทึก'));
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
     await waitFor(() => expect(mockSave).toHaveBeenCalled());
     expect(mockSave.mock.calls[0][0]).toBe('GRP-1');
   });
@@ -395,8 +493,8 @@ describe('ProductGroupFormModal — PM1..PM10', () => {
   it('PM6: save error surfaces in error banner', async () => {
     mockSave.mockRejectedValueOnce(new Error('firestore down'));
     render(<ProductGroupFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    fireEvent.change(screen.getByPlaceholderText(/Botox/), { target: { value: 'X' } });
-    fireEvent.click(screen.getByText('สร้าง'));
+    fireEvent.change(screen.getByPlaceholderText(/กรอกชื่อ/), { target: { value: 'X' } });
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
     await waitFor(() => expect(screen.getByText('firestore down')).toBeInTheDocument());
   });
 
@@ -407,27 +505,37 @@ describe('ProductGroupFormModal — PM1..PM10', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('PM8: productType select offers all 4 Thai options', () => {
+  it('PM8: productType radios offer exactly 2 Triangle-verified options', () => {
     render(<ProductGroupFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
     for (const t of PRODUCT_TYPES) {
-      expect(screen.getByRole('option', { name: t })).toBeInTheDocument();
+      expect(screen.getByDisplayValue(t)).toBeInTheDocument();
     }
+    // Legacy 4-option values absent
+    expect(screen.queryByDisplayValue('ยา')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('บริการ')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('สินค้าหน้าร้าน')).not.toBeInTheDocument();
   });
 
   it('PM9: trims name before save (no leading/trailing whitespace persists)', async () => {
     mockSave.mockResolvedValueOnce(undefined);
     render(<ProductGroupFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    fireEvent.change(screen.getByPlaceholderText(/Botox/), { target: { value: '   Padded   ' } });
-    fireEvent.click(screen.getByText('สร้าง'));
+    fireEvent.change(screen.getByPlaceholderText(/กรอกชื่อ/), { target: { value: '   Padded   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
     await waitFor(() => expect(mockSave).toHaveBeenCalled());
     expect(mockSave.mock.calls[0][1].name).toBe('Padded');
   });
 
-  it('PM10: edit mode shows linked-product count when productIds present', () => {
+  it('PM10: edit mode migrates legacy productIds[] → products[] on load (via migrateProductIdsToProducts)', async () => {
+    mockSave.mockResolvedValueOnce(undefined);
     render(<ProductGroupFormModal
-      productGroup={makeGroup({ productIds: ['P1', 'P2', 'P3', 'P4'] })}
+      productGroup={{ ...makeGroup(), productIds: ['P-legacy-1', 'P-legacy-2'], products: undefined }}
       onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
-    expect(screen.getByText(/4/)).toBeInTheDocument();
-    expect(screen.getByText(/สินค้าที่ผูก/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /บันทึก|ยืนยัน|สร้าง/ }));
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
+    const payload = mockSave.mock.calls[0][1];
+    expect(payload.products).toEqual([
+      { productId: 'P-legacy-1', qty: 1 },
+      { productId: 'P-legacy-2', qty: 1 },
+    ]);
   });
 });

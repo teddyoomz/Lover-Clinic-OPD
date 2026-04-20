@@ -391,12 +391,51 @@ async function syncGenericList(req, res, { type, path, idPattern, fieldMap }) {
   });
 }
 
+// Phase 11.9: switched from HTML list scrape → JSON API `/admin/api/product-group`.
+// HTML scrape only returned name + type (2 fields); JSON API returns full
+// `products[]` with `pivot.qty` per group-product. Rule H + user directive
+// "ดูดมาครบ" — preserve qty so OUR be_product_groups mirror ProClinic 1:1.
 async function handleSyncProductGroups(req, res) {
-  return syncGenericList(req, res, {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const allItems = [];
+  for (let p = 1; ; p++) {
+    const data = await withRetry(async () => {
+      const resp = await session.fetch(`${base}/admin/api/product-group?page=${p}`, {
+        headers: { 'Accept': 'application/json' },
+        timeoutMs: FETCH_OPTS.timeoutMs,
+      });
+      if (!resp.ok) {
+        const err = new Error(`Product-group API error: ${resp.status}`);
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
+    }, RETRY_OPTS);
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1) || p >= 50) break;
+  }
+  const normalized = allItems.map(g => ({
+    id: g.id,
+    groupName: g.group_name || '',
+    name: g.group_name || '',
+    productType: g.product_type || 'ยากลับบ้าน',
+    products: Array.isArray(g.products) ? g.products.map(p => ({
+      productId: String(p.id),
+      qty: Number(p.pivot?.qty) || 1,
+      productName: p.product_name || '',
+      unit: p.unit_name || '',
+    })) : [],
+    status: g.deleted_at ? 'พักใช้งาน' : 'ใช้งาน',
+    _source: 'proclinic',
+  }));
+  return res.status(200).json({
+    success: true,
     type: 'product_groups',
-    path: '/admin/product-group',
-    idPattern: /\/product-group\/(\d+)/,
-    fieldMap: { name: 0, productType: 1 },
+    count: normalized.length,
+    totalPages: 1,
+    items: normalized,
   });
 }
 

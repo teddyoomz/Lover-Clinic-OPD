@@ -4159,13 +4159,29 @@ export async function saveProductGroup(groupId, data) {
   if (!String(data.name || '').trim()) throw new Error('name required');
   if (!data.productType) throw new Error('productType required');
 
+  // Phase 11.9: canonical field is `products: [{productId, qty}]`.
+  // Legacy callers may still pass productIds[] — lift into products[{qty:1}].
+  let products = Array.isArray(data.products)
+    ? data.products
+        .filter(p => p && typeof p === 'object')
+        .map(p => ({ productId: String(p.productId || ''), qty: Number(p.qty) || 1 }))
+        .filter(p => p.productId)
+    : [];
+  if (products.length === 0 && Array.isArray(data.productIds)) {
+    products = data.productIds
+      .filter(pid => typeof pid === 'string' && pid.trim())
+      .map(pid => ({ productId: String(pid), qty: 1 }));
+  }
+
   const now = new Date().toISOString();
   await setDoc(productGroupDoc(id), {
     ...data,
     groupId: id,
     name: String(data.name).trim(),
     status: data.status || 'ใช้งาน',
-    productIds: Array.isArray(data.productIds) ? data.productIds : [],
+    products,
+    // Derived convenience index for legacy readers / audits that still grep productIds[]
+    productIds: products.map(p => p.productId),
     note: String(data.note || '').trim(),
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -4176,6 +4192,93 @@ export async function deleteProductGroup(groupId) {
   const id = String(groupId || '');
   if (!id) throw new Error('groupId required');
   await deleteDoc(productGroupDoc(id));
+}
+
+/**
+ * Phase 11.9: read be_product_groups filtered by productType, enrich each
+ * group's products[{productId, qty}] with be_products detail (name/unit/
+ * price/label). Returns shape that TreatmentFormPage medication / consumable
+ * group modals expect:
+ *   [{ id, name, productType, products: [{id, name, qty, unit, price, label?}] }]
+ *
+ * Replaces the master_data/medication_groups + master_data/consumable_groups
+ * cached paths. Single collection (be_product_groups) is canonical.
+ *
+ * @param {'ยากลับบ้าน' | 'สินค้าสิ้นเปลือง'} productType
+ */
+export async function listProductGroupsForTreatment(productType) {
+  const targetType = String(productType || '').trim();
+  if (!targetType) return [];
+  const [groupsSnap, productsSnap] = await Promise.all([
+    getDocs(productGroupsCol()),
+    getDocs(productsCol()),
+  ]);
+  const productLookup = new Map();
+  productsSnap.docs.forEach(d => {
+    const p = d.data();
+    const pid = String(p.productId || d.id || '');
+    if (!pid) return;
+    productLookup.set(pid, {
+      id: pid,
+      name: p.productName || '',
+      unit: p.mainUnitName || '',
+      price: p.price ?? 0,
+      isVatIncluded: p.isVatIncluded ? 1 : 0,
+      category: p.categoryName || '',
+      label: p.label && typeof p.label === 'object' ? {
+        genericName: p.label.genericName || '',
+        dosageAmount: p.label.dosageAmount || '',
+        dosageUnit: p.label.dosageUnit || '',
+        timesPerDay: p.label.timesPerDay || '',
+        administrationMethod: p.label.administrationMethod || '',
+        administrationTimes: p.label.administrationTimes || '',
+        instructions: p.label.instructions || '',
+      } : null,
+    });
+  });
+
+  const filtered = groupsSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(g => {
+      if ((g.status || 'ใช้งาน') !== 'ใช้งาน') return false;
+      const gt = String(g.productType || '');
+      // Match direct or via legacy 4-option normalization
+      if (gt === targetType) return true;
+      if (targetType === 'ยากลับบ้าน' && gt === 'ยา') return true;
+      if (targetType === 'สินค้าสิ้นเปลือง' && (gt === 'สินค้าหน้าร้าน' || gt === 'บริการ')) return true;
+      return false;
+    });
+
+  return filtered.map(g => {
+    const entries = Array.isArray(g.products) && g.products.length > 0
+      ? g.products
+      : Array.isArray(g.productIds)
+        ? g.productIds.map(pid => ({ productId: pid, qty: 1 }))
+        : [];
+    const products = entries.map(entry => {
+      const pid = String(entry.productId);
+      const lookup = productLookup.get(pid);
+      if (lookup) {
+        return { ...lookup, qty: Number(entry.qty) || 1 };
+      }
+      return {
+        id: pid,
+        name: `(สินค้า ${pid})`,
+        unit: '',
+        price: 0,
+        qty: Number(entry.qty) || 1,
+        isVatIncluded: 0,
+        category: '',
+        label: null,
+      };
+    });
+    return {
+      id: g.groupId || g.id,
+      name: g.name || '',
+      productType: g.productType || targetType,
+      products,
+    };
+  });
 }
 
 /**
@@ -4514,12 +4617,38 @@ export async function deletePermissionGroup(permissionGroupId) {
 
 function mapMasterToProductGroup(src, id, now, existingCreatedAt) {
   if (!id) return null;
-  const productType = src.productType || src.product_type || src.type || 'ยา';
+  // Phase 11.9: normalize 4-option legacy type → 2-option via validator helper.
+  // ProClinic API returns 'ยากลับบ้าน' / 'สินค้าสิ้นเปลือง' directly (verified
+  // via GET /admin/api/product-group).
+  const rawType = src.productType || src.product_type || src.type || 'ยากลับบ้าน';
+  const LEGACY = { 'ยา': 'ยากลับบ้าน', 'สินค้าหน้าร้าน': 'สินค้าสิ้นเปลือง', 'บริการ': 'สินค้าสิ้นเปลือง' };
+  const productType = ['ยากลับบ้าน', 'สินค้าสิ้นเปลือง'].includes(rawType)
+    ? rawType
+    : (LEGACY[rawType] || 'ยากลับบ้าน');
+
+  // Phase 11.9: ProClinic API response has products[] with pivot.qty per
+  // group-product. Scraper passes through as src.products with
+  // { productId, qty } shape. Legacy master_data may still have productIds[]
+  // → lift into products[{productId, qty:1}].
+  let products = [];
+  if (Array.isArray(src.products) && src.products.length > 0) {
+    products = src.products
+      .map(p => ({
+        productId: String(p.productId ?? p.id ?? ''),
+        qty: Number(p.qty) || 1,
+      }))
+      .filter(p => p.productId);
+  } else if (Array.isArray(src.productIds)) {
+    products = src.productIds
+      .filter(pid => typeof pid === 'string' && pid.trim())
+      .map(pid => ({ productId: String(pid), qty: 1 }));
+  }
+
   return {
     groupId: id,
     name: String(src.groupName || src.group_name || src.name || '').trim() || '(imported)',
-    productType: ['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ'].includes(productType) ? productType : 'ยา',
-    productIds: Array.isArray(src.productIds) ? src.productIds : [],
+    productType,
+    products,
     status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
     note: String(src.note || '').trim(),
     createdAt: existingCreatedAt || now,

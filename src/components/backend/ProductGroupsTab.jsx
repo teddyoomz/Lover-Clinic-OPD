@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, FolderTree, Loader2, Package } from 'lucide-react';
-import { listProductGroups, deleteProductGroup } from '../../lib/backendClient.js';
+import { listProductGroups, deleteProductGroup, listProducts } from '../../lib/backendClient.js';
 import ProductGroupFormModal from './ProductGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { PRODUCT_TYPES, STATUS_OPTIONS } from '../../lib/productGroupValidation.js';
@@ -19,9 +19,11 @@ const STATUS_BADGE = {
 };
 
 const TYPE_COLOR = {
+  ยากลับบ้าน:       { cls: 'bg-rose-700/20 border-rose-700/40 text-rose-300' },
+  สินค้าสิ้นเปลือง:  { cls: 'bg-sky-700/20 border-sky-700/40 text-sky-300' },
+  // Legacy 4-option types kept for display-only of pre-11.9 data
   ยา:              { cls: 'bg-rose-700/20 border-rose-700/40 text-rose-300' },
   สินค้าหน้าร้าน:    { cls: 'bg-amber-700/20 border-amber-700/40 text-amber-300' },
-  สินค้าสิ้นเปลือง:  { cls: 'bg-sky-700/20 border-sky-700/40 text-sky-300' },
   บริการ:           { cls: 'bg-violet-700/20 border-violet-700/40 text-violet-300' },
 };
 
@@ -35,12 +37,20 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  const [productLookup, setProductLookup] = useState(new Map());
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setItems(await listProductGroups());
+      const [groups, products] = await Promise.all([listProductGroups(), listProducts().catch(() => [])]);
+      setItems(groups);
+      const lookup = new Map();
+      (products || []).forEach(p => {
+        const pid = String(p.productId || p.id || '');
+        if (pid) lookup.set(pid, { name: p.productName || p.name || '', unit: p.mainUnitName || '' });
+      });
+      setProductLookup(lookup);
     } catch (e) {
       setError(e.message || 'โหลดกลุ่มสินค้าล้มเหลว');
       setItems([]);
@@ -124,9 +134,17 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
           {filtered.map(g => {
             const id = g.groupId || g.id;
             const statusCfg = STATUS_BADGE[g.status || 'ใช้งาน'] || STATUS_BADGE['ใช้งาน'];
-            const typeCfg = TYPE_COLOR[g.productType] || TYPE_COLOR['ยา'];
+            const typeCfg = TYPE_COLOR[g.productType] || TYPE_COLOR['ยากลับบ้าน'];
             const busy = deleting === id;
-            const productCount = Array.isArray(g.productIds) ? g.productIds.length : 0;
+            // Phase 11.9: products[{productId,qty}] is canonical; productIds[] legacy fallback
+            const groupProducts = Array.isArray(g.products) && g.products.length > 0
+              ? g.products
+              : Array.isArray(g.productIds) ? g.productIds.map(pid => ({ productId: pid, qty: 1 })) : [];
+            const productCount = groupProducts.length;
+            const preview = groupProducts.slice(0, 4).map(gp => {
+              const p = productLookup.get(String(gp.productId)) || {};
+              return `${p.name || `(${gp.productId})`} (${Number(gp.qty) || 1} ${p.unit || ''})`.trim();
+            });
             return (
               <div key={id} data-testid={`group-card-${id}`}
                 className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] hover:border-[var(--accent)] transition-all">
@@ -146,6 +164,17 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
                 <div className="text-xs text-[var(--tx-muted)] mb-2 flex items-center gap-1.5">
                   <Package size={12} /> <span className="font-semibold text-[var(--tx-primary)]">{productCount}</span> สินค้าในกลุ่ม
                 </div>
+
+                {preview.length > 0 && (
+                  <ul className="text-[11px] text-[var(--tx-primary)] space-y-0.5 mb-2">
+                    {preview.map((line, i) => (
+                      <li key={i} className="truncate">• {line}</li>
+                    ))}
+                    {productCount > preview.length && (
+                      <li className="text-[var(--tx-muted)]">... อีก {productCount - preview.length} รายการ</li>
+                    )}
+                  </ul>
+                )}
 
                 {g.note && (
                   <p className="text-[11px] text-[var(--tx-muted)] line-clamp-2 mb-2">{g.note}</p>

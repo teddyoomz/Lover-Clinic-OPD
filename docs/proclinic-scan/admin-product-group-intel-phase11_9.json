@@ -1,0 +1,1226 @@
+{
+  "meta": {
+    "url": "/admin/product-group",
+    "scannedAt": "2026-04-20T16:12:53.033Z"
+  },
+  "identity": {
+    "title": "กลุ่มสินค้า | ProClinic",
+    "url": "https://trial.proclinicth.com/admin/product-group",
+    "path": "/admin/product-group",
+    "bodyClasses": "",
+    "framework": [
+      "Laravel",
+      "Bootstrap5",
+      "jQuery",
+      "SweetAlert2",
+      "Flatpickr",
+      "Select2",
+      "FullCalendar"
+    ]
+  },
+  "server": {
+    "tech": "PHP/8.4.18 / cloudflare",
+    "framework": "unknown",
+    "cacheControl": "private, must-revalidate"
+  },
+  "layout": {
+    "tag": "div",
+    "cls": [
+      "sidebar-content"
+    ],
+    "c": [
+      {
+        "tag": "div",
+        "cls": [
+          "sidebar-menu"
+        ],
+        "c": [
+          {
+            "tag": "ul",
+            "cls": [
+              "pt-3"
+            ],
+            "c": [
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "forms": [
+    {
+      "id": "form_0",
+      "action": "/admin/product-group",
+      "method": "GET",
+      "totalFields": 2,
+      "visibleFields": 2,
+      "hiddenFields": 0,
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "label": "ค้นหา",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "classes": "form-control",
+          "isHidden": false
+        },
+        {
+          "name": "type",
+          "type": "select-one",
+          "label": "",
+          "required": false,
+          "classes": "selectpicker rounded-0",
+          "isHidden": false,
+          "dataAttrs": {
+            "width": "180px"
+          },
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ประเภททั้งหมด"
+            },
+            {
+              "v": "ยากลับบ้าน",
+              "t": "ยากลับบ้าน"
+            },
+            {
+              "v": "สินค้าสิ้นเปลือง",
+              "t": "สินค้าสิ้นเปลือง"
+            }
+          ]
+        }
+      ],
+      "submitButtons": [
+        {
+          "text": "ประเภททั้งหมด",
+          "type": "button",
+          "classes": "btn dropdown-toggle"
+        },
+        {
+          "text": "",
+          "type": "submit",
+          "classes": "btn btn-primary px-3"
+        }
+      ]
+    },
+    {
+      "id": "form-create-product-group",
+      "action": "/admin/product-group",
+      "method": "POST",
+      "totalFields": 5,
+      "visibleFields": 4,
+      "hiddenFields": 1,
+      "fields": [
+        {
+          "name": "_token",
+          "type": "hidden",
+          "label": "",
+          "required": false,
+          "isHidden": true,
+          "hiddenValue": "iqJykHBw8n5yGPzodEKAsOboow9ZRyXRDugn3bkT"
+        },
+        {
+          "name": "group_name",
+          "type": "text",
+          "label": "ชื่อกลุ่มสินค้า",
+          "required": true,
+          "placeholder": "กรอกชื่อกลุ่มสินค้า",
+          "classes": "form-control",
+          "isHidden": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "defaultValue": "ยากลับบ้าน",
+          "classes": "form-check-input",
+          "isHidden": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": false,
+          "defaultValue": "สินค้าสิ้นเปลือง",
+          "classes": "form-check-input",
+          "isHidden": false
+        },
+        {
+          "name": "product-search",
+          "type": "text",
+          "label": "ค้นหาสินค้า",
+          "required": false,
+          "placeholder": "ค้นหาสินค้า",
+          "classes": "form-control mb-1",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": [
+        {
+          "text": "ยกเลิก",
+          "type": "button",
+          "classes": "btn btn-outline-primary"
+        },
+        {
+          "text": "ยืนยัน",
+          "type": "submit",
+          "classes": "btn btn-primary"
+        }
+      ]
+    },
+    {
+      "id": "form_2",
+      "method": "GET",
+      "totalFields": 1,
+      "visibleFields": 1,
+      "hiddenFields": 0,
+      "fields": [
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "defaultValue": "ยากลับบ้าน",
+          "classes": "form-check-input",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": []
+    },
+    {
+      "id": "form_3",
+      "method": "GET",
+      "totalFields": 1,
+      "visibleFields": 1,
+      "hiddenFields": 0,
+      "fields": [
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": false,
+          "defaultValue": "สินค้าสิ้นเปลือง",
+          "classes": "form-check-input",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": []
+    },
+    {
+      "id": "form-edit-product-group",
+      "action": "/admin/product-group",
+      "method": "POST",
+      "totalFields": 7,
+      "visibleFields": 4,
+      "hiddenFields": 3,
+      "fields": [
+        {
+          "name": "_token",
+          "type": "hidden",
+          "label": "",
+          "required": false,
+          "isHidden": true,
+          "hiddenValue": "iqJykHBw8n5yGPzodEKAsOboow9ZRyXRDugn3bkT"
+        },
+        {
+          "name": "_method",
+          "type": "hidden",
+          "label": "",
+          "required": false,
+          "isHidden": true,
+          "hiddenValue": "PUT"
+        },
+        {
+          "name": "product_group_id",
+          "type": "hidden",
+          "label": "",
+          "required": false,
+          "isHidden": true,
+          "hiddenValue": ""
+        },
+        {
+          "name": "group_name",
+          "type": "text",
+          "label": "ชื่อกลุ่มสินค้า",
+          "required": true,
+          "placeholder": "กรอกชื่อกลุ่มสินค้า",
+          "classes": "form-control",
+          "isHidden": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "defaultValue": "ยากลับบ้าน",
+          "disabled": true,
+          "classes": "form-check-input",
+          "isHidden": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": false,
+          "defaultValue": "สินค้าสิ้นเปลือง",
+          "disabled": true,
+          "classes": "form-check-input",
+          "isHidden": false
+        },
+        {
+          "name": "edit-product-search",
+          "type": "text",
+          "label": "ค้นหาสินค้า",
+          "required": false,
+          "placeholder": "ค้นหาสินค้า",
+          "classes": "form-control mb-1",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": [
+        {
+          "text": "ยกเลิก",
+          "type": "button",
+          "classes": "btn btn-outline-primary"
+        },
+        {
+          "text": "ยืนยัน",
+          "type": "submit",
+          "classes": "btn btn-primary"
+        }
+      ]
+    },
+    {
+      "id": "form_5",
+      "method": "GET",
+      "totalFields": 1,
+      "visibleFields": 1,
+      "hiddenFields": 0,
+      "fields": [
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "defaultValue": "ยากลับบ้าน",
+          "disabled": true,
+          "classes": "form-check-input",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": []
+    },
+    {
+      "id": "form_6",
+      "method": "GET",
+      "totalFields": 1,
+      "visibleFields": 1,
+      "hiddenFields": 0,
+      "fields": [
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": false,
+          "defaultValue": "สินค้าสิ้นเปลือง",
+          "disabled": true,
+          "classes": "form-check-input",
+          "isHidden": false
+        }
+      ],
+      "submitButtons": []
+    }
+  ],
+  "tables": [
+    {
+      "headers": [
+        "กลุ่มสินค้า",
+        "ประเภท",
+        "รายการ",
+        "ตัวเลือก"
+      ],
+      "sampleRows": [
+        [
+          "ปวดหัวไมเกรน",
+          "ยากลับบ้าน",
+          "Paracetamol (12 เม็ด)แก้ปวดเฉพาะไมเกรน Ergotamine (12 เม็ด)คลายกล้ามเนื้อ Orphen",
+          ""
+        ],
+        [
+          "ผ่าตัด",
+          "ยากลับบ้าน",
+          "เข็มปลายทู่ (1 อัน)เข็มสำหรับรักษา (1 เข็ม)",
+          ""
+        ],
+        [
+          "ผ่าตัด",
+          "สินค้าสิ้นเปลือง",
+          "ไม้พันสำลี (1 ก้าน)สำลี (1 แพ็ค)ชุดผ่าตัด (1 ชุด)",
+          ""
+        ]
+      ],
+      "totalRows": 6,
+      "actions": [],
+      "hasPagination": false
+    }
+  ],
+  "buttons": [
+    {
+      "text": "เมนูอื่นๆ17",
+      "classes": "nav-link dropdown-toggle",
+      "toggle": "dropdown"
+    },
+    {
+      "text": "",
+      "classes": "nav-link dropdown-toggle btn btn-outline-primary ms-xxl-2"
+    },
+    {
+      "text": "สาขา พระราม9",
+      "classes": "nav-link dropdown-toggle btn btn-outline-secondary ms-xxl-2",
+      "toggle": "dropdown"
+    },
+    {
+      "text": "Dr.M Clinic \n                           ",
+      "classes": "nav-link dropdown-toggle sp-left",
+      "toggle": "dropdown"
+    },
+    {
+      "text": "เพิ่มข้อมูล",
+      "classes": "btn btn-primary add-group w-100 text-nowrap d-flex align-ite"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/4"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/13"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/14"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/12"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/5"
+    },
+    {
+      "text": "",
+      "classes": "btn-delete",
+      "dataUrl": "https://trial.proclinicth.com/admin/product-group/3"
+    }
+  ],
+  "tabs": [],
+  "modals": [
+    {
+      "trigger": "เพิ่มข้อมูล",
+      "title": "เพิ่มกลุ่มสินค้า",
+      "fields": [
+        {
+          "name": "group_name",
+          "type": "text",
+          "label": "ชื่อกลุ่มสินค้า"
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ประเภทกลุ่มสินค้า"
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ประเภทกลุ่มสินค้า"
+        },
+        {
+          "name": "product-search",
+          "type": "text",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        },
+        {
+          "name": "temp_product_id[]",
+          "type": "checkbox",
+          "label": ""
+        }
+      ],
+      "apisTriggered": [
+        {
+          "method": "GET",
+          "url": "/admin/api/v2/product?q=&product_type=%E0%B8%A2%E0%B8%B2&is_takeaway_product=1",
+          "status": 200,
+          "postData": null,
+          "response": {
+            "_keys": [
+              "current_page",
+              "data",
+              "first_page_url",
+              "from",
+              "last_page",
+              "last_page_url",
+              "links",
+              "next_page_url",
+              "path",
+              "per_page",
+              "prev_page_url",
+              "to",
+              "total"
+            ],
+            "_preview": "{\"current_page\":1,\"data\":[{\"id\":9142,\"clinic_id\":23,\"product_category_id\":267,\"product_name\":\"Acetin\",\"unit_name\":\"amp.\",\"price\":\"1000.00\",\"is_including_vat\":0,\"product_type\":\"ยา\",\"minumum_qty\":null,\"is_df\":0,\"status\":1,\"created_at\":\"2025-05-27T23:33:20.000000Z\",\"updated_at\":\"2025-11-12T08:20:17.000000Z\",\"deleted_at\":null,\"alert_day_before_expire\":90,\"alert_qty_before_out_of_stock\":10,\"alert_qty_before_max_stock\":100,\"product_code\":\"6\",\"product_sub_category_id\":null,\"service_type\":null,\"is_vat_included\":0,\"price_incl_vat\":null,\"is_claim_drug_discount\":0,\"stock_location\":null,\"is_takeaway_product\":1,\"product_type_text\":\"ยา\",\"total_price\":\"1000.00\",\"product_category\":{\"id\":267,\"clinic_id\":23,\"category_name\":\"ยาฉีด\",\"created_at\":\"2024-09-10T17:34:50.000000Z\",\"updated_at\":\"2024-09-10T17:34:50.000000Z\",\"deleted_at\":null},\"product_stock\":null,\"product_sub_category\":null,\"product_label\":{\"id\":32,\"product_id\":9142,\"generic_name\":null,\"indications\":null,\"dosage_amount\":null,\"dosage_unit\":null,\""
+          }
+        }
+      ]
+    }
+  ],
+  "api": {
+    "onPageLoad": [
+      {
+        "method": "GET",
+        "url": "/admin/api/stat",
+        "status": 200,
+        "postData": null,
+        "response": {
+          "today_appointment_count": 6,
+          "online_appointment_count": 0,
+          "stock_transfer": 1,
+          "stock_receiving": 1,
+          "central_stock_transfer": 5,
+          "central_stock_withdrawal": 10,
+          "central_stock_receiving": 0
+        }
+      }
+    ],
+    "onInteraction": []
+  },
+  "dataModel": {
+    "type": {
+      "type": "enum/fk",
+      "count": 2,
+      "sample": [
+        "ยากลับบ้าน",
+        "สินค้าสิ้นเปลือง"
+      ]
+    },
+    "product_group_id": {
+      "type": "foreign_key",
+      "relatedEntity": "product_group",
+      "value": ""
+    }
+  },
+  "connections": {
+    "linksTo": [
+      {
+        "href": "https://trial.proclinicth.com/admin",
+        "text": ""
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer/search",
+        "text": "ค้นหาลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment/coming",
+        "text": "นัดหมายวันนี้6"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment",
+        "text": "จองนัดหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/membership",
+        "text": "บัตรสมาชิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/deposit",
+        "text": "จ่ายมัดจำ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer/create",
+        "text": "เพิ่มลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer",
+        "text": "รายการลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/treatment",
+        "text": "ประวัติการรักษา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/remaining-course/create",
+        "text": "เพิ่มคอร์สคงเหลือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/remaining-course",
+        "text": "รายการคอร์สคงเหลือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/quotation/create",
+        "text": "ทำใบเสนอราคา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/quotation",
+        "text": "รายการใบเสนอราคา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale/create",
+        "text": "ขายคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/online-sale",
+        "text": "ขายออนไลน์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale",
+        "text": "รายการขาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale-insurance-claim",
+        "text": "รายการเบิกประกัน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer-product-change/create",
+        "text": "เปลี่ยนสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/course/create",
+        "text": "เพิ่มคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/course",
+        "text": "รายการคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/promotion",
+        "text": "โปรโมชัน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/coupon",
+        "text": "คูปองส่วนลด"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/voucher",
+        "text": "Voucher"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/doctor",
+        "text": "ค่ามือแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/assistance?position=%E0%B8%9C%E0%B8%B9%E0%B9%89%E0%B8%8A%E0%B9%88%E0%B8%A7%E0%B8%A2%E0%B9%81%E0%B8%9E%E0%B8%97%E0%B8%A2%E0%B9%8C",
+        "text": "ค่ามือผู้ช่วยแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/df-group",
+        "text": "ค่ามือกลุ่ม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/expense",
+        "text": "รายจ่ายอื่นๆ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/schedule/doctor",
+        "text": "ตารางแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/schedule/employee",
+        "text": "ตารางพนักงาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/treatment",
+        "text": "เอกสารการรักษา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/chart",
+        "text": "Chart"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/consent",
+        "text": "ใบยินยอม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/sale-cancelation",
+        "text": "เอกสารยกเลิกการขาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-certificate",
+        "text": "ใบรับรองแพทย์ 5 โรค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-certificate-for-driver-license",
+        "text": "ใบรับรองแพทย์สำหรับอนุญาตขับรถ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-opinion",
+        "text": "ใบรับรองแพทย์ลาป่วย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/physical-therapy-certificate",
+        "text": "ใบรับรองกายภาพบำบัด"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/thai-traditional-medicine-medical-certificate",
+        "text": "ใบรับรองแพทย์แผนไทย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/chinese-traditional-medicine-medical-certificate",
+        "text": "ใบรับรองแพทย์แผนจีน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/patient-referral",
+        "text": "ใบส่งตัวผู้ป่วย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/fit-to-fly",
+        "text": "ใบรับรองแพทย์ Fit to fly"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medicine-label",
+        "text": "ฉลากยา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/order/create",
+        "text": "นำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale/vendor/create",
+        "text": "ขายสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-change/create",
+        "text": "ปรับสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-transfer",
+        "text": "โอนสินค้าข้ามคลัง1"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch-stock-withdrawal/create",
+        "text": "เบิกสินค้าจากสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-withdrawal",
+        "text": "เบิกสินค้าจากคลังกลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-receiving",
+        "text": "รับสินค้าเข้าสาขา1"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock",
+        "text": "สต็อคสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/order",
+        "text": "รายการนำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch-stock-withdrawal",
+        "text": "รายการเบิกสินค้าจากสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-movement",
+        "text": "รายการเคลื่อนไหวสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/order/create",
+        "text": "นำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-change/create",
+        "text": "ปรับสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-transfer",
+        "text": "โอนสินค้าข้ามคลัง5"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-withdrawal",
+        "text": "คำขอเบิกสินค้า10"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-receiving",
+        "text": "รับสินค้าเข้าคลังกลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock",
+        "text": "สต็อคสินค้ากลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/order",
+        "text": "รายการนำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-movement",
+        "text": "รายการเคลื่อนไหวสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch",
+        "text": "ตั้งค่าสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/holiday",
+        "text": "ตั้งค่าวันหยุดสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-instrument",
+        "text": "เครื่องหัตถการ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/google-calendar/setting",
+        "text": "ตั้งค่า Google Calendar"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/product",
+        "text": "จัดการสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/default-product-unit",
+        "text": "จัดการหน่วยสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/product-group",
+        "text": "จัดการกลุ่มสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/permission-group",
+        "text": "ตำแหน่งและสิทธิ์การใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/doctor",
+        "text": "แพทย์ & ผู้ช่วยแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/user",
+        "text": "พนักงาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df-group",
+        "text": "จัดการกลุ่มค่ามือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/wallet",
+        "text": "จัดการกระเป๋าเงิน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock",
+        "text": "ตั้งค่าคลังสินค้ากลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/report",
+        "text": "รายงานสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/clinic-report",
+        "text": "รายงานคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/crm-insight",
+        "text": "วิเคราะห์พฤติกรรมลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/smart-audience",
+        "text": "วิเคราะห์กลุ่มเป้าหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/revenue-analysis-by-procedure",
+        "text": "วิเคราะห์รายรับตามหัตถการ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment-analysis",
+        "text": "วิเคราะห์รายการนัดหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment-analysis/user",
+        "text": "วิเคราะห์รายการนัดหมายรายผู้ใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/payment-summary-analysis",
+        "text": "วิเคราะห์สรุปบัญชีรับชำระเงิน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/27",
+        "text": "สาขา ชลบุรี"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/28",
+        "text": "สาขา พระราม9"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/37",
+        "text": "สาขา ราชพฤกษ์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/38",
+        "text": "สาขา สุขุมวิท"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/60",
+        "text": "สาขา สยาม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/clinic",
+        "text": "ตั้งค่าคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/setting",
+        "text": "ตั้งค่าผู้ใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/info",
+        "text": "แพ็กเกจโปรคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-lang/th",
+        "text": "ภาษาไทย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-lang/en",
+        "text": "English"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/logout",
+        "text": "ออกจากระบบ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/assistance",
+        "text": "ค่ามือผู้ช่วยแพทย์"
+      }
+    ],
+    "formsPostTo": [
+      {
+        "action": "/admin/product-group",
+        "method": "post"
+      },
+      {
+        "action": "/admin/product-group",
+        "method": "post"
+      }
+    ],
+    "foreignKeys": [
+      {
+        "field": "product_group_id",
+        "entity": "product_group"
+      }
+    ]
+  },
+  "businessLogic": [],
+  "validation": [
+    {
+      "form": "form-create-product-group",
+      "field": "group_name",
+      "message": "Please fill out this field.",
+      "source": "runtime"
+    },
+    {
+      "form": "form-create-product-group",
+      "field": "group_name",
+      "message": "Please fill out this field.",
+      "source": "runtime"
+    },
+    {
+      "form": "form-edit-product-group",
+      "field": "group_name",
+      "message": "Please fill out this field.",
+      "source": "runtime"
+    },
+    {
+      "form": "form-edit-product-group",
+      "field": "group_name",
+      "message": "Please fill out this field.",
+      "source": "runtime"
+    },
+    {
+      "form": "form-create-product-group",
+      "field": "group_name",
+      "label": "ชื่อกลุ่มสินค้า",
+      "rules": {
+        "required": true
+      },
+      "source": "html"
+    },
+    {
+      "form": "form-edit-product-group",
+      "field": "group_name",
+      "label": "ชื่อกลุ่มสินค้า",
+      "rules": {
+        "required": true
+      },
+      "source": "html"
+    }
+  ],
+  "styles": {
+    "body": {
+      "bg": "rgb(245, 245, 245)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "0px",
+      "borderRadius": "0px"
+    },
+    "sidebar": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "67px 0px 0px",
+      "borderRadius": "0px"
+    },
+    "header": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "12px 0px",
+      "borderRadius": "0px"
+    },
+    "table": {
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(33, 37, 41)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "0px",
+      "borderRadius": "0px"
+    },
+    "card": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "0px",
+      "borderRadius": "8px"
+    },
+    "btnPrimary": {
+      "bg": "rgb(46, 196, 182)",
+      "color": "rgb(255, 255, 255)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "8px 16px",
+      "borderRadius": "0px 8px 8px 0px"
+    },
+    "formControl": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "8px 15px 8px 35px",
+      "borderRadius": "8px 0px 0px 8px"
+    }
+  },
+  "jsInternals": {
+    "functions": [],
+    "eventHandlers": [
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      }
+    ],
+    "inlineLogic": []
+  },
+  "hiddenData": [
+    {
+      "name": "_method",
+      "value": "PUT",
+      "form": "form-edit-product-group"
+    },
+    {
+      "name": "product_group_id",
+      "value": "",
+      "form": "form-edit-product-group"
+    }
+  ],
+  "behaviorTest": [
+    {
+      "form": "form-create-product-group",
+      "fieldsAttempted": 0,
+      "validationErrors": [
+        {
+          "message": "Please fill out this field.",
+          "field": "group_name",
+          "label": "",
+          "fieldSelector": "[name=\"group_name\"]",
+          "type": "html5"
+        },
+        {
+          "message": "Please fill out this field.",
+          "field": "group_name",
+          "label": "",
+          "fieldSelector": "[name=\"group_name\"]",
+          "type": "html5"
+        }
+      ],
+      "apisCalled": [],
+      "success": false
+    },
+    {
+      "form": "form-edit-product-group",
+      "fieldsAttempted": 0,
+      "validationErrors": [
+        {
+          "message": "Please fill out this field.",
+          "field": "group_name",
+          "label": "",
+          "fieldSelector": "[name=\"group_name\"]",
+          "type": "html5"
+        },
+        {
+          "message": "Please fill out this field.",
+          "field": "group_name",
+          "label": "",
+          "fieldSelector": "[name=\"group_name\"]",
+          "type": "html5"
+        }
+      ],
+      "apisCalled": [],
+      "success": false
+    }
+  ],
+  "raw": {}
+}
