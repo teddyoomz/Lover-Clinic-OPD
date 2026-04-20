@@ -3,29 +3,52 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { width: 300px; padding: 16px; font-family: sans-serif; background: #111; color: #eee; }
-    h3 { margin: 0 0 12px; color: #f87171; font-size: 14px; }
-    label { display: block; margin-bottom: 4px; font-size: 12px; color: #aaa; }
-    input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #333; border-radius: 6px; background: #222; color: #eee; box-sizing: border-box; font-size: 13px; }
-    button { width: 100%; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
-    #save { background: #dc2626; color: white; margin-bottom: 6px; }
-    #save:hover { background: #b91c1c; }
-    #sync { background: #333; color: #eee; }
+    body { width: 340px; padding: 16px; font-family: sans-serif; background: #111; color: #eee; }
+    h3 { margin: 0 0 8px; font-size: 14px; }
+    h3.prod { color: #f87171; }
+    h3.trial { color: #fbbf24; }
+    label { display: block; margin-bottom: 4px; font-size: 11px; color: #aaa; }
+    input { width: 100%; padding: 7px; margin-bottom: 8px; border: 1px solid #333; border-radius: 6px; background: #222; color: #eee; box-sizing: border-box; font-size: 12px; }
+    button { width: 100%; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; }
+    #saveProd { background: #dc2626; color: white; margin-bottom: 6px; }
+    #saveProd:hover { background: #b91c1c; }
+    #saveTrial { background: #f59e0b; color: white; margin-bottom: 6px; }
+    #saveTrial:hover { background: #d97706; }
+    #sync { background: #333; color: #eee; margin-top: 8px; }
     #sync:hover { background: #444; }
+    .section { border: 1px solid #333; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+    .section.prod { border-color: rgba(220,38,38,0.3); }
+    .section.trial { border-color: rgba(245,158,11,0.3); }
     #status { margin-top: 10px; font-size: 12px; min-height: 16px; }
     .ok { color: #4ade80; }
     .err { color: #f87171; }
+    .hint { font-size: 10px; color: #666; margin-top: -4px; margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <h3>ProClinic Credentials</h3>
-  <label>Origin URL</label>
-  <input id="origin" placeholder="https://proclinicth.com">
-  <label>Email</label>
-  <input id="email" type="email" placeholder="demo@proclinic.com">
-  <label>Password</label>
-  <input id="password" type="password" placeholder="••••••">
-  <button id="save">บันทึก Credentials</button>
+  <div class="section prod">
+    <h3 class="prod">Production — proclinicth.com</h3>
+    <label>Origin URL</label>
+    <input id="originProd" placeholder="https://proclinicth.com">
+    <label>Email</label>
+    <input id="emailProd" type="email" placeholder="demo@proclinic.com">
+    <label>Password</label>
+    <input id="passwordProd" type="password" placeholder="••••••">
+    <button id="saveProd">บันทึก Production</button>
+  </div>
+
+  <div class="section trial">
+    <h3 class="trial">Trial — trial.proclinicth.com</h3>
+    <p class="hint">Backend dashboard (dev) uses trial creds — เก็บแยกจาก production</p>
+    <label>Origin URL</label>
+    <input id="originTrial" placeholder="https://trial.proclinicth.com">
+    <label>Email</label>
+    <input id="emailTrial" type="email" placeholder="demo@proclinic.com">
+    <label>Password</label>
+    <input id="passwordTrial" type="password" placeholder="••••••">
+    <button id="saveTrial">บันทึก Trial</button>
+  </div>
+
   <button id="sync">Sync Cookies ตอนนี้</button>
   <div id="status"></div>
   <script src="popup.js"></script>
