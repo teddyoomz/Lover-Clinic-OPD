@@ -4865,3 +4865,138 @@ export async function migrateMasterProductsToBe() {
 export async function migrateMasterCoursesToBeV2() {
   return runMasterToBeMigration({ sourceType: 'courses', targetCol: coursesCol, targetDocFn: courseDoc, mapper: mapMasterToCourse });
 }
+
+// ─── Bank Accounts CRUD (Phase 12.5) ────────────────────────────────────────
+
+const bankAccountsCol = () => collection(db, ...basePath(), 'be_bank_accounts');
+const bankAccountDoc = (id) => doc(db, ...basePath(), 'be_bank_accounts', String(id));
+
+export async function getBankAccount(bankAccountId) {
+  const id = String(bankAccountId || '');
+  if (!id) return null;
+  const snap = await getDoc(bankAccountDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listBankAccounts() {
+  const snap = await getDocs(bankAccountsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
+    return (a.bankName || '').localeCompare(b.bankName || '', 'th');
+  });
+  return items;
+}
+
+export async function saveBankAccount(bankAccountId, data) {
+  const id = String(bankAccountId || '');
+  if (!id) throw new Error('bankAccountId required');
+  const { normalizeBankAccount, validateBankAccount } = await import('./bankAccountValidation.js');
+  const normalized = normalizeBankAccount(data);
+  const fail = validateBankAccount(normalized);
+  if (fail) throw new Error(fail[1]);
+
+  if (normalized.isDefault) {
+    const all = await getDocs(bankAccountsCol());
+    const batch = writeBatch(db);
+    for (const d of all.docs) {
+      if (d.id !== id && d.data().isDefault === true) {
+        batch.update(bankAccountDoc(d.id), { isDefault: false, updatedAt: new Date().toISOString() });
+      }
+    }
+    await batch.commit();
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(bankAccountDoc(id), {
+    ...normalized,
+    bankAccountId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteBankAccount(bankAccountId) {
+  const id = String(bankAccountId || '');
+  if (!id) throw new Error('bankAccountId required');
+  await deleteDoc(bankAccountDoc(id));
+}
+
+// ─── Expense Categories CRUD (Phase 12.5) ───────────────────────────────────
+
+const expenseCategoriesCol = () => collection(db, ...basePath(), 'be_expense_categories');
+const expenseCategoryDoc = (id) => doc(db, ...basePath(), 'be_expense_categories', String(id));
+
+export async function listExpenseCategories() {
+  const snap = await getDocs(expenseCategoriesCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
+  return items;
+}
+
+export async function saveExpenseCategory(categoryId, data) {
+  const id = String(categoryId || '');
+  if (!id) throw new Error('categoryId required');
+  const { normalizeExpenseCategory, validateExpenseCategory } = await import('./expenseCategoryValidation.js');
+  const normalized = normalizeExpenseCategory(data);
+  const fail = validateExpenseCategory(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(expenseCategoryDoc(id), {
+    ...normalized,
+    categoryId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteExpenseCategory(categoryId) {
+  const id = String(categoryId || '');
+  if (!id) throw new Error('categoryId required');
+  await deleteDoc(expenseCategoryDoc(id));
+}
+
+// ─── Expenses CRUD (Phase 12.5) ─────────────────────────────────────────────
+
+const expensesCol = () => collection(db, ...basePath(), 'be_expenses');
+const expenseDoc = (id) => doc(db, ...basePath(), 'be_expenses', String(id));
+
+export async function getExpense(expenseId) {
+  const id = String(expenseId || '');
+  if (!id) return null;
+  const snap = await getDoc(expenseDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listExpenses({ startDate, endDate, categoryId, branchId } = {}) {
+  const snap = await getDocs(expensesCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (startDate) items = items.filter(e => (e.date || '') >= startDate);
+  if (endDate) items = items.filter(e => (e.date || '') <= endDate);
+  if (categoryId) items = items.filter(e => e.categoryId === categoryId);
+  if (branchId) items = items.filter(e => e.branchId === branchId);
+  items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return items;
+}
+
+export async function saveExpense(expenseId, data, opts = {}) {
+  const id = String(expenseId || '');
+  if (!id) throw new Error('expenseId required');
+  const { normalizeExpense, validateExpense } = await import('./expenseValidation.js');
+  const normalized = normalizeExpense(data);
+  const fail = validateExpense(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(expenseDoc(id), {
+    ...normalized,
+    expenseId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteExpense(expenseId) {
+  const id = String(expenseId || '');
+  if (!id) throw new Error('expenseId required');
+  await deleteDoc(expenseDoc(id));
+}

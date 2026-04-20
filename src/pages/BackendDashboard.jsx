@@ -51,6 +51,7 @@ import StaffTab from '../components/backend/StaffTab.jsx';
 import DoctorsTab from '../components/backend/DoctorsTab.jsx';
 import ProductsTab from '../components/backend/ProductsTab.jsx';
 import CoursesTab from '../components/backend/CoursesTab.jsx';
+import FinanceMasterTab from '../components/backend/FinanceMasterTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -367,6 +368,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <ProductsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'courses' ? (
           <CoursesTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'finance-master' ? (
+          <FinanceMasterTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </div>
 

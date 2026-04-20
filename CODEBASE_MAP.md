@@ -1846,4 +1846,26 @@ Evenly splits an amount across ≤5 sellers. Last seller absorbs rounding so sum
 
 Tests: 2600 → 2644 (+44). Build clean.
 
+---
+
+## Phase 12.5 — Finance master (bank accounts + expense categories + expenses)
+
+ProClinic `/admin/bank-account` + `/admin/expense-category` returned 0-form responses (inline in ProClinic forms, no dedicated page). ProClinic `/admin/expense` scan confirms amount/category/doc_id/user_id/image/note shape. We model 3 separate canonical entities in OUR Firestore.
+
+**New files:**
+- `src/lib/bankAccountValidation.js` — bankName*, accountNumber* (digits only after normalize — dashes/spaces stripped), accountName, accountType enum (savings/current/fixed/other), branchName, branchId, isDefault (only one), status, note. `generateBankAccountId()` → `BANK-*`.
+- `src/lib/expenseCategoryValidation.js` — name*, note, status. `generateExpenseCategoryId()` → `EXPCAT-*`.
+- `src/lib/expenseValidation.js` — expenseName*, amount (≥0, strict >0), date (YYYY-MM-DD, strict required), categoryId + categoryName (denorm for report speed), docId, userId, hasUserId, branchId, imageUrl, imagePath, note, status (active|void). `generateExpenseId()` → `EXP-*`.
+- `src/components/backend/FinanceMasterTab.jsx` — combined tab with 3 subtabs (bank / category / expense). Each section uses an inline add form + row list with edit/delete. No separate FormModal (fields ≤8 each, inline is faster UX). Expense submit uses strict validator.
+- `tests/phase12-finance-master.test.js` — 42 tests (BA1-9, BN1-3, BG1-2, EC1-6, ECN1-2, EX1-14, EXN1-4, RE1-2).
+
+**Edits:**
+- `src/lib/backendClient.js` — `listBankAccounts/saveBankAccount/deleteBankAccount/getBankAccount`, `listExpenseCategories/saveExpenseCategory/deleteExpenseCategory`, `listExpenses/saveExpense/deleteExpense/getExpense`. `saveExpense(id, data, {strict})` pattern matches saveCustomer/createDeposit. `saveBankAccount` enforces single-default via batched write.
+- `src/components/backend/nav/navConfig.js` — master section +1 (finance-master). Master now 12 items.
+- `src/pages/BackendDashboard.jsx` — route `finance-master` tab.
+- `firestore.rules` — be_bank_accounts + be_expense_categories + be_expenses match blocks.
+- Nav tests updated 11 → 12.
+
+Tests: 2644 → 2686 (+42). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

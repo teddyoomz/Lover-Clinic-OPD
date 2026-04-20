@@ -158,6 +158,17 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 12.5 Finance Master (bank accounts + expense cats + expenses) ──
+      match /be_bank_accounts/{bankAccountId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_expense_categories/{categoryId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_expenses/{expenseId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();
