@@ -1951,4 +1951,29 @@ Two new report aggregators + UI tabs, rounding out the Phase 12 financial report
 
 Tests: 2760 → 2793 (+33). Build clean.
 
+---
+
+## Phase 12.9 — be_sales validator (101-field reconcile, 5 sellers, 3 payments)
+
+Triangle (Rule F): `detailed-adminsalecreate.json` captures ~90 unique ProClinic field names. Validator reconciles OUR schema to every critical invariant: 5-seller percent+total reconciliation, 3-payment-method total reconciliation, deposit+wallet consistency, discount bounds, status+cancel+refund gates, items-array completeness.
+
+**New files:**
+- `src/lib/saleValidation.js` — `validateSaleStrict(form)` returns `[field, msg]` or null. `normalizeSale(form)` caps sellers at 5, payments at 3, drops zero-amount payments, supports legacy snake_case seller/payment keys. `emptySaleForm()` seeds full schema.
+- `tests/saleValidation.test.js` — 44 adversarial tests (SV1-38, SN1-6). Covers every invariant + edge cases (course-only item, 5 seller percent split, percent-discount > 100, refundValue ≤ totalPaid, etc.).
+
+**Invariants enforced (strict mode):**
+- SA-1 customerId required
+- SA-2 items[] non-empty
+- SA-3 each item has productId XOR courseId + qty > 0 + price ≥ 0
+- SA-4 5-seller rule: ≤ 5 entries; no dup; sum(percent)==100 AND sum(total)==netTotal ±0.01 when any
+- SA-5 3-payment rule: ≤ 3 methods; each method non-empty; sum(amount)==totalPaidAmount ±0.01
+- SA-6 usingDeposit ⇒ deposit > 0; usingWallet ⇒ customerWalletId + credit > 0
+- SA-7 discountType ∈ {'', 'percent', 'baht'}; percent ≤ 100
+- SA-8 status='cancelled' requires cancelDetail + cancelledAt
+- SA-9 refundValue ≤ totalPaidAmount
+
+**Scope decision:** validator exported as a NEW strict gate — existing saveBackendSale in backendClient.js stays unchanged (2000+ LOC refactor deferred to a follow-up task). UI callers opt in by importing `validateSaleStrict` directly. This pattern matches saveCustomer/createDeposit/saveExpense from 12.3/12.4/12.5 — non-strict by default, strict on demand.
+
+Tests: 2793 → 2837 (+44). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).
