@@ -1596,3 +1596,49 @@ Two-type holiday entity (`specific` dates + `weekly` day-of-week) with pure `isD
 - **H**: OUR canonical; pure `isDateHoliday` helper ready for 11.8 wiring into scheduleFilterUtils.js
 
 Tests: 2251 → 2293 PASS (+42).
+
+---
+
+## Phase 11.6 Branches CRUD (2026-04-20)
+
+Core 13 branch fields + isDefault flag + unique-default enforcement via writeBatch. 7-day opening schedule deferred to Phase 13 (pairs with staff schedule + booking).
+
+**Schema (`be_branches`):**
+- `branchId` — `BR-{ts}-{8hex}`
+- Identification: `name` (required, ≤ 120), `nameEn`
+- Contact: `phone` (required, regex `0[0-9]{8,10}`), `website` (optional, must be http(s)://)
+- Legal: `licenseNo`, `taxId`
+- Address: `address` (≤ 500), `addressEn` (≤ 500 — for English-doc printing)
+- Map: `googleMapUrl` (http(s)://), `latitude` (-90..90), `longitude` (-180..180)
+- Our: `isDefault` boolean, `status` (ใช้งาน/พักใช้งาน), `note` (≤ 200)
+- Timestamps
+
+**Unique-default invariant**: when saving a branch with `isDefault: true`, `saveBranch` clears `isDefault` on all other branches in a `writeBatch` — so exactly one default exists at a time. Prevents ambiguity for future "use default branch" picker defaults.
+
+**New files:**
+- `src/lib/branchValidation.js` — validate (Thai phone regex strict, URL regex for website/map, lat/lng range, length bounds), normalize (trim + strip phone whitespace/dashes + coerce numbers), empty form, 4 frozen consts
+- `src/components/backend/BranchFormModal.jsx` — 3xl modal (wide), 13 inputs arranged in grid + isDefault checkbox; explicit Phase-13 note at bottom about deferred hours
+- `src/components/backend/BranchesTab.jsx` — 8th shell reuse; card shows name + nameEn + default badge (⭐) + phone + address snippet + Google Maps link
+
+**Edits:**
+- `src/lib/backendClient.js` — +4 CRUD fns; sort order is isDefault-first → newest-first; saveBranch uses writeBatch to enforce default-uniqueness
+- `src/pages/BackendDashboard.jsx` — swap ComingSoon → BranchesTab
+- `tests/phase11-master-data-scaffold.test.jsx` — R5 updated + mock
+
+**New tests — `tests/branch.test.jsx` — 34 adversarial:**
+- BV1-BV15 validator (minimal, null/array, blank name, bounds, non-string, missing phone, Thai phone regex 7/8/9/10/11-digit boundaries + no-0 prefix reject, phone accepts spaces/dashes, website URL validation, map URL validation, lat -91/91/boundaries/text, lng -181/181, address+addressEn length, status enum, isDefault boolean)
+- BN1-BN4 normalizer (trim + strip phone chars, empty→null, string→number, defaults + truthy isDefault)
+- E1-E2 Rule E import-only greps
+- BT1-BT6 Tab (empty, card with phone/default badge, search nameEn+taxId, status filter, delete confirm YES, load error)
+- BM1-BM7 Modal (create/edit, validation block, BR crypto id, bad phone surfaces, id preserve, ESC)
+
+**Rule compliance:**
+- **C1**: 8th shell reuse
+- **C2**: BR crypto id
+- **C3**: justified: distinct address/contact/geo concern
+- **D**: 34 adversarial, esp. phone regex 5-point boundary
+- **E**: E1/E2 greps
+- **F**: Triangle captured 18+ ProClinic fields; shipped core 13 with lat/lng + bilingual; 7-day schedule deferred with explicit note
+- **H**: OUR canonical; unique-default enforcement is OUR invariant
+
+Tests: 2293 → 2327 PASS (+34).

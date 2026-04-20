@@ -4161,3 +4161,72 @@ export async function deleteHoliday(holidayId) {
   if (!id) throw new Error('holidayId required');
   await deleteDoc(holidayDoc(id));
 }
+
+// ─── Branch CRUD (Phase 11.6 Master Data Suite) ────────────────────────────
+// Core branch record (identification/contact/address/map + isDefault + status).
+// 7-day opening-hours deferred to Phase 13.
+
+const branchesCol = () => collection(db, ...basePath(), 'be_branches');
+const branchDoc = (id) => doc(db, ...basePath(), 'be_branches', String(id));
+
+export async function getBranch(branchId) {
+  const id = String(branchId || '');
+  if (!id) return null;
+  const snap = await getDoc(branchDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listBranches() {
+  const snap = await getDocs(branchesCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Default branch first, then newest-first.
+  items.sort((a, b) => {
+    if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveBranch(branchId, data) {
+  const id = String(branchId || '');
+  if (!id) throw new Error('branchId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeBranch, validateBranch } = await import('./branchValidation.js');
+
+  const normalized = normalizeBranch(data);
+  const fail = validateBranch(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  // If this branch is being set as default, clear isDefault on all others so
+  // only ONE default exists at a time.
+  if (normalized.isDefault) {
+    const all = await getDocs(branchesCol());
+    const batch = writeBatch(db);
+    for (const d of all.docs) {
+      if (d.id !== id && d.data().isDefault === true) {
+        batch.update(branchDoc(d.id), { isDefault: false, updatedAt: new Date().toISOString() });
+      }
+    }
+    await batch.commit();
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(branchDoc(id), {
+    ...normalized,
+    branchId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteBranch(branchId) {
+  const id = String(branchId || '');
+  if (!id) throw new Error('branchId required');
+  await deleteDoc(branchDoc(id));
+}
