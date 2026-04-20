@@ -125,16 +125,21 @@ functions/index.js             — Cloud Function: onPatientSubmit → FCM push
 
 ## 📋 Onboarding สำหรับ Claude แชทใหม่
 
-⭐ **ต่องานจากแชทก่อน → อ่าน `SESSION_HANDOFF.md` เป็นอันดับแรก** (next action ชัดเจน)
+⭐ **ต่องานจากแชทก่อน → อ่าน `.agents/active.md` + `SESSION_HANDOFF.md` เป็นอันดับแรก** (next action ชัดเจน)
 
 ลำดับ:
-1. **Memory `SESSION_HANDOFF.md`** ⭐ — สถานะล่าสุด + commits + next action
-2. **ไฟล์นี้** — stack / paths / env
-3. **`.claude/rules/01-04`** — กฎเหล็ก (auto-load ตาม context)
-4. **`CODEBASE_MAP.md`** — เฉพาะ section ที่เกี่ยวกับงาน
-5. **Memory `project_phase*.md`** — ถ้าทำ feature ใน phase นั้น
+1. **`.agents/active.md`** ⭐ — hot state: current focus, blockers, next action (update ทุกครั้งที่ focus เปลี่ยน)
+2. **Memory `SESSION_HANDOFF.md`** — cross-session state + commit history + deploy status
+3. **ไฟล์นี้** — stack / paths / env / iron-clad rules summary
+4. **`.claude/rules/00-session-start.md`** ⭐ — character + all iron-clad rules A-H + H-bis + past violations (V1-V9)
+5. **`.claude/rules/01-04`** — detail rules (auto-load ตาม context)
+6. **`.agents/sessions/` latest checkpoint** — most recent `YYYY-MM-DD-*.md` = last resumable state (includes resume prompt)
+7. **`.agents/topics/service-overview.md`** — stack + env + Firestore paths + Phase status + audit tier table
+8. **`CODEBASE_MAP.md`** — เฉพาะ section ที่เกี่ยวกับงาน
+9. **Memory `project_phase*.md` / `project_proclinic_full_parity_audit_v5.md`** — ถ้าทำ feature ใน phase นั้น
 
-> Memory: `~/.claude/projects/F--LoverClinic-app/memory/` (ดู `MEMORY.md` index)
+> Memory: `~/.claude/projects/F--LoverClinic-app/memory/` (ดู `MEMORY.md` index) — auto-loaded ทุก session
+> `.agents/` layer: installed 2026-04-20 via agent-context-kit. Scaffold policy ใน `.agents/AGENTS.md`. Iron-clad rules ใน `.claude/rules/` ชนะเสมอเมื่อ conflict.
 
 ---
 
