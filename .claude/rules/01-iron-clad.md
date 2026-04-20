@@ -8,12 +8,25 @@
 ### B. Probe-Deploy-Probe สำหรับ `firestore:rules`
 ทุกครั้งที่จะ `firebase deploy --only firestore:rules` — ไม่มีข้อยกเว้น:
 1. `curl -X POST .../chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-2. `curl -X PATCH .../pc_appointments/test?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-3. `firebase deploy --only firestore:rules`
-4. รัน probe 1+2 ซ้ำ → ถ้า 403 = revert deploy ทันที
-5. ลบ probe docs ทิ้ง (test-probe-* ใน chat_conversations ทำให้ `useChatUnread` เด้งเสียงไม่หยุด)
+2. `curl -X PATCH .../pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
+3. `curl -X PATCH .../clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
+4. `curl -X PATCH .../clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
+5. `firebase deploy --only firestore:rules`
+6. รัน probe 1-4 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+7. ลบ probe docs ทิ้ง + PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field (sentinel ไม่ให้ปนกับ cookies จริง)
 
-**Why:** Webhook (`api/webhook/facebook.js` + `line.js`) + sync (`api/proclinic/courses.js`) เขียน Firestore ผ่าน REST **โดยไม่มี auth** — Vercel serverless ไม่มี `firebase-admin` SDK ในเส้นนี้. Rules สำหรับ `chat_conversations` (create/update) + `pc_*` (write) ต้องเปิดไว้จนกว่าจะมี service-account helper ใน `api/_lib/`. ปิดโดยไม่มี helper = แชท+ปฏิทินตายทันที.
+**Why:** Multiple serverless/extension paths เขียน Firestore ผ่าน REST **โดยไม่มี Firebase auth** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
+- `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)
+- `pc_*` collection — ProClinic mirror sync (`api/proclinic/courses.js` + อื่นๆ)
+- `clinic_settings/proclinic_session` + `_trial` — Cookie Relay Chrome Extension (PATCH via REST ตรง, ไม่มี Bearer token)
+
+ถ้า probe ตัวใดตัวหนึ่ง 403 = ลืมเปิด rule = ระบบพัง. Probe list นี้ต้องเพิ่มขึ้นเมื่อมี unauth-write path ใหม่. Deploy ทุกครั้ง = อ่าน list นี้ก่อน.
+
+**V1 + V9 anti-examples**:
+- V1 (2026-04-19, deploy `8fc2ed9`) — ทับ Console rule ที่เปิด `chat_conversations` + `pc_*` → chat + ปฏิทินตาย
+- V9 (2026-04-20, deploy `5636eb4` = Phase 11.2) — **ทับ Console rule ที่เปิด `clinic_settings/proclinic_session*` → cookie-relay extension เขียน cookie ไม่ได้ → frontend "ทดสอบการเชื่อมต่อ" fail ทุกครั้ง** (V1 ซ้ำรอบ 2 เพราะ probe list ขาด 2 endpoints). Fix: commit `34ef493` เพิ่ม explicit rules + probe list extended.
+
+**Pattern เข้าใจให้ชัด**: ทุกครั้งที่ `firebase deploy --only firestore:rules` = file-in-repo ทับ live-rules-on-Firebase 100%. Console-side edit ไม่ reflect ใน file = หายหลัง deploy. Fix: ถ้าเห็น Console edit → copy กลับมาลง file ก่อน → ค่อย deploy.
 
 ### C. Anti-Vibe-Code — AI ฉลาด แต่คนใช้ต้องฉลาดกว่า AI
 ห้ามละเมิด 3 failure modes ของ vibe-code:
