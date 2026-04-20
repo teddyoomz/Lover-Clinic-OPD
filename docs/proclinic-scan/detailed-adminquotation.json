@@ -1,0 +1,26 @@
+{
+  "url": "https://trial.proclinicth.com/admin/quotation",
+  "totalForms": 1,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/quotation",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

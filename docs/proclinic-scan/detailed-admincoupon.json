@@ -1,0 +1,256 @@
+{
+  "url": "https://trial.proclinicth.com/admin/coupon",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/coupon",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/coupon",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "coupon_name",
+          "type": "text",
+          "label": "ชื่อคูปอง",
+          "required": true,
+          "placeholder": "กรอกชื่อคูปอง",
+          "isSelect2": false
+        },
+        {
+          "name": "coupon_code",
+          "type": "text",
+          "label": "โค้ดส่วนลด",
+          "required": true,
+          "placeholder": "กรอกโค้ดส่วนลด",
+          "isSelect2": false
+        },
+        {
+          "name": "discount",
+          "type": "number",
+          "label": "ส่วนลด",
+          "required": true,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "max_qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_limit_per_user",
+          "type": "checkbox",
+          "label": "จำกัดการใช้งานคนละ 1 ครั้ง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันเริ่มต้น",
+          "required": true,
+          "placeholder": "เลือกวันเริ่มต้น",
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันสิ้นสุด",
+          "required": true,
+          "placeholder": "เลือกวันสิ้นสุด",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ชลบุรี",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา พระราม9",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ราชพฤกษ์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สุขุมวิท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สยาม",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/coupon",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "coupon_name",
+          "type": "text",
+          "label": "ชื่อคูปอง",
+          "required": true,
+          "placeholder": "กรอกชื่อคูปอง",
+          "isSelect2": false
+        },
+        {
+          "name": "coupon_code",
+          "type": "text",
+          "label": "โค้ดส่วนลด",
+          "required": true,
+          "placeholder": "กรอกโค้ดส่วนลด",
+          "isSelect2": false
+        },
+        {
+          "name": "discount",
+          "type": "number",
+          "label": "ส่วนลด",
+          "required": true,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "max_qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_limit_per_user",
+          "type": "checkbox",
+          "label": "จำกัดการใช้งานคนละ 1 ครั้ง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันเริ่มต้น",
+          "required": true,
+          "placeholder": "เลือกวันเริ่มต้น",
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันสิ้นสุด",
+          "required": true,
+          "placeholder": "เลือกวันสิ้นสุด",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ชลบุรี",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา พระราม9",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ราชพฤกษ์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สุขุมวิท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สยาม",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

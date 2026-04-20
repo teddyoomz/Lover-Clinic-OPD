@@ -1,0 +1,795 @@
+{
+  "url": "https://trial.proclinicth.com/admin/quotation/create",
+  "totalForms": 6,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/quotation",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "select-one",
+          "label": "ชื่อลูกค้า",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "type": "text",
+          "label": "วันที่เสนอราคา",
+          "required": true,
+          "placeholder": "กรอกวันที่เสนอราคา",
+          "isSelect2": false
+        },
+        {
+          "name": "discount",
+          "type": "number",
+          "label": "%",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "หมายเหตุการขาย",
+          "required": false,
+          "placeholder": "กรอกหมายเหตุการขาย",
+          "isSelect2": false
+        },
+        {
+          "name": "seller_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/quotation/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "course_name",
+          "type": "text",
+          "label": "คอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/quotation/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "product_name",
+          "type": "text",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "action": "/admin/quotation/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "promotion_name",
+          "type": "text",
+          "label": "โปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "action": "/admin/quotation/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "takeaway_product_id",
+          "type": "select-one",
+          "label": "ยากลับบ้าน",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "action": "/admin/quotation/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "takeaway_product",
+          "type": "text",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "url": "https://trial.proclinicth.com/admin/wallet",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/wallet",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/wallet",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "wallet_name",
+          "type": "text",
+          "label": "ชื่อกระเป๋าเงิน",
+          "required": true,
+          "placeholder": "กรอกชื่อกระเป๋าเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/wallet",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "wallet_name",
+          "type": "text",
+          "label": "ชื่อกระเป๋าเงิน",
+          "required": true,
+          "placeholder": "กรอกชื่อกระเป๋าเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

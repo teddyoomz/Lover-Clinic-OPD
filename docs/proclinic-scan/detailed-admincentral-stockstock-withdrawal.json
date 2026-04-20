@@ -1,0 +1,71 @@
+{
+  "url": "https://trial.proclinicth.com/admin/central-stock/stock-withdrawal",
+  "totalForms": 2,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/central-stock/stock-withdrawal",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สถานะทั้งหมด"
+            },
+            {
+              "v": "0",
+              "t": "รับยืนยัน"
+            },
+            {
+              "v": "1",
+              "t": "รอส่งสินค้า"
+            },
+            {
+              "v": "2",
+              "t": "สำเร็จ"
+            },
+            {
+              "v": "3",
+              "t": "ยกเลิก"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/central-stock/stock-withdrawal/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "canceled_note",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

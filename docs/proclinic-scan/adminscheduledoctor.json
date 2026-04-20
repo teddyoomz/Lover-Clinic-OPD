@@ -1,0 +1,519 @@
+{
+  "url": "https://trial.proclinicth.com/admin/schedule/doctor",
+  "totalRequests": 3,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/admin/api/user-schedule/308",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "success": true,
+        "doctor": {
+          "id": 308,
+          "clinic_id": 23,
+          "current_branch_id": 27,
+          "prefix": "นาสาว",
+          "firstname": "An",
+          "lastname": "เอ",
+          "nickname": "เอ",
+          "email": "a@a.acom",
+          "email_verified_at": null,
+          "telephone_number": null,
+          "position": "แพทย์",
+          "status": 1,
+          "is_clinic_owner": null,
+          "is_admin": null,
+          "created_at": "2024-10-08T10:31:54.000000Z",
+          "updated_at": "2026-01-30T07:02:23.000000Z",
+          "deleted_at": null,
+          "hourly_income": "300",
+          "salary": "200.00",
+          "salary_date": "ทุกวันที่ 1",
+          "color": "#F6DA09",
+          "professional_license": null,
+          "background_color": null,
+          "employee_code": null,
+          "df_group_id": 16,
+          "prefix_en": null,
+          "firstname_en": null,
+          "lastname_en": null,
+          "df_paid_type": "default",
+          "has_sales": 1,
+          "minimum_df_type": "no_minimum",
+          "lang": "th",
+          "app_current_branch_id": null,
+          "responsive_mode": "responsive",
+          "weekly_work_time": {
+            "id": 71,
+            "user_id": 308,
+            "branch_id": 28,
+            "is_monday_work": 0,
+            "is_tuesday_work": 1,
+            "is_wednesday_work": 1,
+            "is_thursday_work": 1,
+            "is_friday_work": 1,
+            "is_saturday_work": 1,
+            "is_sunday_work": 0,
+            "monday_working_start_time": null,
+            "tuesday_working_start_time": "08:30",
+            "wednesday_working_start_time": "10:30",
+            "thursday_working_start_time": "10:00",
+            "friday_working_start_time": "10:30",
+            "saturday_working_start_time": "11:00",
+            "sunday_working_start_time": null,
+            "monday_working_end_time": null,
+            "tuesday_working_end_time": "12:00",
+            "wednesday_working_end_time": "17:30",
+            "thursday_working_end_time": "11:00",
+            "friday_working_end_time": "12:30",
+            "saturday_working_end_time": "13:00",
+            "sunday_working_end_time": null,
+            "created_at": "2025-05-08T11:01:38.000000Z",
+            "updated_at": "2026-04-06T03:30:45.000000Z",
+            "total_work_hour": 15.5
+          },
+          "current_work_times": [],
+          "current_holidays": [
+            {
+              "id": 203,
+              "user_id": 308,
+              "branch_id": 28,
+              "holiday_date": "2026-04-26",
+              "created_at": "2026-04-18T02:10:27.000000Z",
+              "updated_at": "2026-04-18T02:10:27.000000Z"
+            }
+          ],
+          "image": null
+        },
+        "profile_image": "default-doctor.png"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/stat",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "today_appointment_count": 5,
+        "online_appointment_count": 0,
+        "stock_transfer": 1,
+        "stock_receiving": 1,
+        "central_stock_transfer": 5,
+        "central_stock_withdrawal": 10,
+        "central_stock_receiving": 0
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/schedule/%E0%B9%81%E0%B8%9E%E0%B8%97%E0%B8%A2%E0%B9%8C?start=2026-03-30T00%3A00%3A00%2B07%3A00&end=2026-05-11T00%3A00%3A00%2B07%3A00",
+      "status": 200,
+      "postData": null,
+      "response": [
+        {
+          "id": "recurring-308-tuesday",
+          "title": "08:30-12:00 นาสาว เอ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [
+            "2026-04-26"
+          ],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 308,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-308-wednesday",
+          "title": "10:30-17:30 นาสาว เอ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [
+            "2026-04-26"
+          ],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 308,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-308-thursday",
+          "title": "10:00-11:00 นาสาว เอ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "th",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [
+            "2026-04-26"
+          ],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 308,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-308-friday",
+          "title": "10:30-12:30 นาสาว เอ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "fr",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [
+            "2026-04-26"
+          ],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 308,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-308-saturday",
+          "title": "11:00-13:00 นาสาว เอ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "sa",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [
+            "2026-04-26"
+          ],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 308,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-400-monday",
+          "title": "09:00-11:30 Wee 523",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "#4FC3F7",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 400,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "#4FC3F7",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-400-tuesday",
+          "title": "09:00-13:30 Wee 523",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "#4FC3F7",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 400,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "#4FC3F7",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-400-wednesday",
+          "title": "10:00-17:30 Wee 523",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "#4FC3F7",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 400,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "#4FC3F7",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-400-thursday",
+          "title": "09:00-12:30 Wee 523",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "th",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "#4FC3F7",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 400,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "#4FC3F7",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-609-wednesday",
+          "title": "08:30-17:00 กภ ก้อง ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 609,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-85-friday",
+          "title": "10:30-17:00 หมอ น้ำตาล ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "fr",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 85,
+            "eventColor": "#56ccf2",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-85-saturday",
+          "title": "11:30-13:30 หมอ น้ำตาล ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "sa",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 85,
+            "eventColor": "#56ccf2",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-85-sunday",
+          "title": "10:00-14:30 หมอ น้ำตาล ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "su",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 85,
+            "eventColor": "#56ccf2",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-monday",
+          "title": "09:00-12:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-tuesday",
+          "title": "09:00-19:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-wednesday",
+          "title": "09:00-12:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-thursday",
+          "title": "09:00-19:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "th",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-friday",
+          "title": "09:30-14:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "fr",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-saturday",
+          "title": "13:00-22:30 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "sa",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-96-sunday",
+          "title": "13:00-22:00 หมอ ฟ้า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "su",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 96,
+            "eventColor": "#D4932B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "a",
+          "title": "10:00-17:00 นาสาว เอ",
+          "start": "2026-04-19",
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "normal",
+            "workTime": "{\"id\":781,\"user_id\":308,\"branch_id\":28,\"work_date\":\"2026-04-19\",\"start_time\":\"10:00\",\"end_time\":\"17:00\",\"created_at\":\"2026-04-18T02:15:30.000000Z\",\"updated_at\":\"2026-04-18T02:15:30.000000Z\",\"work_time\":\"10:00 - 17:00\",\"user\":{\"id\":308,\"clinic_id\":23,\"current_branch_id\":27,\"prefix\":\"\\u0e19\\u0e32\\u0e2a\\u0e32\\u0e27\",\"firstname\":\"An\",\"lastname\":\"\\u0e40\\u0e2d\",\"nickname\":\"\\u0e40\\u0e2d\",\"email\":\"a@a.acom\",\"email_verified_at\":null,\"telephone_number\":null,\"position\":\"\\u0e41\\u0e1e\\u0e17\\u0e22\\u0e4c\",\"status\":1,\"is_clinic_owner\":null,\"is_admin\":null,\"created_at\":\"2024-10-08T10:31:54.000000Z\",\"updated_at\":\"2026-01-30T07:02:23.000000Z\",\"deleted_at\":null,\"hourly_income\":\"300\",\"salary\":\"200.00\",\"salary_date\":\"\\u0e17\\u0e38\\u0e01\\u0e27\\u0e31\\u0e19\\u0e17\\u0e35\\u0e48 1\",\"color\":\"#F6DA09\",\"professional_license\":null,\"background_color\":null,\"employee_code\":null,\"df_group_id\":16,\"prefix_en\":null,\"firstname_en\":null,\"lastname_en\":null,\"df_paid_type\":\"default\",\"has_sales\":1,\"minimum_df_type\":\"no_minimum\",\"lang\":\"th\",\"app_current_branch_id\":null,\"responsive_mode\":\"responsive\"}}",
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        }
+      ]
+    }
+  ]
+}

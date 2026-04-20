@@ -1,0 +1,311 @@
+{
+  "url": "https://trial.proclinicth.com/admin/sale",
+  "totalForms": 4,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/sale",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกสถานะการขาย"
+            },
+            {
+              "v": "0",
+              "t": "ยังไม่ชำระเงิน"
+            },
+            {
+              "v": "4",
+              "t": "แบ่งชำระ"
+            },
+            {
+              "v": "2",
+              "t": "ชำระแล้ว"
+            },
+            {
+              "v": "6",
+              "t": "ค้างชำระ"
+            },
+            {
+              "v": "3",
+              "t": "ยกเลิก"
+            },
+            {
+              "v": "5",
+              "t": "คืนเงิน"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-payment",
+      "action": "/admin/sale/payment",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "payment-remaining-amount",
+          "type": "text",
+          "label": "ยอดคงเหลือ (ยอดทั้งหมด  บาท)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ชำระเงิน",
+          "required": true,
+          "placeholder": "กรอกวันที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "usingDeposit",
+          "type": "checkbox",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "deposit",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกยอดมัดจำ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "usingWallet",
+          "type": "checkbox",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "customer_wallet_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            }
+          ]
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกยอด Wallet",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod1",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 1",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod2",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_2",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_2",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 2",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod3",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_3",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_3",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 3",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "ref_no",
+          "type": "text",
+          "label": "เลขที่อ้างอิงใบเสร็จหน้าร้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "label": "แนบหลักฐานชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/sale/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/sale/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "refunded",
+          "type": "radio",
+          "label": "ยกเลิกการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "refunded",
+          "type": "radio",
+          "label": "คืนเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "cancel_image",
+          "type": "file",
+          "label": "แนบหลักฐานการยกเลิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "refund_method",
+          "type": "radio",
+          "label": "Wallet",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "refund_method",
+          "type": "radio",
+          "label": "เงินสด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่คืนเงิน",
+          "required": false,
+          "placeholder": "กรอกวันที่คืนเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "refund_time",
+          "type": "text",
+          "label": "เวลา",
+          "required": false,
+          "placeholder": "กรอกเวลาที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "refund_value",
+          "type": "number",
+          "label": "จำนวนเงินคืนลูกค้า",
+          "required": false,
+          "placeholder": "กรอกจำนวนเงินคืนลูกค้า",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "refund_image",
+          "type": "file",
+          "label": "แนบหลักฐานการคืนเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

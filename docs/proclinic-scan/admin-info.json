@@ -1,0 +1,617 @@
+{
+  "meta": {
+    "url": "/admin/info",
+    "scannedAt": "2026-04-20T11:43:50.757Z"
+  },
+  "identity": {
+    "title": "แพ็กเกจโปรคลินิก | ProClinic",
+    "url": "https://trial.proclinicth.com/admin/info",
+    "path": "/admin/info",
+    "bodyClasses": "",
+    "framework": [
+      "Laravel",
+      "Bootstrap5",
+      "jQuery",
+      "SweetAlert2",
+      "Flatpickr",
+      "Select2",
+      "FullCalendar"
+    ]
+  },
+  "server": {
+    "tech": "PHP/8.4.18 / cloudflare",
+    "framework": "unknown",
+    "cacheControl": "private, must-revalidate"
+  },
+  "layout": {
+    "tag": "div",
+    "cls": [
+      "sidebar-content"
+    ],
+    "c": [
+      {
+        "tag": "div",
+        "cls": [
+          "sidebar-menu"
+        ],
+        "c": [
+          {
+            "tag": "ul",
+            "cls": [
+              "pt-3"
+            ],
+            "c": [
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              },
+              {
+                "tag": "li"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "forms": [],
+  "tables": [],
+  "buttons": [
+    {
+      "text": "เมนูอื่นๆ17",
+      "classes": "nav-link dropdown-toggle",
+      "toggle": "dropdown"
+    },
+    {
+      "text": "",
+      "classes": "nav-link dropdown-toggle btn btn-outline-primary ms-xxl-2"
+    },
+    {
+      "text": "สาขา พระราม9",
+      "classes": "nav-link dropdown-toggle btn btn-outline-secondary ms-xxl-2",
+      "toggle": "dropdown"
+    },
+    {
+      "text": "Dr.M Clinic \n                           ",
+      "classes": "nav-link dropdown-toggle sp-left",
+      "toggle": "dropdown"
+    }
+  ],
+  "tabs": [],
+  "modals": [],
+  "api": {
+    "onPageLoad": [
+      {
+        "method": "GET",
+        "url": "/admin/api/stat",
+        "status": 200,
+        "postData": null,
+        "response": {
+          "today_appointment_count": 5,
+          "online_appointment_count": 0,
+          "stock_transfer": 1,
+          "stock_receiving": 1,
+          "central_stock_transfer": 5,
+          "central_stock_withdrawal": 10,
+          "central_stock_receiving": 0
+        }
+      }
+    ],
+    "onInteraction": []
+  },
+  "dataModel": {},
+  "connections": {
+    "linksTo": [
+      {
+        "href": "https://trial.proclinicth.com/admin",
+        "text": ""
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer/search",
+        "text": "ค้นหาลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment/coming",
+        "text": "นัดหมายวันนี้5"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment",
+        "text": "จองนัดหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/membership",
+        "text": "บัตรสมาชิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/deposit",
+        "text": "จ่ายมัดจำ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer/create",
+        "text": "เพิ่มลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer",
+        "text": "รายการลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/treatment",
+        "text": "ประวัติการรักษา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/remaining-course/create",
+        "text": "เพิ่มคอร์สคงเหลือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/remaining-course",
+        "text": "รายการคอร์สคงเหลือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/quotation/create",
+        "text": "ทำใบเสนอราคา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/quotation",
+        "text": "รายการใบเสนอราคา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale/create",
+        "text": "ขายคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/online-sale",
+        "text": "ขายออนไลน์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale",
+        "text": "รายการขาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale-insurance-claim",
+        "text": "รายการเบิกประกัน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/customer-product-change/create",
+        "text": "เปลี่ยนสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/course/create",
+        "text": "เพิ่มคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/course",
+        "text": "รายการคอร์ส"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/promotion",
+        "text": "โปรโมชัน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/coupon",
+        "text": "คูปองส่วนลด"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/voucher",
+        "text": "Voucher"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/doctor",
+        "text": "ค่ามือแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/assistance?position=%E0%B8%9C%E0%B8%B9%E0%B9%89%E0%B8%8A%E0%B9%88%E0%B8%A7%E0%B8%A2%E0%B9%81%E0%B8%9E%E0%B8%97%E0%B8%A2%E0%B9%8C",
+        "text": "ค่ามือผู้ช่วยแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/df-group",
+        "text": "ค่ามือกลุ่ม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/expense",
+        "text": "รายจ่ายอื่นๆ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/schedule/doctor",
+        "text": "ตารางแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/schedule/employee",
+        "text": "ตารางพนักงาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/treatment",
+        "text": "เอกสารการรักษา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/chart",
+        "text": "Chart"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/consent",
+        "text": "ใบยินยอม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/document/sale-cancelation",
+        "text": "เอกสารยกเลิกการขาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-certificate",
+        "text": "ใบรับรองแพทย์ 5 โรค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-certificate-for-driver-license",
+        "text": "ใบรับรองแพทย์สำหรับอนุญาตขับรถ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-opinion",
+        "text": "ใบรับรองแพทย์ลาป่วย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/physical-therapy-certificate",
+        "text": "ใบรับรองกายภาพบำบัด"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/thai-traditional-medicine-medical-certificate",
+        "text": "ใบรับรองแพทย์แผนไทย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/chinese-traditional-medicine-medical-certificate",
+        "text": "ใบรับรองแพทย์แผนจีน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/patient-referral",
+        "text": "ใบส่งตัวผู้ป่วย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/fit-to-fly",
+        "text": "ใบรับรองแพทย์ Fit to fly"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medicine-label",
+        "text": "ฉลากยา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/order/create",
+        "text": "นำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/sale/vendor/create",
+        "text": "ขายสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-change/create",
+        "text": "ปรับสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-transfer",
+        "text": "โอนสินค้าข้ามคลัง1"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch-stock-withdrawal/create",
+        "text": "เบิกสินค้าจากสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-withdrawal",
+        "text": "เบิกสินค้าจากคลังกลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-receiving",
+        "text": "รับสินค้าเข้าสาขา1"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock",
+        "text": "สต็อคสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/order",
+        "text": "รายการนำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch-stock-withdrawal",
+        "text": "รายการเบิกสินค้าจากสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/stock-movement",
+        "text": "รายการเคลื่อนไหวสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/order/create",
+        "text": "นำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-change/create",
+        "text": "ปรับสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-transfer",
+        "text": "โอนสินค้าข้ามคลัง5"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-withdrawal",
+        "text": "คำขอเบิกสินค้า10"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-receiving",
+        "text": "รับสินค้าเข้าคลังกลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock",
+        "text": "สต็อคสินค้ากลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/order",
+        "text": "รายการนำเข้าสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock/stock-movement",
+        "text": "รายการเคลื่อนไหวสต็อค"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/branch",
+        "text": "ตั้งค่าสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/holiday",
+        "text": "ตั้งค่าวันหยุดสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/medical-instrument",
+        "text": "เครื่องหัตถการ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/google-calendar/setting",
+        "text": "ตั้งค่า Google Calendar"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/product",
+        "text": "จัดการสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/default-product-unit",
+        "text": "จัดการหน่วยสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/product-group",
+        "text": "จัดการกลุ่มสินค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/permission-group",
+        "text": "ตำแหน่งและสิทธิ์การใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/doctor",
+        "text": "แพทย์ & ผู้ช่วยแพทย์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/user",
+        "text": "พนักงาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df-group",
+        "text": "จัดการกลุ่มค่ามือ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/wallet",
+        "text": "จัดการกระเป๋าเงิน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/central-stock",
+        "text": "ตั้งค่าคลังสินค้ากลาง"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/report",
+        "text": "รายงานสาขา"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/clinic-report",
+        "text": "รายงานคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/crm-insight",
+        "text": "วิเคราะห์พฤติกรรมลูกค้า"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/smart-audience",
+        "text": "วิเคราะห์กลุ่มเป้าหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/revenue-analysis-by-procedure",
+        "text": "วิเคราะห์รายรับตามหัตถการ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment-analysis",
+        "text": "วิเคราะห์รายการนัดหมาย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/appointment-analysis/user",
+        "text": "วิเคราะห์รายการนัดหมายรายผู้ใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/payment-summary-analysis",
+        "text": "วิเคราะห์สรุปบัญชีรับชำระเงิน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/27",
+        "text": "สาขา ชลบุรี"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/28",
+        "text": "สาขา พระราม9"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/37",
+        "text": "สาขา ราชพฤกษ์"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/38",
+        "text": "สาขา สุขุมวิท"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-branch/60",
+        "text": "สาขา สยาม"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/clinic",
+        "text": "ตั้งค่าคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/setting",
+        "text": "ตั้งค่าผู้ใช้งาน"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/info",
+        "text": "แพ็กเกจโปรคลินิก"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-lang/th",
+        "text": "ภาษาไทย"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/change-lang/en",
+        "text": "English"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/logout",
+        "text": "ออกจากระบบ"
+      },
+      {
+        "href": "https://trial.proclinicth.com/admin/df/assistance",
+        "text": "ค่ามือผู้ช่วยแพทย์"
+      }
+    ],
+    "formsPostTo": [],
+    "foreignKeys": []
+  },
+  "businessLogic": [],
+  "validation": [],
+  "styles": {
+    "body": {
+      "bg": "rgb(245, 245, 245)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "0px",
+      "borderRadius": "0px"
+    },
+    "sidebar": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "67px 0px 0px",
+      "borderRadius": "0px"
+    },
+    "header": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "12px 0px",
+      "borderRadius": "0px"
+    },
+    "card": {
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "font": "IBM",
+      "fontSize": "16px",
+      "padding": "0px",
+      "borderRadius": "8px"
+    }
+  },
+  "jsInternals": {
+    "functions": [],
+    "eventHandlers": [
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      },
+      {
+        "element": "dropdown-item",
+        "handler": "event.stopPropagation()"
+      }
+    ],
+    "inlineLogic": []
+  },
+  "hiddenData": [],
+  "behaviorTest": [],
+  "raw": {}
+}

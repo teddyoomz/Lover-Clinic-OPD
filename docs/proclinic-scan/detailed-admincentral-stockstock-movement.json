@@ -1,0 +1,149 @@
+{
+  "url": "https://trial.proclinicth.com/admin/central-stock/stock-movement",
+  "totalForms": 1,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/central-stock/stock-movement",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "select-one",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "type",
+          "type": "select-one",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ประเภททั้งหมด"
+            },
+            {
+              "v": "1",
+              "t": "นำเข้า"
+            },
+            {
+              "v": "14",
+              "t": "ยกเลิกนำเข้า"
+            },
+            {
+              "v": "2|5",
+              "t": "ขาย"
+            },
+            {
+              "v": "3|4",
+              "t": "ปรับสต็อค"
+            },
+            {
+              "v": "6|7",
+              "t": "รักษา"
+            },
+            {
+              "v": "8|10",
+              "t": "ส่งออก"
+            },
+            {
+              "v": "9",
+              "t": "รับเข้า"
+            },
+            {
+              "v": "12|13",
+              "t": "เบิก"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "stock_id",
+          "type": "select-one",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "central_stock_30",
+              "t": "Test test"
+            },
+            {
+              "v": "central_stock_27",
+              "t": "คลัง test"
+            },
+            {
+              "v": "central_stock_2",
+              "t": "คลัง 2"
+            },
+            {
+              "v": "central_stock_1",
+              "t": "คลัง 1"
+            },
+            {
+              "v": "branch_27",
+              "t": "สาขา ชลบุรี"
+            },
+            {
+              "v": "branch_28",
+              "t": "สาขา พระราม9"
+            },
+            {
+              "v": "branch_37",
+              "t": "สาขา ราชพฤกษ์"
+            },
+            {
+              "v": "branch_38",
+              "t": "สาขา สุขุมวิท"
+            },
+            {
+              "v": "branch_60",
+              "t": "สาขา สยาม"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "สินค้า",
+          "required": false,
+          "placeholder": "วันที่เริ่มต้น",
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "สินค้า",
+          "required": false,
+          "placeholder": "วันที่สิ้นสุด",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

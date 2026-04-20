@@ -1,0 +1,64 @@
+{
+  "url": "https://trial.proclinicth.com/admin/document/treatment",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/document/treatment",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-create-document",
+      "action": "/admin/document/treatment",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "document_name",
+          "type": "text",
+          "label": "ชื่อเอกสาร",
+          "required": true,
+          "placeholder": "กรอกชื่อเอกสาร",
+          "isSelect2": false
+        },
+        {
+          "name": "image",
+          "type": "file",
+          "label": "แนบรูปเอกสาร",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-edit-document",
+      "action": "/admin/document/treatment",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "document_name",
+          "type": "text",
+          "label": "ชื่อเอกสาร",
+          "required": true,
+          "placeholder": "กรอกชื่อเอกสาร",
+          "isSelect2": false
+        },
+        {
+          "name": "edit_image",
+          "type": "file",
+          "label": "แนบรูปเอกสาร",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

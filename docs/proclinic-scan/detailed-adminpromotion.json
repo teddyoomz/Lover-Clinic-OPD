@@ -1,0 +1,564 @@
+{
+  "url": "https://trial.proclinicth.com/admin/promotion",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/promotion",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_category_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "1",
+              "t": "CHA01"
+            },
+            {
+              "v": "2",
+              "t": "picosure"
+            },
+            {
+              "v": "3",
+              "t": "แพทย์แผนจีน"
+            }
+          ]
+        },
+        {
+          "name": "procedure_type_name",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "laser",
+              "t": "laser"
+            }
+          ]
+        },
+        {
+          "name": "enable_line_oa_display",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "1",
+              "t": "แสดงผล"
+            },
+            {
+              "v": "0",
+              "t": "ไม่แสดงผล"
+            }
+          ]
+        },
+        {
+          "name": "order_by",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ใหม่ไปเก่า"
+            },
+            {
+              "v": "promotion_name_asc",
+              "t": "ชื่อโปรโมชัน"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "form-create-promotion",
+      "action": "/admin/promotion",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับคลินิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_name",
+          "type": "text",
+          "label": "ชื่อโปรโมชัน",
+          "required": true,
+          "placeholder": "กรอกชื่อโปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "receipt_promotion_name",
+          "type": "text",
+          "label": "ชื่อโปรโมชัน (แสดงในใบเสร็จ)",
+          "required": false,
+          "placeholder": "กรณีเว้นว่าง จะได้ชื่อโปรโมชันด้านบนในใบเสร็จ",
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_code",
+          "type": "text",
+          "label": "รหัสโปรโมชัน",
+          "required": false,
+          "placeholder": "กรอกรหัสโปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "label": "หมวดหมู่",
+          "required": false,
+          "placeholder": "เลือกหมวดหมู่โปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "procedure_type_name",
+          "type": "text",
+          "label": "ประเภทหัตถการ",
+          "required": false,
+          "placeholder": "เลือกประเภทหัตถการ",
+          "isSelect2": false
+        },
+        {
+          "name": "deposit_price",
+          "type": "number",
+          "label": "ราคามัดจำ",
+          "required": false,
+          "placeholder": "กรอกราคามัดจำ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price",
+          "type": "number",
+          "label": "ราคาขาย",
+          "required": true,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price_incl_vat",
+          "type": "number",
+          "label": "ราคาขาย (Inc. VAT)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_type",
+          "type": "radio",
+          "label": "ระบุคอร์สและจำนวนคอร์ส\n                                            สำหรับโปรโมชันที่คอร์ส/จำนวนคอร์สคงที่",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_type",
+          "type": "radio",
+          "label": "เลือกคอร์สตามจริง\n                                            สำหรับโปรโมชันที่ให้ลูกค้าเลือกคอร์สได้",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "min_course_chosen_count",
+          "type": "number",
+          "required": false,
+          "placeholder": "ต่ำสุด",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "max_course_chosen_count",
+          "type": "number",
+          "required": false,
+          "placeholder": "สูงสุด",
+          "max": "999",
+          "isSelect2": false
+        },
+        {
+          "name": "min_course_chosen_qty",
+          "type": "number",
+          "required": false,
+          "placeholder": "ต่ำสุด",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "max_course_chosen_qty",
+          "type": "number",
+          "required": false,
+          "placeholder": "สูงสุด",
+          "max": "999",
+          "isSelect2": false
+        },
+        {
+          "name": "has_promotion_period",
+          "type": "checkbox",
+          "label": "กำหนดช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "ช่วงเวลา",
+          "required": true,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "label": "รายละเอียด",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "enable_line_oa_display",
+          "type": "checkbox",
+          "label": "แสดงผลใน Line OA",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_price_line_display",
+          "type": "radio",
+          "label": "แสดงผล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_price_line_display",
+          "type": "radio",
+          "label": "ไม่แสดงผล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "button_label",
+          "type": "text",
+          "label": "ชื่อปุ่ม",
+          "required": false,
+          "placeholder": "กรอกชื่อปุ่ม",
+          "isSelect2": false
+        },
+        {
+          "name": "cover_image",
+          "type": "file",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "course-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาคอร์ส",
+          "isSelect2": false
+        },
+        {
+          "name": "product-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาสินค้าหน้าร้าน",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-edit-promotion",
+      "action": "/admin/promotion",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับคลินิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_name",
+          "type": "text",
+          "label": "ชื่อโปรโมชัน",
+          "required": true,
+          "placeholder": "กรอกชื่อโปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "receipt_promotion_name",
+          "type": "text",
+          "label": "ชื่อโปรโมชัน (แสดงในใบเสร็จ)",
+          "required": false,
+          "placeholder": "กรณีเว้นว่าง จะได้ชื่อโปรโมชันด้านบนในใบเสร็จ",
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_code",
+          "type": "text",
+          "label": "รหัสโปรโมชัน",
+          "required": false,
+          "placeholder": "กรอกรหัสโปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "label": "หมวดหมู่",
+          "required": false,
+          "placeholder": "เลือกหมวดหมู่โปรโมชัน",
+          "isSelect2": false
+        },
+        {
+          "name": "procedure_type_name",
+          "type": "text",
+          "label": "ประเภทหัตถการ",
+          "required": false,
+          "placeholder": "เลือกประเภทหัตถการ",
+          "isSelect2": false
+        },
+        {
+          "name": "deposit_price",
+          "type": "number",
+          "label": "ราคามัดจำ",
+          "required": false,
+          "placeholder": "กรอกราคามัดจำ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price",
+          "type": "number",
+          "label": "ราคาขาย",
+          "required": true,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price_incl_vat",
+          "type": "number",
+          "label": "ราคาขาย (Inc. VAT)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_type",
+          "type": "radio",
+          "label": "ระบุคอร์สและจำนวนคอร์ส\n                                            สำหรับโปรโมชันที่คอร์ส/จำนวนคอร์สคงที่",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "promotion_type",
+          "type": "radio",
+          "label": "เลือกคอร์สตามจริง\n                                            สำหรับโปรโมชันที่ให้ลูกค้าเลือกคอร์สได้",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "min_course_chosen_count",
+          "type": "number",
+          "required": false,
+          "placeholder": "ต่ำสุด",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "max_course_chosen_count",
+          "type": "number",
+          "required": false,
+          "placeholder": "สูงสุด",
+          "max": "999",
+          "isSelect2": false
+        },
+        {
+          "name": "min_course_chosen_qty",
+          "type": "number",
+          "required": false,
+          "placeholder": "ต่ำสุด",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "max_course_chosen_qty",
+          "type": "number",
+          "required": false,
+          "placeholder": "สูงสุด",
+          "max": "999",
+          "isSelect2": false
+        },
+        {
+          "name": "has_promotion_period",
+          "type": "checkbox",
+          "label": "กำหนดช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "ช่วงเวลา",
+          "required": true,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "label": "รายละเอียด",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "enable_line_oa_display",
+          "type": "checkbox",
+          "label": "แสดงผลใน Line OA",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_price_line_display",
+          "type": "radio",
+          "label": "แสดงผล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_price_line_display",
+          "type": "radio",
+          "label": "ไม่แสดงผล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "button_label",
+          "type": "text",
+          "label": "ชื่อปุ่ม",
+          "required": false,
+          "placeholder": "กรอกชื่อปุ่ม",
+          "isSelect2": false
+        },
+        {
+          "name": "cover_image",
+          "type": "file",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-course-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาคอร์ส",
+          "isSelect2": false
+        },
+        {
+          "name": "edit-product-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาสินค้าหน้าร้าน",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

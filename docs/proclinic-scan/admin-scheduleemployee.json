@@ -1,0 +1,335 @@
+{
+  "url": "https://trial.proclinicth.com/admin/schedule/employee",
+  "totalRequests": 3,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/admin/api/user-schedule/637",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "success": true,
+        "doctor": {
+          "id": 637,
+          "clinic_id": 23,
+          "current_branch_id": 27,
+          "prefix": null,
+          "firstname": "audi",
+          "lastname": "ddd",
+          "nickname": "audi",
+          "email": "audi@pcnclinic.com",
+          "email_verified_at": null,
+          "telephone_number": null,
+          "position": "รีเซฟชั่น",
+          "status": 1,
+          "is_clinic_owner": null,
+          "is_admin": null,
+          "created_at": "2025-12-28T07:23:27.000000Z",
+          "updated_at": "2025-12-28T07:23:58.000000Z",
+          "deleted_at": null,
+          "hourly_income": null,
+          "salary": "10000.00",
+          "salary_date": "ทุกสิ้นเดือน",
+          "color": "#C42D3B",
+          "professional_license": null,
+          "background_color": null,
+          "employee_code": null,
+          "df_group_id": null,
+          "prefix_en": null,
+          "firstname_en": null,
+          "lastname_en": null,
+          "df_paid_type": "default",
+          "has_sales": 0,
+          "minimum_df_type": "no_minimum",
+          "lang": "th",
+          "app_current_branch_id": null,
+          "responsive_mode": "responsive",
+          "weekly_work_time": {
+            "id": 122,
+            "user_id": 637,
+            "branch_id": 28,
+            "is_monday_work": 1,
+            "is_tuesday_work": 1,
+            "is_wednesday_work": 0,
+            "is_thursday_work": 0,
+            "is_friday_work": 0,
+            "is_saturday_work": 0,
+            "is_sunday_work": 0,
+            "monday_working_start_time": "10:30",
+            "tuesday_working_start_time": "08:30",
+            "wednesday_working_start_time": null,
+            "thursday_working_start_time": null,
+            "friday_working_start_time": null,
+            "saturday_working_start_time": null,
+            "sunday_working_start_time": null,
+            "monday_working_end_time": "12:00",
+            "tuesday_working_end_time": "12:00",
+            "wednesday_working_end_time": null,
+            "thursday_working_end_time": null,
+            "friday_working_end_time": null,
+            "saturday_working_end_time": null,
+            "sunday_working_end_time": null,
+            "created_at": "2026-02-26T07:41:24.000000Z",
+            "updated_at": "2026-03-11T10:52:27.000000Z",
+            "total_work_hour": 5
+          },
+          "current_work_times": [],
+          "current_holidays": [],
+          "image": null
+        },
+        "profile_image": "default-admin.png"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/stat",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "today_appointment_count": 5,
+        "online_appointment_count": 0,
+        "stock_transfer": 1,
+        "stock_receiving": 1,
+        "central_stock_transfer": 5,
+        "central_stock_withdrawal": 10,
+        "central_stock_receiving": 0
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/schedule/%E0%B8%9E%E0%B8%99%E0%B8%B1%E0%B8%81%E0%B8%87%E0%B8%B2%E0%B8%99?start=2026-03-30T00%3A00%3A00%2B07%3A00&end=2026-05-11T00%3A00%3A00%2B07%3A00",
+      "status": 200,
+      "postData": null,
+      "response": [
+        {
+          "id": "recurring-637-monday",
+          "title": "10:30-12:00 audi",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 637,
+            "eventColor": "#C42D3B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-637-tuesday",
+          "title": "08:30-12:00 audi",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 637,
+            "eventColor": "#C42D3B",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-95-monday",
+          "title": "09:00-13:00 ผู้ช่วย ดรีม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 95,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-95-tuesday",
+          "title": "11:00-18:30 ผู้ช่วย ดรีม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 95,
+            "eventColor": "#F6DA09",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-103-monday",
+          "title": "08:30-13:00 นัท ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 103,
+            "eventColor": "#6B2DC4",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-307-monday",
+          "title": "09:00-20:00 นาน่า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 307,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-307-tuesday",
+          "title": "09:00-20:00 นาน่า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 307,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-307-wednesday",
+          "title": "09:00-20:00 นาน่า ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 307,
+            "eventColor": "#2EC4B6",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-97-monday",
+          "title": "10:00-13:00 ผู้ช่วย ปาล์ม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "mo",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 97,
+            "eventColor": "#7c89b1",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-97-tuesday",
+          "title": "09:30-12:30 ผู้ช่วย ปาล์ม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "tu",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 97,
+            "eventColor": "#7c89b1",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-97-wednesday",
+          "title": "09:00-10:30 ผู้ช่วย ปาล์ม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "we",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 97,
+            "eventColor": "#7c89b1",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        },
+        {
+          "id": "recurring-97-thursday",
+          "title": "14:30-19:00 ผู้ช่วย ปาล์ม ",
+          "rrule": {
+            "freq": "weekly",
+            "byweekday": "th",
+            "dtstart": "2025-01-01",
+            "until": "2027-12-31"
+          },
+          "exdate": [],
+          "backgroundColor": "transparent",
+          "extendedProps": {
+            "type": "recurring",
+            "user_id": 97,
+            "eventColor": "#7c89b1",
+            "backgroundColor": "transparent",
+            "textColor": "black"
+          }
+        }
+      ]
+    }
+  ]
+}

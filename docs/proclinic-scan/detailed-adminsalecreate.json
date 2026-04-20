@@ -1,0 +1,2917 @@
+{
+  "url": "https://trial.proclinicth.com/admin/sale/create",
+  "totalForms": 10,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/sale",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "select-one",
+          "label": "ชื่อลูกค้า",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "appointment_id",
+          "type": "select-one",
+          "label": "นัดหมายที่เกี่ยวข้อง",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "นัดหมายที่เกี่ยวข้อง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ขาย",
+          "required": true,
+          "placeholder": "กรอกวันที่ขาย",
+          "isSelect2": false
+        },
+        {
+          "name": "coupon-code",
+          "type": "text",
+          "label": "%",
+          "required": false,
+          "placeholder": "กรอกรหัสคูปอง",
+          "isSelect2": false
+        },
+        {
+          "name": "discount",
+          "type": "number",
+          "label": "%",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "usingDeposit",
+          "type": "checkbox",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "deposit",
+          "type": "number",
+          "label": "%",
+          "required": true,
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "customer_wallet_id",
+          "type": "select-one",
+          "label": "%",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "กระเป๋าเงินหลัก (0.00 บาท)"
+            }
+          ]
+        },
+        {
+          "name": "usingWallet",
+          "type": "checkbox",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "label": "%",
+          "required": true,
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_note",
+          "type": "textarea",
+          "label": "หมายเหตุการขาย",
+          "required": false,
+          "placeholder": "กรอกหมายเหตุการขาย",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "แบ่งชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ชำระเต็มจำนวน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ชำระภายหลัง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกวันที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "payment_time",
+          "type": "text",
+          "label": "เวลา",
+          "required": false,
+          "placeholder": "กรอกเวลาที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod1",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 1",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod2",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_2",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_2",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 2",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod3",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_3",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_3",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 3",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "ref_no",
+          "type": "text",
+          "label": "เลขที่อ้างอิงใบเสร็จหน้าร้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "label": "แนบหลักฐานชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "หมายเหตุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "hasSeller1",
+          "type": "checkbox",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "seller_1_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": true,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_percent_1",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": true,
+          "placeholder": "% ยอดขาย",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_total_1",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": true,
+          "placeholder": "ยอดขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasSeller2",
+          "type": "checkbox",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "seller_2_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_percent_2",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "% ยอดขาย",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_total_2",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "ยอดขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasSeller3",
+          "type": "checkbox",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "seller_3_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_percent_3",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "% ยอดขาย",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_total_3",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "ยอดขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasSeller4",
+          "type": "checkbox",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "seller_4_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_percent_4",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "% ยอดขาย",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_total_4",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "ยอดขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasSeller5",
+          "type": "checkbox",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "seller_5_id",
+          "type": "select-one",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "พนักงานขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_percent_5",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "% ยอดขาย",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_total_5",
+          "type": "number",
+          "label": "พนักงานขาย",
+          "required": false,
+          "placeholder": "ยอดขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasAppointment",
+          "type": "radio",
+          "label": "ไม่นัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "hasAppointment",
+          "type": "radio",
+          "label": "จองนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ติดตาม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่",
+          "required": false,
+          "placeholder": "กรอกวันที่",
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_start_time",
+          "type": "select-one",
+          "label": "เวลาเริ่มต้น",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "08:30",
+              "t": "08:30"
+            },
+            {
+              "v": "09:00",
+              "t": "09:00"
+            },
+            {
+              "v": "09:30",
+              "t": "09:30"
+            },
+            {
+              "v": "10:00",
+              "t": "10:00"
+            },
+            {
+              "v": "10:30",
+              "t": "10:30"
+            },
+            {
+              "v": "11:00",
+              "t": "11:00"
+            },
+            {
+              "v": "11:30",
+              "t": "11:30"
+            },
+            {
+              "v": "12:00",
+              "t": "12:00"
+            },
+            {
+              "v": "12:30",
+              "t": "12:30"
+            },
+            {
+              "v": "13:00",
+              "t": "13:00"
+            },
+            {
+              "v": "13:30",
+              "t": "13:30"
+            },
+            {
+              "v": "14:00",
+              "t": "14:00"
+            },
+            {
+              "v": "14:30",
+              "t": "14:30"
+            },
+            {
+              "v": "15:00",
+              "t": "15:00"
+            },
+            {
+              "v": "15:30",
+              "t": "15:30"
+            },
+            {
+              "v": "16:00",
+              "t": "16:00"
+            },
+            {
+              "v": "16:30",
+              "t": "16:30"
+            },
+            {
+              "v": "17:00",
+              "t": "17:00"
+            },
+            {
+              "v": "17:30",
+              "t": "17:30"
+            },
+            {
+              "v": "18:00",
+              "t": "18:00"
+            },
+            {
+              "v": "18:30",
+              "t": "18:30"
+            },
+            {
+              "v": "19:00",
+              "t": "19:00"
+            },
+            {
+              "v": "19:30",
+              "t": "19:30"
+            },
+            {
+              "v": "20:00",
+              "t": "20:00"
+            },
+            {
+              "v": "20:30",
+              "t": "20:30"
+            },
+            {
+              "v": "21:00",
+              "t": "21:00"
+            },
+            {
+              "v": "21:30",
+              "t": "21:30"
+            },
+            {
+              "v": "22:00",
+              "t": "22:00"
+            },
+            {
+              "v": "22:30",
+              "t": "22:30"
+            }
+          ]
+        },
+        {
+          "name": "appointment_end_time",
+          "type": "select-one",
+          "label": "เวลาสิ้นสุด",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "09:00",
+              "t": "09:00"
+            },
+            {
+              "v": "09:30",
+              "t": "09:30"
+            },
+            {
+              "v": "10:00",
+              "t": "10:00"
+            },
+            {
+              "v": "10:30",
+              "t": "10:30"
+            },
+            {
+              "v": "11:00",
+              "t": "11:00"
+            },
+            {
+              "v": "11:30",
+              "t": "11:30"
+            },
+            {
+              "v": "12:00",
+              "t": "12:00"
+            },
+            {
+              "v": "12:30",
+              "t": "12:30"
+            },
+            {
+              "v": "13:00",
+              "t": "13:00"
+            },
+            {
+              "v": "13:30",
+              "t": "13:30"
+            },
+            {
+              "v": "14:00",
+              "t": "14:00"
+            },
+            {
+              "v": "14:30",
+              "t": "14:30"
+            },
+            {
+              "v": "15:00",
+              "t": "15:00"
+            },
+            {
+              "v": "15:30",
+              "t": "15:30"
+            },
+            {
+              "v": "16:00",
+              "t": "16:00"
+            },
+            {
+              "v": "16:30",
+              "t": "16:30"
+            },
+            {
+              "v": "17:00",
+              "t": "17:00"
+            },
+            {
+              "v": "17:30",
+              "t": "17:30"
+            },
+            {
+              "v": "18:00",
+              "t": "18:00"
+            },
+            {
+              "v": "18:30",
+              "t": "18:30"
+            },
+            {
+              "v": "19:00",
+              "t": "19:00"
+            },
+            {
+              "v": "19:30",
+              "t": "19:30"
+            },
+            {
+              "v": "20:00",
+              "t": "20:00"
+            },
+            {
+              "v": "20:30",
+              "t": "20:30"
+            },
+            {
+              "v": "21:00",
+              "t": "21:00"
+            },
+            {
+              "v": "21:30",
+              "t": "21:30"
+            },
+            {
+              "v": "22:00",
+              "t": "22:00"
+            },
+            {
+              "v": "22:30",
+              "t": "22:30"
+            },
+            {
+              "v": "23:00",
+              "t": "23:00"
+            }
+          ]
+        },
+        {
+          "name": "appointment_option",
+          "type": "radio",
+          "label": "นัดครั้งเดียว",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_option",
+          "type": "radio",
+          "label": "นัดหลายครั้ง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_every_n_units",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกระยะห่างนัดหมาย",
+          "min": "1",
+          "max": "30",
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "day",
+              "t": "วัน"
+            },
+            {
+              "v": "month",
+              "t": "เดือน"
+            }
+          ]
+        },
+        {
+          "name": "appointment_times",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนนัดหมายเพิ่มเติม",
+          "min": "1",
+          "max": "20",
+          "isSelect2": false
+        },
+        {
+          "name": "advisor_id",
+          "type": "select-one",
+          "label": "ที่ปรึกษา",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "637",
+              "t": "audi ddd (audi)"
+            },
+            {
+              "v": "670",
+              "t": "bbek"
+            },
+            {
+              "v": "673",
+              "t": "Game"
+            },
+            {
+              "v": "675",
+              "t": "gu"
+            },
+            {
+              "v": "746",
+              "t": "Mymo Mymo"
+            },
+            {
+              "v": "614",
+              "t": "Test"
+            },
+            {
+              "v": "754",
+              "t": "Test Test (Test)"
+            },
+            {
+              "v": "696",
+              "t": "Test2"
+            },
+            {
+              "v": "647",
+              "t": "tt tt"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "633",
+              "t": "ดรีม ฝันหวาน"
+            },
+            {
+              "v": "510",
+              "t": "ตอง ตอง (ตอง)"
+            },
+            {
+              "v": "103",
+              "t": "นัท"
+            },
+            {
+              "v": "307",
+              "t": "นาน่า"
+            },
+            {
+              "v": "386",
+              "t": "น้ำ"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "102",
+              "t": "ฟิล์ม"
+            },
+            {
+              "v": "747",
+              "t": "ส้ม"
+            },
+            {
+              "v": "466",
+              "t": "หมอ สุขใจ ชีวา (ชีวี)"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "ที่ปรึกษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "633",
+              "t": "ดรีม ฝันหวาน"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "doctor_assistant_id[]",
+          "type": "select-multiple",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "633",
+              "t": "ดรีม ฝันหวาน"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "examination_room_id",
+          "type": "select-one",
+          "label": "ห้องตรวจ",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "245",
+              "t": "นักกายภาพ"
+            },
+            {
+              "v": "198",
+              "t": "นักกายภาพA x"
+            },
+            {
+              "v": "123",
+              "t": "ห้อง 3"
+            },
+            {
+              "v": "124",
+              "t": "ห้อง 4"
+            },
+            {
+              "v": "185",
+              "t": "ห้องผ่าตัด"
+            },
+            {
+              "v": "46",
+              "t": "ห้องหัตถการ 1"
+            },
+            {
+              "v": "47",
+              "t": "ห้องหัตถการ 2"
+            },
+            {
+              "v": "325",
+              "t": "แพทย์แผนไทย B"
+            }
+          ]
+        },
+        {
+          "name": "source",
+          "type": "select-one",
+          "label": "ช่องทางนัดหมาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เคาน์เตอร์",
+              "t": "เคาน์เตอร์"
+            },
+            {
+              "v": "โทรศัพท์",
+              "t": "โทรศัพท์"
+            },
+            {
+              "v": "Walk-in",
+              "t": "Walk-in"
+            },
+            {
+              "v": "Facebook",
+              "t": "Facebook"
+            },
+            {
+              "v": "Instagram",
+              "t": "Instagram"
+            },
+            {
+              "v": "Tiktok",
+              "t": "Tiktok"
+            },
+            {
+              "v": "Line",
+              "t": "Line"
+            },
+            {
+              "v": "อื่นๆ",
+              "t": "อื่นๆ"
+            }
+          ]
+        },
+        {
+          "name": "appointment_to",
+          "type": "textarea",
+          "label": "นัดมาเพื่อ",
+          "required": false,
+          "placeholder": "กรอกนัดมาเพื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "expected_sales",
+          "type": "number",
+          "label": "ยอดขายที่คาดหวัง",
+          "required": false,
+          "placeholder": "ยอดขายที่คาดหวัง",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "preparation",
+          "type": "textarea",
+          "label": "การเตรียมตัว",
+          "required": false,
+          "placeholder": "กรอกการเตรียมตัว",
+          "isSelect2": false
+        },
+        {
+          "name": "customer_note",
+          "type": "textarea",
+          "label": "หมายเหตุ (แจ้งลูกค้า)",
+          "required": false,
+          "placeholder": "กรอกหมายเหตุ",
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_note",
+          "type": "textarea",
+          "label": "โน้ต (สำหรับคลินิก)",
+          "required": false,
+          "placeholder": "กรอกโน้ต",
+          "isSelect2": false
+        },
+        {
+          "name": "appointment_color",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ใช้สีเริ่มต้น"
+            },
+            {
+              "v": "#fffef7",
+              "t": "เหลืองอ่อน"
+            },
+            {
+              "v": "#daf4f0",
+              "t": "เขียวอ่อน"
+            },
+            {
+              "v": "#ffecd7",
+              "t": "ส้มอ่อน"
+            },
+            {
+              "v": "#f5d7d9",
+              "t": "แดงอ่อน"
+            },
+            {
+              "v": "#f7ead7",
+              "t": "น้ำตาลอ่อน"
+            },
+            {
+              "v": "#fae7ed",
+              "t": "ชมพูอ่อน"
+            },
+            {
+              "v": "#e2d6f4",
+              "t": "ม่วงอ่อน"
+            },
+            {
+              "v": "#d4e5fe",
+              "t": "น้ำเงินอ่อน"
+            },
+            {
+              "v": "#e0f4fd",
+              "t": "ฟ้าอ่อน"
+            },
+            {
+              "v": "#e4e8f0",
+              "t": "เทาอ่อน"
+            },
+            {
+              "v": "#d4d5d9",
+              "t": "ดำอ่อน"
+            },
+            {
+              "v": "#FFC720",
+              "t": "เหลืองเข้ม"
+            },
+            {
+              "v": "#4FC3F7",
+              "t": "ฟ้าเข้ม"
+            },
+            {
+              "v": "#4F94E6",
+              "t": "น้ำเงินเข้ม"
+            },
+            {
+              "v": "#2EC1B4",
+              "t": "เขียวเข้ม"
+            },
+            {
+              "v": "#FF6A9C",
+              "t": "ชมพูเข้ม"
+            },
+            {
+              "v": "#FF9E1F",
+              "t": "ส้มเข้ม"
+            },
+            {
+              "v": "#EA4747",
+              "t": "แดงเข้ม"
+            },
+            {
+              "v": "#7D58BE",
+              "t": "ม่วงเข้ม"
+            },
+            {
+              "v": "#A56B49",
+              "t": "น้ำตาลเข้ม"
+            },
+            {
+              "v": "#676767",
+              "t": "เทาเข้ม"
+            },
+            {
+              "v": "#252525",
+              "t": "ดำเข้ม"
+            }
+          ]
+        },
+        {
+          "name": "line_notify",
+          "type": "checkbox",
+          "label": "แจ้งเตือนนัดหมายทาง LINE",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "course_id",
+          "type": "select-one",
+          "label": "คอร์ส",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "course_name",
+          "type": "text",
+          "label": "คอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "select-one",
+          "label": "สินค้า",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "product_name",
+          "type": "text",
+          "label": "สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "voucher_id",
+          "type": "select-one",
+          "label": "เลือก Voucher",
+          "required": true,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "12",
+              "t": "2.2 ต้อนรับวาเลนไทม์"
+            },
+            {
+              "v": "36",
+              "t": "beautyshop"
+            },
+            {
+              "v": "19",
+              "t": "Botox 1 บริเวณ"
+            },
+            {
+              "v": "22",
+              "t": "Flash ลด 1,000 ไม่มีขั้นต่ำ"
+            },
+            {
+              "v": "21",
+              "t": "บัตรสมาชิก VIP"
+            },
+            {
+              "v": "20",
+              "t": "เทส voucher"
+            },
+            {
+              "v": "23",
+              "t": "แลกซื้อ 99 บาท"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "เลือก Voucher",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f7",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "promotion_id",
+          "type": "select-one",
+          "label": "โปรโมชัน",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f8",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "promotion_name",
+          "type": "text",
+          "label": "โปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f9",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "takeaway_product_id",
+          "type": "select-one",
+          "label": "ยากลับบ้าน",
+          "required": true,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f10",
+      "action": "/admin/sale/create",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "takeaway_product",
+          "type": "text",
+          "label": "ยากลับบ้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "จำนวน",
+          "required": true,
+          "placeholder": "กรอกจำนวน",
+          "min": "0.01",
+          "isSelect2": false
+        },
+        {
+          "name": "is_premium",
+          "type": "checkbox",
+          "label": "สินค้าของแถม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกราคาต่อหน่วย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกส่วนลด",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "%",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "item_discount_type",
+          "type": "radio",
+          "label": "บาท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "ภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

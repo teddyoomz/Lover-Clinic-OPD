@@ -1,0 +1,57 @@
+{
+  "url": "https://trial.proclinicth.com/admin/remaining-course",
+  "totalForms": 2,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/remaining-course",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกสถานะ"
+            },
+            {
+              "v": "2",
+              "t": "สำเร็จ"
+            },
+            {
+              "v": "3",
+              "t": "ยกเลิก"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/remaining-course/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

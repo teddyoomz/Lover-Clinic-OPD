@@ -1,0 +1,21 @@
+{
+  "url": "https://trial.proclinicth.com/admin/sale",
+  "totalRequests": 1,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/admin/api/stat",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "today_appointment_count": 5,
+        "online_appointment_count": 0,
+        "stock_transfer": 1,
+        "stock_receiving": 1,
+        "central_stock_transfer": 5,
+        "central_stock_withdrawal": 10,
+        "central_stock_receiving": 0
+      }
+    }
+  ]
+}

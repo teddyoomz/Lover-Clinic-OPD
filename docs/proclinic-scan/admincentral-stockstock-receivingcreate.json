@@ -1,0 +1,292 @@
+{
+  "url": "https://trial.proclinicth.com/admin",
+  "totalRequests": 3,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/admin/api/dashboard/main",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "total_sale": "43314132.57",
+        "avg_total_price": "30861.832315",
+        "avg_course_per_sale": "1.622147",
+        "pledge_amount": "2034622.00",
+        "overdue_amount": "3719003.64",
+        "stock_cost": "1040250379.40850000",
+        "clinic_customer": 437,
+        "branch_customer": 384,
+        "today_customer": 1,
+        "income": "39412194.04"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/stat",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "today_appointment_count": 6,
+        "online_appointment_count": 0,
+        "stock_transfer": 1,
+        "stock_receiving": 1,
+        "central_stock_transfer": 5,
+        "central_stock_withdrawal": 10,
+        "central_stock_receiving": 0
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/dashboard/sub?period_select=week&period=",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "summary_sale_label": [
+          "14/04/2026",
+          "15/04/2026",
+          "16/04/2026",
+          "17/04/2026",
+          "18/04/2026",
+          "19/04/2026",
+          "20/04/2026"
+        ],
+        "summary_sale_data": [
+          0,
+          "200.00",
+          "32000.00",
+          "28999.00",
+          "60000.00",
+          0,
+          "10300.00"
+        ],
+        "average_sale_data": [
+          0,
+          "200.000000",
+          "16000.000000",
+          "28999.000000",
+          "30000.000000",
+          0,
+          "5150.000000"
+        ],
+        "aov_sale_data": [
+          "30861.832315",
+          "30861.832315",
+          "30861.832315",
+          "30861.832315",
+          "30861.832315",
+          "30861.832315",
+          "30861.832315"
+        ],
+        "top_5_sale_by_course_categories": [
+          {
+            "course_category_name": "HIFU",
+            "category_total": "30000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_category_name": "ไม่ระบุ",
+            "category_total": "27000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_category_name": "นวด",
+            "category_total": "10000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_category_name": "Botox",
+            "category_total": "10000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          }
+        ],
+        "top_5_customer_by_source": [
+          {
+            "source": "ไม่ระบุ",
+            "source_total": 2,
+            "profile_image": "default-admin.png",
+            "membership_badge": "<span class=\"badge bg-general text-gray-2 fw-semibold\" style=\"width: 100px; font-size: 12px;\">ลูกค้าทั่วไป</span>",
+            "aov": 0,
+            "total_sale_price": 0,
+            "total_unpaid": null,
+            "full_customer_name": " |   ",
+            "membership_json": {
+              "membership_id": null,
+              "membership_expiration": null,
+              "membership_name": "",
+              "is_valid": false,
+              "color": "",
+              "credit": null,
+              "point": null,
+              "baht_per_point": null,
+              "discount_percent": null,
+              "membership_expired_in": 0
+            },
+            "sum_credit": 0,
+            "image": null,
+            "membership": null
+          }
+        ],
+        "doctor_df": "3255.00",
+        "assistance_df": "1040.00",
+        "order_count": 3,
+        "stock_change_count": 0,
+        "top_10_sale_by_course": [
+          {
+            "course_name": "filler 1 cc",
+            "total_qty": "1.00",
+            "sale_total": "25000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "H_HIFU 500 Shot",
+            "total_qty": "1.00",
+            "sale_total": "15000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "G_HIFU 500 Shot",
+            "total_qty": "1.00",
+            "sale_total": "15000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "นวกผ่อนคลาย 5 ครั้ง",
+            "total_qty": "1.00",
+            "sale_total": "10000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "Allergan 100 unit",
+            "total_qty": "1.00",
+            "sale_total": "5000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "botox 100 u",
+            "total_qty": "1.00",
+            "sale_total": "5000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "course_name": "ทดสอบ Botox",
+            "total_qty": "1.00",
+            "sale_total": "2000.0000",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          }
+        ],
+        "top_10_sale_by_promotion": [],
+        "top_10_sale_by_customer": [
+          {
+            "firstname": "ปกป้อง",
+            "lastname": "ซื่อตรง",
+            "nickname": null,
+            "sale_total": "94249.00",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "firstname": "สมชาย",
+            "lastname": "มีโชค",
+            "nickname": null,
+            "sale_total": "32000.00",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "firstname": "Mega Smile",
+            "lastname": null,
+            "nickname": null,
+            "sale_total": "5050.00",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "firstname": "อุ้ม",
+            "lastname": "DE",
+            "nickname": null,
+            "sale_total": "200.00",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          }
+        ],
+        "top_10_sale_by_seller": [
+          {
+            "firstname": "Game",
+            "lastname": null,
+            "nickname": null,
+            "sale_count": 7,
+            "avg_sale_total": "10927.898571",
+            "sale_total": "76495.29",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          },
+          {
+            "firstname": "bbek",
+            "lastname": null,
+            "nickname": null,
+            "sale_count": 6,
+            "avg_sale_total": "3724.916667",
+            "sale_total": "22349.50",
+            "formatted_sale_id": "INV01700000",
+            "formatted_receipt_id": "RCPT01700000",
+            "left_amount": 0,
+            "paid_total": 0
+          }
+        ],
+        "sale_total_invoice": 8,
+        "sale_total_canceled_invoice": 1,
+        "sale_total_deposit": "10000.00",
+        "sale_total_deposit_count": 1,
+        "sale_total_membership_invoice": "50000.00",
+        "sale_total_membership_invoice_count": 1,
+        "stat_neary_expiration_count": 6,
+        "stat_neary_out_of_stock_count": 30,
+        "appointment_count": 35,
+        "online_appointment_count": 0
+      }
+    }
+  ]
+}

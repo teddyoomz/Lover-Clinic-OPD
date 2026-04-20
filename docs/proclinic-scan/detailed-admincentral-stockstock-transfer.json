@@ -1,0 +1,208 @@
+{
+  "url": "https://trial.proclinicth.com/admin/central-stock/stock-transfer",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/central-stock/stock-transfer",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "source_stock_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ต้นทางทั้งหมด"
+            },
+            {
+              "v": "central_stock_30",
+              "t": "Test test"
+            },
+            {
+              "v": "central_stock_27",
+              "t": "คลัง test"
+            },
+            {
+              "v": "central_stock_2",
+              "t": "คลัง 2"
+            },
+            {
+              "v": "central_stock_1",
+              "t": "คลัง 1"
+            },
+            {
+              "v": "branch_27",
+              "t": "สาขา ชลบุรี"
+            },
+            {
+              "v": "branch_28",
+              "t": "สาขา พระราม9"
+            },
+            {
+              "v": "branch_37",
+              "t": "สาขา ราชพฤกษ์"
+            },
+            {
+              "v": "branch_38",
+              "t": "สาขา สุขุมวิท"
+            },
+            {
+              "v": "branch_60",
+              "t": "สาขา สยาม"
+            }
+          ]
+        },
+        {
+          "name": "destination_stock_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ปลายทางทั้งหมด"
+            },
+            {
+              "v": "central_stock_30",
+              "t": "Test test"
+            },
+            {
+              "v": "central_stock_27",
+              "t": "คลัง test"
+            },
+            {
+              "v": "central_stock_2",
+              "t": "คลัง 2"
+            },
+            {
+              "v": "central_stock_1",
+              "t": "คลัง 1"
+            },
+            {
+              "v": "branch_27",
+              "t": "สาขา ชลบุรี"
+            },
+            {
+              "v": "branch_28",
+              "t": "สาขา พระราม9"
+            },
+            {
+              "v": "branch_37",
+              "t": "สาขา ราชพฤกษ์"
+            },
+            {
+              "v": "branch_38",
+              "t": "สาขา สุขุมวิท"
+            },
+            {
+              "v": "branch_60",
+              "t": "สาขา สยาม"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สถานะทั้งหมด"
+            },
+            {
+              "v": "0",
+              "t": "รอส่งสินค้า"
+            },
+            {
+              "v": "1",
+              "t": "รอรับสินค้า"
+            },
+            {
+              "v": "2",
+              "t": "สำเร็จ"
+            },
+            {
+              "v": "3",
+              "t": "ยกเลิก"
+            },
+            {
+              "v": "4",
+              "t": "ปฏิเสธ"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/central-stock/stock-transfer/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "canceled_note",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/central-stock/stock-transfer/delivery",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "delivered_tracking_number",
+          "type": "text",
+          "label": "เลขพัสดุ",
+          "required": false,
+          "placeholder": "กรอกเลขพัสดุ",
+          "isSelect2": false
+        },
+        {
+          "name": "delivered_note",
+          "type": "textarea",
+          "label": "หมายเหตุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-image",
+          "type": "file",
+          "label": "แนบรูปภาพสินค้า",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

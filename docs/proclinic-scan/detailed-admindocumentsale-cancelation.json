@@ -1,0 +1,28 @@
+{
+  "url": "https://trial.proclinicth.com/admin/document/sale-cancelation",
+  "totalForms": 1,
+  "forms": [
+    {
+      "id": "form-edit-document",
+      "action": "/admin/document/sale-cancelation",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "document_name",
+          "type": "text",
+          "label": "ชื่อเอกสาร",
+          "required": false,
+          "placeholder": "กรอกชื่อเอกสาร",
+          "isSelect2": false
+        },
+        {
+          "name": "edit_image",
+          "type": "file",
+          "label": "แนบรูปเอกสาร",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

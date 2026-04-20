@@ -1,0 +1,452 @@
+{
+  "url": "https://trial.proclinicth.com/admin/treatment",
+  "totalForms": 5,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/treatment",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงวันที่รักษา",
+          "isSelect2": false
+        },
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "เลือกแพทย์/ผู้ช่วยแพทย์"
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "462",
+              "t": "In"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "633",
+              "t": "ดรีม ฝันหวาน"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สถานะ"
+            },
+            {
+              "v": "completed",
+              "t": "สำเร็จ"
+            },
+            {
+              "v": "draft",
+              "t": "แบบร่าง"
+            },
+            {
+              "v": "canceled",
+              "t": "ยกเลิก"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "has_df",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ประเภทค่ามือ"
+            },
+            {
+              "v": "1",
+              "t": "มีค่ามือ"
+            },
+            {
+              "v": "0",
+              "t": "ไม่มีค่ามือ"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "treatment_information",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "1",
+              "t": "มีข้อมูลการรักษา"
+            },
+            {
+              "v": "0",
+              "t": "ไม่มีข้อมูลการรักษา"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/treatment/image",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "edit-add-before-image",
+          "type": "file",
+          "label": "เพิ่มรูปก่อนรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-add-after-image",
+          "type": "file",
+          "label": "เพิ่มรูปหลังรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "treatment_information",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "ข้อมูลการรักษา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/treatment/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/treatment",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": true,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "308",
+              "t": "นาสาว An เอ (เอ)"
+            },
+            {
+              "v": "671",
+              "t": "eba"
+            },
+            {
+              "v": "462",
+              "t": "In (in)"
+            },
+            {
+              "v": "511",
+              "t": "namfon nam (fon)"
+            },
+            {
+              "v": "400",
+              "t": "Wee 523"
+            },
+            {
+              "v": "609",
+              "t": "กภ ก้อง"
+            },
+            {
+              "v": "794",
+              "t": "คุณบี"
+            },
+            {
+              "v": "95",
+              "t": "ผู้ช่วย ดรีม"
+            },
+            {
+              "v": "633",
+              "t": "ดรีม ฝันหวาน"
+            },
+            {
+              "v": "85",
+              "t": "หมอ น้ำตาล"
+            },
+            {
+              "v": "632",
+              "t": "นิ ศา (หมอวิว)"
+            },
+            {
+              "v": "617",
+              "t": "นิ่ม เทสเดโม่"
+            },
+            {
+              "v": "97",
+              "t": "ผู้ช่วย ปาล์ม"
+            },
+            {
+              "v": "410",
+              "t": "คุณ พิมพ์"
+            },
+            {
+              "v": "96",
+              "t": "หมอ ฟ้า"
+            },
+            {
+              "v": "646",
+              "t": "นางสาว รัชนี เส็งมา (อ้อม)"
+            },
+            {
+              "v": "465",
+              "t": "สุข ใจ (ชีวา)"
+            },
+            {
+              "v": "619",
+              "t": "หมอนุ่น"
+            },
+            {
+              "v": "309",
+              "t": "นาสาว เอ เอ (เอ)"
+            },
+            {
+              "v": "618",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "620",
+              "t": "โค้ชอาร์ท"
+            },
+            {
+              "v": "601",
+              "t": "ใหม่"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "symptoms",
+          "type": "textarea",
+          "label": "อาการ",
+          "required": false,
+          "placeholder": "อาการ",
+          "isSelect2": false
+        },
+        {
+          "name": "diagnosis",
+          "type": "textarea",
+          "label": "วินิจฉัย",
+          "required": false,
+          "placeholder": "วินิจฉัย",
+          "isSelect2": false
+        },
+        {
+          "name": "physical_therapy",
+          "type": "textarea",
+          "label": "กายภาพบำบัด",
+          "required": false,
+          "placeholder": "กายภาพบำบัด",
+          "isSelect2": false
+        },
+        {
+          "name": "is_actually_come",
+          "type": "checkbox",
+          "label": "ผู้ป่วยได้มารับการตรวจรักษาวันนี้จริง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "rest",
+          "type": "checkbox",
+          "label": "ให้หยุดพัก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงวันที่หยุดพัก",
+          "isSelect2": false
+        },
+        {
+          "name": "other",
+          "type": "checkbox",
+          "label": "อื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "other_detail",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "ระบุข้อมูลอื่นๆ",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "action": "/admin/treatment",
+      "method": "GET",
+      "fields": [
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกวันที่รักษา",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

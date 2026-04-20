@@ -1,0 +1,323 @@
+{
+  "url": "https://trial.proclinicth.com/admin/membership",
+  "totalForms": 4,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/membership",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกสถานะการขาย"
+            },
+            {
+              "v": "4",
+              "t": "แบ่งชำระ"
+            },
+            {
+              "v": "2",
+              "t": "ชำระแล้ว"
+            },
+            {
+              "v": "6",
+              "t": "ค้างชำระ"
+            },
+            {
+              "v": "3",
+              "t": "ยกเลิก"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-payment",
+      "action": "/admin/sale/payment",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "payment-remaining-amount",
+          "type": "text",
+          "label": "ยอดคงเหลือ (ยอดทั้งหมด  บาท)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ชำระเงิน",
+          "required": true,
+          "placeholder": "กรอกวันที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "usingDeposit",
+          "type": "checkbox",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "deposit",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอกยอดมัดจำ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "usingWallet",
+          "type": "checkbox",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "customer_wallet_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            }
+          ]
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกยอด Wallet",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod1",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 1",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod2",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_2",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_2",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 2",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod3",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method_3",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount_3",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ 3",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "ref_no",
+          "type": "text",
+          "label": "เลขที่อ้างอิงใบเสร็จหน้าร้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "label": "แนบหลักฐานชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-setting",
+      "action": "/admin/membership",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "membership_name",
+          "type": "text",
+          "label": "ชื่อบัตร",
+          "required": true,
+          "placeholder": "กรอกชื่อบัตร",
+          "isSelect2": false
+        },
+        {
+          "name": "color",
+          "type": "text",
+          "label": "สีบัตร",
+          "required": false,
+          "placeholder": "กรอกชื่อบัตร",
+          "isSelect2": false
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "label": "เงินในบัตร (บาท)",
+          "required": true,
+          "placeholder": "กรอกเงินในบัตร",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "discount_percent",
+          "type": "number",
+          "label": "ส่วนลด On Top (%)",
+          "required": true,
+          "placeholder": "กรอกส่วนลด Ontop",
+          "min": "0",
+          "max": "100",
+          "isSelect2": false
+        },
+        {
+          "name": "point",
+          "type": "number",
+          "label": "คะแนนในบัตร (คะแนน)",
+          "required": true,
+          "placeholder": "กรอกคะแนนในบัตร",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "baht_per_point",
+          "type": "number",
+          "label": "ยอดซื้อต่อ 1 คะแนน",
+          "required": true,
+          "placeholder": "กรอกอายุ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "label": "ราคาบัตร (บาท)",
+          "required": true,
+          "placeholder": "กรอกราคาบัตร",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "expired_in",
+          "type": "number",
+          "label": "อายุ (จำนวนวัน) ที่ได้รับสิทธิประโยชน์",
+          "required": true,
+          "placeholder": "กรอกอายุ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/membership/cancel",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "cancel_image",
+          "type": "file",
+          "label": "แนบหลักฐานการยกเลิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1172 @@
+{
+  "url": "https://trial.proclinicth.com/admin/appointment",
+  "totalRequests": 4,
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/admin/api/appointment-month?doctor_id=&current_date=2026-04-20",
+      "status": 200,
+      "postData": null,
+      "response": [
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-02",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-04",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-05",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-06",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-07",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-09",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-10",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-11",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-12",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-13",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-14",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-15",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-16",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-17",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-18",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-19",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 7
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-20",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-21",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-22",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-23",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-24",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-25",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 2
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-26",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-27",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-28",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-29",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-30",
+          "backgroundColor": "#EB5757",
+          "extendedProps": {
+            "appointment_count": 11
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-31",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-01",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-02",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-03",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-05",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-06",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-07",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-08",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-09",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 7
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-10",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-11",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-12",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-13",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 2
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-14",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-15",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-16",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-17",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-18",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-19",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-20",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-21",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-25",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-29",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/appointment-month?doctor_id=&current_date=2026-04-01",
+      "status": 200,
+      "postData": null,
+      "response": [
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-02",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-04",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-05",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-06",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-07",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-09",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-10",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-11",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-12",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-13",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-14",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-15",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-16",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-17",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-18",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-19",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 7
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-20",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-21",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-22",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-23",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-24",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-25",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 2
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-26",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-27",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-28",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-29",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 3
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-30",
+          "backgroundColor": "#EB5757",
+          "extendedProps": {
+            "appointment_count": 11
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-03-31",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-01",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-02",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-03",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-05",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-06",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-07",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-08",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-09",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 7
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-10",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-11",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-12",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-13",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 2
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-14",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-15",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-16",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-17",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 4
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-18",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 6
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-19",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-20",
+          "backgroundColor": "#FF9F1C",
+          "extendedProps": {
+            "appointment_count": 5
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-21",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-25",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        },
+        {
+          "id": "id",
+          "title": "event",
+          "start": "2026-04-29",
+          "backgroundColor": "#2F80ED",
+          "extendedProps": {
+            "appointment_count": 1
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/appointment?date=2026-04-20&doctor_id=",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "appointment": [
+          {
+            "id": 3469,
+            "title": "ลูกค้า: ปกป้อง ซื่อตรง  แพทย์: -",
+            "start": "2026-04-20 10:00:00",
+            "end": "2026-04-20 10:30:00",
+            "backgroundColor": "#F8FAFD",
+            "resourceId": 245,
+            "borderColor": "rgb(234 236 243)",
+            "textColor": "black",
+            "extendedProps": {
+              "id": 3469,
+              "customer_id": 13646,
+              "customer_name": "ปกป้อง ซื่อตรง",
+              "hn_id": "HN69000519",
+              "customer_name_with_nickname": "ปกป้อง ซื่อตรง",
+              "full_customer_name": "HN69000519 | ปกป้อง ซื่อตรง (0655529999)",
+              "doctor_id": null,
+              "doctor_name": "",
+              "assistants": "-",
+              "examination_room_id": 245,
+              "examination_room_name": "นักกายภาพ",
+              "appointment_date": "2026-04-20",
+              "appointment_start_time": "10:00",
+              "appointment_end_time": "10:30",
+              "source": null,
+              "note": "test A - existed",
+              "customer_note": null,
+              "appointment_to": null,
+              "preparation": null,
+              "status": "3",
+              "eventColor": "#2EC4B6",
+              "appointment_color": null,
+              "editable": false,
+              "confirmed": true,
+              "appointment_group_id": null,
+              "appointment_type": "sales",
+              "advisor_id": null,
+              "expected_sales": null,
+              "appointment_location": null,
+              "can_manage": true,
+              "assistant_ids": [],
+              "changed": false
+            }
+          },
+          {
+            "id": 3559,
+            "title": "ลูกค้า: Mega Smile   แพทย์: -",
+            "start": "2026-04-20 13:00:00",
+            "end": "2026-04-20 13:30:00",
+            "backgroundColor": "#F8FAFD",
+            "resourceId": 245,
+            "borderColor": "rgb(234 236 243)",
+            "textColor": "black",
+            "extendedProps": {
+              "id": 3559,
+              "customer_id": 13851,
+              "customer_name": "Mega Smile ",
+              "hn_id": "HN69000619",
+              "customer_name_with_nickname": "Mega Smile ",
+              "full_customer_name": "HN69000619 | Mega Smile  ",
+              "doctor_id": null,
+              "doctor_name": "",
+              "assistants": "-",
+              "examination_room_id": 245,
+              "examination_room_name": "นักกายภาพ",
+              "appointment_date": "2026-04-20",
+              "appointment_start_time": "13:00",
+              "appointment_end_time": "13:30",
+              "source": null,
+              "note": null,
+              "customer_note": null,
+              "appointment_to": "botox, filler",
+              "preparation": null,
+              "status": "3",
+              "eventColor": "#2EC4B6",
+              "appointment_color": null,
+              "editable": false,
+              "confirmed": true,
+              "appointment_group_id": null,
+              "appointment_type": "follow",
+              "advisor_id": null,
+              "expected_sales": null,
+              "appointment_location": null,
+              "can_manage": true,
+              "assistant_ids": [],
+              "changed": false
+            }
+          },
+          {
+            "id": 3563,
+            "title": "ลูกค้า: ปกป้อง ซื่อตรง  แพทย์: หมอ น้ำตาล ",
+            "start": "2026-04-20 13:30:00",
+            "end": "2026-04-20 14:00:00",
+            "backgroundColor": "#EA4747",
+            "resourceId": 198,
+            "borderColor": "rgb(234 236 243)",
+            "textColor": "#FFFFFF",
+            "extendedProps": {
+              "id": 3563,
+              "customer_id": 13646,
+              "customer_name": "ปกป้อง ซื่อตรง",
+              "hn_id": "HN69000519",
+              "customer_name_with_nickname": "ปกป้อง ซื่อตรง",
+              "full_customer_name": "HN69000519 | ปกป้อง ซื่อตรง (0655529999)",
+              "doctor_id": 85,
+              "doctor_name": "หมอ น้ำตาล ",
+              "assistants": "ดรีม ฝันหวาน",
+              "examination_room_id": 198,
+              "examination_room_name": "นักกายภาพA x",
+              "appointment_date": "2026-04-20",
+              "appointment_start_time": "13:30",
+              "appointment_end_time": "14:00",
+              "source": "โทรศัพท์",
+              "note": null,
+              "customer_note": null,
+              "appointment_to": null,
+              "preparation": null,
+              "status": "0",
+              "eventColor": "#56ccf2",
+              "appointment_color": "#EA4747",
+              "editable": true,
+              "confirmed": false,
+              "appointment_group_id": 109,
+              "appointment_type": "follow",
+              "advisor_id": null,
+              "expected_sales": null,
+              "appointment_location": null,
+              "can_manage": true,
+              "assistant_ids": [
+                "633"
+              ],
+              "changed": false
+            }
+          },
+          {
+            "id": 3564,
+            "title": "ลูกค้า: Mega Smile   แพทย์: -",
+            "start": "2026-04-20 13:00:00",
+            "end": "2026-04-20 13:30:00",
+            "backgroundColor": "#F8FAFD",
+            "resourceId": 245,
+            "borderColor": "rgb(234 236 243)",
+            "textColor": "black",
+            "extendedProps": {
+              "id": 3564,
+              "customer_id": 13851,
+              "customer_name": "Mega Smile ",
+              "hn_id": "HN69000619",
+              "customer_name_with_nickname": "Mega Smile ",
+              "full_customer_name": "HN69000619 | Mega Smile  ",
+              "doctor_id": null,
+              "doctor_name": "",
+              "assistants": "-",
+              "examination_room_id": 245,
+              "examination_room_name": "นักกายภาพ",
+              "appointment_date": "2026-04-20",
+              "appointment_start_time": "13:00",
+              "appointment_end_time": "13:30",
+              "source": null,
+              "note": null,
+              "customer_note": null,
+              "appointment_to": "botox, filler",
+              "preparation": null,
+              "status": "0",
+              "eventColor": "#2EC4B6",
+              "appointment_color": null,
+              "editable": true,
+              "confirmed": false,
+              "appointment_group_id": null,
+              "appointment_type": "follow",
+              "advisor_id": null,
+              "expected_sales": null,
+              "appointment_location": null,
+              "can_manage": true,
+              "assistant_ids": [],
+              "changed": false
+            }
+          },
+          {
+            "id": 3565,
+            "title": "ลูกค้า: ปกป้อง ซื่อตรง  แพทย์: หมอ น้ำตาล ",
+            "start": "2026-04-20 14:00:00",
+            "end": "2026-04-20 14:30:00",
+            "backgroundColor": "#EA4747",
+            "resourceId": 123,
+            "borderColor": "rgb(234 236 243)",
+            "textColor": "#FFFFFF",
+            "extendedProps": {
+              "id": 3565,
+              "customer_id": 13646,
+              "customer_name": "ปกป้อง ซื่อตรง",
+              "hn_id": "HN69000519",
+              "customer_name_with_nickname": "ปกป้อง ซื่อตรง",
+              "full_customer_name": "HN69000519 | ปกป้อง ซื่อตรง (0655529999)",
+              "doctor_id": 85,
+              "doctor_name": "หมอ น้ำตาล ",
+              "assistants": "ผู้ช่วย ดรีม ",
+              "examination_room_id": 123,
+              "examination_room_name": "ห้อง 3",
+              "appointment_date": "2026-04-20",
+              "appointment_start_time": "14:00",
+              "appointment_end_time": "14:30",
+              "source": "Facebook",
+              "note": null,
+              "customer_note": null,
+              "appointment_to": "ให้คำปรึกษา",
+              "preparation": null,
+              "status": "2",
+              "eventColor": "#56ccf2",
+              "appointment_color": "#EA4747",
+              "editable": true,
+              "confirmed": true,
+              "appointment_group_id": null,
+              "appointment_type": "sales",
+              "advisor_id": null,
+              "expected_sales": null,
+              "appointment_location": null,
+              "can_manage": true,
+              "assistant_ids": [
+                "95"
+              ],
+              "changed": false
+            }
+          }
+        ],
+        "day_note": "งดทำ Pico"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "/admin/api/stat",
+      "status": 200,
+      "postData": null,
+      "response": {
+        "today_appointment_count": 5,
+        "online_appointment_count": 0,
+        "stock_transfer": 1,
+        "stock_receiving": 1,
+        "central_stock_transfer": 5,
+        "central_stock_withdrawal": 10,
+        "central_stock_receiving": 0
+      }
+    }
+  ]
+}

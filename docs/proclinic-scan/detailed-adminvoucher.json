@@ -1,0 +1,291 @@
+{
+  "url": "https://trial.proclinicth.com/admin/voucher",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/voucher",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-create-voucher",
+      "action": "/admin/voucher",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับคลินิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "voucher_name",
+          "type": "text",
+          "label": "ชื่อ Voucher",
+          "required": true,
+          "placeholder": "กรอกชื่อ Voucher",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price",
+          "type": "number",
+          "label": "ราคาขาย (Inc. VAT)",
+          "required": true,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "commission_percent",
+          "type": "number",
+          "label": "% ค่าธรรมเนียม",
+          "required": true,
+          "placeholder": "กรอก %",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "has_period",
+          "type": "checkbox",
+          "label": "กำหนดช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "ช่วงเวลา",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        },
+        {
+          "name": "platform",
+          "type": "select-one",
+          "label": "Platform",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "HDmall",
+              "t": "HDmall"
+            },
+            {
+              "v": "GoWabi",
+              "t": "GoWabi"
+            },
+            {
+              "v": "SkinX",
+              "t": "SkinX"
+            },
+            {
+              "v": "Shopee",
+              "t": "Shopee"
+            },
+            {
+              "v": "Tiktok",
+              "t": "Tiktok"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "Platform",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "label": "รายละเอียด",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "course-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาคอร์ส",
+          "isSelect2": false
+        },
+        {
+          "name": "product-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาสินค้าหน้าร้าน",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-edit-voucher",
+      "action": "/admin/voucher",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับคลินิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "usage_type",
+          "type": "radio",
+          "label": "ระดับสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "voucher_name",
+          "type": "text",
+          "label": "ชื่อ Voucher",
+          "required": true,
+          "placeholder": "กรอกชื่อ Voucher",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price",
+          "type": "number",
+          "label": "ราคาขาย (Inc. VAT)",
+          "required": true,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "commission_percent",
+          "type": "number",
+          "required": true,
+          "placeholder": "กรอก %",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "has_period",
+          "type": "checkbox",
+          "label": "กำหนดช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "ช่วงเวลา",
+          "required": false,
+          "placeholder": "เลือกช่วงเวลา",
+          "isSelect2": false
+        },
+        {
+          "name": "platform",
+          "type": "select-one",
+          "label": "Platform",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "HDmall",
+              "t": "HDmall"
+            },
+            {
+              "v": "GoWabi",
+              "t": "GoWabi"
+            },
+            {
+              "v": "SkinX",
+              "t": "SkinX"
+            },
+            {
+              "v": "Shopee",
+              "t": "Shopee"
+            },
+            {
+              "v": "Tiktok",
+              "t": "Tiktok"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "label": "Platform",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "description",
+          "type": "textarea",
+          "label": "รายละเอียด",
+          "required": false,
+          "placeholder": "กรอกรายละเอียด",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-course-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาคอร์ส",
+          "isSelect2": false
+        },
+        {
+          "name": "edit-product-search",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหาสินค้าหน้าร้าน",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

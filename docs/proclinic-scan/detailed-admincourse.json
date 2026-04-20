@@ -1,0 +1,335 @@
+{
+  "url": "https://trial.proclinicth.com/admin/course",
+  "totalForms": 2,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/course",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "course_type",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "ระบุสินค้าและจำนวนสินค้า",
+              "t": "ระบุสินค้าและจำนวนสินค้า"
+            },
+            {
+              "v": "บุฟเฟต์",
+              "t": "บุฟเฟต์"
+            },
+            {
+              "v": "เหมาตามจริง",
+              "t": "เหมาตามจริง"
+            },
+            {
+              "v": "เลือกสินค้าตามจริง",
+              "t": "เลือกสินค้าตามจริง"
+            }
+          ]
+        },
+        {
+          "name": "course_category",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "Botox",
+              "t": "Botox"
+            },
+            {
+              "v": "Laser",
+              "t": "Laser"
+            },
+            {
+              "v": "Treatment",
+              "t": "Treatment"
+            },
+            {
+              "v": "HIFU",
+              "t": "HIFU"
+            },
+            {
+              "v": "Vitamin",
+              "t": "Vitamin"
+            },
+            {
+              "v": "นวด",
+              "t": "นวด"
+            },
+            {
+              "v": "Filler",
+              "t": "Filler"
+            },
+            {
+              "v": "Consult",
+              "t": "Consult"
+            },
+            {
+              "v": "IV",
+              "t": "IV"
+            },
+            {
+              "v": "สิว",
+              "t": "สิว"
+            },
+            {
+              "v": "ทรีทเม้นท์",
+              "t": "ทรีทเม้นท์"
+            },
+            {
+              "v": "pico",
+              "t": "pico"
+            },
+            {
+              "v": "Ultraformer",
+              "t": "Ultraformer"
+            },
+            {
+              "v": "meso",
+              "t": "meso"
+            },
+            {
+              "v": "fat",
+              "t": "fat"
+            },
+            {
+              "v": "ทันตกรรมทั่วไป",
+              "t": "ทันตกรรมทั่วไป"
+            },
+            {
+              "v": "ทันตกรรมจัดฟัน",
+              "t": "ทันตกรรมจัดฟัน"
+            },
+            {
+              "v": "ตรวจรักษา",
+              "t": "ตรวจรักษา"
+            },
+            {
+              "v": "บริการ",
+              "t": "บริการ"
+            },
+            {
+              "v": "สักคิ้ว",
+              "t": "สักคิ้ว"
+            },
+            {
+              "v": "Ultrafomer III",
+              "t": "Ultrafomer III"
+            },
+            {
+              "v": "อัลตร้าฟอเมอร์",
+              "t": "อัลตร้าฟอเมอร์"
+            },
+            {
+              "v": "ปรึกษา",
+              "t": "ปรึกษา"
+            },
+            {
+              "v": "ออกกำลัฃกาย",
+              "t": "ออกกำลัฃกาย"
+            },
+            {
+              "v": "ลดไขมัน",
+              "t": "ลดไขมัน"
+            },
+            {
+              "v": "บำบัด",
+              "t": "บำบัด"
+            },
+            {
+              "v": "picosure",
+              "t": "picosure"
+            },
+            {
+              "v": "แพทย์แผนจีน",
+              "t": "แพทย์แผนจีน"
+            },
+            {
+              "v": "สปา",
+              "t": "สปา"
+            },
+            {
+              "v": "mpt",
+              "t": "mpt"
+            }
+          ]
+        },
+        {
+          "name": "course_status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "3",
+              "t": "ใช้งาน"
+            },
+            {
+              "v": "2",
+              "t": "ไม่ใช้งาน"
+            },
+            {
+              "v": "1",
+              "t": "สินค้าถูกลบ/พักใช้งาน"
+            }
+          ]
+        },
+        {
+          "name": "usage_type",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทั้งหมด"
+            },
+            {
+              "v": "clinic",
+              "t": "ระดับคลินิก"
+            },
+            {
+              "v": "branch",
+              "t": "ระดับสาขา"
+            }
+          ]
+        },
+        {
+          "name": "order_by",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "course_category_name_asc",
+              "t": "เรียงหมวดหมู่คอร์ส"
+            },
+            {
+              "v": "course_name_asc",
+              "t": "เรียงชื่อคอร์ส"
+            },
+            {
+              "v": "created_at_desc",
+              "t": "เรียงใหม่ไปเก่า"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/course/duplicate",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "duplicate-old-course",
+          "type": "text",
+          "label": "คอร์สที่คัดลอก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "course_name",
+          "type": "text",
+          "label": "ชื่อคอร์สใหม่",
+          "required": true,
+          "placeholder": "กรอกชื่อคอร์ส",
+          "isSelect2": false
+        },
+        {
+          "name": "receipt_course_name",
+          "type": "text",
+          "label": "ชื่อคอร์ส (แสดงในใบเสร็จ)",
+          "required": false,
+          "placeholder": "กรณีเว้นว่าง จะได้ชื่อคอร์สด้านบนในใบเสร็จ",
+          "isSelect2": false
+        },
+        {
+          "name": "course_code",
+          "type": "text",
+          "label": "รหัสคอร์สใหม่",
+          "required": false,
+          "placeholder": "กรอกรหัสคอร์สใหม่",
+          "isSelect2": false
+        },
+        {
+          "name": "time",
+          "type": "number",
+          "label": "จำนวนครั้ง",
+          "required": true,
+          "placeholder": "กรอกจำนวนครั้ง",
+          "min": "1",
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price",
+          "type": "number",
+          "label": "ราคาขาย",
+          "required": true,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "sale_price_incl_vat",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}
