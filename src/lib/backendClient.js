@@ -982,7 +982,27 @@ function beProductToMasterShape(p) {
   };
 }
 
-function beCourseToMasterShape(c) {
+function beCourseToMasterShape(c, opts = {}) {
+  // Phase 12.11 bug fix (2026-04-20): be_courses stores nested items as
+  // `courseProducts: [{productId, productName, qty}]` but master_data shape
+  // (consumed by TreatmentFormPage buy modal + SaleTab + PromotionFormModal)
+  // expects `products: [{id, name, qty, unit}]`. Without this mapping, a
+  // course created via our CoursesTab shows its NAME in the treatment-form
+  // course column but NO checkboxes for the sub-items to deduct. Unit is
+  // enriched via opts.productLookup (preloaded be_products Map).
+  const productLookup = opts.productLookup instanceof Map ? opts.productLookup : null;
+  const products = Array.isArray(c.courseProducts)
+    ? c.courseProducts.map(cp => {
+        const pid = String(cp.productId || cp.id || '');
+        const enriched = productLookup?.get(pid) || {};
+        return {
+          id: pid,
+          name: cp.productName || enriched.name || '',
+          qty: Number(cp.qty) || 0,
+          unit: cp.unit || enriched.unit || 'ครั้ง',
+        };
+      })
+    : [];
   return {
     ...c,
     id: c.courseId || c.id,
@@ -997,6 +1017,7 @@ function beCourseToMasterShape(c) {
     time: c.time ?? null,
     course_category: c.courseCategory || '',
     category: c.courseCategory || '',
+    products,
     status: c.status === 'พักใช้งาน' ? 0 : 1,
   };
 }
@@ -1048,8 +1069,31 @@ const BE_BACKED_MASTER_TYPES = Object.freeze({
 async function readBeForMasterType(type) {
   const conf = BE_BACKED_MASTER_TYPES[type];
   if (!conf) return null;
+  // Phase 12.11 bug fix (2026-04-20): courses reference products by id only —
+  // preload be_products into a Map so beCourseToMasterShape can enrich each
+  // nested courseProduct with its real unit (and fall back to stored name).
+  // Single extra getDocs per getAllMasterDataItems('courses') call.
+  let opts = {};
+  if (type === 'courses') {
+    try {
+      const productSnap = await getDocs(collection(db, ...basePath(), 'be_products'));
+      const productLookup = new Map();
+      productSnap.docs.forEach(d => {
+        const p = d.data();
+        const pid = String(p.productId || d.id || '');
+        if (!pid) return;
+        productLookup.set(pid, {
+          name: p.productName || '',
+          unit: p.mainUnitName || '',
+        });
+      });
+      opts = { productLookup };
+    } catch {
+      // be_products may not exist yet (pre-seed) — fall through with empty lookup
+    }
+  }
   const snap = await getDocs(collection(db, ...basePath(), conf.col));
-  return snap.docs.map(d => conf.map({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => conf.map({ id: d.id, ...d.data() }, opts));
 }
 
 /**

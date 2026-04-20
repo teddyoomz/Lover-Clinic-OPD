@@ -125,22 +125,24 @@ describe('Phase 12.11 — getAllMasterDataItems reads be_* first for backed type
 
   it('BE7: courses adapter maps be_courses', async () => {
     const { getDocs } = await import('firebase/firestore');
-    getDocs.mockResolvedValueOnce({
-      docs: [{
-        id: 'COURSE-1',
-        data: () => ({
-          courseId: 'COURSE-1',
-          courseName: 'Laser',
-          courseCode: 'L01',
-          receiptCourseName: 'เลเซอร์',
-          salePrice: 2500,
-          salePriceInclVat: 2675,
-          time: 30,
-          courseCategory: 'Laser',
-          status: 'ใช้งาน',
-        }),
-      }],
-    });
+    getDocs
+      .mockResolvedValueOnce({ docs: [] })  // be_products empty (no enrichment needed for this case)
+      .mockResolvedValueOnce({
+        docs: [{
+          id: 'COURSE-1',
+          data: () => ({
+            courseId: 'COURSE-1',
+            courseName: 'Laser',
+            courseCode: 'L01',
+            receiptCourseName: 'เลเซอร์',
+            salePrice: 2500,
+            salePriceInclVat: 2675,
+            time: 30,
+            courseCategory: 'Laser',
+            status: 'ใช้งาน',
+          }),
+        }],
+      });
     const items = await mod.getAllMasterDataItems('courses');
     const c = items[0];
     expect(c.id).toBe('COURSE-1');
@@ -153,6 +155,85 @@ describe('Phase 12.11 — getAllMasterDataItems reads be_* first for backed type
     expect(c.price).toBe(2500);  // callers also read .price
     expect(c.category).toBe('Laser');
     expect(c.status).toBe(1);
+    expect(c.products).toEqual([]);  // Phase 12.11 bug fix: always emits products array
+  });
+
+  it('BE7a: courses adapter flattens courseProducts → products with unit enrichment from be_products', async () => {
+    const { getDocs } = await import('firebase/firestore');
+    // First getDocs call = be_products preload for unit lookup
+    getDocs
+      .mockResolvedValueOnce({
+        docs: [
+          { id: 'PROD-A', data: () => ({ productId: 'PROD-A', productName: 'Filler Restylane', mainUnitName: 'ซีซี' }) },
+          { id: 'PROD-B', data: () => ({ productId: 'PROD-B', productName: 'Allergan 100 U', mainUnitName: 'U' }) },
+        ],
+      })
+      // Second getDocs call = be_courses
+      .mockResolvedValueOnce({
+        docs: [{
+          id: 'COURSE-2',
+          data: () => ({
+            courseId: 'COURSE-2',
+            courseName: 'อ่อมลอง 2',
+            salePrice: 4990,
+            courseProducts: [
+              { productId: 'PROD-A', productName: 'Filler Restylane', qty: 1 },
+              { productId: 'PROD-B', productName: 'Allergan 100 U', qty: 100 },
+            ],
+            status: 'ใช้งาน',
+          }),
+        }],
+      });
+    const items = await mod.getAllMasterDataItems('courses');
+    const c = items[0];
+    expect(c.id).toBe('COURSE-2');
+    expect(c.name).toBe('อ่อมลอง 2');
+    expect(Array.isArray(c.products)).toBe(true);
+    expect(c.products).toHaveLength(2);
+    expect(c.products[0]).toEqual({ id: 'PROD-A', name: 'Filler Restylane', qty: 1, unit: 'ซีซี' });
+    expect(c.products[1]).toEqual({ id: 'PROD-B', name: 'Allergan 100 U', qty: 100, unit: 'U' });
+  });
+
+  it('BE7b: courses adapter uses stored productName + default unit when be_products lookup misses', async () => {
+    const { getDocs } = await import('firebase/firestore');
+    getDocs
+      .mockResolvedValueOnce({ docs: [] })  // be_products empty — no enrichment
+      .mockResolvedValueOnce({
+        docs: [{
+          id: 'COURSE-3',
+          data: () => ({
+            courseId: 'COURSE-3',
+            courseName: 'Course with orphan products',
+            courseProducts: [
+              { productId: 'MISSING-1', productName: 'Stored Name', qty: 2 },
+              { productId: 'MISSING-2', qty: 5 },  // no productName
+            ],
+          }),
+        }],
+      });
+    const items = await mod.getAllMasterDataItems('courses');
+    const c = items[0];
+    expect(c.products).toHaveLength(2);
+    expect(c.products[0]).toEqual({ id: 'MISSING-1', name: 'Stored Name', qty: 2, unit: 'ครั้ง' });
+    expect(c.products[1]).toEqual({ id: 'MISSING-2', name: '', qty: 5, unit: 'ครั้ง' });
+  });
+
+  it('BE7c: courses adapter gracefully handles be_products read error', async () => {
+    const { getDocs } = await import('firebase/firestore');
+    getDocs
+      .mockRejectedValueOnce(new Error('products offline'))  // be_products fails
+      .mockResolvedValueOnce({                                // be_courses still works
+        docs: [{
+          id: 'COURSE-4',
+          data: () => ({
+            courseId: 'COURSE-4',
+            courseName: 'Resilient Course',
+            courseProducts: [{ productId: 'P1', productName: 'FromCourse', qty: 1 }],
+          }),
+        }],
+      });
+    const items = await mod.getAllMasterDataItems('courses');
+    expect(items[0].products[0]).toEqual({ id: 'P1', name: 'FromCourse', qty: 1, unit: 'ครั้ง' });
   });
 
   it('BE8: staff adapter composes firstname+lastname into name', async () => {

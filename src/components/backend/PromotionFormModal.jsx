@@ -104,7 +104,13 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     if (!product) return;
     setForm(prev => {
       if (prev.products.some(p => String(p.id) === String(product.id))) return prev;
-      return { ...prev, products: [...prev.products, { id: product.id, name: product.name, qty: 1, price: Number(product.price) || 0 }] };
+      return { ...prev, products: [...prev.products, {
+        id: product.id,
+        name: product.name,
+        qty: 1,
+        price: Number(product.price) || 0,
+        unit: product.unit || '',
+      }] };
     });
     setProductQuery('');
   };
