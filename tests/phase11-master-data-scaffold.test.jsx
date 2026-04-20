@@ -243,9 +243,10 @@ vi.mock('../src/components/backend/reports/RevenueAnalysisTab.jsx', () => ({ def
 vi.mock('../src/components/backend/reports/AppointmentAnalysisTab.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/reports/DailyRevenueTab.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/reports/StaffSalesTab.jsx', () => ({ default: () => <div /> }));
-// Phase 11.2 shipped — ProductGroupsTab is now a real tab (no longer a stub).
-// Mock it here so this scaffold test stays independent of 11.2's internals.
+// Phase 11.2 + 11.3 shipped — ProductGroupsTab + ProductUnitsTab are now real.
+// Mock them here so this scaffold test stays independent of their internals.
 vi.mock('../src/components/backend/ProductGroupsTab.jsx', () => ({ default: () => <div data-testid="t-product-groups" /> }));
+vi.mock('../src/components/backend/ProductUnitsTab.jsx', () => ({ default: () => <div data-testid="t-product-units" /> }));
 vi.mock('../src/components/TreatmentFormPage.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/nav/BackendNav.jsx', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -269,11 +270,9 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-product-groups')).toBeInTheDocument();
   });
 
-  it('R2 ?tab=product-units renders ComingSoon with "หน่วยสินค้า"', async () => {
+  it('R2 ?tab=product-units renders ProductUnitsTab (Phase 11.3 shipped 2026-04-20)', async () => {
     await renderWith('product-units');
-    await screen.findByTestId('coming-soon');
-    expect(screen.getByText('หน่วยสินค้า')).toBeInTheDocument();
-    expect(screen.getByText('Phase 11.3')).toBeInTheDocument();
+    expect(await screen.findByTestId('t-product-units')).toBeInTheDocument();
   });
 
   it('R3 ?tab=medical-instruments renders ComingSoon with "เครื่องหัตถการ"', async () => {

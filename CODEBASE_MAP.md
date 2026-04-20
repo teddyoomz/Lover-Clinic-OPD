@@ -1457,3 +1457,50 @@ First real CRUD tab of the Master Data Suite. Replaces Phase 11.1 ComingSoon stu
 - **H** data ownership: be_product_groups is OUR canonical; master_data/products stays read-only-from-sync
 
 Tests: 2112 → 2157 PASS (+45).
+
+---
+
+## Phase 11.3 Product Unit Groups CRUD (2026-04-20)
+
+Conversion-group model — Triangle (Rule F) captured via fresh `opd.js forms /admin/default-product-unit` after quick-login. ProClinic uses `product_unit_group_name` + `unit_name[]` + `unit_amount[]` (row 0 = smallest with implicit amount=1). Plan memory had oversimplified schema; fresh intel corrected it before code.
+
+**Schema (`be_product_units`):**
+- `unitGroupId` — `UNIT-{ts}-{8hex}` via `generateMarketingId('UNIT')`
+- `groupName` — trimmed, ≤ `GROUP_NAME_MAX_LENGTH` (80)
+- `units[]` — array 1..MAX_UNITS (10):
+  - `name` — trimmed, ≤ `UNIT_NAME_MAX_LENGTH` (40), unique case-insensitive within group
+  - `amount` — integer ≥ 1; row 0 LOCKED to 1 (base rule)
+  - `isBase` — `true` on row 0, `false` elsewhere (enforced by normalizer)
+- `status` / `note` — same pattern as Phase 11.2
+- `createdAt` / `updatedAt` ISO
+
+**New files:**
+- `src/lib/productUnitValidation.js` — `validateProductUnitGroup` (null form, non-string group, bounds, array shape, < MIN / > MAX units, dup names, amount < 1 / non-int / base-amount=1, multi-base rejection), `normalizeProductUnitGroup` (trim, force row 0 base, reset non-base isBase), `emptyProductUnitGroupForm` (1-row seed), 6 frozen constants
+- `src/components/backend/ProductUnitFormModal.jsx` — dynamic add/remove rows; base row has readOnly amount + emerald BASE badge; higher rows show `× {baseName}` suffix
+- `src/components/backend/ProductUnitsTab.jsx` — card shows conversion chain preview (1 base = smallest; 1 higher → N base); reuses MarketingTabShell (5th use)
+
+**Edits:**
+- `src/lib/backendClient.js` — +5 fns (`listProductUnitGroups`, `getProductUnitGroup`, `saveProductUnitGroup`, `deleteProductUnitGroup`, `findProductUnitGroupByName`); `saveProductUnitGroup` dynamically imports validator + normalizer so Firestore never stores inconsistent base flag
+- `src/pages/BackendDashboard.jsx` — swap ComingSoon → ProductUnitsTab for `product-units`
+- `tests/phase11-master-data-scaffold.test.jsx` — R2 updated (no longer ComingSoon); added ProductUnitsTab mock
+
+**New tests — `tests/productUnit.test.jsx` — 51 adversarial:**
+- PUV1-PUV20 validator (happy / null / whitespace / bounds / per-row name+amount / dup name case-insensitive / base=1 rule / multi-base rejection / single-unit group accept / status enum)
+- PUN1-PUN5 normalizer (trim, force base, reset non-base, default status, trim units)
+- PUC1-PUC4 constants (frozen, MIN/MAX sanity)
+- PUE1-PUE2 empty form (1-row seed + no-shared-mutation)
+- E1-E2 Rule E import-only grep
+- PUT1-PUT8 Tab flow (empty, conversion chain display, search matches unit names not just group, status filter, delete confirm yes/no, load error, unit count badge)
+- PUM1-PUM10 Modal flow (create/edit mode, add/remove rows, validate block, crypto id on create, id preserved on edit, save error, base readOnly, ESC close)
+
+**Rule compliance:**
+- **B**: firestore.rules already covers be_product_units (shipped in 11.2 batch) — no re-deploy needed this commit
+- **C1**: 5th reuse of MarketingFormShell/MarketingTabShell chrome
+- **C2**: id via `generateMarketingId('UNIT')` — crypto-random
+- **C3**: justified — distinct conversion-group concern not fitting existing collections
+- **D**: 51 adversarial cases across validator + normalizer + UI + Rule-E static
+- **E**: zero broker/proclinic imports (E1/E2 greps)
+- **F**: Triangle re-run on CF-blocked route; corrected plan schema before coding
+- **H**: OUR canonical data; no write-back to ProClinic; master_data unaffected
+
+Tests: 2157 → 2208 PASS (+51).

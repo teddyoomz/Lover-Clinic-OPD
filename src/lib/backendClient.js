@@ -3975,3 +3975,79 @@ export async function findProductGroupByName(name) {
   }
   return null;
 }
+
+// ─── Product Unit Group CRUD (Phase 11.3 Master Data Suite) ─────────────────
+// Conversion-group model — each doc is a group of units where row 0 is the
+// base (smallest) at amount=1 and rows 1..N declare multiples. Normalization
+// is enforced via normalizeProductUnitGroup so Firestore never stores an
+// inconsistent base flag / amount.
+
+const productUnitsCol = () => collection(db, ...basePath(), 'be_product_units');
+const productUnitDoc = (id) => doc(db, ...basePath(), 'be_product_units', String(id));
+
+export async function getProductUnitGroup(unitGroupId) {
+  const id = String(unitGroupId || '');
+  if (!id) return null;
+  const snap = await getDoc(productUnitDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listProductUnitGroups() {
+  const snap = await getDocs(productUnitsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveProductUnitGroup(unitGroupId, data) {
+  const id = String(unitGroupId || '');
+  if (!id) throw new Error('unitGroupId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeProductUnitGroup, validateProductUnitGroup } = await import('./productUnitValidation.js');
+
+  // Normalize before validate so shape issues (e.g. amount=0 on row 0) get
+  // corrected into 1 instead of rejected — the client form already constrains
+  // this, but guard defensively.
+  const normalized = normalizeProductUnitGroup(data);
+  const fail = validateProductUnitGroup(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(productUnitDoc(id), {
+    ...normalized,
+    unitGroupId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteProductUnitGroup(unitGroupId) {
+  const id = String(unitGroupId || '');
+  if (!id) throw new Error('unitGroupId required');
+  await deleteDoc(productUnitDoc(id));
+}
+
+/**
+ * Lookup by trimmed + case-insensitive groupName. Used by the form's
+ * duplicate-name guard.
+ */
+export async function findProductUnitGroupByName(groupName) {
+  const q = String(groupName || '').trim().toLowerCase();
+  if (!q) return null;
+  const snap = await getDocs(productUnitsCol());
+  for (const d of snap.docs) {
+    const data = d.data();
+    if (String(data.groupName || '').trim().toLowerCase() === q) {
+      return { id: d.id, ...data };
+    }
+  }
+  return null;
+}
