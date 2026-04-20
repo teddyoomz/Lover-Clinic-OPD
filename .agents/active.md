@@ -1,12 +1,13 @@
 ---
-updated_at: "2026-04-20 (prep for Friday 2026-04-24)"
-status: "production-live — Phase 13 prep complete, Phase 13.1 starts Friday"
+updated_at: "2026-04-21 (end-of-session)"
+status: "production-live — Phase 11.9 complete + claude-guardrails v0.1 shipped"
 current_focus: "Phase 13.1 Quotations — START Friday 2026-04-24 (Triangle pre-scanned)"
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "1db4af2"
-tests: 2850
+last_commit: "5a7687e"
+tests: 2865
 production_url: "https://lover-clinic-app.vercel.app"
+guardrails_repo: "F:/claude-guardrails (v0.1 MVP, local only, commit 49a61b0)"
 ---
 
 # Active Context
@@ -25,15 +26,21 @@ Phase 13 — 6 sub-tasks sequential starting Friday 2026-04-24. Begin with **13.
 - **13.5** Permission tab-gate wiring — 🟡 NOT STARTED (building blocks ready: `hasPermission()` at `permissionGroupValidation.js:320` + `be_staff/be_doctors.permissionGroupId` + be_permission_groups CRUD. Missing: BackendDashboard gate + navConfig permission keys + current-user context hook)
 - **13.6** Treatment validator + schema — 🟡 NOT STARTED (3200-line form)
 
-## Current State (post-Phase-12 deploy)
-- **Phase 12 DONE + deployed** — 11 sub-tasks (12.0-12.10) + 12.11 bonus adapter + `.agents/` scaffold install.
-- **Last commit**: `1db4af2 docs(agents): update active.md post-deploy — Phase 12 production-live`
-- **Tests**: 2850 passing
+## Current State (end of 2026-04-21 session)
+- **Phase 11.9 DONE + deployed** — product-group full rewrite (2-type + products[] qty + wiring), full-field sync (JSON API), adapter expansion 4→13, buy-modal NaN guard, treatment med-group wiring to be_product_groups.
+- **Last commit**: `5a7687e docs: import claude-guardrails methodology + grep-pair hook`
+- **Tests**: 2865 passing
 - **Build**: clean
-- **firestore.rules**: **DEPLOYED** ✅ — Rule B Probe-Deploy-Probe ran clean
-- **Vercel production**: **DEPLOYED** ✅ — https://lover-clinic-app.vercel.app
-- **Env vars on Vercel**: ✅ `FIREBASE_ADMIN_CLIENT_EMAIL` + `FIREBASE_ADMIN_PRIVATE_KEY`
-- **`/api/admin/users` smoke**: HTTP 401 "missing Bearer" OK
+- **firestore.rules**: unchanged (no deploy needed this session)
+- **Vercel production**: DEPLOYED via `lover-clinic-eg6mk2cgd` (last deploy: commit `c72fd0e`). Latest `5a7687e` = docs + hook only, no deploy required.
+- **Env vars on Vercel**: ✅ all Phase 12 set
+- **`/api/admin/users` smoke**: HTTP 401 OK
+
+## claude-guardrails (sibling repo)
+- Location: `F:/claude-guardrails` (local git, NOT pushed to GitHub)
+- Version: v0.1 MVP (commit `49a61b0`, 25 files, 2909 lines)
+- Self-use only — install via `bash F:/claude-guardrails/install.sh <new-project>`
+- Feedback loop: `project_claude_guardrails_feedback.md` memory file tracks 5 pending insights to batch-port
 
 ## Blockers
 None. Phase 12 production-live. Phase 13.1 ready to start Friday.
