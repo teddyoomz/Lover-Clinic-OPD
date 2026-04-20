@@ -243,6 +243,9 @@ vi.mock('../src/components/backend/reports/RevenueAnalysisTab.jsx', () => ({ def
 vi.mock('../src/components/backend/reports/AppointmentAnalysisTab.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/reports/DailyRevenueTab.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/reports/StaffSalesTab.jsx', () => ({ default: () => <div /> }));
+// Phase 11.2 shipped — ProductGroupsTab is now a real tab (no longer a stub).
+// Mock it here so this scaffold test stays independent of 11.2's internals.
+vi.mock('../src/components/backend/ProductGroupsTab.jsx', () => ({ default: () => <div data-testid="t-product-groups" /> }));
 vi.mock('../src/components/TreatmentFormPage.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/nav/BackendNav.jsx', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -259,12 +262,11 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     return render(<BackendDashboard clinicSettings={{ accentColor: '#dc2626' }} />);
   }
 
-  it('R1 ?tab=product-groups renders ComingSoon with "กลุ่มสินค้า"', async () => {
+  it('R1 ?tab=product-groups renders ProductGroupsTab (Phase 11.2 shipped 2026-04-20)', async () => {
     await renderWith('product-groups');
-    // Wait for hydration.
-    await screen.findByTestId('coming-soon');
-    expect(screen.getByText('กลุ่มสินค้า')).toBeInTheDocument();
-    expect(screen.getByText('Phase 11.2')).toBeInTheDocument();
+    // Phase 11.2 replaced the ComingSoon stub with a real tab. Verify routing
+    // still works — mocked stub renders with testid.
+    expect(await screen.findByTestId('t-product-groups')).toBeInTheDocument();
   });
 
   it('R2 ?tab=product-units renders ComingSoon with "หน่วยสินค้า"', async () => {

@@ -1411,3 +1411,49 @@ Nav restructure + 6 CRUD placeholders. No Firestore writes yet — full CRUD lan
 - **F** Triangle: `opd.js routes` confirmed 6 target ProClinic routes (`/admin/product-group`, `/admin/default-product-unit`, `/admin/medical-instrument`, `/admin/holiday`, `/admin/branch`, `/admin/permission-group`) exist in trial server
 
 Tests: 2085 → 2112 PASS (+27).
+
+---
+
+## Phase 11.2 Product Groups CRUD (2026-04-20)
+
+First real CRUD tab of the Master Data Suite. Replaces Phase 11.1 ComingSoon stub with live `be_product_groups` collection + create/edit/delete UI.
+
+**Schema (`be_product_groups`):**
+- `groupId` — doc id, shape `GRP-{ts}-{8hex}` via shared `generateMarketingId('GRP')` from `marketingUiUtils.js` (Rule C2 crypto-random)
+- `name` — trimmed, ≤ `NAME_MAX_LENGTH` (80)
+- `productType` — enum 4: `ยา | สินค้าหน้าร้าน | สินค้าสิ้นเปลือง | บริการ` (matches ProClinic product_type)
+- `status` — enum 2: `ใช้งาน | พักใช้งาน`
+- `productIds[]` — FK into `master_data/products/items`; populated in Phase 11.8 wiring (StockTab chip picker)
+- `note` — optional free-form
+- `createdAt` / `updatedAt` ISO strings
+
+**New files:**
+- `src/lib/productGroupValidation.js` — `validateProductGroup(form) → [field,msg] | null`, `emptyProductGroupForm()`, `PRODUCT_TYPES` (Object.freeze), `STATUS_OPTIONS`, `NAME_MAX_LENGTH`
+- `src/components/backend/ProductGroupFormModal.jsx` — reuses `MarketingFormShell` chrome; 4 fields (name / productType / status / note); shows linked-product count read-only in edit mode
+- `src/components/backend/ProductGroupsTab.jsx` — reuses `MarketingTabShell` chrome; grid of cards with type colorization (rose/amber/sky/violet) + status badge; filter by productType / status + search
+
+**Edits:**
+- `src/lib/backendClient.js` — appends 5 fns: `listProductGroups` (sort updatedAt desc, ties by createdAt), `getProductGroup`, `saveProductGroup` (trims, defaults status/productIds/note), `deleteProductGroup`, `findProductGroupByName` (case-insensitive)
+- `src/pages/BackendDashboard.jsx` — swaps the Phase 11.1 ComingSoon stub branch to `<ProductGroupsTab>` for `activeTab === 'product-groups'`
+- `firestore.rules` — new Phase-11 section with 6 `be_*` collections (product_groups / product_units / medical_instruments / holidays / branches / permission_groups), all `allow read, write: if isClinicStaff()`. Adding all 6 in this commit lets Rule B probe-deploy-probe fire once instead of 6 times during 11.3-11.7.
+- `tests/phase11-master-data-scaffold.test.jsx` — R1 updated (product-groups now real, no longer ComingSoon); added `ProductGroupsTab` mock so scaffold test stays independent of 11.2 internals
+
+**New tests — `tests/productGroup.test.jsx` — 45 adversarial:**
+- PV1-PV15 validator (null form, blank name, whitespace, non-string, boundary, enum drift, array shape)
+- PC1-PC5 constants (freeze, Thai-only, length bounds, no dupes)
+- PE1-PE2 emptyForm shape + no-shared-mutation
+- E1-E3 Rule E grep (validator/tab/modal don't import brokerClient; firestore.rules has the new block)
+- PU1-PU10 Tab flow (empty state, render, search, type filter, status filter, delete confirm yes/no/error, load error, product count badge)
+- PM1-PM10 Modal flow (create/edit modes, validation blocks save, new id on create, preserve id on edit, save error, ESC close, 4-option select, trim on save, linked-product count)
+
+**Rule compliance:**
+- **B** probe-deploy-probe: firestore.rules modified but NOT deployed — next `firebase deploy --only firestore:rules` MUST run curl-probe on chat_conversations + pc_appointments before AND after per iron-clad B
+- **C1** Rule of 3: ProductGroupFormModal/Tab reuse `MarketingFormShell`/`MarketingTabShell` instead of forking (4th use of the shared chrome now)
+- **C2** security: id via `generateMarketingId('GRP')` which wraps `crypto.getRandomValues` (never Math.random)
+- **C3** lean schema: justified — reader (SaleTab/StockTab will pick categories), writer (this tab), shape doesn't fit existing master_data (ProClinic-origin vs OUR-origin split per Rule H)
+- **D** adversarial: 45 tests span validator branches + UI edge cases + Rule-E static
+- **E** Firestore only: static E1/E2/E3 greps guard every file in scope
+- **F** Triangle: Plan memory field list (group_name/product_type) matches ProClinic intel captured 2026-04-20
+- **H** data ownership: be_product_groups is OUR canonical; master_data/products stays read-only-from-sync
+
+Tests: 2112 → 2157 PASS (+45).

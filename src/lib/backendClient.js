@@ -3905,3 +3905,73 @@ export async function migrateMasterVouchersToBe() {
   }
   return { imported, skipped, total: masterSnap.size };
 }
+
+// ─── Product Group CRUD (Phase 11.2 Master Data Suite) ─────────────────────
+// OUR collection per Rule H — no ProClinic write-back, sync-seed-only relation
+// to master_data/products. Shape validated upstream by productGroupValidation.
+
+const productGroupsCol = () => collection(db, ...basePath(), 'be_product_groups');
+const productGroupDoc = (id) => doc(db, ...basePath(), 'be_product_groups', String(id));
+
+export async function getProductGroup(groupId) {
+  const id = String(groupId || '');
+  if (!id) return null;
+  const snap = await getDoc(productGroupDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listProductGroups() {
+  const snap = await getDocs(productGroupsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Sort newest-first (by updatedAt); ties broken by createdAt so deterministic.
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveProductGroup(groupId, data) {
+  const id = String(groupId || '');
+  if (!id) throw new Error('groupId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  if (!String(data.name || '').trim()) throw new Error('name required');
+  if (!data.productType) throw new Error('productType required');
+
+  const now = new Date().toISOString();
+  await setDoc(productGroupDoc(id), {
+    ...data,
+    groupId: id,
+    name: String(data.name).trim(),
+    status: data.status || 'ใช้งาน',
+    productIds: Array.isArray(data.productIds) ? data.productIds : [],
+    note: String(data.note || '').trim(),
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteProductGroup(groupId) {
+  const id = String(groupId || '');
+  if (!id) throw new Error('groupId required');
+  await deleteDoc(productGroupDoc(id));
+}
+
+/**
+ * Lookup by (case-insensitive trimmed) name. Used by the form's "already
+ * exists" check before create. Returns the matching doc or null.
+ */
+export async function findProductGroupByName(name) {
+  const q = String(name || '').trim().toLowerCase();
+  if (!q) return null;
+  const snap = await getDocs(productGroupsCol());
+  for (const d of snap.docs) {
+    const data = d.data();
+    if (String(data.name || '').trim().toLowerCase() === q) {
+      return { id: d.id, ...data };
+    }
+  }
+  return null;
+}

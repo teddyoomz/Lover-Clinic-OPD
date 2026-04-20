@@ -41,6 +41,7 @@ import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAna
 import DailyRevenueTab from '../components/backend/reports/DailyRevenueTab.jsx';
 import StaffSalesTab from '../components/backend/reports/StaffSalesTab.jsx';
 import ComingSoon from '../components/backend/ComingSoon.jsx';
+import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -338,7 +339,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : activeTab === 'product-groups' ? (
-          <ComingSoon icon={FolderTree}  label="กลุ่มสินค้า"        phaseTag="Phase 11.2" message="จัดการหมวดหมู่/กลุ่มสินค้า (ยา · สินค้าหน้าร้าน · สินค้าสิ้นเปลือง · บริการ)"      clinicSettings={clinicSettings} />
+          <ProductGroupsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'product-units' ? (
           <ComingSoon icon={Scale}       label="หน่วยสินค้า"         phaseTag="Phase 11.3" message="จัดการหน่วยสินค้า (amp · เข็ม · U · ครั้ง · อัน · ขวด …)"                         clinicSettings={clinicSettings} />
         ) : activeTab === 'medical-instruments' ? (
