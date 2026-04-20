@@ -13,17 +13,7 @@ window.addEventListener('message', (event) => {
   if (event.source !== window) return;
 
   if (event.data?.type === 'LC_SYNC_COOKIES') {
-    // 2026-04-20 bug fix: forward `useTrial` flag to background. Without
-    // this, backend (which sets useTrial=true) was getting routed to the
-    // REAL ProClinic login because msg.useTrial arrived undefined on the
-    // background side → autoLogin(false) → real creds → real login window.
-    // User: "backend แม่ง login ผิดป่าวไอ้สัส มันต้อง login trial
-    // proclinic ไม่ใช่ proclinic จริง".
-    sendToBackground({
-      type: 'LC_SYNC_COOKIES',
-      forceLogin: !!event.data.forceLogin,
-      useTrial: !!event.data.useTrial,
-    }, (result) => {
+    sendToBackground({ type: 'LC_SYNC_COOKIES', forceLogin: !!event.data.forceLogin }, (result) => {
       window.postMessage({
         type: 'LC_SYNC_COOKIES_RESULT',
         result: result || { success: false, error: 'Extension not responding' },

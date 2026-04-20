@@ -58,11 +58,9 @@ async function syncCookies() {
       if (ok) { synced++; console.log(`[CookieRelay] Synced ${prodCookies.length} PRODUCTION cookies`); }
     }
 
-    // Sync trial cookies (fallback defaults to trial URL — previous fallback
-    // was 'https://proclinicth.com' which would mis-flag trial cookies with
-    // the production origin string).
+    // Sync trial cookies
     if (trialCookies.some(c => c.name === 'laravel_session')) {
-      const origin = stored.proclinic_trial_origin || 'https://trial.proclinicth.com';
+      const origin = stored.proclinic_trial_origin || 'https://proclinicth.com';
       const ok = await syncCookiesToDoc(origin, trialCookies.map(cookieToString), SESSION_TRIAL_DOC_PATH);
       if (ok) { synced++; console.log(`[CookieRelay] Synced ${trialCookies.length} TRIAL cookies`); }
     }
@@ -92,9 +90,6 @@ async function autoLogin(useTrial = false) {
   const origin = stored[keys[0]];
   const email = stored[keys[1]];
   const password = stored[keys[2]];
-  // Breadcrumb for "why is login opening the wrong domain?" debugging.
-  // Masks password — only shows origin + email to avoid leaking into logs.
-  console.log(`[CookieRelay] autoLogin(useTrial=${useTrial}) — origin=${origin || '<missing>'}, email=${email || '<missing>'}, keys=${keys.join(',')}`);
 
   if (!origin || !email || !password) {
     return { success: false, error: 'ยังไม่ได้ตั้ง credentials — เปิด popup ของ extension แล้วกรอก' };
@@ -132,33 +127,7 @@ async function autoLogin(useTrial = false) {
     console.log('[CookieRelay] Login script result:', loginResult);
 
     // Wait for redirect to /admin
-    const redirectSucceeded = await waitForLoginRedirect(tab.id, origin, 15000);
-
-    // 2026-04-20 bug fix: waitForLoginRedirect sometimes returns false even
-    // when login actually succeeded (race between submit redirect + onUpdated
-    // listener; also minimized windows occasionally miss 'complete' status).
-    // User reported seeing trial.proclinicth.com/admin in the popup but the
-    // extension still returned "Login ไม่สำเร็จ". Fall back to checking
-    // cookies directly — ground truth is "does this domain have a
-    // laravel_session cookie now?", not "did onUpdated fire the right event?".
-    let success = redirectSucceeded;
-    if (!success) {
-      try {
-        const cookies = await chrome.cookies.getAll({ domain: PROCLINIC_DOMAIN });
-        // Match origin to cookie domain (trial cookies vs prod cookies).
-        const isTrialOrigin = origin.includes('trial');
-        const domainMatch = cookies.filter(c =>
-          isTrialOrigin ? c.domain.includes('trial') : !c.domain.includes('trial')
-        );
-        const hasSession = domainMatch.some(c => c.name === 'laravel_session');
-        if (hasSession) {
-          console.log(`[CookieRelay] Redirect watcher missed but ${isTrialOrigin ? 'trial' : 'prod'} laravel_session present → treating as success`);
-          success = true;
-        }
-      } catch (e) {
-        console.warn('[CookieRelay] Cookie fallback check failed:', e.message);
-      }
-    }
+    const success = await waitForLoginRedirect(tab.id, origin, 15000);
 
     // Close the entire window
     await chrome.windows.remove(winId).catch(() => {});
@@ -349,15 +318,6 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'LC_SYNC_COOKIES') {
-    // Explicit debug: log the full incoming msg so we can verify the
-    // content-script bridge is forwarding useTrial correctly (2026-04-20
-    // bug — content script was stripping the flag before my fix).
-    console.log('[CookieRelay] LC_SYNC_COOKIES received:', JSON.stringify({
-      forceLogin: !!msg.forceLogin,
-      useTrial: !!msg.useTrial,
-      hasUseTrial: 'useTrial' in msg,
-      allKeys: Object.keys(msg),
-    }));
     const useTrial = !!msg.useTrial;
     if (msg.forceLogin) {
       console.log(`[CookieRelay] Force login requested (${useTrial ? 'trial' : 'production'})`);
