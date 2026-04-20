@@ -14,6 +14,52 @@ const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 const stockBatchesCol = () => collection(db, ...basePath(), 'be_stock_batches');
 const stockMovementsCol = () => collection(db, ...basePath(), 'be_stock_movements');
 const customersCol = () => collection(db, ...basePath(), 'be_customers');
+// Phase 12.8 — P&L report joins expenses and insurance-claims.
+const expensesColReports = () => collection(db, ...basePath(), 'be_expenses');
+const saleClaimsColReports = () => collection(db, ...basePath(), 'be_sale_insurance_claims');
+
+/** Load expenses by `date` field (YYYY-MM-DD inclusive). Fallback path
+ *  identical to loadSalesByDateRange — no composite index required yet. */
+export async function loadExpensesByDateRange({ from = '', to = '' } = {}) {
+  try {
+    const conds = [];
+    if (from) conds.push(where('date', '>=', from));
+    if (to) conds.push(where('date', '<=', to));
+    const q = conds.length > 0
+      ? query(expensesColReports(), ...conds, orderBy('date', 'desc'))
+      : query(expensesColReports(), orderBy('date', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch {
+    const snap = await getDocs(expensesColReports());
+    let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (from) items = items.filter(e => (e.date || '') >= from);
+    if (to) items = items.filter(e => (e.date || '') <= to);
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    return items;
+  }
+}
+
+/** Load sale insurance claims by `claimDate` (YYYY-MM-DD inclusive). */
+export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '' } = {}) {
+  try {
+    const conds = [];
+    if (from) conds.push(where('claimDate', '>=', from));
+    if (to) conds.push(where('claimDate', '<=', to));
+    const q = conds.length > 0
+      ? query(saleClaimsColReports(), ...conds, orderBy('claimDate', 'desc'))
+      : query(saleClaimsColReports(), orderBy('claimDate', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch {
+    const snap = await getDocs(saleClaimsColReports());
+    let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (from) items = items.filter(c => (c.claimDate || '') >= from);
+    if (to) items = items.filter(c => (c.claimDate || '') <= to);
+    items.sort((a, b) => (b.claimDate || '').localeCompare(a.claimDate || ''));
+    return items;
+  }
+}
 
 /**
  * Load sales whose `saleDate` falls in [fromISO, toISO] (YYYY-MM-DD inclusive).

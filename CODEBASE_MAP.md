@@ -1929,4 +1929,26 @@ No new UI tab in 12.7. Claim entry lands in SaleDetailModal when Phase 12.9 rewi
 
 Tests: 2722 → 2760 (+38). Build clean.
 
+---
+
+## Phase 12.8 — P&L Report + Payment Summary Report (2026-04-20)
+
+Two new report aggregators + UI tabs, rounding out the Phase 12 financial reporting story.
+
+**New files:**
+- `src/lib/pnlReportAggregator.js` — `aggregatePnLReport({ sales, expenses, filters })`. Period granularity: day / month (default) / year. Cancelled sales + voided expenses excluded from totals. Per-period netProfit + count pairs. `getPnLColumns(fmtMoney)` column spec (6 cols).
+- `src/lib/paymentSummaryAggregator.js` — `aggregatePaymentSummary(sales, filters)`. Groups by canonical payment method (Thai labels). Handles both modern `sale.payment.channels[]` and legacy `sale.paymentMethod` + `paidAmount`. Case-insensitive alias normalization (cash→เงินสด, transfer→โอน, etc.). Returns rows with amount + saleCount + percentage.
+- `src/components/backend/reports/PnLReportTab.jsx` — 12th report tab. ReportShell + DateRangePicker + period selector (day/month/year). 3 insight cards + summary table + CSV export.
+- `src/components/backend/reports/PaymentSummaryTab.jsx` — 13th report tab. Single-table with percentage sparkbar.
+- `tests/pnlReport.test.js` — 19 tests (PL1-14, PC1-2).
+- `tests/paymentSummary.test.js` — 17 tests (PS1-15, PC1-2).
+
+**Edits:**
+- `src/lib/reportsLoaders.js` — `loadExpensesByDateRange` + `loadSaleInsuranceClaimsByDateRange` (Phase 12.7 + 12.8 both consume the claims loader; expenses loader feeds P&L).
+- `src/components/backend/nav/navConfig.js` — `reports` section +2 items (reports-pnl + reports-payment, emerald color). 10 → 12 items.
+- `src/pages/BackendDashboard.jsx` — routes both new tabs.
+- `tests/reports-shell.test.jsx` + `tests/phase10-wiring-crosscut.test.jsx` — expect 12 items + allow emerald color.
+
+Tests: 2760 → 2793 (+33). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

@@ -26,11 +26,12 @@ const REPORT_TAB_IDS = [
   'reports-staff-sales',    // 10.X2
 ];
 
-describe('navConfig — all 10 Phase 10 report items present', () => {
-  it('reports section exists with all 10 items (8 original + 2 orphan-cards added)', () => {
+describe('navConfig — Phase 10 + 12.8 report items present', () => {
+  it('reports section has 12 items (P10: 10 + P12.8: 2 new)', () => {
+    // Phase 12.8 (2026-04-20) appended reports-pnl + reports-payment.
     const reportsSection = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reportsSection).toBeDefined();
-    expect(reportsSection.items.length).toBe(10);
+    expect(reportsSection.items.length).toBe(12);
   });
 
   it('every report tab id is in ALL_ITEM_IDS whitelist (URL deep-link support)', () => {

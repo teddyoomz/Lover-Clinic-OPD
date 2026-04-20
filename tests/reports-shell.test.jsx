@@ -147,10 +147,11 @@ describe('DateRangePicker.buildPresets', () => {
 });
 
 describe('navConfig — Phase 10 reports section wired', () => {
-  it('reports section exists with 10 items (8 original + 10.X1 daily-revenue + 10.X2 staff-sales)', () => {
+  it('reports section exists with 12 items (8 P10 + 2 P10.X + 2 P12.8)', () => {
+    // Phase 12.8 appended reports-pnl + reports-payment.
     const reports = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reports).toBeDefined();
-    expect(reports.items).toHaveLength(10);
+    expect(reports.items).toHaveLength(12);
   });
 
   it('all 8 report tab IDs are in ALL_ITEM_IDS whitelist (URL deep-link)', () => {
@@ -168,10 +169,10 @@ describe('navConfig — Phase 10 reports section wired', () => {
     expect(sectionOf('reports-sale')).toBe('reports');
   });
 
-  it('reports section uses sky/amber colors only (matches plan)', () => {
+  it('reports section uses sky/amber/emerald colors (P12.8 added emerald for P&L + payment)', () => {
     const reports = NAV_SECTIONS.find(s => s.id === 'reports');
     const colors = new Set(reports.items.map(i => i.color));
-    [...colors].forEach(c => expect(['sky', 'amber']).toContain(c));
+    [...colors].forEach(c => expect(['sky', 'amber', 'emerald']).toContain(c));
   });
 
   it('does not break existing nav (Phase 9 marketing items still present)', () => {

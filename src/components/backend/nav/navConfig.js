@@ -107,6 +107,8 @@ export const NAV_SECTIONS = [
       { id: 'reports-appt-analysis', label: 'วิเคราะห์นัด',       icon: Activity,        color: 'amber', palette: 'appointment analysis kpi performance วิเคราะห์ นัด' },
       { id: 'reports-daily-revenue', label: 'รายรับประจำวัน',     icon: CalendarDays,    color: 'sky',   palette: 'daily revenue รายรับ ประจำวัน daily-briefing per-day' },
       { id: 'reports-staff-sales',   label: 'ยอดขายรายพนักงาน',   icon: Users,           color: 'sky',   palette: 'staff sales doctor seller ยอดขาย รายแพทย์ พนักงาน' },
+      { id: 'reports-pnl',           label: 'กำไรขาดทุน (P&L)',    icon: TrendingUp,      color: 'emerald', palette: 'pnl profit loss P&L กำไรขาดทุน profit-and-loss' },
+      { id: 'reports-payment',       label: 'สรุปบัญชีรับชำระ',    icon: WalletIcon,      color: 'emerald', palette: 'payment summary บัญชี ชำระ สรุป cash transfer' },
     ],
   },
   {
