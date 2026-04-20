@@ -51,14 +51,27 @@ export async function getAllCustomers() {
  * data (vitals, diagnosis). Existing customers imported from ProClinic get
  * the defaults; the admin needs to re-confirm via a one-time consent prompt.
  */
-export async function saveCustomer(proClinicId, data) {
+export async function saveCustomer(proClinicId, data, opts = {}) {
   const safe = data && typeof data === 'object' ? data : {};
   const withConsent = {
     ...safe,
     // PV1/PV2 consent block last so it can't be stomped by `...safe` above.
     consent: { marketing: false, healthData: false, ...(safe.consent || {}) },
   };
-  await setDoc(customerDoc(proClinicId), withConsent, { merge: false });
+
+  // Phase 12.3: normalize shape on every save; strict-validate only when
+  // caller opts in (UI edit path). CloneTab imports opt out to avoid
+  // blocking recovery when ProClinic returned partial rows.
+  const { normalizeCustomer, validateCustomer } = await import('./customerValidation.js');
+  const normalized = normalizeCustomer(withConsent);
+  if (opts.strict) {
+    const fail = validateCustomer(normalized, { strict: true });
+    if (fail) {
+      const [, msg] = fail;
+      throw new Error(msg);
+    }
+  }
+  await setDoc(customerDoc(proClinicId), normalized, { merge: false });
 }
 
 /** Update specific fields on be_customers doc */

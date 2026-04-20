@@ -1802,4 +1802,21 @@ Triangle-verified from `opd.js forms /admin/product` (788 lines) + `/admin/cours
 
 Tests: 2493 → 2557 (+64). Build clean.
 
+---
+
+## Phase 12.3 — be_customers validator + schema enforcement (2026-04-20)
+
+Triangle-verified from `opd.js forms /admin/customer/create` (79+ fields). Validator covers every scanned field at type-level; 40+ fields get strict length bounds; a curated subset gets stricter semantic checks (email regex, Thai citizen-id 13 digits, birthdate ISO, gender enum, height/weight ranges, income ≥ 0).
+
+**New files:**
+- `src/lib/customerValidation.js` — `validateCustomer(form, {strict})` returns `[field, message]` or null. `normalizeCustomer(form)` coerces strings → numbers for height/weight/income, normalizes gender → uppercase M/F, strips dashes from citizen_id, guarantees `consent` shape. `emptyCustomerForm()` seeds the full 79-field skeleton.
+- `tests/customerValidation.test.js` — 43 adversarial tests (CU1-34, NC1-8, RT1).
+
+**Edits:**
+- `src/lib/backendClient.js` `saveCustomer` — always normalizes via `normalizeCustomer` (defensive shape); `{strict: true}` option layers `validateCustomer` on top for UI edit path. CloneTab imports stay non-strict so partial ProClinic rows don't block recovery. Backwards-compat: `opts` param defaults to `{}`, so every existing caller works unchanged.
+
+Sort order + consent-block semantics unchanged.
+
+Tests: 2557 → 2600 (+43). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).
