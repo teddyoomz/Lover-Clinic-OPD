@@ -40,7 +40,8 @@ import {
 import ComingSoon from '../src/components/backend/ComingSoon.jsx';
 import { FolderTree, Wrench } from 'lucide-react';
 
-// Phase 11.1 stub tab IDs — source of truth for iteration.
+// Phase 11.1 stub tab IDs + Phase 12.1 people tabs — source of truth for iteration.
+// (staff + doctors added 2026-04-20; keep list append-only to preserve sidebar order.)
 const MASTER_STUB_IDS = [
   'product-groups',
   'product-units',
@@ -48,6 +49,8 @@ const MASTER_STUB_IDS = [
   'holidays',
   'branches',
   'permission-groups',
+  'staff',
+  'doctors',
 ];
 
 const MASTER_SECTION_ITEM_IDS = ['masterdata', ...MASTER_STUB_IDS];
@@ -61,9 +64,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 7 items — 1 sync + 6 CRUD stubs', () => {
+  it('M2 master section has exactly 9 items — 1 sync + 6 Phase 11 CRUDs + 2 Phase 12.1 people CRUDs', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(7);
+    expect(master.items.length).toBe(9);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 

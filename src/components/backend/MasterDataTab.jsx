@@ -25,6 +25,8 @@ import {
   migrateMasterProductGroupsToBe, migrateMasterProductUnitsToBe,
   migrateMasterMedicalInstrumentsToBe, migrateMasterHolidaysToBe,
   migrateMasterBranchesToBe, migrateMasterPermissionGroupsToBe,
+  // Phase 12.1: people entities
+  migrateMasterStaffToBe, migrateMasterDoctorsToBe,
 } from '../../lib/backendClient.js';
 import {
   syncProducts, syncDoctors, syncStaff, syncCourses,
@@ -283,6 +285,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     { key: 'holidays',            label: 'วันหยุด → be_holidays',                   icon: '📅', fn: migrateMasterHolidaysToBe },
     { key: 'branches',            label: 'สาขา → be_branches',                     icon: '🏢', fn: migrateMasterBranchesToBe },
     { key: 'permission_groups',   label: 'สิทธิ์การใช้งาน → be_permission_groups',   icon: '🛡️', fn: migrateMasterPermissionGroupsToBe },
+    // Phase 12.1 — seed be_staff + be_doctors from list-page scrape. Password
+    // + permission group wiring happens in OUR CRUD after migrate.
+    { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },
+    { key: 'doctors',             label: 'แพทย์/ผู้ช่วย → be_doctors',              icon: '🩺', fn: migrateMasterDoctorsToBe },
   ];
 
   const handleMigrate = useCallback(async (target) => {

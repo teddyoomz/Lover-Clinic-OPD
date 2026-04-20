@@ -180,11 +180,12 @@ describe('section integrity', () => {
     expect(ids).toEqual(expect.arrayContaining(['clone', 'customers']));
   });
 
-  it('I4 master section owns Sync ProClinic + 6 Phase 11 CRUD tabs', () => {
-    // Phase 11.1 scaffold (2026-04-20): renamed 'system' → 'master', moved
-    // masterdata in (renamed label to "Sync ProClinic"), added 6 CRUD stubs
-    // for 11.2-11.7 (product-groups / product-units / medical-instruments /
-    // holidays / branches / permission-groups). DF-rates deferred to Phase 13.
+  it('I4 master section owns Sync ProClinic + 6 Phase 11 CRUD tabs + 2 Phase 12.1 people tabs', () => {
+    // Phase 11.1 (2026-04-20): renamed 'system' → 'master', moved masterdata in,
+    // added 6 CRUD stubs (product-groups / product-units / medical-instruments /
+    // holidays / branches / permission-groups).
+    // Phase 12.1 (2026-04-20): appended staff + doctors people CRUD tabs.
+    // DF-rates still deferred to Phase 13.
     const master = NAV_SECTIONS.find(s => s.id === 'master');
     expect(master).toBeTruthy();
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
@@ -196,6 +197,8 @@ describe('section integrity', () => {
       'holidays',
       'branches',
       'permission-groups',
+      'staff',
+      'doctors',
     ]);
   });
 

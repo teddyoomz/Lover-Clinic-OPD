@@ -4451,3 +4451,201 @@ export async function migrateMasterBranchesToBe() {
 export async function migrateMasterPermissionGroupsToBe() {
   return runMasterToBeMigration({ sourceType: 'permission_groups', targetCol: permissionGroupsCol, targetDocFn: permissionGroupDoc, mapper: mapMasterToPermissionGroup });
 }
+
+// ─── Staff CRUD (Phase 12.1) ────────────────────────────────────────────────
+// Entity lives fully in Firestore. Firebase Auth account creation (when email +
+// password supplied) is delegated to /api/admin/users via src/lib/adminUsersClient.js
+// — this module intentionally stays Admin-SDK-free.
+
+const staffCol = () => collection(db, ...basePath(), 'be_staff');
+const staffDoc = (id) => doc(db, ...basePath(), 'be_staff', String(id));
+
+export async function getStaff(staffId) {
+  const id = String(staffId || '');
+  if (!id) return null;
+  const snap = await getDoc(staffDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listStaff() {
+  const snap = await getDocs(staffCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveStaff(staffId, data) {
+  const id = String(staffId || '');
+  if (!id) throw new Error('staffId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeStaff, validateStaff } = await import('./staffValidation.js');
+
+  const normalized = normalizeStaff(data);
+  const fail = validateStaff(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  // Don't persist the raw password to Firestore — it's consumed by /api/admin/users
+  // at the caller before saveStaff is invoked.
+  const { password: _drop, ...safe } = normalized;
+
+  const now = new Date().toISOString();
+  await setDoc(staffDoc(id), {
+    ...safe,
+    staffId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteStaff(staffId) {
+  const id = String(staffId || '');
+  if (!id) throw new Error('staffId required');
+  await deleteDoc(staffDoc(id));
+}
+
+// ─── Doctors CRUD (Phase 12.1) ──────────────────────────────────────────────
+
+const doctorsCol = () => collection(db, ...basePath(), 'be_doctors');
+const doctorDoc = (id) => doc(db, ...basePath(), 'be_doctors', String(id));
+
+export async function getDoctor(doctorId) {
+  const id = String(doctorId || '');
+  if (!id) return null;
+  const snap = await getDoc(doctorDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listDoctors() {
+  const snap = await getDocs(doctorsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    // Doctors first, assistants second, then newest-first by updatedAt.
+    const pa = a.position === 'แพทย์' ? 0 : 1;
+    const pb = b.position === 'แพทย์' ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveDoctor(doctorId, data) {
+  const id = String(doctorId || '');
+  if (!id) throw new Error('doctorId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeDoctor, validateDoctor } = await import('./doctorValidation.js');
+
+  const normalized = normalizeDoctor(data);
+  const fail = validateDoctor(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const { password: _drop, ...safe } = normalized;
+
+  const now = new Date().toISOString();
+  await setDoc(doctorDoc(id), {
+    ...safe,
+    doctorId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteDoctor(doctorId) {
+  const id = String(doctorId || '');
+  if (!id) throw new Error('doctorId required');
+  await deleteDoc(doctorDoc(id));
+}
+
+// ─── Phase 12.1: master_data → be_* mappers + migrators (staff + doctors) ───
+// Masters come from the existing syncStaff/syncDoctors scrapers (list pages
+// only — name/email/color/position/branches). Details like password + per-
+// permission toggles land in be_* only when a human fills the CRUD form.
+// @dev-only — part of Rule H-bis strip list.
+
+function mapMasterToStaff(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  // Split scraped "name" into first + last if possible.
+  const rawName = String(src.name || src.firstname || '').trim();
+  const parts = rawName.split(/\s+/);
+  const firstname = parts[0] || '(imported)';
+  const lastname = parts.slice(1).join(' ');
+  const position = typeof src.position === 'string' && src.position.trim() ? src.position.trim() : '';
+  return {
+    staffId: id,
+    firstname,
+    lastname,
+    nickname: String(src.nickname || '').trim(),
+    employeeCode: String(src.employeeCode || src.employee_code || '').trim(),
+    email: String(src.email || '').trim(),
+    position,
+    permissionGroupId: '',
+    branchIds: [],
+    color: String(src.color || '').trim(),
+    backgroundColor: '',
+    hasSales: false,
+    disabled: String(src.status || '').trim() === 'พักใช้งาน',
+    firebaseUid: '',
+    note: '',
+    status: String(src.status || '').trim() === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToDoctor(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const rawName = String(src.name || src.firstname || '').trim();
+  const parts = rawName.split(/\s+/);
+  const firstname = parts[0] || '(imported)';
+  const lastname = parts.slice(1).join(' ');
+  const rawPosition = typeof src.position === 'string' ? src.position.trim() : '';
+  const position = rawPosition === 'ผู้ช่วยแพทย์' ? 'ผู้ช่วยแพทย์' : 'แพทย์';
+  const hourly = src.hourlyRate != null ? Number(src.hourlyRate) : (src.hourlyIncome != null ? Number(src.hourlyIncome) : null);
+  return {
+    doctorId: id,
+    firstname,
+    lastname,
+    firstnameEn: '',
+    lastnameEn: '',
+    nickname: String(src.nickname || '').trim(),
+    email: String(src.email || '').trim(),
+    position,
+    professionalLicense: '',
+    permissionGroupId: '',
+    branchIds: [],
+    color: String(src.color || '').trim(),
+    backgroundColor: '',
+    hourlyIncome: Number.isFinite(hourly) ? hourly : null,
+    dfGroupId: '',
+    dfPaidType: '',
+    minimumDfType: '',
+    hasSales: false,
+    disabled: String(src.status || '').trim() === 'พักใช้งาน',
+    firebaseUid: '',
+    note: '',
+    status: String(src.status || '').trim() === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterStaffToBe() {
+  return runMasterToBeMigration({ sourceType: 'staff', targetCol: staffCol, targetDocFn: staffDoc, mapper: mapMasterToStaff });
+}
+
+export async function migrateMasterDoctorsToBe() {
+  return runMasterToBeMigration({ sourceType: 'doctors', targetCol: doctorsCol, targetDocFn: doctorDoc, mapper: mapMasterToDoctor });
+}

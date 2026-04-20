@@ -139,6 +139,17 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 12.1 People (staff + doctors / ผู้ช่วยแพทย์) ──
+      // Firebase Auth account creation for these records goes through
+      // /api/admin/users (Phase 12.0 endpoint) — Firestore side is just the
+      // directory record; Admin SDK enforces its own admin gate.
+      match /be_staff/{staffId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_doctors/{doctorId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();

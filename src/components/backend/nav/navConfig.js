@@ -30,6 +30,8 @@ import {
   LayoutDashboard, Receipt, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
   // Phase 11 master-data tab icons
   FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
+  // Phase 12.1 people tab icons
+  User, Stethoscope,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -115,6 +117,8 @@ export const NAV_SECTIONS = [
       { id: 'holidays',             label: 'วันหยุด',             icon: CalendarX,     color: 'amber', palette: 'holiday off วันหยุด day-off closure' },
       { id: 'branches',             label: 'สาขา',               icon: Building2,     color: 'amber', palette: 'branch สาขา location' },
       { id: 'permission-groups',    label: 'สิทธิ์การใช้งาน',      icon: ShieldCheck,   color: 'amber', palette: 'permission role rights สิทธิ์ บทบาท access' },
+      { id: 'staff',                label: 'พนักงาน',             icon: User,          color: 'amber', palette: 'staff employee user พนักงาน เจ้าหน้าที่' },
+      { id: 'doctors',              label: 'แพทย์ & ผู้ช่วย',      icon: Stethoscope,   color: 'amber', palette: 'doctor assistant physician แพทย์ หมอ ผู้ช่วยแพทย์' },
     ],
   },
 ];

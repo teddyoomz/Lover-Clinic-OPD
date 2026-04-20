@@ -1733,4 +1733,47 @@ The plan's 11.8 wiring of consumers to `be_*` is intentionally deferred:
 Tests: 2363 → 2373 PASS (+10 wiring tests shipped in 11.8 main commit, scraper/migrate untested against live Firestore — PERMISSION_DENIED at master setup; functional validation happens on real admin click).
 Build clean.
 
+---
+
+## Phase 12.0 — Firebase Admin SDK serverless (2026-04-20)
+
+**New files:**
+- `api/admin/_lib/adminAuth.js` — Firebase Admin SDK singleton init + `verifyAdminToken(req, res)` helper. `getAdminAuth()` lazy-caches `getAuth()`; env-var gated (`FIREBASE_ADMIN_CLIENT_EMAIL` + `FIREBASE_ADMIN_PRIVATE_KEY`). `isBootstrapAdmin(uid)` checks comma-sep `FIREBASE_ADMIN_BOOTSTRAP_UIDS`. Token verified with `verifyIdToken(token, checkRevoked=true)` then gated on `decoded.admin === true` OR bootstrap UID.
+- `api/admin/users.js` — POST-only dispatcher. Actions: `list`, `get`, `create`, `update`, `delete`, `grantAdmin`, `revokeAdmin`. Self-protection: cannot delete own UID; cannot revoke own admin unless in bootstrap list. Input validation: email regex + min-6 password.
+- `.claude/skills/audit-firebase-admin-security/SKILL.md` — FA1-FA12 invariants (private-key hygiene, checkRevoked enforcement, admin gate presence, self-protection, input validation, CORS+token pairing, no firebase-admin import in src/, singleton init). Registered in `/audit-all` Tier 5.
+- `tests/api-admin-users.test.js` — 28 adversarial tests mocking `firebase-admin/app` + `firebase-admin/auth`.
+
+**Edits:**
+- `.claude/rules/03-stack.md` #7 — `/api/admin/*` documented as explicit Rule E exception (production infra, touches OUR Firebase project only, not ProClinic write-back). Backend UI may call.
+- `.claude/skills/audit-all/SKILL.md` — Tier 5 now lists 18 skills (197 → 209 invariants).
+
+Tests: 2373 → 2401 (+28). Build clean.
+
+---
+
+## Phase 12.1 — be_staff + be_doctors CRUD pair (2026-04-20)
+
+**New files:**
+- `src/lib/staffValidation.js` — `validateStaff` / `normalizeStaff` / `emptyStaffForm` / `generateStaffId` (STAFF-{b36ts}-{16-hex} via crypto). Password policy matches ProClinic's `^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{8,}$`. Position enum: ผู้จัดการ/พนักงานต้อนรับ/พนักงานดำเนินการ/รีเซฟชั่น/เคาเตอร์/เจ้าหน้าที่คลังกลาง.
+- `src/lib/doctorValidation.js` — same shape + position enum (แพทย์/ผู้ช่วยแพทย์) + bilingual names (firstname/lastname + firstnameEn/lastnameEn) + professionalLicense + DF scaffolding (hourlyIncome/dfGroupId/dfPaidType/minimumDfType — validated only for type, strict wiring in Phase 13.3 be_df_groups). `generateDoctorId(position)` prefixes DOC- or ASST-.
+- `src/lib/adminUsersClient.js` — wraps `/api/admin/users` with Firebase idToken injection. `listAdminUsers`, `getAdminUser`, `createAdminUser`, `updateAdminUser`, `deleteAdminUser`, `grantAdmin`, `revokeAdmin`.
+- `src/components/backend/StaffTab.jsx` — MarketingTabShell reuse #10. Firestore-only; delete cascades to `/api/admin/users` when `firebaseUid` is set.
+- `src/components/backend/StaffFormModal.jsx` — Firebase account creation BEFORE Firestore save when email+password supplied (so `firebaseUid` lands on saved doc atomically from the UI's POV). Password optional on edit.
+- `src/components/backend/DoctorsTab.jsx` + `DoctorFormModal.jsx` — same pattern, adds bilingual name pair + license + DF fields.
+- `tests/staffValidation.test.js` — 32 adversarial tests.
+- `tests/doctorValidation.test.js` — 27 adversarial tests.
+- `tests/adminUsersClient.test.js` — 8 tests (token injection, HTTP errors, body shape).
+- `tests/phase12-people-tabs.test.jsx` — 17 tests (tab smoke + Firebase-create-before-Firestore ordering + Rule E greps).
+- `docs/proclinic-scan/admin-user-forms.json` + `admin-doctor-forms.json` — fresh Triangle scans (~2871 + 3127 lines).
+
+**Edits:**
+- `src/lib/backendClient.js` — appended `staffCol/staffDoc + listStaff/getStaff/saveStaff/deleteStaff` + `doctorsCol/doctorDoc + listDoctors/getDoctor/saveDoctor/deleteDoctor`. Password never persisted to Firestore (stripped before `setDoc`). Added `mapMasterToStaff` + `mapMasterToDoctor` + `migrateMasterStaffToBe` + `migrateMasterDoctorsToBe` migrators.
+- `src/components/backend/nav/navConfig.js` — master section +2 items: staff + doctors.
+- `src/components/backend/MasterDataTab.jsx` — `MIGRATE_TARGETS` +2: staff → be_staff, doctors → be_doctors.
+- `src/pages/BackendDashboard.jsx` — routes `staff` / `doctors` tab ids.
+- `firestore.rules` — `be_staff` + `be_doctors` match blocks (isClinicStaff read + write). Rule B probe list already extended in V9 fix; same probe applies.
+- `tests/backend-nav-config.test.js` + `tests/phase11-master-data-scaffold.test.jsx` — updated master-section expectations (7 → 9).
+
+Tests: 2401 → 2493 (+92). Build clean. `firebase deploy --only firestore:rules` pending (user-triggered); env vars (`FIREBASE_ADMIN_CLIENT_EMAIL` + `_PRIVATE_KEY` + `_BOOTSTRAP_UIDS`) required on Vercel before `/api/admin/users` calls succeed.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

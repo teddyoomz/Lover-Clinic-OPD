@@ -47,6 +47,8 @@ import MedicalInstrumentsTab from '../components/backend/MedicalInstrumentsTab.j
 import HolidaysTab from '../components/backend/HolidaysTab.jsx';
 import BranchesTab from '../components/backend/BranchesTab.jsx';
 import PermissionGroupsTab from '../components/backend/PermissionGroupsTab.jsx';
+import StaffTab from '../components/backend/StaffTab.jsx';
+import DoctorsTab from '../components/backend/DoctorsTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -355,6 +357,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <BranchesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'permission-groups' ? (
           <PermissionGroupsTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'staff' ? (
+          <StaffTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'doctors' ? (
+          <DoctorsTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </div>
 

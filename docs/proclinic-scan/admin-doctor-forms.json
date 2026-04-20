@@ -1,0 +1,3127 @@
+{
+  "url": "https://trial.proclinicth.com/admin/doctor",
+  "totalForms": 4,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/doctor",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "position",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ตำแหน่งทั้งหมด"
+            },
+            {
+              "v": "แพทย์",
+              "t": "แพทย์"
+            },
+            {
+              "v": "ผู้ช่วยแพทย์",
+              "t": "ผู้ช่วยแพทย์"
+            }
+          ]
+        },
+        {
+          "name": "branch_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สาขาทั้งหมด"
+            },
+            {
+              "v": "27",
+              "t": "สาขา ชลบุรี"
+            },
+            {
+              "v": "28",
+              "t": "สาขา พระราม9"
+            },
+            {
+              "v": "37",
+              "t": "สาขา ราชพฤกษ์"
+            },
+            {
+              "v": "38",
+              "t": "สาขา สุขุมวิท"
+            },
+            {
+              "v": "60",
+              "t": "สาขา สยาม"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/doctor",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "profile_image",
+          "type": "file",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "prefix",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": true,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "label": "ชื่อเล่น",
+          "required": false,
+          "placeholder": "กรอกชื่อเล่น",
+          "isSelect2": false
+        },
+        {
+          "name": "prefix_en",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname_en",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname_em",
+          "type": "text",
+          "label": "สำหรับออกเอกสารภาษาอังกฤษ (EN)เว้นว่างกรณีต้องการใช้ข้อมูลพื้นฐาน",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "professional_license",
+          "type": "text",
+          "label": "เลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "required": false,
+          "placeholder": "กรอกเลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "isSelect2": false
+        },
+        {
+          "name": "hourly_income",
+          "type": "number",
+          "label": "ค่านั่งต่อชั่วโมง",
+          "required": false,
+          "placeholder": "กรอกค่านั่งต่อชั่วโมง",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "df_group_id",
+          "type": "select-one",
+          "label": "กลุ่มค่ามือ",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "เลือกกลุ่มค่ามือ"
+            },
+            {
+              "v": "28",
+              "t": "ตัดไหม"
+            },
+            {
+              "v": "26",
+              "t": "ตอกเส้น"
+            },
+            {
+              "v": "25",
+              "t": "นวด"
+            },
+            {
+              "v": "19",
+              "t": "เอ"
+            },
+            {
+              "v": "18",
+              "t": "ผู้ช่วยประจำ"
+            },
+            {
+              "v": "17",
+              "t": "กลุ่มหมอฟรีแลน"
+            },
+            {
+              "v": "16",
+              "t": "กลุ่มหมอประจำ"
+            },
+            {
+              "v": "6",
+              "t": "ค่ามือหมอ 10% ทุกคอร์ส"
+            }
+          ]
+        },
+        {
+          "name": "df_paid_type",
+          "type": "radio",
+          "label": "ตามหัตถการที่ทำจริง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "df_paid_type",
+          "type": "radio",
+          "label": "ได้เฉพาะหัตถการสูงสุดที่ทำครั้งนั้น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "minimum_df_type",
+          "type": "radio",
+          "label": "ขั้นต่ำ 1 ครั้ง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "minimum_df_type",
+          "type": "radio",
+          "label": "ไม่กำหนดขั้นต่ำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "position",
+          "type": "radio",
+          "label": "แพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "position",
+          "type": "radio",
+          "label": "ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "salary",
+          "type": "number",
+          "label": "เงินเดือน",
+          "required": false,
+          "placeholder": "กรอกเงินเดือน",
+          "isSelect2": false
+        },
+        {
+          "name": "salary_date",
+          "type": "select-one",
+          "label": "วันที่จ่ายเงินเดือน",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "ทุกสิ้นเดือน",
+              "t": "ทุกสิ้นเดือน"
+            },
+            {
+              "v": "ทุกวันที่ 1",
+              "t": "ทุกวันที่ 1"
+            },
+            {
+              "v": "ทุกวันที่ 2",
+              "t": "ทุกวันที่ 2"
+            },
+            {
+              "v": "ทุกวันที่ 3",
+              "t": "ทุกวันที่ 3"
+            },
+            {
+              "v": "ทุกวันที่ 4",
+              "t": "ทุกวันที่ 4"
+            },
+            {
+              "v": "ทุกวันที่ 5",
+              "t": "ทุกวันที่ 5"
+            },
+            {
+              "v": "ทุกวันที่ 6",
+              "t": "ทุกวันที่ 6"
+            },
+            {
+              "v": "ทุกวันที่ 7",
+              "t": "ทุกวันที่ 7"
+            },
+            {
+              "v": "ทุกวันที่ 8",
+              "t": "ทุกวันที่ 8"
+            },
+            {
+              "v": "ทุกวันที่ 9",
+              "t": "ทุกวันที่ 9"
+            },
+            {
+              "v": "ทุกวันที่ 10",
+              "t": "ทุกวันที่ 10"
+            },
+            {
+              "v": "ทุกวันที่ 11",
+              "t": "ทุกวันที่ 11"
+            },
+            {
+              "v": "ทุกวันที่ 12",
+              "t": "ทุกวันที่ 12"
+            },
+            {
+              "v": "ทุกวันที่ 13",
+              "t": "ทุกวันที่ 13"
+            },
+            {
+              "v": "ทุกวันที่ 14",
+              "t": "ทุกวันที่ 14"
+            },
+            {
+              "v": "ทุกวันที่ 15",
+              "t": "ทุกวันที่ 15"
+            },
+            {
+              "v": "ทุกวันที่ 16",
+              "t": "ทุกวันที่ 16"
+            },
+            {
+              "v": "ทุกวันที่ 17",
+              "t": "ทุกวันที่ 17"
+            },
+            {
+              "v": "ทุกวันที่ 18",
+              "t": "ทุกวันที่ 18"
+            },
+            {
+              "v": "ทุกวันที่ 19",
+              "t": "ทุกวันที่ 19"
+            },
+            {
+              "v": "ทุกวันที่ 20",
+              "t": "ทุกวันที่ 20"
+            },
+            {
+              "v": "ทุกวันที่ 21",
+              "t": "ทุกวันที่ 21"
+            },
+            {
+              "v": "ทุกวันที่ 22",
+              "t": "ทุกวันที่ 22"
+            },
+            {
+              "v": "ทุกวันที่ 23",
+              "t": "ทุกวันที่ 23"
+            },
+            {
+              "v": "ทุกวันที่ 24",
+              "t": "ทุกวันที่ 24"
+            },
+            {
+              "v": "ทุกวันที่ 25",
+              "t": "ทุกวันที่ 25"
+            },
+            {
+              "v": "ทุกวันที่ 26",
+              "t": "ทุกวันที่ 26"
+            },
+            {
+              "v": "ทุกวันที่ 27",
+              "t": "ทุกวันที่ 27"
+            },
+            {
+              "v": "ทุกวันที่ 28",
+              "t": "ทุกวันที่ 28"
+            }
+          ]
+        },
+        {
+          "name": "color",
+          "type": "select-one",
+          "label": "สี (สำหรับตารางงาน)",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "#F6DA09",
+              "t": "เหลือง"
+            },
+            {
+              "v": "#2dc4b6",
+              "t": "เขียว"
+            },
+            {
+              "v": "#ff9f1c",
+              "t": "ส้ม"
+            },
+            {
+              "v": "#C42D3B",
+              "t": "แดง"
+            },
+            {
+              "v": "#D4932B",
+              "t": "น้ำตาล"
+            },
+            {
+              "v": "#e685a5",
+              "t": "ชมพู"
+            },
+            {
+              "v": "#6B2DC4",
+              "t": "ม่วง"
+            },
+            {
+              "v": "#1f7af8",
+              "t": "น้ำเงิน"
+            },
+            {
+              "v": "#56ccf2",
+              "t": "ฟ้า"
+            },
+            {
+              "v": "#7c89b1",
+              "t": "เทา"
+            },
+            {
+              "v": "#282e45",
+              "t": "ดำ"
+            }
+          ]
+        },
+        {
+          "name": "background_color",
+          "type": "select-one",
+          "label": "สีพื้นหลัง (สำหรับตารางงาน)",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สีโปร่งใส"
+            },
+            {
+              "v": "#fffef7",
+              "t": "เหลืองอ่อน"
+            },
+            {
+              "v": "#daf4f0",
+              "t": "เขียวอ่อน"
+            },
+            {
+              "v": "#ffecd7",
+              "t": "ส้มอ่อน"
+            },
+            {
+              "v": "#f5d7d9",
+              "t": "แดงอ่อน"
+            },
+            {
+              "v": "#f7ead7",
+              "t": "น้ำตาลอ่อน"
+            },
+            {
+              "v": "#fae7ed",
+              "t": "ชมพูอ่อน"
+            },
+            {
+              "v": "#e2d6f4",
+              "t": "ม่วงอ่อน"
+            },
+            {
+              "v": "#d4e5fe",
+              "t": "น้ำเงินอ่อน"
+            },
+            {
+              "v": "#e0f4fd",
+              "t": "ฟ้าอ่อน"
+            },
+            {
+              "v": "#e4e8f0",
+              "t": "เทาอ่อน"
+            },
+            {
+              "v": "#d4d5d9",
+              "t": "ดำอ่อน"
+            },
+            {
+              "v": "#FFC720",
+              "t": "เหลืองเข้ม"
+            },
+            {
+              "v": "#4FC3F7",
+              "t": "ฟ้าเข้ม"
+            },
+            {
+              "v": "#4F94E6",
+              "t": "น้ำเงินเข้ม"
+            },
+            {
+              "v": "#2EC1B4",
+              "t": "เขียวเข้ม"
+            },
+            {
+              "v": "#FF6A9C",
+              "t": "ชมพูเข้ม"
+            },
+            {
+              "v": "#FF9E1F",
+              "t": "ส้มเข้ม"
+            },
+            {
+              "v": "#EA4747",
+              "t": "แดงเข้ม"
+            },
+            {
+              "v": "#7D58BE",
+              "t": "ม่วงเข้ม"
+            },
+            {
+              "v": "#A56B49",
+              "t": "น้ำตาลเข้ม"
+            },
+            {
+              "v": "#676767",
+              "t": "เทาเข้ม"
+            },
+            {
+              "v": "#252525",
+              "t": "ดำเข้ม"
+            }
+          ]
+        },
+        {
+          "name": "has_sales",
+          "type": "checkbox",
+          "label": "มียอดขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "label": "อีเมล",
+          "required": false,
+          "placeholder": "กรอกอีเมล",
+          "isSelect2": false
+        },
+        {
+          "name": "password",
+          "type": "password",
+          "label": "รหัสผ่าน\n                                    \n                                    \n                                        8ตัวอักษรขึ้นไป\n                                        ประกอบด้วยพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข",
+          "required": false,
+          "placeholder": "********",
+          "pattern": "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{8,}$",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission-all",
+          "type": "checkbox",
+          "label": "ใช้งานทุกระบบ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_management",
+          "type": "checkbox",
+          "label": "จัดการลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_view",
+          "type": "checkbox",
+          "label": "ดูข้อมูลลูกค้าทั่วไป",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_contact_view",
+          "type": "checkbox",
+          "label": "ดูข้อมูลการติดต่อของลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_customer",
+          "type": "checkbox",
+          "label": "ดูเฉพาะลูกค้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_delete",
+          "type": "checkbox",
+          "label": "ลบลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment",
+          "type": "checkbox",
+          "label": "จองนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_self",
+          "type": "checkbox",
+          "label": "จองนัดหมาย (เฉพาะแพทย์)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coming_appointment",
+          "type": "checkbox",
+          "label": "นัดหมายวันนี้ (ทั้งหมด)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coming_appointment_self",
+          "type": "checkbox",
+          "label": "นัดหมายวันนี้ (เฉพาะแพทย์)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_manage_own_appointments_only",
+          "type": "checkbox",
+          "label": "จัดการนัดหมายเฉพาะผู้ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_management",
+          "type": "checkbox",
+          "label": "บันทึกการตรวจ OPD",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_df_management",
+          "type": "checkbox",
+          "label": "เปลี่ยนแปลงค่ามือแพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_df_view",
+          "type": "checkbox",
+          "label": "ดูค่ามือแพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_deposit",
+          "type": "checkbox",
+          "label": "จ่ายมัดจำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_deposit_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกมัดจำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_quotation_management",
+          "type": "checkbox",
+          "label": "ทำใบเสนอราคา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_quotation_view",
+          "type": "checkbox",
+          "label": "ดูรายการใบเสนอราคา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_management",
+          "type": "checkbox",
+          "label": "ขายคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_view",
+          "type": "checkbox",
+          "label": "ดูรายการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_edit_sale_price",
+          "type": "checkbox",
+          "label": "แก้ไขราคาขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_edit_sale_discount",
+          "type": "checkbox",
+          "label": "ระบุส่วนลดท้ายบิล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_product_change",
+          "type": "checkbox",
+          "label": "เปลี่ยนสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_membership",
+          "type": "checkbox",
+          "label": "บัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_membership_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_change_customer_credit",
+          "type": "checkbox",
+          "label": "ปรับวงเงินบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_change_customer_point",
+          "type": "checkbox",
+          "label": "ปรับคะแนนบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_management",
+          "type": "checkbox",
+          "label": "จัดการคอร์ส (ระดับสาขา)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_view",
+          "type": "checkbox",
+          "label": "ดูคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_course_management",
+          "type": "checkbox",
+          "label": "จัดการคอร์ส (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_online_sale",
+          "type": "checkbox",
+          "label": "ขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_online_sale_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_remaining_course",
+          "type": "checkbox",
+          "label": "จัดการคอร์สคงเหลือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_management",
+          "type": "checkbox",
+          "label": "สต็อคสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_view_stock_cost",
+          "type": "checkbox",
+          "label": "ดูต้นทุนสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_movement",
+          "type": "checkbox",
+          "label": "ดูรายการเคลื่อนไหวสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_order_management",
+          "type": "checkbox",
+          "label": "นําสินค้าเข้าสต็อค/ยกเลิกการนำเข้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_order",
+          "type": "checkbox",
+          "label": "รายการนำเข้าสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_vendor_sale_management",
+          "type": "checkbox",
+          "label": "ขายสินค้าในสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_change_management",
+          "type": "checkbox",
+          "label": "ปรับสินค้าในสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_transfer_management",
+          "type": "checkbox",
+          "label": "โอนสินค้าข้ามสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_receiving_management",
+          "type": "checkbox",
+          "label": "รับสินค้าเข้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_withdrawal_management",
+          "type": "checkbox",
+          "label": "เบิกสินค้าจากคลังกลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_stock_withdrawal",
+          "type": "checkbox",
+          "label": "เบิกสินค้าจากสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_central_stock",
+          "type": "checkbox",
+          "label": "คลังสินค้ากลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_assistance_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_df_group_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือกลุ่ม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_expense_management",
+          "type": "checkbox",
+          "label": "จัดการรายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_expense_view",
+          "type": "checkbox",
+          "label": "ดูรายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_promotion_management",
+          "type": "checkbox",
+          "label": "จัดการโปรโมชัน (ระดับสาขา)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_promotion_view",
+          "type": "checkbox",
+          "label": "ดูโปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_promotion_management",
+          "type": "checkbox",
+          "label": "จัดการโปรโมชัน (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coupon_management",
+          "type": "checkbox",
+          "label": "จัดการคูปองส่วนลด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coupon_view",
+          "type": "checkbox",
+          "label": "ดูคูปองส่วนลด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_voucher_management",
+          "type": "checkbox",
+          "label": "จัดการ Voucher (ระดับสาขา)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_voucher_view",
+          "type": "checkbox",
+          "label": "ดู Voucher",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_voucher_management",
+          "type": "checkbox",
+          "label": "จัดการ Voucher (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_document",
+          "type": "checkbox",
+          "label": "เอกสารการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_chart_document",
+          "type": "checkbox",
+          "label": "Chart",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_consent_document",
+          "type": "checkbox",
+          "label": "ใบยินยอม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medical_certificate",
+          "type": "checkbox",
+          "label": "ใบรับรองแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_cancelation_document",
+          "type": "checkbox",
+          "label": "เอกสารยกเลิกการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medicine_label",
+          "type": "checkbox",
+          "label": "ฉลากยา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_schedule_management",
+          "type": "checkbox",
+          "label": "จัดการงานแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_schedule_view",
+          "type": "checkbox",
+          "label": "ดูงานแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_schedule_management",
+          "type": "checkbox",
+          "label": "จัดการงานพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_schedule_view",
+          "type": "checkbox",
+          "label": "ดูงานพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_sale",
+          "type": "checkbox",
+          "label": "รายงานการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_profit_and_loss",
+          "type": "checkbox",
+          "label": "กำไร/ขาดทุน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_income",
+          "type": "checkbox",
+          "label": "รายรับประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_customer_sales",
+          "type": "checkbox",
+          "label": "ยอดขายลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_vendor_sales",
+          "type": "checkbox",
+          "label": "ยอดขายคู่ค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_profit",
+          "type": "checkbox",
+          "label": "กำไรต่อการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_course_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายคอร์ส/สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_seller_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายแพทย์/พนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_paid_seller_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายแพทย์/พนักงานตามยอดเงินที่ชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_customer_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายทั้งหมด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_doctor_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายแพทย์ (ทั้งหมด)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_doctor_self_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายแพทย์ (เฉพาะผู้ใช้งาน)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_employee_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายพนักงาน (ทั้งหมด)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_employee_self_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายพนักงาน (เฉพาะผู้ใช้งาน)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_other_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_promotion",
+          "type": "checkbox",
+          "label": "รายงานโปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_course",
+          "type": "checkbox",
+          "label": "รายงานคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_product",
+          "type": "checkbox",
+          "label": "รายงานสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_appointment",
+          "type": "checkbox",
+          "label": "รายงานนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_customer",
+          "type": "checkbox",
+          "label": "รายงานลูกค้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_remaining_course",
+          "type": "checkbox",
+          "label": "รายงานคอร์สคงเหลือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_unpaid",
+          "type": "checkbox",
+          "label": "รายการขายค้างชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment",
+          "type": "checkbox",
+          "label": "รายงานประวัติการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_course_usage",
+          "type": "checkbox",
+          "label": "รายงานการใช้คอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_order",
+          "type": "checkbox",
+          "label": "รายงานนำเข้าสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_stock_movement",
+          "type": "checkbox",
+          "label": "รายการเคลื่อนไหวสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_nearing_expiration_stock",
+          "type": "checkbox",
+          "label": "รายงานล็อตสินค้าใกล้หมดอายุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_expired_stock",
+          "type": "checkbox",
+          "label": "รายงานล็อตสินค้าหมดอายุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_nearing_out_of_stock",
+          "type": "checkbox",
+          "label": "รายงานสินค้าใกล้หมดสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_sum_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending_by_treatment_date",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามวันที่รักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending_by_sale_date",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามวันที่ขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_future_stock",
+          "type": "checkbox",
+          "label": "รายงานตัดสต็อคล่วงหน้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_coupon",
+          "type": "checkbox",
+          "label": "รายงานคูปอง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_voucher",
+          "type": "checkbox",
+          "label": "รายงาน Voucher",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_online_sale_payment",
+          "type": "checkbox",
+          "label": "รายงานรับเงินจาก ProClinic",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_online_sale",
+          "type": "checkbox",
+          "label": "รายงานการขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_report_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายทั้งหมด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_report_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_management",
+          "type": "checkbox",
+          "label": "ตั้งค่าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_holiday_setting",
+          "type": "checkbox",
+          "label": "ตั้งค่าวันหยุดสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medical_instrument",
+          "type": "checkbox",
+          "label": "เครื่องหัตถการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_google_calendar",
+          "type": "checkbox",
+          "label": "ตั้งค่า Google Calendar",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_dashboard",
+          "type": "checkbox",
+          "label": "แดชบอร์ด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_product_management",
+          "type": "checkbox",
+          "label": "จัดการสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_default_product_unit",
+          "type": "checkbox",
+          "label": "จัดการหน่วยสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_product_group",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_permission_group_management",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มสิทธิ์การใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_management",
+          "type": "checkbox",
+          "label": "จัดการแพทย์ & ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_management",
+          "type": "checkbox",
+          "label": "จัดการพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_df_group",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มค่ามือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_wallet_management",
+          "type": "checkbox",
+          "label": "จัดการกระเป๋าเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_central_stock_setting",
+          "type": "checkbox",
+          "label": "ตั้งค่าคลังสินค้ากลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_crm_insight",
+          "type": "checkbox",
+          "label": "Customer Insight",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_smart_audience",
+          "type": "checkbox",
+          "label": "Smart Audience",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_revenue_analysis_by_procedure",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายรับตามหัตถการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_analysis",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายการนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_analysis_user",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายการนัดหมายรายผู้ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_payment_summary_analysis",
+          "type": "checkbox",
+          "label": "วิเคราะห์สรุปบัญชีรับชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch-all",
+          "type": "checkbox",
+          "label": "ทุกสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ชลบุรี",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา พระราม9",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ราชพฤกษ์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สุขุมวิท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สยาม",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/doctor",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "profile_image",
+          "type": "file",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "prefix",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": true,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "label": "ชื่อเล่น",
+          "required": false,
+          "placeholder": "กรอกชื่อเล่น",
+          "isSelect2": false
+        },
+        {
+          "name": "prefix_en",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname_en",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname_en",
+          "type": "text",
+          "label": "สำหรับออกเอกสารภาษาอังกฤษ (EN)เว้นว่างกรณีต้องการใช้ข้อมูลพื้นฐาน",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "professional_license",
+          "type": "text",
+          "label": "เลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "required": false,
+          "placeholder": "กรอกเลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "isSelect2": false
+        },
+        {
+          "name": "hourly_income",
+          "type": "number",
+          "label": "ค่านั่งต่อชั่วโมง",
+          "required": false,
+          "placeholder": "กรอกค่านั่งต่อชั่วโมง",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "df_group_id",
+          "type": "select-one",
+          "label": "กลุ่มค่ามือ",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "เลือกกลุ่มค่ามือ"
+            },
+            {
+              "v": "28",
+              "t": "ตัดไหม"
+            },
+            {
+              "v": "26",
+              "t": "ตอกเส้น"
+            },
+            {
+              "v": "25",
+              "t": "นวด"
+            },
+            {
+              "v": "19",
+              "t": "เอ"
+            },
+            {
+              "v": "18",
+              "t": "ผู้ช่วยประจำ"
+            },
+            {
+              "v": "17",
+              "t": "กลุ่มหมอฟรีแลน"
+            },
+            {
+              "v": "16",
+              "t": "กลุ่มหมอประจำ"
+            },
+            {
+              "v": "6",
+              "t": "ค่ามือหมอ 10% ทุกคอร์ส"
+            }
+          ]
+        },
+        {
+          "name": "df_paid_type",
+          "type": "radio",
+          "label": "ตามหัตถการที่ทำจริง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "df_paid_type",
+          "type": "radio",
+          "label": "ได้เฉพาะหัตถการสูงสุดที่ทำครั้งนั้น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "minimum_df_type",
+          "type": "radio",
+          "label": "ขั้นต่ำ 1 ครั้ง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "minimum_df_type",
+          "type": "radio",
+          "label": "ไม่กำหนดขั้นต่ำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "position",
+          "type": "radio",
+          "label": "แพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "position",
+          "type": "radio",
+          "label": "ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "salary",
+          "type": "number",
+          "label": "เงินเดือน",
+          "required": false,
+          "placeholder": "กรอกเงินเดือน",
+          "isSelect2": false
+        },
+        {
+          "name": "salary_date",
+          "type": "select-one",
+          "label": "วันที่จ่ายเงินเดือน",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "ทุกสิ้นเดือน",
+              "t": "ทุกสิ้นเดือน"
+            },
+            {
+              "v": "ทุกวันที่ 1",
+              "t": "ทุกวันที่ 1"
+            },
+            {
+              "v": "ทุกวันที่ 2",
+              "t": "ทุกวันที่ 2"
+            },
+            {
+              "v": "ทุกวันที่ 3",
+              "t": "ทุกวันที่ 3"
+            },
+            {
+              "v": "ทุกวันที่ 4",
+              "t": "ทุกวันที่ 4"
+            },
+            {
+              "v": "ทุกวันที่ 5",
+              "t": "ทุกวันที่ 5"
+            },
+            {
+              "v": "ทุกวันที่ 6",
+              "t": "ทุกวันที่ 6"
+            },
+            {
+              "v": "ทุกวันที่ 7",
+              "t": "ทุกวันที่ 7"
+            },
+            {
+              "v": "ทุกวันที่ 8",
+              "t": "ทุกวันที่ 8"
+            },
+            {
+              "v": "ทุกวันที่ 9",
+              "t": "ทุกวันที่ 9"
+            },
+            {
+              "v": "ทุกวันที่ 10",
+              "t": "ทุกวันที่ 10"
+            },
+            {
+              "v": "ทุกวันที่ 11",
+              "t": "ทุกวันที่ 11"
+            },
+            {
+              "v": "ทุกวันที่ 12",
+              "t": "ทุกวันที่ 12"
+            },
+            {
+              "v": "ทุกวันที่ 13",
+              "t": "ทุกวันที่ 13"
+            },
+            {
+              "v": "ทุกวันที่ 14",
+              "t": "ทุกวันที่ 14"
+            },
+            {
+              "v": "ทุกวันที่ 15",
+              "t": "ทุกวันที่ 15"
+            },
+            {
+              "v": "ทุกวันที่ 16",
+              "t": "ทุกวันที่ 16"
+            },
+            {
+              "v": "ทุกวันที่ 17",
+              "t": "ทุกวันที่ 17"
+            },
+            {
+              "v": "ทุกวันที่ 18",
+              "t": "ทุกวันที่ 18"
+            },
+            {
+              "v": "ทุกวันที่ 19",
+              "t": "ทุกวันที่ 19"
+            },
+            {
+              "v": "ทุกวันที่ 20",
+              "t": "ทุกวันที่ 20"
+            },
+            {
+              "v": "ทุกวันที่ 21",
+              "t": "ทุกวันที่ 21"
+            },
+            {
+              "v": "ทุกวันที่ 22",
+              "t": "ทุกวันที่ 22"
+            },
+            {
+              "v": "ทุกวันที่ 23",
+              "t": "ทุกวันที่ 23"
+            },
+            {
+              "v": "ทุกวันที่ 24",
+              "t": "ทุกวันที่ 24"
+            },
+            {
+              "v": "ทุกวันที่ 25",
+              "t": "ทุกวันที่ 25"
+            },
+            {
+              "v": "ทุกวันที่ 26",
+              "t": "ทุกวันที่ 26"
+            },
+            {
+              "v": "ทุกวันที่ 27",
+              "t": "ทุกวันที่ 27"
+            },
+            {
+              "v": "ทุกวันที่ 28",
+              "t": "ทุกวันที่ 28"
+            }
+          ]
+        },
+        {
+          "name": "color",
+          "type": "select-one",
+          "label": "สี (สำหรับตารางงาน)",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "#F6DA09",
+              "t": "เหลือง"
+            },
+            {
+              "v": "#2dc4b6",
+              "t": "เขียว"
+            },
+            {
+              "v": "#ff9f1c",
+              "t": "ส้ม"
+            },
+            {
+              "v": "#C42D3B",
+              "t": "แดง"
+            },
+            {
+              "v": "#D4932B",
+              "t": "น้ำตาล"
+            },
+            {
+              "v": "#e685a5",
+              "t": "ชมพู"
+            },
+            {
+              "v": "#6B2DC4",
+              "t": "ม่วง"
+            },
+            {
+              "v": "#1f7af8",
+              "t": "น้ำเงิน"
+            },
+            {
+              "v": "#56ccf2",
+              "t": "ฟ้า"
+            },
+            {
+              "v": "#7c89b1",
+              "t": "เทา"
+            },
+            {
+              "v": "#282e45",
+              "t": "ดำ"
+            }
+          ]
+        },
+        {
+          "name": "background_color",
+          "type": "select-one",
+          "label": "สีพื้นหลัง (สำหรับตารางงาน)",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "สีโปร่งใส"
+            },
+            {
+              "v": "#fffef7",
+              "t": "เหลืองอ่อน"
+            },
+            {
+              "v": "#daf4f0",
+              "t": "เขียวอ่อน"
+            },
+            {
+              "v": "#ffecd7",
+              "t": "ส้มอ่อน"
+            },
+            {
+              "v": "#f5d7d9",
+              "t": "แดงอ่อน"
+            },
+            {
+              "v": "#f7ead7",
+              "t": "น้ำตาลอ่อน"
+            },
+            {
+              "v": "#fae7ed",
+              "t": "ชมพูอ่อน"
+            },
+            {
+              "v": "#e2d6f4",
+              "t": "ม่วงอ่อน"
+            },
+            {
+              "v": "#d4e5fe",
+              "t": "น้ำเงินอ่อน"
+            },
+            {
+              "v": "#e0f4fd",
+              "t": "ฟ้าอ่อน"
+            },
+            {
+              "v": "#e4e8f0",
+              "t": "เทาอ่อน"
+            },
+            {
+              "v": "#d4d5d9",
+              "t": "ดำอ่อน"
+            },
+            {
+              "v": "#FFC720",
+              "t": "เหลืองเข้ม"
+            },
+            {
+              "v": "#4FC3F7",
+              "t": "ฟ้าเข้ม"
+            },
+            {
+              "v": "#4F94E6",
+              "t": "น้ำเงินเข้ม"
+            },
+            {
+              "v": "#2EC1B4",
+              "t": "เขียวเข้ม"
+            },
+            {
+              "v": "#FF6A9C",
+              "t": "ชมพูเข้ม"
+            },
+            {
+              "v": "#FF9E1F",
+              "t": "ส้มเข้ม"
+            },
+            {
+              "v": "#EA4747",
+              "t": "แดงเข้ม"
+            },
+            {
+              "v": "#7D58BE",
+              "t": "ม่วงเข้ม"
+            },
+            {
+              "v": "#A56B49",
+              "t": "น้ำตาลเข้ม"
+            },
+            {
+              "v": "#676767",
+              "t": "เทาเข้ม"
+            },
+            {
+              "v": "#252525",
+              "t": "ดำเข้ม"
+            }
+          ]
+        },
+        {
+          "name": "has_sales",
+          "type": "checkbox",
+          "label": "มียอดขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "label": "อีเมล",
+          "required": false,
+          "placeholder": "กรอกอีเมล",
+          "isSelect2": false
+        },
+        {
+          "name": "password",
+          "type": "password",
+          "label": "รหัสผ่าน\n                                    \n                                    \n                                        8ตัวอักษรขึ้นไป\n                                        ประกอบด้วยพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข",
+          "required": false,
+          "placeholder": "กรณีใช้รหัสผ่านเดิม ให้เว้นว่าง",
+          "pattern": "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{8,}$",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-permission-all",
+          "type": "checkbox",
+          "label": "ใช้งานทุกระบบ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_management",
+          "type": "checkbox",
+          "label": "จัดการลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_view",
+          "type": "checkbox",
+          "label": "ดูข้อมูลลูกค้าทั่วไป",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_contact_view",
+          "type": "checkbox",
+          "label": "ดูข้อมูลการติดต่อของลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_customer",
+          "type": "checkbox",
+          "label": "ดูเฉพาะลูกค้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_delete",
+          "type": "checkbox",
+          "label": "ลบลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment",
+          "type": "checkbox",
+          "label": "จองนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_self",
+          "type": "checkbox",
+          "label": "จองนัดหมาย (เฉพาะแพทย์)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coming_appointment",
+          "type": "checkbox",
+          "label": "นัดหมายวันนี้",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coming_appointment_self",
+          "type": "checkbox",
+          "label": "นัดหมายวันนี้ (เฉพาะแพทย์)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_manage_own_appointments_only",
+          "type": "checkbox",
+          "label": "จัดการนัดหมายเฉพาะผู้ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_management",
+          "type": "checkbox",
+          "label": "บันทึกการตรวจ OPD",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_df_management",
+          "type": "checkbox",
+          "label": "เปลี่ยนแปลงค่ามือแพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_df_view",
+          "type": "checkbox",
+          "label": "ดูค่ามือแพทย์/ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_deposit",
+          "type": "checkbox",
+          "label": "จ่ายมัดจำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_deposit_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกมัดจำ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_quotation_management",
+          "type": "checkbox",
+          "label": "ทำใบเสนอราคา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_quotation_view",
+          "type": "checkbox",
+          "label": "ดูรายการใบเสนอราคา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_management",
+          "type": "checkbox",
+          "label": "ขายคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_view",
+          "type": "checkbox",
+          "label": "ดูรายการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_edit_sale_price",
+          "type": "checkbox",
+          "label": "แก้ไขราคาขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_edit_sale_discount",
+          "type": "checkbox",
+          "label": "ระบุส่วนลดท้ายบิล",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_customer_product_change",
+          "type": "checkbox",
+          "label": "เปลี่ยนสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_membership",
+          "type": "checkbox",
+          "label": "บัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_membership_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_change_customer_credit",
+          "type": "checkbox",
+          "label": "ปรับวงเงินบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_change_customer_point",
+          "type": "checkbox",
+          "label": "ปรับคะแนนบัตรสมาชิก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_management",
+          "type": "checkbox",
+          "label": "จัดการคอร์ส (ระดับสาขา)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_view",
+          "type": "checkbox",
+          "label": "ดูคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_course_management",
+          "type": "checkbox",
+          "label": "จัดการคอร์ส (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_online_sale",
+          "type": "checkbox",
+          "label": "ขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_online_sale_cancel",
+          "type": "checkbox",
+          "label": "ยกเลิกขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_remaining_course",
+          "type": "checkbox",
+          "label": "จัดการคอร์สคงเหลือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_management",
+          "type": "checkbox",
+          "label": "สต็อคสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_view_stock_cost",
+          "type": "checkbox",
+          "label": "ดูต้นทุนสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_movement",
+          "type": "checkbox",
+          "label": "ดูรายการเคลื่อนไหวสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_order_management",
+          "type": "checkbox",
+          "label": "นําสินค้าเข้าสต็อค/ยกเลิกการนำเข้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_order",
+          "type": "checkbox",
+          "label": "รายการนำเข้าสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_vendor_sale_management",
+          "type": "checkbox",
+          "label": "ขายสินค้าในสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_change_management",
+          "type": "checkbox",
+          "label": "ปรับสินค้าในสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_transfer_management",
+          "type": "checkbox",
+          "label": "โอนสินค้าข้ามสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_receiving_management",
+          "type": "checkbox",
+          "label": "รับสินค้าเข้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_stock_withdrawal_management",
+          "type": "checkbox",
+          "label": "เบิกสินค้าจากคลังกลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_stock_withdrawal",
+          "type": "checkbox",
+          "label": "เบิกสินค้าจากสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_central_stock",
+          "type": "checkbox",
+          "label": "คลังสินค้ากลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_assistance_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_course_df_group_df_management",
+          "type": "checkbox",
+          "label": "ค่ามือกลุ่ม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_expense_management",
+          "type": "checkbox",
+          "label": "จัดการรายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_expense_view",
+          "type": "checkbox",
+          "label": "ดูรายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_promotion_management",
+          "type": "checkbox",
+          "label": "จัดการโปรโมชัน (ระดับสาขา)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_promotion_view",
+          "type": "checkbox",
+          "label": "ดูโปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_promotion_management",
+          "type": "checkbox",
+          "label": "จัดการโปรโมชัน (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coupon_management",
+          "type": "checkbox",
+          "label": "จัดการคูปองส่วนลด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_coupon_view",
+          "type": "checkbox",
+          "label": "ดูคูปองส่วนลด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_voucher_management",
+          "type": "checkbox",
+          "label": "จัดการ Voucher",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_voucher_view",
+          "type": "checkbox",
+          "label": "ดู Voucher",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_voucher_management",
+          "type": "checkbox",
+          "label": "จัดการ Voucher (ระดับคลินิก)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_treatment_document",
+          "type": "checkbox",
+          "label": "เอกสารการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_chart_document",
+          "type": "checkbox",
+          "label": "Chart",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_consent_document",
+          "type": "checkbox",
+          "label": "ใบยินยอม",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medical_certificate",
+          "type": "checkbox",
+          "label": "ใบรับรองแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_sale_cancelation_document",
+          "type": "checkbox",
+          "label": "เอกสารยกเลิกการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medicine_label",
+          "type": "checkbox",
+          "label": "ฉลากยา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_schedule_management",
+          "type": "checkbox",
+          "label": "จัดการงานแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_schedule_view",
+          "type": "checkbox",
+          "label": "ดูงานแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_schedule_management",
+          "type": "checkbox",
+          "label": "จัดการงานพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_schedule_view",
+          "type": "checkbox",
+          "label": "ดูงานพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_sale",
+          "type": "checkbox",
+          "label": "รายงานการขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_profit_and_loss",
+          "type": "checkbox",
+          "label": "กำไร/ขาดทุน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_income",
+          "type": "checkbox",
+          "label": "รายรับประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_customer_sales",
+          "type": "checkbox",
+          "label": "ยอดขายลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_vendor_sales",
+          "type": "checkbox",
+          "label": "ยอดขายคู่ค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_profit",
+          "type": "checkbox",
+          "label": "กำไรต่อการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_course_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายคอร์ส/สินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_seller_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายแพทย์/พนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_paid_seller_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายแพทย์/พนักงานตามยอดเงินที่ชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_top_customer_sales",
+          "type": "checkbox",
+          "label": "ยอดขายรายลูกค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายทั้งหมด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_doctor_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายแพทย์ (ทั้งหมด)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_doctor_self_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายแพทย์ (เฉพาะผู้ใช้งาน)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_employee_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายพนักงาน (ทั้งหมด)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_employee_self_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายพนักงาน (เฉพาะผู้ใช้งาน)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_other_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายอื่นๆ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_promotion",
+          "type": "checkbox",
+          "label": "รายงานโปรโมชัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_course",
+          "type": "checkbox",
+          "label": "รายงานคอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_product",
+          "type": "checkbox",
+          "label": "รายงานสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_appointment",
+          "type": "checkbox",
+          "label": "รายงานนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_customer",
+          "type": "checkbox",
+          "label": "รายงานลูกค้าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_remaining_course",
+          "type": "checkbox",
+          "label": "รายงานคอร์สคงเหลือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_unpaid",
+          "type": "checkbox",
+          "label": "รายการขายค้างชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment",
+          "type": "checkbox",
+          "label": "รายงานประวัติการรักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_course_usage",
+          "type": "checkbox",
+          "label": "รายงานการใช้คอร์ส",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_stock",
+          "type": "checkbox",
+          "label": "รายงานสต็อคสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_order",
+          "type": "checkbox",
+          "label": "รายงานนำเข้าสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_stock_movement",
+          "type": "checkbox",
+          "label": "รายการเคลื่อนไหวสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_nearing_expiration_stock",
+          "type": "checkbox",
+          "label": "รายงานล็อตสินค้าใกล้หมดอายุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_expired_stock",
+          "type": "checkbox",
+          "label": "รายงานล็อตสินค้าหมดอายุ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_nearing_out_of_stock",
+          "type": "checkbox",
+          "label": "รายงานสินค้าใกล้หมดสต็อค",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_sum_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามช่วงเวลา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending_by_treatment_date",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามวันที่รักษา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_treatment_spending_by_sale_date",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาตามวันที่ขาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_future_stock",
+          "type": "checkbox",
+          "label": "รายงานตัดสต็อคล่วงหน้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_coupon",
+          "type": "checkbox",
+          "label": "รายงานคูปอง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_voucher",
+          "type": "checkbox",
+          "label": "รายงาน Voucher",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_online_sale_payment",
+          "type": "checkbox",
+          "label": "รายงานรับเงินจาก ProClinic",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_report_online_sale",
+          "type": "checkbox",
+          "label": "รายงานการขายออนไลน์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_report_expense",
+          "type": "checkbox",
+          "label": "รายจ่ายทั้งหมด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_clinic_report_treatment_spending",
+          "type": "checkbox",
+          "label": "รายงานสรุปใช้ยาประจำวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_branch_management",
+          "type": "checkbox",
+          "label": "ตั้งค่าสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_holiday_setting",
+          "type": "checkbox",
+          "label": "ตั้งค่าวันหยุดสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_medical_instrument",
+          "type": "checkbox",
+          "label": "เครื่องหัตถการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_google_calendar",
+          "type": "checkbox",
+          "label": "ตั้งค่า Google Calendar",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_dashboard",
+          "type": "checkbox",
+          "label": "แดชบอร์ด",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_product_management",
+          "type": "checkbox",
+          "label": "จัดการสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_default_product_unit",
+          "type": "checkbox",
+          "label": "จัดการหน่วยสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_product_group",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มสินค้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_permission_group_management",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มสิทธิ์การใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_doctor_management",
+          "type": "checkbox",
+          "label": "จัดการแพทย์ & ผู้ช่วยแพทย์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_user_management",
+          "type": "checkbox",
+          "label": "จัดการพนักงาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_df_group",
+          "type": "checkbox",
+          "label": "จัดการกลุ่มค่ามือ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_wallet_management",
+          "type": "checkbox",
+          "label": "จัดการกระเป๋าเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_central_stock_setting",
+          "type": "checkbox",
+          "label": "ตั้งค่าคลังสินค้ากลาง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_crm_insight",
+          "type": "checkbox",
+          "label": "Customer Insight",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_smart_audience",
+          "type": "checkbox",
+          "label": "Smart Audience",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_revenue_analysis_by_procedure",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายรับตามหัตถการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_analysis",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายการนัดหมาย",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_appointment_analysis_user",
+          "type": "checkbox",
+          "label": "วิเคราะห์รายการนัดหมายรายผู้ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "permission_payment_summary_analysis",
+          "type": "checkbox",
+          "label": "วิเคราะห์สรุปบัญชีรับชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "edit-branch-all",
+          "type": "checkbox",
+          "label": "ทุกสาขา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ชลบุรี",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา พระราม9",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา ราชพฤกษ์",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สุขุมวิท",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "branch_id[]",
+          "type": "checkbox",
+          "label": "สาขา สยาม",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/doctor/duplicate",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "duplicate-old-doctor",
+          "type": "text",
+          "label": "แพทย์ที่คัดลอก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "prefix",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": true,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "label": "ชื่อเล่น",
+          "required": false,
+          "placeholder": "กรอกชื่อเล่น",
+          "isSelect2": false
+        },
+        {
+          "name": "prefix_en",
+          "type": "text",
+          "label": "คำนำหน้า",
+          "required": false,
+          "placeholder": "กรอกคำนำหน้า",
+          "isSelect2": false
+        },
+        {
+          "name": "firstname_en",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false,
+          "placeholder": "กรอกชื่อ",
+          "isSelect2": false
+        },
+        {
+          "name": "lastname_em",
+          "type": "text",
+          "label": "สำหรับออกเอกสารภาษาอังกฤษ (EN)เว้นว่างกรณีต้องการใช้ข้อมูลพื้นฐาน",
+          "required": false,
+          "placeholder": "กรอกนามสกุล",
+          "isSelect2": false
+        },
+        {
+          "name": "professional_license",
+          "type": "text",
+          "label": "เลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "required": false,
+          "placeholder": "กรอกเลขที่ใบอนุญาตประกอบวิชาชีพเวชกรรม",
+          "isSelect2": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "label": "อีเมล",
+          "required": false,
+          "placeholder": "กรอกอีเมล",
+          "isSelect2": false
+        },
+        {
+          "name": "password",
+          "type": "password",
+          "required": false,
+          "placeholder": "********",
+          "pattern": "^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{8,}$",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}
