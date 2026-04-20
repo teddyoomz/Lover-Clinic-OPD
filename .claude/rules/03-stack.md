@@ -30,6 +30,7 @@
 4. `be_*` collections (be_customers, be_sales, be_promotions, be_coupons, be_vouchers, …) = **OUR OWN** data — stored in Firestore, created in our UI, NEVER pushed to ProClinic
 5. ข้อมูลไม่มีใน master_data → ไป MasterDataTab sync ก่อน → แล้วค่อยใช้
 6. **Fully replicate ProClinic UI** (look + fields) แต่ backend storage = **OURS**
+7. **`/api/admin/*` = allowed exception** (added Phase 12.0, 2026-04-20). Unlike `/api/proclinic/*` (dev-only ProClinic bridge), `/api/admin/*` endpoints are **production** infrastructure that touch OUR Firebase project only (Firebase Admin SDK user creation, custom claims). Backend UI MAY import `/api/admin/*`. Rule E's restriction is specifically about ProClinic write-back — **not** all `/api/*`. New privileged endpoints audited via `/audit-firebase-admin-security` (FA1-FA12).
 
 #### 🚨 ANTI-EXAMPLE — Phase 9 violation 2026-04-19
 **What I did wrong** (commits `fc3400e`, `0fd1643`, `c31c817`):

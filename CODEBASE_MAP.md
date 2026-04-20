@@ -64,12 +64,15 @@ src/
     ├── BackendDashboard.jsx    — Backend admin page (/?backend=1, new tab) — Clone + Customer list
     ├── ClinicSchedule.jsx      — Public schedule page (/?schedule=<token>) — calendar + time slots
     └── PatientForm.jsx         — Patient intake/follow-up form (QR scan target)
+api/admin/                      — Privileged endpoints (production; Firebase Admin SDK) — Phase 12.0
+├── users.js                    — actions: list, get, create, update, delete, grantAdmin, revokeAdmin. Token-gated via Admin SDK verifyIdToken + admin claim OR bootstrap UID. Self-protection (no delete-self, no revoke-own-admin unless bootstrap). Audited via /audit-firebase-admin-security (FA1-FA12).
+└── _lib/adminAuth.js           — Admin SDK singleton + verifyAdminToken(req, res) helper
 api/webhook/                    — Chat webhook endpoints (FB/LINE)
 ├── facebook.js                 — FB webhook handler + processEchoMessage() for echo events
 ├── line.js                     — LINE webhook handler
 ├── send.js                     — Send messages to FB/LINE (Graph API v25)
 └── saved-replies.js            — GET endpoint proxying FB saved_message_responses
-api/proclinic/                  — Vercel Serverless Functions (7 consolidated endpoints)
+api/proclinic/                  — Vercel Serverless Functions (7 consolidated endpoints) — @dev-only (rule H-bis)
 ├── customer.js                 — actions: create, update, delete, search, fetchPatient. Backups to `pc_customers/{proClinicId}` on create + fetchPatient
 ├── deposit.js                  — actions: submit, update, cancel, options (รวมจาก deposit-*.js). Options action backups to `pc_form_options/deposit` in Firestore
 ├── connection.js               — actions: login, credentials, clear (รวมจาก login/credentials/clear-session.js)
