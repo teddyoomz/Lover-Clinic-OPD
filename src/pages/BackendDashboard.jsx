@@ -44,6 +44,7 @@ import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
 import MedicalInstrumentsTab from '../components/backend/MedicalInstrumentsTab.jsx';
+import HolidaysTab from '../components/backend/HolidaysTab.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -347,7 +348,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'medical-instruments' ? (
           <MedicalInstrumentsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'holidays' ? (
-          <ComingSoon icon={CalendarX}   label="วันหยุด"              phaseTag="Phase 11.5" message="วันหยุดเฉพาะ + ตารางหยุดประจำสัปดาห์ — integrate เข้ากับ Appointment calendar"     clinicSettings={clinicSettings} />
+          <HolidaysTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'branches' ? (
           <ComingSoon icon={Building2}   label="สาขา"                phaseTag="Phase 11.6" message="จัดการสาขา + ตั้งสาขาหลัก + ที่อยู่/โทร/LINE"                                        clinicSettings={clinicSettings} />
         ) : activeTab === 'permission-groups' ? (

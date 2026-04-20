@@ -248,6 +248,7 @@ vi.mock('../src/components/backend/reports/StaffSalesTab.jsx', () => ({ default:
 vi.mock('../src/components/backend/ProductGroupsTab.jsx', () => ({ default: () => <div data-testid="t-product-groups" /> }));
 vi.mock('../src/components/backend/ProductUnitsTab.jsx', () => ({ default: () => <div data-testid="t-product-units" /> }));
 vi.mock('../src/components/backend/MedicalInstrumentsTab.jsx', () => ({ default: () => <div data-testid="t-medical-instruments" /> }));
+vi.mock('../src/components/backend/HolidaysTab.jsx', () => ({ default: () => <div data-testid="t-holidays" /> }));
 vi.mock('../src/components/TreatmentFormPage.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/nav/BackendNav.jsx', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -281,11 +282,9 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-medical-instruments')).toBeInTheDocument();
   });
 
-  it('R4 ?tab=holidays renders ComingSoon with "วันหยุด"', async () => {
+  it('R4 ?tab=holidays renders HolidaysTab (Phase 11.5 shipped 2026-04-20)', async () => {
     await renderWith('holidays');
-    await screen.findByTestId('coming-soon');
-    expect(screen.getByText('วันหยุด')).toBeInTheDocument();
-    expect(screen.getByText('Phase 11.5')).toBeInTheDocument();
+    expect(await screen.findByTestId('t-holidays')).toBeInTheDocument();
   });
 
   it('R5 ?tab=branches renders ComingSoon with "สาขา"', async () => {

@@ -1552,3 +1552,47 @@ Equipment registry with maintenance scheduling. Fields match ProClinic (Triangle
 - **H**: OUR canonical; maintenanceLog array is OUR extension (not in ProClinic)
 
 Tests: 2208 → 2251 PASS (+43).
+
+---
+
+## Phase 11.5 Holidays CRUD (2026-04-20)
+
+Two-type holiday entity (`specific` dates + `weekly` day-of-week) with pure `isDateHoliday()` decider ready for wiring into AppointmentTab calendar + schedule-link `shouldBlockScheduleSlot` consumer.
+
+**Schema (`be_holidays`):**
+- `holidayId` — `HOL-{ts}-{8hex}`
+- `type` — enum `specific | weekly` (discriminator)
+- `dates[]` (type=specific) — 1..60 unique `YYYY-MM-DD` strings
+- `dayOfWeek` (type=weekly) — integer 0..6 (0=Sun in JS Date.getUTCDay)
+- `note` — optional, ≤ 200
+- `status` — enum `ใช้งาน | พักใช้งาน` (พักใช้งาน = skipped by `isDateHoliday` so admin can temporarily lift a holiday without deleting)
+
+**New files:**
+- `src/lib/holidayValidation.js` — `validateHoliday`, `normalizeHoliday` (dedup+sort dates, clamp dayOfWeek, delete unused discriminator field), `emptyHolidayForm`, `isDateHoliday(dateStr, holidays) → Holiday | null` pure decider, `DAY_OF_WEEK_LABELS` Thai frozen const (อาทิตย์..เสาร์)
+- `src/components/backend/HolidayFormModal.jsx` — type toggle (specific/weekly); DateField picker + "เพิ่มวัน" button for specific mode → dates rendered as removable chips; 7-button day-of-week grid for weekly mode
+- `src/components/backend/HolidaysTab.jsx` — 7th shell reuse; cards show either date chips (first 6 + "+ N" overflow) or day-of-week badge
+
+**Edits:**
+- `src/lib/backendClient.js` — +4 CRUD fns (`list/get/save/delete`); `saveHoliday` dyn-imports validator+normalizer
+- `src/pages/BackendDashboard.jsx` — swap ComingSoon → HolidaysTab
+- `tests/phase11-master-data-scaffold.test.jsx` — R4 updated + mock
+
+**New tests — `tests/holiday.test.jsx` — 42 adversarial:**
+- HV1-HV13 validator (specific/weekly happy paths, null/array form, bad type, 0-date specific, malformed date, dup dates, 60-cap, dayOfWeek integer+range, note string+bound, status enum, HOLIDAY_TYPES frozen)
+- HN1-HN5 normalizer (dedup+sort, drop invalid dates, clamp dayOfWeek 0..6, drop unused discriminator field, trim+default status)
+- HIS1-HIS8 `isDateHoliday` (empty+bad input, specific match, multi-date range, weekly Sunday/Saturday with UTC-safe getUTCDay, skip พักใช้งาน, first-match wins, null-safe over array)
+- C1-E2 constants + Rule E imports
+- HT1-HT6 Tab (empty, specific card with date chips, weekly card with Thai dow label, type filter, search matches date string, delete confirm YES)
+- HM1-HM7 Modal (specific default, toggle to weekly reveals 7-day grid, validate blocks empty, weekly crypto id HOL-, edit prefill dates, remove chip, ESC)
+
+**Bug caught by test — JSX lowercase-variable dot access**: first draft used `<typeCfg.icon />` which fails React's JSX tag parser (lowercase start = HTML tag). Fixed by capitalizing: `const TypeIcon = typeCfg.icon; <TypeIcon/>`. Also fixed duplicate text rendering (note in h3 AND in bottom `<p>`) — pruned redundant p for specific type.
+
+**Rule compliance:**
+- **C1**: 7th shell reuse; DateField canonical
+- **C2**: HOL crypto id
+- **D**: 42 adversarial cases including `isDateHoliday` UTC-safe day-of-week (prevents Thai TZ drift same class as `thaiTodayISO` hazard)
+- **E**: E1/E2 import-only greps
+- **F**: Triangle captured ProClinic `holiday_date` (multi-date flatpickr) + `holiday_note`; extended with type discriminator + weekly mode for OUR clinic-use semantics
+- **H**: OUR canonical; pure `isDateHoliday` helper ready for 11.8 wiring into scheduleFilterUtils.js
+
+Tests: 2251 → 2293 PASS (+42).

@@ -4106,3 +4106,58 @@ export async function deleteMedicalInstrument(instrumentId) {
   if (!id) throw new Error('instrumentId required');
   await deleteDoc(medicalInstrumentDoc(id));
 }
+
+// ─── Holiday CRUD (Phase 11.5 Master Data Suite) ────────────────────────────
+// Two-type collection (specific-date vs weekly-day-of-week); AppointmentTab
+// consumes via isDateHoliday() helper in holidayValidation.js. Wiring to the
+// calendar slot-block lands in Phase 11.8.
+
+const holidaysCol = () => collection(db, ...basePath(), 'be_holidays');
+const holidayDoc = (id) => doc(db, ...basePath(), 'be_holidays', String(id));
+
+export async function getHoliday(holidayId) {
+  const id = String(holidayId || '');
+  if (!id) return null;
+  const snap = await getDoc(holidayDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listHolidays() {
+  const snap = await getDocs(holidaysCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveHoliday(holidayId, data) {
+  const id = String(holidayId || '');
+  if (!id) throw new Error('holidayId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeHoliday, validateHoliday } = await import('./holidayValidation.js');
+
+  const normalized = normalizeHoliday(data);
+  const fail = validateHoliday(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(holidayDoc(id), {
+    ...normalized,
+    holidayId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteHoliday(holidayId) {
+  const id = String(holidayId || '');
+  if (!id) throw new Error('holidayId required');
+  await deleteDoc(holidayDoc(id));
+}
