@@ -1,0 +1,122 @@
+{
+  "url": "https://trial.proclinicth.com/admin/sale-insurance-claim",
+  "totalForms": 2,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/sale-insurance-claim",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกสถานะการเบิกประกัน"
+            },
+            {
+              "v": "0",
+              "t": "ยังไม่ชำระเงิน"
+            },
+            {
+              "v": "3",
+              "t": "แบ่งชำระ"
+            },
+            {
+              "v": "1",
+              "t": "ชำระแล้ว"
+            },
+            {
+              "v": "4",
+              "t": "ค้างชำระ"
+            },
+            {
+              "v": "2",
+              "t": "ยกเลิก"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "form-claim-payment",
+      "action": "/admin/sale/insurance-claim/payment",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "claim-payment-remaining-amount",
+          "type": "text",
+          "label": "ยอดคงเหลือ (ยอดทั้งหมด  บาท)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ชำระเงิน",
+          "required": true,
+          "placeholder": "กรอกวันที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "payment_time",
+          "type": "text",
+          "label": "เวลา",
+          "required": false,
+          "placeholder": "กรอกเวลาที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "hasPaymentMethod1",
+          "type": "checkbox",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "payment_method",
+          "type": "text",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "เลือกช่องทางชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "paid_amount",
+          "type": "number",
+          "label": "ช่องทางชำระเงิน",
+          "required": false,
+          "placeholder": "กรอกยอดที่ชำระ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "claim-file",
+          "type": "file",
+          "label": "แนบหลักฐานชำระเงิน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

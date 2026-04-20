@@ -1896,4 +1896,37 @@ Terminal states (completed / cancelled) can't transition further. `completed` re
 
 Tests: 2686 → 2722 (+36). Build clean.
 
+---
+
+## Phase 12.7 — be_sale_insurance_claims + Phase 10.2 backfill (2026-04-20)
+
+Backfills the Phase 10.2 SaleReportTab "เบิกประกัน" column which was hardcoded to 0. One sale may have multiple claim rows (partial reimbursements over time); aggregator sums per saleId, counting only `status === 'paid'` claims.
+
+State machine (enforced by `applyClaimStatusTransition`):
+```
+pending ──► approved ──► paid
+   ├─► rejected       (from pending or approved)
+   └─► rejected
+```
+Terminal states (paid / rejected) can't transition. `status=paid` requires `paidAmount > 0` AND `paidAmount ≤ claimAmount`.
+
+**New files:**
+- `src/lib/saleInsuranceClaimValidation.js` — validator + normalizer + transition + `aggregateClaimsBySaleId(claims) → Map`. `generateSaleInsuranceClaimId()` → `CLAIM-*`.
+- `tests/saleInsuranceClaim.test.js` — 38 tests (SC1-15, TR1-9, NC1-3, AG1-4, SR1-6, RE1).
+- `docs/proclinic-scan/admin-sale-insurance-claim-forms.json` — Triangle scan.
+
+**Edits:**
+- `src/lib/backendClient.js` — `listSaleInsuranceClaims({ saleId, status, startDate, endDate })` + `saveSaleInsuranceClaim(id, data, {strict})` + `deleteSaleInsuranceClaim` + `transitionSaleInsuranceClaim(id, next, {paidAmount, rejectReason})` with approvedAt / paidAt / rejectedAt timestamping.
+- `src/lib/saleReportAggregator.js`:
+  - `deriveInsuranceClaim(sale, claimsBySaleId = null)` — prefers claims map when provided, falls back to legacy `sale.insuranceClaim` for pre-12.7 rows.
+  - `buildSaleReportRow(sale, customerLookup, claimsBySaleId)` — new 3rd arg threaded through.
+  - `aggregateSaleReport(sales, { claims, claimsBySaleId, ... })` — caller can pass raw `claims` (auto-aggregated to Map) OR a pre-built `claimsBySaleId` Map. Defaults to null → zero column (legacy behavior).
+- `firestore.rules` — be_sale_insurance_claims match block.
+
+Backwards-compat: every existing saleReport test passes unchanged; new tests SR1-6 cover the Phase 10.2 backfill path.
+
+No new UI tab in 12.7. Claim entry lands in SaleDetailModal when Phase 12.9 rewires the sale modal.
+
+Tests: 2722 → 2760 (+38). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

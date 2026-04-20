@@ -5066,3 +5066,70 @@ export async function transitionOnlineSale(onlineSaleId, nextStatus, extra = {})
   await updateDoc(ref, updates);
   return { success: true, status: resolved };
 }
+
+// ─── Sale Insurance Claims CRUD (Phase 12.7) ───────────────────────────────
+// Multiple claim rows per sale permitted (partial reimbursements). Aggregator
+// in saleReportAggregator.js reads via listSaleInsuranceClaims.
+
+const saleInsuranceClaimsCol = () => collection(db, ...basePath(), 'be_sale_insurance_claims');
+const saleInsuranceClaimDoc = (id) => doc(db, ...basePath(), 'be_sale_insurance_claims', String(id));
+
+export async function getSaleInsuranceClaim(claimId) {
+  const id = String(claimId || '');
+  if (!id) return null;
+  const snap = await getDoc(saleInsuranceClaimDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listSaleInsuranceClaims({ saleId, status, startDate, endDate } = {}) {
+  const snap = await getDocs(saleInsuranceClaimsCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (saleId) items = items.filter(c => c.saleId === saleId);
+  if (status) items = items.filter(c => c.status === status);
+  if (startDate) items = items.filter(c => (c.claimDate || '') >= startDate);
+  if (endDate) items = items.filter(c => (c.claimDate || '') <= endDate);
+  items.sort((a, b) => (b.claimDate || '').localeCompare(a.claimDate || ''));
+  return items;
+}
+
+export async function saveSaleInsuranceClaim(claimId, data, opts = {}) {
+  const id = String(claimId || '');
+  if (!id) throw new Error('claimId required');
+  const { normalizeSaleInsuranceClaim, validateSaleInsuranceClaim } = await import('./saleInsuranceClaimValidation.js');
+  const normalized = normalizeSaleInsuranceClaim(data);
+  const fail = validateSaleInsuranceClaim(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(saleInsuranceClaimDoc(id), {
+    ...normalized,
+    claimId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteSaleInsuranceClaim(claimId) {
+  const id = String(claimId || '');
+  if (!id) throw new Error('claimId required');
+  await deleteDoc(saleInsuranceClaimDoc(id));
+}
+
+export async function transitionSaleInsuranceClaim(claimId, nextStatus, extra = {}) {
+  const id = String(claimId || '');
+  if (!id) throw new Error('claimId required');
+  const { applyClaimStatusTransition } = await import('./saleInsuranceClaimValidation.js');
+  const ref = saleInsuranceClaimDoc(id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('claim not found');
+  const cur = snap.data();
+  const resolved = applyClaimStatusTransition(cur.status || 'pending', nextStatus);
+  const now = new Date().toISOString();
+  const updates = { status: resolved, updatedAt: now };
+  if (resolved === 'approved' && !cur.approvedAt) updates.approvedAt = now;
+  if (resolved === 'paid' && !cur.paidAt) updates.paidAt = now;
+  if (resolved === 'rejected' && !cur.rejectedAt) updates.rejectedAt = now;
+  if (extra.paidAmount != null) updates.paidAmount = Number(extra.paidAmount) || 0;
+  if (extra.rejectReason != null) updates.rejectReason = String(extra.rejectReason);
+  await updateDoc(ref, updates);
+  return { success: true, status: resolved };
+}

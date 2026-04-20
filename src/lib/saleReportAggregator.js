@@ -88,8 +88,18 @@ function deriveRefundAmount(sale) {
   return roundTHB(Number(sale?.refundAmount) || 0);
 }
 
-/** "เบิกประกัน" — insurance claim. Phase 12 dep — defaults 0 in v1. */
-function deriveInsuranceClaim(sale) {
+/** "เบิกประกัน" — insurance claim. Phase 12.7 populates via a saleId → paid
+ *  total map built from be_sale_insurance_claims (only 'paid' claims count).
+ *  Falls back to denormalized sale.insuranceClaim for pre-12.7 sales or
+ *  when claims weren't loaded. */
+function deriveInsuranceClaim(sale, claimsBySaleId = null) {
+  const sid = sale?.saleId || sale?.id || '';
+  if (claimsBySaleId && sid) {
+    const fromClaims = claimsBySaleId instanceof Map
+      ? claimsBySaleId.get(sid)
+      : claimsBySaleId[sid];
+    if (Number.isFinite(fromClaims)) return roundTHB(fromClaims);
+  }
   return roundTHB(Number(sale?.insuranceClaim) || 0);
 }
 
@@ -105,7 +115,7 @@ function deriveInsuranceClaim(sale) {
  *   denormalized values (legacy sales pre-2026-04-19 fix where the
  *   treatment-page auto-sale wrote customerHN: '').
  */
-export function buildSaleReportRow(sale, customerLookup = null) {
+export function buildSaleReportRow(sale, customerLookup = null, claimsBySaleId = null) {
   const s = sale || {};
   const billing = s.billing || {};
   const payment = s.payment || {};
@@ -114,7 +124,7 @@ export function buildSaleReportRow(sale, customerLookup = null) {
   const walletApplied = roundTHB(Number(billing.walletApplied) || 0);
   const paidAmount = derivePaidAmount(s);
   const refundAmount = deriveRefundAmount(s);
-  const insuranceClaim = deriveInsuranceClaim(s);
+  const insuranceClaim = deriveInsuranceClaim(s, claimsBySaleId);
   // ค้างชำระ = max(0, netTotal − paid). Refund DOES NOT reduce ค้างชำระ
   // (refund is post-payment money returned, separate from outstanding balance).
   const outstandingAmount = roundTHB(Math.max(0, netTotal - paidAmount));
@@ -198,7 +208,23 @@ export function aggregateSaleReport(sales, filters = {}) {
     includeCancelled = false,
     searchText = '',
     customers = null,
+    claimsBySaleId = null, // Phase 12.7: Map<saleId, totalPaid> — or pass raw claims via `claims`
+    claims = null,
   } = filters;
+
+  // If caller passes raw claims instead of pre-built map, build here.
+  let resolvedClaimsMap = claimsBySaleId;
+  if (!resolvedClaimsMap && Array.isArray(claims)) {
+    // Inline light aggregation to avoid circular import — sum 'paid' status only.
+    const m = new Map();
+    for (const c of claims) {
+      if (!c || c.status !== 'paid') continue;
+      const sid = String(c.saleId || '').trim();
+      if (!sid) continue;
+      m.set(sid, (m.get(sid) || 0) + (Number(c.paidAmount) || 0));
+    }
+    resolvedClaimsMap = m;
+  }
 
   // Build O(1) lookup once per aggregation if customers list provided.
   const customerLookup = Array.isArray(customers)
@@ -237,7 +263,7 @@ export function aggregateSaleReport(sales, filters = {}) {
 
   // 6) Build display rows + sort newest first by (saleDate desc, saleId desc)
   const rows = filtered
-    .map(s => buildSaleReportRow(s, customerLookup))
+    .map(s => buildSaleReportRow(s, customerLookup, resolvedClaimsMap))
     .sort((a, b) => {
       const c = (b.saleDate || '').localeCompare(a.saleDate || '');
       if (c !== 0) return c;
