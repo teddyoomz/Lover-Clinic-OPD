@@ -28,6 +28,22 @@ service cloud.firestore {
         allow write: if isClinicStaff();
       }
 
+      // ── ProClinic session cookies (cookie-relay extension writes unauth) ──
+      // The Chrome extension PATCHes cached cookies to these docs via
+      // Firestore REST without a Firebase auth token. Same rationale as
+      // pc_* mirror + chat_conversations — Vercel serverless likewise reads
+      // these docs unauth. Read stays open (cookies are long-expiring
+      // random tokens, not user PII). Write stays open so the extension
+      // auto-sync + popup manual sync can land cookies.
+      // 2026-04-20 — explicit rules after Phase 11.2 deploy overwrote the
+      // permissive Console edit that previously granted this (V1 repeat).
+      match /clinic_settings/proclinic_session {
+        allow read, write: if true;
+      }
+      match /clinic_settings/proclinic_session_trial {
+        allow read, write: if true;
+      }
+
       // ── Form Templates (custom intake/follow-up forms — staff-authored) ──
       // Read: any signed-in user (admin + kiosk) needs to render forms.
       // Write: clinic staff only.
