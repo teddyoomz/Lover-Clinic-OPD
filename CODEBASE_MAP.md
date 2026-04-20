@@ -1819,4 +1819,31 @@ Sort order + consent-block semantics unchanged.
 
 Tests: 2557 → 2600 (+43). Build clean.
 
+---
+
+## Phase 12.4 — be_deposits validator + 5-seller support (2026-04-20)
+
+Triangle-verified from `opd.js forms /admin/deposit` (2246-line scan). v5 plan said 3-seller; ProClinic actually has **5 sellers** (hasSeller1..5 / seller_1..5_id / sale_percent_1..5 / sale_total_1..5). Validator + normalizer reflect that.
+
+**New files:**
+- `src/lib/depositValidation.js` — validateDeposit / normalizeDeposit / emptyDepositForm / distributeDepositEvenly. MAX_SELLERS = 5. STATUS_OPTIONS = ['active','partial','used','cancelled','refunded'].
+- `docs/proclinic-scan/admin-deposit-forms.json` — Triangle scan.
+- `tests/depositValidation.test.js` — 44 adversarial tests (DV1-33, DN1-5, DE1-6).
+
+**Invariants enforced (strict mode):**
+- amount > 0; customerId + paymentChannel required
+- paymentDate = YYYY-MM-DD (if present)
+- sellers.length ≤ 5; no duplicate sellerId; each percent in [0,100]; totals ≥ 0
+- If any seller present: sum(percent) == 100 ± 0.01 AND sum(total) == amount ± 0.01
+- refundAmount ∈ [0, amount]
+- usedAmount + remainingAmount == amount ± 0.01 (only checked when one is non-zero so fresh forms don't false-positive)
+
+**Helper — distributeDepositEvenly(amount, sellerIds):**
+Evenly splits an amount across ≤5 sellers. Last seller absorbs rounding so sum(percent) = 100 exactly and sum(total) = amount exactly. Output passes validateDeposit out-of-the-box.
+
+**Edits:**
+- `src/lib/backendClient.js` `createDeposit` — `{strict: true}` option runs validateDeposit before write. Default stays false (legacy DepositPanel flows unaffected). Matches the same backwards-compat pattern as saveCustomer from 12.3.
+
+Tests: 2600 → 2644 (+44). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

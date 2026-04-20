@@ -992,7 +992,20 @@ export async function recalcCustomerDepositBalance(customerId) {
  * Create a new deposit. Sets remainingAmount = amount, usedAmount = 0, status = 'active'.
  * Returns { depositId, success }.
  */
-export async function createDeposit(data) {
+export async function createDeposit(data, opts = {}) {
+  // Phase 12.4: strict=true runs validateDeposit before write. Default stays
+  // false to preserve existing DepositPanel behavior (legacy flows rely on
+  // lenient create). New UI paths should pass strict: true.
+  if (opts.strict) {
+    const { normalizeDeposit, validateDeposit } = await import('./depositValidation.js');
+    const normalized = normalizeDeposit(data);
+    const fail = validateDeposit(normalized, { strict: true });
+    if (fail) {
+      const [, msg] = fail;
+      throw new Error(msg);
+    }
+    data = normalized;
+  }
   const depositId = `DEP-${Date.now()}`;
   const now = new Date().toISOString();
   const amount = Number(data.amount) || 0;
