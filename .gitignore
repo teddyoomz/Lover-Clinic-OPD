@@ -29,7 +29,8 @@ dist-ssr
 test-results/
 
 # Claude Code scratch / local-only
-.agents/
 skills-lock.json
 *.tmp.js
 *.tmp.ts
+# agent-context-kit: commit scaffold; only private/ stays local.
+.agents/private/
