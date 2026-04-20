@@ -238,9 +238,22 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   });
 
   const openCreate = (date, time, room) => {
+    // Phase 11.8d: holiday-gate. If the target date falls on an active
+    // holiday, require an explicit confirm before proceeding. Non-blocking
+    // override — admin can still book on holidays (emergency / special
+    // hours) but must consciously acknowledge.
+    const target = date || selectedDate;
+    const holiday = isDateHoliday(target, holidays);
+    if (holiday) {
+      const label = holiday.type === 'weekly'
+        ? `ทุกวัน${DAY_OF_WEEK_LABELS[Number(holiday.dayOfWeek) || 0]}`
+        : (holiday.note || `วันหยุดเฉพาะ (${target})`);
+      if (!window.confirm(`วันนี้เป็นวันหยุดคลินิก:\n\n${label}\n\nยืนยันสร้างนัดหมายในวันนี้ ?`)) return;
+    }
+
     loadFormOptions();
     setFormData(defaultFormData({
-      date: date || selectedDate,
+      date: target,
       startTime: time || '10:00',
       endTime: time ? TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time : '10:30',
       roomName: room || '',

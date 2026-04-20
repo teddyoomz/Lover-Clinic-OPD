@@ -1687,3 +1687,47 @@ dashboard / customer / appointment / treatment / sale / course_membership / fina
 - **H**: OUR canonical; normalize drops unknown keys so future ProClinic-only permissions don't pollute OUR map
 
 Tests: 2327 → 2363 PASS (+36).
+
+---
+
+## Phase 11.8 closeout (4 commits, 2026-04-20)
+
+Phase 11 Master Data Suite COMPLETE. 4-part closeout over 11.8a-d:
+
+### 11.8a — Rule H-bis + @dev-only banners
+- Rule H-bis added to `.claude/rules/00-session-start.md`:
+  - MasterDataTab + brokerClient + CloneTab + api/proclinic/* = dev-time scaffolding only
+  - Purpose: seed master_data/be_* from trial ProClinic; pre-release strip
+  - Single-tab rule: ALL sync + import UI lives in MasterDataTab only; CRUD tabs stay Firestore-only (applies to every future master-data entity)
+- `// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)` banner added to MasterDataTab.jsx, brokerClient.js, CloneTab.jsx (pre-release `grep @dev-only` lists the strip set)
+
+### 11.8b — migrate master_data/* → be_* for 6 Phase 11 entities
+- 6 per-entity mappers in backendClient.js: `mapMasterToProductGroup`, `mapMasterToProductUnit`, `mapMasterToMedicalInstrument`, `mapMasterToHoliday`, `mapMasterToBranch`, `mapMasterToPermissionGroup`. Lenient shape — accept both ProClinic snake_case and our camelCase fields.
+- Shared `runMasterToBeMigration({sourceType, targetDocFn, mapper})` helper
+- 6 exported migrate fns: `migrateMasterProductGroupsToBe` ... `migrateMasterPermissionGroupsToBe`. Idempotent; preserves createdAt on re-run.
+- MasterDataTab `MIGRATE_TARGETS` array 3 → 9 entries; grid stays `sm:grid-cols-3` (3×3)
+
+### 11.8c — sync ProClinic → master_data via generic scraper
+- `extractGenericListPage(html, {idPattern, fieldMap})` — walks `<table><tbody><tr>`, pulls id from first matching anchor/button URL, maps cell indices to field names, captures trailing `.badge` as status
+- 6 handlers in api/proclinic/master.js call `syncGenericList()` helper with per-entity path + idPattern + fieldMap
+- 6 dispatcher cases: `syncProductGroups` / `syncProductUnits` / `syncMedicalInstruments` / `syncHolidays` / `syncBranches` / `syncPermissionGroups`. Grep-pair verified (14 cases ↔ 14 handler defs — Rule 02 V6 silent-fail guard clean)
+- 6 brokerClient.js wrappers
+- MasterDataTab `SYNC_TYPES` 9 → 15 entries
+
+### 11.8d — holiday slot-block in AppointmentTab
+- `openCreate(date, time, room)` now checks `isDateHoliday(date, holidays)` FIRST
+- If holiday active: shows `window.confirm` with the holiday label (Thai day-of-week for weekly, note for specific) — non-blocking override so admin can still book emergency/special hours, but requires conscious acknowledgement
+- Reuses holidays state already loaded for the top banner (no extra load)
+
+### Deferred wiring (documented, to ship in Phase 16 Polish per plan R1-R3)
+The plan's 11.8 wiring of consumers to `be_*` is intentionally deferred:
+- **StockTab product picker** — still reads `master_data/products`. Phase 16 follow-up wires `be_product_groups.productIds[]` cross-ref for filtering
+- **SaleTab product picker** — same as above
+- **TreatmentFormPage unit conversion** — currently uses flat `unit` string from master_data. Phase 16 rewires to `be_product_units` conversion-group model so qty conversion (1 amp = 10 เข็ม) becomes automatic
+- **StockReportTab** — filter by group/unit deferred
+- **Permission tab-gate** — requires user→role mapping (not yet modeled). Phase 16 polish adds `user.permissionGroupId` + `hasPermission(group, key)` gate at tab render entry; per-button enforcement explicitly out-of-scope per plan R3
+
+Tests: 2363 → 2373 PASS (+10 wiring tests shipped in 11.8 main commit, scraper/migrate untested against live Firestore — PERMISSION_DENIED at master setup; functional validation happens on real admin click).
+Build clean.
+
+Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).
