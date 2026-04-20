@@ -250,6 +250,7 @@ vi.mock('../src/components/backend/ProductUnitsTab.jsx', () => ({ default: () =>
 vi.mock('../src/components/backend/MedicalInstrumentsTab.jsx', () => ({ default: () => <div data-testid="t-medical-instruments" /> }));
 vi.mock('../src/components/backend/HolidaysTab.jsx', () => ({ default: () => <div data-testid="t-holidays" /> }));
 vi.mock('../src/components/backend/BranchesTab.jsx', () => ({ default: () => <div data-testid="t-branches" /> }));
+vi.mock('../src/components/backend/PermissionGroupsTab.jsx', () => ({ default: () => <div data-testid="t-permission-groups" /> }));
 vi.mock('../src/components/TreatmentFormPage.jsx', () => ({ default: () => <div /> }));
 vi.mock('../src/components/backend/nav/BackendNav.jsx', () => ({
   default: ({ children }) => <div>{children}</div>,
@@ -293,11 +294,9 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-branches')).toBeInTheDocument();
   });
 
-  it('R6 ?tab=permission-groups renders ComingSoon with "สิทธิ์การใช้งาน"', async () => {
+  it('R6 ?tab=permission-groups renders PermissionGroupsTab (Phase 11.7 shipped 2026-04-20)', async () => {
     await renderWith('permission-groups');
-    await screen.findByTestId('coming-soon');
-    expect(screen.getByText('สิทธิ์การใช้งาน')).toBeInTheDocument();
-    expect(screen.getByText('Phase 11.7')).toBeInTheDocument();
+    expect(await screen.findByTestId('t-permission-groups')).toBeInTheDocument();
   });
 
   it('R7 ?tab=masterdata still renders MasterDataTab (preserved URL)', async () => {

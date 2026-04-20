@@ -4230,3 +4230,58 @@ export async function deleteBranch(branchId) {
   if (!id) throw new Error('branchId required');
   await deleteDoc(branchDoc(id));
 }
+
+// ─── Permission Group CRUD (Phase 11.7 Master Data Suite) ──────────────────
+// Flat per-action permission map (Record<string, true>). Falsy values aren't
+// persisted — absence = not granted. Enforcement via `hasPermission(group, key)`
+// helper in permissionGroupValidation.js (11.8 wiring).
+
+const permissionGroupsCol = () => collection(db, ...basePath(), 'be_permission_groups');
+const permissionGroupDoc = (id) => doc(db, ...basePath(), 'be_permission_groups', String(id));
+
+export async function getPermissionGroup(permissionGroupId) {
+  const id = String(permissionGroupId || '');
+  if (!id) return null;
+  const snap = await getDoc(permissionGroupDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listPermissionGroups() {
+  const snap = await getDocs(permissionGroupsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function savePermissionGroup(permissionGroupId, data) {
+  const id = String(permissionGroupId || '');
+  if (!id) throw new Error('permissionGroupId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizePermissionGroup, validatePermissionGroup } = await import('./permissionGroupValidation.js');
+
+  const normalized = normalizePermissionGroup(data);
+  const fail = validatePermissionGroup(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+
+  const now = new Date().toISOString();
+  await setDoc(permissionGroupDoc(id), {
+    ...normalized,
+    permissionGroupId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deletePermissionGroup(permissionGroupId) {
+  const id = String(permissionGroupId || '');
+  if (!id) throw new Error('permissionGroupId required');
+  await deleteDoc(permissionGroupDoc(id));
+}

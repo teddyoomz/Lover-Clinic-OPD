@@ -1642,3 +1642,48 @@ Core 13 branch fields + isDefault flag + unique-default enforcement via writeBat
 - **H**: OUR canonical; unique-default enforcement is OUR invariant
 
 Tests: 2293 → 2327 PASS (+34).
+
+---
+
+## Phase 11.7 Permission Groups CRUD (2026-04-20)
+
+Role-based access control. 130 ProClinic permissions mirrored across 14 modules, rendered as collapsible checkbox matrix. Flat `Record<string, boolean>` storage. `hasPermission(group, key)` pure helper is ready for Phase 11.8 tab/button gating.
+
+**Schema (`be_permission_groups`):**
+- `permissionGroupId` — `ROLE-{ts}-{8hex}`
+- `name` (required, ≤ 80), `description` (≤ 300)
+- `permissions` — Record<string, true>; falsy values NOT persisted (absent key = not granted)
+- `status`, timestamps
+
+**Seed: `PERMISSION_MODULES`** — 14 modules × 1-40+ items = ~130 keys covering ProClinic surface:
+dashboard / customer / appointment / treatment / sale / course_membership / finance / stock / marketing / df / document / analytics / reports / settings.
+
+**New files:**
+- `src/lib/permissionGroupValidation.js` — validate (shape check of Record<string, boolean>, enum-only status), normalize (drops unknown keys + drops false entries so doc stays compact), `countPermissions(permissions) → n`, `hasPermission(group, key) → boolean` pure helpers, `PERMISSION_MODULES` + `ALL_PERMISSION_KEYS` frozen seeds
+- `src/components/backend/PermissionGroupFormModal.jsx` — 3xl modal; master "ใช้งานทุกระบบ" toggle mirrors ProClinic's `permission-all`; 14 collapsible module sections each with "ทั้งหมด" cascade checkbox (with `indeterminate` when partial); auto-expand modules with granted permissions on edit
+- `src/components/backend/PermissionGroupsTab.jsx` — 9th shell reuse; card shows permission-count + gradient progress bar (sky → amber)
+
+**Edits:**
+- `src/lib/backendClient.js` — +4 CRUD fns
+- `src/pages/BackendDashboard.jsx` — swap ComingSoon → PermissionGroupsTab
+- `tests/phase11-master-data-scaffold.test.jsx` — R6 updated + mock
+
+**New tests — `tests/permissionGroup.test.jsx` — 36 adversarial:**
+- PGV1-PGV10 validator (null/array form, blank name, non-string, bounds, description optional+type+length, permissions object shape, boolean values, status enum, 130 real keys)
+- PGN1-PGN5 normalizer (trim, drop false entries, drop unknown keys, default status, non-object→empty map)
+- PGS1-PGS4 seed integrity (frozen, id/label/items, unique keys with Thai labels, ALL_PERMISSION_KEYS = flatten; ≥ 100 sanity floor)
+- PGH1-PGH4 helpers (countPermissions, hasPermission boolean + null-safe + rejects non-true)
+- E1-E2 Rule E
+- PGT1-PGT5 Tab (empty, card with count + progress, search description, delete, error)
+- PGM1-PGM6 Modal (create blank, validate, ROLE crypto id, "ใช้งานทุกระบบ" grants ≥ 100 permissions in single toggle, edit prefill, ESC)
+
+**Rule compliance:**
+- **C1**: 9th shell reuse
+- **C2**: ROLE crypto id
+- **C3**: distinct concern; Record<string, bool> avoids premature sub-collection per permission
+- **D**: 36 adversarial including master-toggle payload size assertion
+- **E**: E1/E2 greps
+- **F**: Triangle captured all 130+ ProClinic permissions via grep over form fields; organized into 14 user-friendly modules
+- **H**: OUR canonical; normalize drops unknown keys so future ProClinic-only permissions don't pollute OUR map
+
+Tests: 2327 → 2363 PASS (+36).
