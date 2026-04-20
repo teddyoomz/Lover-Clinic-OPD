@@ -92,7 +92,8 @@ describe('ITEM_LOOKUP + helpers', () => {
   it('L3 sectionOf returns section id for grouped items', () => {
     expect(sectionOf('promotions')).toBe('marketing');
     expect(sectionOf('clone')).toBe('customers');
-    expect(sectionOf('masterdata')).toBe('system');
+    // Phase 11.1: masterdata moved from deprecated 'system' → new 'master' section
+    expect(sectionOf('masterdata')).toBe('master');
   });
 
   it('L4 sectionOf returns null for pinned items', () => {
@@ -179,10 +180,33 @@ describe('section integrity', () => {
     expect(ids).toEqual(expect.arrayContaining(['clone', 'customers']));
   });
 
-  it('I4 system section owns masterdata only (sync is the sanctioned exception)', () => {
-    const system = NAV_SECTIONS.find(s => s.id === 'system');
-    expect(system).toBeTruthy();
-    expect(system.items.map(i => i.id)).toEqual(['masterdata']);
+  it('I4 master section owns Sync ProClinic + 6 Phase 11 CRUD tabs', () => {
+    // Phase 11.1 scaffold (2026-04-20): renamed 'system' → 'master', moved
+    // masterdata in (renamed label to "Sync ProClinic"), added 6 CRUD stubs
+    // for 11.2-11.7 (product-groups / product-units / medical-instruments /
+    // holidays / branches / permission-groups). DF-rates deferred to Phase 13.
+    const master = NAV_SECTIONS.find(s => s.id === 'master');
+    expect(master).toBeTruthy();
+    expect(master.label).toBe('ข้อมูลพื้นฐาน');
+    expect(master.items.map(i => i.id)).toEqual([
+      'masterdata',
+      'product-groups',
+      'product-units',
+      'medical-instruments',
+      'holidays',
+      'branches',
+      'permission-groups',
+    ]);
+  });
+
+  it('I4b deprecated "system" section no longer exists (absorbed into master in Phase 11.1)', () => {
+    expect(NAV_SECTIONS.find(s => s.id === 'system')).toBeUndefined();
+  });
+
+  it('I4c masterdata label renamed to "Sync ProClinic" so it reads as seed-only', () => {
+    const md = NAV_SECTIONS.find(s => s.id === 'master').items.find(i => i.id === 'masterdata');
+    expect(md).toBeTruthy();
+    expect(md.label).toBe('Sync ProClinic');
   });
 });
 

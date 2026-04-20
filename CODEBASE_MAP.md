@@ -1382,3 +1382,32 @@ No refactor of billing math — coupon simply feeds the manual discount inputs.
 ## Phase 9 Rule of 3 opportunity (deferred)
 
 After Task 9.3 there are 3 near-identical `*Tab.jsx` (PromotionTab/CouponTab/VoucherTab) and 3 near-identical `*FormModal.jsx` shells. Extraction candidate: `src/components/backend/MarketingTabBase.jsx` (list + search + filter + card grid) + a `MarketingFormShell.jsx` (header/footer/save button/error banner). Deferred to a post-merge refactor — current cost of 3 tab copies is tolerable given per-entity fields differ.
+
+---
+
+## Phase 11.1 Master Data Suite — scaffold (2026-04-20)
+
+Nav restructure + 6 CRUD placeholders. No Firestore writes yet — full CRUD lands in 11.2-11.7.
+
+**navConfig restructure:**
+- Old `system` section (label "ระบบ") removed — absorbed into new `master` section (label "ข้อมูลพื้นฐาน") with 7 items
+- Existing `masterdata` item: label renamed `ข้อมูลพื้นฐาน` → `Sync ProClinic` to clarify its seed-only role; ID preserved for URL back-compat
+- 6 new stub items (all `color: amber`, section `master`, Phase 11.2-11.7 one-per-task): `product-groups` (FolderTree), `product-units` (Scale), `medical-instruments` (Wrench), `holidays` (CalendarX), `branches` (Building2), `permission-groups` (ShieldCheck)
+- DF rates (doctor/assistance/group) NOT scaffolded in 11.x — moved to Phase 13 alongside payout calc
+
+**New file:**
+- `src/components/backend/ComingSoon.jsx` — shared placeholder card. Accepts `{icon, label, message, phaseTag, clinicSettings}`. Renders icon chip + title + message + phase tag. Rule C1 shared chrome for 6 stubs now + future scaffolds.
+
+**Edits:**
+- `src/components/backend/nav/navConfig.js` — `system` → `master` section, 6 new items, new icon imports (FolderTree/Scale/Wrench/CalendarX/Building2/ShieldCheck)
+- `src/pages/BackendDashboard.jsx` — 6 new `activeTab === 'xxx'` branches pointing to `<ComingSoon icon label phaseTag message />`
+- `tests/backend-nav-config.test.js` — test I4 (was "system owns masterdata only") rewritten to "master owns Sync ProClinic + 6 stubs"; L3 updated `'system' → 'master'`; added I4b/I4c
+- `tests/phase11-master-data-scaffold.test.jsx` — 25 adversarial: M1-M11 nav shape + CS1-CS5 component render + E1-E2 Rule E grep + R1-R7 BackendDashboard deep-link routing
+
+**Rule compliance:**
+- **E** backend=Firestore ONLY: ComingSoon has zero broker/proclinic refs (E1/E2 greps guard this)
+- **H** data ownership: all 6 stubs carry Phase 11.x phaseTag so future CRUD commits replace in-place
+- **C1** Rule of 3: ComingSoon extracted BEFORE 3rd use (used 6× immediately; existing `ReportComingSoon` in BackendDashboard.jsx is a candidate for later consolidation)
+- **F** Triangle: `opd.js routes` confirmed 6 target ProClinic routes (`/admin/product-group`, `/admin/default-product-unit`, `/admin/medical-instrument`, `/admin/holiday`, `/admin/branch`, `/admin/permission-group`) exist in trial server
+
+Tests: 2085 → 2112 PASS (+27).

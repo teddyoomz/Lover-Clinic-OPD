@@ -23,11 +23,13 @@
 
 import {
   // section icons
-  UsersRound, Briefcase, Package, Wallet, Megaphone, Settings, BarChart3,
+  UsersRound, Briefcase, Package, Wallet, Megaphone, Settings, BarChart3, Database,
   // tab icons
-  Download, Users, Database, CalendarDays, ShoppingCart,
+  Download, Users, CalendarDays, ShoppingCart,
   Package as PackageIcon, Tag, Ticket, Gift, Wallet as WalletIcon,
   LayoutDashboard, Receipt, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
+  // Phase 11 master-data tab icons
+  FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -99,11 +101,20 @@ export const NAV_SECTIONS = [
     ],
   },
   {
-    id: 'system',
-    label: 'ระบบ',
-    icon: Settings,
+    // Phase 11 Master Data Suite — renamed from old 'system' container.
+    // Old `masterdata` (ProClinic sync) stays as the FIRST item (seed-only),
+    // 6 new CRUD tabs land as stubs in 11.1 and replace one-by-one in 11.2-11.7.
+    id: 'master',
+    label: 'ข้อมูลพื้นฐาน',
+    icon: Database,
     items: [
-      { id: 'masterdata',  label: 'ข้อมูลพื้นฐาน',   icon: Database, color: 'amber', palette: 'master data sync proclinic products doctors ข้อมูลพื้นฐาน' },
+      { id: 'masterdata',           label: 'Sync ProClinic',   icon: Download,      color: 'amber', palette: 'sync import initial seed proclinic ข้อมูลพื้นฐาน นำเข้า master' },
+      { id: 'product-groups',       label: 'กลุ่มสินค้า',        icon: FolderTree,    color: 'amber', palette: 'product group category กลุ่ม หมวดหมู่ สินค้า' },
+      { id: 'product-units',        label: 'หน่วยสินค้า',         icon: Scale,         color: 'amber', palette: 'unit amp เข็ม U ครั้ง หน่วย' },
+      { id: 'medical-instruments',  label: 'เครื่องหัตถการ',      icon: Wrench,        color: 'amber', palette: 'medical instrument laser hifu maintenance เครื่องมือ' },
+      { id: 'holidays',             label: 'วันหยุด',             icon: CalendarX,     color: 'amber', palette: 'holiday off วันหยุด day-off closure' },
+      { id: 'branches',             label: 'สาขา',               icon: Building2,     color: 'amber', palette: 'branch สาขา location' },
+      { id: 'permission-groups',    label: 'สิทธิ์การใช้งาน',      icon: ShieldCheck,   color: 'amber', palette: 'permission role rights สิทธิ์ บทบาท access' },
     ],
   },
 ];

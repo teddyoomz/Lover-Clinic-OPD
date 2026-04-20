@@ -6,7 +6,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3 } from 'lucide-react';
+import {
+  ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3,
+  // Phase 11 master-data stub icons
+  FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
+} from 'lucide-react';
 import { db, appId } from '../firebase.js';
 import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor } from '../utils.js';
@@ -36,6 +40,7 @@ import RevenueAnalysisTab from '../components/backend/reports/RevenueAnalysisTab
 import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAnalysisTab.jsx';
 import DailyRevenueTab from '../components/backend/reports/DailyRevenueTab.jsx';
 import StaffSalesTab from '../components/backend/reports/StaffSalesTab.jsx';
+import ComingSoon from '../components/backend/ComingSoon.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -332,6 +337,18 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <StaffSalesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
+        ) : activeTab === 'product-groups' ? (
+          <ComingSoon icon={FolderTree}  label="กลุ่มสินค้า"        phaseTag="Phase 11.2" message="จัดการหมวดหมู่/กลุ่มสินค้า (ยา · สินค้าหน้าร้าน · สินค้าสิ้นเปลือง · บริการ)"      clinicSettings={clinicSettings} />
+        ) : activeTab === 'product-units' ? (
+          <ComingSoon icon={Scale}       label="หน่วยสินค้า"         phaseTag="Phase 11.3" message="จัดการหน่วยสินค้า (amp · เข็ม · U · ครั้ง · อัน · ขวด …)"                         clinicSettings={clinicSettings} />
+        ) : activeTab === 'medical-instruments' ? (
+          <ComingSoon icon={Wrench}      label="เครื่องหัตถการ"      phaseTag="Phase 11.4" message="ทะเบียนเครื่องมือ + รอบบำรุงรักษา + ประวัติ maintenance"                            clinicSettings={clinicSettings} />
+        ) : activeTab === 'holidays' ? (
+          <ComingSoon icon={CalendarX}   label="วันหยุด"              phaseTag="Phase 11.5" message="วันหยุดเฉพาะ + ตารางหยุดประจำสัปดาห์ — integrate เข้ากับ Appointment calendar"     clinicSettings={clinicSettings} />
+        ) : activeTab === 'branches' ? (
+          <ComingSoon icon={Building2}   label="สาขา"                phaseTag="Phase 11.6" message="จัดการสาขา + ตั้งสาขาหลัก + ที่อยู่/โทร/LINE"                                        clinicSettings={clinicSettings} />
+        ) : activeTab === 'permission-groups' ? (
+          <ComingSoon icon={ShieldCheck} label="สิทธิ์การใช้งาน"      phaseTag="Phase 11.7" message="บทบาท + ตาราง permission แบบ 8-module (ลูกค้า/ขาย/การเงิน/…)"                        clinicSettings={clinicSettings} />
         ) : null}
       </div>
 
