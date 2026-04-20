@@ -53,10 +53,12 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
   });
 
   it('W2: banner renders when current date IS a specific holiday', async () => {
-    // The test environment's `new Date()` returns real system time, so we
-    // can't pin the "selected date" deterministically. Instead, seed holidays
-    // covering a wide range so at least one matches today.
-    const today = new Date().toISOString().slice(0, 10);
+    // AppointmentTab uses thaiTodayISO() for selectedDate (Bangkok TZ).
+    // `new Date().toISOString().slice(0, 10)` is UTC — off-by-one after
+    // 17:00 Bangkok / 00:00 UTC. Use the same helper as the component so
+    // dates match regardless of run time.
+    const { thaiTodayISO } = await import('../src/utils.js');
+    const today = thaiTodayISO();
     mockListHolidays.mockResolvedValueOnce([
       { type: 'specific', dates: [today], note: 'Test Holiday' },
     ]);

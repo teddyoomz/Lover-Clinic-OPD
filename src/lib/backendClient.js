@@ -963,21 +963,51 @@ export async function getMasterDataMeta(type) {
 // directly and drop these adapters.
 
 function beProductToMasterShape(p) {
+  // Phase 11.9: also reconstruct nested `label` + surface full medication
+  // labeling fields so TreatmentFormPage med modal + SaleTab see correct
+  // data straight from be_products (no separate lookup needed).
+  const hasLabel = p.genericName || p.dosageAmount || p.dosageUnit
+    || p.timesPerDay != null || p.administrationMethod
+    || (Array.isArray(p.administrationTimes) && p.administrationTimes.length)
+    || p.instructions || p.indications;
   return {
     ...p,
     id: p.productId || p.id,
     name: p.productName || '',
     price: p.price ?? null,
     price_incl_vat: p.priceInclVat ?? null,
+    is_vat_included: p.isVatIncluded ? 1 : 0,
     unit: p.mainUnitName || '',
     unit_name: p.mainUnitName || '',
     type: p.productType || '',
     product_type: p.productType || '',
+    service_type: p.serviceType || '',
     category: p.categoryName || '',
     category_name: p.categoryName || '',
+    sub_category_name: p.subCategoryName || '',
     code: p.productCode || '',
     product_code: p.productCode || '',
     generic_name: p.genericName || '',
+    is_takeaway_product: p.isTakeawayProduct ? 1 : 0,
+    is_claim_drug_discount: p.isClaimDrugDiscount ? 1 : 0,
+    stock_location: p.stockLocation || '',
+    alert_day_before_expire: p.alertDayBeforeExpire,
+    alert_qty_before_out_of_stock: p.alertQtyBeforeOutOfStock,
+    alert_qty_before_max_stock: p.alertQtyBeforeMaxStock,
+    label: hasLabel ? {
+      genericName: p.genericName || '',
+      indications: p.indications || '',
+      dosageAmount: p.dosageAmount || '',
+      dosageUnit: p.dosageUnit || '',
+      timesPerDay: p.timesPerDay != null ? String(p.timesPerDay) : '',
+      administrationMethod: p.administrationMethod || '',
+      administrationMethodHour: p.administrationMethodHour || '',
+      administrationTimes: Array.isArray(p.administrationTimes)
+        ? p.administrationTimes.join(', ')
+        : (p.administrationTimes || ''),
+      instructions: p.instructions || '',
+      storageInstructions: p.storageInstructions || '',
+    } : null,
     status: p.status === 'พักใช้งาน' ? 0 : 1,
   };
 }
@@ -4267,6 +4297,13 @@ export async function listProductGroupsForTreatment(productType) {
     const p = d.data();
     const pid = String(p.productId || d.id || '');
     if (!pid) return;
+    // Phase 11.9: be_products stores label fields flat (genericName,
+    // dosageAmount, dosageUnit, ...) — reconstruct nested label object
+    // for TreatmentFormPage med-group modal consumer.
+    const hasLabel = p.genericName || p.dosageAmount || p.dosageUnit
+      || p.timesPerDay != null || p.administrationMethod
+      || (Array.isArray(p.administrationTimes) && p.administrationTimes.length)
+      || p.instructions || p.indications;
     productLookup.set(pid, {
       id: pid,
       name: p.productName || '',
@@ -4274,14 +4311,19 @@ export async function listProductGroupsForTreatment(productType) {
       price: p.price ?? 0,
       isVatIncluded: p.isVatIncluded ? 1 : 0,
       category: p.categoryName || '',
-      label: p.label && typeof p.label === 'object' ? {
-        genericName: p.label.genericName || '',
-        dosageAmount: p.label.dosageAmount || '',
-        dosageUnit: p.label.dosageUnit || '',
-        timesPerDay: p.label.timesPerDay || '',
-        administrationMethod: p.label.administrationMethod || '',
-        administrationTimes: p.label.administrationTimes || '',
-        instructions: p.label.instructions || '',
+      label: hasLabel ? {
+        genericName: p.genericName || '',
+        indications: p.indications || '',
+        dosageAmount: p.dosageAmount || '',
+        dosageUnit: p.dosageUnit || '',
+        timesPerDay: p.timesPerDay != null ? String(p.timesPerDay) : '',
+        administrationMethod: p.administrationMethod || '',
+        administrationMethodHour: p.administrationMethodHour || '',
+        administrationTimes: Array.isArray(p.administrationTimes)
+          ? p.administrationTimes.join(', ')
+          : (p.administrationTimes || ''),
+        instructions: p.instructions || '',
+        storageInstructions: p.storageInstructions || '',
       } : null,
     });
   });

@@ -63,18 +63,82 @@ async function scrapePaginated(session, baseUrl, extractFn, maxPages = 50) {
 
 // ─── Action: syncProducts ───────────────────────────────────────────────────
 
+// Phase 11.9 fix (2026-04-21): switched from HTML scrape → JSON API
+// `/admin/api/v2/product`. HTML scrape only pulled name+unit+price+category
+// +type (from cell-index guessing — often miscoded). JSON API gives every
+// canonical field incl. product_label (medication labeling), service_type,
+// alert thresholds. User directive: "เอามาให้ครบนะ ราคา หน่วย บลาๆๆ ทุกไส้ใน".
 async function handleSyncProducts(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
-  const { items, totalPages } = await scrapePaginated(
-    session, `${base}/admin/product`, extractProductList
-  );
+  const allItems = [];
+  for (let p = 1; ; p++) {
+    const data = await withRetry(async () => {
+      const resp = await session.fetch(`${base}/admin/api/v2/product?page=${p}&per_page=200`, {
+        headers: { 'Accept': 'application/json' },
+        timeoutMs: FETCH_OPTS.timeoutMs,
+      });
+      if (!resp.ok) {
+        const err = new Error(`Product API error: ${resp.status}`);
+        err.status = resp.status;
+        throw err;
+      }
+      return resp.json();
+    }, RETRY_OPTS);
+    const items = data.data || [];
+    allItems.push(...items);
+    if (p >= (data.last_page || 1) || p >= 100) break;
+  }
+
+  const normalized = allItems.map(item => {
+    const label = item.product_label || {};
+    const cat = item.product_category || {};
+    const subCat = item.product_sub_category || {};
+    // administration_times arrives as comma-separated string in ProClinic
+    const adminTimesStr = label.administration_times || '';
+    const adminTimesArr = adminTimesStr
+      ? String(adminTimesStr).split(/[,،]\s*/).map(s => s.trim()).filter(Boolean)
+      : [];
+    return {
+      id: item.id,
+      product_name: item.product_name || '',
+      product_code: item.product_code || '',
+      product_type: item.product_type || 'ยา',
+      service_type: item.service_type || '',
+      category_name: cat.category_name || '',
+      sub_category_name: subCat.category_name || '',
+      unit_name: item.unit_name || '',
+      price: item.price != null ? Number(item.price) : null,
+      price_incl_vat: item.price_incl_vat != null ? Number(item.price_incl_vat) : null,
+      is_vat_included: !!(item.is_vat_included || item.is_including_vat),
+      is_claim_drug_discount: !!item.is_claim_drug_discount,
+      is_takeaway_product: !!item.is_takeaway_product,
+      alert_day_before_expire: item.alert_day_before_expire,
+      alert_qty_before_out_of_stock: item.alert_qty_before_out_of_stock,
+      alert_qty_before_max_stock: item.alert_qty_before_max_stock,
+      stock_location: item.stock_location || '',
+      // Medication labeling (nested in ProClinic, flattened for master_data consumers)
+      generic_name: label.generic_name || '',
+      dosage_amount: label.dosage_amount || '',
+      dosage_unit: label.dosage_unit || '',
+      times_per_day: label.times_per_day != null ? Number(label.times_per_day) : null,
+      administration_method: label.administration_method || '',
+      administration_method_hour: label.administration_method_hour || '',
+      administration_times: adminTimesArr,
+      indications: label.indications || '',
+      instructions: label.instructions || '',
+      storage_instructions: label.storage_instructions || '',
+      status: item.deleted_at || item.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+      _source: 'proclinic',
+    };
+  });
+
   return res.status(200).json({
     success: true,
     type: 'products',
-    count: items.length,
-    totalPages,
-    items
+    count: normalized.length,
+    totalPages: 1,
+    items: normalized,
   });
 }
 
@@ -319,15 +383,18 @@ async function handleSyncMembershipTypes(req, res) {
 
 // ─── Action: syncCourses — uses API (not HTML scraper) to get product qty ───
 
+// Phase 11.9 fix (2026-04-21): switched to /admin/api/course (richer fields)
+// from /admin/api/item/course (buy-modal minimal). Extracts every field
+// mapMasterToCourse expects: salePrice + salePriceInclVat + receiptCourseName
+// + courseType + usageType + isVatIncluded + courseProducts with pivot.qty.
+// User directive: "เอามาให้ครบนะ ราคา หน่วย บลาๆๆ ทุกไส้ใน".
 async function handleSyncCourses(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
 
-  // Use /admin/api/item/course endpoint (same as listItems in treatment.js)
-  // This returns product-level qty that HTML scraper misses
   const allItems = [];
   for (let p = 1; ; p++) {
-    const apiUrl = `${base}/admin/api/item/course?page=${p}`;
+    const apiUrl = `${base}/admin/api/course?page=${p}&per_page=200`;
     const data = await withRetry(async () => {
       const resp = await session.fetch(apiUrl, {
         headers: { 'Accept': 'application/json' },
@@ -342,23 +409,44 @@ async function handleSyncCourses(req, res) {
     }, RETRY_OPTS);
     const items = data.data || [];
     allItems.push(...items);
-    if (p >= (data.last_page || 1) || p >= 30) break;
+    if (p >= (data.last_page || 1) || p >= 100) break;
   }
 
   const normalized = allItems.map(item => ({
     id: item.id,
-    code: item.course_code || '',
-    name: item.course_name || '',
-    price: item.sale_price || item.full_price || '0',
-    category: item.course_category_name || '',
-    courseType: item.course_type_name || '',
-    status: 'ใช้งาน',
-    products: (item.course_products || item.products || []).map(p => ({
-      id: p.id || p.product_id,
-      name: p.product_name || p.name,
-      qty: p.qty || p.pivot?.qty || p.amount || 1,
-      unit: p.unit_name || p.unit || '',
+    course_code: item.course_code || '',
+    course_name: item.course_name || '',
+    receipt_course_name: item.receipt_course_name || '',
+    course_category: item.course_category_name || '',
+    course_type: item.course_type || '',
+    usage_type: item.usage_type || '',
+    time: item.period != null ? Number(item.period) : null,
+    sale_price: item.sale_price != null ? Number(item.sale_price) : null,
+    sale_price_incl_vat: item.sale_price_incl_vat != null ? Number(item.sale_price_incl_vat) : null,
+    price: item.sale_price != null ? Number(item.sale_price) : (item.full_price != null ? Number(item.full_price) : null),
+    full_price: item.full_price != null ? Number(item.full_price) : null,
+    is_vat_included: !!(item.is_vat_included || item.is_including_vat),
+    days_before_expire: item.days_before_expire,
+    main_product_qty: item.main_product_qty != null ? Number(item.main_product_qty) : 0,
+    max_chosen_count: item.max_chosen_count != null ? Number(item.max_chosen_count) : null,
+    is_df: !!item.is_df,
+    is_hidden_for_sale: !!item.is_hidden_for_sale,
+    status: item.deleted_at || item.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    // Preserve full product + pivot structure so mapMasterToCourse can read
+    // courseProducts[].qty (ProClinic pivot.qty) + productName for enrichment.
+    courseProducts: (item.products || []).map(p => ({
+      productId: String(p.id || p.product_id || ''),
+      product_id: String(p.id || p.product_id || ''),
+      productName: p.product_name || p.name || '',
+      product_name: p.product_name || p.name || '',
+      qty: p.pivot?.qty != null ? Number(p.pivot.qty) : (p.qty != null ? Number(p.qty) : 1),
+      qty_per_time: p.pivot?.qty_per_time != null ? Number(p.pivot.qty_per_time) : null,
+      unit_name: p.unit_name || '',
+      price: p.price != null ? Number(p.price) : null,
+      is_premium: !!p.pivot?.is_premium,
+      is_main_product: !!p.pivot?.is_main_product,
     })),
+    _source: 'proclinic',
   }));
 
   return res.status(200).json({
