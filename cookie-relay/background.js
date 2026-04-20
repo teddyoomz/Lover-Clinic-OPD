@@ -90,6 +90,9 @@ async function autoLogin(useTrial = false) {
   const origin = stored[keys[0]];
   const email = stored[keys[1]];
   const password = stored[keys[2]];
+  // Breadcrumb for "why is login opening the wrong domain?" debugging.
+  // Masks password — only shows origin + email to avoid leaking into logs.
+  console.log(`[CookieRelay] autoLogin(useTrial=${useTrial}) — origin=${origin || '<missing>'}, email=${email || '<missing>'}, keys=${keys.join(',')}`);
 
   if (!origin || !email || !password) {
     return { success: false, error: 'ยังไม่ได้ตั้ง credentials — เปิด popup ของ extension แล้วกรอก' };
@@ -318,6 +321,15 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'LC_SYNC_COOKIES') {
+    // Explicit debug: log the full incoming msg so we can verify the
+    // content-script bridge is forwarding useTrial correctly (2026-04-20
+    // bug — content script was stripping the flag before my fix).
+    console.log('[CookieRelay] LC_SYNC_COOKIES received:', JSON.stringify({
+      forceLogin: !!msg.forceLogin,
+      useTrial: !!msg.useTrial,
+      hasUseTrial: 'useTrial' in msg,
+      allKeys: Object.keys(msg),
+    }));
     const useTrial = !!msg.useTrial;
     if (msg.forceLogin) {
       console.log(`[CookieRelay] Force login requested (${useTrial ? 'trial' : 'production'})`);
