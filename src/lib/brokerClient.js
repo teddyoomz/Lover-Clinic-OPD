@@ -425,3 +425,14 @@ export function listItems(itemType, query) {
 // writes to be_coupons / be_vouchers.
 export function syncCoupons() { return apiFetch('master', { action: 'syncCoupons' }); }
 export function syncVouchers() { return apiFetch('master', { action: 'syncVouchers' }); }
+
+// Phase 11.8c: 6 new master-data sync targets. Each hits the generic
+// list-page scraper on the serverless side (see api/proclinic/master.js
+// `syncGenericList`). Output lands in master_data/{type}/items/* — the
+// matching migrate fn in backendClient.js then writes to be_*.
+export function syncProductGroups()      { return apiFetch('master', { action: 'syncProductGroups' }); }
+export function syncProductUnits()       { return apiFetch('master', { action: 'syncProductUnits' }); }
+export function syncMedicalInstruments() { return apiFetch('master', { action: 'syncMedicalInstruments' }); }
+export function syncHolidays()           { return apiFetch('master', { action: 'syncHolidays' }); }
+export function syncBranches()           { return apiFetch('master', { action: 'syncBranches' }); }
+export function syncPermissionGroups()   { return apiFetch('master', { action: 'syncPermissionGroups' }); }

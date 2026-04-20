@@ -1,11 +1,18 @@
 // ─── Master Data Sync API ────────────────────────────────────────────────────
-// Actions: syncProducts, syncDoctors, syncStaff, syncCourses, syncCoupons, syncVouchers
+// Actions: syncProducts, syncDoctors, syncStaff, syncCourses, syncCoupons,
+//   syncVouchers, syncProductGroups, syncProductUnits, syncMedicalInstruments,
+//   syncHolidays, syncBranches, syncPermissionGroups (11.8c).
 // Scrapes ProClinic list pages and returns structured JSON for caching.
+//
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
+// Dev scaffolding to seed master_data/*. Production does NOT ship this
+// handler or any /api/proclinic/* sync path; be_* CRUD tabs are the
+// user-facing master-data surface.
 
 import { createSession, getSession, handleCors } from './_lib/session.js';
 import {
   extractProductList, extractDoctorList, extractStaffList, extractCourseList,
-  extractListPagination
+  extractListPagination, extractGenericListPage,
 } from './_lib/scraper.js';
 import { withRetry } from './_lib/retry.js';
 import { verifyAuth } from './_lib/auth.js';
@@ -363,6 +370,84 @@ async function handleSyncCourses(req, res) {
   });
 }
 
+// ─── Phase 11.8c: sync 6 master-data entities via generic scraper ──────────
+// Each handler hits a ProClinic list page, extracts id + basic fields, and
+// emits items the migrate-to-be_* functions can map. The migrate mapper is
+// lenient (accepts snake_case ProClinic fields OR camelCase), so the scrape
+// output can stay close to HTML literals and we don't have to get every
+// cell-index right on the first pass.
+
+async function syncGenericList(req, res, { type, path, idPattern, fieldMap }) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const extractFn = (html) => extractGenericListPage(html, { idPattern, fieldMap });
+  const { items, totalPages } = await scrapePaginated(session, `${base}${path}`, extractFn);
+  return res.status(200).json({
+    success: true,
+    type,
+    count: items.length,
+    totalPages,
+    items,
+  });
+}
+
+async function handleSyncProductGroups(req, res) {
+  return syncGenericList(req, res, {
+    type: 'product_groups',
+    path: '/admin/product-group',
+    idPattern: /\/product-group\/(\d+)/,
+    fieldMap: { name: 0, productType: 1 },
+  });
+}
+
+async function handleSyncProductUnits(req, res) {
+  return syncGenericList(req, res, {
+    type: 'product_units',
+    path: '/admin/default-product-unit',
+    idPattern: /\/default-product-unit\/(\d+)/,
+    // ProClinic lists the group name first; per-unit detail needs a visit
+    // to each edit page. MVP keeps it as groupName only — migrate mapper
+    // will create a single base-unit row when `units[]` is missing.
+    fieldMap: { groupName: 0 },
+  });
+}
+
+async function handleSyncMedicalInstruments(req, res) {
+  return syncGenericList(req, res, {
+    type: 'medical_instruments',
+    path: '/admin/medical-instrument',
+    idPattern: /\/medical-instrument\/(\d+)/,
+    fieldMap: { name: 0, code: 1, cost_price: 2 },
+  });
+}
+
+async function handleSyncHolidays(req, res) {
+  return syncGenericList(req, res, {
+    type: 'holidays',
+    path: '/admin/holiday',
+    idPattern: /\/holiday\/(\d+)/,
+    fieldMap: { holiday_date: 0, holiday_note: 1 },
+  });
+}
+
+async function handleSyncBranches(req, res) {
+  return syncGenericList(req, res, {
+    type: 'branches',
+    path: '/admin/branch',
+    idPattern: /\/branch\/(\d+)/,
+    fieldMap: { branch_name: 0, telephone_number: 1, address: 2 },
+  });
+}
+
+async function handleSyncPermissionGroups(req, res) {
+  return syncGenericList(req, res, {
+    type: 'permission_groups',
+    path: '/admin/permission-group',
+    idPattern: /\/permission-group\/(\d+)/,
+    fieldMap: { permission_group_name: 0 },
+  });
+}
+
 // ─── Route handler ──────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -387,6 +472,13 @@ export default async function handler(req, res) {
       case 'syncMembershipTypes': return await handleSyncMembershipTypes(req, res);
       case 'syncCoupons':         return await handleSyncCoupons(req, res);
       case 'syncVouchers':        return await handleSyncVouchers(req, res);
+      // Phase 11.8c: 6 master-data entities via generic scraper
+      case 'syncProductGroups':       return await handleSyncProductGroups(req, res);
+      case 'syncProductUnits':        return await handleSyncProductUnits(req, res);
+      case 'syncMedicalInstruments':  return await handleSyncMedicalInstruments(req, res);
+      case 'syncHolidays':            return await handleSyncHolidays(req, res);
+      case 'syncBranches':            return await handleSyncBranches(req, res);
+      case 'syncPermissionGroups':    return await handleSyncPermissionGroups(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

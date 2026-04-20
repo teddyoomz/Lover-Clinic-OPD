@@ -26,7 +26,13 @@ import {
   migrateMasterMedicalInstrumentsToBe, migrateMasterHolidaysToBe,
   migrateMasterBranchesToBe, migrateMasterPermissionGroupsToBe,
 } from '../../lib/backendClient.js';
-import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, syncCoupons, syncVouchers, listItems } from '../../lib/brokerClient.js';
+import {
+  syncProducts, syncDoctors, syncStaff, syncCourses,
+  syncWalletTypes, syncMembershipTypes, syncCoupons, syncVouchers, listItems,
+  // Phase 11.8c: 6 master-data sync targets
+  syncProductGroups, syncProductUnits, syncMedicalInstruments,
+  syncHolidays, syncBranches, syncPermissionGroups,
+} from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
 // Wrapper: listItems('promotion') → format like syncProducts response
@@ -47,6 +53,13 @@ const SYNC_TYPES = [
   // Phase 7 — syncable via /admin/api/wallet + /admin/api/membership, AND manual CRUD for backend-only items
   { key: 'wallet_types', label: 'กระเป๋าเงิน', fn: syncWalletTypes, icon: '💼', color: 'emerald' },
   { key: 'membership_types', label: 'บัตรสมาชิก', fn: syncMembershipTypes, icon: '🎫', color: 'purple' },
+  // Phase 11.8c: 6 master-data entities (generic list-page scraper)
+  { key: 'product_groups',      label: 'กลุ่มสินค้า',      fn: syncProductGroups,      icon: '📁', color: 'amber' },
+  { key: 'product_units',       label: 'หน่วยสินค้า',       fn: syncProductUnits,       icon: '⚖️', color: 'amber' },
+  { key: 'medical_instruments', label: 'เครื่องหัตถการ',    fn: syncMedicalInstruments, icon: '🔧', color: 'amber' },
+  { key: 'holidays',            label: 'วันหยุด',           fn: syncHolidays,           icon: '📅', color: 'amber' },
+  { key: 'branches',            label: 'สาขา',             fn: syncBranches,           icon: '🏢', color: 'amber' },
+  { key: 'permission_groups',   label: 'สิทธิ์การใช้งาน',    fn: syncPermissionGroups,   icon: '🛡️', color: 'amber' },
 ];
 
 const SYNC_COLOR_MAP_DARK = {

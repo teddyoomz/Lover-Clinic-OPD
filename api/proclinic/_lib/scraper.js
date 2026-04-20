@@ -1,8 +1,51 @@
 // ─── ProClinic HTML Scraper ─────────────────────────────────────────────────
 // Cheerio-based extraction of data from ProClinic HTML pages.
 // Mirrors the DOM scraping logic from broker-extension/background.js.
+//
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
+// This module only exists to seed master_data/* from the trial ProClinic
+// server during development. Real production has no ProClinic dependency.
 
 import * as cheerio from 'cheerio';
+
+// ─── Generic list-page extractor (Phase 11.8c) ──────────────────────────────
+// Used by handlers for simple table-based list pages where each row has an
+// edit/delete button that embeds the entity id in its URL. Extracts id +
+// the first N table cells as named fields. Tolerant of missing rows/cells.
+//
+// Config shape: { idPattern: RegExp, fieldMap: { fieldName: cellIndex } }
+//   idPattern  — capture group 1 = id (e.g. /\/admin\/product-group\/(\d+)/)
+//   fieldMap   — map cell 0..N → field name on the emitted item
+
+export function extractGenericListPage(html, { idPattern, fieldMap = {} }) {
+  const $ = cheerio.load(html);
+  const rows = [];
+  $('table tbody tr').each((_, tr) => {
+    const $tr = $(tr);
+    const cells = $tr.find('td');
+    if (cells.length === 0) return;
+
+    // Find id from any anchor/button URL in the row that matches idPattern.
+    let id = null;
+    $tr.find('a[href], button[data-url], a[data-url]').each((_, el) => {
+      if (id) return;
+      const href = $(el).attr('href') || $(el).attr('data-url') || '';
+      const m = href.match(idPattern);
+      if (m && m[1]) id = m[1];
+    });
+    if (!id) return;
+
+    const row = { id };
+    for (const [fieldName, cellIdx] of Object.entries(fieldMap)) {
+      row[fieldName] = cells.eq(cellIdx).text().trim();
+    }
+    // Keep last-cell badge status if present.
+    const statusBadge = $tr.find('.badge').last().text().trim();
+    if (statusBadge && !row.status) row.status = statusBadge;
+    rows.push(row);
+  });
+  return rows;
+}
 
 // ─── CSRF Token ─────────────────────────────────────────────────────────────
 
