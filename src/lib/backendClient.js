@@ -1057,13 +1057,62 @@ function beDoctorToMasterShape(d) {
   };
 }
 
-// Types that have be_* canonical backing as of Phase 12.11.
-// Phase 13+ can extend as more master_data entities migrate to be_*.
+// ── Identity / minimal shape mappers for Phase 9 + Phase 11 be_* types ──
+// For types where consumers use direct CRUD (listPromotions, listProductGroups,
+// etc.) rather than getAllMasterDataItems, the mapper mostly only needs to
+// expose `id`. But we also spread the be_ doc so any legacy master_data-shape
+// consumer that DOES call getAllMasterDataItems(type) gets real data, not
+// stale master_data. All 13 listed here are "user-visible green badge" in
+// MasterDataTab debug panel.
+
+function bePromotionToMasterShape(p) {
+  return { ...p, id: p.promotionId || p.id, name: p.promotion_name || p.name || '' };
+}
+function beCouponToMasterShape(c) {
+  return { ...c, id: c.couponId || c.id, name: c.coupon_name || c.name || '' };
+}
+function beVoucherToMasterShape(v) {
+  return { ...v, id: v.voucherId || v.id, name: v.voucher_name || v.name || '' };
+}
+function beProductGroupToMasterShape(g) {
+  return { ...g, id: g.groupId || g.id, name: g.name || g.group_name || '' };
+}
+function beProductUnitToMasterShape(u) {
+  return { ...u, id: u.unitGroupId || u.id, name: u.groupName || u.name || '' };
+}
+function beMedicalInstrumentToMasterShape(m) {
+  return { ...m, id: m.instrumentId || m.id, name: m.name || '' };
+}
+function beHolidayToMasterShape(h) {
+  return { ...h, id: h.holidayId || h.id, name: h.holiday_note || h.note || '' };
+}
+function beBranchToMasterShape(b) {
+  return { ...b, id: b.branchId || b.id, name: b.branch_name || b.name || '' };
+}
+function bePermissionGroupToMasterShape(g) {
+  return { ...g, id: g.permissionGroupId || g.id, name: g.name || g.group_name || '' };
+}
+
+// Types that have be_* canonical backing as of Phase 11.9 (2026-04-20).
+// Every type listed here SHOULD show green "be_*" badge in MasterDataTab
+// debug panel + getAllMasterDataItems reads be_ first.
 const BE_BACKED_MASTER_TYPES = Object.freeze({
+  // Phase 12.x — primary adapter-routed consumers (TreatmentFormPage etc)
   products: { col: 'be_products',  map: beProductToMasterShape },
   courses:  { col: 'be_courses',   map: beCourseToMasterShape  },
   staff:    { col: 'be_staff',     map: beStaffToMasterShape   },
   doctors:  { col: 'be_doctors',   map: beDoctorToMasterShape  },
+  // Phase 9 — marketing entities (consumers use direct CRUD)
+  promotions: { col: 'be_promotions', map: bePromotionToMasterShape },
+  coupons:    { col: 'be_coupons',    map: beCouponToMasterShape    },
+  vouchers:   { col: 'be_vouchers',   map: beVoucherToMasterShape   },
+  // Phase 11 — master data suite (consumers use direct CRUD)
+  product_groups:      { col: 'be_product_groups',      map: beProductGroupToMasterShape      },
+  product_units:       { col: 'be_product_units',       map: beProductUnitToMasterShape       },
+  medical_instruments: { col: 'be_medical_instruments', map: beMedicalInstrumentToMasterShape },
+  holidays:            { col: 'be_holidays',            map: beHolidayToMasterShape           },
+  branches:            { col: 'be_branches',            map: beBranchToMasterShape            },
+  permission_groups:   { col: 'be_permission_groups',   map: bePermissionGroupToMasterShape   },
 });
 
 async function readBeForMasterType(type) {

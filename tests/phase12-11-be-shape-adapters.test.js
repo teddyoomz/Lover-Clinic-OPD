@@ -35,11 +35,36 @@ const mod = await import('../src/lib/backendClient.js');
 
 beforeEach(() => { vi.resetAllMocks(); });
 
-describe('Phase 12.11 — getBeBackedMasterTypes', () => {
-  it('BE1: exports exactly 4 types (products/courses/staff/doctors)', () => {
+describe('Phase 12.11 + 11.9 — getBeBackedMasterTypes', () => {
+  it('BE1: exports 13 types covering all Phase 9/11/12 be_* collections', () => {
     const types = mod.getBeBackedMasterTypes();
-    expect(types).toEqual(expect.arrayContaining(['products', 'courses', 'staff', 'doctors']));
-    expect(types).toHaveLength(4);
+    const expected = [
+      'products', 'courses', 'staff', 'doctors',                   // Phase 12
+      'promotions', 'coupons', 'vouchers',                         // Phase 9
+      'product_groups', 'product_units', 'medical_instruments',    // Phase 11
+      'holidays', 'branches', 'permission_groups',                 // Phase 11
+    ];
+    expect(types).toEqual(expect.arrayContaining(expected));
+    expect(types).toHaveLength(13);
+  });
+
+  it('BE1a: every listed type maps be_ doc → master_data shape with id field', async () => {
+    const { getDocs } = await import('firebase/firestore');
+    // Minimal smoke test: every type returns at least id+name for a stubbed doc
+    const typeToBeIdField = {
+      promotions: 'promotionId', coupons: 'couponId', vouchers: 'voucherId',
+      product_groups: 'groupId', product_units: 'unitGroupId',
+      medical_instruments: 'instrumentId',
+      holidays: 'holidayId', branches: 'branchId', permission_groups: 'permissionGroupId',
+    };
+    for (const [type, idField] of Object.entries(typeToBeIdField)) {
+      getDocs.mockResolvedValueOnce({
+        docs: [{ id: 'BE-1', data: () => ({ [idField]: 'BE-1', name: 'X' }) }],
+      });
+      const items = await mod.getAllMasterDataItems(type);
+      expect(items).toHaveLength(1);
+      expect(items[0].id).toBe('BE-1');
+    }
   });
 });
 
