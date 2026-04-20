@@ -1976,4 +1976,39 @@ Triangle (Rule F): `detailed-adminsalecreate.json` captures ~90 unique ProClinic
 
 Tests: 2793 → 2837 (+44). Build clean.
 
+---
+
+## Phase 12.10 — `/audit-finance-completeness` skill (2026-04-20)
+
+Closing audit skill for the Phase 12 financial foundation. FC1-FC20 invariants ensure every sub-task's entity has the full validator + CRUD + Firestore rule + tests + Rule E cleanliness stack.
+
+**New files:**
+- `.claude/skills/audit-finance-completeness/SKILL.md` — FC1-FC20 invariants with grep commands, severity mapping, Phase 12 scorecard (12.0-12.9 with test counts).
+
+**Edits:**
+- `.claude/skills/audit-all/SKILL.md` — Tier 5 now lists 19 skills (229 invariants total; 209 → 229).
+
+**Severity mapping:**
+- CRITICAL (FC4, FC8, FC11, FC12): open rule, ProClinic leak, weak ID, Admin SDK in bundle — block release.
+- HIGH: missing validator / rule / CRUD / state machine / reconciliation.
+- MEDIUM: missing tests / export completeness / nav wiring.
+- LOW: marker hygiene.
+
+**Phase 12 scorecard:**
+- 12.0: 28 tests (api/admin + audit-firebase-admin-security)
+- 12.1: 92 tests (staff + doctors + adminUsersClient)
+- 12.2: 64 tests (products + courses)
+- 12.3: 43 tests (customer validator)
+- 12.4: 44 tests (deposit 5-seller)
+- 12.5: 42 tests (bank + expense cat + expense)
+- 12.6: 36 tests (online-sale state machine)
+- 12.7: 38 tests (insurance claims + aggregator wiring)
+- 12.8: 33 tests (P&L + payment summary)
+- 12.9: 44 tests (sale 5-seller 3-payment strict validator)
+- 12.10: 0 new test (audit skill only)
+
+**Grand total: 2373 → 2837 (+464).** Target was +465 per v5 plan — off by 1 (within 0.2% tolerance).
+
+Build clean. Ready for Phase 13.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

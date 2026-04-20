@@ -37,18 +37,19 @@ Run these in order (17 total):
 14. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
 15. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
 
-**Tier 5 — hygiene / anti-vibe-code (31 invariants — session 2026-04-19, extended 2026-04-20)**:
+**Tier 5 — hygiene / anti-vibe-code (51 invariants — session 2026-04-19, extended 2026-04-20)**:
 16. `/audit-anti-vibe-code` (AV1–AV12) — Rule of 3 duplication, `Math.random` tokens, leaked uids in world-readable docs, open Firestore/Storage rules, orphan collections, over-normalized schema
 17. `/audit-backend-firestore-only` (BF1–BF7) — backend UI ห้าม import brokerClient หรือเรียก /api/proclinic/* ยกเว้น MasterDataTab (rule 03-stack.md). Phase 9 violation 2026-04-19.
 18. `/audit-firebase-admin-security` (FA1–FA12) — privileged api/admin/** endpoints: private-key hygiene, token verification with checkRevoked, admin gate (custom claim OR bootstrap UID), self-protection on delete/revoke-admin, input validation, CORS + method gates, no `firebase-admin` imports in src/. Phase 12.0 infrastructure.
+19. `/audit-finance-completeness` (FC1–FC20) — every Phase 12 entity has validator + CRUD + Firestore rule + tests + Rule E cleanliness. 5-seller + 3-payment-method limits enforced. Claims aggregator + P&L reconcile. State machines present. Production vs @dev-only separation. Required before Phase 13 ships.
 
 **Tier 6 — legal/compliance (7 invariants)**:
-19. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+20. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
 
 **Tier 7 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
-20. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
+21. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
 
-**Total: 209 invariants**. Do NOT write report to disk — chat output only.
+**Total: 229 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 
