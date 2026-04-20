@@ -4285,3 +4285,169 @@ export async function deletePermissionGroup(permissionGroupId) {
   if (!id) throw new Error('permissionGroupId required');
   await deleteDoc(permissionGroupDoc(id));
 }
+
+// ─── Phase 11.8b: Bulk-import master_data/* → be_* (DEV scaffolding) ─────────
+// Each migrator reads `master_data/{type}/items/*` and writes to the
+// corresponding `be_*` collection. Called from MasterDataTab's "นำเข้า" button
+// AFTER ProClinic sync has populated master_data. Idempotent — re-running
+// overwrites the same doc ids while preserving `createdAt`.
+// @dev-only — removed with MasterDataTab per rule H-bis.
+
+function mapMasterToProductGroup(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const productType = src.productType || src.product_type || src.type || 'ยา';
+  return {
+    groupId: id,
+    name: String(src.groupName || src.group_name || src.name || '').trim() || '(imported)',
+    productType: ['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ'].includes(productType) ? productType : 'ยา',
+    productIds: Array.isArray(src.productIds) ? src.productIds : [],
+    status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    note: String(src.note || '').trim(),
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToProductUnit(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  // Expected shape: { groupName|name, units: [{name, amount}] }
+  // ProClinic may ship as flat { unit_name: 'amp', unit_amount: 10 } array —
+  // the scraper (11.8c) normalizes before writing master_data.
+  let units = Array.isArray(src.units) ? src.units : [];
+  if (units.length === 0) units = [{ name: src.baseUnitName || src.name || 'ชิ้น', amount: 1, isBase: true }];
+  return {
+    unitGroupId: id,
+    groupName: String(src.groupName || src.group_name || src.name || '').trim() || '(imported)',
+    units: units.map((u, i) => ({
+      name: String(u.name || '').trim(),
+      amount: i === 0 ? 1 : (Number(u.amount) || 1),
+      isBase: i === 0,
+    })),
+    status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    note: String(src.note || '').trim(),
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  return {
+    instrumentId: id,
+    name: String(src.name || src.medical_instrument_name || '').trim() || '(imported)',
+    code: String(src.code || src.medical_instrument_code || '').trim(),
+    costPrice: src.costPrice != null ? Number(src.costPrice) : (src.cost_price != null ? Number(src.cost_price) : null),
+    purchaseDate: src.purchaseDate || src.purchase_date || '',
+    maintenanceIntervalMonths: src.maintenanceIntervalMonths != null ? Number(src.maintenanceIntervalMonths) : (src.maintenance_interval_months != null ? Number(src.maintenance_interval_months) : null),
+    nextMaintenanceDate: src.nextMaintenanceDate || src.next_maintenance_date || '',
+    maintenanceLog: Array.isArray(src.maintenanceLog) ? src.maintenanceLog : [],
+    status: ['ใช้งาน', 'พักใช้งาน', 'ซ่อมบำรุง'].includes(src.status) ? src.status : 'ใช้งาน',
+    note: String(src.note || '').trim(),
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToHoliday(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const type = src.type === 'weekly' ? 'weekly' : 'specific';
+  const base = {
+    holidayId: id,
+    type,
+    note: String(src.note || src.holiday_note || '').trim(),
+    status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+  if (type === 'specific') {
+    const dates = Array.isArray(src.dates) ? src.dates : (src.holiday_date ? [src.holiday_date] : []);
+    base.dates = Array.from(new Set(dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))))).sort();
+  } else {
+    base.dayOfWeek = Math.max(0, Math.min(6, Number(src.dayOfWeek) || 0));
+  }
+  return base;
+}
+
+function mapMasterToBranch(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const coerceNum = (v) => (v === '' || v == null) ? null : Number(v);
+  return {
+    branchId: id,
+    name: String(src.name || src.branch_name || '').trim() || '(imported)',
+    nameEn: String(src.nameEn || src.branch_name_en || '').trim(),
+    phone: String(src.phone || src.telephone_number || '').replace(/[\s-]/g, ''),
+    website: String(src.website || src.website_url || '').trim(),
+    licenseNo: String(src.licenseNo || src.license_no || '').trim(),
+    taxId: String(src.taxId || src.tax_id || '').trim(),
+    address: String(src.address || '').trim(),
+    addressEn: String(src.addressEn || src.address_en || '').trim(),
+    googleMapUrl: String(src.googleMapUrl || src.google_map_url || '').trim(),
+    latitude: coerceNum(src.latitude),
+    longitude: coerceNum(src.longitude),
+    isDefault: !!src.isDefault,
+    status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    note: String(src.note || '').trim(),
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToPermissionGroup(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const incoming = (src.permissions && typeof src.permissions === 'object' && !Array.isArray(src.permissions)) ? src.permissions : {};
+  const perms = {};
+  for (const [k, v] of Object.entries(incoming)) {
+    if (v === true) perms[k] = true;
+  }
+  return {
+    permissionGroupId: id,
+    name: String(src.name || src.permission_group_name || '').trim() || '(imported)',
+    description: String(src.description || '').trim(),
+    permissions: perms,
+    status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapper }) {
+  const masterSnap = await getDocs(masterDataItemsCol(sourceType));
+  if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
+  const now = new Date().toISOString();
+  let imported = 0;
+  let skipped = 0;
+  for (const d of masterSnap.docs) {
+    const src = d.data();
+    const id = String(d.id || src.id || '');
+    if (!id) { skipped++; continue; }
+    let existingCreatedAt = null;
+    try {
+      const existing = await getDoc(targetDocFn(id));
+      if (existing.exists()) existingCreatedAt = existing.data().createdAt || null;
+    } catch {}
+    const doc_ = mapper(src, id, now, existingCreatedAt);
+    if (!doc_) { skipped++; continue; }
+    await setDoc(targetDocFn(id), doc_, { merge: false });
+    imported++;
+  }
+  return { imported, skipped, total: masterSnap.size };
+}
+
+export async function migrateMasterProductGroupsToBe() {
+  return runMasterToBeMigration({ sourceType: 'product_groups', targetCol: productGroupsCol, targetDocFn: productGroupDoc, mapper: mapMasterToProductGroup });
+}
+export async function migrateMasterProductUnitsToBe() {
+  return runMasterToBeMigration({ sourceType: 'product_units', targetCol: productUnitsCol, targetDocFn: productUnitDoc, mapper: mapMasterToProductUnit });
+}
+export async function migrateMasterMedicalInstrumentsToBe() {
+  return runMasterToBeMigration({ sourceType: 'medical_instruments', targetCol: medicalInstrumentsCol, targetDocFn: medicalInstrumentDoc, mapper: mapMasterToMedicalInstrument });
+}
+export async function migrateMasterHolidaysToBe() {
+  return runMasterToBeMigration({ sourceType: 'holidays', targetCol: holidaysCol, targetDocFn: holidayDoc, mapper: mapMasterToHoliday });
+}
+export async function migrateMasterBranchesToBe() {
+  return runMasterToBeMigration({ sourceType: 'branches', targetCol: branchesCol, targetDocFn: branchDoc, mapper: mapMasterToBranch });
+}
+export async function migrateMasterPermissionGroupsToBe() {
+  return runMasterToBeMigration({ sourceType: 'permission_groups', targetCol: permissionGroupsCol, targetDocFn: permissionGroupDoc, mapper: mapMasterToPermissionGroup });
+}

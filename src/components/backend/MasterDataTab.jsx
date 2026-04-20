@@ -16,7 +16,16 @@ import {
   Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info,
   Plus, Edit3, Trash2, X, ArrowLeft
 } from 'lucide-react';
-import { getMasterDataMeta, getAllMasterDataItems, runMasterDataSync, createMasterCourse, updateMasterCourse, deleteMasterCourse, createMasterItem, updateMasterItem, deleteMasterItem, migrateMasterPromotionsToBe, migrateMasterCouponsToBe, migrateMasterVouchersToBe } from '../../lib/backendClient.js';
+import {
+  getMasterDataMeta, getAllMasterDataItems, runMasterDataSync,
+  createMasterCourse, updateMasterCourse, deleteMasterCourse,
+  createMasterItem, updateMasterItem, deleteMasterItem,
+  migrateMasterPromotionsToBe, migrateMasterCouponsToBe, migrateMasterVouchersToBe,
+  // Phase 11.8b: import master_data/* → be_* for 6 Phase 11 entities
+  migrateMasterProductGroupsToBe, migrateMasterProductUnitsToBe,
+  migrateMasterMedicalInstrumentsToBe, migrateMasterHolidaysToBe,
+  migrateMasterBranchesToBe, migrateMasterPermissionGroupsToBe,
+} from '../../lib/backendClient.js';
 import { syncProducts, syncDoctors, syncStaff, syncCourses, syncWalletTypes, syncMembershipTypes, syncCoupons, syncVouchers, listItems } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -245,11 +254,22 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     }
   }, [handleSync]);
 
-  // One-time migrations: master_data/{type} → be_{entity} for Phase 9 CRUD tabs
+  // One-time migrations: master_data/{type} → be_{entity}
+  // Phase 9 + Phase 11.8b (added 6 Phase-11 entities). Runs AFTER a fresh
+  // ProClinic sync that lands into master_data/*. Idempotent per-entity
+  // (re-importing overwrites same doc ids, preserves createdAt).
   const MIGRATE_TARGETS = [
-    { key: 'promotions', label: 'โปรโมชัน → be_promotions', icon: '🏷️', fn: migrateMasterPromotionsToBe },
-    { key: 'coupons',    label: 'คูปอง → be_coupons',       icon: '🎟️', fn: migrateMasterCouponsToBe },
-    { key: 'vouchers',   label: 'Voucher → be_vouchers',     icon: '🎁', fn: migrateMasterVouchersToBe },
+    // Phase 9 marketing
+    { key: 'promotions',          label: 'โปรโมชัน → be_promotions',              icon: '🏷️', fn: migrateMasterPromotionsToBe },
+    { key: 'coupons',             label: 'คูปอง → be_coupons',                    icon: '🎟️', fn: migrateMasterCouponsToBe },
+    { key: 'vouchers',            label: 'Voucher → be_vouchers',                  icon: '🎁', fn: migrateMasterVouchersToBe },
+    // Phase 11 master data (added 11.8b)
+    { key: 'product_groups',      label: 'กลุ่มสินค้า → be_product_groups',         icon: '📁', fn: migrateMasterProductGroupsToBe },
+    { key: 'product_units',       label: 'หน่วยสินค้า → be_product_units',          icon: '⚖️', fn: migrateMasterProductUnitsToBe },
+    { key: 'medical_instruments', label: 'เครื่องหัตถการ → be_medical_instruments', icon: '🔧', fn: migrateMasterMedicalInstrumentsToBe },
+    { key: 'holidays',            label: 'วันหยุด → be_holidays',                   icon: '📅', fn: migrateMasterHolidaysToBe },
+    { key: 'branches',            label: 'สาขา → be_branches',                     icon: '🏢', fn: migrateMasterBranchesToBe },
+    { key: 'permission_groups',   label: 'สิทธิ์การใช้งาน → be_permission_groups',   icon: '🛡️', fn: migrateMasterPermissionGroupsToBe },
   ];
 
   const handleMigrate = useCallback(async (target) => {
@@ -734,7 +754,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         </div>
 
         <p className="mt-3 text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
-          <Info size={12} /> คัดลอก master_data/{'{type}'}/items/* → be_{'{entity}'}/* พร้อมคอร์ส/สินค้าในโปรโมชัน. รัน 1 ครั้งพอ — แก้ไขหลังนำเข้าที่แถบ โปรโมชัน/คูปอง/Voucher ใน backend
+          <Info size={12} /> คัดลอก master_data/{'{type}'}/items/* → be_{'{entity}'}/*. รันหลัง Sync ProClinic ให้ข้อมูลเข้า master_data ก่อน. Idempotent — รันซ้ำได้ · แก้ไขต่อใน CRUD tab ของ entity นั้น
         </p>
       </div>
 
