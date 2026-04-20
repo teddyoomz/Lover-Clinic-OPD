@@ -1,6 +1,14 @@
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
 // ─── MasterDataTab — Sync + Display master data from ProClinic ──────────────
 // Sub-tabs: Products | Doctors | Staff | Courses
 // Reads from existing master_data/{type}/items/* collections (shared with ClinicSettingsPanel)
+//
+// PURPOSE: Dev-time scaffolding only. Pulls ProClinic trial data into our
+// Firestore so we don't hand-type fixtures while developing. In the
+// production release this whole tab (and every brokerClient consumer in
+// backend/) is removed — `be_*` CRUD tabs are the user-facing master-data
+// surface. See `.claude/rules/00-session-start.md` Rule H-bis for the full
+// strip list.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {

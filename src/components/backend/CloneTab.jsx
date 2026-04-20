@@ -1,6 +1,12 @@
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
 // ─── CloneTab — Search ProClinic + Clone customer data ──────────────────────
 // Search by HN (last 3-4 digits), name, surname, or ID card number.
 // Display results as cards with "ดูดข้อมูลทั้งหมด" button.
+//
+// PURPOSE: Dev-time customer bootstrap — pulls real trial patient records
+// so we have realistic fixtures during development. Production pipeline:
+// real patients enter via the frontend intake form, NOT cloned from
+// ProClinic. Strip entire tab from production build (rule H-bis).
 
 import { useState, useRef, useCallback } from 'react';
 import { Search, Loader2, AlertCircle, Download, Info, Users, Pause, Play, X, CheckCircle2, RefreshCw, SkipForward, Zap } from 'lucide-react';

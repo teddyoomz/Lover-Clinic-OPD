@@ -1,7 +1,14 @@
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
 // ─── Broker Client — Server API Only ─────────────────────────────────────────
 // All ProClinic operations go through Vercel API routes.
 // Credentials come from Vercel env vars (not from frontend).
 // Consolidated: customer, deposit, connection, appointment, courses (5 endpoints)
+//
+// PURPOSE: Dev-time scaffolding to seed `master_data/*` and `be_*` from the
+// trial ProClinic server. In the production release the ENTIRE brokerClient
+// is removed along with every consumer in `src/components/backend/**`
+// (MasterDataTab, CloneTab, CustomerDetailView sync path). `be_*` CRUD is
+// the only master-data surface that ships to end users.
 
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
