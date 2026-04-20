@@ -32,6 +32,8 @@ import {
   FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
   // Phase 12.1 people tab icons
   User, Stethoscope,
+  // Phase 12.2 catalog tab icons
+  Briefcase as BriefcaseIcon,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -119,6 +121,8 @@ export const NAV_SECTIONS = [
       { id: 'permission-groups',    label: 'สิทธิ์การใช้งาน',      icon: ShieldCheck,   color: 'amber', palette: 'permission role rights สิทธิ์ บทบาท access' },
       { id: 'staff',                label: 'พนักงาน',             icon: User,          color: 'amber', palette: 'staff employee user พนักงาน เจ้าหน้าที่' },
       { id: 'doctors',              label: 'แพทย์ & ผู้ช่วย',      icon: Stethoscope,   color: 'amber', palette: 'doctor assistant physician แพทย์ หมอ ผู้ช่วยแพทย์' },
+      { id: 'products',             label: 'สินค้า',              icon: PackageIcon,   color: 'amber', palette: 'product drug service สินค้า ยา บริการ' },
+      { id: 'courses',              label: 'คอร์ส',               icon: BriefcaseIcon, color: 'amber', palette: 'course program package คอร์ส โปรแกรม' },
     ],
   },
 ];

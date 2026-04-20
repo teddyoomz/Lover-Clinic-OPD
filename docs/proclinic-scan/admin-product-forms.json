@@ -1,0 +1,788 @@
+{
+  "url": "https://trial.proclinicth.com/admin/product",
+  "totalForms": 4,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/product",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกประเภทสินค้า"
+            },
+            {
+              "v": "ยา",
+              "t": "ยา"
+            },
+            {
+              "v": "บริการ",
+              "t": "บริการ"
+            },
+            {
+              "v": "สินค้าหน้าร้าน",
+              "t": "สินค้าหน้าร้าน"
+            },
+            {
+              "v": "สินค้าสิ้นเปลือง",
+              "t": "สินค้าสิ้นเปลือง"
+            }
+          ]
+        },
+        {
+          "name": "service_type",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกประเภทบริการ"
+            },
+            {
+              "v": "บริการ",
+              "t": "บริการ"
+            },
+            {
+              "v": "Lab",
+              "t": "Lab"
+            },
+            {
+              "v": "X-Ray",
+              "t": "X-Ray"
+            }
+          ]
+        },
+        {
+          "name": "order_by",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "default",
+              "t": "เรียงประเภทสินค้า"
+            },
+            {
+              "v": "product_name_asc",
+              "t": "เรียงชื่อสินค้า"
+            },
+            {
+              "v": "created_at_desc",
+              "t": "เรียงใหม่ไปเก่า"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "action": "/admin/product",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "product_name",
+          "type": "text",
+          "label": "ชื่อสินค้า",
+          "required": true,
+          "placeholder": "กรอกชื่อสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "product_code",
+          "type": "text",
+          "label": "รหัสสินค้า",
+          "required": false,
+          "placeholder": "กรอกรหัสสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยา",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "บริการ",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าหน้าร้าน",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "บริการ",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "Lab",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "X-Ray",
+          "required": true,
+          "isSelect2": false
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "label": "หมวดหมู่สินค้า",
+          "required": true,
+          "placeholder": "เลือกหมวดหมู่สินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "sub_category_name",
+          "type": "text",
+          "label": "หมวดหมู่ย่อย",
+          "required": false,
+          "placeholder": "เลือกหมวดหมู่ย่อย",
+          "isSelect2": false
+        },
+        {
+          "name": "main_unit_name",
+          "type": "text",
+          "label": "หน่วยสินค้า",
+          "required": true,
+          "placeholder": "เลือกหน่วยสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "default_product_unit_group_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "label": "ราคาขาย (บาท/หน่วย)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price_incl_vat",
+          "type": "number",
+          "label": "ราคาขาย (บาท/หน่วย) (Inc. VAT)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_claim_drug_discount",
+          "type": "checkbox",
+          "label": "ส่วนลดเบิกประกัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "alert_day_before_expire",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนวันแจ้งเตือนก่อนหมดอายุ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "alert_qty_before_out_of_stock",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนแจ้งเตือนเมื่อใกล้หมดสต็อค",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "alert_qty_before_max_stock",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนสูงสุดที่ควรสต็อค",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "stock_location",
+          "type": "text",
+          "label": "ตำแหน่งสต็อค",
+          "required": false,
+          "placeholder": "เลือกตำแหน่งสต็อค",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_takeaway_product",
+          "type": "checkbox",
+          "label": "ขายยากลับบ้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "action": "/admin/product",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "product_name",
+          "type": "text",
+          "label": "ชื่อสินค้า",
+          "required": true,
+          "placeholder": "กรอกชื่อสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "product_code",
+          "type": "text",
+          "label": "รหัสสินค้า",
+          "required": false,
+          "placeholder": "กรอกรหัสสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "ยา",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "บริการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าหน้าร้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "product_type",
+          "type": "radio",
+          "label": "สินค้าสิ้นเปลือง",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "บริการ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "Lab",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "service_type",
+          "type": "radio",
+          "label": "X-Ray",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "label": "หมวดหมู่สินค้า",
+          "required": true,
+          "placeholder": "เลือกหมวดหมู่สินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "sub_category_name",
+          "type": "text",
+          "label": "หมวดหมู่ย่อย",
+          "required": false,
+          "placeholder": "เลือกหมวดหมู่ย่อย",
+          "isSelect2": false
+        },
+        {
+          "name": "main_unit_name",
+          "type": "text",
+          "label": "หน่วยสินค้า",
+          "required": true,
+          "placeholder": "เลือกหน่วยสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "default_product_unit_group_id",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": []
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "label": "ราคาขาย (บาท/หน่วย)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price_incl_vat",
+          "type": "number",
+          "label": "ราคาขาย (บาท/หน่วย) (Inc. VAT)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_claim_drug_discount",
+          "type": "checkbox",
+          "label": "ส่วนลดเบิกประกัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "alert_day_before_expire",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนวันแจ้งเตือนก่อนหมดอายุ",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "alert_qty_before_out_of_stock",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนแจ้งเตือนเมื่อใกล้หมดสต็อค",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "alert_qty_before_max_stock",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกจำนวนสูงสุดที่ควรสต็อค",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "stock_location",
+          "type": "text",
+          "label": "ตำแหน่งสต็อค",
+          "required": false,
+          "placeholder": "เลือกตำแหน่งสต็อค",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "ใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "radio",
+          "label": "พักใช้งาน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "is_takeaway_product",
+          "type": "checkbox",
+          "label": "ขายยากลับบ้าน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "generic_name",
+          "type": "text",
+          "label": "ชื่อสามัญ",
+          "required": false,
+          "placeholder": "ชื่อยา",
+          "isSelect2": false
+        },
+        {
+          "name": "indications",
+          "type": "text",
+          "label": "ข้อบ่งใช้",
+          "required": false,
+          "placeholder": "ข้อบ่งใช้",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_amount",
+          "type": "text",
+          "required": false,
+          "placeholder": "รับประทานครั้งละ",
+          "isSelect2": false
+        },
+        {
+          "name": "dosage_unit",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "เม็ด",
+              "t": "เม็ด"
+            },
+            {
+              "v": "ซีซี",
+              "t": "ซีซี"
+            },
+            {
+              "v": "ช้อนชา",
+              "t": "ช้อนชา"
+            }
+          ]
+        },
+        {
+          "name": "times_per_day",
+          "type": "text",
+          "label": "วันละ",
+          "required": false,
+          "placeholder": "วันละ",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ก่อนอาหาร 30 นาที",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "หลังอาหาร",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method",
+          "type": "radio",
+          "label": "ทุกๆ\n                                                        \n                                                        ชม.",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_method_hour",
+          "type": "text",
+          "label": "วิธีรับประทานยา",
+          "required": false,
+          "placeholder": "ชั่วโมง",
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เช้า",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "กลางวัน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "เย็น",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "administration_times[]",
+          "type": "checkbox",
+          "label": "ก่อนนอน",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "label": "คำแนะนำ",
+          "required": false,
+          "placeholder": "คำแนะนำ",
+          "isSelect2": false
+        },
+        {
+          "name": "storage_instructions",
+          "type": "text",
+          "required": false,
+          "placeholder": "วิธีเก็บรักษา",
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/product/duplicate",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "duplicate-old-product",
+          "type": "text",
+          "label": "สินค้าที่คัดลอก",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "product_name",
+          "type": "text",
+          "label": "ชื่อสินค้าใหม่",
+          "required": true,
+          "placeholder": "กรอกชื่อสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "product_code",
+          "type": "text",
+          "label": "รหัสสินค้า",
+          "required": false,
+          "placeholder": "กรอกรหัสสินค้า",
+          "isSelect2": false
+        },
+        {
+          "name": "price",
+          "type": "number",
+          "label": "ราคาขาย (บาท/หน่วย)",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        },
+        {
+          "name": "is_vat_included",
+          "type": "checkbox",
+          "label": "มีภาษีมูลค่าเพิ่ม (VAT 7%)",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "name": "price_incl_vat",
+          "type": "number",
+          "required": false,
+          "placeholder": "กรอกราคาขาย",
+          "min": "0",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

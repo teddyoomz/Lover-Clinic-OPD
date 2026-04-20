@@ -150,6 +150,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 12.2 Catalog (products + courses with sub-items) ──
+      match /be_products/{productId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_courses/{courseId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();

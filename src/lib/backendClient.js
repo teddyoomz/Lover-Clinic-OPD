@@ -4649,3 +4649,193 @@ export async function migrateMasterStaffToBe() {
 export async function migrateMasterDoctorsToBe() {
   return runMasterToBeMigration({ sourceType: 'doctors', targetCol: doctorsCol, targetDocFn: doctorDoc, mapper: mapMasterToDoctor });
 }
+
+// ─── Products CRUD (Phase 12.2) ─────────────────────────────────────────────
+
+const productsCol = () => collection(db, ...basePath(), 'be_products');
+const productDoc = (id) => doc(db, ...basePath(), 'be_products', String(id));
+
+export async function getProduct(productId) {
+  const id = String(productId || '');
+  if (!id) return null;
+  const snap = await getDoc(productDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listProducts() {
+  const snap = await getDocs(productsCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const oa = a.orderBy ?? null;
+    const ob = b.orderBy ?? null;
+    if (oa !== ob) {
+      if (oa == null) return 1;
+      if (ob == null) return -1;
+      return oa - ob;
+    }
+    const na = (a.productName || '').toLowerCase();
+    const nb = (b.productName || '').toLowerCase();
+    return na.localeCompare(nb, 'th');
+  });
+  return items;
+}
+
+export async function saveProduct(productId, data) {
+  const id = String(productId || '');
+  if (!id) throw new Error('productId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeProduct, validateProduct } = await import('./productValidation.js');
+  const normalized = normalizeProduct(data);
+  const fail = validateProduct(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+  const now = new Date().toISOString();
+  await setDoc(productDoc(id), {
+    ...normalized,
+    productId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteProduct(productId) {
+  const id = String(productId || '');
+  if (!id) throw new Error('productId required');
+  await deleteDoc(productDoc(id));
+}
+
+// ─── Courses CRUD (Phase 12.2) ──────────────────────────────────────────────
+
+const coursesCol = () => collection(db, ...basePath(), 'be_courses');
+const courseDoc = (id) => doc(db, ...basePath(), 'be_courses', String(id));
+
+export async function getCourse(courseId) {
+  const id = String(courseId || '');
+  if (!id) return null;
+  const snap = await getDoc(courseDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listCourses() {
+  const snap = await getDocs(coursesCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const oa = a.orderBy ?? null;
+    const ob = b.orderBy ?? null;
+    if (oa !== ob) {
+      if (oa == null) return 1;
+      if (ob == null) return -1;
+      return oa - ob;
+    }
+    const na = (a.courseName || '').toLowerCase();
+    const nb = (b.courseName || '').toLowerCase();
+    return na.localeCompare(nb, 'th');
+  });
+  return items;
+}
+
+export async function saveCourse(courseId, data) {
+  const id = String(courseId || '');
+  if (!id) throw new Error('courseId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeCourse, validateCourse } = await import('./courseValidation.js');
+  const normalized = normalizeCourse(data);
+  const fail = validateCourse(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+  const now = new Date().toISOString();
+  await setDoc(courseDoc(id), {
+    ...normalized,
+    courseId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteCourse(courseId) {
+  const id = String(courseId || '');
+  if (!id) throw new Error('courseId required');
+  await deleteDoc(courseDoc(id));
+}
+
+// ─── Phase 12.2: master_data → be_* (products + courses) ───────────────────
+// @dev-only scaffolding per rule H-bis.
+
+function mapMasterToProduct(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const pt = src.productType || src.product_type || 'ยา';
+  return {
+    productId: id,
+    productName: String(src.productName || src.product_name || src.name || '').trim() || '(imported)',
+    productCode: String(src.productCode || src.product_code || '').trim(),
+    productType: ['ยา', 'สินค้าหน้าร้าน', 'สินค้าสิ้นเปลือง', 'บริการ'].includes(pt) ? pt : 'ยา',
+    serviceType: String(src.serviceType || src.service_type || '').trim(),
+    genericName: String(src.genericName || src.generic_name || '').trim(),
+    categoryName: String(src.categoryName || src.category_name || src.category || '').trim(),
+    subCategoryName: String(src.subCategoryName || src.sub_category_name || '').trim(),
+    mainUnitName: String(src.mainUnitName || src.unit_name || src.unit || '').trim(),
+    price: src.price != null ? Number(src.price) : null,
+    priceInclVat: src.priceInclVat != null ? Number(src.priceInclVat) : (src.price_incl_vat != null ? Number(src.price_incl_vat) : null),
+    isVatIncluded: !!(src.isVatIncluded || src.is_vat_included),
+    isClaimDrugDiscount: !!(src.isClaimDrugDiscount || src.is_claim_drug_discount),
+    isTakeawayProduct: !!(src.isTakeawayProduct || src.is_takeaway_product),
+    defaultProductUnitGroupId: '',
+    stockLocation: String(src.stockLocation || src.stock_location || '').trim(),
+    alertDayBeforeExpire: src.alertDayBeforeExpire != null ? Number(src.alertDayBeforeExpire) : (src.alert_day_before_expire != null ? Number(src.alert_day_before_expire) : null),
+    alertQtyBeforeOutOfStock: src.alertQtyBeforeOutOfStock != null ? Number(src.alertQtyBeforeOutOfStock) : (src.alert_qty_before_out_of_stock != null ? Number(src.alert_qty_before_out_of_stock) : null),
+    alertQtyBeforeMaxStock: src.alertQtyBeforeMaxStock != null ? Number(src.alertQtyBeforeMaxStock) : (src.alert_qty_before_max_stock != null ? Number(src.alert_qty_before_max_stock) : null),
+    dosageAmount: String(src.dosageAmount || src.dosage_amount || '').trim(),
+    dosageUnit: String(src.dosageUnit || src.dosage_unit || '').trim(),
+    indications: String(src.indications || '').trim(),
+    instructions: String(src.instructions || '').trim(),
+    storageInstructions: String(src.storageInstructions || src.storage_instructions || '').trim(),
+    administrationMethod: String(src.administrationMethod || src.administration_method || '').trim(),
+    administrationMethodHour: String(src.administrationMethodHour || src.administration_method_hour || '').trim(),
+    administrationTimes: Array.isArray(src.administrationTimes) ? src.administrationTimes.slice() : [],
+    timesPerDay: src.timesPerDay != null ? Number(src.timesPerDay) : null,
+    orderBy: src.orderBy != null ? Number(src.orderBy) : null,
+    status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+function mapMasterToCourse(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const products = Array.isArray(src.courseProducts) ? src.courseProducts
+                 : Array.isArray(src.products) ? src.products : [];
+  return {
+    courseId: id,
+    courseName: String(src.courseName || src.course_name || src.name || '').trim() || '(imported)',
+    courseCode: String(src.courseCode || src.course_code || '').trim(),
+    receiptCourseName: String(src.receiptCourseName || src.receipt_course_name || '').trim(),
+    courseCategory: String(src.courseCategory || src.course_category || src.category || '').trim(),
+    courseType: String(src.courseType || src.course_type || '').trim(),
+    usageType: String(src.usageType || src.usage_type || '').trim(),
+    time: src.time != null ? Number(src.time) : null,
+    salePrice: src.salePrice != null ? Number(src.salePrice) : (src.sale_price != null ? Number(src.sale_price) : null),
+    salePriceInclVat: src.salePriceInclVat != null ? Number(src.salePriceInclVat) : (src.sale_price_incl_vat != null ? Number(src.sale_price_incl_vat) : null),
+    isVatIncluded: !!(src.isVatIncluded || src.is_vat_included),
+    courseProducts: products.map(p => ({
+      productId: String(p.productId || p.product_id || p.id || '').trim(),
+      productName: String(p.productName || p.product_name || p.name || '').trim(),
+      qty: Number(p.qty) || 0,
+    })).filter(p => p.productId && p.qty > 0),
+    orderBy: src.orderBy != null ? Number(src.orderBy) : null,
+    status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterProductsToBe() {
+  return runMasterToBeMigration({ sourceType: 'products', targetCol: productsCol, targetDocFn: productDoc, mapper: mapMasterToProduct });
+}
+
+export async function migrateMasterCoursesToBeV2() {
+  return runMasterToBeMigration({ sourceType: 'courses', targetCol: coursesCol, targetDocFn: courseDoc, mapper: mapMasterToCourse });
+}

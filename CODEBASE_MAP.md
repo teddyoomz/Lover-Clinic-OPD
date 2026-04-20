@@ -1776,4 +1776,30 @@ Tests: 2373 → 2401 (+28). Build clean.
 
 Tests: 2401 → 2493 (+92). Build clean. `firebase deploy --only firestore:rules` pending (user-triggered); env vars (`FIREBASE_ADMIN_CLIENT_EMAIL` + `_PRIVATE_KEY` + `_BOOTSTRAP_UIDS`) required on Vercel before `/api/admin/users` calls succeed.
 
+---
+
+## Phase 12.2 — be_products + be_courses CRUD (2026-04-20)
+
+Triangle-verified from `opd.js forms /admin/product` (788 lines) + `/admin/course` (335 lines) + live `/admin/api/product` JSON snapshot.
+
+**New files:**
+- `src/lib/productValidation.js` — validateProduct / normalizeProduct / emptyProductForm / generateProductId. Free-text length bounds. Product type enum: ยา / สินค้าหน้าร้าน / สินค้าสิ้นเปลือง / บริการ. Dosage cluster (genericName, dosageAmount/Unit, indications, instructions, storageInstructions, administrationMethod*, timesPerDay, administrationTimes[]) carried in schema, strict by-type validation deferred to Phase 16.
+- `src/lib/courseValidation.js` — validateCourse / normalizeCourse / emptyCourseForm / generateCourseId. `courseProducts[]` sub-items validated (non-empty productId + qty > 0). VAT-aware pricing (salePrice + salePriceInclVat).
+- `src/components/backend/ProductsTab.jsx` + `ProductFormModal.jsx` (11th + 12th MarketingTabShell reuse). Category + unit pickers pull from be_product_groups/be_product_units via <datalist>. Dosage block only shows for productType === 'ยา'.
+- `src/components/backend/CoursesTab.jsx` + `CourseFormModal.jsx` (13th + 14th shell reuse). Sub-item picker filters be_products live (max 50 results), add-by-click, qty editable inline, remove by Trash icon.
+- `tests/productValidation.test.js` — 26 adversarial tests (PV1-18, PN1-4, PG1-2).
+- `tests/courseValidation.test.js` — 22 tests (CV1-17, CN1-4, CG1-2).
+- `tests/phase12-catalog-tabs.test.jsx` — 16 tests (PT1-4, PM1-5, CT1-3, CM1-3, RE1-2).
+- `docs/proclinic-scan/admin-product-forms.json` + `admin-course-forms.json` — Triangle scan artefacts.
+
+**Edits:**
+- `src/lib/backendClient.js` — +4 CRUD fns each for products/courses + 2 mappers (mapMasterToProduct / mapMasterToCourse) + 2 migrators (migrateMasterProductsToBe / migrateMasterCoursesToBeV2 — suffix V2 to avoid collision with existing migrateMasterCoursesToBe). Sort: `orderBy ASC` with null-last fallback, then name A→Z with Thai locale.
+- `src/components/backend/nav/navConfig.js` — master section + 2 items (products + courses). Master section now 11 items total.
+- `src/components/backend/MasterDataTab.jsx` — `MIGRATE_TARGETS` +2: products → be_products, courses → be_courses.
+- `src/pages/BackendDashboard.jsx` — routes `products` + `courses` tab ids.
+- `firestore.rules` — be_products + be_courses match blocks (isClinicStaff).
+- `tests/backend-nav-config.test.js` + `tests/phase11-master-data-scaffold.test.jsx` — master-section expectations bumped 9 → 11.
+
+Tests: 2493 → 2557 (+64). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

@@ -27,6 +27,8 @@ import {
   migrateMasterBranchesToBe, migrateMasterPermissionGroupsToBe,
   // Phase 12.1: people entities
   migrateMasterStaffToBe, migrateMasterDoctorsToBe,
+  // Phase 12.2: catalog entities
+  migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
 } from '../../lib/backendClient.js';
 import {
   syncProducts, syncDoctors, syncStaff, syncCourses,
@@ -289,6 +291,10 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     // + permission group wiring happens in OUR CRUD after migrate.
     { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },
     { key: 'doctors',             label: 'แพทย์/ผู้ช่วย → be_doctors',              icon: '🩺', fn: migrateMasterDoctorsToBe },
+    // Phase 12.2 — seed be_products + be_courses. ProClinic IDs preserved so
+    // existing sales referencing them stay resolvable.
+    { key: 'products',            label: 'สินค้า → be_products',                   icon: '📦', fn: migrateMasterProductsToBe },
+    { key: 'courses',             label: 'คอร์ส → be_courses',                    icon: '💼', fn: migrateMasterCoursesToBeV2 },
   ];
 
   const handleMigrate = useCallback(async (target) => {
