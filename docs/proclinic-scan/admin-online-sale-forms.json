@@ -1,0 +1,160 @@
+{
+  "url": "https://trial.proclinicth.com/admin/online-sale",
+  "totalForms": 3,
+  "forms": [
+    {
+      "id": "f0",
+      "action": "/admin/online-sale",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "q",
+          "type": "text",
+          "required": false,
+          "placeholder": "ค้นหา",
+          "isSelect2": false
+        },
+        {
+          "name": "status",
+          "type": "select-one",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ทุกสถานะ"
+            },
+            {
+              "v": "pending",
+              "t": "รอชำระ"
+            },
+            {
+              "v": "paid",
+              "t": "รอตรวจสอบ"
+            },
+            {
+              "v": "completed",
+              "t": "ชำระเงินสำเร็จ"
+            },
+            {
+              "v": "canceled",
+              "t": "ยกเลิก"
+            }
+          ]
+        },
+        {
+          "type": "search",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "form-complete",
+      "action": "/admin/online-sale",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "complete-transfer_amount",
+          "type": "text",
+          "label": "ยอดที่ชำระ",
+          "required": false,
+          "isSelect2": false
+        },
+        {
+          "type": "text",
+          "label": "วันที่ชำระเงิน",
+          "required": true,
+          "placeholder": "กรอกวันที่ชำระเงิน",
+          "isSelect2": false
+        },
+        {
+          "name": "transfer_time",
+          "type": "time",
+          "label": "เวลา",
+          "required": true,
+          "placeholder": "กรอกเวลา",
+          "isSelect2": false
+        },
+        {
+          "name": "bank_account_id",
+          "type": "select-one",
+          "label": "บัญชีที่ชำระ",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "ไม่เลือก"
+            },
+            {
+              "v": "11",
+              "t": "กสิกร (KBANK) | บจก โปรคลินิก กรุ๊ป | 720-2-65211-7"
+            },
+            {
+              "v": "104",
+              "t": "ไทยพาณิชย์ (SCB) | นาย เดโม่ สร้างสุข |"
+            }
+          ]
+        },
+        {
+          "name": "slip_image",
+          "type": "file",
+          "required": false,
+          "isSelect2": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "action": "/admin/online-sale/0",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "source",
+          "type": "select-one",
+          "label": "ช่องทางขาย",
+          "required": false,
+          "isSelect2": true,
+          "options": [
+            {
+              "v": "",
+              "t": ""
+            },
+            {
+              "v": "",
+              "t": "เลือกช่องทางขาย"
+            },
+            {
+              "v": "Facebook",
+              "t": "Facebook"
+            },
+            {
+              "v": "Tiktok",
+              "t": "Tiktok"
+            },
+            {
+              "v": "Line",
+              "t": "Line"
+            }
+          ]
+        },
+        {
+          "name": "ad_description",
+          "type": "textarea",
+          "required": false,
+          "placeholder": "กรอกรายละเอียดโฆษณา",
+          "isSelect2": false
+        }
+      ]
+    }
+  ]
+}

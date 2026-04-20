@@ -1868,4 +1868,32 @@ ProClinic `/admin/bank-account` + `/admin/expense-category` returned 0-form resp
 
 Tests: 2644 → 2686 (+42). Build clean.
 
+---
+
+## Phase 12.6 — be_online_sales + status machine (2026-04-20)
+
+Pre-sale ledger for online transfers. Staff creates an online-sale when a customer transfers money, marks it paid when the slip verifies, then converts it to a full be_sales record.
+
+State machine (enforced by `applyStatusTransition`):
+```
+pending ──► paid ──► completed
+   ├─► cancelled    (from pending or paid)
+   └─► cancelled
+```
+Terminal states (completed / cancelled) can't transition further. `completed` requires a non-empty `linkedSaleId` (Phase 12.9 creates the sale first, then transitions).
+
+**New files:**
+- `src/lib/onlineSaleValidation.js` — validator + normalizer + `applyStatusTransition(cur, next)` pure helper. TRANSITIONS map deeply frozen. `generateOnlineSaleId()` → `OSALE-*`.
+- `src/components/backend/OnlineSalesTab.jsx` — list + inline add + transition buttons (ชำระแล้ว / เสร็จสิ้น / ยกเลิก). Status filter. Customer/bank pickers cross-reference be_customers + be_bank_accounts (Phase 12.3 + 12.5).
+- `tests/onlineSaleValidation.test.js` — 36 tests (OS1-18, ST1-12, ON1-4, RE1-2).
+- `docs/proclinic-scan/admin-online-sale-forms.json` — Triangle scan (list-page fields only; ProClinic's create page is behind a different route).
+
+**Edits:**
+- `src/lib/backendClient.js` — `listOnlineSales/saveOnlineSale/deleteOnlineSale/getOnlineSale/transitionOnlineSale`. Transition helper timestamps paidAt/completedAt/cancelledAt automatically.
+- `src/components/backend/nav/navConfig.js` — `sales` section +1 (online-sales).
+- `src/pages/BackendDashboard.jsx` — route `online-sales` tab.
+- `firestore.rules` — be_online_sales match block.
+
+Tests: 2686 → 2722 (+36). Build clean.
+
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).

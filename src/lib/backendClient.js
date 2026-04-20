@@ -5000,3 +5000,69 @@ export async function deleteExpense(expenseId) {
   if (!id) throw new Error('expenseId required');
   await deleteDoc(expenseDoc(id));
 }
+
+// ─── Online Sales CRUD + state machine (Phase 12.6) ────────────────────────
+
+const onlineSalesCol = () => collection(db, ...basePath(), 'be_online_sales');
+const onlineSaleDoc = (id) => doc(db, ...basePath(), 'be_online_sales', String(id));
+
+export async function getOnlineSale(onlineSaleId) {
+  const id = String(onlineSaleId || '');
+  if (!id) return null;
+  const snap = await getDoc(onlineSaleDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listOnlineSales({ status, startDate, endDate } = {}) {
+  const snap = await getDocs(onlineSalesCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (status) items = items.filter(o => o.status === status);
+  if (startDate) items = items.filter(o => (o.transferDate || '') >= startDate);
+  if (endDate) items = items.filter(o => (o.transferDate || '') <= endDate);
+  items.sort((a, b) => (b.transferDate || '').localeCompare(a.transferDate || ''));
+  return items;
+}
+
+export async function saveOnlineSale(onlineSaleId, data, opts = {}) {
+  const id = String(onlineSaleId || '');
+  if (!id) throw new Error('onlineSaleId required');
+  const { normalizeOnlineSale, validateOnlineSale } = await import('./onlineSaleValidation.js');
+  const normalized = normalizeOnlineSale(data);
+  const fail = validateOnlineSale(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(onlineSaleDoc(id), {
+    ...normalized,
+    onlineSaleId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteOnlineSale(onlineSaleId) {
+  const id = String(onlineSaleId || '');
+  if (!id) throw new Error('onlineSaleId required');
+  await deleteDoc(onlineSaleDoc(id));
+}
+
+// Transition an online-sale through its status machine. Persists timestamp
+// fields (paidAt / completedAt / cancelledAt) on transition.
+export async function transitionOnlineSale(onlineSaleId, nextStatus, extra = {}) {
+  const id = String(onlineSaleId || '');
+  if (!id) throw new Error('onlineSaleId required');
+  const { applyStatusTransition } = await import('./onlineSaleValidation.js');
+  const ref = onlineSaleDoc(id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('online sale not found');
+  const cur = snap.data();
+  const resolved = applyStatusTransition(cur.status || 'pending', nextStatus);
+  const now = new Date().toISOString();
+  const updates = { status: resolved, updatedAt: now };
+  if (resolved === 'paid' && !cur.paidAt) updates.paidAt = now;
+  if (resolved === 'completed' && !cur.completedAt) updates.completedAt = now;
+  if (resolved === 'cancelled' && !cur.cancelledAt) updates.cancelledAt = now;
+  if (extra.linkedSaleId) updates.linkedSaleId = String(extra.linkedSaleId);
+  if (extra.cancelReason != null) updates.cancelReason = String(extra.cancelReason);
+  await updateDoc(ref, updates);
+  return { success: true, status: resolved };
+}

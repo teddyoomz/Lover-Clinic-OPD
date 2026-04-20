@@ -169,6 +169,11 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 12.6 Online Sales (pre-sale status machine) ──
+      match /be_online_sales/{onlineSaleId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();
