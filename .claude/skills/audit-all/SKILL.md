@@ -49,7 +49,10 @@ Run these in order (17 total):
 **Tier 7 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
 21. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
 
-**Total: 229 invariants**. Do NOT write report to disk — chat output only.
+**Tier 8 — Chat notification pipeline (8 invariants — session 2026-04-22 phantom-noti fix)**:
+22. `/audit-chat-notifications` (AN1–AN8) — sound trigger wires to `chatUnread` not `chatConvCount`, `ChatDetailView` mount effect zeros `unreadCount`, `api/webhook/send.js` zeros `unreadCount`, shared `countUnreadPeople` / `shouldRingChatAlert` / `shouldRingChatInterval` helpers enforced via Rule of 3, Firestore REST string `integerValue` coerced, PHANTOM-NOTI REPRO tests present. User-reported 2026-04-22 "noti เตือนค้างแต่ไม่มีแชทค้าง".
+
+**Total: 237 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 

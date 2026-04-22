@@ -118,11 +118,16 @@ export default async function handler(req, res) {
       isFromCustomer: { booleanValue: false },
     });
 
-    // Update lastMessage but NOT displayName/pictureUrl — keep customer profile
+    // Update lastMessage but NOT displayName/pictureUrl — keep customer profile.
+    // Zeroing unreadCount here (admin replying = admin has seen the chat) is the
+    // belt-and-suspenders half of the mark-read fix; the other half is the
+    // ChatDetailView mount effect. Without this the badge can linger if admin
+    // replies via API without ever opening the UI.
     const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/${convId}`;
     await firestorePatch(convPath, {
       lastMessage: { stringValue: text },
       lastMessageAt: { stringValue: now },
+      unreadCount: { integerValue: '0' },
     });
 
     return res.status(200).json({ success: true });

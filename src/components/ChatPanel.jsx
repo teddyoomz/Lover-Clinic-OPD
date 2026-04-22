@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
+import { countUnreadPeople } from '../lib/chatUnreadUtils.js';
 
 // ─── LINE / FB brand colors ────────────────────────────────────────────────
 const LINE_COLOR = '#06C755';
@@ -270,6 +271,15 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
       setMessages(msgs);
     });
   }, [conversation, db, appId]);
+
+  // Mark conversation as read whenever admin has it open and unread > 0.
+  // Runs on open AND on every new inbound message that arrives while viewing.
+  useEffect(() => {
+    if (!conversation?.id) return;
+    if (!((Number(conversation.unreadCount) || 0) > 0)) return;
+    const convRef = doc(db, `artifacts/${appId}/public/data/chat_conversations`, conversation.id);
+    updateDoc(convRef, { unreadCount: 0 }).catch(() => {});
+  }, [conversation?.id, conversation?.unreadCount, db, appId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -576,8 +586,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   }, [db, appId]);
 
   // Count number of PEOPLE with unread (not total messages)
-  const lineUnread = conversations.filter(c => c.platform === 'line' && c.unreadCount > 0).length;
-  const fbUnread = conversations.filter(c => c.platform === 'facebook' && c.unreadCount > 0).length;
+  const { lineUnread, fbUnread } = countUnreadPeople(conversations);
 
   const filtered = filter === 'all' ? conversations : conversations.filter(c => c.platform === filter);
 
@@ -876,16 +885,8 @@ export function useChatUnread(db, appId) {
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
     return onSnapshot(convsRef, snap => {
-      let lu = 0, fu = 0;
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const count = data.unreadCount || 0;
-        if (count > 0) {
-          // Count number of people, not total messages
-          if (data.platform === 'line') lu += 1;
-          else if (data.platform === 'facebook') fu += 1;
-        }
-      });
+      const convs = snap.docs.map(d => d.data());
+      const { lineUnread: lu, fbUnread: fu } = countUnreadPeople(convs);
       setLineUnread(lu);
       setFbUnread(fu);
       setTotalConversations(snap.docs.length);

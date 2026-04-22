@@ -26,6 +26,7 @@ import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPane
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
+import { shouldRingChatAlert, shouldRingChatInterval } from '../lib/chatUnreadUtils.js';
 import DateField from '../components/DateField.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
@@ -168,7 +169,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [editingNameValue, setEditingNameValue] = useState("");
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
-  const { totalUnread: chatUnread, totalConversations: chatConvCount } = useChatUnread(db, appId);
+  const { totalUnread: chatUnread } = useChatUnread(db, appId);
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { mode, customerId, treatmentId, patientName }
   const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
   const [autoExpandTreatmentId, setAutoExpandTreatmentId] = useState('');
@@ -190,30 +191,38 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return nowMin >= openMin && nowMin < closeMin;
   }, [cs.chatAlwaysOn, cs.chatOpenTime, cs.chatCloseTime, cs.chatOpenTimeWeekend, cs.chatCloseTimeWeekend, currentTime]);
 
-  // ─── Chat alert sound: plays on ALL pages when chat is active ─────
+  // ─── Chat alert sound: fires on UNREAD count, never on total conv count ─
   const chatIsPlayingRef = useRef(false);
-  const chatPrevCountRef = useRef(0);
-  const chatConvCountRef = useRef(0);
+  const chatPrevUnreadRef = useRef(0);
+  const chatUnreadRef = useRef(0);
   const isChatActiveRef = useRef(isChatActive);
   // Track in-flight deposit syncs locally (so stuck Firestore 'pending' state doesn't block retry)
   const depositSyncingRef = useRef(new Set());
   const [, forceRerender] = useState(0);
-  chatConvCountRef.current = chatConvCount;
+  chatUnreadRef.current = chatUnread;
   isChatActiveRef.current = isChatActive;
 
   useEffect(() => {
-    if (!isChatActive) { chatPrevCountRef.current = chatConvCount; return; }
-    if (chatConvCount > 0 && chatPrevCountRef.current === 0 && !chatIsPlayingRef.current) {
+    if (shouldRingChatAlert({
+      chatUnread,
+      prevUnread: chatPrevUnreadRef.current,
+      isChatActive,
+      isPlaying: chatIsPlayingRef.current,
+    })) {
       chatIsPlayingRef.current = true;
       playAlertSound();
       setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
     }
-    chatPrevCountRef.current = chatConvCount;
-  }, [chatConvCount, isChatActive]);
+    chatPrevUnreadRef.current = chatUnread;
+  }, [chatUnread, isChatActive]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (isChatActiveRef.current && chatConvCountRef.current > 0 && !chatIsPlayingRef.current) {
+      if (shouldRingChatInterval({
+        chatUnread: chatUnreadRef.current,
+        isChatActive: isChatActiveRef.current,
+        isPlaying: chatIsPlayingRef.current,
+      })) {
         chatIsPlayingRef.current = true;
         playAlertSound();
         setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
