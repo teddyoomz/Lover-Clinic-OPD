@@ -4,8 +4,10 @@
 ### 🔥 Pre-Commit Checklist — RUN BEFORE EVERY `git commit` (no exceptions)
 Added after 2026-04-19 `handleSyncCoupons is not defined` runtime crash — router cases referenced functions that were never actually defined because an Edit call errored silently and I didn't verify. Mechanical checks only; each takes seconds.
 
-1. **TEST**: `npm test -- --run` → ALL PASS (41+ known PERMISSION_DENIED integration fails are OK per tests/setup.js limitation). If you wrote new tests, verify they RAN and passed (not silently skipped).
+1. **TEST**: `npm test -- --run <focused path>` → ALL PASS for the sub-phase's focused tests. Full `npm test -- --run` (~2900 tests, ~30s) is reserved for end-of-major-phase (13 / 14 / 15 / 16), per `feedback_test_per_subphase`. If you wrote new tests, verify they RAN and passed (not silently skipped).
 2. **VERIFY**: `npm run build` → clean. Catches syntax / import / unreachable-code errors the REPL doesn't.
+   - **V11 near-miss (2026-04-24)**: `vi.mock(module, () => ({ newName: fn() }))` **creates** the export name in the mock — it does NOT validate that the real module exports it. If you import `newName` from the real module but the real export is `otherName`, focused tests PASS (mock shadows reality), build FAILS (`MISSING_EXPORT`). Always trust build over focused tests for import resolution.
+   - **Pre-flight grep for new imports** — before writing `import { foo } from './bar.js'`, grep `^export (async )?function foo` in `./bar.js`. Catches the V11 pattern cheaper than waiting for build.
 3. **AUDIT (area-specific)** — run the skill matching what you touched:
    - `src/components/backend/**` or `BackendDashboard.jsx` → `/audit-backend-firestore-only` (BF1-BF7)
    - `api/proclinic/*.js` → grep-pair verify: every `case '<action>':` has matching `async function handle<Action>` definition in same file
