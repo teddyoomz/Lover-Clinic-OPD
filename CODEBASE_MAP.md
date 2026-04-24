@@ -1812,13 +1812,67 @@ Retroactive gap-close from Phase 12.2. Phase 12.2 shipped core CRUD (13 fields) 
 
 **Step 2 — UI (commit `60b7b5a`):** `src/components/backend/CourseFormModal.jsx` full rewrite — 4-radio selector with type-conditional blocks, main-product picker via `be_products` datalist, sub-item table with 6 pivot-field columns.
 
-**Step 3 — sync mapper (commit pending):**
+**Step 3 — sync mapper (commit `1744eee`):**
 - `api/proclinic/master.js` — extracted pure `export function normalizeCourseJsonItem(item)`. Translates `usage_type` "clinic"|"branch" → Thai labels, extracts main product from `products[]` `pivot.is_main_product=1`, preserves 6 new pivot fields on each sub-item, carries `procedure_type_name` / `deduct_cost` / `df_editable_global` / `is_hidden_for_sale`. `handleSyncCourses` calls it via `.map(normalizeCourseJsonItem).filter(Boolean)`.
 - `src/lib/backendClient.js` — `mapMasterToCourse` exported + extended from 13 → 26 output fields, accepts both camelCase (OUR shape) and snake_case (ProClinic shape), inherits main-product fallback from courseProducts when top-level is empty. `isDf` defaults `true` matching `emptyCourseForm()`.
-- `tests/courseSync.test.js` — 40 tests (CS1-CS40): real ProClinic `/admin/api/course` row fixture, usage_type translation, main-product pivot extraction, 6 new pivot fields, edge-case defaults.
-- `tests/courseMigrate.test.js` — 28 tests (CM1-CM28): camelCase + snake_case input acceptance, legacy-shape compatibility, sub-item filter rules, `isDf` default-true behavior.
+- `tests/courseSync.test.js` — 40 tests (CS1-CS40).
+- `tests/courseMigrate.test.js` — 28 tests (CM1-CM28).
 
-Steps 5/6/7 pending: DfEntryModal group-switch bug (~30m), TreatmentFormPage `ซื้อเพิ่ม` layout refactor (~1-2h), `courseType === 'เหมาตามจริง'` fill-later flow (~1h).
+**Step 5 — DfEntryModal group-switch race (commit `9ee3213`):**
+- `src/components/backend/DfEntryModal.jsx` — handleDoctorChange + handleGroupChange + recalcRows refactored to `setForm((prev) => ...)` updater pattern (previously closed over stale `form.doctorId` / `form.dfGroupId`). Warning banner recolored red → amber; "ไม่มีอัตราในกลุ่มนี้" hint added per-row when source=null.
+- `tests/dfEntryModal.test.jsx` +6 (DFM-S5-1..6): switch-causes-refresh + stale-closure guard + empty-group hint.
+
+**Step 6 — ซื้อเพิ่ม courses render under parent headers (commit `f936d86`):**
+- `src/components/TreatmentFormPage.jsx` — confirmBuyModal stamps `isAddon` + `purchasedItemId` + `purchasedItemType` on customerCourses entries. Course column filters out promotion-linked (render only in promo column). Header gets "(ซื้อเพิ่ม)" badge + Trash button; old flat bottom lists removed.
+- `src/lib/treatmentBuyHelpers.js` — NEW `buildCustomerPromotionGroups(customerCourses, customerPromotions)` pure helper extracted from useMemo (testable without remounting TreatmentFormPage).
+- `tests/treatmentBuyHelpers.test.js` — new file, 18 tests (TBH1-6 + BCPG1-12).
+
+**Step 7 — เหมาตามจริง fill-later qty flow (commits `a5d82fd` + `5d14616`):**
+- `src/lib/treatmentBuyHelpers.js` — NEW `buildPurchasedCourseEntry(item, opts)` pure helper forking by courseType; NEW `findMissingFillLaterQty(treatmentItems)` save-time validator.
+- `src/components/TreatmentFormPage.jsx` — confirmBuyModal delegates to `buildPurchasedCourseEntry`; toggleCourseItem accepts fill-later products (bypasses exhausted guard); handleSubmit validates missing fill-later qty before save; treatment items column shows amber bg + "(ระบุจำนวนตามจริง)" badge when `needsQty`.
+- `tests/treatmentBuyHelpers.test.js` +23 (BPCE1-12 + FMFLQ1-11).
+
+**Follow-up batch (commits `6a7b6d0` → `84f5b0d`):**
+- `src/components/backend/CourseFormModal.jsx` — courseCategory + procedureType `<datalist>` dropdowns from `listCourses()`. Sub-item table grid alignment fixed (`grid-cols-[1fr_70px_70px_70px_200px]`).
+- `src/lib/backendClient.js`:
+  - `_getProductStockConfig` reads `be_products` first (was `master_data/products/items/*` → silent skip for every sale since Phase 11.9).
+  - `createStockOrder` auto-opt-in writes stockConfig to `be_products`.
+  - `beCourseToMasterShape` exported + prepends main product (was missing from `products[]`).
+  - `assignCourseToCustomer` captures `productId` + `courseType` on customer.courses; writes "1/1 unit" sentinel for เหมาตามจริง.
+  - `deductCourseItems` courseType-aware short-circuit (เหมาตามจริง zeros to 0 regardless of deductQty → course moves to history).
+- `src/lib/dfGroupValidation.js` — `computeDfAmount(rate, sub, qty, {courseUsageWeight})` opt; NEW `computeCourseUsageWeight(saleCourseItem, treatmentCourseItems)` pure formula (avg(used_qty/total_qty) across course products).
+- `src/lib/dfPayoutAggregator.js` — `explicitBySale` Map → array (multi-treatment-per-sale); weighted DF per treatment; id/courseId fallback (was keyed by courseId only → ฿0 across prod since all backend sales store `it.id`). Breakdown rows emit `courseUsageWeight` + `treatmentId`.
+- `src/components/TreatmentFormPage.jsx`:
+  - `customerCoursesForForm` skips consumed courses (`total > 0 && remaining <= 0`); propagates `courseType` + `isRealQty` + `isPickAtTreatment` + `productId` onto product rows.
+  - `treatmentCoursesForDf` carries `price` per course (purchasedItems → `value` string → treatmentItem.price fallback).
+  - `toggleCourseItem` auto-populates qty with `product.remaining` (was hardcoded '1').
+  - DF summary card shows emerald baht amount per doctor + grand total (uses treatmentCoursesForDf price × percent rate).
+  - 0-baht `showBilling = hasSale && netTotal > 0` hides ALL 5 billing UI sections (was only skipping validation).
+  - treatmentItems save-payload preserves `id` + `productId` + `fillLater` (previous shape `{name, qty, unit, price}` silently dropped productId → stock never deducted).
+- `src/components/backend/DfEntryModal.jsx` — dup-guard non-blocking (amber hint, not red block); percent rate shows emerald `≈ ฿5,000.00` via `treatmentCourses[i].price`.
+- `src/components/backend/CustomerDetailView.jsx`:
+  - `CourseItemBar` violet display + 100% bar for `courseType === 'เหมาตามจริง'`.
+  - `expiredCourses` filter strict: only `customer?.expiredCourses` (date-expired), used-up courses removed.
+  - Purchase history tab item breakdown (type-colored bullets: คอร์ส/โปรโมชัน/สินค้า/ยา).
+
+**Pick-at-treatment iteration (reverted `f7cb8a8` → revert `967d7b2` → correct `84f5b0d`):**
+- Initial design: limit-gated min/max bounds → user rejected; reverted per Rule A bug-blast.
+- Final correct design: TWO-STEP pick-at-purchase flow.
+  - `src/lib/treatmentBuyHelpers.js`: `buildPurchasedCourseEntry` forks for `เลือกสินค้าตามจริง` → placeholder entry `{needsPickSelection: true, availableProducts: [...], products: []}`. NEW `resolvePickedCourseEntry(placeholder, picks)` pure transform — fills products[] with picked items (remaining=qty, total=qty, fillLater=false) and clears the flag.
+  - `src/components/backend/PickProductsModal.jsx` — NEW (~150 LOC). Checkbox list + qty input per available product; validates ≥1 pick, qty > 0, within min/max. ProClinic-matching copy ("เลือกสินค้า (คอร์ส X)", ยกเลิก / ยืนยัน).
+  - `src/components/TreatmentFormPage.jsx` — `pickModalCourseId` state; "เลือกสินค้า" teal button on course header when `needsPickSelection`; placeholder body text "ยังไม่ได้เลือกสินค้า"; confirm handler updates `options.customerCourses` via `resolvePickedCourseEntry`. After pick, course renders standard sub-rows (normal remaining + checkbox + stock deduct + history on depletion).
+  - Tests: `tests/treatmentBuyHelpers.test.js` +9 (RPCE1-8 + BPCE5 rewrite); `tests/phase12.2b-scenarios.test.js` S9.3 updated.
+
+**Regression + integration scenario file (NEW commit `c245e14`):**
+- `tests/phase12.2b-scenarios.test.js` — 125+ tests in 20 scenarios: ProClinic JSON pipeline, fill-later one-shot, fill-later late-visit, specific-qty progressive, DF invariant math, promotion bundle, 0-baht gate, productId chain, courseType branching, pick-at-treatment flows (S19-S20 reverted; RPCE coverage moved to treatmentBuyHelpers), edge cases.
+- `tests/beCourseToMasterShape.test.js` — 10 tests (BC1-BC10).
+- `tests/dfGroupValidation.test.js` +18 (C6-C11 + CUW1-CUW12).
+- `tests/dfPayoutAggregator.test.js` +11 (DP26-DP36).
+
+**Summary — Phase 12.2b marathon 2026-04-24:**
+- Files added: `src/components/backend/PickProductsModal.jsx`, `tests/courseSync.test.js`, `tests/courseMigrate.test.js`, `tests/beCourseToMasterShape.test.js`, `tests/phase12.2b-scenarios.test.js`.
+- Files edited: `api/proclinic/master.js`, `src/lib/backendClient.js`, `src/lib/treatmentBuyHelpers.js`, `src/lib/dfGroupValidation.js`, `src/lib/dfPayoutAggregator.js`, `src/lib/courseValidation.js`, `src/components/TreatmentFormPage.jsx`, `src/components/backend/CourseFormModal.jsx`, `src/components/backend/CustomerDetailView.jsx`, `src/components/backend/DfEntryModal.jsx`, `src/components/backend/SaleTab.jsx`.
+- Tests: 3306 → 3555 (+249). Build clean every commit. 19 net commits (one reverted + one revert commit inside).
 
 ---
 
