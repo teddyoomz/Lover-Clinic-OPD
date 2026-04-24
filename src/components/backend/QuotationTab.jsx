@@ -4,10 +4,13 @@
 // Rule E: no brokerClient import. Rule H: no ProClinic mirror.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle } from 'lucide-react';
-import { listQuotations, deleteQuotation, convertQuotationToSale } from '../../lib/backendClient.js';
+import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle, Receipt } from 'lucide-react';
+import {
+  listQuotations, deleteQuotation, convertQuotationToSale, getBackendSale,
+} from '../../lib/backendClient.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
+import SalePrintView from './SalePrintView.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/quotationValidation.js';
 
@@ -40,6 +43,8 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [printing, setPrinting] = useState(null);
+  const [printingSale, setPrintingSale] = useState(null);
+  const [loadingSale, setLoadingSale] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [converting, setConverting] = useState(null);
   const [error, setError] = useState('');
@@ -76,6 +81,19 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const handleCreate = () => { setEditing(null); setFormOpen(true); };
   const handleEdit = (q) => { setEditing(q); setFormOpen(true); };
   const handlePrint = (q) => setPrinting(q);
+
+  const handlePrintSale = async (q) => {
+    const saleId = q.convertedToSaleId;
+    if (!saleId) { setError('ใบเสนอราคานี้ยังไม่ได้แปลงเป็นใบขาย'); return; }
+    setLoadingSale(q.quotationId || q.id); setError('');
+    try {
+      const sale = await getBackendSale(saleId);
+      if (!sale) { setError(`ไม่พบใบขาย ${saleId}`); return; }
+      setPrintingSale(sale);
+    } catch (e) {
+      setError(e.message || 'โหลดใบขายล้มเหลว');
+    } finally { setLoadingSale(null); }
+  };
 
   const handleDelete = async (q) => {
     const name = q.customerName || q.quotationId || q.id;
@@ -162,11 +180,26 @@ export default function QuotationTab({ clinicSettings, theme }) {
                         แปลงเป็นใบขาย
                       </button>
                     )}
-                    <button onClick={() => handlePrint(q)} disabled={busy} aria-label={`ปริ๊นใบเสนอราคา ${id}`}
-                      className="p-1.5 rounded text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] hover:text-sky-400 disabled:opacity-50"
+                    <button onClick={() => handlePrint(q)} disabled={busy}
+                      aria-label={`ปริ๊นใบเสนอราคา ${id}`}
+                      title="ปริ๊นใบเสนอราคา"
+                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] hover:text-sky-400 disabled:opacity-50"
                       data-testid={`quotation-print-${id}`}>
-                      <Printer size={14} />
+                      <Printer size={14} /> <span className="hidden sm:inline">ใบเสนอราคา</span>
                     </button>
+                    {status === 'converted' && q.convertedToSaleId && (
+                      <button onClick={() => handlePrintSale(q)}
+                        disabled={busy || loadingSale === id}
+                        aria-label={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
+                        title={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] text-emerald-400 hover:bg-emerald-900/20 disabled:opacity-50"
+                        data-testid={`quotation-print-sale-${id}`}>
+                        {loadingSale === id
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <Receipt size={14} />}
+                        <span className="hidden sm:inline">ใบขาย</span>
+                      </button>
+                    )}
                     <button onClick={() => handleEdit(q)} disabled={busy} aria-label={`แก้ไขใบเสนอราคา ${id}`}
                       className="p-1.5 rounded text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] hover:text-sky-400 disabled:opacity-50"
                       data-testid={`quotation-edit-${id}`}>
@@ -202,6 +235,14 @@ export default function QuotationTab({ clinicSettings, theme }) {
           quotation={printing}
           clinicSettings={clinicSettings}
           onClose={() => setPrinting(null)}
+        />
+      )}
+
+      {printingSale && (
+        <SalePrintView
+          sale={printingSale}
+          clinicSettings={clinicSettings}
+          onClose={() => setPrintingSale(null)}
         />
       )}
     </>

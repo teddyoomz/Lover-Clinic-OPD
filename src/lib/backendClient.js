@@ -711,6 +711,14 @@ async function _clearLinkedTreatmentsHasSale(saleId) {
   }
 }
 
+/** Get a single sale by id. Returns null when missing. (Phase 13.1.4 convert flow needs this for print-after-convert UX.) */
+export async function getBackendSale(saleId) {
+  const id = String(saleId || '');
+  if (!id) return null;
+  const snap = await getDoc(saleDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 /** Get all sales (sorted by date desc) */
 export async function getAllSales() {
   const snap = await getDocs(salesCol());
