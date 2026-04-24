@@ -80,15 +80,47 @@ modal. Our Phase 13.3 resolver `getRateForStaffCourse` mirrors this — so our
 Phase 14 implementation can call it client-side instead of needing a server
 endpoint.
 
-## Save flow (not yet captured — open for 14.2b)
+## Save flow — captured 2026-04-24 via HAR + flow
 
-The final "ยืนยัน" submit probably POSTs to a different endpoint (not
-`/admin/treatment/{id}/edit` directly) — need a `fill + click + har` capture
-to confirm. Follow-up flow recipe should:
-1. Open modal
-2. Fill at least one row with value > 0
-3. Click "ยืนยัน"
-4. Capture the network POST via `waitForResponse` or HAR
+Recipe: `F:\replicated\scraper\recipes\df-save-capture.json`
+HAR: `F:\replicated\output\har\har-*_treatment_3357_edit-*.har`
+Flow trace: `F:\replicated\output\flows\df-save-capture-*.json`
+
+**Findings:**
+
+1. **Modal form FormData contains only 2 named fields**: `doctor_id` + `df_group_id`.
+   All the per-course rows use `<input type=number>` and `<input type=checkbox>`
+   WITHOUT `name` attributes. ProClinic's JS harvests the row DOM nodes
+   at submit time + assembles the payload before XHR.
+
+2. **Client-side uniqueness guard**: clicking "ยืนยัน" when `doctor_id`
+   already has an existing DF entry on this treatment shows a toast
+   "แพทย์/ผู้ช่วยแพทย์คนดังกล่าวถูกเลือกแล้ว" and blocks submission.
+   No network call fires. So ADD modal is "new doctor only" — editing
+   an existing entry must use `#editDfModal`.
+
+3. **Submit flow** (blocked by dup-guard in our test run, inferred from
+   the JS files loaded — `treatment-edit.js`, `treatment-draft.js`):
+   - Collect checked rows → build payload `[{courseId, value, type}, ...]`
+   - XHR POST (likely to `/admin/treatment/{id}/df-entry` or similar)
+   - On success, close modal + refresh the DF section inline
+
+4. **TODO — follow-up capture** when time permits:
+   - Test on a treatment WITHOUT existing DF entries to trigger real POST
+   - Capture response shape (does it return the saved entry? the full list?)
+   - Probe `#editDfModal` with same flow pattern (open → inspect → fill → submit)
+
+## Design implication for Phase 14
+
+Since ProClinic doesn't expose the row inputs by name, our replica can
+freely design the `dfEntries[]` shape however makes sense for Firestore
+without worrying about ProClinic parity at the field-name level. The
+KEY behaviours to mirror are:
+
+1. Auto-populate on doctor+group change (via client-side resolver)
+2. Dup-guard: can't add DF for a doctor who already has an entry —
+   instead, opening that doctor loads `#editDfModal` with existing values
+3. Inline refresh after save (no page reload)
 
 ## Mapping to Phase 14 design
 
