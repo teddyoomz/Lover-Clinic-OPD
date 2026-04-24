@@ -84,19 +84,33 @@ export default function DfEntryModal({
   const handleDoctorChange = (doctorId) => {
     setError('');
     const picked = peopleById.get(String(doctorId));
-    const defaultGroupId = picked?.defaultDfGroupId || form.dfGroupId || '';
     const doctorName = picked?.name || '';
     // Dup-guard (ADD only): don't block the state change — we warn + disable save.
     const isDup = !isEdit && isDoctorAlreadyEntered(doctorId, existingEntries);
     setDupWarn(isDup);
-    const nextRows = resolveRows(doctorId, defaultGroupId);
-    setForm((prev) => ({ ...prev, doctorId, doctorName, dfGroupId: defaultGroupId, rows: nextRows }));
+    // Phase 12.2b Step 5 (2026-04-24): resolve inside the setForm updater so
+    // we read the LATEST dfGroupId from React's state pipeline rather than
+    // the closure value from the render that created this handler. Guards
+    // against rapid successive changes (doctor → group in same tick) where
+    // the closure `form.dfGroupId` would be stale.
+    setForm((prev) => {
+      const defaultGroupId = picked?.defaultDfGroupId || prev.dfGroupId || '';
+      const nextRows = resolveRows(doctorId, defaultGroupId);
+      return { ...prev, doctorId, doctorName, dfGroupId: defaultGroupId, rows: nextRows };
+    });
   };
 
   const handleGroupChange = (dfGroupId) => {
     setError('');
-    const nextRows = resolveRows(form.doctorId, dfGroupId);
-    setForm((prev) => ({ ...prev, dfGroupId, rows: nextRows }));
+    // Phase 12.2b Step 5 (2026-04-24): same setForm-updater treatment as
+    // handleDoctorChange — read doctorId from prev so a rapid doctor-then-
+    // group change can't resolve against a stale doctorId (user-reported
+    // bug: "เปลี่ยน group แล้วค่ามือไม่แสดง" = rates didn't refresh because
+    // resolveRows was called with empty doctorId during a batched update).
+    setForm((prev) => {
+      const nextRows = resolveRows(prev.doctorId, dfGroupId);
+      return { ...prev, dfGroupId, rows: nextRows };
+    });
   };
 
   const updateRow = (courseId, patch) => {
@@ -107,8 +121,7 @@ export default function DfEntryModal({
   };
 
   const recalcRows = () => {
-    const nextRows = resolveRows(form.doctorId, form.dfGroupId);
-    setForm((prev) => ({ ...prev, rows: nextRows }));
+    setForm((prev) => ({ ...prev, rows: resolveRows(prev.doctorId, prev.dfGroupId) }));
   };
 
   const handleSave = () => {
@@ -239,6 +252,17 @@ export default function DfEntryModal({
                   {r.source && (
                     <span className="ml-1.5 text-[9px] text-[var(--tx-muted)] italic">
                       ({r.source === 'staff' ? 'override ส่วนบุคคล' : 'จากกลุ่ม'})
+                    </span>
+                  )}
+                  {/* Phase 12.2b Step 5 (2026-04-24): explain why an
+                      otherwise-enabled course shows value 0 after a group
+                      switch — it genuinely has no rate in the new group.
+                      Was the source of the "ค่ามือกลุ่มอื่นไม่แสดง" bug
+                      report: switching worked but user expected a rate
+                      that doesn't exist. */}
+                  {!r.source && form.doctorId && form.dfGroupId && (
+                    <span className="ml-1.5 text-[9px] text-amber-400 italic">
+                      (ไม่มีอัตราในกลุ่มนี้)
                     </span>
                   )}
                 </span>

@@ -207,6 +207,113 @@ describe('DfEntryModal — EDIT mode', () => {
   });
 });
 
+describe('DfEntryModal — Phase 12.2b Step 5 group-switch robustness', () => {
+  // These tests cover the user-reported bug "เลือก 10% แล้วเปลี่ยน group
+  // อื่น ค่ามือกลุ่มอื่นไม่แสดง". Root cause was (a) resolveRows reading
+  // stale doctorId/dfGroupId from the render closure during batched state
+  // updates, and (b) no UI cue when the new group genuinely has no rate
+  // for a course so the zero-value disabled row looked like a missing rate.
+
+  it('DFM-S5-1: row with no rate in selected group shows "ไม่มีอัตราในกลุ่มนี้" hint', async () => {
+    renderModal();
+    // D1 picks DFG-1 auto — DFG-1 has rates for both C1 + C2 → no hint yet
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D1' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-field="dfGroupId"] select').value).toBe('DFG-1');
+    });
+    expect(screen.queryByText(/ไม่มีอัตราในกลุ่มนี้/)).not.toBeInTheDocument();
+    // Switch to DFG-2 — only C1 has a rate; C2 falls through to null source
+    fireEvent.change(document.querySelector('[data-field="dfGroupId"] select'), { target: { value: 'DFG-2' } });
+    await waitFor(() => {
+      expect(screen.getByText(/ไม่มีอัตราในกลุ่มนี้/)).toBeInTheDocument();
+    });
+  });
+
+  it('DFM-S5-2: manual row value edit is overwritten on group switch (documents expected behavior)', async () => {
+    renderModal();
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D1' } });
+    await waitFor(() => {
+      const first = document.querySelector('[data-field="rows"] input[type="number"]');
+      expect(first.value).toBe('500');
+    });
+    // User manually types 12345 into C1's value
+    const first = document.querySelector('[data-field="rows"] input[type="number"]');
+    fireEvent.change(first, { target: { value: '12345' } });
+    await waitFor(() => expect(first.value).toBe('12345'));
+    // Switch group → rows rebuild from resolver; manual edit is lost
+    fireEvent.change(document.querySelector('[data-field="dfGroupId"] select'), { target: { value: 'DFG-2' } });
+    const rows = document.querySelector('[data-field="rows"]').querySelectorAll('input[type="number"]');
+    await waitFor(() => expect(rows[0].value).toBe('300'));
+  });
+
+  it('DFM-S5-3: row type dropdown refreshes when group switch changes the type (baht→percent)', async () => {
+    // Craft a fixture where DFG-A has baht, DFG-B has percent, same course.
+    const groupsTypeFlip = [
+      { id: 'G-A', groupId: 'G-A', name: 'กลุ่ม Baht', rates: [{ courseId: 'C1', value: 100, type: 'baht' }] },
+      { id: 'G-B', groupId: 'G-B', name: 'กลุ่ม Percent', rates: [{ courseId: 'C1', value: 15, type: 'percent' }] },
+    ];
+    const peopleFlip = [{ id: 'D-FLIP', name: 'หมอ Flip', position: 'แพทย์', defaultDfGroupId: 'G-A' }];
+    renderModal({ dfGroups: groupsTypeFlip, people: peopleFlip, staffRates: [], treatmentCourses: [{ courseId: 'C1', courseName: 'Botox' }] });
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D-FLIP' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-field="rows"] select').value).toBe('baht');
+    });
+    fireEvent.change(document.querySelector('[data-field="dfGroupId"] select'), { target: { value: 'G-B' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-field="rows"] select').value).toBe('percent');
+    });
+  });
+
+  it('DFM-S5-4: staff override survives group switch (source=staff pinned to the staff doc, not the group)', async () => {
+    // D2 has a staff override for C1 (400 baht). Switching groups should
+    // leave C1 at 400 because staff override wins over group rates.
+    renderModal();
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D2' } });
+    await waitFor(() => {
+      const first = document.querySelector('[data-field="rows"] input[type="number"]');
+      expect(first.value).toBe('400');
+    });
+    // Verify source badge shows "override ส่วนบุคคล"
+    expect(screen.getByText(/override ส่วนบุคคล/)).toBeInTheDocument();
+    // Switch group to DFG-2 — D2's staff override for C1 still wins
+    fireEvent.change(document.querySelector('[data-field="dfGroupId"] select'), { target: { value: 'DFG-2' } });
+    const rows = document.querySelector('[data-field="rows"]').querySelectorAll('input[type="number"]');
+    await waitFor(() => expect(rows[0].value).toBe('400'));
+    // Source badge remains "override ส่วนบุคคล" (still staff, not group)
+    expect(screen.getByText(/override ส่วนบุคคล/)).toBeInTheDocument();
+  });
+
+  it('DFM-S5-5: handleGroupChange uses updater-form setForm so stale doctorId closures cannot corrupt rows', async () => {
+    // Regression for the setForm-updater fix: if the setter were reading a
+    // stale `form.doctorId` from the pre-change closure, switching group
+    // immediately after doctor would produce rows against the OLD doctor.
+    // Exercise by firing both changes back-to-back without awaiting render.
+    renderModal();
+    // Fire doctor change + group change in the same tick — React batches
+    // these state updates. Without the updater-form fix, the group handler
+    // reads the pre-doctor-change form value.
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D1' } });
+    fireEvent.change(document.querySelector('[data-field="dfGroupId"] select'), { target: { value: 'DFG-2' } });
+    // Final state must reflect D1 + DFG-2: C1=300 (DFG-2 group rate, no D1 override)
+    const rows = document.querySelector('[data-field="rows"]').querySelectorAll('input[type="number"]');
+    await waitFor(() => expect(rows[0].value).toBe('300'));
+    // doctorName preserved through the updater
+    expect(document.querySelector('[data-field="doctorId"] select').value).toBe('D1');
+    expect(document.querySelector('[data-field="dfGroupId"] select').value).toBe('DFG-2');
+  });
+
+  it('DFM-S5-6: empty group (no rates at all) → every row marked "ไม่มีอัตราในกลุ่มนี้"', async () => {
+    const emptyGroup = [{ id: 'G-EMPTY', groupId: 'G-EMPTY', name: 'Empty', rates: [] }];
+    renderModal({ dfGroups: emptyGroup, people: [{ id: 'D-E', name: 'Dr E', position: 'แพทย์', defaultDfGroupId: 'G-EMPTY' }], staffRates: [] });
+    fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D-E' } });
+    await waitFor(() => {
+      const hints = screen.getAllByText(/ไม่มีอัตราในกลุ่มนี้/);
+      // Both C1 + C2 get the hint since neither has a rate in G-EMPTY
+      expect(hints.length).toBe(2);
+    });
+  });
+});
+
 describe('DfEntryModal — empty state', () => {
   it('DFM13: no treatmentCourses → shows "ไม่พบคอร์ส" empty state after doctor+group pick', async () => {
     renderModal({ treatmentCourses: [] });
