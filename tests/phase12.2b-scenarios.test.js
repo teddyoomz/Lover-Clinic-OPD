@@ -1123,21 +1123,23 @@ describe('Scenario 21 — เลือกสินค้าตามจริง
     expect(body).toContain('courses.splice');
   });
 
-  it('S21.5: customerCoursesForForm has needsPickSelection branch emitting placeholder shape', () => {
-    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
-    const sentinelIdx = src.indexOf('customerCoursesForForm = rawCourses');
+  it('S21.5: mapRawCoursesToForm helper (extracted from TreatmentFormPage) handles pick-at-treatment placeholder', () => {
+    // Phase 12.2b follow-up (2026-04-25): the inline mapper in TFP was
+    // extracted into treatmentBuyHelpers.mapRawCoursesToForm so the
+    // branch logic becomes unit-testable. Grep the HELPER file, not TFP.
+    const src = fs.readFileSync('src/lib/treatmentBuyHelpers.js', 'utf-8');
+    const sentinelIdx = src.indexOf('export function mapRawCoursesToForm');
     expect(sentinelIdx).toBeGreaterThan(-1);
-    // Grab a generous context window covering the entire mapper.
     const ctx = src.slice(sentinelIdx, sentinelIdx + 4000);
-    // Must detect the placeholder stored by assignCourseToCustomer
     expect(ctx).toContain('c.needsPickSelection');
     expect(ctx).toContain('Array.isArray(c.availableProducts)');
-    // Must emit isPickAtTreatment + needsPickSelection so render fires
     expect(ctx).toContain('isPickAtTreatment: true');
-    // Must stamp a key for the persist call — prefer the persistent
-    // courseId, fall back to the index
     expect(ctx).toContain('_beCourseId');
     expect(ctx).toContain('_beCourseIndex');
+    // TFP must IMPORT + use the helper (not re-inline the logic)
+    const tfp = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    expect(tfp).toMatch(/import[^;]*mapRawCoursesToForm[^;]*from\s*['"]\.\.\/lib\/treatmentBuyHelpers\.js['"]/);
+    expect(tfp).toMatch(/mapRawCoursesToForm\(rawCourses\)/);
   });
 
   it('S21.6: TreatmentFormPage customerCourses filter exempts placeholders from allZero drop', () => {
@@ -1148,7 +1150,9 @@ describe('Scenario 21 — เลือกสินค้าตามจริง
     // never renders (the user's "nothing shows" report).
     const filterIdx = src.indexOf('const allZero = (c.products || []).every');
     expect(filterIdx).toBeGreaterThan(-1);
-    const before = src.slice(Math.max(0, filterIdx - 400), filterIdx);
+    // Widened 400→900 on 2026-04-25 after buffet exemption landed between
+    // the pick-at-treatment exemption and the allZero line.
+    const before = src.slice(Math.max(0, filterIdx - 900), filterIdx);
     expect(before).toContain('c.isPickAtTreatment && c.needsPickSelection');
     expect(before).toContain('return true');
   });

@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -573,94 +573,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             try {
               const custData = await getBackendCustomer(customerId);
               const rawCourses = custData?.courses || [];
-              customerCoursesForForm = rawCourses
-                .map((c, idx) => {
-                  if (!c.name) return null;
-                  // Phase 12.2b follow-up (2026-04-24): pick-at-treatment
-                  // placeholder persisted via assignCourseToCustomer.
-                  // Re-emit as an in-memory placeholder so the course
-                  // column renders the "เลือกสินค้า" button identical
-                  // to the in-visit buy flow. Prefer the persistent
-                  // `c.courseId` (stamped at assign time) so a later
-                  // pick survives index-shifts from other resolutions.
-                  // `_beCourseIndex` kept as a fallback for legacy docs
-                  // that predate the persistent courseId.
-                  if (c.needsPickSelection && Array.isArray(c.availableProducts)) {
-                    const persistedCourseId = typeof c.courseId === 'string' && c.courseId
-                      ? c.courseId
-                      : `be-course-${idx}`;
-                    return {
-                      courseId: persistedCourseId,
-                      courseName: c.name,
-                      parentName: c.parentName || '',
-                      source: c.source || '',
-                      linkedSaleId: c.linkedSaleId || null,
-                      status: c.status || '',
-                      expiry: c.expiry || '',
-                      courseType: String(c.courseType || '').trim(),
-                      isPickAtTreatment: true,
-                      needsPickSelection: true,
-                      availableProducts: c.availableProducts,
-                      products: [],
-                      _beCourseId: typeof c.courseId === 'string' ? c.courseId : null,
-                      _beCourseIndex: idx,
-                    };
-                  }
-                  const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
-                  const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
-                  const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
-                  const unit = qtyMatch ? qtyMatch[3].trim() : '';
-                  const productName = c.product || c.name;
-                  // Phase 12.2b follow-up (2026-04-24, user-reported): skip
-                  // fully-consumed courses so they don't re-appear as
-                  // selectable in the treatment form. User saw "อ๋อม
-                  // เหมา" in the new-treatment course column even though
-                  // it wasn't in คอร์สของฉัน — the entry was still in
-                  // customer.courses with qty "0/1 U" (consumed).
-                  // CustomerDetailView.activeCourses already filters this
-                  // way; treatment form now matches. Fill-later (เหมา
-                  // ตามจริง) consumed courses are especially bad because
-                  // the render's exhausted check bypasses fillLater, so
-                  // the checkbox stays enabled and the user could tick +
-                  // save → stock deducts AGAIN against a zero-qty entry.
-                  if (total > 0 && remaining <= 0) return null;
-                  // Phase 12.2b follow-up (2026-04-24): propagate
-                  // courseType so a bought-but-not-yet-used "เหมาตามจริง"
-                  // course renders with the fill-later display +
-                  // checkbox-and-fill semantics on a later treatment
-                  // visit. productId was captured at assign time →
-                  // carry it through here so the stock-deduct path
-                  // (toggleCourseItem → treatmentItem.productId →
-                  // deductStockForTreatment) resolves a real be_products
-                  // batch instead of falling back to the synthetic rowId.
-                  const courseType = String(c.courseType || '').trim();
-                  const isRealQty = courseType === 'เหมาตามจริง';
-                  return {
-                    courseId: `be-course-${idx}`,
-                    courseName: c.name,
-                    parentName: c.parentName || '',
-                    source: c.source || '',
-                    linkedSaleId: c.linkedSaleId || null,
-                    status: c.status || '',
-                    expiry: c.expiry || '',
-                    courseType,
-                    isRealQty,
-                    products: [{
-                      rowId: `be-row-${idx}`,
-                      courseIndex: idx, // exact targeting — survives name-collision
-                      productId: c.productId || '',
-                      name: productName,
-                      // Fill-later entries display "เหมาตามจริง" and
-                      // start the treatment row with blank qty — doctor
-                      // enters the real amount used at this visit.
-                      remaining: isRealQty ? '' : (remaining > 0 ? `${remaining}` : '0'),
-                      total: isRealQty ? '' : `${total}`,
-                      unit: unit || 'ครั้ง',
-                      fillLater: isRealQty,
-                    }],
-                  };
-                })
-                .filter(Boolean);
+              // Phase 12.2b follow-up (2026-04-25): extracted into
+              // `mapRawCoursesToForm` so the branch logic (pick-at-treatment
+              // placeholder / เหมาตามจริง / บุฟเฟต์ / specific-qty) is
+              // unit-testable without mounting TreatmentFormPage.
+              customerCoursesForForm = mapRawCoursesToForm(rawCourses);
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
@@ -689,7 +606,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             assistants: allDoctors
               .filter(d => assistantPositionNames.includes(String(d.position || '').trim()))
               .map(d => ({ id: d.id, name: d.name, defaultDfGroupId: d.defaultDfGroupId || '' })),
-            bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'],
+            // Phase 12.2b follow-up (2026-04-25): bloodTypeOptions must
+            // be objects {id, name} because the render maps `b.id` +
+            // `b.name` (line 2740) and the ProClinic import path at line
+            // 930 matches by `b.name`. Prior `['A','B',...]` string array
+            // rendered `<option key={undefined} value={undefined}>` → empty
+            // dropdown (user-reported bug).
+            bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'].map(v => ({ id: v, name: v })),
             products: productItems,
             customerCourses: customerCoursesForForm,
             customerPromotions: customerPromotionsForForm,
@@ -1970,6 +1893,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   const liveIsRealQty = String(liveC?.courseType || '').trim() === 'เหมาตามจริง';
                   const inMemoryIsRealQty = !!(product.fillLater || course.isRealQty);
                   if (liveIsRealQty || inMemoryIsRealQty) continue;
+                  // Phase 12.2b follow-up (2026-04-25): buffet courses
+                  // have unlimited usage until date-expiry. No
+                  // over-deduct is possible; skip the remaining check.
+                  const liveIsBuffet = String(liveC?.courseType || '').trim() === 'บุฟเฟต์';
+                  const inMemoryIsBuffet = !!(product.isBuffet || course.isBuffet);
+                  if (liveIsBuffet || inMemoryIsBuffet) continue;
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
                   const isPurchased = isPurchasedSessionRowId(rowId);
                   // After de-grouping: each row = one customer.courses entry, so validate
@@ -2641,6 +2570,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // returns true (vacuous truth) → would drop the placeholder so
     // the "เลือกสินค้า" button never renders. Exempt placeholders.
     if (c.isPickAtTreatment && c.needsPickSelection) return true;
+    // Phase 12.2b follow-up (2026-04-25): buffet courses are unlimited
+    // use until date-expiry — "remaining" is conceptually irrelevant,
+    // and the stored qty sentinel could parse to 0 after cold-load.
+    // Always show buffet while it's in customer.courses.
+    if (c.isBuffet || String(c.courseType || '').trim() === 'บุฟเฟต์') return true;
     // Check if ALL products in this course are 0 remaining
     const allZero = (c.products || []).every(p => parseFloat(p.remaining) <= 0);
     return !allZero;
@@ -3609,6 +3543,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                   (ระบุตอนรักษา)
                                 </span>
                               )}
+                              {course.isBuffet && (
+                                <span className="text-[10px] text-violet-400 font-semibold shrink-0 italic">
+                                  (บุฟเฟต์)
+                                </span>
+                              )}
                               {/* Phase 12.2b follow-up (2026-04-24):
                                   pick-at-treatment courses show a
                                   "เลือกสินค้า" button on the header
@@ -3646,10 +3585,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             const isSelected = selectedCourseItems.has(product.rowId);
                             const remainingNum = parseFloat(product.remaining) || 0;
                             const totalNum = parseFloat(product.total) || 0;
-                            // Fill-later products: never "exhausted" (no
-                            // pre-set qty to consume); also swap display
-                            // to the "เหมาตามจริง" hint instead of 0/0.
-                            const exhausted = !product.fillLater && totalNum > 0 && remainingNum <= 0;
+                            // Fill-later + buffet products: never "exhausted".
+                            // - Fill-later: one-shot qty entered at save time
+                            // - Buffet: unlimited until date-expiry
+                            const exhausted = !product.fillLater && !product.isBuffet && totalNum > 0 && remainingNum <= 0;
                             return (
                               <label key={product.rowId} className={`flex items-center justify-between px-3 py-1.5 border-b cursor-pointer transition-all ${
                                 isSelected ? isDark ? 'bg-teal-500/10 border-teal-500/20' : 'bg-teal-50 border-teal-100'
@@ -3664,7 +3603,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                 <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap font-mono">
                                   {product.fillLater
                                     ? <span className="italic text-amber-500">เหมาตามจริง</span>
-                                    : `${product.remaining} / ${product.total} ${product.unit}`}
+                                    : product.isBuffet
+                                      ? <span className="italic text-violet-400">บุฟเฟต์</span>
+                                      : `${product.remaining} / ${product.total} ${product.unit}`}
                                 </span>
                               </label>
                             );

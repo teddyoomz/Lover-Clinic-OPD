@@ -189,6 +189,12 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   const courseType = String(item.courseType || '').trim();
   const isRealQty = courseType === 'เหมาตามจริง';
   const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
+  // Phase 12.2b follow-up (2026-04-25): buffet = "unlimited usage
+  // until expiry date". qty column must display "บุฟเฟต์" text
+  // (mirrors ProClinic), deductions are a no-op, and the course stays
+  // in คอร์สของฉัน until its date-expiry moves it to คอร์สหมดอายุ.
+  // Stock still decrements normally on use.
+  const isBuffet = courseType === 'บุฟเฟต์';
 
   const rawCourseProducts = Array.isArray(item.products) ? item.products : [];
 
@@ -237,11 +243,15 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
           productId: pid,
           name: p.name || item.name,
           // เหมาตามจริง → blank remaining/total (UI shows "ระบุตอนรักษา"
-          // / "เหมาตามจริง"); specific-qty → configured qty.
+          // / "เหมาตามจริง"); บุฟเฟต์ → the stored qty is kept (so
+          // pre-validation and deduct-path heuristics can still read a
+          // non-empty value) but UI switches to "บุฟเฟต์" text via the
+          // isBuffet flag. Specific-qty → configured qty.
           remaining: fillLater ? '' : String(p.qty || item.qty || 1),
           total: fillLater ? '' : String(p.qty || item.qty || 1),
           unit: p.unit || item.unit || 'ครั้ง',
           fillLater,
+          isBuffet,
         };
       })
     : [{
@@ -252,6 +262,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         total: fillLater ? '' : String(item.qty || 1),
         unit: item.unit || 'คอร์ส',
         fillLater,
+        isBuffet,
       }];
   return {
     courseId: `purchased-course-${item.id}-${now}`,
@@ -259,6 +270,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
     courseType,
     isAddon: true,
     isRealQty,
+    isBuffet,
     isPickAtTreatment: false,
     needsPickSelection: false,
     purchasedItemId: item.id,
@@ -300,6 +312,102 @@ export function resolvePickedCourseEntry(placeholder, picks) {
     needsPickSelection: false,
     products,
   };
+}
+
+/**
+ * Phase 12.2b follow-up (2026-04-25): map a customer's raw `be_customers.courses[]`
+ * array into the `options.customerCourses` shape that TreatmentFormPage's
+ * course column renders. Extracted from the inline useEffect so the
+ * transform is unit-testable without mounting the component.
+ *
+ * Three branches by courseType + flags on the raw entry:
+ *
+ *  1. `needsPickSelection: true` + `availableProducts: []` → pick-at-treatment
+ *     placeholder (late-visit flow). Emits a placeholder-shape entry with
+ *     `isPickAtTreatment`, `_beCourseId`/`_beCourseIndex` for persist-back.
+ *
+ *  2. `courseType === 'เหมาตามจริง'` → fill-later (one-shot). Product row
+ *     carries `fillLater: true`, empty remaining/total (UI shows "เหมาตาม
+ *     จริง" text instead of N/M). deductCourseItems zeros the entry at
+ *     save-time via consumeRealQty.
+ *
+ *  3. `courseType === 'บุฟเฟต์'` → unlimited until date-expiry. Product
+ *     row carries `isBuffet: true` (UI shows "บุฟเฟต์" text).
+ *     deductCourseItems is a no-op for buffet. Never filtered by
+ *     remaining<=0 (user sees the course in คอร์สของฉัน + treatment form
+ *     until expiry moves it to คอร์สหมดอายุ).
+ *
+ *  4. Default (specific-qty) → parses "X / Y unit" from `c.qty`,
+ *     emits a standard product row. If `total > 0 && remaining <= 0`
+ *     (course fully consumed) AND not buffet → returns null (filtered
+ *     from the list).
+ *
+ * @param {Array<object>} rawCourses — `be_customers.courses[]`
+ * @returns {Array<object>} customerCoursesForForm-shape array
+ */
+export function mapRawCoursesToForm(rawCourses) {
+  const list = Array.isArray(rawCourses) ? rawCourses : [];
+  return list
+    .map((c, idx) => {
+      if (!c || !c.name) return null;
+      // Branch 1: pick-at-treatment placeholder (late-visit flow).
+      if (c.needsPickSelection && Array.isArray(c.availableProducts)) {
+        const persistedCourseId = typeof c.courseId === 'string' && c.courseId
+          ? c.courseId
+          : `be-course-${idx}`;
+        return {
+          courseId: persistedCourseId,
+          courseName: c.name,
+          parentName: c.parentName || '',
+          source: c.source || '',
+          linkedSaleId: c.linkedSaleId || null,
+          status: c.status || '',
+          expiry: c.expiry || '',
+          courseType: String(c.courseType || '').trim(),
+          isPickAtTreatment: true,
+          needsPickSelection: true,
+          availableProducts: c.availableProducts,
+          products: [],
+          _beCourseId: typeof c.courseId === 'string' ? c.courseId : null,
+          _beCourseIndex: idx,
+        };
+      }
+      const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+      const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
+      const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
+      const unit = qtyMatch ? qtyMatch[3].trim() : '';
+      const productName = c.product || c.name;
+      const courseType = String(c.courseType || '').trim();
+      const isRealQty = courseType === 'เหมาตามจริง';
+      const isBuffet = courseType === 'บุฟเฟต์';
+      // Skip fully-consumed (specific-qty) courses; buffet never
+      // "consumes" so it's exempt.
+      if (total > 0 && remaining <= 0 && !isBuffet) return null;
+      return {
+        courseId: `be-course-${idx}`,
+        courseName: c.name,
+        parentName: c.parentName || '',
+        source: c.source || '',
+        linkedSaleId: c.linkedSaleId || null,
+        status: c.status || '',
+        expiry: c.expiry || '',
+        courseType,
+        isRealQty,
+        isBuffet,
+        products: [{
+          rowId: `be-row-${idx}`,
+          courseIndex: idx,
+          productId: c.productId || '',
+          name: productName,
+          remaining: isRealQty ? '' : (remaining > 0 ? `${remaining}` : '0'),
+          total: isRealQty ? '' : `${total}`,
+          unit: unit || 'ครั้ง',
+          fillLater: isRealQty,
+          isBuffet,
+        }],
+      };
+    })
+    .filter(Boolean);
 }
 
 /**

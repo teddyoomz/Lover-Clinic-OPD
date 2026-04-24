@@ -399,18 +399,17 @@ describe('Phase 12.2 — Rule E', () => {
     expect(body).toContain('p.id');
   });
 
-  it('RE7: customerCoursesForForm propagates courseType + isRealQty + fillLater', () => {
-    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
-    // The customerCoursesForForm builder must carry these three flags so
-    // a bought-but-unused fill-later course renders correctly next visit.
-    const sentinelIdx = src.indexOf('customerCoursesForForm = rawCourses');
+  it('RE7: mapRawCoursesToForm propagates courseType + isRealQty + fillLater + isBuffet', () => {
+    // Phase 12.2b follow-up (2026-04-25): mapper extracted from TFP into
+    // treatmentBuyHelpers.mapRawCoursesToForm. Grep the helper, not the
+    // inline block (no longer exists).
+    const src = fs.readFileSync('src/lib/treatmentBuyHelpers.js', 'utf-8');
+    const sentinelIdx = src.indexOf('export function mapRawCoursesToForm');
     expect(sentinelIdx).toBeGreaterThan(-1);
-    // Grab 4500 chars of context (bumped from 2500 on 2026-04-24 after
-    // the pick-at-treatment late-visit branch landed BEFORE the
-    // specific-qty mapper — pushing isRealQty/fillLater past 2500).
     const ctx = src.slice(sentinelIdx, sentinelIdx + 4500);
     expect(ctx).toContain('courseType');
     expect(ctx).toContain('isRealQty');
     expect(ctx).toContain('fillLater');
+    expect(ctx).toContain('isBuffet');
   });
 });

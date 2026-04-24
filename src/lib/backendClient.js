@@ -308,6 +308,13 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
           consumeRealQty(d.courseIndex);
           continue;
         }
+        // Phase 12.2b follow-up (2026-04-25): buffet = unlimited use
+        // until date-expiry. Stock still decrements in deductStockForTreatment
+        // via the separate stock path; HERE we skip the qty decrement so
+        // the course stays in "กำลังใช้งาน" forever.
+        if (c.courseType === 'บุฟเฟต์') {
+          continue;
+        }
         const parsed = parseQtyString(c.qty);
         if (parsed.remaining > 0) {
           const toDeduct = Math.min(remaining, parsed.remaining);
@@ -322,15 +329,19 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
       const order = preferNewest
         ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
         : Array.from({ length: courses.length }, (_, i) => i);
-      // Fill-later fallback: look for a matching เหมาตามจริง entry
-      // FIRST in the preferred order; if found, consume it and skip the
-      // normal deduction loop entirely (the whole course is one-shot).
+      // Fill-later / buffet fallback: look for a matching special-type
+      // entry FIRST in the preferred order; if found, handle it (consume
+      // for fill-later, no-op for buffet) and skip the normal deduction.
       for (const i of order) {
         if (i === d.courseIndex) continue;
         const c = courses[i];
         if (!matchesDed(c, d)) continue;
         if (c.courseType === 'เหมาตามจริง') {
           consumeRealQty(i);
+          remaining = 0;
+          break;
+        }
+        if (c.courseType === 'บุฟเฟต์') {
           remaining = 0;
           break;
         }
@@ -346,6 +357,7 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
         const c = courses[i];
         if (!matchesDed(c, d)) continue;
         if (c.courseType === 'เหมาตามจริง') continue; // already handled above
+        if (c.courseType === 'บุฟเฟต์') continue; // already handled above
         const parsed = parseQtyString(c.qty);
         if (parsed.remaining <= 0) continue;
         const toDeduct = Math.min(remaining, parsed.remaining);

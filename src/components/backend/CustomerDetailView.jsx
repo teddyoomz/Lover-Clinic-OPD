@@ -139,6 +139,12 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
     // customer sees "เลือกสินค้าเพื่อใช้" pending action + the
     // treatment form can surface the "เลือกสินค้า" button.
     if (c && c.needsPickSelection) return true;
+    // Phase 12.2b follow-up (2026-04-25): buffet = unlimited until
+    // date-expiry. parseQtyString on a buffet's stored qty could
+    // legitimately parse to remaining=0 after heavy use. Keep them
+    // active so คอร์สของฉัน always shows them until date expiry
+    // (the expiredCourses lifecycle handler moves them over).
+    if (c && String(c.courseType || '').trim() === 'บุฟเฟต์') return true;
     const { remaining } = parseQtyString(c.qty);
     return remaining > 0;
   }), [allCourses]);
@@ -1056,12 +1062,19 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
   // the card visually separates from specific-qty courses even when
   // still "กำลังใช้งาน" (bought but not yet used).
   const isRealQty = String(course.courseType || '').trim() === 'เหมาตามจริง';
+  // Phase 12.2b follow-up (2026-04-25): buffet = unlimited until expiry.
+  // Display "บุฟเฟต์" in the qty column (matching ProClinic). Progress
+  // bar stays full + violet (same tone as fill-later — both are
+  // "stock-doesn't-decrement" course concepts).
+  const isBuffet = String(course.courseType || '').trim() === 'บุฟเฟต์';
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="text-[var(--tx-secondary)]">{course.product}</span>
         {isRealQty ? (
           <span className="font-mono font-bold text-violet-400">เหมาตามจริง</span>
+        ) : isBuffet ? (
+          <span className="font-mono font-bold text-violet-400">บุฟเฟต์</span>
         ) : (
           <span className="font-mono font-bold text-[var(--tx-heading)]">{parsed.remaining} / {parsed.total} {parsed.unit}</span>
         )}
@@ -1069,10 +1082,10 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
       <div className="w-full h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden">
         <div className="h-full rounded-full transition-all"
           style={{
-            width: isRealQty ? '100%' : `${pct}%`,
-            // Violet for fill-later (still-unused → 100% bar in the
-            // distinctive color); teal/amber/red for standard by %.
-            backgroundColor: isRealQty
+            width: (isRealQty || isBuffet) ? '100%' : `${pct}%`,
+            // Violet for fill-later + buffet (unlimited/one-shot concepts);
+            // teal/amber/red for standard by %.
+            backgroundColor: (isRealQty || isBuffet)
               ? '#a855f7'
               : (pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444'),
           }} />
