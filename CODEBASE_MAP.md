@@ -2097,3 +2097,30 @@ Tests: 2865 → 2939 PASS (+51 new + delta from concurrent baseline growth). Bui
 - Rule B — firestore.rules edited but NOT deployed this sub-task. Next `firebase deploy --only firestore:rules` requires Probe-Deploy-Probe (4 endpoints) before and after.
 
 Tests: focused-only per new feedback rule (`feedback_test_per_subphase`) — 15/15 pass in 1.5s. Build clean. Full regression deferred to end of Phase 13.1.
+
+---
+
+## Phase 13.1.3 — QuotationTab + FormModal + PrintView (2026-04-24)
+
+**Context:** The UI layer for Phase 13.1. Three components land together so the MarketingTabShell → Modal → Print triangle stays consistent with the Phase-9 marketing tabs (PromotionTab / CouponTab / VoucherTab). User directive ("ใช้ claude design ออกแบบให้สวยนา แต่ละใบที่ต้องปริ๊น") pushed the print-view design work into this sub-phase rather than deferring to a polish pass later.
+
+**New files:**
+- `src/components/backend/QuotationTab.jsx` — list tab via MarketingTabShell. Search (customer / HN / id / sellerName) + status filter (7 STATUS_OPTIONS) + status-coded badges. Row actions: print (opens PrintView), edit (opens Modal), delete (with convert-lock respect from Phase 13.1.2). Uses `listQuotations` / `deleteQuotation` from backendClient.
+- `src/components/backend/QuotationFormModal.jsx` — full-featured form modal via MarketingFormShell. Header fields (customerId select sourced from `getAllCustomers`, `quotationDate` via DateField `locale='ce'` per backend convention, sellerId select from `getAllStaff`, note). 4 sub-item sections (courses / products / promotions / takeawayMeds) — each with Lucide `Search` picker chip list (read-only consume of `getAllMasterDataItems` output which adapts be_* via Phase 12.11). Per-item controls: qty / price / itemDiscount + type / VAT / (products|meds) isPremium. Takeaway-med block exposes genericName / indications / dosageAmount + DOSAGE_UNITS dropdown / timesPerDay / ADMINISTRATION_METHODS dropdown / conditional interval-hour input / ADMINISTRATION_TIMES checkboxes. Live `subtotal` + `netTotal` via `useMemo` of header discount and per-item discount rules. On save: `normalizeQuotation` → `validateQuotationStrict` → `scrollToField` on error → `saveQuotation` with `generateQuotationId` (new) or existing id (edit).
+- `src/components/backend/QuotationPrintView.jsx` — A4 customer-facing print surface. Accent-stripe header + clinic logo/name/address/tax id from `clinicSettings`. Customer block + quotation meta grid (เลขที่ / วันที่ / พนักงาน) with **date in Thai พ.ศ.** (rule 04 customer-facing) via `formatDateThaiBE`. Line-items table with category badges (คอร์ส / สินค้า / โปรโมชัน / ยา), per-row line total, flavor-text medication block for takeaway meds (dosage + admin method + admin times). Totals panel: subtotal → discount (shown only when > 0) → สุทธิ highlight (accent color, extra-large). Terms & conditions + dual signature blocks (ลูกค้า / ผู้เสนอราคา). `@media print` CSS: A4 portrait, 0 page margin, hides chrome + shadow. Escape-key close. Sarabun/Noto Sans Thai font stack.
+- `tests/quotationUi.test.jsx` — 15 focused RTL tests (QT1-5 Tab, QF1-5 Modal, QP1-5 PrintView). Covers empty state, row render, status filter, search, edit/create mode split, 4-section presence, validation blocks save, print view Thai-BE date, discount-row conditional, category badges across all 4 types.
+
+**Design decisions (print view):**
+- Thai-first typography, serif-ish readability via Sarabun / Noto Sans Thai stack.
+- Minimal palette: white / black + clinic accent color only. No red on customer name/HN (rule 04).
+- `tabular-nums` for all money + quantity columns so digits align vertically.
+- Accent treatment: top stripe + table header tint (10% opacity) + net-total underline + category badge tint.
+- Typography hierarchy: xs-tracking-widest uppercase for labels / base for data / 3xl for clinic name / xl for net total. Discipline matters more than flourish.
+
+**Rules status:**
+- Rule E ✅ — no brokerClient, no `/api/proclinic/*` imports.
+- Rule H ✅ — OUR data; never round-trips to ProClinic.
+- Rule C1 ✅ — reuses MarketingFormShell / MarketingTabShell / DateField / scrollToField / generateQuotationId — no duplicated utility.
+- Rule 04 ✅ — dd/mm/yyyy ค.ศ. in backend form (DateField locale='ce'); dd เดือน พ.ศ. in customer-facing print.
+
+Tests: 15/15 focused pass. Build clean (`built in 1.84s`). Full regression deferred.
