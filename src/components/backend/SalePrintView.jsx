@@ -4,6 +4,7 @@
 // dates) but labels as "ใบเสร็จ/ใบขาย" with payment status displayed.
 
 import { useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 
 function formatDateThaiBE(iso) {
@@ -74,7 +75,9 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
     : paidAmount > 0 ? `ชำระบางส่วน ${fmtMoney(paidAmount)}`
     : 'ยังไม่ชำระ';
 
-  return (
+  // Render via React Portal into document.body so print CSS can hide #root
+  // cleanly (see QuotationPrintView for the same pattern).
+  const content = (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm overflow-auto print:bg-white print:backdrop-blur-none print:overflow-visible"
       data-testid="sale-print-overlay">
       <div className="print:hidden sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-neutral-800">
@@ -270,11 +273,18 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
-          html, body { background: #fff !important; }
-          [data-testid="sale-print-overlay"] { position: static !important; background: #fff !important; }
+          html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+          #root { display: none !important; }
+          [data-testid="sale-print-overlay"] {
+            position: static !important;
+            background: #fff !important;
+            overflow: visible !important;
+          }
           [data-testid="sale-print-surface"] { box-shadow: none !important; margin: 0 !important; }
         }
       `}</style>
     </div>
   );
+
+  return createPortal(content, document.body);
 }

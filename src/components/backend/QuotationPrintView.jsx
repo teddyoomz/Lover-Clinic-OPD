@@ -5,6 +5,7 @@
 // only the document surface.
 
 import { useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer, Download } from 'lucide-react';
 
 function formatDateThaiBE(iso) {
@@ -65,7 +66,10 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
 
   const quotationNumber = q.quotationId || q.id || '—';
 
-  return (
+  // Render via React Portal into document.body so the print overlay becomes
+  // a sibling of #root. CSS `@media print { #root { display: none } }` then
+  // hides the rest of the app, leaving only this document for printing.
+  const content = (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm overflow-auto print:bg-white print:backdrop-blur-none print:overflow-visible"
       data-testid="quotation-print-overlay">
       {/* Screen chrome — hidden on print */}
@@ -272,15 +276,23 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
         </div>
       </div>
 
-      {/* Print CSS: A4 portrait, no margins on page, hide chrome */}
+      {/* Print CSS: A4 portrait, no margins on page, hide chrome + #root */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
-          html, body { background: #fff !important; }
-          [data-testid="quotation-print-overlay"] { position: static !important; background: #fff !important; }
+          html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+          /* Hide the main app tree — portal content is a body sibling of #root */
+          #root { display: none !important; }
+          [data-testid="quotation-print-overlay"] {
+            position: static !important;
+            background: #fff !important;
+            overflow: visible !important;
+          }
           [data-testid="quotation-print-surface"] { box-shadow: none !important; margin: 0 !important; }
         }
       `}</style>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
