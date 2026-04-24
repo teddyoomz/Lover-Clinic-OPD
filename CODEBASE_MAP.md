@@ -2415,3 +2415,27 @@ Consumes the DF matrix from Phase 13.3 to compute per-doctor payout over a date 
 - No firestore.rules change — reads existing collections only.
 
 18/18 aggregator + 25/25 nav-config pass. Build clean. Phase 13.4 closes in ~1h (vs 3h plan). Low risk as expected.
+
+---
+
+## Phase 13.5 — Permission tab-gate scaffolding (2026-04-24) SHIPPED
+
+Pure-function permission gate + stub hook. **Scaffolding only** — real user-auth integration (Firebase custom claims + read from be_permission_groups) deferred to a follow-on phase once claims are plumbed through the app. This phase lands the pipes so when auth integrates, tab filtering is a one-line swap.
+
+**New files:**
+- `src/lib/tabPermissions.js` — `TAB_PERMISSION_MAP` (35+ tab → permission-keys mapping based on Phase 11.7 PERMISSION_MODULES catalog). Helpers `canAccessTab(tabId, permissions, isAdmin)` (any-of match unlocks, adminOnly gates, unknown-tab default-allow), `filterAllowedTabs(tabIds, ...)`, `firstAllowedTab(permissions, isAdmin, candidates)` for deep-link fallback.
+- `src/hooks/useTabAccess.js` — stub hook returning `{ isAdmin: true, permissions: {}, canAccess, filter, first }`. Every user currently treated as admin (preserves UX). Single swap-point when custom claims integrate: replace `isAdmin: true` + `permissions: {}` with real values from `auth.currentUser.getIdTokenResult()` + `getPermissionGroup(user.permissionGroupId)`.
+- `tests/tabPermissions.test.js` — 20 tests (TP1-TP20): admin bypass, any-of permission match, adminOnly gate, staff-schedules/df-groups overrides, unknown-tab default-allow, empty/null handling, filter + firstAllowedTab.
+
+**Key mapping decisions:**
+- Master-data tabs default to `adminOnly: true` (master-data changes are admin actions; regular staff shouldn't touch product groups / units / branches etc).
+- `staff-schedules` has `adminOnly: false` + `requires: [user_schedule_management, user_schedule_view, doctor_schedule_management, doctor_schedule_view]` — staff viewing their own schedule is a real use case.
+- `df-groups` has `adminOnly: false` + `requires: ['df_group']` — matches ProClinic's single-permission gate.
+- `reports-df-payout` requires `doctor_df_management | treatment_df_view | treatment_df_management` — broad read access.
+- Unknown tab → default allow (better to surface than hide — a new tab without mapping shouldn't vanish).
+
+**Not wired yet:**
+- Sidebar does NOT filter by `useTabAccess()` — intentional, since with stub hook it's no-op anyway. When auth integrates, add `const access = useTabAccess(); const visible = access.filter(section.items.map(i => i.id))` in Sidebar + use `visible` for rendering.
+- BackendDashboard does NOT redirect on forbidden deep-link — same reason. Add `if (!access.canAccess(activeTab)) setActiveTab(access.first())` guard in useEffect when auth integrates.
+
+20/20 focused pass. Build clean. Scope narrower than plan (+30 tests target; 20 delivered) — remaining 10 tests would cover wiring + edge cases that don't exist until auth integrates.
