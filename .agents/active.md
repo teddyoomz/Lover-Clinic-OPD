@@ -1,65 +1,70 @@
 ---
-updated_at: "2026-04-21 (end-of-session via /session-end)"
-status: "session closed — Phase 11.9 + claude-guardrails v0.1 + handoff skills shipped"
-current_focus: "Phase 13.1 Quotations — START Friday 2026-04-24 (Triangle pre-scanned)"
+updated_at: "2026-04-24 (end-of-session via /session-end)"
+status: "session closed — guardrails compounding-loop shipment; LoverClinic source untouched"
+current_focus: "Phase 13.1 Quotations — next active work session"
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "783ee4b"
+last_commit: "647e2a1"
 tests: 2865
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "c72fd0e (2026-04-21, lover-clinic-eg6mk2cgd) — HEAD ahead by 3 docs-only commits, no deploy needed"
-guardrails_repo: "F:/claude-guardrails v0.1 MVP (commit d8ea1a5, local only)"
+last_deploy: "c72fd0e (2026-04-21) — HEAD unchanged from deploy, no deploy needed"
+guardrails_repo: "F:/claude-guardrails commit f780430 (local only, +6 skills +3 docs +G.3 rule)"
 ---
 
 # Active Context
 
 ## Objective
 
-Continue Phase 13 sequential build starting from Phase 13.1 Quotations on
-Friday 2026-04-24. Triangle artifacts pre-scanned, sub-task breakdown
-ready at `.agents/sessions/2026-04-24-phase13-prep.md`.
+Phase 13.1 Quotations on next active work session. Session 2026-04-24 was
+a guardrails-only upgrade session — LoverClinic source untouched, but the
+"God Brain" template at `F:/claude-guardrails` leveled up significantly.
 
-## Current State (end of 2026-04-21 session)
+## Current State (end of 2026-04-24 session)
 
-- **Phase 11.9 DONE + deployed** — product-group rewrite (2-type + products[] with qty + wiring), full-field JSON API sync, adapter expansion 4→13, buy-modal NaN guard, treatment med-group wiring to be_product_groups
-- **claude-guardrails v0.1 MVP shipped** at `F:/claude-guardrails` (commit `d8ea1a5`, local only, NOT pushed to GitHub)
-- **Handoff skills installed** — `/session-start`, `/session-end`, `/violation-log` in both repos
-- **Methodology docs** imported into LoverClinic (5 docs in `docs/` + PostToolUse hook in `.claude/hooks/`)
-- **Tests**: 2865 passing (last run this session)
-- **Build**: clean (last run this session)
-- **firestore.rules**: unchanged
-- **Vercel**: deployed at `c72fd0e` — HEAD ahead by `5a7687e` (docs) + `258e2fe` (active.md) + `783ee4b` (skills) + this commit. None require deploy (all docs/skills).
-- **Env vars on Vercel**: ✅ Phase 12 complete
+- **LoverClinic**: no source changes. `master = 647e2a1`, 2865 tests,
+  production unchanged. No deploy needed.
+- **F:/claude-guardrails**: 2 commits shipped (`5894b02` + `f780430`).
+  Upgraded from passive rule catalog to self-compounding system.
+  Details in `.agents/sessions/2026-04-24-guardrails-compounding-loop.md`.
+- **Memory**: `project_claude_guardrails_feedback.md` entry 2026-04-24
+  moved from Pending to Ported.
+- **firestore.rules**: unchanged from last session.
+- **Vercel**: deployed at `c72fd0e`; HEAD unchanged since last deploy.
 
 ## Blockers
 
-None. Friday Phase 13.1 ready to start.
+None. Phase 13.1 ready to start whenever.
 
-## Next Action (Friday 2026-04-24)
+## Next Action
 
-**Phase 13.1 Quotations** — start with validator at
-`src/lib/quotationValidation.js`. Full breakdown in
+**Phase 13.1 Quotations** — validator-first approach. Full breakdown:
 `.agents/sessions/2026-04-24-phase13-prep.md`:
-- 13.1.1 Validator + normalizer (~45min, +15 tests)
+
+- 13.1.1 Validator + normalizer at `src/lib/quotationValidation.js` (~45min, +15 tests)
 - 13.1.2 backendClient CRUD (~30min, +5 tests)
 - 13.1.3 QuotationTab + FormModal UI (~1.5h, +10 tests)
-- 13.1.4 Convert-to-sale (~45min, +8 tests)
+- 13.1.4 Convert-to-sale handler (~45min, +8 tests)
 - 13.1.5 Nav + wiring (~15min, +2 tests)
 
-Triangle artifacts already captured in `docs/proclinic-scan/admin-quotation-*-phase13_1.json`
-+ `docs/proclinic-scan/detailed-adminquotationcreate.json`.
+Triangle artifacts pre-scanned (2026-04-20): `docs/proclinic-scan/admin-quotation-*-phase13_1.json`.
 
-## Recent Decisions (this session, 2026-04-21)
+**Optional next actions:**
+- B. Copy 5 new guardrails skills into LoverClinic if wanted locally
+  (`audit-rules`, `audit-health`, `skill-relevant`, `research-gap`, `skill-autoinstall`)
+- C. Test Phase 11.9 end-to-end (MasterDataTab Sync + Import)
+- D. Try Research Mode live on a real LoverClinic question
 
-1. **product-group schema 4→2 types** — ProClinic has only ยากลับบ้าน / สินค้าสิ้นเปลือง (re-Triangle after V10 drift). Legacy 4-option data auto-normalized via `normalizeProductType` helper on read.
-2. **products[] with qty** replaces `productIds[]` — pivot.qty from ProClinic JSON API is per-group-product data (the "(12 เม็ด)" shown in list). Kept productIds[] as derived index for legacy grep compatibility.
-3. **Removed master_data fallback** from TreatmentFormPage med/consumable modals — delete-in-tab must propagate (Rule H). User complained "ลบหมดแล้วยังเห็นครบ" = fallback silently hides state.
-4. **Full-field sync** via JSON API replaced HTML scrape for products + courses — HTML scrape mis-coded fields from cell index (fragile). User directive "เอามาให้ครบ ทุกไส้ใน".
-5. **claude-guardrails self-use only** — not publishing, not chasing v1.0 brand. User's phrase: "ใช้เองไปเลย". Growth via manual Rule D — feedback loop memory tracks insights to port back.
-6. **Session handoff as SKILLS** — not just docs. `/session-start` + `/session-end` + `/violation-log` commands enforce the protocol actively instead of hoping users manually follow it.
+## Recent Decisions (this session, 2026-04-24)
+
+1. **Research Mode = G.3 rule + triad of skills** — research-gap + skill-autoinstall + capability-scout must all exist together. Any one alone would be decorative.
+2. **Triangle Rule reframed as UNIVERSAL** — user insisted it should apply to any project, not just ProClinic replication. Now: Evidence + Intention + Existing code. Original replication variant kept as sub-case.
+3. **Evidence requirement enforced by audit-rules LR4** — every invariant must cite V-entry or mark PRE-SHIP. Template requires; audit catches. Closes "rules rot silently" failure.
+4. **MCP registry via existing deferred tool** — `mcp__mcp-registry__list_connectors` leveraged (already in deferred list today), no new dependency for skill-autoinstall SA4.
+5. **Guardrails stays local-only** — per prior directive "ใช้เองไปเลย". Bridge file `project_claude_guardrails_feedback.md` is the sole cross-project propagation path.
+6. **10 leverage points in one commit** — the "compound the compounding" strategy — 6 new skills + 3 new docs + 1 new rule + 2 new hooks + methodology principle 6 + anti-pattern 8. Coherent as a set; incoherent as drip additions.
 
 ## Notes
 
 - `.agents/` layer + iron-clad rules + V-log = core institutional memory. Never AI-compress.
-- Feedback loop file: `project_claude_guardrails_feedback.md` has 5 pending insights to batch-port to F:/claude-guardrails when ≥5 more accumulate.
-- "God Brain" pattern: every project that uses claude-guardrails contributes back → template compounds over time without AI summarization drift.
+- Feedback loop file: `project_claude_guardrails_feedback.md` has 0 pending entries (all 2026-04-24 entries are Ported).
+- Next LoverClinic source work = Phase 13.1. No scope expansion planned.
