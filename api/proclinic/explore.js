@@ -1,3 +1,4 @@
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
 // Temporary exploration endpoint — fetch ProClinic pages and return HTML structure
 // DELETE THIS FILE after exploration is complete
 

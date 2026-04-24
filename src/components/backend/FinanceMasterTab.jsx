@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Banknote, FolderOpen, TrendingDown, Loader2, Plus, Star } from 'lucide-react';
+import DateField from '../DateField.jsx';
 import {
   listBankAccounts, saveBankAccount, deleteBankAccount,
   listExpenseCategories, saveExpenseCategory, deleteExpenseCategory,
@@ -266,9 +267,9 @@ function ExpensesSection() {
     <div className="space-y-3" data-testid="expenses-section">
       {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/50 rounded p-2">{error}</div>}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-2 p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)]">
-        <input type="date" required value={form.date}
-          onChange={(e) => setForm({ ...form, date: e.target.value })}
-          className="px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+        <DateField value={form.date}
+          onChange={(v) => setForm({ ...form, date: v })}
+          fieldClassName="px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
         <input type="text" required placeholder="รายการ *" value={form.expenseName}
           onChange={(e) => setForm({ ...form, expenseName: e.target.value })}
           className="md:col-span-2 px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />

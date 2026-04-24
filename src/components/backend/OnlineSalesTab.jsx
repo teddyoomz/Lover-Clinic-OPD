@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Globe2, Loader2, Plus, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import DateField from '../DateField.jsx';
 import {
   listOnlineSales, saveOnlineSale, deleteOnlineSale, transitionOnlineSale,
   listBankAccounts, getAllCustomers,
@@ -139,9 +140,9 @@ export default function OnlineSalesTab({ clinicSettings, theme }) {
         <input type="number" required step="0.01" min="0.01" placeholder="ยอด *" value={form.amount ?? ''}
           onChange={(e) => setForm({ ...form, amount: e.target.value })}
           className="px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-        <input type="date" placeholder="วันที่โอน" value={form.transferDate}
-          onChange={(e) => setForm({ ...form, transferDate: e.target.value })}
-          className="px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+        <DateField value={form.transferDate} placeholder="วันที่โอน"
+          onChange={(v) => setForm({ ...form, transferDate: v })}
+          fieldClassName="px-2 py-1.5 rounded text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
         <button type="submit" className="px-3 py-1.5 rounded text-xs font-bold bg-[var(--accent)] text-white">
           {editingId ? 'บันทึก' : <><Plus size={12} className="inline" /> เพิ่ม</>}
         </button>
