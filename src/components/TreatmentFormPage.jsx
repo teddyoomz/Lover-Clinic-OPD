@@ -1759,7 +1759,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       scrollToError(fillLaterMissing.id, `กรุณาระบุจำนวน "${fillLaterMissing.name}" ก่อนบันทึก (คอร์สเหมาตามจริง)`);
       return;
     }
-    if (hasSale) {
+    // Phase 12.2b follow-up (2026-04-24): if the net total is 0 (free /
+    // fully-discounted / promo-gift course), skip the hasSale-gated seller
+    // + payment checks. Bug was: buying a ฿0 course populated purchasedItems
+    // (→ hasSale=true) → validation demanded seller+payment channel even
+    // though there's nothing to collect. User-reported on the new-treatment
+    // screen. Non-zero totals keep the original validation contract.
+    const netTotalNow = Number(billing?.netTotal) || 0;
+    if (hasSale && netTotalNow > 0) {
       if (!pmSellers.some(s => s.enabled && s.id)) { scrollToError('sellers', 'กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
         if (!pmChannels.some(c => c.enabled && c.method)) { scrollToError('paymentChannels', 'กรุณาเลือกช่องทางชำระเงิน'); return; }
@@ -1869,6 +1876,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               for (const course of (options?.customerCourses || [])) {
                 const product = course.products?.find(p => p.rowId === rowId);
                 if (product) {
+                  // Phase 12.2b follow-up (2026-04-24): fill-later
+                  // (เหมาตามจริง) courses don't have meaningful "remaining"
+                  // — the doctor enters actual product usage at treatment
+                  // time, and the course consumes to 0 on save via the
+                  // deductCourseItems short-circuit. Skip the pre-check
+                  // for these rows; the backend zero-out handles
+                  // lifecycle, and stock deduction uses treatment qty
+                  // directly (be_products batch, not course balance).
+                  const liveC = typeof product.courseIndex === 'number'
+                    ? liveCourses[product.courseIndex]
+                    : null;
+                  const liveIsRealQty = String(liveC?.courseType || '').trim() === 'เหมาตามจริง';
+                  const inMemoryIsRealQty = !!(product.fillLater || course.isRealQty);
+                  if (liveIsRealQty || inMemoryIsRealQty) continue;
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
                   const isPurchased = rowId.startsWith('purchased-') || rowId.startsWith('promo-');
                   // After de-grouping: each row = one customer.courses entry, so validate
@@ -1877,8 +1898,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   let remaining;
                   if (isPurchased) {
                     remaining = parseFloat(product.remaining) || 0;
-                  } else if (typeof product.courseIndex === 'number' && liveCourses[product.courseIndex]) {
-                    const liveC = liveCourses[product.courseIndex];
+                  } else if (liveC) {
                     const { remaining: liveRem } = parseQtyString(liveC.qty);
                     remaining = liveRem;
                   } else {

@@ -343,3 +343,131 @@ describe('computeDfPayoutReport — treatments[] with dfEntries (Phase 14.5)', (
     expect(r.rows[0].totalDf).toBe(200);
   });
 });
+
+describe('computeDfPayoutReport — Phase 12.2b partial-usage weighting', () => {
+  // User spec: percent DF = rate% × full_course_price × (treatment_usage /
+  // total_course_qty averaged over products). Sum across all treatments
+  // that eventually fully consume the course = full DF.
+  //
+  // Fixtures: a Premium Combo course at ฿50,000 with Botox 100u + Filler 1cc.
+  // Doctor D1 is in DFG-1 with rates: { Premium: 10% }.
+  const premiumCourse = {
+    courseId: 'C-PREM',
+    name: 'Premium Combo',
+    qty: 1,
+    price: 50000,
+    products: [
+      { id: 'P-BOTOX', name: 'Botox 100u', qty: 100, unit: 'U' },
+      { id: 'P-FILLER', name: 'Filler 1cc', qty: 1, unit: 'cc' },
+    ],
+  };
+  const premiumGroups = [{ id: 'DFG-1', rates: [{ courseId: 'C-PREM', value: 10, type: 'percent' }] }];
+  const premiumSale = {
+    saleId: 'INV-PREM', saleDate: '2026-04-24', status: 'active',
+    doctorId: 'D1',
+    items: [premiumCourse],
+  };
+
+  const buildTreatmentEntry = (treatmentId, courseItems, rate = { value: 10, type: 'percent' }) => ({
+    treatmentId,
+    detail: {
+      treatmentDate: '2026-04-24',
+      linkedSaleId: 'INV-PREM',
+      dfEntries: [{
+        id: `DFE-${treatmentId}`,
+        doctorId: 'D1', doctorName: 'Alice A',
+        dfGroupId: 'DFG-1',
+        rows: [{ courseId: 'C-PREM', courseName: 'Premium Combo', enabled: true, value: rate.value, type: rate.type }],
+      }],
+      courseItems,
+    },
+  });
+
+  it('DP26: full usage ONE treatment → full ฿5,000 DF', () => {
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [buildTreatmentEntry('BT-A', [
+        { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 100 },
+        { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 1 },
+      ])],
+      doctors, groups: premiumGroups,
+    });
+    expect(r.rows[0].totalDf).toBe(5000);
+    expect(r.rows[0].breakdown[0].courseUsageWeight).toBe(1);
+  });
+
+  it('DP27: partial usage (50u Botox only) → ฿1,250 DF (25% weight)', () => {
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [buildTreatmentEntry('BT-A', [
+        { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+      ])],
+      doctors, groups: premiumGroups,
+    });
+    expect(r.rows[0].totalDf).toBe(1250); // 50000 × 10% × 0.25
+    expect(r.rows[0].breakdown[0].courseUsageWeight).toBe(0.25);
+  });
+
+  it('DP28: TWO visits fully consume → sum = ฿5,000 (DF invariant preserved)', () => {
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [
+        buildTreatmentEntry('BT-1', [
+          { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+        ]),
+        buildTreatmentEntry('BT-2', [
+          { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+          { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 1 },
+        ]),
+      ],
+      doctors, groups: premiumGroups,
+    });
+    // Visit 1: weight 0.25 → ฿1,250. Visit 2: weight 0.75 → ฿3,750. Total ฿5,000.
+    expect(r.rows[0].totalDf).toBe(5000);
+    expect(r.rows[0].lineCount).toBe(2);
+    expect(r.rows[0].breakdown).toHaveLength(2);
+    expect(r.rows[0].breakdown.reduce((s, b) => s + b.df, 0)).toBe(5000);
+  });
+
+  it('DP29: multi-treatment per sale indexing — both treatments contribute (not last-wins)', () => {
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [
+        buildTreatmentEntry('BT-A', [{ courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 25 }]),
+        buildTreatmentEntry('BT-B', [{ courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 25 }]),
+      ],
+      doctors, groups: premiumGroups,
+    });
+    // Each visit: 25u/100u botox → 0.125 weight. Two visits → 0.25 total.
+    // Total DF: 50000 × 10% × 0.25 = 1250.
+    expect(r.rows[0].totalDf).toBe(1250);
+    expect(r.rows[0].lineCount).toBe(2);
+  });
+
+  it('DP30: baht rate ignores usage weight (per-unit already accounts for partial)', () => {
+    // Explicit path uses the dfEntries row's own rate (value + type), so
+    // we have to flip the row to baht — the group doesn't affect this path.
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [buildTreatmentEntry('BT-A', [
+        { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+      ], { value: 500, type: 'baht' })],
+      doctors, groups: premiumGroups,
+    });
+    // baht: value × saleLineQty = 500 × 1 = 500 regardless of usage weight.
+    expect(r.rows[0].totalDf).toBe(500);
+  });
+
+  it('DP31: treatment breakdown records courseUsageWeight + treatmentId for audit', () => {
+    const r = computeDfPayoutReport({
+      sales: [premiumSale],
+      treatments: [buildTreatmentEntry('BT-AUDIT', [
+        { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+      ])],
+      doctors, groups: premiumGroups,
+    });
+    const b = r.rows[0].breakdown[0];
+    expect(b.courseUsageWeight).toBe(0.25);
+    expect(b.treatmentId).toBe('BT-AUDIT');
+  });
+});

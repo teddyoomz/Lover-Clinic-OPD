@@ -208,15 +208,89 @@ export function getRateForStaffCourse(staffId, courseId, dfGroupId, groups, staf
 
 /**
  * Compute the DF payout amount for a single sale line given a resolved rate.
- * - percent: subtotal * (value / 100)
+ * - percent: subtotal * (value / 100) * courseUsageWeight
  * - baht:    value * qty
+ *
+ * Phase 12.2b follow-up (2026-04-24): `opts.courseUsageWeight` (0..1)
+ * scales the percent result so partial course usage pays proportional DF.
+ * User spec: "ค่ามือแพทย์ ที่ขึ้นเป็น % จะต้องคิดจากราคาเต็มคอร์สนั้นๆ
+ * ที่เลือกติ๊ก โดยถ้าใช้คอร์สนั้นๆไม่หมด จะหารแบ่งจ่ายตามจำนวนที่เลือก
+ * ตัดรักษา". Example: 10% × ฿50,000 course used 25% this visit →
+ * ฿1,250 DF (not ฿5,000).
+ *
+ * Default weight is 1 = full DF, so callers that haven't been updated
+ * keep the pre-12.2b behavior (backward compat). Baht rate intentionally
+ * IGNORES courseUsageWeight because baht is already per-unit (qty-scaled).
+ *
  * Returns 0 when rate is null or invalid.
  */
-export function computeDfAmount(rate, lineSubtotal, qty) {
+export function computeDfAmount(rate, lineSubtotal, qty, opts = {}) {
   if (!rate) return 0;
   const sub = Number(lineSubtotal) || 0;
   const q = Number(qty) || 0;
-  if (rate.type === 'percent') return Math.max(0, sub * (Number(rate.value) / 100));
+  const rawWeight = opts && typeof opts.courseUsageWeight === 'number'
+    ? opts.courseUsageWeight
+    : 1;
+  // Clamp to [0, 1] — callers may pass unclamped ratios from floating-point
+  // rounding errors (e.g. 1.0000001) or degenerate zero-total cases.
+  const w = Number.isFinite(rawWeight) ? Math.max(0, Math.min(1, rawWeight)) : 1;
+  if (rate.type === 'percent') return Math.max(0, sub * (Number(rate.value) / 100) * w);
   if (rate.type === 'baht') return Math.max(0, Number(rate.value) * q);
   return 0;
+}
+
+/**
+ * Phase 12.2b follow-up (2026-04-24): compute the fraction (0..1) of a
+ * purchased course consumed by ONE treatment visit. Used by the DF payout
+ * aggregator to split a sale's full percent-DF across multiple treatments
+ * so sum(visit DFs) = full DF when the course is eventually fully used.
+ *
+ * Formula: average of (used_qty / total_qty) across all products in the
+ * course. A course with Botox 100u + Filler 1cc that had 50u Botox used
+ * and no Filler touched → weight = avg(0.5, 0) = 0.25.
+ *
+ * Edge cases:
+ *   - saleCourseItem has no products[]  → 1 (unknown structure; behave
+ *     like pre-12.2b: full DF per visit)
+ *   - no treatment items match the course → 0 (treatment didn't use it)
+ *   - product has total qty 0 → skipped (can't compute ratio)
+ *   - all products skipped → 1 (degenerate fallback)
+ *
+ * Product-to-usage match key: productName (treatmentCourseItems[].productName
+ * === saleProducts[i].name). courseName is used to scope matches when set
+ * on the treatment items so multiple courses on the same treatment don't
+ * cross-contaminate.
+ *
+ * @param {object} saleCourseItem       — one entry from sale.items.courses[]
+ * @param {Array} treatmentCourseItems  — treatment.detail.courseItems[]
+ * @returns {number} weight in [0, 1]
+ */
+export function computeCourseUsageWeight(saleCourseItem, treatmentCourseItems) {
+  const products = Array.isArray(saleCourseItem?.products) ? saleCourseItem.products : [];
+  if (products.length === 0) return 1;
+  const courseName = String(saleCourseItem?.name || saleCourseItem?.courseName || '').trim();
+  const matching = (treatmentCourseItems || []).filter((ti) => {
+    if (!courseName) return true;
+    const n = String(ti?.courseName || '').trim();
+    return n === courseName;
+  });
+  if (matching.length === 0) return 0;
+
+  let sumRatio = 0;
+  let count = 0;
+  for (const p of products) {
+    const total = Number(p?.qty) || 0;
+    if (total <= 0) continue;
+    const productName = String(p?.name || '').trim();
+    const used = matching.reduce((s, ti) => {
+      const tin = String(ti?.productName || '').trim();
+      if (tin === productName) return s + (Number(ti?.deductQty) || 0);
+      return s;
+    }, 0);
+    const ratio = Math.min(1, Math.max(0, used / total));
+    sumRatio += ratio;
+    count += 1;
+  }
+  if (count === 0) return 1;
+  return sumRatio / count;
 }

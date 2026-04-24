@@ -965,15 +965,33 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
   const parsed = parseQtyString(course.qty);
   const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
   const origIdx = allCourses.findIndex(c => c.name === course.name && c.product === course.product && c.qty === course.qty);
+  // Phase 12.2b follow-up (2026-04-24): fill-later (เหมาตามจริง) courses
+  // display "เหมาตามจริง" in the qty column instead of the raw "1/1 U"
+  // sentinel — the "1" is a placeholder for "one-shot use", not a real
+  // remaining balance. The progress bar uses a distinct violet tone so
+  // the card visually separates from specific-qty courses even when
+  // still "กำลังใช้งาน" (bought but not yet used).
+  const isRealQty = String(course.courseType || '').trim() === 'เหมาตามจริง';
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="text-[var(--tx-secondary)]">{course.product}</span>
-        <span className="font-mono font-bold text-[var(--tx-heading)]">{parsed.remaining} / {parsed.total} {parsed.unit}</span>
+        {isRealQty ? (
+          <span className="font-mono font-bold text-violet-400">เหมาตามจริง</span>
+        ) : (
+          <span className="font-mono font-bold text-[var(--tx-heading)]">{parsed.remaining} / {parsed.total} {parsed.unit}</span>
+        )}
       </div>
       <div className="w-full h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden">
         <div className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444' }} />
+          style={{
+            width: isRealQty ? '100%' : `${pct}%`,
+            // Violet for fill-later (still-unused → 100% bar in the
+            // distinctive color); teal/amber/red for standard by %.
+            backgroundColor: isRealQty
+              ? '#a855f7'
+              : (pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444'),
+          }} />
       </div>
       {courseTab === 'active' && (
         <div className="flex items-center gap-3">

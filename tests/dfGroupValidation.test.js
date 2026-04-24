@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateDfGroupStrict, normalizeDfGroup, emptyDfGroupForm, generateDfGroupId,
   validateDfStaffRatesStrict, normalizeDfStaffRates, emptyDfStaffRatesForm,
-  getRateForStaffCourse, computeDfAmount,
+  getRateForStaffCourse, computeDfAmount, computeCourseUsageWeight,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,
 } from '../src/lib/dfGroupValidation.js';
 
@@ -208,6 +208,142 @@ describe('computeDfAmount', () => {
   });
   it('C5: negative subtotal clamped to 0', () => {
     expect(computeDfAmount({ value: 10, type: 'percent' }, -1000, 1)).toBe(0);
+  });
+
+  // Phase 12.2b follow-up (2026-04-24): courseUsageWeight — percent DF
+  // scales proportionally to course usage this treatment.
+  it('C6: percent × courseUsageWeight=1 → full DF (backward compat default)', () => {
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 50000, 1, { courseUsageWeight: 1 })).toBe(5000);
+    // Default opts → same
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 50000, 1)).toBe(5000);
+  });
+  it('C7: percent × courseUsageWeight=0.25 → quarter DF', () => {
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 50000, 1, { courseUsageWeight: 0.25 })).toBe(1250);
+  });
+  it('C8: percent × courseUsageWeight=0 → 0 (visit used nothing from course)', () => {
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 50000, 1, { courseUsageWeight: 0 })).toBe(0);
+  });
+  it('C9: baht rate IGNORES courseUsageWeight (qty-scaled already)', () => {
+    // baht 500 × qty 2 = 1000 regardless of weight
+    expect(computeDfAmount({ value: 500, type: 'baht' }, 9999, 2, { courseUsageWeight: 0.25 })).toBe(1000);
+  });
+  it('C10: courseUsageWeight clamped to [0,1] defensively', () => {
+    // Floating-point rounding might give 1.0000001
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 100, 1, { courseUsageWeight: 1.5 })).toBe(10);
+    // Negative weight clamps to 0
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 100, 1, { courseUsageWeight: -0.5 })).toBe(0);
+  });
+  it('C11: non-finite courseUsageWeight (NaN) falls back to 1', () => {
+    expect(computeDfAmount({ value: 10, type: 'percent' }, 100, 1, { courseUsageWeight: NaN })).toBe(10);
+  });
+});
+
+describe('computeCourseUsageWeight — Phase 12.2b partial-usage formula', () => {
+  // User spec: weight = average(qty_used / qty_total) across course products.
+  // Sum over all treatments fully using the course = 1 (= full DF preserved).
+
+  const course = {
+    name: 'Premium Combo',
+    qty: 1,
+    price: 50000,
+    products: [
+      { id: 'P-BOTOX', name: 'Botox 100u', qty: 100, unit: 'U' },
+      { id: 'P-FILLER', name: 'Filler 1cc', qty: 1, unit: 'cc' },
+    ],
+  };
+
+  it('CUW1: no treatment items → 0 (visit didn\'t touch this course)', () => {
+    expect(computeCourseUsageWeight(course, [])).toBe(0);
+  });
+
+  it('CUW2: using 50% of one product only → weight = 0.25 (avg over 2 products)', () => {
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+    ];
+    expect(computeCourseUsageWeight(course, items)).toBe(0.25);
+  });
+
+  it('CUW3: using 100% of BOTH products → weight = 1.0 (fully consumed)', () => {
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 100 },
+      { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 1 },
+    ];
+    expect(computeCourseUsageWeight(course, items)).toBe(1);
+  });
+
+  it('CUW4: using 50% Botox + 100% Filler → weight = (0.5 + 1) / 2 = 0.75', () => {
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+      { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 1 },
+    ];
+    expect(computeCourseUsageWeight(course, items)).toBe(0.75);
+  });
+
+  it('CUW5: sum of two complementary partial visits = 1 (DF invariant: full DF preserved)', () => {
+    // Visit 1: 50u Botox + 0 Filler → 0.25 weight
+    const visit1 = [{ courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 }];
+    // Visit 2: 50u Botox + 1cc Filler → 0.75 weight
+    const visit2 = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+      { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 1 },
+    ];
+    const w1 = computeCourseUsageWeight(course, visit1);
+    const w2 = computeCourseUsageWeight(course, visit2);
+    expect(w1 + w2).toBe(1);
+    // And the DF math: w1 + w2 = 1 → 5000 × 1 = 5000 full DF across both visits
+    expect((50000 * 0.10 * w1) + (50000 * 0.10 * w2)).toBe(5000);
+  });
+
+  it('CUW6: over-usage clamped (50/1 cap at 1, not 50)', () => {
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Filler 1cc', deductQty: 50 }, // 50× total
+    ];
+    // Filler ratio clamped to 1, Botox 0 → avg (1 + 0) / 2 = 0.5
+    expect(computeCourseUsageWeight(course, items)).toBe(0.5);
+  });
+
+  it('CUW7: treatment items for OTHER courses are ignored when courseName set', () => {
+    const items = [
+      { courseName: 'OTHER', productName: 'Botox 100u', deductQty: 100 }, // different course
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 50 },
+    ];
+    expect(computeCourseUsageWeight(course, items)).toBe(0.25);
+  });
+
+  it('CUW8: empty products[] → 1 (backward compat: unknown structure = full DF)', () => {
+    const courseNoProducts = { name: 'Old', price: 1000 };
+    const items = [{ courseName: 'Old', productName: 'X', deductQty: 5 }];
+    expect(computeCourseUsageWeight(courseNoProducts, items)).toBe(1);
+  });
+
+  it('CUW9: all products have total qty 0 → 1 (degenerate fallback)', () => {
+    const courseZero = {
+      name: 'Zero', products: [{ id: 'P1', name: 'X', qty: 0, unit: 'U' }],
+    };
+    const items = [{ courseName: 'Zero', productName: 'X', deductQty: 5 }];
+    expect(computeCourseUsageWeight(courseZero, items)).toBe(1);
+  });
+
+  it('CUW10: null / undefined saleCourseItem → 1 (safe fallback)', () => {
+    expect(computeCourseUsageWeight(null, [])).toBe(1);
+    expect(computeCourseUsageWeight(undefined, [])).toBe(1);
+  });
+
+  it('CUW11: product not in treatment items contributes 0 to average', () => {
+    // Visit used ONLY Botox, not Filler — ratio 1.0 + 0 = 0.5 avg
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 100 },
+    ];
+    expect(computeCourseUsageWeight(course, items)).toBe(0.5);
+  });
+
+  it('CUW12: multiple usages same product (e.g. two deductions of Botox) sum before ratio', () => {
+    const items = [
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 30 },
+      { courseName: 'Premium Combo', productName: 'Botox 100u', deductQty: 20 },
+    ];
+    // 30+20 = 50 → 50/100 = 0.5, Filler 0 → avg 0.25
+    expect(computeCourseUsageWeight(course, items)).toBe(0.25);
   });
 });
 

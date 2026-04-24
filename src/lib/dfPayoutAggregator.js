@@ -17,7 +17,7 @@
 // Line subtotal: qty × price × (1 − item_discount_percent) / or (qty×price − baht_discount).
 // Matches Phase 13.1.3 Quotation computation for consistency.
 
-import { getRateForStaffCourse, computeDfAmount } from './dfGroupValidation.js';
+import { getRateForStaffCourse, computeDfAmount, computeCourseUsageWeight } from './dfGroupValidation.js';
 
 function lineSubtotal(item) {
   const qty = Number(item?.qty) || 0;
@@ -62,12 +62,20 @@ export function computeDfPayoutReport({
 
   // Phase 14.5: index treatments by linkedSaleId when they carry explicit
   // dfEntries. Lookup during the sale loop short-circuits inference.
-  const explicitBySale = new Map();
+  //
+  // Phase 12.2b follow-up (2026-04-24): changed from last-wins Map to
+  // accumulating array so MULTIPLE treatments linked to the same sale
+  // each contribute their own proportional DF share. Required for the
+  // partial-usage spec — a ฿50,000 course with 10% DF used across two
+  // visits splits ฿5,000 as ฿1,250 (visit 1 = 25%) + ฿3,750 (visit 2 =
+  // 75%) instead of double-counting or dropping one visit silently.
+  const explicitBySale = new Map(); // saleId → Array<{ treatment, entries }>
   for (const t of (treatments || [])) {
     const linked = String(t?.detail?.linkedSaleId || '');
     const entries = Array.isArray(t?.detail?.dfEntries) ? t.detail.dfEntries : [];
     if (linked && entries.length > 0) {
-      explicitBySale.set(linked, { treatment: t, entries });
+      if (!explicitBySale.has(linked)) explicitBySale.set(linked, []);
+      explicitBySale.get(linked).push({ treatment: t, entries });
     }
   }
 
@@ -110,49 +118,65 @@ export function computeDfPayoutReport({
     // code path below. Per-row rate comes from the entry row (value + type);
     // qty + subtotal still come from the sale line (the entry only carries
     // who + how, not how-much-was-sold).
+    //
+    // Phase 12.2b follow-up (2026-04-24): iterate ALL treatments linked
+    // to this sale (not just one) and scale each treatment's percent DF
+    // by the course usage weight — the fraction of the course's total
+    // product qty consumed in that visit. Baht DF uses qty directly so
+    // it already accounts for per-visit usage and isn't scaled further.
     const saleId = String(sale.saleId || sale.id);
     const explicit = explicitBySale.get(saleId);
-    if (explicit) {
+    if (explicit && explicit.length > 0) {
       const courseIndex = new Map(items.map((it) => [String(it?.courseId || ''), it]));
-      for (const entry of explicit.entries) {
-        const doctorId = String(entry.doctorId || '');
-        if (!doctorId) continue;
-        const doctor = doctorById.get(doctorId);
-        const doctorName = doctor?.name
-          || `${doctor?.firstname || ''} ${doctor?.lastname || ''}`.trim()
-          || doctor?.nickname
-          || entry.doctorName
-          || '';
-        const entryGroupId = String(entry.dfGroupId || '');
-        for (const row of (entry.rows || [])) {
-          if (!row || !row.enabled) continue;
-          const courseId = String(row.courseId || '');
-          if (!courseId) continue;
-          const matchingItem = courseIndex.get(courseId);
-          if (!matchingItem) continue; // row references a course not on the sale
-          const qty = Number(matchingItem.qty) || 0;
-          const sub = lineSubtotal(matchingItem);
-          if (qty <= 0 || sub <= 0) continue;
-          const rate = { value: Number(row.value) || 0, type: row.type, source: 'dfEntry' };
-          const df = computeDfAmount(rate, sub, qty);
-          if (df <= 0) continue;
-          const reportRow = ensureRow(doctorId, doctorName, entryGroupId);
-          reportRow.totalDf += df;
-          reportRow.saleSet.add(saleId);
-          reportRow.lineCount += 1;
-          reportRow.breakdown.push({
-            saleId,
-            saleDate: sale.saleDate,
-            courseId,
-            courseName: matchingItem.name || matchingItem.courseName || '',
-            qty,
-            subtotal: sub,
-            rateValue: rate.value,
-            rateType: rate.type,
-            rateSource: 'dfEntry',
-            share: 1, // explicit entry is authoritative — no share splitting
-            df,
-          });
+      for (const { treatment, entries } of explicit) {
+        const treatmentCourseItems = Array.isArray(treatment?.detail?.courseItems)
+          ? treatment.detail.courseItems
+          : (Array.isArray(treatment?.courseItems) ? treatment.courseItems : []);
+        for (const entry of entries) {
+          const doctorId = String(entry.doctorId || '');
+          if (!doctorId) continue;
+          const doctor = doctorById.get(doctorId);
+          const doctorName = doctor?.name
+            || `${doctor?.firstname || ''} ${doctor?.lastname || ''}`.trim()
+            || doctor?.nickname
+            || entry.doctorName
+            || '';
+          const entryGroupId = String(entry.dfGroupId || '');
+          for (const row of (entry.rows || [])) {
+            if (!row || !row.enabled) continue;
+            const courseId = String(row.courseId || '');
+            if (!courseId) continue;
+            const matchingItem = courseIndex.get(courseId);
+            if (!matchingItem) continue; // row references a course not on the sale
+            const qty = Number(matchingItem.qty) || 0;
+            const sub = lineSubtotal(matchingItem);
+            if (qty <= 0 || sub <= 0) continue;
+            const rate = { value: Number(row.value) || 0, type: row.type, source: 'dfEntry' };
+            // Weighted percent DF: fraction of course consumed this visit.
+            // Baht rate ignores the weight (already per-unit).
+            const usageWeight = computeCourseUsageWeight(matchingItem, treatmentCourseItems);
+            const df = computeDfAmount(rate, sub, qty, { courseUsageWeight: usageWeight });
+            if (df <= 0) continue;
+            const reportRow = ensureRow(doctorId, doctorName, entryGroupId);
+            reportRow.totalDf += df;
+            reportRow.saleSet.add(saleId);
+            reportRow.lineCount += 1;
+            reportRow.breakdown.push({
+              saleId,
+              saleDate: sale.saleDate,
+              courseId,
+              courseName: matchingItem.name || matchingItem.courseName || '',
+              qty,
+              subtotal: sub,
+              rateValue: rate.value,
+              rateType: rate.type,
+              rateSource: 'dfEntry',
+              share: 1, // explicit entry is authoritative — no sharing
+              courseUsageWeight: usageWeight,
+              treatmentId: treatment?.treatmentId || treatment?.id || null,
+              df,
+            });
+          }
         }
       }
       continue; // skip legacy sale-inference path for this sale
