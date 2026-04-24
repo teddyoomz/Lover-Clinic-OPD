@@ -9,10 +9,11 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
+import PickProductsModal from './backend/PickProductsModal.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 
@@ -275,6 +276,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // dfEntryValidation.buildDefaultRows auto-fills from dfGroups + staffRates.
   const [dfEntries, setDfEntries] = useState([]);
   const [dfModalState, setDfModalState] = useState(null); // null | { mode: 'add', entry: null } | { mode: 'edit', entry }
+  // Phase 12.2b follow-up (2026-04-24): pick-at-treatment modal state.
+  // Holds the courseId of the customer-course entry whose availableProducts
+  // list is being picked. null = modal closed.
+  const [pickModalCourseId, setPickModalCourseId] = useState(null);
   const [dfGroups, setDfGroups] = useState([]);
   const [dfStaffRates, setDfStaffRates] = useState([]);
   const [masterCourses, setMasterCourses] = useState([]);
@@ -3555,12 +3560,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               {/* Phase 12.2b Step 7 (2026-04-24):
                                   fill-later badge — เหมาตามจริง courses
                                   don't pre-set qty; doctor enters during
-                                  treatment. User saw "0 / 0" before and
-                                  thought something was wrong. */}
-                              {(course.isRealQty || course.isPickAtTreatment) && (
+                                  treatment. Pick-at-treatment courses
+                                  get their own button below (not this
+                                  badge) — they BECOME standard after
+                                  picking. */}
+                              {course.isRealQty && (
                                 <span className="text-[10px] text-amber-500 font-semibold shrink-0 italic">
                                   (ระบุตอนรักษา)
                                 </span>
+                              )}
+                              {/* Phase 12.2b follow-up (2026-04-24):
+                                  pick-at-treatment courses show a
+                                  "เลือกสินค้า" button on the header
+                                  when products haven't been picked yet.
+                                  After pick, the button disappears and
+                                  products render as standard sub-rows. */}
+                              {course.isPickAtTreatment && course.needsPickSelection && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPickModalCourseId(course.courseId)}
+                                  className="flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 border border-teal-500/40 transition-colors shrink-0"
+                                  aria-label={`เลือกสินค้า ${course.courseName}`}
+                                >
+                                  <Check size={10} /> เลือกสินค้า
+                                </button>
                               )}
                             </div>
                             {course.isAddon && course.purchasedItemId && (
@@ -3574,13 +3597,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               </button>
                             )}
                           </div>
-                          {course.products.map(product => {
+                          {course.isPickAtTreatment && course.needsPickSelection ? (
+                            /* Pick-at-treatment placeholder — before pick */
+                            <p className={`text-[11px] italic text-center py-2 px-3 border-b ${isDark ? 'border-[#1a1a1a] text-teal-400/70' : 'border-gray-50 text-teal-600'}`}>
+                              ยังไม่ได้เลือกสินค้า — กด "เลือกสินค้า" ด้านบน
+                            </p>
+                          ) : course.products.map(product => {
                             const isSelected = selectedCourseItems.has(product.rowId);
                             const remainingNum = parseFloat(product.remaining) || 0;
                             const totalNum = parseFloat(product.total) || 0;
                             // Fill-later products: never "exhausted" (no
                             // pre-set qty to consume); also swap display
-                            // to the "ระบุตอนรักษา" hint instead of 0/0.
+                            // to the "เหมาตามจริง" hint instead of 0/0.
                             const exhausted = !product.fillLater && totalNum > 0 && remainingNum <= 0;
                             return (
                               <label key={product.rowId} className={`flex items-center justify-between px-3 py-1.5 border-b cursor-pointer transition-all ${
@@ -4419,6 +4447,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           clinicSettings={{}}
         />
       )}
+
+      {/* ── Pick Products Modal (Phase 12.2b เลือกสินค้าตามจริง) ────────── */}
+      {pickModalCourseId && (() => {
+        const course = (options?.customerCourses || []).find(c => c.courseId === pickModalCourseId);
+        if (!course) return null;
+        return (
+          <PickProductsModal
+            courseName={course.courseName}
+            availableProducts={course.availableProducts || []}
+            onCancel={() => setPickModalCourseId(null)}
+            onConfirm={(picks) => {
+              // Phase 12.2b follow-up (2026-04-24): resolve the
+              // placeholder entry with the user's picks — populate
+              // products[] and clear needsPickSelection. Courses then
+              // render as standard sub-rows with remaining tracking,
+              // tick-to-treat, stock deduction.
+              setOptions((prev) => {
+                if (!prev) return prev;
+                const list = (prev.customerCourses || []).map((c) => {
+                  if (c.courseId !== pickModalCourseId) return c;
+                  return resolvePickedCourseEntry(c, picks);
+                });
+                return { ...prev, customerCourses: list };
+              });
+              setPickModalCourseId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

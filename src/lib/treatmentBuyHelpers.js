@@ -154,20 +154,30 @@ export function findMissingFillLaterQty(treatmentItems) {
 }
 
 /**
- * Phase 12.2b Step 7 (2026-04-24): pure helper that builds the synthetic
- * customerCourses entry for a newly-purchased course (buy-modal confirm).
- * Extracted from TreatmentFormPage.confirmBuyModal so the courseType-aware
- * fill-later logic has direct unit test coverage.
+ * Phase 12.2b Step 7 + follow-up (2026-04-24): build the synthetic
+ * customerCourses entry for a newly-purchased course. Behavior forks by
+ * courseType:
  *
- * Contract:
- *   - `isRealQty: true` when item.courseType === 'เหมาตามจริง' — the user
- *     bought a real-qty course, qty is NOT yet known at purchase; doctor
- *     fills it during treatment. Products carry remaining/total = '' so
- *     the course header shows "ระบุตอนรักษา" instead of "X / Y".
- *   - `isPickAtTreatment: true` when item.courseType === 'เลือกสินค้าตามจริง'
- *     — similar but products are chosen at treatment time (not just qty).
- *   - All other course types → standard remaining/total from item.qty with
- *     the existing 1-unit fallback to preserve display.
+ *   - "เหมาตามจริง" (isRealQty): one-shot unbounded fill-later. Products
+ *     created with fillLater=true, empty remaining/total; doctor enters
+ *     actual usage at treatment save time. Course moves to history
+ *     after the first save (deductCourseItems short-circuits to 0).
+ *
+ *   - "เลือกสินค้าตามจริง" (isPickAtTreatment): a TWO-STEP pick flow.
+ *     The customerCourses entry starts as a PLACEHOLDER with
+ *     `needsPickSelection: true` and `availableProducts: [...]` carrying
+ *     every option configured on the master course (name, qty, unit,
+ *     productId, min/max). The doctor clicks a "เลือกสินค้า" button to
+ *     open PickProductsModal, picks 1+ products and confirms the qty per
+ *     product. On confirm, `products: []` is populated with those picked
+ *     items and `needsPickSelection: false`. From that point on the
+ *     course behaves EXACTLY like a standard specific-qty course —
+ *     remaining tracking, checkbox-to-treat, qty input, stock
+ *     deduction. Unpicked options are dropped (not re-pickable in the
+ *     same visit — user can buy another course if they want more).
+ *
+ *   - All other types: specific-qty. Products created immediately with
+ *     remaining=total=configured qty. Standard course flow.
  *
  * @param {object} item — purchasedItems shape: { id, name, qty, unit, courseType?, products? }
  * @param {object} [opts] — { now: Date = Date.now() } for deterministic testing
@@ -179,25 +189,55 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   const courseType = String(item.courseType || '').trim();
   const isRealQty = courseType === 'เหมาตามจริง';
   const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
-  const fillLater = isRealQty || isPickAtTreatment;
+
+  const rawCourseProducts = Array.isArray(item.products) ? item.products : [];
+
+  // "เลือกสินค้าตามจริง" → placeholder entry with availableProducts list.
+  // products[] stays empty; doctor must pick before the course is usable.
+  if (isPickAtTreatment) {
+    return {
+      courseId: `purchased-course-${item.id}-${now}`,
+      courseName: item.name,
+      courseType,
+      isAddon: true,
+      isRealQty: false,
+      isPickAtTreatment: true,
+      needsPickSelection: true,
+      purchasedItemId: item.id,
+      purchasedItemType: 'course',
+      // Every master-course product is an "option" the doctor can pick.
+      // Field names mirror the resolved product shape so the pick modal
+      // can render without re-mapping.
+      availableProducts: rawCourseProducts.map(p => ({
+        productId: p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : ''),
+        name: p.name || item.name,
+        // Default qty = configured course-product qty (what the user typed
+        // at course-creation time). The pick modal pre-fills this value;
+        // the doctor can edit UP to the master qty cap if they want less.
+        qty: Number(p.qty) || 0,
+        unit: p.unit || item.unit || 'ครั้ง',
+        minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
+        maxQty: p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null,
+      })),
+      products: [], // populated by the pick modal's confirm handler
+    };
+  }
+
+  const fillLater = isRealQty;
+
   // Phase 12.2b Step 7 follow-up (2026-04-24): preserve the master
   // productId on each sub-product so the downstream stock path
   // (_normalizeStockItems → _deductOneItem) can look up the real
-  // be_products doc. Before this, only `rowId` was set ("purchased-
-  // <courseId>-row-<productId>") and _normalizeStockItems fell back to
-  // `t.id` which was the rowId → productId mismatch → skipped movement
-  // → user sees "ไม่เห็น stock movement" even after the previous fix.
-  const products = (Array.isArray(item.products) && item.products.length > 0)
-    ? item.products.map(p => {
+  // be_products doc.
+  const products = (rawCourseProducts.length > 0)
+    ? rawCourseProducts.map(p => {
         const pid = p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : '');
         return {
           rowId: `purchased-${item.id}-row-${pid || Math.random().toString(36).slice(2, 6)}`,
           productId: pid,
           name: p.name || item.name,
-          // Real-qty / pick-at-treatment → leave qty markers empty so UI
-          // can swap in the fill-later badge. Other types retain the
-          // 1-unit fallback (pre-12.2b behavior) so existing installs
-          // keep working.
+          // เหมาตามจริง → blank remaining/total (UI shows "ระบุตอนรักษา"
+          // / "เหมาตามจริง"); specific-qty → configured qty.
           remaining: fillLater ? '' : String(p.qty || item.qty || 1),
           total: fillLater ? '' : String(p.qty || item.qty || 1),
           unit: p.unit || item.unit || 'ครั้ง',
@@ -219,9 +259,45 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
     courseType,
     isAddon: true,
     isRealQty,
-    isPickAtTreatment,
+    isPickAtTreatment: false,
+    needsPickSelection: false,
     purchasedItemId: item.id,
     purchasedItemType: 'course',
+    products,
+  };
+}
+
+/**
+ * Phase 12.2b follow-up (2026-04-24): given a placeholder pick-at-
+ * treatment customerCourses entry + the user's picked selections from
+ * PickProductsModal, produce the fully-resolved entry (needsPickSelection
+ * cleared, products[] populated with the picked items). Pure — no side
+ * effects — so the modal's confirm handler can update state via React
+ * setter without extra plumbing.
+ *
+ * @param {object} placeholder — courseEntry with needsPickSelection=true
+ * @param {Array<{productId, name, qty, unit}>} picks — user's selections
+ * @returns {object} resolved courseEntry (needsPickSelection=false, products populated)
+ */
+export function resolvePickedCourseEntry(placeholder, picks) {
+  if (!placeholder || typeof placeholder !== 'object') return placeholder;
+  const valid = (Array.isArray(picks) ? picks : [])
+    .filter(p => p && p.productId && Number(p.qty) > 0);
+  const products = valid.map((p, idx) => ({
+    rowId: `picked-${placeholder.courseId}-row-${p.productId}-${idx}`,
+    productId: String(p.productId),
+    name: p.name || '',
+    // Picked products behave as standard course sub-rows: remaining starts
+    // at the user-entered qty, total matches, and fillLater=false so the
+    // render branch takes the normal "X / Y unit" path.
+    remaining: String(p.qty),
+    total: String(p.qty),
+    unit: p.unit || '',
+    fillLater: false,
+  }));
+  return {
+    ...placeholder,
+    needsPickSelection: false,
     products,
   };
 }

@@ -545,14 +545,20 @@ describe('Scenario 9 — courseType branching helpers', () => {
   });
 
   it('S9.3: buildPurchasedCourseEntry branches qty markers by courseType', () => {
-    const specific = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 10, courseType: 'ระบุสินค้าและจำนวนสินค้า' }, { now: NOW });
-    const buffet = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 10, courseType: 'บุฟเฟต์' }, { now: NOW });
-    const fillLater = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 0, courseType: 'เหมาตามจริง' }, { now: NOW });
-    const pick = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 0, courseType: 'เลือกสินค้าตามจริง' }, { now: NOW });
+    const specific = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 10, courseType: 'ระบุสินค้าและจำนวนสินค้า', products: [{ id: 'p', name: 'P', qty: 10 }] }, { now: NOW });
+    const buffet = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 10, courseType: 'บุฟเฟต์', products: [{ id: 'p', name: 'P', qty: 10 }] }, { now: NOW });
+    const fillLater = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 0, courseType: 'เหมาตามจริง', products: [{ id: 'p', name: 'P', qty: 0 }] }, { now: NOW });
+    // Phase 12.2b follow-up (2026-04-24): pick-at-treatment is a
+    // TWO-STEP flow. Placeholder entry carries availableProducts +
+    // needsPickSelection; products[] stays empty until the doctor
+    // confirms via PickProductsModal → resolvePickedCourseEntry.
+    const pick = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 0, courseType: 'เลือกสินค้าตามจริง', products: [{ id: 'p', name: 'P', qty: 5 }] }, { now: NOW });
     expect(specific.products[0].fillLater).toBe(false);
     expect(buffet.products[0].fillLater).toBe(false);
     expect(fillLater.products[0].fillLater).toBe(true);
-    expect(pick.products[0].fillLater).toBe(true);
+    expect(pick.needsPickSelection).toBe(true);
+    expect(pick.products).toEqual([]);
+    expect(pick.availableProducts).toHaveLength(1);
     expect(specific.products[0].remaining).not.toBe('');
     expect(fillLater.products[0].remaining).toBe('');
   });
