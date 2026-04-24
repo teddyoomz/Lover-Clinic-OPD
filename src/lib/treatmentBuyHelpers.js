@@ -129,3 +129,43 @@ export function flattenPromotionsForStockDeduction(items) {
   if (expanded.length === 0) return items;
   return { ...items, products: [...baseProducts, ...expanded] };
 }
+
+/**
+ * Phase 12.2b Step 6 (2026-04-24): pure helper extracted from
+ * TreatmentFormPage's customerPromotionGroups useMemo so the add-on
+ * propagation logic has direct unit test coverage (instead of relying on
+ * a huge mount of TreatmentFormPage with mocked Firestore state).
+ *
+ * Groups customerCourses[] by promotionId, preserving courses that still
+ * have remaining qty in at least one product row. Each output group
+ * surfaces `isAddon` + `purchasedItemId` + `purchasedItemType` derived
+ * from the synthetic courseEntry that confirmBuyModal wrote for
+ * "ซื้อเพิ่ม" promotions. Existing (non-buy-this-visit) promotions
+ * carry `isAddon: false`.
+ *
+ * @param {Array<object>} customerCourses — [{ courseId, courseName, promotionId, products[], isAddon?, purchasedItemId?, purchasedItemType? }]
+ * @param {Array<object>} customerPromotions — [{ id, promotionName, isAddon? }]
+ * @returns {Array<{ promotionId, promotionName, isAddon, purchasedItemId, purchasedItemType, courses: object[] }>}
+ */
+export function buildCustomerPromotionGroups(customerCourses, customerPromotions) {
+  const allCourses = Array.isArray(customerCourses) ? customerCourses : [];
+  const promos = Array.isArray(customerPromotions) ? customerPromotions : [];
+  const promoCourses = allCourses.filter(c => c && c.promotionId && (c.products || []).some(p => parseFloat(p.remaining) > 0));
+  const groups = {};
+  promoCourses.forEach(c => {
+    const pid = c.promotionId;
+    if (!groups[pid]) {
+      const promo = promos.find(p => String(p.id) === String(pid));
+      groups[pid] = {
+        promotionId: pid,
+        promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
+        isAddon: !!(c.isAddon || promo?.isAddon),
+        purchasedItemId: c.purchasedItemId || null,
+        purchasedItemType: c.purchasedItemType || null,
+        courses: [],
+      };
+    }
+    groups[pid].courses.push(c);
+  });
+  return Object.values(groups);
+}

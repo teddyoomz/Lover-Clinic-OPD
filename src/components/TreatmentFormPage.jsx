@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -1403,13 +1403,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType || buyModalType, category: i.category, courses: i.courses, products: i.products };
     });
     setPurchasedItems(prev => [...prev, ...newItems]);
-    // Auto-add purchased items to customerCourses (so checkboxes appear in course/promotion columns)
+    // Auto-add purchased items to customerCourses (so checkboxes appear in course/promotion columns).
+    // Phase 12.2b Step 6 (2026-04-24): every synthetic entry carries
+    // `isAddon: true` + `purchasedItemId` + `purchasedItemType` so the
+    // course / promotion column renders a "(ซื้อเพิ่ม)" header badge +
+    // Trash button on the parent course group itself (ProClinic Image-1
+    // style), replacing the old gather-at-bottom flat list.
     newItems.forEach(item => {
       if (item.itemType === 'course') {
         // Purchased course → add to customerCourses with product items for checkbox
         const courseEntry = {
           courseId: `purchased-course-${item.id}-${Date.now()}`,
           courseName: item.name,
+          isAddon: true,
+          purchasedItemId: item.id,
+          purchasedItemType: 'course',
           products: (item.products && item.products.length > 0)
             ? item.products.map(p => ({
                 rowId: `purchased-${item.id}-row-${p.id || Math.random().toString(36).slice(2,6)}`,
@@ -1437,6 +1445,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           courseId: `promo-${item.id}-course-${c.id}`,
           courseName: c.name,
           promotionId: item.id,
+          isAddon: true,
+          purchasedItemId: item.id,
+          purchasedItemType: 'promotion',
           products: (c.products || []).map(p => ({
             rowId: `promo-${item.id}-row-${c.id}-${p.id}`,
             name: p.name,
@@ -1448,7 +1459,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         setOptions(prev => ({
           ...prev,
           customerCourses: [...(prev?.customerCourses || []), ...newCourseEntries],
-          customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name }],
+          customerPromotions: [...(prev?.customerPromotions || []), { id: item.id, promotionName: item.name, isAddon: true }],
         }));
       }
       // Purchased promotion's STANDALONE products → consumables (so they
@@ -1652,24 +1663,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // Group promotion-linked courses by promotionId with promotion name
   const customerPromotionGroups = useMemo(() => {
-    const allCourses = options?.customerCourses || [];
-    const promos = options?.customerPromotions || [];
-    // Filter out promotion courses with 0 remaining
-    const promoCourses = allCourses.filter(c => c.promotionId && (c.products || []).some(p => parseFloat(p.remaining) > 0));
-    const groups = {};
-    promoCourses.forEach(c => {
-      const pid = c.promotionId;
-      if (!groups[pid]) {
-        const promo = promos.find(p => String(p.id) === String(pid));
-        groups[pid] = {
-          promotionId: pid,
-          promotionName: promo?.promotionName || c.courseName || `โปรโมชัน #${pid}`,
-          courses: [],
-        };
-      }
-      groups[pid].courses.push(c);
-    });
-    return Object.values(groups);
+    // Phase 12.2b Step 6 (2026-04-24): extracted into a pure helper in
+    // treatmentBuyHelpers.js so the add-on propagation logic has direct
+    // unit-test coverage without remounting TreatmentFormPage.
+    return buildCustomerPromotionGroups(options?.customerCourses, options?.customerPromotions);
   }, [options]);
 
   // ── Seller commission auto-calc ──
@@ -3371,12 +3368,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
-                      {customerCourses.map(course => (
+                      {/* Phase 12.2b Step 6 (2026-04-24): every course —
+                          existing OR purchased-this-visit — renders via
+                          ONE map. "(ซื้อเพิ่ม)" badge + Trash live on the
+                          header itself (ProClinic Image-1 style) instead
+                          of a separate flat list at the bottom. Skip any
+                          promotion-linked course (courses with
+                          `promotionId` render inside the promotion column
+                          group header — double-render guard). */}
+                      {customerCourses.filter(c => !c.promotionId).map(course => (
                         <div key={course.courseId}>
-                          <div className={`px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
-                            {course.courseName}
-                            {course.parentName && (
-                              <span className={`ml-2 text-[10px] font-normal ${isDark ? 'text-orange-400/80' : 'text-orange-600'}`}>· {course.parentName}</span>
+                          <div className={`flex items-center justify-between px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{course.courseName}</span>
+                              {course.parentName && (
+                                <span className={`text-[10px] font-normal ${isDark ? 'text-orange-400/80' : 'text-orange-600'}`}>· {course.parentName}</span>
+                              )}
+                              {course.isAddon && (
+                                <span className="text-[10px] text-teal-500 font-semibold shrink-0">(ซื้อเพิ่ม)</span>
+                              )}
+                            </div>
+                            {course.isAddon && course.purchasedItemId && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: course.purchasedItemId, itemType: course.purchasedItemType }); }}
+                                className="text-red-400 hover:text-red-300 shrink-0 p-1"
+                                aria-label={`ลบ ${course.courseName}`}
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             )}
                           </div>
                           {course.products.map(product => {
@@ -3403,18 +3423,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           })}
                         </div>
                       ))}
-                      {purchasedByType.course.map((item, idx) => (
-                        <div key={`pc-${idx}`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-teal-500/5' : 'border-gray-50 bg-teal-50/50'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Check size={12} className="text-teal-500 shrink-0" />
-                            <span className="text-xs font-medium truncate">{item.name}</span>
-                            <span className="text-[11px] text-teal-500 shrink-0">(ซื้อเพิ่ม)</span>
-                            <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
-                          </div>
-                          <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
-                        </div>
-                      ))}
-                      {customerCourses.length === 0 && purchasedByType.course.length === 0 && (
+                      {customerCourses.filter(c => !c.promotionId).length === 0 && (
                         <p className="text-xs text-gray-500 text-center py-4">ไม่มีคอร์ส</p>
                       )}
                     </div>
@@ -3427,10 +3436,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
+                      {/* Phase 12.2b Step 6 (2026-04-24): promotion group
+                          header renders its own "(ซื้อเพิ่ม)" badge +
+                          Trash when the group came from a buy-this-visit
+                          promotion. Removes the old flat "purchased
+                          promotion" list that was rendered below. */}
                       {customerPromotionGroups.map(group => (
                         <div key={`promo-${group.promotionId}`}>
-                          <div className={`px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
-                            {group.promotionName}
+                          <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">{group.promotionName}</span>
+                              {group.isAddon && (
+                                <span className={`text-[10px] font-semibold shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
+                              )}
+                            </div>
+                            {group.isAddon && group.purchasedItemId && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); removePurchasedItem({ id: group.purchasedItemId, itemType: group.purchasedItemType || 'promotion' }); }}
+                                className="text-red-400 hover:text-red-300 shrink-0 p-1"
+                                aria-label={`ลบโปรโมชัน ${group.promotionName}`}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                           {group.courses.map(course => (
                             <div key={course.courseId}>
@@ -3457,19 +3486,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           ))}
                         </div>
                       ))}
-                      {purchasedByType.promotion.map((item, idx) => (
-                        <div key={`pp-${idx}`}>
-                          <div className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] font-black tracking-wide ${isDark ? 'border-orange-900/40 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-100 text-orange-800'}`}>
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="truncate">{item.name}</span>
-                              <span className={`text-[11px] shrink-0 ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>(ซื้อเพิ่ม)</span>
-                              <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
-                            </div>
-                            <span className="text-gray-500 font-normal shrink-0 ml-2">{item.qty} โปรโมชัน</span>
-                          </div>
-                        </div>
-                      ))}
-                      {customerPromotionGroups.length === 0 && purchasedByType.promotion.length === 0 && (
+                      {customerPromotionGroups.length === 0 && (
                         <p className="text-xs text-gray-500 text-center py-4">ไม่มีโปรโมชัน</p>
                       )}
                     </div>
