@@ -1007,4 +1007,69 @@ describe('F15: source-grep regression guards', () => {
     expect(TFP).toMatch(/isPurchasedSessionRowId/);
     expect(TFP).toMatch(/resolvePurchasedCourseForAssign/);
   });
+
+  it('F15.14: CustomerDetailView hides มูลค่าคงเหลือ for buffet + shows days-until-expiry', () => {
+    // Value line must be gated on !isBuffetCourse
+    expect(CDV).toMatch(/course\.value\s*&&\s*!isBuffetCourse/);
+    // daysUntilExpiry helper must exist
+    expect(CDV).toMatch(/function daysUntilExpiry/);
+    // Countdown JSX must render the 3 cases (future / today / past)
+    expect(CDV).toMatch(/หมดอายุอีก \$\{daysLeft\} วัน/);
+    expect(CDV).toMatch(/หมดอายุวันนี้/);
+    expect(CDV).toMatch(/เลยกำหนด \$\{Math\.abs\(daysLeft\)\} วัน/);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// F16: buffet days-until-expiry helper (daysUntilExpiry)
+// ════════════════════════════════════════════════════════════════════════
+
+describe('F16: daysUntilExpiry — buffet countdown helper (2026-04-25)', () => {
+  // Inline mirror of CustomerDetailView.daysUntilExpiry so we can unit-test
+  // the logic without mounting the component. Uses 2026-04-25 as "today"
+  // to make assertions deterministic across runs.
+  const MOCK_TODAY_ISO = '2026-04-25';
+  function daysUntilExpiry(expiryStr, todayIso = MOCK_TODAY_ISO) {
+    if (!expiryStr || typeof expiryStr !== 'string') return null;
+    let iso = expiryStr.trim();
+    const dmy = iso.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) iso = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    const exp = new Date(iso + 'T00:00:00');
+    if (isNaN(exp.getTime())) return null;
+    const today = new Date(todayIso + 'T00:00:00');
+    return Math.floor((exp.getTime() - today.getTime()) / 86400000);
+  }
+
+  it('F16.1: ISO YYYY-MM-DD, 1 year future → 365 days', () => {
+    expect(daysUntilExpiry('2027-04-25')).toBe(365);
+  });
+  it('F16.2: DD/MM/YYYY display format also parses correctly', () => {
+    expect(daysUntilExpiry('25/04/2027')).toBe(365);
+    expect(daysUntilExpiry('1/1/2027')).toBe(251); // 2026-04-25 → 2027-01-01
+  });
+  it('F16.3: same day → 0 ("หมดอายุวันนี้")', () => {
+    expect(daysUntilExpiry('2026-04-25')).toBe(0);
+  });
+  it('F16.4: past date → negative ("เลยกำหนด N วัน")', () => {
+    expect(daysUntilExpiry('2026-04-20')).toBe(-5);
+    expect(daysUntilExpiry('2025-04-25')).toBe(-365);
+  });
+  it('F16.5: near-expiry (≤ 30 days) → positive but small', () => {
+    expect(daysUntilExpiry('2026-05-25')).toBe(30);
+    expect(daysUntilExpiry('2026-04-30')).toBe(5);
+    expect(daysUntilExpiry('2026-04-26')).toBe(1);
+  });
+  it('F16.6: empty/null/invalid → null', () => {
+    expect(daysUntilExpiry('')).toBeNull();
+    expect(daysUntilExpiry(null)).toBeNull();
+    expect(daysUntilExpiry(undefined)).toBeNull();
+    expect(daysUntilExpiry('not-a-date')).toBeNull();
+    expect(daysUntilExpiry(1234)).toBeNull();
+  });
+  it('F16.7: leap year handled (2028-02-29 is real; 2027-02-29 is invalid)', () => {
+    expect(daysUntilExpiry('2028-02-29')).not.toBeNull();
+    // 2027-02-29 → browser normalizes to March 1 → date valid but shifted
+    const d = daysUntilExpiry('2027-02-29');
+    expect(d).toBeGreaterThan(0);
+  });
 });

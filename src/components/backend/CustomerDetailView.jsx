@@ -32,6 +32,30 @@ function formatThaiDate(dateStr) {
   return fmtThaiDate(dateStr);
 }
 
+/**
+ * Phase 12.2b follow-up (2026-04-25): days-until-expiry countdown for
+ * buffet courses. User directive: hide "มูลค่าคงเหลือ" on buffet, show
+ * "หมดอายุอีก N วัน" instead (matches ProClinic's customer view).
+ *
+ * Accepts ISO "YYYY-MM-DD" (how backendClient stores expiry at
+ * assignCourseToCustomer time) OR "DD/MM/YYYY" Thai display. Returns
+ * integer days (positive = future, 0 = today, negative = past) or null
+ * when the input is empty/unparseable. Bangkok TZ via thaiTodayISO.
+ */
+function daysUntilExpiry(expiryStr) {
+  if (!expiryStr || typeof expiryStr !== 'string') return null;
+  let iso = expiryStr.trim();
+  // DD/MM/YYYY → YYYY-MM-DD
+  const dmy = iso.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) {
+    iso = `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  }
+  const exp = new Date(iso + 'T00:00:00');
+  if (isNaN(exp.getTime())) return null;
+  const today = new Date(thaiTodayISO() + 'T00:00:00');
+  return Math.floor((exp.getTime() - today.getTime()) / 86400000);
+}
+
 function formatDob(pd) {
   if (!pd) return '-';
   const { dobDay, dobMonth, dobYear, age } = pd;
@@ -587,7 +611,15 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                   {courseTab === 'active' ? 'ไม่มีคอร์ส' : 'ไม่มีคอร์สหมดอายุ'}
                 </div>
               ) : (
-                (courseTab === 'active' ? activeCourses : expiredCourses).map((course, i) => (
+                (courseTab === 'active' ? activeCourses : expiredCourses).map((course, i) => {
+                  // Phase 12.2b follow-up (2026-04-25): buffet = hide
+                  // "มูลค่าคงเหลือ", show days-until-expiry countdown
+                  // ("หมดอายุอีก N วัน") per user directive + ProClinic
+                  // parity. All other course types keep the existing
+                  // value + expiry layout.
+                  const isBuffetCourse = String(course.courseType || '').trim() === 'บุฟเฟต์';
+                  const daysLeft = isBuffetCourse && courseTab === 'active' ? daysUntilExpiry(course.expiry) : null;
+                  return (
                   <div key={i} className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -598,9 +630,14 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                         {course.expiry && (
                           <p className="text-xs text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
                             <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {course.expiry}
+                            {daysLeft != null && (
+                              <span className={`ml-1 italic ${daysLeft <= 30 ? 'text-amber-400' : 'text-violet-400'}`}>
+                                {daysLeft > 0 ? `(หมดอายุอีก ${daysLeft} วัน)` : daysLeft === 0 ? '(หมดอายุวันนี้)' : `(เลยกำหนด ${Math.abs(daysLeft)} วัน)`}
+                              </span>
+                            )}
                           </p>
                         )}
-                        {course.value && (
+                        {course.value && !isBuffetCourse && (
                           <p className="text-xs text-[var(--tx-muted)]">มูลค่าคงเหลือ {course.value}</p>
                         )}
                       </div>
@@ -633,7 +670,8 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                       </div>
                     )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 
