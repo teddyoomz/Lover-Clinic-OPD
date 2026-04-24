@@ -1335,7 +1335,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         } else if (type === 'course') {
           const all = await getAllMasterDataItems('courses');
-          items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, type: 'course', itemType: 'course', courseType: c.courseType, products: c.products || [] }));
+          // Phase 12.2b follow-up (2026-04-25): preserve daysBeforeExpire
+          // + period + unit. Prior whitelist kept courseType but stripped
+          // the validity window → expiry='' on customer.courses even when
+          // master had it. Accept both camelCase + snake_case.
+          //
+          // Skip shadow/archive courses from ProClinic sync (empty
+          // courseType, null price — same rule as SaleTab).
+          items = all
+            .filter(c => {
+              const ct = c.courseType || c.course_type || '';
+              const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
+              return !!ct && price != null && price > 0;
+            })
+            .map(c => ({
+              id: c.id, name: c.name, price: c.price, category: c.category,
+              type: 'course', itemType: 'course',
+              unit: c.unit || '',
+              courseType: c.courseType || c.course_type || '',
+              products: c.products || [],
+              daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
+                : (c.days_before_expire != null ? c.days_before_expire : null),
+              period: c.period != null ? c.period : null,
+            }));
           categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
         } else if (type === 'promotion') {
           const all = await listPromotions();

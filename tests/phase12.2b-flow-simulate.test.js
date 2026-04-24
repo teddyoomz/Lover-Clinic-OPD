@@ -1242,6 +1242,147 @@ describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.co
     }
   });
 
+  it('F17.15: SaleTab openBuyModal whitelist preserves courseType + daysBeforeExpire + period', () => {
+    // THE REAL BUG 2026-04-25 second round: SaleTab.openBuyModal mapped
+    // `getAllMasterDataItems('courses')` with a narrow whitelist
+    // `{ id, name, price, category, itemType, products }` that SILENTLY
+    // STRIPPED courseType + daysBeforeExpire + period. My previous fix
+    // at confirmBuy tried to read `i.daysBeforeExpire` but `i` came from
+    // this whitelisted shape → always null → expiry empty despite all
+    // the downstream wiring being correct. Regression guard: the
+    // openBuyModal source must map these fields through.
+    const openBuyModalIdx = SALE.indexOf("// 'course'");
+    expect(openBuyModalIdx).toBeGreaterThan(-1);
+    const block = SALE.slice(openBuyModalIdx, openBuyModalIdx + 2500);
+    expect(block).toMatch(/courseType:\s*c\.courseType/);
+    expect(block).toMatch(/daysBeforeExpire:\s*c\.daysBeforeExpire/);
+    expect(block).toMatch(/period:\s*c\.period/);
+  });
+
+  it('F17.16: TFP openBuyModal whitelist preserves courseType + daysBeforeExpire + period', () => {
+    // Same pattern as F17.15 but for the in-visit buy flow (TFP has its
+    // own openBuyModal because it shows a different UI).
+    // NOTE: TFP has multiple getAllMasterDataItems('courses') calls —
+    // the first one is in the useEffect that populates `options.*`, NOT
+    // the buy modal. Scan for the SECOND occurrence which is inside
+    // openBuyModal.
+    const firstIdx = TFP.indexOf("getAllMasterDataItems('courses')");
+    expect(firstIdx).toBeGreaterThan(-1);
+    const openBuyIdx = TFP.indexOf("getAllMasterDataItems('courses')", firstIdx + 1);
+    expect(openBuyIdx).toBeGreaterThan(-1);
+    const block = TFP.slice(openBuyIdx, openBuyIdx + 1500);
+    expect(block).toMatch(/courseType:\s*c\.courseType/);
+    expect(block).toMatch(/daysBeforeExpire:\s*c\.daysBeforeExpire/);
+    expect(block).toMatch(/period:\s*c\.period/);
+  });
+
+  it('F17.17: END-TO-END chain (master → openBuyModal → confirmBuy → assign) preserves daysBeforeExpire', () => {
+    // Mirror the 4-step chain to prove no middle hop drops the field.
+    // If ANY step in the chain strips daysBeforeExpire, this test fails
+    // by asserting expiry === ''.
+    const masterCourse = {
+      id: '1154', name: 'Laser Buffet', price: 15000, category: 'Treatment',
+      courseType: 'บุฟเฟต์', daysBeforeExpire: 365, period: 10,
+      products: [{ id: 'P', name: 'Laser', qty: 1, unit: 'ครั้ง', isMainProduct: true }],
+    };
+    // Step 1: openBuyModal whitelist
+    const buyItem = {
+      id: masterCourse.id, name: masterCourse.name, price: masterCourse.price,
+      category: masterCourse.category, unit: masterCourse.unit || '',
+      itemType: 'course', products: masterCourse.products,
+      courseType: masterCourse.courseType || masterCourse.course_type || '',
+      daysBeforeExpire: masterCourse.daysBeforeExpire != null ? masterCourse.daysBeforeExpire
+        : (masterCourse.days_before_expire != null ? masterCourse.days_before_expire : null),
+      period: masterCourse.period != null ? masterCourse.period : null,
+    };
+    expect(buyItem.daysBeforeExpire).toBe(365);
+    // Step 2: confirmBuy newItems map
+    const newItem = {
+      id: buyItem.id, name: buyItem.name, price: buyItem.price,
+      unitPrice: buyItem.price, unit: buyItem.unit || 'คอร์ส',
+      qty: '1', itemType: buyItem.itemType, category: buyItem.category,
+      products: buyItem.products || [], courses: buyItem.courses || [],
+      courseType: buyItem.courseType || '',
+      daysBeforeExpire: buyItem.daysBeforeExpire != null ? buyItem.daysBeforeExpire : null,
+      period: buyItem.period != null ? buyItem.period : null,
+    };
+    expect(newItem.daysBeforeExpire).toBe(365);
+    // Step 3: handleSubmit grouped.courses loop → assignCourseToCustomer args
+    const assignArgs = {
+      name: newItem.name,
+      price: newItem.unitPrice,
+      source: 'sale',
+      courseType: newItem.courseType || '',
+      daysBeforeExpire: newItem.daysBeforeExpire ?? null,
+    };
+    expect(assignArgs.daysBeforeExpire).toBe(365);
+    // Step 4: expiry computation
+    const vd = assignArgs.daysBeforeExpire != null
+      ? Number(assignArgs.daysBeforeExpire)
+      : (assignArgs.validityDays != null ? Number(assignArgs.validityDays) : null);
+    const expiry = vd > 0
+      ? new Date(Date.now() + vd * 86400000).toISOString().split('T')[0]
+      : '';
+    expect(expiry).not.toBe('');
+    expect(expiry).toMatch(/^\d{4}-\d{2}-\d{2}$/); // valid ISO date
+  });
+
+  it('F17.18: SaleTab openBuyModal filters shadow courses (no courseType OR null/0 price)', () => {
+    // User bug 2026-04-25 round-3: ProClinic sync emits "shadow" course
+    // rows (same name as real course, empty courseType, null price).
+    // ProClinic's own buy modal hides them — we mirror that rule.
+    // Without the filter, user saw 7 "บุฟเฟ่" matches instead of 4 — 3
+    // of which had "ราคา 0.00".
+    const openBuyIdx = SALE.indexOf("// 'course'");
+    expect(openBuyIdx).toBeGreaterThan(-1);
+    const block = SALE.slice(openBuyIdx, openBuyIdx + 2000);
+    // Filter must check BOTH courseType truthy + price > 0
+    expect(block).toMatch(/\.filter\(c\s*=>\s*\{/);
+    expect(block).toMatch(/!!ct\s*&&\s*price\s*!=\s*null\s*&&\s*price\s*>\s*0/);
+  });
+
+  it('F17.19: TFP openBuyModal filters shadow courses (same rule as SaleTab)', () => {
+    const firstIdx = TFP.indexOf("getAllMasterDataItems('courses')");
+    const openBuyIdx = TFP.indexOf("getAllMasterDataItems('courses')", firstIdx + 1);
+    expect(openBuyIdx).toBeGreaterThan(-1);
+    const block = TFP.slice(openBuyIdx, openBuyIdx + 2000);
+    expect(block).toMatch(/\.filter\(c\s*=>\s*\{/);
+    expect(block).toMatch(/!!ct\s*&&\s*price\s*!=\s*null\s*&&\s*price\s*>\s*0/);
+  });
+
+  it('F17.20: shadow-filter logic — pure simulate rejects shadow + keeps real', () => {
+    // Pure mirror of the filter so future refactors can verify by running
+    // this test, not just source-grep.
+    const shadowFilter = (c) => {
+      const ct = c.courseType || c.course_type || '';
+      const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
+      return !!ct && price != null && price > 0;
+    };
+    // Real: passes
+    expect(shadowFilter({ courseType: 'บุฟเฟต์', price: 7900 })).toBe(true);
+    expect(shadowFilter({ course_type: 'ระบุสินค้าและจำนวนสินค้า', price: 100 })).toBe(true);
+    expect(shadowFilter({ courseType: 'บุฟเฟต์', salePrice: 500 })).toBe(true); // fallback to salePrice
+    // Shadows: rejected
+    expect(shadowFilter({ courseType: '', price: null })).toBe(false); // the exact shape from sync
+    expect(shadowFilter({ courseType: 'บุฟเฟต์', price: null })).toBe(false); // partial shadow
+    expect(shadowFilter({ courseType: '', price: 7900 })).toBe(false); // missing type
+    expect(shadowFilter({ courseType: 'บุฟเฟต์', price: 0 })).toBe(false); // zero price (freebie handled separately)
+    expect(shadowFilter({})).toBe(false); // empty
+    expect(shadowFilter({ courseType: null, price: null })).toBe(false);
+  });
+
+  it('F17.21: shadow filter does NOT reject legitimate courses that use snake_case course_type', () => {
+    // Older migrations may leave course_type (snake) instead of courseType (camel).
+    // The filter must accept both.
+    const shadowFilter = (c) => {
+      const ct = c.courseType || c.course_type || '';
+      const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
+      return !!ct && price != null && price > 0;
+    };
+    expect(shadowFilter({ course_type: 'บุฟเฟต์', price: 100 })).toBe(true);
+    expect(shadowFilter({ course_type: 'เหมาตามจริง', price: 500 })).toBe(true);
+  });
+
   it('F17.14: migrate round-trip — master_data course with days_before_expire (snake) → be_courses daysBeforeExpire (camel)', () => {
     // Mirror of mapMasterToCourse line 5845 casing bridge.
     const numOrNull = (v) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));

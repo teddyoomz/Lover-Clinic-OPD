@@ -310,7 +310,35 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       } else {
         // 'course'
         const all = await getAllMasterDataItems('courses');
-        items = all.map(c => ({ id: c.id, name: c.name, price: c.price, category: c.category, itemType: 'course', products: c.products }));
+        // Phase 12.2b follow-up (2026-04-25): preserve courseType +
+        // daysBeforeExpire + period + unit so the full buy chain carries
+        // the validity window through to assignCourseToCustomer. Prior
+        // whitelist silently dropped these fields → expiry='' on every
+        // customer.courses entry ("เหมือนไม่มีวันหมดอายุ" bug). Accept
+        // both camelCase (be_courses) + snake_case (legacy master_data).
+        //
+        // Skip "shadow" courses — ProClinic sync emits archive/template
+        // copies alongside each real course (same name, different id,
+        // empty courseType, null price). User-reported 2026-04-25:
+        // "ราคา 0 มาจากไหน / ทำไมคอร์สซ้ำมันเยอะจัง". ProClinic's own buy
+        // modal hides them; we mirror that rule.
+        items = all
+          .filter(c => {
+            const ct = c.courseType || c.course_type || '';
+            const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
+            // Real courses always have BOTH a courseType AND a positive price
+            return !!ct && price != null && price > 0;
+          })
+          .map(c => ({
+            id: c.id, name: c.name, price: c.price, category: c.category,
+            unit: c.unit || '',
+            itemType: 'course',
+            products: c.products,
+            courseType: c.courseType || c.course_type || '',
+            daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
+              : (c.days_before_expire != null ? c.days_before_expire : null),
+            period: c.period != null ? c.period : null,
+          }));
       }
       cats = [...new Set(items.map(i => i.category).filter(Boolean))].sort();
       setBuyItems(prev => ({ ...prev, [type]: items }));
