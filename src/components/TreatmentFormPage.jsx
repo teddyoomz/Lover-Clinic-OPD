@@ -275,6 +275,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [dfModalState, setDfModalState] = useState(null); // null | { mode: 'add', entry: null } | { mode: 'edit', entry }
   const [dfGroups, setDfGroups] = useState([]);
   const [dfStaffRates, setDfStaffRates] = useState([]);
+  const [masterCourses, setMasterCourses] = useState([]);
 
   // Health Info
   const [bloodType, setBloodType] = useState('');
@@ -531,15 +532,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
           const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer, listDfGroups, listDfStaffRates } = await import('../lib/backendClient.js');
-          const [doctorItems, productItems, staffItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
+          const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
             getAllMasterDataItems('doctors'),
             getAllMasterDataItems('products'),
             getAllMasterDataItems('staff'),
+            getAllMasterDataItems('courses'),
             listDfGroups().catch(() => []),
             listDfStaffRates().catch(() => []),
           ]);
           setDfGroups(dfGroupItems || []);
           setDfStaffRates(dfStaffRatesItems || []);
+          // Phase 14.4 bug fix (2026-04-24): build name→master-courseId map
+          // so `treatmentCoursesForDf` can resolve synthetic be-course-N ids
+          // from customer.courses[] (which carry only name, not master id)
+          // back to the real master courseId that be_df_groups.rates[]
+          // are keyed by. Without this map the resolver returns null for
+          // every row and the DF modal shows "0 บาท ทุกอัน" (user-reported).
+          setMasterCourses(courseItems || []);
           const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
           const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
 
@@ -1489,8 +1498,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Phase 14.4 (2026-04-24): derive the list of courses selected on this
   // treatment for the DF modal. DfEntryModal renders ONE row per distinct
   // course, filtered by what the user has picked (selectedCourseItems Set).
-  // Falls back to empty list when nothing is picked — the modal then shows
-  // a "no courses yet" empty state.
+  //
+  // Bug fix round 2 (2026-04-24): use MASTER courseId (from master_data
+  // courses / be_courses), not the synthetic `be-course-N` id baked into
+  // customer.courses[]. The synthetic id is scoped to a customer's
+  // purchase history and never matches `be_df_groups.rates[].courseId`
+  // (which is keyed by master id). User-reported: "ขึ้นว่า 0 บาท ทุกอัน"
+  // when adding a DF entry — the resolver walked mismatched ids and
+  // returned null for every row → buildDefaultRows defaulted to
+  // value: 0, enabled: false.
+  //
+  // Strategy: look up the master course by course name. Ambiguity (two
+  // master courses with identical names) resolves to the first hit —
+  // that's the same hit DfGroupFormModal's picker would show. Missing
+  // match → pass the customer name as pseudo-id so the modal still
+  // renders the row (user can set the value manually).
+  const masterCourseIdByName = useMemo(() => {
+    const m = new Map();
+    for (const mc of (masterCourses || [])) {
+      const n = String(mc?.name || '').trim();
+      if (!n || m.has(n)) continue;
+      m.set(n, String(mc.id || mc.courseId || ''));
+    }
+    return m;
+  }, [masterCourses]);
+
   const treatmentCoursesForDf = useMemo(() => {
     const all = options?.customerCourses || [];
     const seen = new Set();
@@ -1498,13 +1530,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     for (const c of all) {
       const hasPicked = (c.products || []).some(p => selectedCourseItems.has(p.rowId));
       if (!hasPicked) continue;
-      const cid = String(c.courseId || '');
+      const name = String(c.courseName || '').trim();
+      const masterId = masterCourseIdByName.get(name) || '';
+      // Prefer master id — matches be_df_groups.rates keys. Fall back to
+      // the customer-course synthetic id so the row still appears (user
+      // can then set fees manually).
+      const cid = masterId || String(c.courseId || name);
       if (!cid || seen.has(cid)) continue;
       seen.add(cid);
-      out.push({ courseId: cid, courseName: c.courseName || cid });
+      out.push({ courseId: cid, courseName: name || cid });
     }
     return out;
-  }, [options?.customerCourses, selectedCourseItems]);
+  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName]);
 
   // Combined people list (doctors + assistants) for DfEntryModal picker.
   // Each carries `position` + `defaultDfGroupId` so the modal can auto-fill

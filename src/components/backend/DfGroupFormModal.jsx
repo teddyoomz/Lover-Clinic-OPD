@@ -26,6 +26,25 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
     return () => { cancelled = true; };
   }, []);
 
+  // Bug fix 2026-04-24: rehydrate courseName on existing rate rows when
+  // the form opens in edit mode and the rate row was saved before the
+  // normalizer preserved courseName (legacy Phase 13.3 docs). Without
+  // this, the row label shows the courseId until the user touches it.
+  useEffect(() => {
+    if (!Array.isArray(form.rates) || form.rates.length === 0) return;
+    if (!Array.isArray(courses) || courses.length === 0) return;
+    const nameById = new Map(courses.map((c) => [String(c.id), c.name || '']));
+    let changed = false;
+    const patched = form.rates.map((r) => {
+      if (r && r.courseName && String(r.courseName).trim()) return r;
+      const name = nameById.get(String(r?.courseId ?? ''));
+      if (name) { changed = true; return { ...r, courseName: name }; }
+      return r;
+    });
+    if (changed) setForm((prev) => ({ ...prev, rates: patched }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courses]);
+
   const takenCourseIds = useMemo(() => new Set((form.rates || []).map((r) => String(r.courseId))), [form.rates]);
   const availablePool = useMemo(() => {
     const q = courseQuery.trim().toLowerCase();

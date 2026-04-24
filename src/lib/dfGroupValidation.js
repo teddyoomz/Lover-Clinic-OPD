@@ -102,8 +102,14 @@ export function normalizeDfGroup(form) {
   out.name = trim(out.name);
   out.note = trim(out.note);
   out.status = STATUS_OPTIONS.includes(out.status) ? out.status : 'active';
+  // Bug fix 2026-04-24: preserve courseName round-trip. Without it the
+  // DfGroupFormModal edit-mode rendered rate rows with the raw courseId
+  // as label (because `r.courseName || r.courseId` falls back when the
+  // name is stripped by this normalizer). User-reported: "หน้าแก้ไขกลุ่ม
+  // DF มันขึ้นเป็นเลขไม่เป็นชื่อ".
   out.rates = Array.isArray(out.rates) ? out.rates.map((r) => ({
     courseId: trim(r?.courseId ?? r?.course_id),
+    courseName: trim(r?.courseName ?? r?.course_name),
     value: Math.max(0, Number(r?.value) || 0),
     type: RATE_TYPES.includes(r?.type) ? r.type : 'baht',
   })).filter((r) => r.courseId) : [];
@@ -151,8 +157,14 @@ export function normalizeDfStaffRates(form) {
   const out = { ...form };
   out.staffId = trim(out.staffId ?? out.staff_id);
   out.staffName = trim(out.staffName ?? out.staff_name);
+  // Bug fix 2026-04-24: preserve courseName round-trip. Without it the
+  // DfGroupFormModal edit-mode rendered rate rows with the raw courseId
+  // as label (because `r.courseName || r.courseId` falls back when the
+  // name is stripped by this normalizer). User-reported: "หน้าแก้ไขกลุ่ม
+  // DF มันขึ้นเป็นเลขไม่เป็นชื่อ".
   out.rates = Array.isArray(out.rates) ? out.rates.map((r) => ({
     courseId: trim(r?.courseId ?? r?.course_id),
+    courseName: trim(r?.courseName ?? r?.course_name),
     value: Math.max(0, Number(r?.value) || 0),
     type: RATE_TYPES.includes(r?.type) ? r.type : 'baht',
   })).filter((r) => r.courseId) : [];
