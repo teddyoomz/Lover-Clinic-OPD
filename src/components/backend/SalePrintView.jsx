@@ -30,7 +30,9 @@ const PAYMENT_STATUS_LABEL = {
 };
 
 function computeLineTotal(item) {
-  const gross = (Number(item.qty) || 0) * (Number(item.price) || 0);
+  // Grouped items (SaleTab) use `unitPrice`; legacy flat items use `price`.
+  const unit = Number(item.unitPrice ?? item.price) || 0;
+  const gross = (Number(item.qty) || 0) * unit;
   const disc = Number(item.discount ?? item.itemDiscount) || 0;
   const type = item.discountType ?? item.itemDiscountType;
   if (type === 'percent') return Math.max(0, gross * (1 - disc / 100));
@@ -48,14 +50,59 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // be_sales uses items[] directly (flattened from quotation on convert).
-  // Each item has courseId OR productId.
+  // be_sales supports TWO shapes (accept both to avoid crashes):
+  //   - GROUPED (canonical — SaleTab writes this): items = { promotions,
+  //     courses, products, medications } where each bucket is an array
+  //   - LEGACY FLAT: items = [{...courseId|productId...}, ...]
+  // The grouped path was shipped by SaleTab since Phase 10; Phase 13.1.4's
+  // quotation converter used to ship flat (a bug — crashed this component
+  // and hid items from SaleTab's grouped reader at line 374). Phase 14.x
+  // fix (2026-04-24) makes the converter produce grouped too. This reader
+  // still handles both to survive any legacy docs already in Firestore.
   const rows = useMemo(() => {
-    return (s.items || []).map((it) => ({
+    const src = s.items;
+    if (src && !Array.isArray(src) && typeof src === 'object') {
+      const out = [];
+      for (const p of (src.promotions || [])) {
+        out.push({
+          ...p,
+          kind: 'promotion',
+          label: 'โปรโมชัน',
+          name: p.name || p.promotionName || p.promotionId || '',
+        });
+      }
+      for (const c of (src.courses || [])) {
+        out.push({
+          ...c,
+          kind: 'course',
+          label: 'คอร์ส',
+          name: c.name || c.courseName || c.courseId || '',
+        });
+      }
+      for (const p of (src.products || [])) {
+        out.push({
+          ...p,
+          kind: p.isTakeaway ? 'med' : 'product',
+          label: p.isTakeaway ? 'ยา' : 'สินค้า',
+          name: p.name || p.productName || p.productId || '',
+        });
+      }
+      for (const m of (src.medications || [])) {
+        out.push({
+          ...m,
+          kind: 'med',
+          label: 'ยา',
+          name: m.name || '',
+        });
+      }
+      return out;
+    }
+    // Legacy flat array path.
+    return (Array.isArray(src) ? src : []).map((it) => ({
+      ...it,
       kind: it.courseId ? 'course' : (it.isTakeaway ? 'med' : 'product'),
       label: it.courseId ? 'คอร์ส' : (it.isTakeaway ? 'ยา' : 'สินค้า'),
-      name: it.courseName || it.productName || it.courseId || it.productId,
-      ...it,
+      name: it.name || it.courseName || it.productName || it.courseId || it.productId || '',
     }));
   }, [s.items]);
 

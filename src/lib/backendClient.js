@@ -5870,54 +5870,64 @@ export async function convertQuotationToSale(quotationId) {
     throw new Error(`สถานะ "${curStatus}" ไม่สามารถแปลงเป็นใบขายได้`);
   }
 
-  // Flatten 4 sub-item categories into sale.items[].
-  const items = [];
-  for (const c of (q.courses || [])) {
-    items.push({
-      courseId: c.courseId,
-      courseName: c.courseName,
-      qty: Number(c.qty) || 0,
-      price: Number(c.price) || 0,
-      discount: Number(c.itemDiscount) || 0,
-      discountType: c.itemDiscountType || '',
-      isVatIncluded: !!c.isVatIncluded,
-    });
-  }
-  for (const p of (q.products || [])) {
-    items.push({
-      productId: p.productId,
-      productName: p.productName,
-      qty: Number(p.qty) || 0,
-      price: Number(p.price) || 0,
-      discount: Number(p.itemDiscount) || 0,
-      discountType: p.itemDiscountType || '',
-      isVatIncluded: !!p.isVatIncluded,
-      isPremium: !!p.isPremium,
-    });
-  }
-  for (const m of (q.takeawayMeds || [])) {
-    items.push({
-      productId: m.productId,
-      productName: m.productName,
-      qty: Number(m.qty) || 0,
-      price: Number(m.price) || 0,
-      discount: Number(m.itemDiscount) || 0,
-      discountType: m.itemDiscountType || '',
-      isVatIncluded: !!m.isVatIncluded,
-      isPremium: !!m.isPremium,
-      isTakeaway: true,
-      medication: {
-        genericName: m.genericName || '',
-        indications: m.indications || '',
-        dosageAmount: m.dosageAmount || '',
-        dosageUnit: m.dosageUnit || '',
-        timesPerDay: m.timesPerDay || '',
-        administrationMethod: m.administrationMethod || '',
-        administrationMethodHour: Number(m.administrationMethodHour) || 0,
-        administrationTimes: Array.isArray(m.administrationTimes) ? [...m.administrationTimes] : [],
-      },
-    });
-  }
+  // Phase 14.x bug fix round 2 (2026-04-24): sale.items is a GROUPED object
+  // ({promotions, courses, products, medications}) — that's the shape SaleTab
+  // writes + SaleDetailModal + aggregators read. Phase 13.1.4's original
+  // flat-array writer silently hid items from SaleTab's grouped reader.
+  //
+  // Round-1 fix (commit 6bda5d2) changed only the converter and crashed
+  // SalePrintView's flat reader on print-after-convert — reverted to d56b5cf.
+  // This round fixes converter + SalePrintView + dfPayoutAggregator together
+  // so both readers survive both shapes.
+  //
+  // User-reported 2026-04-24:
+  //   round 1 → "promotion หายไปจาก list ในใบขาย"
+  //   round 2 → "แปลงเป็นใบขายล่าสุดแล้วเปิดใบขายไม่ได้เลย" (SalePrintView
+  //             called .map on an object)
+  const toItem = (src, kind, nameField, idField) => ({
+    [idField]: src[idField] || '',
+    name: src[nameField] || '',
+    unitPrice: Number(src.price) || 0,
+    qty: Number(src.qty) || 0,
+    itemDiscount: Number(src.itemDiscount) || 0,
+    itemDiscountType: src.itemDiscountType || '',
+    isVatIncluded: !!src.isVatIncluded,
+    itemType: kind,
+  });
+
+  const items = {
+    promotions: (q.promotions || []).map((p) => ({
+      ...toItem(p, 'promotion', 'promotionName', 'promotionId'),
+    })),
+    courses: (q.courses || []).map((c) => ({
+      ...toItem(c, 'course', 'courseName', 'courseId'),
+    })),
+    products: [
+      ...(q.products || []).map((p) => ({
+        ...toItem(p, 'product', 'productName', 'productId'),
+        isPremium: !!p.isPremium,
+      })),
+      // Takeaway meds ride in products[] with isTakeaway + medication subobject
+      // (matches SaleTab's intent: in-clinic meds → items.medications[],
+      // take-home meds → items.products[] flagged).
+      ...(q.takeawayMeds || []).map((m) => ({
+        ...toItem(m, 'product', 'productName', 'productId'),
+        isPremium: !!m.isPremium,
+        isTakeaway: true,
+        medication: {
+          genericName: m.genericName || '',
+          indications: m.indications || '',
+          dosageAmount: m.dosageAmount || '',
+          dosageUnit: m.dosageUnit || '',
+          timesPerDay: m.timesPerDay || '',
+          administrationMethod: m.administrationMethod || '',
+          administrationMethodHour: Number(m.administrationMethodHour) || 0,
+          administrationTimes: Array.isArray(m.administrationTimes) ? [...m.administrationTimes] : [],
+        },
+      })),
+    ],
+    medications: [], // no separate in-clinic-consumed meds from a quotation
+  };
 
   // Sellers — quotation has single sellerId; sale model uses 5-seller array.
   // Put the one seller at 100% / full-total so SA-4 invariants hold downstream.
@@ -5932,14 +5942,9 @@ export async function convertQuotationToSale(quotationId) {
     });
   }
 
-  // Promotions — sale doesn't carry per-item promotions; preserve as a note
-  // so the seller can re-apply manually when finalizing the sale.
-  const promoNote = (q.promotions || []).length > 0
-    ? `โปรโมชันจากใบเสนอราคา: ${(q.promotions || [])
-        .map((p) => p.promotionName || p.promotionId)
-        .filter(Boolean)
-        .join(', ')}`
-    : '';
+  // Phase 14.x: promotions now ride in items.promotions[] (above) — no
+  // need for the fallback "โปรโมชันจากใบเสนอราคา: ..." note that used to
+  // carry them. saleNote keeps only q.note (the quotation's text note).
 
   const saleData = {
     customerId: q.customerId,
@@ -5960,7 +5965,7 @@ export async function convertQuotationToSale(quotationId) {
     source: 'quotation',
     sourceDetail: qid,
     saleType: 'course',
-    saleNote: [q.note, promoNote].filter(Boolean).join('\n'),
+    saleNote: q.note || '',
     linkedQuotationId: qid,
   };
 

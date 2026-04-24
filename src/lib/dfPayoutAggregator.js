@@ -72,7 +72,17 @@ export function computeDfPayoutReport({
     if (!isSaleInRange(sale, startDate, endDate)) continue;
     if (!includeCancelled && (sale.status === 'cancelled' || sale.refunded)) continue;
 
-    const items = Array.isArray(sale.items) ? sale.items : [];
+    // Sale items may be GROUPED (SaleTab canonical: {promotions, courses,
+    // products, medications}) or LEGACY FLAT (pre-Phase-14 converter output).
+    // DF payout is course-driven — walk the courses bucket in either shape.
+    let items;
+    if (Array.isArray(sale.items)) {
+      items = sale.items;
+    } else if (sale.items && typeof sale.items === 'object') {
+      items = Array.isArray(sale.items.courses) ? sale.items.courses : [];
+    } else {
+      items = [];
+    }
     if (items.length === 0) continue;
 
     // Build list of (doctorId, share) pairs for this sale.
