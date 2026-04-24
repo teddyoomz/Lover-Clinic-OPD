@@ -120,10 +120,16 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
                 {clinic.taxId && <span>เลขผู้เสียภาษี: {clinic.taxId}</span>}
               </div>
             </div>
-            {clinic.logoUrl && (
-              <img src={clinic.logoUrl} alt="" className="h-16 w-16 object-contain shrink-0"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            )}
+            {(() => {
+              // Same as QuotationPrintView — prefer logoUrlLight (the black-red
+              // variant uploaded for light backgrounds). No color manipulation.
+              const printLogo = clinic.logoUrlLight || clinic.logoUrl;
+              if (!printLogo) return null;
+              return (
+                <img src={printLogo} alt="" className="h-16 w-16 object-contain shrink-0"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              );
+            })()}
           </div>
         </div>
 

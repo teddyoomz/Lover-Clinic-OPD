@@ -115,10 +115,18 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
               </div>
             </div>
 
-            {clinic.logoUrl && (
-              <img src={clinic.logoUrl} alt="" className="h-16 w-16 object-contain shrink-0"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            )}
+            {(() => {
+              // Print surface is white → prefer logoUrlLight (the variant meant
+              // for light backgrounds — typically the full-color/black-on-white
+              // brand logo with red accent). Preserve original colors verbatim,
+              // no filter (brightness-0 earlier killed the red center tone).
+              const printLogo = clinic.logoUrlLight || clinic.logoUrl;
+              if (!printLogo) return null;
+              return (
+                <img src={printLogo} alt="" className="h-16 w-16 object-contain shrink-0"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              );
+            })()}
           </div>
         </div>
 

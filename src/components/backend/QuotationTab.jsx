@@ -205,17 +205,30 @@ export default function QuotationTab({ clinicSettings, theme }) {
                     </button>
                     {status === 'converted' && q.convertedToSaleId && (
                       <>
-                        <button onClick={() => handleRecordPayment(q)}
-                          disabled={busy || loadingPay === id}
-                          aria-label={`บันทึกชำระใบขาย ${q.convertedToSaleId}`}
-                          title="บันทึกชำระเงิน"
-                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] font-bold text-emerald-400 hover:bg-emerald-900/20 border border-emerald-700/40 disabled:opacity-50"
-                          data-testid={`quotation-mark-paid-${id}`}>
-                          {loadingPay === id
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <CheckCircle2 size={14} />}
-                          <span className="hidden sm:inline">บันทึกชำระ</span>
-                        </button>
+                        {q.salePaymentStatus === 'paid' ? (
+                          <span
+                            aria-label={`ใบขาย ${q.convertedToSaleId} ชำระครบแล้ว`}
+                            title="ชำระครบแล้ว"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] font-bold text-emerald-400 bg-emerald-900/20 border border-emerald-700/40 cursor-default"
+                            data-testid={`quotation-paid-badge-${id}`}>
+                            <CheckCircle2 size={14} />
+                            <span className="hidden sm:inline">ชำระครบ</span>
+                          </span>
+                        ) : (
+                          <button onClick={() => handleRecordPayment(q)}
+                            disabled={busy || loadingPay === id}
+                            aria-label={`บันทึกชำระใบขาย ${q.convertedToSaleId}`}
+                            title={q.salePaymentStatus === 'split' ? 'ชำระบางส่วน — บันทึกเพิ่ม' : 'บันทึกชำระเงิน'}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] font-bold text-emerald-400 hover:bg-emerald-900/20 border border-emerald-700/40 disabled:opacity-50"
+                            data-testid={`quotation-mark-paid-${id}`}>
+                            {loadingPay === id
+                              ? <Loader2 size={14} className="animate-spin" />
+                              : <CheckCircle2 size={14} />}
+                            <span className="hidden sm:inline">
+                              {q.salePaymentStatus === 'split' ? 'ชำระเพิ่ม' : 'บันทึกชำระ'}
+                            </span>
+                          </button>
+                        )}
                         <button onClick={() => handlePrintSale(q)}
                           disabled={busy || loadingSale === id}
                           aria-label={`ปริ๊นใบขาย ${q.convertedToSaleId}`}

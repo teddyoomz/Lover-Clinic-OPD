@@ -767,6 +767,23 @@ export async function markSalePaid(saleId, { method, amount, refNo = '', paidAt 
     status: saleStatus,
     updatedAt: now,
   });
+
+  // Denormalize paid state back to the linked quotation so QuotationTab can
+  // disable the 'บันทึกชำระ' button without loading the sale per row.
+  if (sale.linkedQuotationId) {
+    try {
+      await updateDoc(quotationDocRef(sale.linkedQuotationId), {
+        salePaymentStatus: paymentStatus,
+        salePaidAmount: totalPaid,
+        salePaidAt: paymentStatus === 'paid' ? now : null,
+        updatedAt: now,
+      });
+    } catch (e) {
+      // Non-fatal — sale is already updated correctly. Log + continue.
+      console.warn('[markSalePaid] quotation back-ref update failed:', e);
+    }
+  }
+
   return { success: true, totalPaid, saleStatus, paymentStatus };
 }
 
