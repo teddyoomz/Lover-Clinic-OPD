@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -1400,7 +1400,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       const afterDisc = price - disc;
       const vatAmt = vat ? afterDisc * 0.07 : 0;
       const net = Math.max(0, afterDisc + vatAmt);
-      return { id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit, qty: String(qty || 0), discount: String(disc), vat, itemType: i.itemType || buyModalType, category: i.category, courses: i.courses, products: i.products };
+      // Phase 12.2b Step 7 (2026-04-24): preserve courseType through the
+      // buy flow so downstream rendering (customerCourses row, DF modal,
+      // treatment qty input) knows whether the course is fill-later
+      // (เหมาตามจริง / เลือกสินค้าตามจริง) vs fixed-qty. Also flag
+      // isRealQty locally so the stats + UI can branch without re-parsing.
+      return {
+        id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit,
+        qty: String(qty || 0), discount: String(disc), vat,
+        itemType: i.itemType || buyModalType,
+        category: i.category, courses: i.courses, products: i.products,
+        courseType: i.courseType || '',
+        isRealQty: i.courseType === 'เหมาตามจริง',
+      };
     });
     setPurchasedItems(prev => [...prev, ...newItems]);
     // Auto-add purchased items to customerCourses (so checkboxes appear in course/promotion columns).
@@ -1411,33 +1423,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // style), replacing the old gather-at-bottom flat list.
     newItems.forEach(item => {
       if (item.itemType === 'course') {
-        // Purchased course → add to customerCourses with product items for checkbox
-        const courseEntry = {
-          courseId: `purchased-course-${item.id}-${Date.now()}`,
-          courseName: item.name,
-          isAddon: true,
-          purchasedItemId: item.id,
-          purchasedItemType: 'course',
-          products: (item.products && item.products.length > 0)
-            ? item.products.map(p => ({
-                rowId: `purchased-${item.id}-row-${p.id || Math.random().toString(36).slice(2,6)}`,
-                name: p.name || item.name,
-                remaining: String(p.qty || item.qty || 1),
-                total: String(p.qty || item.qty || 1),
-                unit: p.unit || item.unit || 'ครั้ง',
-              }))
-            : [{ // Fallback: use course itself as the product
-                rowId: `purchased-${item.id}-row-self`,
-                name: item.name,
-                remaining: String(item.qty || 1),
-                total: String(item.qty || 1),
-                unit: item.unit || 'คอร์ส',
-              }],
-        };
-        setOptions(prev => ({
-          ...prev,
-          customerCourses: [...(prev?.customerCourses || []), courseEntry],
-        }));
+        // Phase 12.2b Step 7 (2026-04-24): delegate to pure helper so
+        // courseType-aware fill-later logic is unit tested (no TFP mount
+        // required). buildPurchasedCourseEntry stamps isAddon +
+        // purchasedItemId + isRealQty + isPickAtTreatment + empty qty
+        // markers when the course type is fill-later.
+        const courseEntry = buildPurchasedCourseEntry(item);
+        if (courseEntry) {
+          setOptions(prev => ({
+            ...prev,
+            customerCourses: [...(prev?.customerCourses || []), courseEntry],
+          }));
+        }
       }
       // Purchased promotion → add sub-courses as bundle (no manual picking)
       if (item.itemType === 'promotion' && item.courses?.length) {
@@ -3387,6 +3384,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               {course.isAddon && (
                                 <span className="text-[10px] text-teal-500 font-semibold shrink-0">(ซื้อเพิ่ม)</span>
                               )}
+                              {/* Phase 12.2b Step 7 (2026-04-24):
+                                  fill-later badge — เหมาตามจริง courses
+                                  don't pre-set qty; doctor enters during
+                                  treatment. User saw "0 / 0" before and
+                                  thought something was wrong. */}
+                              {(course.isRealQty || course.isPickAtTreatment) && (
+                                <span className="text-[10px] text-amber-500 font-semibold shrink-0 italic">
+                                  (ระบุตอนรักษา)
+                                </span>
+                              )}
                             </div>
                             {course.isAddon && course.purchasedItemId && (
                               <button
@@ -3403,7 +3410,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             const isSelected = selectedCourseItems.has(product.rowId);
                             const remainingNum = parseFloat(product.remaining) || 0;
                             const totalNum = parseFloat(product.total) || 0;
-                            const exhausted = totalNum > 0 && remainingNum <= 0;
+                            // Fill-later products: never "exhausted" (no
+                            // pre-set qty to consume); also swap display
+                            // to the "ระบุตอนรักษา" hint instead of 0/0.
+                            const exhausted = !product.fillLater && totalNum > 0 && remainingNum <= 0;
                             return (
                               <label key={product.rowId} className={`flex items-center justify-between px-3 py-1.5 border-b cursor-pointer transition-all ${
                                 isSelected ? isDark ? 'bg-teal-500/10 border-teal-500/20' : 'bg-teal-50 border-teal-100'
@@ -3416,7 +3426,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                   <span className={`text-xs truncate ${isSelected ? 'font-bold text-teal-400' : ''}`}>{product.name}</span>
                                 </div>
                                 <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap font-mono">
-                                  {product.remaining} / {product.total} {product.unit}
+                                  {product.fillLater
+                                    ? <span className="italic text-amber-500">ระบุตอนรักษา</span>
+                                    : `${product.remaining} / ${product.total} ${product.unit}`}
                                 </span>
                               </label>
                             );

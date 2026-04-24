@@ -131,6 +131,66 @@ export function flattenPromotionsForStockDeduction(items) {
 }
 
 /**
+ * Phase 12.2b Step 7 (2026-04-24): pure helper that builds the synthetic
+ * customerCourses entry for a newly-purchased course (buy-modal confirm).
+ * Extracted from TreatmentFormPage.confirmBuyModal so the courseType-aware
+ * fill-later logic has direct unit test coverage.
+ *
+ * Contract:
+ *   - `isRealQty: true` when item.courseType === 'เหมาตามจริง' — the user
+ *     bought a real-qty course, qty is NOT yet known at purchase; doctor
+ *     fills it during treatment. Products carry remaining/total = '' so
+ *     the course header shows "ระบุตอนรักษา" instead of "X / Y".
+ *   - `isPickAtTreatment: true` when item.courseType === 'เลือกสินค้าตามจริง'
+ *     — similar but products are chosen at treatment time (not just qty).
+ *   - All other course types → standard remaining/total from item.qty with
+ *     the existing 1-unit fallback to preserve display.
+ *
+ * @param {object} item — purchasedItems shape: { id, name, qty, unit, courseType?, products? }
+ * @param {object} [opts] — { now: Date = Date.now() } for deterministic testing
+ * @returns {object|null} customerCourses entry (isAddon=true stamped) or null when id missing
+ */
+export function buildPurchasedCourseEntry(item, opts = {}) {
+  if (!item || typeof item !== 'object' || item.id == null) return null;
+  const now = typeof opts.now === 'number' ? opts.now : Date.now();
+  const courseType = String(item.courseType || '').trim();
+  const isRealQty = courseType === 'เหมาตามจริง';
+  const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
+  const fillLater = isRealQty || isPickAtTreatment;
+  const products = (Array.isArray(item.products) && item.products.length > 0)
+    ? item.products.map(p => ({
+        rowId: `purchased-${item.id}-row-${p.id || Math.random().toString(36).slice(2, 6)}`,
+        name: p.name || item.name,
+        // Real-qty / pick-at-treatment → leave qty markers empty so UI can
+        // swap in "ระบุตอนรักษา" hint. Other types retain the 1-unit
+        // fallback (pre-12.2b behavior) so existing installs keep working.
+        remaining: fillLater ? '' : String(p.qty || item.qty || 1),
+        total: fillLater ? '' : String(p.qty || item.qty || 1),
+        unit: p.unit || item.unit || 'ครั้ง',
+        fillLater,
+      }))
+    : [{
+        rowId: `purchased-${item.id}-row-self`,
+        name: item.name,
+        remaining: fillLater ? '' : String(item.qty || 1),
+        total: fillLater ? '' : String(item.qty || 1),
+        unit: item.unit || 'คอร์ส',
+        fillLater,
+      }];
+  return {
+    courseId: `purchased-course-${item.id}-${now}`,
+    courseName: item.name,
+    courseType,
+    isAddon: true,
+    isRealQty,
+    isPickAtTreatment,
+    purchasedItemId: item.id,
+    purchasedItemType: 'course',
+    products,
+  };
+}
+
+/**
  * Phase 12.2b Step 6 (2026-04-24): pure helper extracted from
  * TreatmentFormPage's customerPromotionGroups useMemo so the add-on
  * propagation logic has direct unit test coverage (instead of relying on

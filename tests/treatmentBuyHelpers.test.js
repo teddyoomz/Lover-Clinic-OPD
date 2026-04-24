@@ -9,6 +9,7 @@ import {
   filterOutConsumablesForPromotion,
   flattenPromotionsForStockDeduction,
   buildCustomerPromotionGroups,
+  buildPurchasedCourseEntry,
 } from '../src/lib/treatmentBuyHelpers.js';
 
 describe('mapPromotionProductsToConsumables', () => {
@@ -161,5 +162,113 @@ describe('buildCustomerPromotionGroups — Phase 12.2b Step 6', () => {
     const courses = [null, undefined, ...base];
     const out = buildCustomerPromotionGroups(courses, promos);
     expect(out).toHaveLength(2); // null/undefined filtered out
+  });
+});
+
+describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตามจริง fill-later)', () => {
+  const NOW = 1719999999000;
+
+  it('BPCE1 null/undefined input → null', () => {
+    expect(buildPurchasedCourseEntry(null)).toBeNull();
+    expect(buildPurchasedCourseEntry(undefined)).toBeNull();
+  });
+
+  it('BPCE2 item without id → null (can\'t generate synthetic courseId)', () => {
+    expect(buildPurchasedCourseEntry({ name: 'C' })).toBeNull();
+  });
+
+  it('BPCE3 standard course (ระบุสินค้าและจำนวนสินค้า) preserves qty in remaining/total', () => {
+    const item = {
+      id: 'C-STD', name: 'Std Course', qty: 5, unit: 'ครั้ง',
+      courseType: 'ระบุสินค้าและจำนวนสินค้า',
+      products: [{ id: 'p1', name: 'Bottle', qty: 3, unit: 'ขวด' }],
+    };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.isRealQty).toBe(false);
+    expect(out.isPickAtTreatment).toBe(false);
+    expect(out.products[0].remaining).toBe('3');
+    expect(out.products[0].total).toBe('3');
+    expect(out.products[0].fillLater).toBe(false);
+  });
+
+  it('BPCE4 เหมาตามจริง → isRealQty true, products carry empty remaining/total + fillLater', () => {
+    const item = {
+      id: 'C-REAL', name: 'Real Qty Course', qty: 0, unit: 'ครั้ง',
+      courseType: 'เหมาตามจริง',
+      products: [{ id: 'p1', name: 'Ampoule', qty: 0, unit: 'cc' }],
+    };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.isRealQty).toBe(true);
+    expect(out.isPickAtTreatment).toBe(false);
+    expect(out.products[0].remaining).toBe('');
+    expect(out.products[0].total).toBe('');
+    expect(out.products[0].fillLater).toBe(true);
+  });
+
+  it('BPCE5 เลือกสินค้าตามจริง → isPickAtTreatment true + fillLater on products', () => {
+    const item = {
+      id: 'C-PICK', name: 'Pick Course', qty: 0,
+      courseType: 'เลือกสินค้าตามจริง',
+      products: [],
+    };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.isRealQty).toBe(false);
+    expect(out.isPickAtTreatment).toBe(true);
+    expect(out.products[0].fillLater).toBe(true);
+    expect(out.products[0].remaining).toBe('');
+  });
+
+  it('BPCE6 บุฟเฟต์ → NOT fillLater (qty can be tracked)', () => {
+    const item = {
+      id: 'C-BUF', name: 'Buffet', qty: 10,
+      courseType: 'บุฟเฟต์',
+      products: [{ id: 'p1', name: 'x', qty: 10, unit: 'ครั้ง' }],
+    };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.isRealQty).toBe(false);
+    expect(out.isPickAtTreatment).toBe(false);
+    expect(out.products[0].fillLater).toBe(false);
+    expect(out.products[0].remaining).toBe('10');
+  });
+
+  it('BPCE7 missing courseType → falls back to standard (NOT fillLater)', () => {
+    const item = { id: 'C-LEGACY', name: 'Legacy', qty: 2, products: [] };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.isRealQty).toBe(false);
+    expect(out.isPickAtTreatment).toBe(false);
+    expect(out.products[0].fillLater).toBe(false);
+    expect(out.products[0].remaining).toBe('2');
+  });
+
+  it('BPCE8 empty products[] → fallback single self-row', () => {
+    const item = { id: 'C-SELF', name: 'Self', qty: 3, unit: 'คอร์ส', courseType: 'บุฟเฟต์' };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.products).toHaveLength(1);
+    expect(out.products[0].name).toBe('Self');
+    expect(out.products[0].rowId).toBe('purchased-C-SELF-row-self');
+  });
+
+  it('BPCE9 self-row for fillLater uses empty markers', () => {
+    const item = { id: 'C-SELF-REAL', name: 'Real', qty: 0, courseType: 'เหมาตามจริง' };
+    const out = buildPurchasedCourseEntry(item, { now: NOW });
+    expect(out.products[0].remaining).toBe('');
+    expect(out.products[0].fillLater).toBe(true);
+  });
+
+  it('BPCE10 top-level isAddon + purchasedItemId stamped', () => {
+    const out = buildPurchasedCourseEntry({ id: 'X', name: 'X', qty: 1 }, { now: NOW });
+    expect(out.isAddon).toBe(true);
+    expect(out.purchasedItemId).toBe('X');
+    expect(out.purchasedItemType).toBe('course');
+  });
+
+  it('BPCE11 deterministic courseId when now injected', () => {
+    const out = buildPurchasedCourseEntry({ id: 'Y', name: 'Y', qty: 1 }, { now: 123 });
+    expect(out.courseId).toBe('purchased-course-Y-123');
+  });
+
+  it('BPCE12 courseType stamped on top-level entry (downstream DF-modal reads this)', () => {
+    const out = buildPurchasedCourseEntry({ id: 'Z', name: 'Z', qty: 1, courseType: 'เหมาตามจริง' });
+    expect(out.courseType).toBe('เหมาตามจริง');
   });
 });
