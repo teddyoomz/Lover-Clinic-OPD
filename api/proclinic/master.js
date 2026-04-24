@@ -13,6 +13,7 @@ import { createSession, getSession, handleCors } from './_lib/session.js';
 import {
   extractProductList, extractDoctorList, extractStaffList, extractCourseList,
   extractListPagination, extractGenericListPage,
+  extractDfGroupList, extractDfGroupRates,
 } from './_lib/scraper.js';
 import { withRetry } from './_lib/retry.js';
 import { verifyAuth } from './_lib/auth.js';
@@ -566,6 +567,83 @@ async function handleSyncBranches(req, res) {
   });
 }
 
+async function handleSyncDfGroups(req, res) {
+  // Phase 14.x bug #2: sync DF groups from ProClinic → master_data/df_groups.
+  // ProClinic exposes one group's rate matrix per page via
+  // `/admin/df/df-group?df_group_id=X`. We first fetch the default page to
+  // collect the tab-link list (id + name for every group), then parallel-
+  // fetch each group's detail page to extract its rates[].
+  //
+  // Field parsing: rate value inputs named `df_group_{G}_df_course_{C}`
+  // with paired radio `..._type`. See extractDfGroupRates.
+  const session = await getSession(req.body);
+  const base = session.origin;
+
+  // Step 1 — fetch list page, extract group ids + names
+  const listHtml = await withRetry(
+    () => session.fetchText(`${base}/admin/df/df-group`, FETCH_OPTS),
+    RETRY_OPTS,
+  );
+  const groups = extractDfGroupList(listHtml);
+  if (groups.length === 0) {
+    return res.status(200).json({
+      success: true,
+      type: 'df_groups',
+      count: 0,
+      totalPages: 1,
+      items: [],
+    });
+  }
+
+  // Step 2 — parse rates for the default-selected group from the list
+  // page itself (one free fetch). Record by id so we don't re-fetch below.
+  const ratesByGroupId = new Map();
+  for (const g of groups) {
+    const rates = extractDfGroupRates(listHtml, g.id);
+    if (rates.length > 0) ratesByGroupId.set(String(g.id), rates);
+  }
+
+  // Step 3 — parallel-fetch each remaining group's detail page.
+  // Batch of 3 to avoid hammering ProClinic (Vercel 60s budget allows this
+  // comfortably for ≤ 20 groups; real world = 9).
+  const BATCH = 3;
+  const remaining = groups.filter((g) => !ratesByGroupId.has(String(g.id)));
+  for (let i = 0; i < remaining.length; i += BATCH) {
+    const chunk = remaining.slice(i, i + BATCH);
+    const results = await Promise.all(chunk.map(async (g) => {
+      try {
+        const html = await withRetry(
+          () => session.fetchText(`${base}/admin/df/df-group?df_group_id=${encodeURIComponent(g.id)}`, FETCH_OPTS),
+          RETRY_OPTS,
+        );
+        return { id: String(g.id), rates: extractDfGroupRates(html, g.id) };
+      } catch {
+        return { id: String(g.id), rates: [] }; // skip on fetch failure
+      }
+    }));
+    for (const r of results) ratesByGroupId.set(r.id, r.rates);
+  }
+
+  // Step 4 — emit items in master_data shape. Each item carries
+  // id / name / rates — enough for migrate-to-be_df_groups to run
+  // without further scraping.
+  const items = groups.map((g) => ({
+    id: String(g.id),
+    name: g.name,
+    rates: ratesByGroupId.get(String(g.id)) || [],
+    status: 'ใช้งาน',
+    _source: 'proclinic',
+  }));
+
+  return res.status(200).json({
+    success: true,
+    type: 'df_groups',
+    count: items.length,
+    totalPages: 1,
+    items,
+  });
+}
+
 async function handleSyncPermissionGroups(req, res) {
   return syncGenericList(req, res, {
     type: 'permission_groups',
@@ -606,6 +684,8 @@ export default async function handler(req, res) {
       case 'syncHolidays':            return await handleSyncHolidays(req, res);
       case 'syncBranches':            return await handleSyncBranches(req, res);
       case 'syncPermissionGroups':    return await handleSyncPermissionGroups(req, res);
+      // Phase 14.x: DF groups sync (scrapes /admin/df/df-group tabs + rates matrix).
+      case 'syncDfGroups':            return await handleSyncDfGroups(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

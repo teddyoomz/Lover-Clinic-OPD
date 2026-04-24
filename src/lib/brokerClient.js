@@ -436,3 +436,5 @@ export function syncMedicalInstruments() { return apiFetch('master', { action: '
 export function syncHolidays()           { return apiFetch('master', { action: 'syncHolidays' }); }
 export function syncBranches()           { return apiFetch('master', { action: 'syncBranches' }); }
 export function syncPermissionGroups()   { return apiFetch('master', { action: 'syncPermissionGroups' }); }
+/** Phase 14.x: pull DF group list + per-group rate matrix from ProClinic. */
+export function syncDfGroups()           { return apiFetch('master', { action: 'syncDfGroups' }); }

@@ -29,6 +29,8 @@ import {
   migrateMasterStaffToBe, migrateMasterDoctorsToBe,
   // Phase 12.2: catalog entities
   migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
+  // Phase 14.x: DF groups (scrape → be_df_groups)
+  migrateMasterDfGroupsToBe,
   // Phase 12.11: debug helper for verifying be_* wiring
   clearMasterDataItems, getBeBackedMasterTypes,
 } from '../../lib/backendClient.js';
@@ -38,6 +40,8 @@ import {
   // Phase 11.8c: 6 master-data sync targets
   syncProductGroups, syncProductUnits, syncMedicalInstruments,
   syncHolidays, syncBranches, syncPermissionGroups,
+  // Phase 14.x: DF groups
+  syncDfGroups,
 } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -66,6 +70,8 @@ const SYNC_TYPES = [
   { key: 'holidays',            label: 'วันหยุด',           fn: syncHolidays,           icon: '📅', color: 'amber' },
   { key: 'branches',            label: 'สาขา',             fn: syncBranches,           icon: '🏢', color: 'amber' },
   { key: 'permission_groups',   label: 'สิทธิ์การใช้งาน',    fn: syncPermissionGroups,   icon: '🛡️', color: 'amber' },
+  // Phase 14.x: DF groups — tabs + rates matrix per-group
+  { key: 'df_groups',            label: 'กลุ่มค่ามือ (DF)',   fn: syncDfGroups,            icon: '💰', color: 'amber' },
 ];
 
 const SYNC_COLOR_MAP_DARK = {
@@ -122,6 +128,12 @@ const COLUMNS = {
   wallet_types: [
     { key: 'name', label: 'ชื่อกระเป๋าเงิน', sticky: true },
     { key: 'description', label: 'รายละเอียด' },
+  ],
+  df_groups: [
+    { key: 'id', label: 'ProClinic ID', w: 'w-24' },
+    { key: 'name', label: 'ชื่อกลุ่ม', sticky: true },
+    { key: 'rates', label: 'จำนวนคอร์ส', w: 'w-24', align: 'text-right', render: (v) => Array.isArray(v) ? String(v.length) : '0' },
+    { key: 'status', label: 'สถานะ', w: 'w-16' },
   ],
   membership_types: [
     { key: 'name', label: 'ชื่อบัตร', sticky: true },
@@ -320,6 +332,8 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     { key: 'holidays',            label: 'วันหยุด → be_holidays',                   icon: '📅', fn: migrateMasterHolidaysToBe },
     { key: 'branches',            label: 'สาขา → be_branches',                     icon: '🏢', fn: migrateMasterBranchesToBe },
     { key: 'permission_groups',   label: 'สิทธิ์การใช้งาน → be_permission_groups',   icon: '🛡️', fn: migrateMasterPermissionGroupsToBe },
+    // Phase 14.x — DF groups + rates matrix (doc id = ProClinic numeric id)
+    { key: 'df_groups',           label: 'กลุ่มค่ามือ → be_df_groups',                icon: '💰', fn: migrateMasterDfGroupsToBe },
     // Phase 12.1 — seed be_staff + be_doctors from list-page scrape. Password
     // + permission group wiring happens in OUR CRUD after migrate.
     { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },

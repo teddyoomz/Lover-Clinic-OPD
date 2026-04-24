@@ -4967,6 +4967,52 @@ export async function migrateMasterPermissionGroupsToBe() {
   return runMasterToBeMigration({ sourceType: 'permission_groups', targetCol: permissionGroupsCol, targetDocFn: permissionGroupDoc, mapper: mapMasterToPermissionGroup });
 }
 
+// ─── Phase 14.x: master_data/df_groups → be_df_groups mapper + migrator ────
+// Scraped shape (api/proclinic/master.js handleSyncDfGroups):
+//   { id: 'ProClinic numeric id', name, rates: [{ courseId, value, type }],
+//     status, _source }
+// Target be_df_groups shape (Phase 13.3.1 saveDfGroup):
+//   { id, groupId, name, note, status: 'active'|'disabled', rates: [...],
+//     branchId, createdBy, createdAt, updatedAt }
+// Doc id = ProClinic numeric id (validator relaxed in Phase 14.x to accept).
+
+function mapMasterToDfGroup(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  // ProClinic status label is ใช้งาน/พักใช้งาน; be_df_groups uses active/disabled.
+  const rawStatus = String(src.status || src.df_status || '').trim();
+  const status = (rawStatus === 'พักใช้งาน' || rawStatus === 'disabled') ? 'disabled' : 'active';
+  const rates = Array.isArray(src.rates) ? src.rates.map((r) => {
+    const t = String(r?.type || '').toLowerCase();
+    return {
+      courseId: String(r?.courseId ?? r?.course_id ?? '').trim(),
+      courseName: String(r?.courseName ?? r?.course_name ?? '').trim(),
+      value: Math.max(0, Number(r?.value) || 0),
+      type: (t === 'percent' || t === '%') ? 'percent' : 'baht',
+    };
+  }).filter((r) => r.courseId) : [];
+  return {
+    id,
+    groupId: id,
+    name: String(src.name || src.group_name || '').trim() || '(imported)',
+    note: String(src.note || '').trim(),
+    status,
+    rates,
+    branchId: '',
+    createdBy: '',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterDfGroupsToBe() {
+  return runMasterToBeMigration({
+    sourceType: 'df_groups',
+    targetCol: dfGroupsCol,
+    targetDocFn: dfGroupDocRef,
+    mapper: mapMasterToDfGroup,
+  });
+}
+
 // ─── Staff CRUD (Phase 12.1) ────────────────────────────────────────────────
 // Entity lives fully in Firestore. Firebase Auth account creation (when email +
 // password supplied) is delegated to /api/admin/users via src/lib/adminUsersClient.js

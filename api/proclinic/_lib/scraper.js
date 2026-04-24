@@ -287,6 +287,108 @@ export function extractSelectOptions(html, selectName) {
   return options;
 }
 
+// ─── Master Data: DF groups extraction (Phase 14.x) ────────────────────────
+// ProClinic's /admin/df/df-group page shows ONE group's rate matrix at a
+// time via query param `?df_group_id=X`. The list of groups lives in the
+// tab strip (anchor links with href pattern `?df_group_id=\d+`). Rates for
+// the currently-selected group are rendered as ~600 form inputs named
+// `df_group_{groupId}_df_course_{courseId}` (the value input) plus
+// `..._type` radios (labels "%" / "บาท").
+//
+// Two extractors so the master.js handler can orchestrate: fetch list
+// page once → extract {id, name} for every group → fetch each group's
+// own page → extract rates[] → combine.
+
+/**
+ * Extract the list of DF groups from any /admin/df/df-group* page by
+ * walking the tab anchor links. Each group has a link like
+ *   <a href=".../admin/df/df-group?df_group_id=28">ตัดไหม...</a>
+ * The currently-active tab's anchor also matches; the "คัดลอกค่ามือ"
+ * copy-button text often trails the group name — we strip anything
+ * after the first newline.
+ *
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function extractDfGroupList(html) {
+  const $ = cheerio.load(html);
+  const byId = new Map();
+  $('a[href*="df_group_id="]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    const m = href.match(/df_group_id=(\d+)/);
+    if (!m) return;
+    const id = m[1];
+    if (byId.has(id)) return;
+    // Anchor text often contains "ชื่อกลุ่ม\n\t\t\tคัดลอกค่ามือ" — first
+    // non-empty line is the real name.
+    const raw = $(a).text() || '';
+    const name = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0] || id;
+    byId.set(id, { id, name });
+  });
+  return Array.from(byId.values());
+}
+
+/**
+ * Extract rates[] for the currently-selected group on a DF group detail
+ * page. Walks every input named `df_group_{G}_df_course_{C}` (without the
+ * `_type` suffix) and pairs it with the corresponding `_type` radio's
+ * checked value to classify baht vs percent.
+ *
+ * ProClinic renders two `_type` radios per course — label "%" and "บาท" —
+ * with `checked="checked"` on whichever is active. We treat any non-
+ * percent label as baht since the UI only offers those two types.
+ *
+ * @param {string} html            - page HTML
+ * @param {string} [expectedGroupId] - if provided, filter to rows for this
+ *                                     group (defensive against stray fields)
+ * @returns {Array<{courseId: string, value: number, type: 'baht'|'percent'}>}
+ */
+export function extractDfGroupRates(html, expectedGroupId = '') {
+  const $ = cheerio.load(html);
+  const valueByField = new Map();   // field name → numeric value
+  const typeByField = new Map();    // "df_group_X_df_course_Y" → 'baht'|'percent'
+
+  $('input[name^="df_group_"][name*="_df_course_"]').each((_, el) => {
+    const name = $(el).attr('name') || '';
+    const type = ($(el).attr('type') || '').toLowerCase();
+    const m = name.match(/^df_group_(\d+)_df_course_(\d+)(_type)?$/);
+    if (!m) return;
+    const [, gId, cId, isType] = m;
+    if (expectedGroupId && String(expectedGroupId) !== gId) return;
+    const fieldKey = `df_group_${gId}_df_course_${cId}`;
+    if (isType) {
+      // Type radio — only record when checked.
+      if (type !== 'radio') return;
+      const isChecked = $(el).attr('checked') != null || $(el).is(':checked');
+      if (!isChecked) return;
+      // ProClinic convention: label "%" = percent, anything else = baht.
+      const label = ($(el).attr('aria-label') || $(el).next().text() || '').trim();
+      // Fallback: read the value attr — ProClinic sets value="%" or value="bath"
+      const valAttr = ($(el).attr('value') || '').trim();
+      const marker = (label + ' ' + valAttr).toLowerCase();
+      typeByField.set(fieldKey, marker.includes('%') || marker.includes('percent') ? 'percent' : 'baht');
+    } else {
+      if (type !== 'number') return;
+      const raw = $(el).attr('value');
+      const def = $(el).attr('defaultValue');
+      const v = Number(raw ?? def ?? 0);
+      valueByField.set(fieldKey, Number.isFinite(v) ? v : 0);
+    }
+  });
+
+  const rates = [];
+  for (const [fieldKey, value] of valueByField.entries()) {
+    const m = fieldKey.match(/^df_group_(\d+)_df_course_(\d+)$/);
+    if (!m) continue;
+    const courseId = m[2];
+    rates.push({
+      courseId,
+      value,
+      type: typeByField.get(fieldKey) || 'baht',
+    });
+  }
+  return rates;
+}
+
 // ─── Master Data: Products extraction ───────────────────────────────────────
 // Scrapes /admin/product list page — returns array of product objects
 

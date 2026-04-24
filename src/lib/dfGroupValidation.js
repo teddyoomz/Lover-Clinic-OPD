@@ -33,7 +33,14 @@ export const STATUS_OPTIONS = Object.freeze(['active', 'disabled']);
 export const RATE_TYPES = Object.freeze(['percent', 'baht']);
 export const RATE_TYPE_LABEL = Object.freeze({ percent: '%', baht: 'บาท' });
 
-const GROUP_ID_RE = /^DFG-\d{4}-[0-9a-f]{8}$/;
+// Accept two id formats:
+//  - `DFG-MMYY-8hex` — generated via generateDfGroupId() for groups created
+//    in OUR UI (Phase 13.3).
+//  - `\d+`           — ProClinic numeric id for groups imported via
+//    migrateMasterDfGroupsToBe (Phase 14.x). Without this, editing a
+//    synced group via DfGroupFormModal → saveDfGroup trips the validator
+//    and bounces the user with "id ต้องเป็น ..." on every save.
+const GROUP_ID_RE = /^(DFG-\d{4}-[0-9a-f]{8}|\d+)$/;
 
 function trim(v) {
   return typeof v === 'string' ? v.trim() : '';
