@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -1971,7 +1971,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   const inMemoryIsRealQty = !!(product.fillLater || course.isRealQty);
                   if (liveIsRealQty || inMemoryIsRealQty) continue;
                   const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
-                  const isPurchased = rowId.startsWith('purchased-') || rowId.startsWith('promo-');
+                  const isPurchased = isPurchasedSessionRowId(rowId);
                   // After de-grouping: each row = one customer.courses entry, so validate
                   // against the row's own remaining. For existing entries we verify against
                   // LIVE Firestore remaining at the exact courseIndex (race-safe).
@@ -2066,9 +2066,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm
         // hits the same entry the deduction touched (purchased items go to the newest match, which is
         // what preferNewest: true gives us).
-        const existingDeductions = (backendDetail.courseItems || []).filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
-        const oldExisting = (existingCourseItems || []).filter(ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-'));
-        const oldPurchased = (existingCourseItems || []).filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+        const existingDeductions = (backendDetail.courseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
+        const oldExisting = (existingCourseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
+        const oldPurchased = (existingCourseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
         if (isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/backendClient.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
@@ -2526,7 +2526,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // `preferNewest: true` — iterate last→first so the just-assigned course entries
         // (always pushed to the end by assignCourseToCustomer) get deducted, not any
         // older entries with the same name+product from prior treatments.
-        const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-'));
+        const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
         if (purchasedDeductions.length > 0) {
           try {
             const { deductCourseItems } = await import('../lib/backendClient.js');

@@ -303,6 +303,40 @@ export function resolvePickedCourseEntry(placeholder, picks) {
 }
 
 /**
+ * Phase 12.2b follow-up (2026-04-24): classify a course-item rowId as a
+ * purchased-this-visit row. The treatment save path runs course
+ * deductions in TWO phases:
+ *   (1) BEFORE the auto-sale is created — deduct from EXISTING customer
+ *       courses (rows from be_customers.courses[] at load time)
+ *   (2) AFTER the auto-sale assigns new courses to customer.courses[] —
+ *       deduct from the newly-assigned rows
+ *
+ * Phase 2 rows are the ones the user bought IN THIS VISIT. They must be
+ * filtered by rowId prefix so Phase 1 doesn't try to deduct from rows
+ * that don't exist yet (customer.courses hasn't been written to
+ * Firestore). Three prefixes exist:
+ *   - `purchased-...`  — specific-qty / fill-later course bought in-visit
+ *     (from buildPurchasedCourseEntry non-pick branch)
+ *   - `promo-...`      — promotion sub-course bought in-visit
+ *   - `picked-...`     — pick-at-treatment product resolved via
+ *     PickProductsModal (from resolvePickedCourseEntry)
+ *
+ * Missing `picked-` here = "คอร์สคงเหลือไม่พอ: LipoS" bug 2026-04-24 —
+ * the picked rowId leaked into Phase 1 deductions, deductCourseItems
+ * ran against customer.courses that hadn't been assigned yet, found no
+ * LipoS entry, threw the error.
+ *
+ * @param {string} rowId
+ * @returns {boolean}
+ */
+export function isPurchasedSessionRowId(rowId) {
+  if (typeof rowId !== 'string' || !rowId) return false;
+  return rowId.startsWith('purchased-')
+    || rowId.startsWith('promo-')
+    || rowId.startsWith('picked-');
+}
+
+/**
  * Phase 12.2b follow-up (2026-04-24): resolve a purchased course item
  * into the shape `assignCourseToCustomer` expects, preferring the
  * doctor's in-session picks over the master options list.

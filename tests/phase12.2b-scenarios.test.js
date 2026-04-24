@@ -21,6 +21,7 @@ import {
   findMissingFillLaterQty,
   resolvePickedCourseEntry,
   resolvePurchasedCourseForAssign,
+  isPurchasedSessionRowId,
 } from '../src/lib/treatmentBuyHelpers.js';
 import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
 import { mapMasterToCourse, beCourseToMasterShape } from '../src/lib/backendClient.js';
@@ -1321,5 +1322,149 @@ describe('Scenario 21 — เลือกสินค้าตามจริง
     // (otherwise the flag never reaches the backend — fix is a no-op)
     const alreadyResolvedPassMatches = src.match(/assignCourseToCustomer\([^)]*alreadyResolved/g) || [];
     expect(alreadyResolvedPassMatches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // S21.17–S21.19: End-to-end simulate of the exact user bug
+  // "คอร์สคงเหลือไม่พอ: LipoS ต้องการตัด 1 เหลือตัดไม่ได้อีก 1"
+  //
+  // User bought แฟต 4 เข็ม (เลือกสินค้าตามจริง) → picked LipoS → ticked →
+  // qty 1 → save → error. Previous "fix" only addressed the SAVE side
+  // (alreadyResolved flag) but missed the prefix-based PRE-DEDUCTION
+  // FILTER. The resolved rowId is `picked-purchased-course-{id}-{now}-
+  // row-{productId}-{idx}` — starts with `picked-`, NOT `purchased-`.
+  // Four filter sites in TreatmentFormPage.handleSubmit checked only
+  // `purchased-` + `promo-`, so picked rows leaked into the Phase-1
+  // (pre-auto-sale) deduction bucket, fired deductCourseItems against
+  // customer.courses that didn't yet have LipoS → throw.
+  //
+  // These tests would have CAUGHT this bug. Critical: test the actual
+  // end-to-end rowId classification + filter routing, not just the
+  // helper output in isolation.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('S21.17: resolvePickedCourseEntry rowId starts with "picked-" prefix (the trigger of the bug)', () => {
+    const placeholder = buildPurchasedCourseEntry(pickMaster, { now: NOW });
+    const resolved = resolvePickedCourseEntry(placeholder, [
+      { productId: 'P1', name: 'Cream 30g', qty: 2, unit: 'tube' },
+    ]);
+    expect(resolved.products).toHaveLength(1);
+    // The rowId prefix IS the contract between this helper and the
+    // save-path filter in TreatmentFormPage. If either side changes
+    // without the other, the bug recurs.
+    expect(resolved.products[0].rowId).toMatch(/^picked-/);
+    // Must NOT collide with 'purchased-' (that prefix is reserved for
+    // non-pick fill-later / specific-qty in-visit buys)
+    expect(resolved.products[0].rowId.startsWith('purchased-')).toBe(false);
+    expect(resolved.products[0].rowId.startsWith('promo-')).toBe(false);
+  });
+
+  it('S21.18: isPurchasedSessionRowId classifies all THREE in-visit prefixes as purchased-session', () => {
+    // This is THE invariant that was broken. Every rowId produced by
+    // in-visit buy / pick must classify as purchased-session so the
+    // save path's Phase-1 (pre-auto-sale) deduction skips them.
+    expect(isPurchasedSessionRowId('purchased-123-row-abc')).toBe(true);
+    expect(isPurchasedSessionRowId('promo-123-row-abc-def')).toBe(true);
+    expect(isPurchasedSessionRowId('picked-purchased-course-123-456-row-P1-0')).toBe(true);
+    // Existing-course rows (loaded from be_customers) use `be-row-<idx>`
+    // → must NOT classify (Phase-1 deducts them from the existing
+    // customer.courses entry at that index)
+    expect(isPurchasedSessionRowId('be-row-0')).toBe(false);
+    expect(isPurchasedSessionRowId('be-row-7')).toBe(false);
+    // Defensive — falsy inputs
+    expect(isPurchasedSessionRowId(null)).toBe(false);
+    expect(isPurchasedSessionRowId(undefined)).toBe(false);
+    expect(isPurchasedSessionRowId('')).toBe(false);
+    expect(isPurchasedSessionRowId(123)).toBe(false);
+  });
+
+  it('S21.19: END-TO-END simulate — buy แฟต 4 เข็ม → pick LipoS → build courseItems → filter routes to POST-auto-sale deduction', () => {
+    // Mirrors the user's exact scenario. If this test fails, the
+    // "คอร์สคงเหลือไม่พอ: LipoS" bug is back.
+    const purchasedItem = {
+      id: 9001, name: 'แฟต 4 เข็ม', courseType: 'เลือกสินค้าตามจริง',
+      qty: '1', unit: 'คอร์ส', unitPrice: '5000',
+      products: [
+        { id: 'LipoS_id', name: 'LipoS', qty: 4, unit: 'เข็ม' },
+        { id: 'LipoF_id', name: 'LipoF', qty: 4, unit: 'เข็ม' },
+      ],
+    };
+    // Step 1: buy modal confirm → placeholder added to options.customerCourses
+    const placeholder = buildPurchasedCourseEntry(purchasedItem, { now: NOW });
+    // Step 2: doctor clicks "เลือกสินค้า" → picks LipoS qty 4 → resolve
+    const resolved = resolvePickedCourseEntry(placeholder, [
+      { productId: 'LipoS_id', name: 'LipoS', qty: 4, unit: 'เข็ม' },
+    ]);
+    const customerCoursesInMemory = [resolved];
+
+    // Step 3: doctor ticks the LipoS sub-row for this treatment.
+    // selectedCourseItems is a Set of rowIds; treatmentItems has the
+    // matching entry with qty 1.
+    const lipoSRowId = resolved.products[0].rowId;
+    const selectedCourseItems = new Set([lipoSRowId]);
+    const treatmentItems = [{ id: lipoSRowId, name: 'LipoS', qty: '1', productId: 'LipoS_id' }];
+
+    // Step 4: handleSubmit builds backendDetail.courseItems (mirrors
+    // TreatmentFormPage lines 2048-2063 exactly)
+    const courseItems = Array.from(selectedCourseItems).map(rowId => {
+      for (const course of customerCoursesInMemory) {
+        const product = course.products?.find(p => p.rowId === rowId);
+        if (product) {
+          return {
+            courseName: course.courseName,
+            productName: product.name,
+            rowId: product.rowId,
+            courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
+            deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
+            unit: product.unit || '',
+          };
+        }
+      }
+      return null;
+    }).filter(Boolean);
+
+    expect(courseItems).toHaveLength(1);
+    expect(courseItems[0]).toMatchObject({ productName: 'LipoS', deductQty: 1 });
+
+    // Step 5: the CRITICAL filter split. Phase-1 deductions run BEFORE
+    // auto-sale → must exclude purchased-session rows. Phase-2
+    // deductions run AFTER → include them.
+    const existingDeductions = courseItems.filter(ci => !isPurchasedSessionRowId(ci.rowId));
+    const purchasedDeductions = courseItems.filter(ci => isPurchasedSessionRowId(ci.rowId));
+
+    // THE REGRESSION GUARD — before the 2026-04-24 fix, both filters
+    // used only `purchased-|promo-` prefixes, so the picked- rowId
+    // went into existingDeductions → deductCourseItems ran against
+    // customer.courses that didn't yet have LipoS → threw the error.
+    expect(existingDeductions).toHaveLength(0); // Phase-1 must be empty
+    expect(purchasedDeductions).toHaveLength(1); // Phase-2 gets the LipoS deduction
+    expect(purchasedDeductions[0].productName).toBe('LipoS');
+
+    // Step 6: assignCourseToCustomer args — alreadyResolved=true so
+    // placeholder branch doesn't fire again (covered by S21.11, but
+    // verify here too to complete the end-to-end chain)
+    const assignArgs = resolvePurchasedCourseForAssign(purchasedItem, customerCoursesInMemory, purchasedItem.qty);
+    expect(assignArgs.alreadyResolved).toBe(true);
+    expect(assignArgs.products[0]).toMatchObject({ id: 'LipoS_id', name: 'LipoS', qty: 4, unit: 'เข็ม' });
+  });
+
+  it('S21.20: TreatmentFormPage source — all 4 filter sites use isPurchasedSessionRowId (no raw startsWith)', () => {
+    // Regression guard: if someone adds a new `purchased-|promo-`
+    // prefix filter without including `picked-`, this test fails.
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    // Must import the helper
+    expect(src).toMatch(/import\s*\{[^}]*isPurchasedSessionRowId[^}]*\}\s*from\s*['"]\.\.\/lib\/treatmentBuyHelpers\.js['"]/);
+    // Must be called at least 4 times (pre-check + existingDeductions +
+    // oldExisting + oldPurchased + purchasedDeductions = 5 call sites;
+    // use 4 as floor to tolerate future refactors that combine calls)
+    const calls = src.match(/isPurchasedSessionRowId\(/g) || [];
+    expect(calls.length).toBeGreaterThanOrEqual(4);
+    // Must NOT have any remaining `rowId?.startsWith('purchased-')` or
+    // `rowId.startsWith('purchased-')` pattern — that's the pre-fix
+    // shape. If this fails, someone regressed.
+    const rawStartsWithPurchased = src.match(/rowId\??\.startsWith\(['"]purchased-['"]\)/g) || [];
+    expect(rawStartsWithPurchased).toHaveLength(0);
+    const rawStartsWithPromo = src.match(/rowId\??\.startsWith\(['"]promo-['"]\)/g) || [];
+    expect(rawStartsWithPromo).toHaveLength(0);
   });
 });
