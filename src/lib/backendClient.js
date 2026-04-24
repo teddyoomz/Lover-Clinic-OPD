@@ -504,12 +504,6 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       // actually decrements a batch. Without this, a fill-later course
       // bought now and used 3 weeks from today would skip stock silently.
       productId: p.id != null ? String(p.id) : (p.productId != null ? String(p.productId) : ''),
-      // Phase 12.2b follow-up (2026-04-24): preserve min/max so
-      // "เลือกสินค้าตามจริง" late-visit treatments can enforce limits
-      // on doctor-entered qty. Null when not configured by the course
-      // (legacy / unconstrained).
-      minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
-      maxQty: p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null,
       qty,
       status: 'กำลังใช้งาน',
       expiry,
@@ -1187,11 +1181,6 @@ export function beCourseToMasterShape(c, opts = {}) {
       qty: Number(c.mainQty) || 0,
       unit: enriched.unit || enriched.mainUnitName || 'ครั้ง',
       isMainProduct: true,
-      // Phase 12.2b follow-up (2026-04-24): preserve minQty + maxQty so
-      // "เลือกสินค้าตามจริง" courses can enforce the limit at treatment
-      // time ("1-10 U" guardrails, not unbounded fill).
-      minQty: c.minQty != null ? Number(c.minQty) : null,
-      maxQty: c.maxQty != null ? Number(c.maxQty) : null,
     });
   }
   if (Array.isArray(c.courseProducts)) {
@@ -1206,8 +1195,6 @@ export function beCourseToMasterShape(c, opts = {}) {
         name: cp.productName || enriched.name || '',
         qty: Number(cp.qty) || 0,
         unit: cp.unit || enriched.unit || 'ครั้ง',
-        minQty: cp.minQty != null ? Number(cp.minQty) : null,
-        maxQty: cp.maxQty != null ? Number(cp.maxQty) : null,
       });
     }
   }

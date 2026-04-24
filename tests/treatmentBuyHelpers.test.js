@@ -11,7 +11,6 @@ import {
   buildCustomerPromotionGroups,
   buildPurchasedCourseEntry,
   findMissingFillLaterQty,
-  findOutOfRangePickAtTreatmentQty,
 } from '../src/lib/treatmentBuyHelpers.js';
 
 describe('mapPromotionProductsToConsumables', () => {
@@ -385,96 +384,5 @@ describe('findMissingFillLaterQty — Phase 12.2b Step 7 save-time validator', (
       { id: 'real-bad', qty: '', fillLater: true },
     ];
     expect(findMissingFillLaterQty(items)?.id).toBe('real-bad');
-  });
-});
-
-describe('findOutOfRangePickAtTreatmentQty — Phase 12.2b pick-at-treatment limits', () => {
-  // User directive: "มันเป็นแค่การกำหนดลิมิตมา แล้วระบุว่าใช้จริงเท่าไหร่
-  // โดยไม่ต่ำกว่าที่กำหนด และไม่สูงกว่าที่กำหนด ไม่ใช่ระบบเหมาเท่าไหร่ก็ได้".
-
-  it('FOOR1 null / undefined / non-array → null (no offender)', () => {
-    expect(findOutOfRangePickAtTreatmentQty(null)).toBeNull();
-    expect(findOutOfRangePickAtTreatmentQty(undefined)).toBeNull();
-    expect(findOutOfRangePickAtTreatmentQty('foo')).toBeNull();
-  });
-
-  it('FOOR2 empty array → null', () => {
-    expect(findOutOfRangePickAtTreatmentQty([])).toBeNull();
-  });
-
-  it('FOOR3 non-pick-at-treatment items ignored entirely', () => {
-    const items = [
-      { id: 'r1', qty: '999', isPickAtTreatment: false, minQty: 1, maxQty: 10 },
-      { id: 'r2', qty: '-5', fillLater: true, minQty: 1, maxQty: 10 },
-    ];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR4 blank qty on pick-at-treatment → skipped (fillLater validator handles it)', () => {
-    const items = [{ id: 'r1', qty: '', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR5 qty below minQty → offender with reason=below', () => {
-    const items = [{ id: 'r1', name: 'Allergan', qty: '0.5', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    const out = findOutOfRangePickAtTreatmentQty(items);
-    expect(out?.reason).toBe('below');
-    expect(out?.limit).toBe(1);
-    expect(out?.item.id).toBe('r1');
-  });
-
-  it('FOOR6 qty above maxQty → offender with reason=above', () => {
-    const items = [{ id: 'r1', name: 'Allergan', qty: '15', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    const out = findOutOfRangePickAtTreatmentQty(items);
-    expect(out?.reason).toBe('above');
-    expect(out?.limit).toBe(10);
-  });
-
-  it('FOOR7 qty exactly at minQty is OK (inclusive)', () => {
-    const items = [{ id: 'r1', qty: '1', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR8 qty exactly at maxQty is OK (inclusive)', () => {
-    const items = [{ id: 'r1', qty: '10', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR9 only maxQty set (no min) — unlimited below, capped above', () => {
-    const items = [{ id: 'r1', qty: '0.0001', isPickAtTreatment: true, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull(); // no min → no floor
-    const hi = [{ id: 'r1', qty: '100', isPickAtTreatment: true, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(hi)?.reason).toBe('above');
-  });
-
-  it('FOOR10 only minQty set (no max) — enforces floor, no ceiling', () => {
-    const items = [{ id: 'r1', qty: '0', isPickAtTreatment: true, minQty: 5 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)?.reason).toBe('below');
-    const hi = [{ id: 'r1', qty: '99999', isPickAtTreatment: true, minQty: 5 }];
-    expect(findOutOfRangePickAtTreatmentQty(hi)).toBeNull(); // no max → no ceiling
-  });
-
-  it('FOOR11 neither min nor max set → always valid (no limit configured)', () => {
-    const items = [{ id: 'r1', qty: '0', isPickAtTreatment: true }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR12 returns FIRST offender + stops scanning (short-circuit)', () => {
-    const items = [
-      { id: 'ok', qty: '5', isPickAtTreatment: true, minQty: 1, maxQty: 10 },
-      { id: 'first-bad', qty: '50', isPickAtTreatment: true, minQty: 1, maxQty: 10 },
-      { id: 'second-bad', qty: '0.1', isPickAtTreatment: true, minQty: 1, maxQty: 10 },
-    ];
-    expect(findOutOfRangePickAtTreatmentQty(items)?.item.id).toBe('first-bad');
-  });
-
-  it('FOOR13 non-numeric qty skipped (can\'t evaluate range)', () => {
-    const items = [{ id: 'r1', qty: 'abc', isPickAtTreatment: true, minQty: 1, maxQty: 10 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)).toBeNull();
-  });
-
-  it('FOOR14 decimal limits work (e.g. 0.5 cc)', () => {
-    const items = [{ id: 'r1', qty: '0.3', isPickAtTreatment: true, minQty: 0.5, maxQty: 1.5 }];
-    expect(findOutOfRangePickAtTreatmentQty(items)?.reason).toBe('below');
   });
 });

@@ -1029,32 +1029,19 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
   const parsed = parseQtyString(course.qty);
   const pct = parsed.total > 0 ? (parsed.remaining / parsed.total * 100) : 0;
   const origIdx = allCourses.findIndex(c => c.name === course.name && c.product === course.product && c.qty === course.qty);
-  // Phase 12.2b follow-up (2026-04-24): distinguish fill-later subtypes:
-  //   เหมาตามจริง → violet, "เหมาตามจริง" label
-  //   เลือกสินค้าตามจริง → sky blue, "min-max unit" label (if limits
-  //     set; otherwise "เลือกตามจริง"). Standard courses unchanged.
-  const courseType = String(course.courseType || '').trim();
-  const isRealQty = courseType === 'เหมาตามจริง';
-  const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
-  const isFillLater = isRealQty || isPickAtTreatment;
-  const pickLabel = (() => {
-    if (!isPickAtTreatment) return null;
-    const mn = course.minQty;
-    const mx = course.maxQty;
-    const u = parsed.unit ? ` ${parsed.unit}` : '';
-    if (mn != null && mx != null) return `${mn}-${mx}${u}`;
-    if (mx != null) return `ไม่เกิน ${mx}${u}`;
-    if (mn != null) return `ขั้นต่ำ ${mn}${u}`;
-    return 'เลือกตามจริง';
-  })();
+  // Phase 12.2b follow-up (2026-04-24): fill-later (เหมาตามจริง) courses
+  // display "เหมาตามจริง" in the qty column instead of the raw "1/1 U"
+  // sentinel — the "1" is a placeholder for "one-shot use", not a real
+  // remaining balance. The progress bar uses a distinct violet tone so
+  // the card visually separates from specific-qty courses even when
+  // still "กำลังใช้งาน" (bought but not yet used).
+  const isRealQty = String(course.courseType || '').trim() === 'เหมาตามจริง';
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="text-[var(--tx-secondary)]">{course.product}</span>
         {isRealQty ? (
           <span className="font-mono font-bold text-violet-400">เหมาตามจริง</span>
-        ) : isPickAtTreatment ? (
-          <span className="font-mono font-bold text-sky-400">{pickLabel}</span>
         ) : (
           <span className="font-mono font-bold text-[var(--tx-heading)]">{parsed.remaining} / {parsed.total} {parsed.unit}</span>
         )}
@@ -1062,14 +1049,12 @@ function CourseItemBar({ course, courseTab, allCourses, onAddQty, onExchange, on
       <div className="w-full h-1.5 rounded-full bg-[var(--bg-hover)] overflow-hidden">
         <div className="h-full rounded-full transition-all"
           style={{
-            width: isFillLater ? '100%' : `${pct}%`,
-            // Violet for เหมาตามจริง; sky for เลือกสินค้าตามจริง;
-            // teal/amber/red for standard by remaining %.
+            width: isRealQty ? '100%' : `${pct}%`,
+            // Violet for fill-later (still-unused → 100% bar in the
+            // distinctive color); teal/amber/red for standard by %.
             backgroundColor: isRealQty
               ? '#a855f7'
-              : isPickAtTreatment
-                ? '#0ea5e9'
-                : (pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444'),
+              : (pct > 50 ? '#14b8a6' : pct > 20 ? '#f59e0b' : '#ef4444'),
           }} />
       </div>
       {courseTab === 'active' && (

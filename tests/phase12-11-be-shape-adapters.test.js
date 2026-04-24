@@ -217,11 +217,8 @@ describe('Phase 12.11 — getAllMasterDataItems reads be_* first for backed type
     expect(c.name).toBe('อ่อมลอง 2');
     expect(Array.isArray(c.products)).toBe(true);
     expect(c.products).toHaveLength(2);
-    // Phase 12.2b follow-up (2026-04-24): beCourseToMasterShape now
-    // also emits minQty + maxQty (null when not configured) so
-    // pick-at-treatment courses can enforce limits.
-    expect(c.products[0]).toEqual({ id: 'PROD-A', name: 'Filler Restylane', qty: 1, unit: 'ซีซี', minQty: null, maxQty: null });
-    expect(c.products[1]).toEqual({ id: 'PROD-B', name: 'Allergan 100 U', qty: 100, unit: 'U', minQty: null, maxQty: null });
+    expect(c.products[0]).toEqual({ id: 'PROD-A', name: 'Filler Restylane', qty: 1, unit: 'ซีซี' });
+    expect(c.products[1]).toEqual({ id: 'PROD-B', name: 'Allergan 100 U', qty: 100, unit: 'U' });
   });
 
   it('BE7b: courses adapter uses stored productName + default unit when be_products lookup misses', async () => {
@@ -244,8 +241,8 @@ describe('Phase 12.11 — getAllMasterDataItems reads be_* first for backed type
     const items = await mod.getAllMasterDataItems('courses');
     const c = items[0];
     expect(c.products).toHaveLength(2);
-    expect(c.products[0]).toEqual({ id: 'MISSING-1', name: 'Stored Name', qty: 2, unit: 'ครั้ง', minQty: null, maxQty: null });
-    expect(c.products[1]).toEqual({ id: 'MISSING-2', name: '', qty: 5, unit: 'ครั้ง', minQty: null, maxQty: null });
+    expect(c.products[0]).toEqual({ id: 'MISSING-1', name: 'Stored Name', qty: 2, unit: 'ครั้ง' });
+    expect(c.products[1]).toEqual({ id: 'MISSING-2', name: '', qty: 5, unit: 'ครั้ง' });
   });
 
   it('BE7c: courses adapter gracefully handles be_products read error', async () => {
@@ -263,7 +260,7 @@ describe('Phase 12.11 — getAllMasterDataItems reads be_* first for backed type
         }],
       });
     const items = await mod.getAllMasterDataItems('courses');
-    expect(items[0].products[0]).toEqual({ id: 'P1', name: 'FromCourse', qty: 1, unit: 'ครั้ง', minQty: null, maxQty: null });
+    expect(items[0].products[0]).toEqual({ id: 'P1', name: 'FromCourse', qty: 1, unit: 'ครั้ง' });
   });
 
   it('BE8: staff adapter composes firstname+lastname into name', async () => {

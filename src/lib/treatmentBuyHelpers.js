@@ -154,40 +154,6 @@ export function findMissingFillLaterQty(treatmentItems) {
 }
 
 /**
- * Phase 12.2b follow-up (2026-04-24): save-time validator for
- * "เลือกสินค้าตามจริง" (pick-at-treatment) items. These carry a minQty
- * and/or maxQty configured on the course; the doctor's actual qty
- * must fall within that range.
- *
- * Returns the FIRST offending item + the reason ('below' | 'above'),
- * or null when all pick-at-treatment rows are within range. Rows
- * without the isPickAtTreatment flag are ignored (handled elsewhere
- * by findMissingFillLaterQty or the standard deduction path).
- *
- * @param {Array<object>} treatmentItems — [{ id, name, qty, isPickAtTreatment?, minQty?, maxQty? }]
- * @returns {{ item: object, reason: 'below' | 'above', limit: number }|null}
- */
-export function findOutOfRangePickAtTreatmentQty(treatmentItems) {
-  if (!Array.isArray(treatmentItems)) return null;
-  for (const t of treatmentItems) {
-    if (!t || !t.isPickAtTreatment) continue;
-    // Blank qty is findMissingFillLaterQty's concern, not ours.
-    if (t.qty === '' || t.qty == null) continue;
-    const n = Number(t.qty);
-    if (!Number.isFinite(n)) continue;
-    const mn = t.minQty != null && t.minQty !== '' ? Number(t.minQty) : null;
-    const mx = t.maxQty != null && t.maxQty !== '' ? Number(t.maxQty) : null;
-    if (mn != null && Number.isFinite(mn) && n < mn) {
-      return { item: t, reason: 'below', limit: mn };
-    }
-    if (mx != null && Number.isFinite(mx) && n > mx) {
-      return { item: t, reason: 'above', limit: mx };
-    }
-  }
-  return null;
-}
-
-/**
  * Phase 12.2b Step 7 (2026-04-24): pure helper that builds the synthetic
  * customerCourses entry for a newly-purchased course (buy-modal confirm).
  * Extracted from TreatmentFormPage.confirmBuyModal so the courseType-aware
@@ -221,17 +187,9 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   // <courseId>-row-<productId>") and _normalizeStockItems fell back to
   // `t.id` which was the rowId → productId mismatch → skipped movement
   // → user sees "ไม่เห็น stock movement" even after the previous fix.
-  // Phase 12.2b follow-up (2026-04-24): distinguish "เหมาตามจริง"
-  // (unlimited real-qty) vs "เลือกสินค้าตามจริง" (pick-at-treatment with
-  // min/max limits). Both are `fillLater` at the treatment-tick level
-  // (qty entered at save time), but they display + validate differently:
-  // - isRealQty → "เหมาตามจริง" label, no qty bounds
-  // - isPickAtTreatment → "min-max unit" label, qty gated by minQty/maxQty
   const products = (Array.isArray(item.products) && item.products.length > 0)
     ? item.products.map(p => {
         const pid = p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : '');
-        const pMinQty = p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null;
-        const pMaxQty = p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null;
         return {
           rowId: `purchased-${item.id}-row-${pid || Math.random().toString(36).slice(2, 6)}`,
           productId: pid,
@@ -244,14 +202,6 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
           total: fillLater ? '' : String(p.qty || item.qty || 1),
           unit: p.unit || item.unit || 'ครั้ง',
           fillLater,
-          // Propagate course type onto each product row so the render
-          // layer can format the label correctly (one of: blank for
-          // standard, "เหมาตามจริง" for real-qty, "min-max U" for pick-
-          // at-treatment with limits).
-          isRealQty,
-          isPickAtTreatment,
-          minQty: pMinQty,
-          maxQty: pMaxQty,
         };
       })
     : [{
@@ -262,10 +212,6 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         total: fillLater ? '' : String(item.qty || 1),
         unit: item.unit || 'คอร์ส',
         fillLater,
-        isRealQty,
-        isPickAtTreatment,
-        minQty: null,
-        maxQty: null,
       }];
   return {
     courseId: `purchased-course-${item.id}-${now}`,
