@@ -2249,3 +2249,16 @@ Tests: 5/5 focused + full regression 2984/2984 (end-of-phase per `feedback_test_
 Rule E ✅ · H ✅ · C1 ✅ (Thai TZ shift for id gen reused from quotationValidation) · C2 ✅ (crypto id) · D ✅ (38 adversarial including time-boundary + cross-staff + malformed).
 
 Tests: 38/38 focused pass in 1.35s. No full regression (per `feedback_test_per_subphase` — end-of-Phase-13 only).
+
+---
+
+## Phase 13.2.2 — backendClient CRUD + firestore.rules (2026-04-24)
+
+**Edits:**
+- `src/lib/backendClient.js`: `getStaffSchedule(id)` / `listStaffSchedules({staffId, startDate, endDate})` (client-side filter, sorted date then startTime) / `saveStaffSchedule(id, data)` (validator-gated setDoc) / `deleteStaffSchedule(id)` (no lock — schedules aren't financial, idempotent delete).
+- `firestore.rules`: `match /be_staff_schedules/{scheduleId}` (allow read/write if isClinicStaff). NOT deployed this sub-task — bundled into end-of-Phase-13 deploy.
+
+**New files:**
+- `tests/staffScheduleCrud.test.js` — 13 focused mocked-Firestore tests (SC1-SC13). Covers save/get/list/delete + list filters (staffId + date range + combined).
+
+Rule E/H ✅. 13/13 focused pass. Build clean.

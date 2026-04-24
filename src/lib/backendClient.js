@@ -5626,6 +5626,63 @@ export async function deleteQuotation(quotationId) {
   return { success: true };
 }
 
+// ─── Staff Schedules CRUD (Phase 13.2.2) ────────────────────────────────────
+
+const staffSchedulesCol = () => collection(db, ...basePath(), 'be_staff_schedules');
+const staffScheduleDocRef = (id) => doc(db, ...basePath(), 'be_staff_schedules', String(id));
+
+export async function getStaffSchedule(scheduleId) {
+  const id = String(scheduleId || '');
+  if (!id) return null;
+  const snap = await getDoc(staffScheduleDocRef(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/**
+ * List be_staff_schedules. Optional filter by staffId and/or date range
+ * (inclusive ISO strings). No indexes required — client-side filter on
+ * the full collection. Realistic volume: <1000 entries.
+ */
+export async function listStaffSchedules(filters = {}) {
+  const { staffId, startDate, endDate } = filters || {};
+  const snap = await getDocs(staffSchedulesCol());
+  let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (staffId) items = items.filter((e) => String(e.staffId) === String(staffId));
+  if (startDate) items = items.filter((e) => (e.date || '') >= startDate);
+  if (endDate) items = items.filter((e) => (e.date || '') <= endDate);
+  items.sort((a, b) => {
+    const d = (a.date || '').localeCompare(b.date || '');
+    if (d !== 0) return d;
+    return (a.startTime || '').localeCompare(b.startTime || '');
+  });
+  return items;
+}
+
+export async function saveStaffSchedule(scheduleId, data) {
+  const id = String(scheduleId || '');
+  if (!id) throw new Error('scheduleId required');
+  const { normalizeStaffSchedule, validateStaffScheduleStrict } = await import('./staffScheduleValidation.js');
+  const normalized = normalizeStaffSchedule(data);
+  const fail = validateStaffScheduleStrict(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(staffScheduleDocRef(id), {
+    ...normalized,
+    id,
+    scheduleId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+  return { success: true, scheduleId: id };
+}
+
+export async function deleteStaffSchedule(scheduleId) {
+  const id = String(scheduleId || '');
+  if (!id) throw new Error('scheduleId required');
+  await deleteDoc(staffScheduleDocRef(id));
+  return { success: true };
+}
+
 /**
  * Phase 13.1.4 — Convert a quotation into a be_sales draft.
  * OUR feature (not in ProClinic). Copies customer + line items + seller
