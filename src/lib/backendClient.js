@@ -1104,7 +1104,7 @@ function beProductToMasterShape(p) {
   };
 }
 
-function beCourseToMasterShape(c, opts = {}) {
+export function beCourseToMasterShape(c, opts = {}) {
   // Phase 12.11 bug fix (2026-04-20): be_courses stores nested items as
   // `courseProducts: [{productId, productName, qty}]` but master_data shape
   // (consumed by TreatmentFormPage buy modal + SaleTab + PromotionFormModal)
@@ -1112,19 +1112,46 @@ function beCourseToMasterShape(c, opts = {}) {
   // course created via our CoursesTab shows its NAME in the treatment-form
   // course column but NO checkboxes for the sub-items to deduct. Unit is
   // enriched via opts.productLookup (preloaded be_products Map).
+  //
+  // Phase 12.2b follow-up (2026-04-24): be_courses stores the MAIN product
+  // at top level (`mainProductId` + `mainProductName` + `mainQty`), SEPARATE
+  // from courseProducts[] which holds ONLY secondary products. Previously
+  // this mapper ignored the main product → buy modal's item.products had
+  // only secondaries → buildPurchasedCourseEntry created a customerCourses
+  // entry without the main product → user saw "ไส้ในของคอร์สเหมามาไม่หมด".
+  // Fix: prepend the main product to products[] so downstream consumers
+  // see ONE flat list with the main product first.
   const productLookup = opts.productLookup instanceof Map ? opts.productLookup : null;
-  const products = Array.isArray(c.courseProducts)
-    ? c.courseProducts.map(cp => {
-        const pid = String(cp.productId || cp.id || '');
-        const enriched = productLookup?.get(pid) || {};
-        return {
-          id: pid,
-          name: cp.productName || enriched.name || '',
-          qty: Number(cp.qty) || 0,
-          unit: cp.unit || enriched.unit || 'ครั้ง',
-        };
-      })
-    : [];
+  const products = [];
+  const mainId = String(c.mainProductId || '').trim();
+  if (mainId) {
+    const enriched = productLookup?.get(mainId) || {};
+    products.push({
+      id: mainId,
+      name: String(c.mainProductName || enriched.name || '').trim() || mainId,
+      // For fill-later courses mainQty is 0/null — leave as 0 so downstream
+      // fillLater branch can handle the "no pre-set qty" semantics. For
+      // standard courses mainQty is the per-purchase qty.
+      qty: Number(c.mainQty) || 0,
+      unit: enriched.unit || enriched.mainUnitName || 'ครั้ง',
+      isMainProduct: true,
+    });
+  }
+  if (Array.isArray(c.courseProducts)) {
+    for (const cp of c.courseProducts) {
+      const pid = String(cp.productId || cp.id || '');
+      // Dedup: skip if courseProducts somehow also carries the main product
+      // (ProClinic sync can include it in both places for some courses).
+      if (pid && pid === mainId) continue;
+      const enriched = productLookup?.get(pid) || {};
+      products.push({
+        id: pid,
+        name: cp.productName || enriched.name || '',
+        qty: Number(cp.qty) || 0,
+        unit: cp.unit || enriched.unit || 'ครั้ง',
+      });
+    }
+  }
   return {
     ...c,
     id: c.courseId || c.id,

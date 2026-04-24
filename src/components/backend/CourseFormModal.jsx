@@ -503,17 +503,24 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
           </p>
         ) : (
           <div className="space-y-1.5">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_70px_70px_70px_auto] gap-1 text-[9px] text-[var(--tx-muted)] uppercase tracking-wider px-2">
+            {/* Header — Phase 12.2b follow-up (2026-04-24): grid template
+                 pinned so header cells match content cells column-for-column.
+                 Previous `auto` column + `w-20` header override caused the
+                 FLAGS column to size differently between rows (header 80px,
+                 content ~180px) → misaligned headers the user flagged as
+                 "ช่องกับคำบรรยายไม่ตรง". Fixed width 200px fits 3 checkbox
+                 labels + trash button; header label "FLAGS" centered in
+                 the same 200px slot. */}
+            <div className="grid grid-cols-[1fr_70px_70px_70px_200px] gap-1 text-[9px] text-[var(--tx-muted)] uppercase tracking-wider px-2">
               <div>สินค้า</div>
               <div className="text-right">ต่อครั้ง</div>
               <div className="text-right">ต่ำสุด</div>
               <div className="text-right">สูงสุด</div>
-              <div className="w-20 text-center">flags</div>
+              <div className="text-center">flags</div>
             </div>
             {(form.courseProducts || []).map((item) => (
               <div key={item.productId}
-                className="grid grid-cols-[1fr_70px_70px_70px_auto] gap-1 items-center p-2 rounded bg-[var(--bg-hover)] border border-[var(--bd)]">
+                className="grid grid-cols-[1fr_70px_70px_70px_200px] gap-1 items-center p-2 rounded bg-[var(--bg-hover)] border border-[var(--bd)]">
                 <div className="min-w-0 truncate text-xs font-semibold text-[var(--tx-primary)]">
                   {item.productName || item.productId}
                 </div>
@@ -528,7 +535,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
                   onChange={(e) => updateSubProduct(item.productId, { maxQty: e.target.value })}
                   placeholder="-"
                   className="w-full px-1.5 py-1 rounded text-xs text-right bg-[var(--bg-base)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-center gap-1.5">
                   <label className="flex items-center gap-0.5 cursor-pointer" title="บังคับเลือก">
                     <input type="checkbox" checked={!!item.isRequired}
                       onChange={(e) => updateSubProduct(item.productId, { isRequired: e.target.checked })}
