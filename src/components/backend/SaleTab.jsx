@@ -326,6 +326,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       qty: String(buyQtyMap[i.id] || 1), itemType: i.itemType || buyModalType, category: i.category,
       // Keep products/courses for auto-assign after sale
       products: i.products || [], courses: i.courses || [],
+      // Phase 12.2b follow-up (2026-04-25): preserve courseType +
+      // validity window so assignCourseToCustomer can stamp the
+      // correct expiry on customer.courses. Previously dropped here →
+      // buffet/specific-qty stored blank expiry.
+      courseType: i.courseType || '',
+      daysBeforeExpire: i.daysBeforeExpire != null ? i.daysBeforeExpire : null,
+      period: i.period != null ? i.period : null,
     }));
     setPurchasedItems(prev => [...prev, ...newItems]);
     setBuyModalOpen(false);
@@ -572,7 +579,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               // courseType so assignCourseToCustomer can apply the
               // one-shot qty override for "เหมาตามจริง" (single
               // treatment consumes the whole course → moves to history).
-              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}`, linkedSaleId: newSaleId, courseType: course.courseType || '' });
+              await assignCourseToCustomer(customerId, {
+                name: course.name, products: prods, price: course.unitPrice,
+                source: 'sale', parentName: `คอร์ส: ${course.name}`,
+                linkedSaleId: newSaleId,
+                courseType: course.courseType || '',
+                daysBeforeExpire: course.daysBeforeExpire ?? null,
+              });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
           }
           for (const promo of grouped.promotions) {

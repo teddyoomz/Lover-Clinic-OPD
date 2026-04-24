@@ -1427,6 +1427,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         category: i.category, courses: i.courses, products: i.products,
         courseType: i.courseType || '',
         isRealQty: i.courseType === 'เหมาตามจริง',
+        // Phase 12.2b follow-up (2026-04-25): preserve the master-course
+        // validity window so assignCourseToCustomer can stamp
+        // customer.courses[].expiry. Lost before → buffet/specific-qty
+        // courses had blank expiry → no countdown, "เหมือนไม่มีวันหมดอายุ".
+        daysBeforeExpire: i.daysBeforeExpire != null ? i.daysBeforeExpire : null,
+        period: i.period != null ? i.period : null,
       };
     });
     setPurchasedItems(prev => [...prev, ...newItems]);
@@ -2183,7 +2189,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const { products: prods, alreadyResolved } = resolvePurchasedCourseForAssign(
                   course, options?.customerCourses, course.qty
                 );
-                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId, courseType: course.courseType || '', alreadyResolved });
+                await assignCourseToCustomer(customerId, {
+                  name: course.name, products: prods, price: course.unitPrice,
+                  source: 'treatment', parentName: `คอร์ส: ${course.name}`,
+                  linkedSaleId: createRes.saleId, linkedTreatmentId,
+                  courseType: course.courseType || '',
+                  daysBeforeExpire: course.daysBeforeExpire ?? null,
+                  alreadyResolved,
+                });
               } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
             }
             for (const promo of grouped.promotions) {
@@ -2308,7 +2321,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     const { products: prods, alreadyResolved } = resolvePurchasedCourseForAssign(
                       course, options?.customerCourses, course.qty
                     );
-                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2, courseType: course.courseType || '', alreadyResolved });
+                    await assignCourseToCustomer(customerId, {
+                      name: course.name, products: prods, price: course.unitPrice,
+                      source: 'treatment', parentName: `คอร์ส: ${course.name}`,
+                      linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2,
+                      courseType: course.courseType || '',
+                      daysBeforeExpire: course.daysBeforeExpire ?? null,
+                      alreadyResolved,
+                    });
                   } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
                 }
                 // Mirror create-path: also assign purchased promotions (bundled sub-courses or plain promo).

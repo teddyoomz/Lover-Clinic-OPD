@@ -446,11 +446,17 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
       {/* ── Row 6: duration ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div data-field="daysBeforeExpire">
-          <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">ระยะเวลาใช้งานหลังซื้อ (วัน)</label>
+          <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
+            ระยะเวลาใช้งาน / วันหมดอายุ (วัน)
+            {isBuffetCourse(form.courseType) && (
+              <span className="ml-1 text-[10px] text-violet-400 normal-case italic">* บุฟเฟต์ใช้ได้จนครบกำหนด</span>
+            )}
+          </label>
           <input type="number" min="0" value={form.daysBeforeExpire ?? ''}
             onChange={(e) => update({ daysBeforeExpire: e.target.value })}
-            placeholder="ไม่จำกัด"
+            placeholder={isBuffetCourse(form.courseType) ? 'เช่น 365 (1 ปี)' : 'ไม่จำกัด'}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
+          <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">นับจากวันที่ลูกค้าซื้อคอร์ส</p>
         </div>
         <div data-field="period">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">ระยะเวลาทำซ้ำ (วัน)</label>
@@ -458,6 +464,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
             onChange={(e) => update({ period: e.target.value })}
             placeholder="ไม่จำกัด"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)]" />
+          <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">ระยะห่างขั้นต่ำระหว่างการใช้แต่ละครั้ง</p>
         </div>
         <div data-field="time">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">เวลา (นาที)</label>

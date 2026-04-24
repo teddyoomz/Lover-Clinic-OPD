@@ -1073,3 +1073,188 @@ describe('F16: daysUntilExpiry — buffet countdown helper (2026-04-25)', () => 
     expect(d).toBeGreaterThan(0);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// F17: course-expiry flow (2026-04-25 bug — "เหมือนไม่มีวันหมดอายุ")
+//
+// The CourseFormModal HAS a daysBeforeExpire field, but the full chain
+// was broken at TWO points:
+//   1. purchasedItems builder in SaleTab/TFP didn't preserve the field
+//   2. assignCourseToCustomer read `masterCourse.validityDays`
+//      (undefined in our schema — we use `daysBeforeExpire`)
+// → every customer.courses entry stored expiry=''. Countdown showed no
+//   date. Buffet "หมดอายุอีก N วัน" impossible because there was no date.
+//
+// F17 tests exercise the FULL chain: master course (with daysBeforeExpire
+// from migrate) → purchasedItems builder → grouped.courses → assign call.
+// Source-grep guards lock every link in place.
+// ════════════════════════════════════════════════════════════════════════
+
+describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.courses)', () => {
+  const BC = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+  const TFP = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+  const SALE = fs.readFileSync('src/components/backend/SaleTab.jsx', 'utf-8');
+  const CFM = fs.readFileSync('src/components/backend/CourseFormModal.jsx', 'utf-8');
+  const MASTER = fs.readFileSync('api/proclinic/master.js', 'utf-8');
+
+  it('F17.1: syncCourses maps ProClinic days_before_expire → master_data field', () => {
+    // normalizeCourseJsonItem must capture the validity window from ProClinic
+    expect(MASTER).toMatch(/days_before_expire:\s*item\.days_before_expire/);
+  });
+
+  it('F17.2: migrateMasterCoursesToBe writes daysBeforeExpire on be_courses (accepts both casings)', () => {
+    // mapMasterToCourse must accept both src.daysBeforeExpire + src.days_before_expire
+    expect(BC).toMatch(/daysBeforeExpire:\s*numOrNull\(src\.daysBeforeExpire[^)]*src\.days_before_expire/);
+  });
+
+  it('F17.3: CourseFormModal renders daysBeforeExpire field with clear ProClinic-parity label', () => {
+    // Must surface "วันหมดอายุ" in the label so user knows THIS is the
+    // expiry input (not some vague "ระยะเวลาใช้งาน" wording)
+    expect(CFM).toMatch(/data-field="daysBeforeExpire"/);
+    expect(CFM).toMatch(/วันหมดอายุ/);
+    // Must also have the period field + explain what it means
+    expect(CFM).toMatch(/data-field="period"/);
+    expect(CFM).toMatch(/ระยะห่างขั้นต่ำ/);
+  });
+
+  it('F17.4: CourseFormModal buffet hint explains expiry → "ใช้ได้จนครบกำหนด"', () => {
+    // User directive: buffet = unlimited use until expiry. Hint required
+    // because the expiry field drives the buffet lifecycle entirely.
+    expect(CFM).toMatch(/isBuffetCourse\(form\.courseType\)/);
+    expect(CFM).toMatch(/บุฟเฟต์ใช้ได้จนครบกำหนด/);
+  });
+
+  it('F17.5: assignCourseToCustomer reads daysBeforeExpire (primary) + validityDays (legacy)', () => {
+    // The ROOT CAUSE of the "no expiry" bug: the function ONLY read
+    // `masterCourse.validityDays` (which our schema never writes).
+    // Regression guard — if someone removes the daysBeforeExpire branch,
+    // this test fails.
+    const fnMatch = BC.match(/export async function assignCourseToCustomer[^{]*\{([\s\S]*?)\nexport async function resolvePickedCourseInCustomer/);
+    expect(fnMatch).toBeTruthy();
+    const body = fnMatch[1];
+    expect(body).toMatch(/masterCourse\.daysBeforeExpire/);
+    expect(body).toMatch(/masterCourse\.validityDays/); // legacy alias still honored
+    expect(body).toMatch(/validityDays\s*>\s*0[^a-z]/); // zero/negative guard (not truthy-test so 0 doesn't fall through)
+    expect(body).toMatch(/validityDays\s*\*\s*86400000/); // ms-per-day math
+  });
+
+  it('F17.6: assignCourseToCustomer computes expiry ISO date (YYYY-MM-DD) from daysBeforeExpire', () => {
+    // Pure simulate of the expiry formula (mirrored from the function).
+    // Not runnable against the real function without Firestore mocks, but
+    // the formula is simple enough to verify end-to-end here + grep-guard
+    // the real impl above.
+    const days = 365;
+    const now = Date.UTC(2026, 3, 25); // 2026-04-25 (month is 0-indexed)
+    const expiryMs = now + days * 86400000;
+    const expiryIso = new Date(expiryMs).toISOString().split('T')[0];
+    expect(expiryIso).toBe('2027-04-25');
+  });
+
+  it('F17.7: SaleTab.confirmBuy preserves daysBeforeExpire in purchasedItems', () => {
+    // Without this field on purchasedItems, grouped.courses iterator has
+    // no validity window to pass to assignCourseToCustomer → blank expiry.
+    const confirmBuyMatch = SALE.match(/const confirmBuy = \(\) => \{([\s\S]*?)\n  \};/);
+    expect(confirmBuyMatch).toBeTruthy();
+    const body = confirmBuyMatch[1];
+    expect(body).toMatch(/daysBeforeExpire:\s*i\.daysBeforeExpire/);
+    expect(body).toMatch(/period:\s*i\.period/);
+    expect(body).toMatch(/courseType:\s*i\.courseType/);
+  });
+
+  it('F17.8: SaleTab.confirmBuy auto-assign passes daysBeforeExpire to assignCourseToCustomer', () => {
+    // Every assignCourseToCustomer call in SaleTab must forward the
+    // validity window from grouped.courses[i] / promo.courses[i].
+    const assignCalls = SALE.match(/assignCourseToCustomer\([\s\S]*?\)\s*;/g) || [];
+    expect(assignCalls.length).toBeGreaterThanOrEqual(1);
+    // At least the direct-course call site must include daysBeforeExpire
+    const directCallIdx = SALE.indexOf('for (const course of grouped.courses)');
+    expect(directCallIdx).toBeGreaterThan(-1);
+    const directBlock = SALE.slice(directCallIdx, directCallIdx + 1500);
+    expect(directBlock).toMatch(/daysBeforeExpire:\s*course\.daysBeforeExpire/);
+  });
+
+  it('F17.9: TFP purchasedItems builder preserves daysBeforeExpire + period', () => {
+    // Same invariant as F17.7 but for the in-visit buy flow. Missing
+    // here = in-visit buffet buys carry no expiry → same bug, different path.
+    expect(TFP).toMatch(/daysBeforeExpire:\s*i\.daysBeforeExpire/);
+    expect(TFP).toMatch(/period:\s*i\.period/);
+  });
+
+  it('F17.10: TFP handleSubmit assignCourseToCustomer BOTH call sites forward daysBeforeExpire', () => {
+    const calls = TFP.match(/assignCourseToCustomer\([^)]*daysBeforeExpire/g) || [];
+    // create-path + edit→sale-path = 2 call sites at minimum.
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('F17.11: beCourseToMasterShape spreads source → daysBeforeExpire reaches buy modal', () => {
+    // The helper uses `...c` at line ~1335 so the buy modal's item shape
+    // receives daysBeforeExpire directly from be_courses. Guard against
+    // a future refactor that whitelists specific fields instead.
+    const fnMatch = BC.match(/export function beCourseToMasterShape[^{]*\{([\s\S]*?)\n\}/);
+    expect(fnMatch).toBeTruthy();
+    const body = fnMatch[1];
+    // Either the spread preserves the field, OR an explicit mapping line exists.
+    expect(body).toMatch(/\.\.\.c\b|daysBeforeExpire/);
+  });
+
+  it('F17.12: end-to-end chain simulate — master course with daysBeforeExpire=365 → customer.courses expiry computed correctly', () => {
+    // Pure simulate of the whole chain:
+    //   be_courses entry → beCourseToMasterShape (spread preserves field) →
+    //   SaleTab buy modal → purchasedItems (preserves field) →
+    //   grouped.courses (preserves field) →
+    //   assignCourseToCustomer (reads masterCourse.daysBeforeExpire) →
+    //   customer.courses[].expiry = today + 365 days
+    const beCourse = {
+      courseId: 'C1', courseName: 'Laser รักแร้ บุฟเฟต์รายปี',
+      courseType: 'บุฟเฟต์', daysBeforeExpire: 365, salePrice: 7900,
+      mainProductId: 'P1', mainProductName: 'Laser รักแร้', mainQty: 1,
+      courseProducts: [],
+    };
+    // Step 1: beCourseToMasterShape (skip the real call; mirror the spread)
+    const masterShape = { ...beCourse, id: beCourse.courseId, name: beCourse.courseName };
+    expect(masterShape.daysBeforeExpire).toBe(365);
+    // Step 2: SaleTab buy modal confirmBuy preserves field
+    const buyItem = {
+      id: masterShape.id, name: masterShape.name, courseType: masterShape.courseType,
+      daysBeforeExpire: masterShape.daysBeforeExpire,
+      period: masterShape.period ?? null,
+    };
+    expect(buyItem.daysBeforeExpire).toBe(365);
+    // Step 3: simulate the expiry computation inside assignCourseToCustomer
+    const validityDays = buyItem.daysBeforeExpire != null
+      ? Number(buyItem.daysBeforeExpire)
+      : (buyItem.validityDays != null ? Number(buyItem.validityDays) : null);
+    const expiry = validityDays > 0
+      ? new Date(Date.UTC(2026, 3, 25) + validityDays * 86400000).toISOString().split('T')[0]
+      : '';
+    expect(expiry).toBe('2027-04-25');
+    expect(expiry).not.toBe(''); // the bug = empty string; regression = empty
+  });
+
+  it('F17.13: validityDays=0 / null / undefined → expiry="" (not "1970-01-01")', () => {
+    // Defensive: bad inputs must produce empty string, NOT a garbage date.
+    for (const bad of [0, null, undefined, -1, 'abc', NaN]) {
+      const days = bad != null ? Number(bad) : null;
+      const expiry = days > 0
+        ? new Date(Date.now() + days * 86400000).toISOString().split('T')[0]
+        : '';
+      expect(expiry).toBe('');
+    }
+  });
+
+  it('F17.14: migrate round-trip — master_data course with days_before_expire (snake) → be_courses daysBeforeExpire (camel)', () => {
+    // Mirror of mapMasterToCourse line 5845 casing bridge.
+    const numOrNull = (v) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
+    const src = { course_name: 'X', days_before_expire: 365 };
+    const mapped = { daysBeforeExpire: numOrNull(src.daysBeforeExpire != null ? src.daysBeforeExpire : src.days_before_expire) };
+    expect(mapped.daysBeforeExpire).toBe(365);
+    // camelCase source takes priority
+    const src2 = { daysBeforeExpire: 180, days_before_expire: 365 };
+    const mapped2 = { daysBeforeExpire: numOrNull(src2.daysBeforeExpire != null ? src2.daysBeforeExpire : src2.days_before_expire) };
+    expect(mapped2.daysBeforeExpire).toBe(180);
+    // both missing → null
+    const src3 = {};
+    const mapped3 = { daysBeforeExpire: numOrNull(src3.daysBeforeExpire != null ? src3.daysBeforeExpire : src3.days_before_expire) };
+    expect(mapped3.daysBeforeExpire).toBeNull();
+  });
+});

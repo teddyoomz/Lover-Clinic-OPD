@@ -482,8 +482,18 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   const courses = [...(snap.data().courses || [])];
 
   const products = masterCourse.products || [];
-  const expiry = masterCourse.validityDays
-    ? new Date(Date.now() + masterCourse.validityDays * 86400000).toISOString().split('T')[0]
+  // Phase 12.2b follow-up (2026-04-25): be_courses schema uses
+  // `daysBeforeExpire` (camelCase, set by CourseFormModal +
+  // migrateMasterCoursesToBe). Earlier `validityDays` kept as legacy
+  // alias for any caller still passing that shape. Without this mapping
+  // buffet courses (and every other course type) stored empty `expiry`
+  // on customer.courses → UI countdown showed no date → user-reported
+  // "เหมือนไม่มีวันหมดอายุ".
+  const validityDays = masterCourse.daysBeforeExpire != null
+    ? Number(masterCourse.daysBeforeExpire)
+    : (masterCourse.validityDays != null ? Number(masterCourse.validityDays) : null);
+  const expiry = validityDays > 0
+    ? new Date(Date.now() + validityDays * 86400000).toISOString().split('T')[0]
     : '';
   // Track where this course came from (parent course/promotion name)
   const parentName = masterCourse.parentName || '';
