@@ -978,6 +978,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Only add to treatment items if not already there (prevent duplicates from multiple course entries)
         setTreatmentItems(ti => {
           if (ti.some(t => t.id === product.rowId)) return ti;
+          // Phase 12.2b follow-up (2026-04-24, user-reported): for
+          // "ระบุสินค้าและจำนวนสินค้า" courses auto-populate qty with
+          // the product's saved remaining value instead of hardcoding
+          // '1'. Users expect "ให้ขึ้นจำนวนที่บันทึกไว้เลย โดยอัตโนมัติ".
+          // Fill-later courses still start blank (qty entered during
+          // treatment). If remaining isn't a positive number (missing /
+          // NaN / 0), fall back to '1' so the existing contract holds.
+          const rawRemaining = String(product.remaining ?? '').trim();
+          const remainingNum = Number(rawRemaining);
+          const defaultQty = product.fillLater
+            ? ''
+            : (Number.isFinite(remainingNum) && remainingNum > 0 ? rawRemaining : '1');
           return [...ti, {
             id: product.rowId,
             // Phase 12.2b Step 7 follow-up (2026-04-24): carry real
@@ -988,10 +1000,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // matches anything in be_products).
             productId: product.productId || '',
             name: product.name,
-            // Fill-later → qty starts blank; doctor must enter before
-            // save (handleSubmit validation blocks empty qty with a
-            // specific Thai error + scrollToError to this row).
-            qty: product.fillLater ? '' : '1',
+            qty: defaultQty,
             unit: product.unit || '',
             price: '',
             fillLater: !!product.fillLater,
