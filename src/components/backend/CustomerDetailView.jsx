@@ -6,12 +6,13 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer
 } from 'lucide-react';
 import {
   getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
   getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
 } from '../../lib/backendClient.js';
+import DocumentPrintModal from './DocumentPrintModal.jsx';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
@@ -100,6 +101,8 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
   const [exchangeModal, setExchangeModal] = useState(null); // { courseIndex, course }
   // Share course
   const [shareModal, setShareModal] = useState(null); // { courseIndex, course }
+  // Phase 14.5 — print document modal
+  const [printDocOpen, setPrintDocOpen] = useState(false);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -388,9 +391,16 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                 style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
+              <button onClick={() => setPrintDocOpen(true)}
+                data-testid="print-document-btn"
+                className="ml-auto text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
+                title="พิมพ์ใบรับรอง / ฉลากยา / เอกสารอื่นๆ">
+                <Printer size={11} /> พิมพ์เอกสาร
+              </button>
               {onCreateTreatment && (
                 <button onClick={onCreateTreatment}
-                  className="ml-auto text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                  className="text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
                   style={{ color: ac, borderColor: `rgba(${acRgb},0.3)`, backgroundColor: `rgba(${acRgb},0.08)` }}>
                   <Plus size={11} /> สร้างการรักษา
                 </button>
@@ -724,6 +734,16 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
           />}
         </div>
       </div>
+      {/* Phase 14.5 — print document modal (shared component) */}
+      <DocumentPrintModal
+        open={printDocOpen}
+        onClose={() => setPrintDocOpen(false)}
+        clinicSettings={{
+          clinicName: customer?.clinicName,
+          accentColor: ac,
+        }}
+        customer={customer}
+      />
     </div>
   );
 }

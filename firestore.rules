@@ -195,6 +195,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 14.1 Document Templates (13 ProClinic doc variants) ──
+      // One collection, docType discriminator. Seeded on first load; staff
+      // can edit all, delete only non-system (isSystemDefault guard enforced
+      // at CRUD layer — rules just gate staff-auth).
+      match /be_document_templates/{templateId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 13.1 Quotations (OUR data; no ProClinic mirror) ──
       match /be_quotations/{quotationId} {
         allow read, write: if isClinicStaff();

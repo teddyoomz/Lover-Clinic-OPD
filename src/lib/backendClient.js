@@ -6186,6 +6186,90 @@ export async function transitionSaleInsuranceClaim(claimId, nextStatus, extra = 
   return { success: true, status: resolved };
 }
 
+// ─── Document Templates CRUD (Phase 14.1) ──────────────────────────────────
+// 13 ProClinic document variants (6 medical certs + fit-to-fly +
+// medicine-label + 4 system templates + patient-referral) share ONE
+// collection via the `docType` discriminator. Seeded on first load if the
+// collection is empty (isSystemDefault: true so users can edit but not
+// delete the originals).
+
+const documentTemplatesCol = () => collection(db, ...basePath(), 'be_document_templates');
+const documentTemplateDoc = (id) => doc(db, ...basePath(), 'be_document_templates', String(id));
+
+export async function getDocumentTemplate(templateId) {
+  const id = String(templateId || '');
+  if (!id) return null;
+  const snap = await getDoc(documentTemplateDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listDocumentTemplates({ docType, activeOnly = false } = {}) {
+  const snap = await getDocs(documentTemplatesCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (docType) items = items.filter(t => t.docType === docType);
+  if (activeOnly) items = items.filter(t => t.isActive !== false);
+  items.sort((a, b) => {
+    // docType alphabetical, then system-defaults first within each type
+    const c = (a.docType || '').localeCompare(b.docType || '');
+    if (c !== 0) return c;
+    if (a.isSystemDefault && !b.isSystemDefault) return -1;
+    if (!a.isSystemDefault && b.isSystemDefault) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  return items;
+}
+
+export async function saveDocumentTemplate(templateId, data, opts = {}) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  const { normalizeDocumentTemplate, validateDocumentTemplate } = await import('./documentTemplateValidation.js');
+  const normalized = normalizeDocumentTemplate(data);
+  const fail = validateDocumentTemplate(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(documentTemplateDoc(id), {
+    ...normalized,
+    templateId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteDocumentTemplate(templateId) {
+  const id = String(templateId || '');
+  if (!id) throw new Error('templateId required');
+  const existing = await getDocumentTemplate(id);
+  if (existing?.isSystemDefault) {
+    throw new Error('ไม่สามารถลบเทมเพลตระบบได้ (แก้ไขได้แต่ห้ามลบ)');
+  }
+  await deleteDoc(documentTemplateDoc(id));
+}
+
+/**
+ * Seed the 13 default templates from `SEED_TEMPLATES` on first-load.
+ * Idempotent: does nothing if any templates already exist. Safe to call
+ * from component mount.
+ */
+export async function seedDocumentTemplatesIfEmpty() {
+  const { SEED_TEMPLATES, generateDocumentTemplateId, normalizeDocumentTemplate } = await import('./documentTemplateValidation.js');
+  const existing = await getDocs(documentTemplatesCol());
+  if (!existing.empty) return { seeded: false, count: 0 };
+  const now = new Date().toISOString();
+  let count = 0;
+  for (const seed of SEED_TEMPLATES) {
+    const id = generateDocumentTemplateId(seed.docType);
+    const normalized = normalizeDocumentTemplate({ ...seed, isSystemDefault: true, isActive: true });
+    await setDoc(documentTemplateDoc(id), {
+      ...normalized,
+      templateId: id,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: false });
+    count++;
+  }
+  return { seeded: true, count };
+}
+
 // ─── Quotations CRUD (Phase 13.1.2) ─────────────────────────────────────────
 
 const quotationsCol = () => collection(db, ...basePath(), 'be_quotations');

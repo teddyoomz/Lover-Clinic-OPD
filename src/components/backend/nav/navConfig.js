@@ -46,6 +46,8 @@ import {
   Percent,
   // Phase 12.3 sale-insurance-claim tab icon
   Shield,
+  // Phase 14.1 document-templates tab icon
+  FileText as FileTextIcon,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -144,6 +146,7 @@ export const NAV_SECTIONS = [
       { id: 'courses',              label: 'คอร์ส',               icon: BriefcaseIcon, color: 'amber', palette: 'course program package คอร์ส โปรแกรม' },
       { id: 'finance-master',       label: 'ตั้งค่าการเงิน',       icon: Banknote,      color: 'amber', palette: 'bank account expense category ค่าใช้จ่าย บัญชีธนาคาร finance' },
       { id: 'df-groups',            label: 'กลุ่ม DF (ค่ามือ)',     icon: Percent,       color: 'amber', palette: 'df doctor fee group rate commission ค่ามือ กลุ่ม อัตรา เปอร์เซ็นต์' },
+      { id: 'document-templates',   label: 'เทมเพลตเอกสาร',        icon: FileTextIcon,  color: 'amber', palette: 'document template certificate medical fit-to-fly medicine label consent referral เทมเพลต เอกสาร ใบรับรอง ฉลากยา ส่งตัว' },
     ],
   },
 ];

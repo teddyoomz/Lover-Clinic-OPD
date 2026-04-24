@@ -2043,6 +2043,32 @@ Tests: 3959 → 3999 (+40). Build clean.
 
 ---
 
+## Phase 14.1 — Document Templates System (13 ProClinic variants, 2026-04-25)
+
+One `be_document_templates` collection with `docType` discriminator backs all 13 ProClinic document routes — 6 medical certificates + fit-to-fly + medicine-label + 4 system templates (chart/consent/treatment/sale-cancelation) + patient-referral. Shared print engine + reusable picker modal. Rule H: OUR data in OUR Firestore. Rule E: Firestore-only (no ProClinic POSTs).
+
+**New files:**
+- `src/lib/documentTemplateValidation.js` (NEW) — validator + normalizer + `extractTemplatePlaceholders(html)` + `generateDocumentTemplateId(docType)` + `SEED_TEMPLATES` (13 defaults covering all DOC_TYPES). Validator enforces: docType enum, name non-empty + ≤200 chars, language (th/en/bilingual), paperSize (A4/A5/label-57x32), htmlTemplate ≤50KB, fields array ≤50 items with unique a-z_[0-9]_ keys, field.type in (text/textarea/date/number/select). Strict mode additionally requires non-empty HTML.
+- `src/lib/documentPrintEngine.js` (NEW) — `htmlEscape()` (5-char XSS guard) + `renderTemplate(html, ctx)` ({{key}} replacement with unknown→empty) + `buildPrintContext({clinic, customer, values})` (auto-populates clinicName/customerName/customerHN/today/todayBE) + `buildPrintDocument()` (full HTML with @page size + Sarabun font + auto-print script) + `openPrintWindow()` + `printDocument()` high-level. Paper sizes: A4 210×297, A5 148×210, label-57x32 (medicine label printer).
+- `src/components/backend/DocumentTemplatesTab.jsx` (NEW) — MarketingTabShell CRUD list. Seeds 13 defaults on first-empty via `seedDocumentTemplatesIfEmpty`. Filter: docType + active/inactive. Each row has preview-print / edit / delete (delete gated by isSystemDefault). Under "ข้อมูลพื้นฐาน" nav section.
+- `src/components/backend/DocumentTemplateFormModal.jsx` (NEW) — MarketingFormShell modal. docType / name / language / paperSize / HTML textarea / fields grid (key/label/type/required). Placeholder extraction highlights which {{keys}} are in the template; missing-field warnings flag placeholders without matching field schema (excluding context defaults: clinicName/customerName/today/etc.). System defaults lock docType dropdown.
+- `src/components/backend/DocumentPrintModal.jsx` (NEW) — 2-step flow (pick → fill). Filter-by-docType optional (SaleDetailModal can restrict to 'sale-cancelation'). Required-field gate before print. Side-by-side live preview + fillable form. Opens browser print dialog via `printDocument()`.
+- `tests/phase14-documents-flow-simulate.test.js` (NEW) — Rule I full-flow: F1 validator (15 edges) · F2 all 13 seeds pass strict validator AND required-field keys appear in HTML · F3 extractTemplatePlaceholders · F4 htmlEscape + renderTemplate + buildPrintContext · F5 end-to-end render per docType · F6 adversarial (100 unique IDs, Thai text, 1000 placeholders) · F7 source-grep regression guards (backendClient exports + rules + nav + CustomerDetailView print button + Rule E — no brokerClient in any doc file).
+
+**Edits:**
+- `src/lib/backendClient.js` — `listDocumentTemplates({ docType, activeOnly })` + `saveDocumentTemplate` + `deleteDocumentTemplate` (blocks system defaults at CRUD layer) + `seedDocumentTemplatesIfEmpty()` (idempotent on first-load).
+- `firestore.rules` — `match /be_document_templates/{templateId} { allow read, write: if isClinicStaff(); }`. **PENDING DEPLOY** per Rule B (Probe-Deploy-Probe required).
+- `src/components/backend/nav/navConfig.js` — "ข้อมูลพื้นฐาน" section +1 item (document-templates, FileText icon, amber). 14 → 15 items.
+- `src/pages/BackendDashboard.jsx` — routes activeTab='document-templates'.
+- `src/components/backend/CustomerDetailView.jsx` — imports DocumentPrintModal + Printer icon, adds `printDocOpen` state, "พิมพ์เอกสาร" button in the treatment section header (next to "สร้างการรักษา"), mounts `<DocumentPrintModal open={printDocOpen} customer={customer}/>` at bottom.
+- `tests/backend-nav-config.test.js` + `tests/phase11-master-data-scaffold.test.jsx` — expect 15 master items; added `document-templates` to MASTER_STUB_IDS.
+
+Runtime verified (preview_eval localhost:5173): DocumentTemplatesTab heading + create button render · pick-a-customer → CustomerDetailView → "พิมพ์เอกสาร" button renders · clicking opens DocumentPrintModal with search + empty-templates message (expected until rules deploy). "Missing or insufficient permissions" error is the ONLY thing gating feature completeness — fully wired once `firebase deploy --only firestore:rules` lands.
+
+Tests: 3999 → 4071 (+72). Build clean.
+
+---
+
 ## Phase 12.8 — P&L Report + Payment Summary Report (2026-04-20)
 
 Two new report aggregators + UI tabs, rounding out the Phase 12 financial reporting story.

@@ -57,6 +57,7 @@ import CoursesTab from '../components/backend/CoursesTab.jsx';
 import FinanceMasterTab from '../components/backend/FinanceMasterTab.jsx';
 import OnlineSalesTab from '../components/backend/OnlineSalesTab.jsx';
 import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab.jsx';
+import DocumentTemplatesTab from '../components/backend/DocumentTemplatesTab.jsx';
 import QuotationTab from '../components/backend/QuotationTab.jsx';
 import StaffSchedulesTab from '../components/backend/StaffSchedulesTab.jsx';
 import DfGroupsTab from '../components/backend/DfGroupsTab.jsx';
@@ -394,6 +395,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <StaffSchedulesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'df-groups' ? (
           <DfGroupsTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'document-templates' ? (
+          <DocumentTemplatesTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
       </div>
 

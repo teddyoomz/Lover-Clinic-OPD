@@ -56,6 +56,7 @@ const MASTER_STUB_IDS = [
   'courses',
   'finance-master',
   'df-groups',
+  'document-templates',
 ];
 
 const MASTER_SECTION_ITEM_IDS = ['masterdata', ...MASTER_STUB_IDS];
@@ -69,9 +70,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 14 items — 1 sync + 6 P11 + 2 P12.1 + 1 P13.2 schedules + 2 P12.2 + 1 P12.5 finance + 1 P13.3 df-groups', () => {
+  it('M2 master section has exactly 15 items — 1 sync + 6 P11 + 2 P12.1 + 1 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 docs', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(14);
+    expect(master.items.length).toBe(15);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 
