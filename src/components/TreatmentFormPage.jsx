@@ -576,6 +576,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               customerCoursesForForm = rawCourses
                 .map((c, idx) => {
                   if (!c.name) return null;
+                  // Phase 12.2b follow-up (2026-04-24): pick-at-treatment
+                  // placeholder persisted via assignCourseToCustomer.
+                  // Re-emit as an in-memory placeholder so the course
+                  // column renders the "เลือกสินค้า" button identical
+                  // to the in-visit buy flow. Prefer the persistent
+                  // `c.courseId` (stamped at assign time) so a later
+                  // pick survives index-shifts from other resolutions.
+                  // `_beCourseIndex` kept as a fallback for legacy docs
+                  // that predate the persistent courseId.
+                  if (c.needsPickSelection && Array.isArray(c.availableProducts)) {
+                    const persistedCourseId = typeof c.courseId === 'string' && c.courseId
+                      ? c.courseId
+                      : `be-course-${idx}`;
+                    return {
+                      courseId: persistedCourseId,
+                      courseName: c.name,
+                      parentName: c.parentName || '',
+                      source: c.source || '',
+                      linkedSaleId: c.linkedSaleId || null,
+                      status: c.status || '',
+                      expiry: c.expiry || '',
+                      courseType: String(c.courseType || '').trim(),
+                      isPickAtTreatment: true,
+                      needsPickSelection: true,
+                      availableProducts: c.availableProducts,
+                      products: [],
+                      _beCourseId: typeof c.courseId === 'string' ? c.courseId : null,
+                      _beCourseIndex: idx,
+                    };
+                  }
                   const qtyMatch = (c.qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
                   const remaining = qtyMatch ? parseFloat(qtyMatch[1].replace(/,/g, '')) : 0;
                   const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
@@ -2601,6 +2631,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Filter out courses with 0 remaining (หมดแล้ว — ไม่ต้องแสดง)
   const customerCourses = allCustomerCourses.filter(c => {
     if (c.promotionId) return false;
+    // Phase 12.2b follow-up (2026-04-24): pick-at-treatment placeholder
+    // has `products: []` by design (awaiting user pick). `[].every()`
+    // returns true (vacuous truth) → would drop the placeholder so
+    // the "เลือกสินค้า" button never renders. Exempt placeholders.
+    if (c.isPickAtTreatment && c.needsPickSelection) return true;
     // Check if ALL products in this course are 0 remaining
     const allZero = (c.products || []).every(p => parseFloat(p.remaining) <= 0);
     return !allZero;
@@ -4457,7 +4492,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             courseName={course.courseName}
             availableProducts={course.availableProducts || []}
             onCancel={() => setPickModalCourseId(null)}
-            onConfirm={(picks) => {
+            onConfirm={async (picks) => {
               // Phase 12.2b follow-up (2026-04-24): resolve the
               // placeholder entry with the user's picks — populate
               // products[] and clear needsPickSelection. Courses then
@@ -4471,6 +4506,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 });
                 return { ...prev, customerCourses: list };
               });
+              // Persist to be_customers when the placeholder came from
+              // an earlier-visit sale (i.e. it's a be_customers.courses
+              // entry, not an in-visit ซื้อเพิ่ม item). `_beCourseId` /
+              // `_beCourseIndex` are stamped by customerCoursesForForm
+              // only in that case. Prefer the persistent courseId —
+              // it survives index shift from resolving OTHER
+              // placeholders on the same customer in the same session.
+              const isPersistedPlaceholder = course._beCourseId != null
+                || typeof course._beCourseIndex === 'number';
+              if (saveTarget === 'backend' && customerId && isPersistedPlaceholder) {
+                try {
+                  const { resolvePickedCourseInCustomer } = await import('../lib/backendClient.js');
+                  const key = course._beCourseId || course._beCourseIndex;
+                  await resolvePickedCourseInCustomer(customerId, key, picks);
+                } catch (e) {
+                  console.error('[TreatmentForm] persist pick-at-treatment pick failed:', e);
+                }
+              }
               setPickModalCourseId(null);
             }}
           />

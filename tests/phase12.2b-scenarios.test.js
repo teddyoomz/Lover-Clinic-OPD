@@ -14,10 +14,12 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { currentUser: null } }));
 
+import fs from 'fs';
 import {
   buildPurchasedCourseEntry,
   buildCustomerPromotionGroups,
   findMissingFillLaterQty,
+  resolvePickedCourseEntry,
 } from '../src/lib/treatmentBuyHelpers.js';
 import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
 import { mapMasterToCourse, beCourseToMasterShape } from '../src/lib/backendClient.js';
@@ -1010,5 +1012,194 @@ describe('Scenario 10 — edge cases + defensive defaults', () => {
   it('S10.8: getRateForStaffCourse empty inputs → null', () => {
     expect(getRateForStaffCourse('', 'C1', 'G1', [], [])).toBeNull();
     expect(getRateForStaffCourse('D1', '', 'G1', [], [])).toBeNull();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 21 — เลือกสินค้าตามจริง late-visit persistence
+// ════════════════════════════════════════════════════════════════════════
+// The Phase 12.2b marathon (session 2026-04-24) shipped pick-at-treatment
+// end-to-end for the IN-VISIT flow (user buys course inside treatment
+// form → PickProductsModal → pick → save). But a pick-at-treatment
+// course bought via SaleTab — then opened in a LATER treatment — was
+// broken: the placeholder entry either vanished (allZero filter drop)
+// or rendered as N duplicate "1/1 ครั้ง" rows (no pick UI). Scenario 21
+// verifies the 5-touch fix that closes the late-visit loop:
+//   (1) TreatmentFormPage customerCourses filter exempts placeholders
+//   (2) backendClient.assignCourseToCustomer writes ONE placeholder +
+//       stable courseId + availableProducts instead of N per-product
+//       entries when courseType === 'เลือกสินค้าตามจริง'
+//   (3) customerCoursesForForm re-emits the placeholder shape so the
+//       existing render branch fires
+//   (4) resolvePickedCourseInCustomer persists the doctor's pick back
+//       to be_customers (finds by courseId string OR index fallback)
+//   (5) CustomerDetailView activeCourses keeps placeholders in the
+//       active tab + renders a "เลือกสินค้าเพื่อใช้" badge so the
+//       customer view reflects the pending action
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 21 — เลือกสินค้าตามจริง late-visit pick persistence', () => {
+  const pickMaster = {
+    id: 4001,
+    name: 'Pick-3-From-5 Special',
+    courseType: 'เลือกสินค้าตามจริง',
+    products: [
+      { id: 'P1', productId: 'P1', name: 'Cream 30g', qty: 2, unit: 'tube', minQty: null, maxQty: 5 },
+      { id: 'P2', productId: 'P2', name: 'Serum 15ml', qty: 1, unit: 'bottle' },
+      { id: 'P3', productId: 'P3', name: 'Mask', qty: 3, unit: 'pack' },
+    ],
+    unit: 'คอร์ส',
+  };
+
+  it('S21.1: buildPurchasedCourseEntry emits placeholder with needsPickSelection + availableProducts', () => {
+    const entry = buildPurchasedCourseEntry(pickMaster, { now: NOW });
+    expect(entry).toBeTruthy();
+    expect(entry.isPickAtTreatment).toBe(true);
+    expect(entry.needsPickSelection).toBe(true);
+    expect(entry.products).toEqual([]);
+    expect(entry.availableProducts).toHaveLength(3);
+    expect(entry.availableProducts[0]).toMatchObject({
+      productId: 'P1', name: 'Cream 30g', qty: 2, unit: 'tube', maxQty: 5,
+    });
+  });
+
+  it('S21.2: resolvePickedCourseEntry replaces placeholder with picked products[] + clears flag', () => {
+    const placeholder = buildPurchasedCourseEntry(pickMaster, { now: NOW });
+    const picks = [
+      { productId: 'P1', name: 'Cream 30g', qty: 2, unit: 'tube' },
+      { productId: 'P3', name: 'Mask', qty: 3, unit: 'pack' },
+    ];
+    const resolved = resolvePickedCourseEntry(placeholder, picks);
+    expect(resolved.needsPickSelection).toBe(false);
+    expect(resolved.products).toHaveLength(2);
+    expect(resolved.products[0]).toMatchObject({
+      productId: 'P1', name: 'Cream 30g', remaining: '2', total: '2', unit: 'tube', fillLater: false,
+    });
+    expect(resolved.products[1]).toMatchObject({ productId: 'P3', name: 'Mask', remaining: '3', total: '3' });
+    // Zero-qty picks are dropped (defensive — modal should already filter)
+    const zeroed = resolvePickedCourseEntry(placeholder, [{ productId: 'P1', name: 'X', qty: 0, unit: 'x' }]);
+    expect(zeroed.products).toHaveLength(0);
+  });
+
+  it('S21.3: assignCourseToCustomer has pick-at-treatment branch writing placeholder + stable courseId', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    const fnMatch = src.match(/export async function assignCourseToCustomer[^{]*\{([\s\S]*?)\nexport/);
+    expect(fnMatch).toBeTruthy();
+    const body = fnMatch[1];
+    // Must branch on the Thai courseType literal (the whole point of
+    // this special-case vs the generic per-product loop).
+    expect(body).toContain("'เลือกสินค้าตามจริง'");
+    // The written placeholder must carry needsPickSelection + availableProducts
+    // (the two fields customerCoursesForForm + render depend on).
+    expect(body).toContain('needsPickSelection: true');
+    expect(body).toContain('availableProducts:');
+    // Stable persistent courseId so resolve can find the placeholder
+    // after other placeholders on the same customer are resolved
+    // (which splice-replaces → shifts every subsequent index).
+    expect(body).toMatch(/courseId:\s*pickCourseId/);
+    expect(body).toMatch(/pick-\$\{Date\.now/);
+  });
+
+  it('S21.4: resolvePickedCourseInCustomer exists, matches by courseId string + index number', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    const fnMatch = src.match(/export async function resolvePickedCourseInCustomer[^{]*\{([\s\S]*?)\n\}/);
+    expect(fnMatch).toBeTruthy();
+    const body = fnMatch[1];
+    // Must accept EITHER a string courseId OR a numeric index. String
+    // path is primary (survives splice-shift); number path is legacy
+    // fallback for customer docs that predate the persistent courseId.
+    expect(body).toContain("typeof courseKey === 'string'");
+    expect(body).toContain("typeof courseKey === 'number'");
+    // String match must filter by needsPickSelection: true so a
+    // non-placeholder entry with a colliding courseId can't be replaced.
+    expect(body).toContain('needsPickSelection === true');
+    // Must reject a non-placeholder entry with a specific error
+    expect(body).toContain("'Course entry is not a pick-at-treatment placeholder'");
+    // Must reject empty picks (silent success = bug — user would think save worked)
+    expect(body).toContain("'No valid picks provided'");
+    // Splice-replace is the mechanism: one placeholder → N resolved entries
+    expect(body).toContain('courses.splice');
+  });
+
+  it('S21.5: customerCoursesForForm has needsPickSelection branch emitting placeholder shape', () => {
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    const sentinelIdx = src.indexOf('customerCoursesForForm = rawCourses');
+    expect(sentinelIdx).toBeGreaterThan(-1);
+    // Grab a generous context window covering the entire mapper.
+    const ctx = src.slice(sentinelIdx, sentinelIdx + 4000);
+    // Must detect the placeholder stored by assignCourseToCustomer
+    expect(ctx).toContain('c.needsPickSelection');
+    expect(ctx).toContain('Array.isArray(c.availableProducts)');
+    // Must emit isPickAtTreatment + needsPickSelection so render fires
+    expect(ctx).toContain('isPickAtTreatment: true');
+    // Must stamp a key for the persist call — prefer the persistent
+    // courseId, fall back to the index
+    expect(ctx).toContain('_beCourseId');
+    expect(ctx).toContain('_beCourseIndex');
+  });
+
+  it('S21.6: TreatmentFormPage customerCourses filter exempts placeholders from allZero drop', () => {
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    // The filter lives immediately before the allZero check. Must
+    // short-circuit to `return true` for placeholder entries — else
+    // `[].every()` = true drops them silently and the pick button
+    // never renders (the user's "nothing shows" report).
+    const filterIdx = src.indexOf('const allZero = (c.products || []).every');
+    expect(filterIdx).toBeGreaterThan(-1);
+    const before = src.slice(Math.max(0, filterIdx - 400), filterIdx);
+    expect(before).toContain('c.isPickAtTreatment && c.needsPickSelection');
+    expect(before).toContain('return true');
+  });
+
+  it('S21.7: CustomerDetailView activeCourses filter keeps placeholders + renders pick-badge', () => {
+    const src = fs.readFileSync('src/components/backend/CustomerDetailView.jsx', 'utf-8');
+    // activeCourses must exempt placeholders — parseQtyString('') = 0
+    // remaining, and without the exemption the course vanishes from
+    // "คอร์สของฉัน" entirely.
+    const filterIdx = src.indexOf('const activeCourses = useMemo');
+    expect(filterIdx).toBeGreaterThan(-1);
+    const filterCtx = src.slice(filterIdx, filterIdx + 600);
+    expect(filterCtx).toContain('c.needsPickSelection');
+    expect(filterCtx).toContain('return true');
+    // The badge must mention the Thai CTA + the option count
+    expect(src).toContain('เลือกสินค้าเพื่อใช้');
+    expect(src).toContain('course.availableProducts.length');
+  });
+
+  it('S21.8: PickProductsModal onConfirm persists via resolvePickedCourseInCustomer when placeholder is persisted', () => {
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    // Must import the function (dynamic import pattern used elsewhere in
+    // this file — we confirm the call site regardless).
+    expect(src).toContain('resolvePickedCourseInCustomer');
+    // Must gate on saveTarget === 'backend' (no persist when editing a
+    // frontend/OPD treatment) + customerId present.
+    const onConfirmIdx = src.indexOf('persist pick-at-treatment pick failed');
+    expect(onConfirmIdx).toBeGreaterThan(-1);
+    const ctx = src.slice(Math.max(0, onConfirmIdx - 800), onConfirmIdx + 200);
+    expect(ctx).toMatch(/saveTarget\s*===\s*'backend'/);
+    expect(ctx).toContain('customerId');
+    // Must pass either the persistent courseId OR the index fallback
+    expect(ctx).toContain('course._beCourseId');
+    expect(ctx).toContain('course._beCourseIndex');
+  });
+
+  it('S21.9: buildPurchasedCourseEntry pick-at-treatment with empty products → empty availableProducts', () => {
+    // Edge: master course with pick-at-treatment type but no products
+    // configured at assign-time. Placeholder is still emitted (UI
+    // shows "ยังไม่ได้เลือกสินค้า" but modal would show no options).
+    const entry = buildPurchasedCourseEntry({ id: 5, name: 'Empty Pick', courseType: 'เลือกสินค้าตามจริง', products: [] });
+    expect(entry.isPickAtTreatment).toBe(true);
+    expect(entry.availableProducts).toEqual([]);
+  });
+
+  it('S21.10: resolvePickedCourseEntry idempotent — second call on resolved entry re-applies picks', () => {
+    // Defensive: if the modal is reopened somehow with a resolved
+    // entry, the helper shouldn't crash — it just re-computes.
+    const placeholder = buildPurchasedCourseEntry(pickMaster, { now: NOW });
+    const once = resolvePickedCourseEntry(placeholder, [{ productId: 'P1', name: 'Cream 30g', qty: 2, unit: 'tube' }]);
+    const twice = resolvePickedCourseEntry(once, [{ productId: 'P2', name: 'Serum 15ml', qty: 1, unit: 'bottle' }]);
+    expect(twice.needsPickSelection).toBe(false);
+    expect(twice.products).toHaveLength(1);
+    expect(twice.products[0].productId).toBe('P2');
   });
 });

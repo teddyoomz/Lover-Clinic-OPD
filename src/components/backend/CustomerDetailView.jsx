@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check
 } from 'lucide-react';
 import {
   getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
@@ -133,6 +133,12 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
   const activeCourses = useMemo(() => allCourses.filter(c => {
+    // Phase 12.2b follow-up (2026-04-24): pick-at-treatment placeholders
+    // carry qty='' (picks haven't happened yet) → parseQtyString returns
+    // remaining=0 → would be dropped. Keep them in active so the
+    // customer sees "เลือกสินค้าเพื่อใช้" pending action + the
+    // treatment form can surface the "เลือกสินค้า" button.
+    if (c && c.needsPickSelection) return true;
     const { remaining } = parseQtyString(c.qty);
     return remaining > 0;
   }), [allCourses]);
@@ -606,6 +612,20 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                       onExchange={(idx) => { setExchangeModal({ courseIndex: idx, course }); }}
                       onShare={(idx) => { setShareModal({ courseIndex: idx, course }); }}
                     />}
+                    {/* Phase 12.2b follow-up (2026-04-24): pick-at-treatment
+                        placeholder — no product row yet, show a prompt
+                        with the available option count. Action happens
+                        on the treatment-form side; CustomerDetailView is
+                        read-only context here. */}
+                    {course.needsPickSelection && Array.isArray(course.availableProducts) && (
+                      <div className={`mt-2 px-2.5 py-1.5 rounded border text-[11px] flex items-center justify-between gap-2 ${isDark ? 'border-teal-800/40 bg-teal-900/10 text-teal-300' : 'border-teal-200 bg-teal-50/60 text-teal-700'}`}>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Check size={11} className="shrink-0" />
+                          <span className="truncate">เลือกสินค้าเพื่อใช้ ({course.availableProducts.length} ตัวเลือก)</span>
+                        </span>
+                        <span className="italic shrink-0 text-[10px] text-[var(--tx-muted)]">เลือกในหน้าสร้างการรักษา</span>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

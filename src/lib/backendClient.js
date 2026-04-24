@@ -491,6 +491,51 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     || masterCourse.isRealQty === true;
   const courseTypeTag = masterCourse.courseType ? String(masterCourse.courseType) : '';
 
+  // Phase 12.2b follow-up (2026-04-24): pick-at-treatment = two-step
+  // pick-at-purchase. Don't split the options into per-product
+  // customer.courses entries (that'd treat options as purchased
+  // products). Instead write ONE placeholder carrying the full option
+  // list on `availableProducts` + `needsPickSelection: true`. The
+  // treatment form reads this and renders a "เลือกสินค้า" button;
+  // after the doctor picks, `resolvePickedCourseInCustomer` rewrites
+  // the entry with the resolved products[] (standard course flow from
+  // that point). Without this special-case the user saw either
+  // duplicate rows (N options as N "1/1 ครั้ง" courses) or nothing at
+  // all (when options carried qty=0 and the allZero filter dropped them).
+  const isPickAtTreatment = masterCourse.courseType === 'เลือกสินค้าตามจริง';
+  if (isPickAtTreatment && products.length > 0) {
+    // Persistent courseId survives splice-replace at resolve time so
+    // multiple pick-at-treatment placeholders can be resolved
+    // independently even as array indices shift.
+    const pickCourseId = `pick-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    courses.push({
+      courseId: pickCourseId,
+      name: masterCourse.name,
+      product: '',
+      qty: '',
+      status: 'กำลังใช้งาน',
+      expiry,
+      value: masterCourse.price ? `${masterCourse.price} บาท` : '',
+      parentName,
+      source,
+      linkedSaleId,
+      linkedTreatmentId,
+      courseType: courseTypeTag,
+      needsPickSelection: true,
+      availableProducts: products.map(p => ({
+        productId: p.id != null ? String(p.id) : (p.productId != null ? String(p.productId) : ''),
+        name: p.name || '',
+        qty: Number(p.qty) || 0,
+        unit: p.unit || 'ครั้ง',
+        minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
+        maxQty: p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null,
+      })),
+      assignedAt: new Date().toISOString(),
+    });
+    await updateCustomer(customerId, { courses });
+    return { success: true, courses };
+  }
+
   for (const p of products) {
     const qty = isRealQty
       ? buildQtyString(1, p.unit || 'ครั้ง')
@@ -535,6 +580,75 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     });
   }
 
+  await updateCustomer(customerId, { courses });
+  return { success: true, courses };
+}
+
+/**
+ * Phase 12.2b follow-up (2026-04-24): resolve a pick-at-treatment
+ * placeholder entry on customer.courses[] by replacing it with N
+ * per-product entries (standard-course shape) built from the
+ * doctor's picks. Runs ONLY on a placeholder — throws if the target
+ * entry lacks `needsPickSelection: true`.
+ *
+ * Why this function exists: the in-memory `resolvePickedCourseEntry`
+ * helper updates Treatment form state, but the be_customers document
+ * still carries the placeholder. On a subsequent visit (or page
+ * reload) the doctor would see the "เลือกสินค้า" button again. This
+ * function persists the resolution so courses become first-class
+ * standard courses after pick.
+ *
+ * `courseKey` is either the persistent `courseId` stamped by
+ * assignCourseToCustomer (preferred, survives index-shift when other
+ * placeholders are resolved in the same session) OR a numeric index
+ * (legacy fallback — caller must ensure no intervening mutation).
+ *
+ * @param {string} customerId
+ * @param {string|number} courseKey — persistent courseId OR array index
+ * @param {Array<{productId, name, qty, unit}>} picks — user's selections
+ * @returns {Promise<{success:boolean, courses:object[]}>}
+ */
+export async function resolvePickedCourseInCustomer(customerId, courseKey, picks) {
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+
+  let idx = -1;
+  if (typeof courseKey === 'string') {
+    idx = courses.findIndex(c => c && c.courseId === courseKey && c.needsPickSelection === true);
+  } else if (typeof courseKey === 'number') {
+    if (courseKey >= 0 && courseKey < courses.length) idx = courseKey;
+  }
+  if (idx < 0) throw new Error('Pick-at-treatment placeholder not found');
+
+  const placeholder = courses[idx];
+  if (!placeholder || !placeholder.needsPickSelection) {
+    throw new Error('Course entry is not a pick-at-treatment placeholder');
+  }
+  const valid = (Array.isArray(picks) ? picks : [])
+    .filter(p => p && Number(p.qty) > 0 && (p.name || p.productId));
+  if (valid.length === 0) throw new Error('No valid picks provided');
+
+  const {
+    availableProducts: _discardOptions,
+    needsPickSelection: _discardFlag,
+    product: _discardProduct,
+    qty: _discardQty,
+    courseId: _discardPickId,
+    ...basePlaceholder
+  } = placeholder;
+
+  const now = new Date().toISOString();
+  const resolvedEntries = valid.map(p => ({
+    ...basePlaceholder,
+    product: p.name || '',
+    productId: p.productId != null ? String(p.productId) : '',
+    qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
+    status: 'กำลังใช้งาน',
+    assignedAt: basePlaceholder.assignedAt || now,
+  }));
+
+  courses.splice(idx, 1, ...resolvedEntries);
   await updateCustomer(customerId, { courses });
   return { success: true, courses };
 }

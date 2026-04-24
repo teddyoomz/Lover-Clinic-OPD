@@ -405,8 +405,10 @@ describe('Phase 12.2 — Rule E', () => {
     // a bought-but-unused fill-later course renders correctly next visit.
     const sentinelIdx = src.indexOf('customerCoursesForForm = rawCourses');
     expect(sentinelIdx).toBeGreaterThan(-1);
-    // Grab 2500 chars of context following the sentinel.
-    const ctx = src.slice(sentinelIdx, sentinelIdx + 2500);
+    // Grab 4500 chars of context (bumped from 2500 on 2026-04-24 after
+    // the pick-at-treatment late-visit branch landed BEFORE the
+    // specific-qty mapper — pushing isRealQty/fillLater past 2500).
+    const ctx = src.slice(sentinelIdx, sentinelIdx + 4500);
     expect(ctx).toContain('courseType');
     expect(ctx).toContain('isRealQty');
     expect(ctx).toContain('fillLater');
