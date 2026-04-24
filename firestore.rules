@@ -189,6 +189,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 13.3 DF (Doctor Fee) Groups + Staff-rate overrides ──
+      match /be_df_groups/{groupId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_df_staff_rates/{staffId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();

@@ -5626,6 +5626,87 @@ export async function deleteQuotation(quotationId) {
   return { success: true };
 }
 
+// ─── DF Groups + DF Staff Rates CRUD (Phase 13.3.2) ────────────────────────
+
+const dfGroupsCol = () => collection(db, ...basePath(), 'be_df_groups');
+const dfGroupDocRef = (id) => doc(db, ...basePath(), 'be_df_groups', String(id));
+const dfStaffRatesCol = () => collection(db, ...basePath(), 'be_df_staff_rates');
+const dfStaffRatesDocRef = (staffId) => doc(db, ...basePath(), 'be_df_staff_rates', String(staffId));
+
+export async function getDfGroup(groupId) {
+  const id = String(groupId || '');
+  if (!id) return null;
+  const snap = await getDoc(dfGroupDocRef(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listDfGroups() {
+  const snap = await getDocs(dfGroupsCol());
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
+  return items;
+}
+
+export async function saveDfGroup(groupId, data) {
+  const id = String(groupId || '');
+  if (!id) throw new Error('groupId required');
+  const { normalizeDfGroup, validateDfGroupStrict } = await import('./dfGroupValidation.js');
+  const normalized = normalizeDfGroup(data);
+  const fail = validateDfGroupStrict(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(dfGroupDocRef(id), {
+    ...normalized,
+    id,
+    groupId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+  return { success: true, groupId: id };
+}
+
+export async function deleteDfGroup(groupId) {
+  const id = String(groupId || '');
+  if (!id) throw new Error('groupId required');
+  await deleteDoc(dfGroupDocRef(id));
+  return { success: true };
+}
+
+export async function getDfStaffRates(staffId) {
+  const id = String(staffId || '');
+  if (!id) return null;
+  const snap = await getDoc(dfStaffRatesDocRef(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listDfStaffRates() {
+  const snap = await getDocs(dfStaffRatesCol());
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function saveDfStaffRates(staffId, data) {
+  const id = String(staffId || '');
+  if (!id) throw new Error('staffId required');
+  const { normalizeDfStaffRates, validateDfStaffRatesStrict } = await import('./dfGroupValidation.js');
+  const normalized = normalizeDfStaffRates({ ...data, staffId: id });
+  const fail = validateDfStaffRatesStrict(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(dfStaffRatesDocRef(id), {
+    ...normalized,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+  return { success: true, staffId: id };
+}
+
+export async function deleteDfStaffRates(staffId) {
+  const id = String(staffId || '');
+  if (!id) throw new Error('staffId required');
+  await deleteDoc(dfStaffRatesDocRef(id));
+  return { success: true };
+}
+
 // ─── Staff Schedules CRUD (Phase 13.2.2) ────────────────────────────────────
 
 const staffSchedulesCol = () => collection(db, ...basePath(), 'be_staff_schedules');

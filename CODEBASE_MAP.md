@@ -2348,3 +2348,14 @@ Nav wiring intentionally places `staff-schedules` next to `staff` (same person-e
 **Schema decision:** embedded `rates[]` on group doc vs separate per-rate collection. Chose embedded — realistic volume (5 groups × 200 courses = 1000 entries × ~60 bytes = 60KB) stays well under 1MB Firestore limit. Staff override doc keyed by `staffId` for O(1) lookup.
 
 Rule E ✅, H ✅, C3 ✅ (2 collections justified — staff overrides need independent CRUD). 43/43 focused pass.
+
+## Phase 13.3.2 — DF CRUD + firestore.rules (2026-04-24)
+
+**Edits:**
+- `src/lib/backendClient.js`: 8 functions — `getDfGroup` / `listDfGroups` (Thai sort) / `saveDfGroup` (validator-gated) / `deleteDfGroup` for groups; `getDfStaffRates` / `listDfStaffRates` / `saveDfStaffRates` (doc keyed by staffId — upsert pattern, injects staffId into payload) / `deleteDfStaffRates` for overrides.
+- `firestore.rules`: be_df_groups + be_df_staff_rates blocks. NOT deployed (bundled into end-of-Phase-13).
+
+**New files:**
+- `tests/dfGroupCrud.test.js` — 12 focused tests (DC1-DC12).
+
+12/12 focused pass. Build clean.
