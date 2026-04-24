@@ -3106,15 +3106,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   const bahtSum = enabledRows
                     .filter(r => r.type === 'baht')
                     .reduce((s, r) => s + (Number(r.value) || 0), 0);
-                  const percentCount = enabledRows.filter(r => r.type === 'percent').length;
+                  // Phase 12.2b follow-up (2026-04-24): compute the baht
+                  // amount for percent rows using the course price carried
+                  // on treatmentCoursesForDf. User directive: "ขอให้แสดง
+                  // ค่ามือตรงรายละเอียดด้านนอก modal". Sum across all
+                  // enabled percent rows; rows without a known price
+                  // contribute 0.
+                  const priceByCourseId = new Map(
+                    (treatmentCoursesForDf || []).map(c => [String(c.courseId), Number(c.price) || 0])
+                  );
+                  const percentSum = enabledRows
+                    .filter(r => r.type === 'percent')
+                    .reduce((s, r) => {
+                      const price = priceByCourseId.get(String(r.courseId)) || 0;
+                      return s + (price * (Number(r.value) || 0) / 100);
+                    }, 0);
+                  const totalDf = bahtSum + percentSum;
                   return (
                     <div key={e.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold truncate">{e.doctorName || e.doctorId}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-xs font-bold truncate">{e.doctorName || e.doctorId}</div>
+                          {totalDf > 0 && (
+                            <span className="text-xs font-bold font-mono tabular-nums text-emerald-400 shrink-0">
+                              ฿{totalDf.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-gray-500 truncate">
                           {groupName} · {enabledRows.length} คอร์ส
                           {bahtSum > 0 && ` · ${bahtSum.toFixed(2)} บาท`}
-                          {percentCount > 0 && ` · ${percentCount} rows %`}
+                          {percentSum > 0 && ` · ${percentSum.toFixed(2)} บาท (%)`}
                         </div>
                       </div>
                       <button
@@ -3143,10 +3165,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     </div>
                   );
                 })}
-                <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                  <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น</span>
-                  <span className="font-mono" style={{ color: '#14b8a6' }}>{dfEntries.length} รายการ</span>
-                </div>
+                {/* Phase 12.2b follow-up (2026-04-24): grand-total baht
+                    sum across all entries (percent + baht combined). */}
+                {(() => {
+                  const priceByCourseId = new Map(
+                    (treatmentCoursesForDf || []).map(c => [String(c.courseId), Number(c.price) || 0])
+                  );
+                  const grandTotal = dfEntries.reduce((sum, e) => {
+                    const enabled = (e.rows || []).filter(r => r.enabled);
+                    const bahtSum = enabled.filter(r => r.type === 'baht').reduce((s, r) => s + (Number(r.value) || 0), 0);
+                    const percentSum = enabled.filter(r => r.type === 'percent').reduce((s, r) => {
+                      const price = priceByCourseId.get(String(r.courseId)) || 0;
+                      return s + (price * (Number(r.value) || 0) / 100);
+                    }, 0);
+                    return sum + bahtSum + percentSum;
+                  }, 0);
+                  return (
+                    <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                      <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น · {dfEntries.length} รายการ</span>
+                      <span className="font-mono tabular-nums" style={{ color: '#14b8a6' }}>
+                        ฿{grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </FormSection>

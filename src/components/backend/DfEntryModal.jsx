@@ -51,6 +51,13 @@ export default function DfEntryModal({
   const isEdit = !!entry;
   const [form, setForm] = useState(() => (entry ? { ...emptyDfEntry(), ...entry } : emptyDfEntry()));
   const [error, setError] = useState('');
+  // Phase 12.2b follow-up (2026-04-24): dup-guard removed per user
+  // directive "มันต้องมีซ้ำได้ดิ มันคนละหัตถการกัน". Different entries
+  // for the same doctor can legitimately target different courses /
+  // procedures on the same treatment — e.g. one entry for Botox,
+  // another for Filler with different rates. The dupWarn state is
+  // retained as a soft-info hint (the heading badge) but never blocks
+  // save.
   const [dupWarn, setDupWarn] = useState(false);
 
   const peopleById = useMemo(() => {
@@ -126,10 +133,12 @@ export default function DfEntryModal({
 
   const handleSave = () => {
     setError('');
-    if (dupWarn) {
-      setError('แพทย์ / ผู้ช่วยแพทย์คนดังกล่าวมีรายการค่ามืออยู่แล้ว — แก้ไขรายการเดิมแทน');
-      return;
-    }
+    // Phase 12.2b follow-up (2026-04-24): dup-guard NO LONGER blocks
+    // save. Multiple DF entries per doctor on the same treatment are
+    // legitimate when each covers different courses / procedures.
+    // The dupWarn flag is still computed + shown as an info badge in
+    // the header so the user can CHOOSE to edit the existing entry
+    // instead of adding a new one.
     const prepared = {
       ...form,
       id: form.id || generateDfEntryId(),
@@ -183,9 +192,9 @@ export default function DfEntryModal({
             <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">แก้ไขไม่ได้ — ต้องลบแล้วเพิ่มใหม่ถ้าจะเปลี่ยนคน</p>
           )}
           {dupWarn && (
-            <div className="flex items-start gap-1.5 mt-2 text-xs text-red-400">
+            <div className="flex items-start gap-1.5 mt-2 text-xs text-amber-400">
               <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-              <span>แพทย์ / ผู้ช่วยแพทย์คนนี้มีรายการค่ามืออยู่แล้วบน treatment นี้</span>
+              <span>หมายเหตุ: มีรายการค่ามือของคนนี้อยู่แล้ว — เพิ่มใหม่ได้ถ้าคนละหัตถการ</span>
             </div>
           )}
         </div>

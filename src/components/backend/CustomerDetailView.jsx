@@ -136,11 +136,12 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
     const { remaining } = parseQtyString(c.qty);
     return remaining > 0;
   }), [allCourses]);
-  const usedUpCourses = useMemo(() => allCourses.filter(c => {
-    const { remaining } = parseQtyString(c.qty);
-    return remaining <= 0;
-  }), [allCourses]);
-  const expiredCourses = useMemo(() => [...(customer?.expiredCourses || []), ...usedUpCourses], [customer?.expiredCourses, usedUpCourses]);
+  // Phase 12.2b follow-up (2026-04-24): "คอร์สหมดอายุ" means ACTUALLY
+  // expired by date — not used-up courses. User directive: "คอร์สหมด
+  // อายุก็คือคอร์สหมดอายุจริงๆ". Used-up courses are traceable via
+  // Purchase History (sales linked to customer). Drop usedUpCourses
+  // from the expired tab.
+  const expiredCourses = useMemo(() => (customer?.expiredCourses || []), [customer?.expiredCourses]);
   const appointments = customer?.appointments || [];
   // Sort treatments newest-first. `rebuildTreatmentSummary` writes them in desc order
   // on every backend save, but customers cloned from ProClinic keep ProClinic's ordering
@@ -491,20 +492,83 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
                 customerSales.length === 0 && !salesError ? (
                   <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการซื้อ</div>
                 ) : (
-                  customerSales.map((sale, i) => (
-                    <div key={i} className="p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
-                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
-                          sale.payment?.status === 'paid' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') :
-                          sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') :
-                          (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700')
-                        }`}>{sale.payment?.status === 'paid' ? 'ชำระแล้ว' : sale.status === 'cancelled' ? 'ยกเลิก' : 'ค้างชำระ'}</span>
+                  customerSales.map((sale, i) => {
+                    // Phase 12.2b follow-up (2026-04-24): surface the
+                    // purchased item names + quantities so the user
+                    // doesn't have to click into every sale to see
+                    // what was bought. User directive: "ทำให้ตรงประวัติ
+                    // การซื้อแสดงรายละเอียดคอร์สที่ซื้อด้วย ไม่ใช่แสดง
+                    // แต่เลข inv". Sale items shape: either grouped
+                    // `{courses, promotions, products, medications}`
+                    // (SaleTab canonical) or legacy flat `[...]`.
+                    const items = sale.items || {};
+                    const courses = Array.isArray(items.courses) ? items.courses : [];
+                    const promotions = Array.isArray(items.promotions) ? items.promotions : [];
+                    const products = Array.isArray(items.products) ? items.products : [];
+                    const medications = Array.isArray(items.medications) ? items.medications : [];
+                    const flatLegacy = Array.isArray(items) ? items : [];
+                    const allLines = flatLegacy.length
+                      ? flatLegacy.map(it => ({ ...it, itemType: it.itemType || 'item' }))
+                      : [
+                        ...courses.map(c => ({ ...c, itemType: 'course' })),
+                        ...promotions.map(p => ({ ...p, itemType: 'promotion' })),
+                        ...products.map(p => ({ ...p, itemType: 'product' })),
+                        ...medications.map(m => ({ ...m, itemType: 'medication' })),
+                      ];
+                    const typeColor = {
+                      course: isDark ? 'text-teal-400' : 'text-teal-700',
+                      promotion: isDark ? 'text-orange-400' : 'text-orange-700',
+                      product: isDark ? 'text-sky-400' : 'text-sky-700',
+                      medication: isDark ? 'text-pink-400' : 'text-pink-700',
+                      item: isDark ? 'text-gray-400' : 'text-gray-600',
+                    };
+                    const typeLabel = {
+                      course: 'คอร์ส',
+                      promotion: 'โปรโมชัน',
+                      product: 'สินค้า',
+                      medication: 'ยา',
+                      item: '',
+                    };
+                    return (
+                      <div key={i} className="p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono text-[var(--tx-muted)]">{sale.saleId || '-'}</span>
+                          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                            sale.payment?.status === 'paid' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') :
+                            sale.payment?.status === 'cancelled' || sale.status === 'cancelled' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') :
+                            (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700')
+                          }`}>{sale.payment?.status === 'paid' ? 'ชำระแล้ว' : sale.status === 'cancelled' ? 'ยกเลิก' : 'ค้างชำระ'}</span>
+                        </div>
+                        <p className="text-xs text-[var(--tx-secondary)] mt-0.5">{formatThaiDateFull(sale.saleDate)}</p>
+                        <p className="text-sm font-bold text-[var(--tx-heading)] font-mono">{sale.billing?.netTotal != null ? Number(sale.billing.netTotal).toLocaleString() : '0'} บาท</p>
+                        {allLines.length > 0 && (
+                          <ul className={`mt-1.5 space-y-0.5 pl-2 border-l-2 ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                            {allLines.map((it, j) => {
+                              const name = it.name || it.productName || it.courseName || '-';
+                              const qty = Number(it.qty) || 0;
+                              const unit = it.unit || '';
+                              const unitPrice = Number(it.unitPrice || it.price) || 0;
+                              return (
+                                <li key={j} className="flex items-center justify-between gap-2 text-[11px]">
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span className={`text-[9px] uppercase tracking-wider shrink-0 ${typeColor[it.itemType] || typeColor.item}`}>
+                                      {typeLabel[it.itemType]}
+                                    </span>
+                                    <span className="text-[var(--tx-secondary)] truncate">{name}</span>
+                                  </span>
+                                  <span className="text-[var(--tx-muted)] font-mono tabular-nums shrink-0">
+                                    {qty > 0 && `${qty}${unit ? ' ' + unit : ''}`}
+                                    {unitPrice > 0 && qty > 0 && ' · '}
+                                    {unitPrice > 0 && `฿${unitPrice.toLocaleString('th-TH')}`}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
                       </div>
-                      <p className="text-xs text-[var(--tx-secondary)] mt-0.5">{formatThaiDateFull(sale.saleDate)}</p>
-                      <p className="text-sm font-bold text-[var(--tx-heading)] font-mono">{sale.billing?.netTotal != null ? Number(sale.billing.netTotal).toLocaleString() : '0'} บาท</p>
-                    </div>
-                  ))
+                    );
+                  })
                 )
               ) : (courseTab === 'active' ? activeCourses : expiredCourses).length === 0 ? (
                 <div className="p-8 text-center text-sm text-[var(--tx-muted)]">

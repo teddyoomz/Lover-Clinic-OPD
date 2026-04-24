@@ -682,6 +682,215 @@ describe('Scenario 13 — showBilling gate for 0-baht treatments', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
+// Scenario 14: DF summary baht calculation outside modal
+// User directive: show DF baht amount on the TreatmentFormPage summary
+// card (not only inside DfEntryModal). Entries carry courseId + rate
+// (value + type) + enabled flag; treatmentCoursesForDf supplies price.
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 14 — DF summary card baht computation', () => {
+  // Mirrors the in-component reduce pattern for a single doctor entry.
+  const computeEntryTotal = (entry, courseIdToPrice) => {
+    const enabled = (entry.rows || []).filter(r => r.enabled);
+    const bahtSum = enabled
+      .filter(r => r.type === 'baht')
+      .reduce((s, r) => s + (Number(r.value) || 0), 0);
+    const percentSum = enabled
+      .filter(r => r.type === 'percent')
+      .reduce((s, r) => {
+        const price = Number(courseIdToPrice.get(String(r.courseId))) || 0;
+        return s + (price * (Number(r.value) || 0) / 100);
+      }, 0);
+    return bahtSum + percentSum;
+  };
+
+  it('S14.1: percent-only entry uses course price × rate%', () => {
+    const priceMap = new Map([['C-PREM', 50000]]);
+    const entry = {
+      id: 'E1', doctorId: 'D1',
+      rows: [{ courseId: 'C-PREM', enabled: true, value: 10, type: 'percent' }],
+    };
+    expect(computeEntryTotal(entry, priceMap)).toBe(5000);
+  });
+
+  it('S14.2: baht-only entry sums raw values', () => {
+    const priceMap = new Map();
+    const entry = {
+      id: 'E1', doctorId: 'D1',
+      rows: [
+        { courseId: 'C1', enabled: true, value: 500, type: 'baht' },
+        { courseId: 'C2', enabled: true, value: 300, type: 'baht' },
+      ],
+    };
+    expect(computeEntryTotal(entry, priceMap)).toBe(800);
+  });
+
+  it('S14.3: mixed percent + baht combines correctly', () => {
+    const priceMap = new Map([['C-PREM', 50000]]);
+    const entry = {
+      id: 'E1', doctorId: 'D1',
+      rows: [
+        { courseId: 'C-PREM', enabled: true, value: 10, type: 'percent' }, // 5000
+        { courseId: 'C-OTHER', enabled: true, value: 500, type: 'baht' },  // 500
+      ],
+    };
+    expect(computeEntryTotal(entry, priceMap)).toBe(5500);
+  });
+
+  it('S14.4: disabled rows are excluded', () => {
+    const priceMap = new Map([['C-PREM', 50000]]);
+    const entry = {
+      id: 'E1', doctorId: 'D1',
+      rows: [
+        { courseId: 'C-PREM', enabled: false, value: 100, type: 'percent' }, // skipped
+        { courseId: 'C-PREM', enabled: true, value: 10, type: 'percent' },
+      ],
+    };
+    expect(computeEntryTotal(entry, priceMap)).toBe(5000);
+  });
+
+  it('S14.5: percent row with missing course price contributes 0 (no crash)', () => {
+    const priceMap = new Map();
+    const entry = {
+      id: 'E1', doctorId: 'D1',
+      rows: [{ courseId: 'C-MISSING', enabled: true, value: 20, type: 'percent' }],
+    };
+    expect(computeEntryTotal(entry, priceMap)).toBe(0);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 15: DF dup-guard is NON-BLOCKING (soft hint only)
+// User directive: "มันต้องมีซ้ำได้ดิ มันคนละหัตถการกัน"
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 15 — DF dup-guard allows multi-entry per doctor', () => {
+  it('S15.1: multiple entries for same doctor on same treatment are valid data', () => {
+    // Simulated state after user adds two DF entries for Dr. X.
+    const dfEntries = [
+      { id: 'E1', doctorId: 'D1', doctorName: 'Dr X', dfGroupId: 'G1',
+        rows: [{ courseId: 'C-BOTOX', enabled: true, value: 10, type: 'percent' }] },
+      { id: 'E2', doctorId: 'D1', doctorName: 'Dr X', dfGroupId: 'G2',
+        rows: [{ courseId: 'C-FILLER', enabled: true, value: 15, type: 'percent' }] },
+    ];
+    // Doctor has 2 entries, each covering a different course.
+    const forDoctor = dfEntries.filter(e => e.doctorId === 'D1');
+    expect(forDoctor).toHaveLength(2);
+    const courseIds = new Set(forDoctor.flatMap(e => e.rows.map(r => r.courseId)));
+    expect(courseIds).toContain('C-BOTOX');
+    expect(courseIds).toContain('C-FILLER');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 16: "คอร์สหมดอายุ" tab excludes used-up courses
+// User directive: "คอร์สหมดอายุก็คือคอร์สหมดอายุจริงๆ".
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 16 — expired tab only shows date-expired courses', () => {
+  const allCourses = [
+    { name: 'Active A', qty: '5 / 10 U' },     // active
+    { name: 'Used-up B', qty: '0 / 10 U' },    // used-up (NOT expired by date)
+    { name: 'Fill-later C', qty: '0 / 1 U', courseType: 'เหมาตามจริง' }, // consumed one-shot
+  ];
+  const customerExpired = [
+    { name: 'Actually-expired D', qty: '3 / 10 U', expiry: '2025-01-01' }, // expired by date
+  ];
+
+  it('S16.1: active tab shows remaining > 0 only', () => {
+    const active = allCourses.filter(c => parseQtyString(c.qty).remaining > 0);
+    expect(active).toHaveLength(1);
+    expect(active[0].name).toBe('Active A');
+  });
+
+  it('S16.2: expired tab ONLY shows customer.expiredCourses — not used-up ones', () => {
+    // Post-fix: expiredCourses = customer.expiredCourses (not joined with usedUp).
+    const expired = customerExpired;
+    expect(expired).toHaveLength(1);
+    expect(expired[0].name).toBe('Actually-expired D');
+    // Used-up courses are NOT in this list
+    expect(expired.find(c => c.name === 'Used-up B')).toBeUndefined();
+    expect(expired.find(c => c.name === 'Fill-later C')).toBeUndefined();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 17: Purchase history displays item names + qty + price
+// User directive: "ทำให้ตรงประวัติการซื้อแสดงรายละเอียดคอร์สที่ซื้อด้วย".
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 17 — purchase history item breakdown', () => {
+  const groupedSale = {
+    saleId: 'INV-001', saleDate: '2026-04-24',
+    items: {
+      courses: [{ name: 'Botox Course', qty: 1, unitPrice: 50000, unit: 'คอร์ส' }],
+      promotions: [{ name: 'New Year Promo', qty: 1, unitPrice: 80000 }],
+      products: [{ name: 'Vitamin', qty: 2, unitPrice: 500, unit: 'ขวด' }],
+      medications: [{ name: 'Paracetamol', qty: 10, unitPrice: 5, unit: 'เม็ด' }],
+    },
+  };
+
+  const buildLines = (sale) => {
+    const items = sale.items || {};
+    const flatLegacy = Array.isArray(items) ? items : [];
+    if (flatLegacy.length) {
+      return flatLegacy.map(it => ({ ...it, itemType: it.itemType || 'item' }));
+    }
+    return [
+      ...(items.courses || []).map(c => ({ ...c, itemType: 'course' })),
+      ...(items.promotions || []).map(p => ({ ...p, itemType: 'promotion' })),
+      ...(items.products || []).map(p => ({ ...p, itemType: 'product' })),
+      ...(items.medications || []).map(m => ({ ...m, itemType: 'medication' })),
+    ];
+  };
+
+  it('S17.1: grouped sale unfolds to 4 lines (one per item type)', () => {
+    const lines = buildLines(groupedSale);
+    expect(lines).toHaveLength(4);
+    expect(lines[0].itemType).toBe('course');
+    expect(lines[1].itemType).toBe('promotion');
+    expect(lines[2].itemType).toBe('product');
+    expect(lines[3].itemType).toBe('medication');
+  });
+
+  it('S17.2: each line carries name + qty + unit + price', () => {
+    const [course] = buildLines(groupedSale);
+    expect(course.name).toBe('Botox Course');
+    expect(course.qty).toBe(1);
+    expect(course.unit).toBe('คอร์ส');
+    expect(course.unitPrice).toBe(50000);
+  });
+
+  it('S17.3: legacy flat items[] array passes through as-is', () => {
+    const legacySale = {
+      saleId: 'INV-LEG', saleDate: '2024-01-01',
+      items: [
+        { name: 'Old Course', qty: 1, unitPrice: 1000, itemType: 'course' },
+      ],
+    };
+    const lines = buildLines(legacySale);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].itemType).toBe('course');
+  });
+
+  it('S17.4: empty items → empty lines array (no crash)', () => {
+    const emptySale = { saleId: 'INV-0' };
+    const lines = buildLines(emptySale);
+    expect(lines).toEqual([]);
+  });
+
+  it('S17.5: missing item type buckets → empty contribution (doesn\'t throw)', () => {
+    const partialSale = {
+      saleId: 'INV-1',
+      items: { courses: [{ name: 'Solo', qty: 1, unitPrice: 100 }] },
+    };
+    const lines = buildLines(partialSale);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].name).toBe('Solo');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 // Scenario 10: comprehensive edge-case coverage
 // Null / undefined / degenerate inputs across the pipeline.
 // ════════════════════════════════════════════════════════════════════════

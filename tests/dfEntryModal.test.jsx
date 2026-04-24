@@ -104,13 +104,15 @@ describe('DfEntryModal — ADD mode', () => {
     expect(rows[1].value).toBe('0'); // no rate for C2 in DFG-2
   });
 
-  it('DFM5: dup-guard warns + blocks save when selecting a doctor already entered', async () => {
+  it('DFM5: dup-guard shows AMBER info hint (not red error) + does NOT block save — user directive "มันต้องมีซ้ำได้ดิ มันคนละหัตถการกัน"', async () => {
     const existingEntries = [{ doctorId: 'D1', dfGroupId: 'DFG-1', rows: [] }];
     const { onSave } = renderModal({ existingEntries });
     fireEvent.change(document.querySelector('[data-field="doctorId"] select'), { target: { value: 'D1' } });
-    await waitFor(() => expect(screen.getByText(/มีรายการค่ามืออยู่แล้ว/)).toBeInTheDocument());
+    // Info hint renders (amber) — same doctor can take another entry for a different procedure.
+    await waitFor(() => expect(screen.getByText(/มีรายการค่ามือของคนนี้อยู่แล้ว/)).toBeInTheDocument());
+    // Save proceeds — the dup-block is gone.
     fireEvent.click(screen.getByText('ยืนยัน'));
-    expect(onSave).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
   });
 
   it('DFM6: save callback fires with normalized entry when valid', async () => {
