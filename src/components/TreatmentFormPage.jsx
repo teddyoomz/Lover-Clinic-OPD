@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, findOutOfRangePickAtTreatmentQty } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -589,17 +589,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   // the checkbox stays enabled and the user could tick +
                   // save → stock deducts AGAIN against a zero-qty entry.
                   if (total > 0 && remaining <= 0) return null;
-                  // Phase 12.2b follow-up (2026-04-24): propagate
-                  // courseType so a bought-but-not-yet-used "เหมาตามจริง"
-                  // course renders with the fill-later display +
-                  // checkbox-and-fill semantics on a later treatment
-                  // visit. productId was captured at assign time →
-                  // carry it through here so the stock-deduct path
-                  // (toggleCourseItem → treatmentItem.productId →
-                  // deductStockForTreatment) resolves a real be_products
-                  // batch instead of falling back to the synthetic rowId.
+                  // Phase 12.2b follow-up (2026-04-24): distinguish the
+                  // TWO fill-later course types — "เหมาตามจริง" is
+                  // unbounded (doctor enters real usage with no limit)
+                  // and "เลือกสินค้าตามจริง" is LIMIT-gated (doctor
+                  // enters qty within the course-configured minQty/
+                  // maxQty range). Both are `fillLater` at the tick
+                  // level but display + validate differently.
                   const courseType = String(c.courseType || '').trim();
                   const isRealQty = courseType === 'เหมาตามจริง';
+                  const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
+                  const fillLater = isRealQty || isPickAtTreatment;
                   return {
                     courseId: `be-course-${idx}`,
                     courseName: c.name,
@@ -610,18 +610,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     expiry: c.expiry || '',
                     courseType,
                     isRealQty,
+                    isPickAtTreatment,
                     products: [{
                       rowId: `be-row-${idx}`,
                       courseIndex: idx, // exact targeting — survives name-collision
                       productId: c.productId || '',
                       name: productName,
-                      // Fill-later entries display "เหมาตามจริง" and
-                      // start the treatment row with blank qty — doctor
-                      // enters the real amount used at this visit.
-                      remaining: isRealQty ? '' : (remaining > 0 ? `${remaining}` : '0'),
-                      total: isRealQty ? '' : `${total}`,
+                      // Fill-later entries start the treatment row with
+                      // blank qty — doctor enters the real amount used
+                      // at this visit. Display label diverges by subtype.
+                      remaining: fillLater ? '' : (remaining > 0 ? `${remaining}` : '0'),
+                      total: fillLater ? '' : `${total}`,
                       unit: unit || 'ครั้ง',
-                      fillLater: isRealQty,
+                      fillLater,
+                      isRealQty,
+                      isPickAtTreatment,
+                      minQty: c.minQty != null && c.minQty !== '' ? Number(c.minQty) : null,
+                      maxQty: c.maxQty != null && c.maxQty !== '' ? Number(c.maxQty) : null,
                     }],
                   };
                 })
@@ -1035,6 +1040,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             unit: product.unit || '',
             price: '',
             fillLater: !!product.fillLater,
+            // Phase 12.2b follow-up (2026-04-24): carry the pick-at-
+            // treatment subtype + its min/max limits onto the treatment
+            // item so the save validator can enforce the bounds + the
+            // UI can show a "1-10 U" hint next to the qty input.
+            isRealQty: !!product.isRealQty,
+            isPickAtTreatment: !!product.isPickAtTreatment,
+            minQty: product.minQty != null ? Number(product.minQty) : null,
+            maxQty: product.maxQty != null ? Number(product.maxQty) : null,
           }];
         });
       }
@@ -1802,6 +1815,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     const fillLaterMissing = findMissingFillLaterQty(treatmentItems);
     if (fillLaterMissing) {
       scrollToError(fillLaterMissing.id, `กรุณาระบุจำนวน "${fillLaterMissing.name}" ก่อนบันทึก (คอร์สเหมาตามจริง)`);
+      return;
+    }
+    // Phase 12.2b follow-up (2026-04-24): pick-at-treatment rows have
+    // min/max limits configured on the course. The doctor's entered qty
+    // must stay within [minQty, maxQty]. Blank qty already gated above.
+    const rangeFail = findOutOfRangePickAtTreatmentQty(treatmentItems);
+    if (rangeFail) {
+      const unit = rangeFail.item.unit ? ` ${rangeFail.item.unit}` : '';
+      const msg = rangeFail.reason === 'below'
+        ? `จำนวน "${rangeFail.item.name}" ต่ำกว่าขั้นต่ำ (${rangeFail.limit}${unit})`
+        : `จำนวน "${rangeFail.item.name}" เกินลิมิต (${rangeFail.limit}${unit})`;
+      scrollToError(rangeFail.item.id, msg);
       return;
     }
     // Phase 12.2b follow-up (2026-04-24): if the net total is 0 (free /
@@ -3595,7 +3620,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                 </div>
                                 <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap font-mono">
                                   {product.fillLater
-                                    ? <span className="italic text-amber-500">เหมาตามจริง</span>
+                                    ? (() => {
+                                        // Phase 12.2b follow-up (2026-
+                                        // 04-24): distinguish display
+                                        // between "เหมาตามจริง" (no
+                                        // limit) and "เลือกสินค้าตาม
+                                        // จริง" (limit-gated). User
+                                        // directive: show the min-max
+                                        // range for pick-at-treatment.
+                                        if (product.isPickAtTreatment) {
+                                          const mn = product.minQty;
+                                          const mx = product.maxQty;
+                                          if (mn != null && mx != null) {
+                                            return <span className="italic text-sky-400">{mn}-{mx} {product.unit}</span>;
+                                          }
+                                          if (mx != null) {
+                                            return <span className="italic text-sky-400">ไม่เกิน {mx} {product.unit}</span>;
+                                          }
+                                          if (mn != null) {
+                                            return <span className="italic text-sky-400">ขั้นต่ำ {mn} {product.unit}</span>;
+                                          }
+                                          return <span className="italic text-sky-400">เลือกตามจริง</span>;
+                                        }
+                                        return <span className="italic text-amber-500">เหมาตามจริง</span>;
+                                      })()
                                     : `${product.remaining} / ${product.total} ${product.unit}`}
                                 </span>
                               </label>
@@ -3686,19 +3734,49 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         // highlight the qty input (amber + required) and
                         // carry a data-field anchor for scrollToError when
                         // the doctor tries to save without entering qty.
-                        const needsQty = item.fillLater && (!item.qty || Number(item.qty) <= 0);
+                        const qtyNum = Number(item.qty);
+                        const needsQty = item.fillLater && (!item.qty || qtyNum <= 0);
+                        // Phase 12.2b follow-up (2026-04-24): pick-at-
+                        // treatment items are LIMIT-gated. Flag the row
+                        // as invalid when qty is below min or above max.
+                        const outOfRange = item.isPickAtTreatment && !needsQty && (
+                          (item.minQty != null && qtyNum < Number(item.minQty)) ||
+                          (item.maxQty != null && qtyNum > Number(item.maxQty))
+                        );
+                        // Display suffix for the name:
+                        //   - เหมาตามจริง → "(ระบุจำนวนตามจริง)"
+                        //   - เลือกสินค้าตามจริง with range → "(1-10 U)"
+                        //   - otherwise no suffix
+                        const limitHint = (() => {
+                          if (item.isPickAtTreatment) {
+                            const mn = item.minQty;
+                            const mx = item.maxQty;
+                            const u = item.unit ? ` ${item.unit}` : '';
+                            if (mn != null && mx != null) return `(${mn}-${mx}${u})`;
+                            if (mx != null) return `(ไม่เกิน ${mx}${u})`;
+                            if (mn != null) return `(ขั้นต่ำ ${mn}${u})`;
+                            return '(เลือกตามจริง)';
+                          }
+                          if (item.isRealQty || item.fillLater) {
+                            return '(ระบุจำนวนตามจริง)';
+                          }
+                          return '';
+                        })();
+                        const hintColor = item.isPickAtTreatment
+                          ? 'text-sky-500'
+                          : 'text-amber-500';
                         return (
                           <div
                             key={item.id}
                             data-field={item.id}
-                            className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'} ${needsQty ? 'bg-amber-500/10' : ''}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'} ${needsQty || outOfRange ? 'bg-amber-500/10' : ''}`}
                           >
                             <div className="flex-1 min-w-0">
                               <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-orange-400' : ''}`}>
                                 {item.name}
                                 {item.source === 'purchased' && <span className="text-[11px] text-orange-500 ml-1">(ซื้อเพิ่ม)</span>}
-                                {item.fillLater && (
-                                  <span className="text-[11px] text-amber-500 ml-1 italic">(ระบุจำนวนตามจริง)</span>
+                                {limitHint && (
+                                  <span className={`text-[11px] ml-1 italic ${hintColor}`}>{limitHint}</span>
                                 )}
                               </span>
                             </div>
@@ -3706,10 +3784,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               type="number"
                               value={item.qty}
                               onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
-                              className={`${inputCls} !w-24 text-center !py-1 shrink-0 ${needsQty ? '!border-amber-500 !ring-1 !ring-amber-500/50' : ''}`}
-                              min="0"
+                              className={`${inputCls} !w-24 text-center !py-1 shrink-0 ${(needsQty || outOfRange) ? '!border-amber-500 !ring-1 !ring-amber-500/50' : ''}`}
+                              min={item.minQty != null ? String(item.minQty) : '0'}
+                              max={item.maxQty != null ? String(item.maxQty) : undefined}
                               placeholder={item.fillLater ? 'ระบุ' : ''}
-                              aria-label={`จำนวน ${item.name}${item.fillLater ? ' (ต้องระบุก่อนบันทึก)' : ''}`}
+                              aria-label={`จำนวน ${item.name}${item.fillLater ? ' (ต้องระบุก่อนบันทึก)' : ''}${limitHint ? ' ' + limitHint : ''}`}
                             />
                             <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
                             <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>

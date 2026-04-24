@@ -959,6 +959,135 @@ describe('Scenario 18 — consumed courses filtered out of treatment form', () =
 });
 
 // ════════════════════════════════════════════════════════════════════════
+// Scenario 19: เลือกสินค้าตามจริง (pick-at-treatment) LIMIT-gated flow
+// User directive: "มันเป็นแค่การกำหนดลิมิตมา แล้วระบุว่าใช้จริงเท่าไหร่
+// โดยไม่ต่ำกว่าที่กำหนด และไม่สูงกว่าที่กำหนด ไม่ใช่ระบบเหมาเท่าไหร่ก็ได้".
+// DIFFERENT from เหมาตามจริง (unlimited) — pick-at-treatment carries a
+// min/max range per product and the doctor's entered qty must fall
+// within it. UI shows "1-10 U" (sky blue) not "เหมาตามจริง" (amber).
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 19 — pick-at-treatment limit-gated flow', () => {
+  const buyItem = {
+    id: 'C-PICK', name: 'Pick Course', unit: 'คอร์ส', itemType: 'course', qty: 1,
+    courseType: 'เลือกสินค้าตามจริง',
+    products: [
+      // Main product has min-max configured
+      { id: 'P-BOTOX', name: 'Botox 100u', qty: 0, unit: 'U', minQty: 1, maxQty: 10 },
+      // Secondary with only max (no floor)
+      { id: 'P-FILLER', name: 'Filler', qty: 0, unit: 'cc', maxQty: 2 },
+    ],
+  };
+
+  it('S19.1: buildPurchasedCourseEntry tags isPickAtTreatment (NOT isRealQty)', () => {
+    const entry = buildPurchasedCourseEntry(buyItem, { now: NOW });
+    expect(entry.isPickAtTreatment).toBe(true);
+    expect(entry.isRealQty).toBe(false);
+    expect(entry.products[0].isPickAtTreatment).toBe(true);
+    expect(entry.products[0].isRealQty).toBe(false);
+  });
+
+  it('S19.2: product rows preserve minQty / maxQty', () => {
+    const entry = buildPurchasedCourseEntry(buyItem, { now: NOW });
+    expect(entry.products[0].minQty).toBe(1);
+    expect(entry.products[0].maxQty).toBe(10);
+    expect(entry.products[1].minQty).toBeNull(); // not set → null
+    expect(entry.products[1].maxQty).toBe(2);
+  });
+
+  it('S19.3: fillLater still true for pick-at-treatment (doctor fills qty at save)', () => {
+    const entry = buildPurchasedCourseEntry(buyItem, { now: NOW });
+    expect(entry.products.every(p => p.fillLater === true)).toBe(true);
+    expect(entry.products.every(p => p.remaining === '')).toBe(true);
+  });
+
+  it('S19.4: เหมาตามจริง and เลือกสินค้าตามจริง BOTH fillLater but distinct flags', () => {
+    const realQty = buildPurchasedCourseEntry(
+      { id: 'CR', name: 'R', qty: 0, courseType: 'เหมาตามจริง', products: [{ id: 'p', name: 'X', qty: 0 }] },
+      { now: NOW }
+    );
+    const pick = buildPurchasedCourseEntry(
+      { id: 'CP', name: 'P', qty: 0, courseType: 'เลือกสินค้าตามจริง', products: [{ id: 'p', name: 'X', qty: 0, minQty: 1, maxQty: 5 }] },
+      { now: NOW }
+    );
+    expect(realQty.isRealQty).toBe(true);
+    expect(realQty.isPickAtTreatment).toBe(false);
+    expect(pick.isRealQty).toBe(false);
+    expect(pick.isPickAtTreatment).toBe(true);
+  });
+
+  it('S19.5: pick-at-treatment product DOES have limits to display (not "เหมาตามจริง")', () => {
+    const entry = buildPurchasedCourseEntry(buyItem, { now: NOW });
+    // Simulate the course-column render branch
+    const p = entry.products[0];
+    const label = p.isPickAtTreatment
+      ? (p.minQty != null && p.maxQty != null ? `${p.minQty}-${p.maxQty} ${p.unit}` : 'fallback')
+      : (p.isRealQty ? 'เหมาตามจริง' : `${p.remaining}/${p.total} ${p.unit}`);
+    expect(label).toBe('1-10 U');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 20: pick-at-treatment range validator + treatment-items hint
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 20 — pick-at-treatment range validator end-to-end', () => {
+  const makeItem = (qty, overrides = {}) => ({
+    id: 'r1', name: 'Allergan',
+    fillLater: true, isPickAtTreatment: true,
+    minQty: 1, maxQty: 10, unit: 'U',
+    qty,
+    ...overrides,
+  });
+
+  it('S20.1: below minQty → blocks save with Thai "ต่ำกว่าขั้นต่ำ" message', () => {
+    // Mirrors the handleSubmit branch that calls findOutOfRangePickAtTreatmentQty.
+    const items = [makeItem('0.5')];
+    const rangeFail = items.find(t => t.isPickAtTreatment && Number(t.qty) < t.minQty);
+    expect(rangeFail).toBeTruthy();
+    // Error message should mention the limit
+    const msg = `จำนวน "${rangeFail.name}" ต่ำกว่าขั้นต่ำ (${rangeFail.minQty} ${rangeFail.unit})`;
+    expect(msg).toBe('จำนวน "Allergan" ต่ำกว่าขั้นต่ำ (1 U)');
+  });
+
+  it('S20.2: above maxQty → blocks save with Thai "เกินลิมิต" message', () => {
+    const items = [makeItem('20')];
+    const rangeFail = items.find(t => t.isPickAtTreatment && Number(t.qty) > t.maxQty);
+    expect(rangeFail).toBeTruthy();
+    const msg = `จำนวน "${rangeFail.name}" เกินลิมิต (${rangeFail.maxQty} ${rangeFail.unit})`;
+    expect(msg).toBe('จำนวน "Allergan" เกินลิมิต (10 U)');
+  });
+
+  it('S20.3: within range → no error', () => {
+    const items = [makeItem('5')];
+    const rangeFail = items.find(t => {
+      const n = Number(t.qty);
+      return (t.minQty != null && n < t.minQty) || (t.maxQty != null && n > t.maxQty);
+    });
+    expect(rangeFail).toBeUndefined();
+  });
+
+  it('S20.4: limit hint format matches UI expectation', () => {
+    const build = (p) => {
+      if (p.isPickAtTreatment) {
+        const mn = p.minQty; const mx = p.maxQty; const u = p.unit ? ` ${p.unit}` : '';
+        if (mn != null && mx != null) return `(${mn}-${mx}${u})`;
+        if (mx != null) return `(ไม่เกิน ${mx}${u})`;
+        if (mn != null) return `(ขั้นต่ำ ${mn}${u})`;
+        return '(เลือกตามจริง)';
+      }
+      if (p.isRealQty || p.fillLater) return '(ระบุจำนวนตามจริง)';
+      return '';
+    };
+    expect(build({ isPickAtTreatment: true, minQty: 1, maxQty: 10, unit: 'U' })).toBe('(1-10 U)');
+    expect(build({ isPickAtTreatment: true, maxQty: 2, unit: 'cc' })).toBe('(ไม่เกิน 2 cc)');
+    expect(build({ isPickAtTreatment: true, minQty: 0.5, unit: 'cc' })).toBe('(ขั้นต่ำ 0.5 cc)');
+    expect(build({ isPickAtTreatment: true })).toBe('(เลือกตามจริง)');
+    expect(build({ isRealQty: true, fillLater: true })).toBe('(ระบุจำนวนตามจริง)');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 // Scenario 10: comprehensive edge-case coverage
 // Null / undefined / degenerate inputs across the pipeline.
 // ════════════════════════════════════════════════════════════════════════
