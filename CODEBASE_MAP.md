@@ -2291,3 +2291,46 @@ Rule E/H ✅. 13/13 focused pass. Build clean.
 **Test coverage:** 13.2.1 CC1-CC10 covers the pure helper. No new UI integration test — AppointmentTab is 827 LOC with heavy grid dependencies, and the helper's contract is fully exercised by unit tests.
 
 Build clean. Rule E ✅ (backendClient-only read path, no broker).
+
+---
+
+## Phase 13.2.5 — Nav + BackendDashboard wiring (2026-04-24)
+
+**Edits:**
+- `src/components/backend/nav/navConfig.js`: added `CalendarClock` import + `staff-schedules` item to the master section (between `staff` and `doctors`, `color: 'amber'`, palette covers schedule/shift/work/holiday/leave + Thai).
+- `src/pages/BackendDashboard.jsx`: imports `StaffSchedulesTab` + adds `activeTab === 'staff-schedules'` case branch after `quotations`.
+- `tests/backend-nav-config.test.js` I4: updated master-section ordering assertion to include `staff-schedules` between `staff` and `doctors`.
+
+**New files:**
+- `tests/staffSchedulesNavWiring.test.js` — 5 tests (SN1-SN5): ALL_ITEM_IDS, sectionOf, metadata, ordering, ITEM_LOOKUP.
+
+Nav wiring intentionally places `staff-schedules` next to `staff` (same person-entity clustering, makes admin's mental model clean — click staff to see people, click staff-schedules to see when they work).
+
+5/5 + 25/25 existing nav-config tests pass. Build clean.
+
+---
+
+## Phase 13.2 — SHIPPED (2026-04-24)
+
+**Summary (5 sub-phases, ~2h, 5 commits):**
+
+| Sub-phase | Commit | Change | Tests |
+|---|---|---|---:|
+| 13.2.1 validator + collision helper | `9b9d7eb` | +2 files | +38 (SV1-SV28 + CC1-CC10) |
+| 13.2.2 CRUD + rules | `af1e7d5` | +1 test, edit backendClient/rules/map | +13 (SC1-SC13) |
+| 13.2.3 StaffSchedulesTab UI | `59466a5` | +2 files | +6 (SU1-SU6) |
+| 13.2.4 AppointmentTab collision | `2823569` | edit AppointmentTab | 0 (CC helper reused) |
+| 13.2.5 Nav + Dashboard wiring | this commit | +1 test, edit navConfig/BackendDashboard | +5 (SN1-SN5) |
+
+**Total delta:** +62 focused tests (plan called for +40; over-delivered via richer validator + collision helper). firestore.rules edited (13.2.2) — bundled into end-of-Phase-13 Probe-Deploy-Probe.
+
+**Feature complete:**
+- `be_staff_schedules` collection — Firestore-owned schedule entries
+- 5-type enum (work/halfday/holiday/leave/sick) with time windows for work types
+- StaffSchedulesTab inline CRUD (outside shell so form stays visible in empty state)
+- AppointmentTab warns (non-blocking) on collision with doctor's schedule
+- Deep-link support via ?tab=staff-schedules
+
+**Rule compliance:** E ✅, H ✅, C1 ✅ (reused Thai-TZ id gen pattern + MarketingTabShell), C2 ✅ (crypto id), D ✅, 04 ✅ (ค.ศ. backend, no red on names).
+
+**Next**: Phase 13.3 — be_df_groups + be_df_staff_rates (DF payout matrix, 5h, +50 tests, High risk).

@@ -40,6 +40,8 @@ import {
   Globe2,
   // Phase 13.1 quotation tab icon
   FileText,
+  // Phase 13.2 staff schedules tab icon
+  CalendarClock,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -130,6 +132,7 @@ export const NAV_SECTIONS = [
       { id: 'branches',             label: 'สาขา',               icon: Building2,     color: 'amber', palette: 'branch สาขา location' },
       { id: 'permission-groups',    label: 'สิทธิ์การใช้งาน',      icon: ShieldCheck,   color: 'amber', palette: 'permission role rights สิทธิ์ บทบาท access' },
       { id: 'staff',                label: 'พนักงาน',             icon: User,          color: 'amber', palette: 'staff employee user พนักงาน เจ้าหน้าที่' },
+      { id: 'staff-schedules',      label: 'ตารางงานพนักงาน',     icon: CalendarClock, color: 'amber', palette: 'schedule shift work holiday leave ตาราง เวลา ทำงาน หยุด ลา พนักงาน' },
       { id: 'doctors',              label: 'แพทย์ & ผู้ช่วย',      icon: Stethoscope,   color: 'amber', palette: 'doctor assistant physician แพทย์ หมอ ผู้ช่วยแพทย์' },
       { id: 'products',             label: 'สินค้า',              icon: PackageIcon,   color: 'amber', palette: 'product drug service สินค้า ยา บริการ' },
       { id: 'courses',              label: 'คอร์ส',               icon: BriefcaseIcon, color: 'amber', palette: 'course program package คอร์ส โปรแกรม' },
