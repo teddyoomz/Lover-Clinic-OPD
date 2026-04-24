@@ -2043,3 +2043,32 @@ Build clean. Ready for Phase 13.
 Tests: 2837 → 2850 (+13). Build clean.
 
 Phase 11 grand total: 2085 → 2373 PASS (+288 tests · 8 tasks · 11 commits over 2026-04-20 session).
+
+---
+
+## Phase 13.1.1 — be_quotations validator + normalizer (2026-04-24)
+
+**Context:** First sub-task of Phase 13.1 (Quotations). Lands the pure-function layer (`validateQuotationStrict` + `normalizeQuotation` + `emptyQuotationForm` + `generateQuotationId`) before UI/CRUD. Triangle-verified against `docs/proclinic-scan/detailed-adminquotationcreate.json` (6 forms captured 2026-04-20).
+
+**New files:**
+- `src/lib/quotationValidation.js` — 10 numbered invariants (QU-1..QU-10). Supports main header (customerId, quotationDate, sellerId, discount + discountType, note) plus 4 sub-item arrays (`courses`, `products`, `promotions`, `takeawayMeds`). Takeaway meds carry medication fields (dosage, administration method with `interval`/`after_meal`/`before_meal_30min`, administration times morning/noon/evening/bedtime). OUR additions: `convertedToSaleId` + `convertedAt` + `converted` status for Phase 13.1.4 convert-to-sale. ID format `QUO-{MMYY}-{8hex}` using `crypto.getRandomValues` + Thai-local month/year (`nowMs + 7h` shift, matching `bangkokNow` convention).
+- `tests/quotationValidation.test.js` — 51 adversarial tests (QV1–QV51). Covers every invariant, all 4 sub-item categories, discount bounds per-item + header, takeaway interval-hour edge, converted-status requirements, ID format + uniqueness (100-id collision test), normalization (snake→camel, invalid enum fallbacks, filter-by-required-id), frozen constants, and the empty form's validator path.
+
+**Invariants enforced (strict mode):**
+- QU-1 customerId required
+- QU-2 quotationDate required + YYYY-MM-DD
+- QU-3 at least one sub-item across 4 categories
+- QU-4 sub-item qty > 0 AND price ≥ 0
+- QU-5 header discountType ∈ {'', 'percent', 'baht'}; percent ≤ 100
+- QU-6 per-item itemDiscountType + bounds
+- QU-7 status ∈ STATUS_OPTIONS (draft/sent/accepted/rejected/expired/converted/cancelled)
+- QU-8 takeawayMed administrationMethod='interval' ⇒ administrationMethodHour > 0
+- QU-9 status='converted' ⇒ convertedToSaleId + convertedAt required
+- QU-10 id format QUO-{MMYY}-{8hex} when present
+
+Rule E: no brokerClient import, no /api/proclinic/quotation call. OUR data in `be_quotations`.
+Rule H: no write-back to ProClinic. Quotation is born-in-our-Firestore.
+
+Tests: 2865 → 2939 PASS (+51 new + delta from concurrent baseline growth). Build clean.
+
+**Next in Phase 13.1**: 13.1.2 backendClient CRUD + firestore.rules → 13.1.3 QuotationTab + FormModal UI → 13.1.4 convert-to-sale → 13.1.5 nav wiring.
