@@ -13,6 +13,8 @@ import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion } f
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
+import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
+import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 //
@@ -276,6 +278,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [dfGroups, setDfGroups] = useState([]);
   const [dfStaffRates, setDfStaffRates] = useState([]);
   const [masterCourses, setMasterCourses] = useState([]);
+  // Phase 14.4 ask-B (2026-04-24): track doctors whose auto-created DF entry
+  // the user has explicitly deleted. Re-picking that doctor later won't
+  // resurrect the entry — respect the manual dismissal.
+  const [dfDismissedIds, setDfDismissedIds] = useState(() => new Set());
 
   // Health Info
   const [bloodType, setBloodType] = useState('');
@@ -939,6 +945,62 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     });
   }, [doctorId, assistantIds, options]);
 
+  // ── Phase 14.4 ask-B (2026-04-24): auto-populate dfEntries[] ──
+  // When the user picks doctor / assistants AND the treatment has any
+  // billable items (purchased-course picks OR direct treatmentItems),
+  // create one dfEntry per person with the resolver's default rows.
+  // No manual "เพิ่มค่ามือ" click required — mirrors the legacy doctorFees
+  // auto-populate above, but scoped to the per-course DF model.
+  //
+  // Respects manual dismissal: when the user deletes an auto-created
+  // entry, its doctorId lands in `dfDismissedIds` so picking the same
+  // doctor again won't resurrect the row.
+  useEffect(() => {
+    if (!options) return;
+    if (treatmentCoursesForDf.length === 0) return;
+    if (!Array.isArray(dfGroups) || dfGroups.length === 0) return;
+    const selectedIds = [doctorId, ...assistantIds].filter(Boolean);
+    if (selectedIds.length === 0) return;
+
+    setDfEntries((prev) => {
+      const existingByDoctor = new Map(prev.map((e) => [String(e.doctorId), e]));
+      const next = [...prev];
+      let changed = false;
+      for (const pid of selectedIds) {
+        const key = String(pid);
+        if (existingByDoctor.has(key)) continue;
+        if (dfDismissedIds.has(key)) continue;
+        const person = treatmentPeopleForDf.find((p) => String(p.id) === key);
+        if (!person) continue;
+        const entryGroupId = person.defaultDfGroupId || '';
+        if (!entryGroupId) continue; // no default group → skip auto-create
+        const rows = buildDefaultRows(
+          treatmentCoursesForDf,
+          key,
+          entryGroupId,
+          dfGroups,
+          dfStaffRates,
+          getRateForStaffCourse,
+        );
+        // Only auto-create if at least one row resolved to a non-zero rate
+        // (otherwise the entry would be all zeros which fails validator
+        // DFE-10 "ต้องเลือกคอร์สอย่างน้อยหนึ่งรายการ" and is meaningless
+        // for the user).
+        if (!rows.some((r) => r.enabled)) continue;
+        next.push({
+          id: generateDfEntryId(),
+          doctorId: key,
+          doctorName: person.name || '',
+          dfGroupId: entryGroupId,
+          rows,
+        });
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, assistantIds, treatmentCoursesForDf, dfGroups, dfStaffRates, treatmentPeopleForDf]);
+
   // ── Course item toggle — also update treatment items ──
   const toggleCourseItem = (product) => {
     // Block if remaining ≤ 0
@@ -1524,24 +1586,40 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   }, [masterCourses]);
 
   const treatmentCoursesForDf = useMemo(() => {
-    const all = options?.customerCourses || [];
     const seen = new Set();
     const out = [];
+    const push = (cid, name) => {
+      const key = String(cid || '');
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push({ courseId: key, courseName: name || key });
+    };
+
+    // Source 1: customer's purchased courses picked this visit (deducted).
+    const all = options?.customerCourses || [];
     for (const c of all) {
       const hasPicked = (c.products || []).some(p => selectedCourseItems.has(p.rowId));
       if (!hasPicked) continue;
       const name = String(c.courseName || '').trim();
       const masterId = masterCourseIdByName.get(name) || '';
-      // Prefer master id — matches be_df_groups.rates keys. Fall back to
-      // the customer-course synthetic id so the row still appears (user
-      // can then set fees manually).
       const cid = masterId || String(c.courseId || name);
-      if (!cid || seen.has(cid)) continue;
-      seen.add(cid);
-      out.push({ courseId: cid, courseName: name || cid });
+      push(cid, name);
+    }
+
+    // Phase 14.4 ask-A (2026-04-24): Source 2 — items directly added on
+    // this visit via "+ เพิ่มรายการรักษา". Match by name → master id;
+    // unmatched items fall back to their display name as pseudo-id so the
+    // row still renders in the DF modal. This is how DF entries can be
+    // added to a treatment that doesn't deduct any existing purchased
+    // course (e.g. ad-hoc walk-in procedures).
+    for (const ti of (treatmentItems || [])) {
+      const name = String(ti?.name || '').trim();
+      if (!name) continue;
+      const masterId = masterCourseIdByName.get(name) || '';
+      push(masterId || name, name);
     }
     return out;
-  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName]);
+  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, treatmentItems]);
 
   // Combined people list (doctors + assistants) for DfEntryModal picker.
   // Each carries `position` + `defaultDfGroupId` so the modal can auto-fill
@@ -2928,7 +3006,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         <Edit3 size={11} />
                       </button>
                       <button
-                        onClick={() => setDfEntries(prev => prev.filter(x => x.id !== e.id))}
+                        onClick={() => {
+                          // Phase 14.4 ask-B: record dismissal so the auto-
+                          // populate effect doesn't re-create this entry.
+                          setDfDismissedIds((prev) => {
+                            const n = new Set(prev);
+                            n.add(String(e.doctorId));
+                            return n;
+                          });
+                          setDfEntries(prev => prev.filter(x => x.id !== e.id));
+                        }}
                         className="text-red-400 hover:text-red-300 transition-colors shrink-0"
                         aria-label={`ลบ ${e.doctorName}`}
                       >
