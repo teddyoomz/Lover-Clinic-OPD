@@ -5332,7 +5332,13 @@ function mapMasterToDoctor(src, id, now, existingCreatedAt) {
     color: String(src.color || '').trim(),
     backgroundColor: '',
     hourlyIncome: Number.isFinite(hourly) ? hourly : null,
-    defaultDfGroupId: '',
+    // Phase 14.x ask-C (2026-04-24): preserve defaultDfGroupId from sync
+    // if provided. handleSyncDoctors now enriches doctor rows with the
+    // ProClinic df_group_id assignment (via the treatment-create options
+    // embedded JSON — same source our extractTreatmentCreateOptions uses).
+    // Empty string when enrichment fetch failed or the doctor has no
+    // default group set in ProClinic.
+    defaultDfGroupId: String(src.defaultDfGroupId || src.df_group_id || '').trim(),
     dfPaidType: '',
     minimumDfType: '',
     hasSales: false,

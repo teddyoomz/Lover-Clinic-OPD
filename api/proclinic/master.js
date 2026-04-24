@@ -153,6 +153,49 @@ async function handleSyncDoctors(req, res) {
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/doctor`, extractDoctorList
   );
+
+  // Phase 14.x ask-C (2026-04-24): enrich each doctor with their
+  // defaultDfGroupId from ProClinic. The mapping lives in a JSON blob
+  // embedded on /admin/treatment/create?customer_id=X, parsed by the
+  // same regex our extractTreatmentCreateOptions uses. We probe ANY
+  // customer from the first page of /admin/customer to get a valid
+  // customer_id — without that the treatment page would 302 back.
+  try {
+    const customerListHtml = await withRetry(
+      () => session.fetchText(`${base}/admin/customer?page=1`, FETCH_OPTS),
+      RETRY_OPTS,
+    );
+    const $c = cheerio.load(customerListHtml);
+    let probeId = '';
+    $c('a[href*="/customer/"], button[data-url*="/customer/"]').each((_, el) => {
+      if (probeId) return;
+      const href = $c(el).attr('href') || $c(el).attr('data-url') || '';
+      const m = href.match(/\/customer\/(\d+)/);
+      if (m) probeId = m[1];
+    });
+    if (probeId) {
+      const treatHtml = await withRetry(
+        () => session.fetchText(`${base}/admin/treatment/create?customer_id=${probeId}`, FETCH_OPTS),
+        RETRY_OPTS,
+      );
+      const dfGroupMap = {};
+      const dfGroupRegex = /&quot;id&quot;:(\d+).*?&quot;df_group_id&quot;:(\d+)/g;
+      let m;
+      while ((m = dfGroupRegex.exec(treatHtml)) !== null) {
+        dfGroupMap[m[1]] = m[2];
+      }
+      for (const d of items) {
+        const id = String(d.id || '');
+        if (dfGroupMap[id]) d.defaultDfGroupId = dfGroupMap[id];
+      }
+    }
+  } catch (err) {
+    // Non-fatal — doctors still sync without the df_group enrichment.
+    // Downstream mapMasterToDoctor reads defaultDfGroupId || '' so empty
+    // is safe (user can still set it manually via DoctorFormModal).
+    console.warn('[syncDoctors] df_group enrichment skipped:', err.message);
+  }
+
   return res.status(200).json({
     success: true,
     type: 'doctors',
