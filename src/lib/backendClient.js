@@ -6165,6 +6165,25 @@ export async function convertQuotationToSale(quotationId) {
 
   const { saleId } = await createBackendSale(saleData);
 
+  // User bug 2026-04-24: "พอกดแปลงใบขายแล้ว และบันทึกชำระครบแล้ว ไม่ยอมไป
+  // ตัดสต็อคเอง". convertQuotationToSale previously created the sale but
+  // never called deductStockForSale — leaving stock untouched even after
+  // markSalePaid. SaleTab's equivalent flow (line 499, 535) deducts on
+  // create, so quotation-convert must do the same to stay consistent.
+  // Non-fatal: log + continue if deduction fails so the sale stays
+  // created (user can manually reconcile).
+  try {
+    const { flattenPromotionsForStockDeduction } = await import('./treatmentBuyHelpers.js');
+    await deductStockForSale(saleId, flattenPromotionsForStockDeduction(items), {
+      saleDate: saleData.saleDate,
+      sellerId: sellers[0]?.sellerId || '',
+      sellerName: sellers[0]?.sellerName || '',
+      source: 'quotation',
+    });
+  } catch (err) {
+    console.warn('[convertQuotationToSale] deductStockForSale failed:', err.message);
+  }
+
   const now = new Date().toISOString();
   await updateDoc(quotationDocRef(qid), {
     status: 'converted',
