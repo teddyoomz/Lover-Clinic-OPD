@@ -471,3 +471,89 @@ describe('computeDfPayoutReport — Phase 12.2b partial-usage weighting', () => 
     expect(b.treatmentId).toBe('BT-AUDIT');
   });
 });
+
+describe('computeDfPayoutReport — production-shape id/courseId fallback (2026-04-24 DF report bug)', () => {
+  // Real backend sales (SaleTab.confirmBuy) store course items with `id:
+  // <master_course_id>` — not `courseId`. Before the fix, every prod sale
+  // produced a ฿0 DF report because the courseIndex was keyed by
+  // `it.courseId` (undefined) → '' collision → lookup miss. These tests
+  // lock the fallback in place.
+
+  it('DP32: explicit-entry path resolves matching item via `id` when `courseId` is absent', () => {
+    const r = computeDfPayoutReport({
+      sales: [{
+        saleId: 'INV-PROD', saleDate: '2026-04-24', status: 'active',
+        doctorId: 'D1',
+        // Production shape: `id` only, no courseId.
+        items: [{ id: 'C-X', name: 'X Course', qty: 1, price: 1000, itemType: 'course' }],
+      }],
+      treatments: [{
+        treatmentId: 'BT-P1',
+        detail: {
+          linkedSaleId: 'INV-PROD',
+          dfEntries: [{
+            id: 'DFE-1', doctorId: 'D1', doctorName: 'A', dfGroupId: 'DFG-1',
+            rows: [{ courseId: 'C-X', enabled: true, value: 20, type: 'percent' }],
+          }],
+          courseItems: [],
+        },
+      }],
+      doctors, groups: [{ id: 'DFG-1', rates: [{ courseId: 'C-X', value: 20, type: 'percent' }] }],
+    });
+    expect(r.rows[0].totalDf).toBe(200); // 20% × 1000 = 200 (weight=1 with empty courseItems → full)
+  });
+
+  it('DP33: inference path resolves courseId from `id` when the field is missing', () => {
+    const r = computeDfPayoutReport({
+      sales: [{
+        saleId: 'INV-INF', saleDate: '2026-04-24', status: 'active',
+        doctorId: 'D1',
+        // Production shape + no explicit dfEntries → hits inference path.
+        items: [{ id: 'C1', name: 'Course 1', qty: 1, price: 1000, itemType: 'course' }],
+      }],
+      doctors, groups,
+    });
+    // DFG-1 has C1 at 20% → 1000 × 20% = 200
+    expect(r.rows[0].totalDf).toBe(200);
+  });
+
+  it('DP34: inference path SKIPS non-course items (product with id set but itemType=product)', () => {
+    const r = computeDfPayoutReport({
+      sales: [{
+        saleId: 'INV-MIX', saleDate: '2026-04-24', status: 'active',
+        doctorId: 'D1',
+        items: [
+          { id: 'PROD-X', name: 'Vitamin', qty: 1, price: 500, itemType: 'product' },
+          { id: 'C1', name: 'Course 1', qty: 1, price: 1000, itemType: 'course' },
+        ],
+      }],
+      doctors, groups,
+    });
+    // Only the course earns DF. 1000 × 20% = 200 (product skipped).
+    expect(r.rows[0].totalDf).toBe(200);
+  });
+
+  it('DP35: test-fixture shape (courseId only, no id) still works — regression', () => {
+    const r = computeDfPayoutReport({
+      sales: [{
+        saleId: 'INV-TEST', saleDate: '2026-04-24', status: 'active',
+        doctorId: 'D1',
+        items: [{ courseId: 'C1', qty: 1, price: 1000 }],
+      }],
+      doctors, groups,
+    });
+    expect(r.rows[0].totalDf).toBe(200);
+  });
+
+  it('DP36: breakdown.courseName falls back to `it.name` when courseName is absent', () => {
+    const r = computeDfPayoutReport({
+      sales: [{
+        saleId: 'INV-NAME', saleDate: '2026-04-24', status: 'active',
+        doctorId: 'D1',
+        items: [{ id: 'C1', name: 'My Course', qty: 1, price: 1000, itemType: 'course' }],
+      }],
+      doctors, groups,
+    });
+    expect(r.rows[0].breakdown[0].courseName).toBe('My Course');
+  });
+});

@@ -127,7 +127,23 @@ export function computeDfPayoutReport({
     const saleId = String(sale.saleId || sale.id);
     const explicit = explicitBySale.get(saleId);
     if (explicit && explicit.length > 0) {
-      const courseIndex = new Map(items.map((it) => [String(it?.courseId || ''), it]));
+      // Phase 12.2b follow-up (2026-04-24): real backend-created sales
+      // store course items with `id: <master_course_id>` (SaleTab's
+      // confirmBuy maps the purchased item that way). Previous code
+      // only keyed courseIndex by `it.courseId` → every production
+      // sale produced an empty-string key collision → DF report showed
+      // ฿0 across the board. Key by BOTH `courseId` AND `id` so test
+      // fixtures (which use `courseId`) AND prod sales (which use `id`)
+      // both resolve correctly. Empty keys skipped so products without
+      // a courseId don't collide on ''.
+      const courseIndex = new Map();
+      for (const it of items) {
+        if (!it) continue;
+        const courseIdKey = String(it.courseId || '').trim();
+        const idKey = String(it.id || '').trim();
+        if (courseIdKey) courseIndex.set(courseIdKey, it);
+        if (idKey && idKey !== courseIdKey) courseIndex.set(idKey, it);
+      }
       for (const { treatment, entries } of explicit) {
         const treatmentCourseItems = Array.isArray(treatment?.detail?.courseItems)
           ? treatment.detail.courseItems
@@ -204,8 +220,19 @@ export function computeDfPayoutReport({
 
       for (const it of items) {
         if (!it) continue;
-        const courseId = it.courseId;
-        if (!courseId) continue; // products don't earn DF in this model
+        // Phase 12.2b follow-up (2026-04-24): real backend sales store
+        // course master id on `it.id` (not `courseId`). Fall back to
+        // both fields so the inference path resolves for prod AND test
+        // fixtures. Skip non-course items: when items come from the
+        // grouped sale shape (sale.items.courses[] only) everything is
+        // a course; when items come from a legacy flat array, require
+        // itemType === 'course' OR an explicit courseId to earn DF.
+        const courseId = String(it.courseId || it.id || '').trim();
+        if (!courseId) continue;
+        const isCourseLike = it.itemType == null // grouped path already filtered
+          || it.itemType === 'course'
+          || !!it.courseId; // test-fixture shape
+        if (!isCourseLike) continue;
         const qty = Number(it.qty) || 0;
         const sub = lineSubtotal(it);
         if (sub <= 0 || qty <= 0) continue;
@@ -223,7 +250,7 @@ export function computeDfPayoutReport({
           saleId: sale.saleId || sale.id,
           saleDate: sale.saleDate,
           courseId,
-          courseName: it.courseName || '',
+          courseName: it.courseName || it.name || '',
           qty,
           subtotal: sub,
           rateValue: rate.value,
