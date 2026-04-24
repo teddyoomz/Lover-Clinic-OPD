@@ -1198,6 +1198,15 @@ function beBranchToMasterShape(b) {
 function bePermissionGroupToMasterShape(g) {
   return { ...g, id: g.permissionGroupId || g.id, name: g.name || g.group_name || '' };
 }
+// Phase 14.x: wallet + membership TYPES migrate to be_* (gap audit
+// 2026-04-24). Each be_wallet_types doc mirrors the ProClinic scrape
+// shape with `id` = ProClinic numeric id.
+function beWalletTypeToMasterShape(w) {
+  return { ...w, id: w.walletTypeId || w.id, name: w.name || w.wallet_name || '' };
+}
+function beMembershipTypeToMasterShape(m) {
+  return { ...m, id: m.membershipTypeId || m.id, name: m.name || m.membership_name || '' };
+}
 
 // Types that have be_* canonical backing as of Phase 11.9 (2026-04-20).
 // Every type listed here SHOULD show green "be_*" badge in MasterDataTab
@@ -1219,6 +1228,10 @@ const BE_BACKED_MASTER_TYPES = Object.freeze({
   holidays:            { col: 'be_holidays',            map: beHolidayToMasterShape           },
   branches:            { col: 'be_branches',            map: beBranchToMasterShape            },
   permission_groups:   { col: 'be_permission_groups',   map: bePermissionGroupToMasterShape   },
+  // Phase 14.x — wallet + membership types migrate (gap audit 2026-04-24).
+  // Readers now hit be_* transparently once the migration button runs.
+  wallet_types:        { col: 'be_wallet_types',        map: beWalletTypeToMasterShape        },
+  membership_types:    { col: 'be_membership_types',    map: beMembershipTypeToMasterShape    },
 });
 
 async function readBeForMasterType(type) {
@@ -5046,6 +5059,70 @@ export async function migrateMasterDfStaffRatesToBe() {
     targetCol: dfStaffRatesCol,
     targetDocFn: dfStaffRatesDocRef,
     mapper: mapMasterToDfStaffRates,
+  });
+}
+
+// ─── Phase 14.x: wallet_types + membership_types migrate to be_* ───────────
+// Gap audit 2026-04-24. These entities had sync (/admin/api/wallet +
+// /admin/api/membership) landing in master_data/* but no corresponding
+// be_* collection. Per Rule H (OUR data in OUR Firestore) + H-tris
+// (backend reads from be_*), migrate them so consumers (MembershipPanel,
+// SaleTab wallet picker) transparently flip via BE_BACKED_MASTER_TYPES.
+
+const walletTypesCol = () => collection(db, ...basePath(), 'be_wallet_types');
+const walletTypeDoc = (id) => doc(db, ...basePath(), 'be_wallet_types', String(id));
+const membershipTypesCol = () => collection(db, ...basePath(), 'be_membership_types');
+const membershipTypeDoc = (id) => doc(db, ...basePath(), 'be_membership_types', String(id));
+
+function mapMasterToWalletType(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  return {
+    walletTypeId: String(id),
+    name: String(src.name || src.wallet_name || '').trim() || '(imported)',
+    description: String(src.description || '').trim(),
+    status: String(src.status || '').trim() === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterWalletTypesToBe() {
+  return runMasterToBeMigration({
+    sourceType: 'wallet_types',
+    targetCol: walletTypesCol,
+    targetDocFn: walletTypeDoc,
+    mapper: mapMasterToWalletType,
+  });
+}
+
+function mapMasterToMembershipType(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  return {
+    membershipTypeId: String(id),
+    name: String(src.name || src.membership_name || '').trim() || '(imported)',
+    colorName: String(src.colorName || src.color || '').trim(),
+    credit: Math.max(0, Number(src.credit) || 0),
+    price: Math.max(0, Number(src.price) || 0),
+    point: Math.max(0, Number(src.point) || 0),
+    bahtPerPoint: Math.max(0, Number(src.bahtPerPoint ?? src.baht_per_point) || 0),
+    discountPercent: Math.max(0, Number(src.discountPercent ?? src.discount_percent) || 0),
+    expiredInDays: Number(src.expiredInDays ?? src.expired_in) || 365,
+    // Wallet link — preserved from master_data if already set by manual
+    // edit, else blank. MembershipPanel can attach in a follow-up CRUD.
+    walletTypeId: String(src.walletTypeId || '').trim(),
+    walletTypeName: String(src.walletTypeName || '').trim(),
+    status: String(src.status || '').trim() === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterMembershipTypesToBe() {
+  return runMasterToBeMigration({
+    sourceType: 'membership_types',
+    targetCol: membershipTypesCol,
+    targetDocFn: membershipTypeDoc,
+    mapper: mapMasterToMembershipType,
   });
 }
 

@@ -89,6 +89,16 @@ service cloud.firestore {
       match /be_customer_wallets/{walletId} {
         allow read, write: if isClinicStaff();
       }
+      // Phase 14.x: wallet + membership TYPES (master data) migrated from
+      // master_data/wallet_types + master_data/membership_types. Reader
+      // pattern flips via BE_BACKED_MASTER_TYPES so existing UIs pick up
+      // transparently once migrated.
+      match /be_wallet_types/{walletTypeId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_membership_types/{membershipTypeId} {
+        allow read, write: if isClinicStaff();
+      }
       match /be_wallet_transactions/{txId} {
         allow read, create: if isClinicStaff();
         // Wallet transactions are audit records — no update/delete from client.

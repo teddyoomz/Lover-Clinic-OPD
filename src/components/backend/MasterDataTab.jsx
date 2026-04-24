@@ -31,6 +31,8 @@ import {
   migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
   // Phase 14.x: DF groups + per-staff rate overrides (scrape → be_*)
   migrateMasterDfGroupsToBe, migrateMasterDfStaffRatesToBe,
+  // Phase 14.x: gap audit backfill — wallet + membership types migrate
+  migrateMasterWalletTypesToBe, migrateMasterMembershipTypesToBe,
   // Phase 12.11: debug helper for verifying be_* wiring
   clearMasterDataItems, getBeBackedMasterTypes,
 } from '../../lib/backendClient.js';
@@ -342,6 +344,9 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     // Phase 14.x — DF groups + rates matrix (doc id = ProClinic numeric id)
     { key: 'df_groups',           label: 'กลุ่มค่ามือ → be_df_groups',                icon: '💰', fn: migrateMasterDfGroupsToBe },
     { key: 'df_staff_rates',      label: 'ค่ามือต่อแพทย์/ผู้ช่วย → be_df_staff_rates', icon: '🩻', fn: migrateMasterDfStaffRatesToBe },
+    // Phase 14.x gap backfill (2026-04-24) — missing migrates for existing syncs
+    { key: 'wallet_types',        label: 'กระเป๋าเงิน → be_wallet_types',             icon: '💼', fn: migrateMasterWalletTypesToBe },
+    { key: 'membership_types',    label: 'บัตรสมาชิก → be_membership_types',           icon: '🎫', fn: migrateMasterMembershipTypesToBe },
     // Phase 12.1 — seed be_staff + be_doctors from list-page scrape. Password
     // + permission group wiring happens in OUR CRUD after migrate.
     { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },
