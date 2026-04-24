@@ -10,6 +10,7 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const salesCol = () => collection(db, ...basePath(), 'be_sales');
+const treatmentsCol = () => collection(db, ...basePath(), 'be_treatments');
 const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 const stockBatchesCol = () => collection(db, ...basePath(), 'be_stock_batches');
 const stockMovementsCol = () => collection(db, ...basePath(), 'be_stock_movements');
@@ -91,6 +92,28 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
     sales.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
     return sales;
   }
+}
+
+/**
+ * Load treatments whose `detail.treatmentDate` falls in [from, to]
+ * (YYYY-MM-DD inclusive). Phase 14.5 DF Payout Report consumes these
+ * to prefer explicit `detail.dfEntries[]` over sale-inference.
+ *
+ * No composite index required: Firestore can't index nested fields
+ * reliably, so this always does a full-collection read + client-side
+ * filter. Acceptable while treatment volume is modest — revisit when
+ * be_treatments grows past ~10k docs.
+ *
+ * Excludes cancelled treatments by default (matches sale loader).
+ */
+export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false } = {}) {
+  const snap = await getDocs(treatmentsCol());
+  let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from);
+  if (to) items = items.filter((t) => (t?.detail?.treatmentDate || '') <= to);
+  if (!includeCancelled) items = items.filter((t) => t?.detail?.status !== 'cancelled');
+  items.sort((a, b) => (b?.detail?.treatmentDate || '').localeCompare(a?.detail?.treatmentDate || ''));
+  return items;
 }
 
 /**

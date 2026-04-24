@@ -35,6 +35,10 @@
 //   TR-8 items.products[] non-empty entries have productId + qty > 0
 //   TR-9 status='cancelled' → cancelReason required
 //   TR-10 hasSale=true → linkedSaleId required
+//   TR-11 detail.dfEntries, if present, must be an array (Phase 14.5)
+//   TR-12 each detail.dfEntries[i] must pass validateDfEntry (Phase 14.5)
+
+import { validateDfEntry, normalizeDfEntry } from './dfEntryValidation.js';
 
 export const STATUS_OPTIONS = Object.freeze(['draft', 'completed', 'cancelled']);
 // ProClinic convention: '0' = ชำระภายหลัง, '2' = ชำระเต็มจำนวน, '4' = แบ่งชำระ
@@ -145,6 +149,21 @@ export function validateTreatmentStrict(form) {
     if (!trim(detail.linkedSaleId)) return ['linkedSaleId', 'hasSale=true ต้องมี linkedSaleId'];
   }
 
+  // TR-11 + TR-12 (Phase 14.5): dfEntries, if present, must be an array
+  // whose elements each pass validateDfEntry. Delegates to Phase 14.3.1
+  // helper so any future tightening of DF invariants propagates here.
+  if (detail.dfEntries != null) {
+    if (!Array.isArray(detail.dfEntries)) {
+      return ['dfEntries', 'dfEntries ต้องเป็น array'];
+    }
+    for (const [i, e] of detail.dfEntries.entries()) {
+      const entryFail = validateDfEntry(e);
+      if (entryFail) {
+        return ['dfEntries', `dfEntries[${i}]: ${entryFail[1]}`];
+      }
+    }
+  }
+
   return null;
 }
 
@@ -159,6 +178,7 @@ export function emptyTreatmentForm() {
       doctorId: '',
       doctorName: '',
       items: { courses: [], products: [] },
+      dfEntries: [],
       billing: { subtotal: 0, discount: 0, discountType: '', netTotal: 0 },
       payment: { paymentStatus: '0', channels: [], paymentDate: '', refNo: '' },
       status: 'draft',
@@ -207,6 +227,12 @@ export function normalizeTreatment(form) {
     courses: Array.isArray(detail.items?.courses) ? detail.items.courses : [],
     products: Array.isArray(detail.items?.products) ? detail.items.products : [],
   };
+
+  // Phase 14.5: normalize each DF entry through its own normalizer (trim /
+  // coerce / drop rows with empty courseId). Missing / non-array becomes [].
+  detail.dfEntries = Array.isArray(detail.dfEntries)
+    ? detail.dfEntries.map(normalizeDfEntry).filter(Boolean)
+    : [];
 
   out.detail = detail;
   return out;

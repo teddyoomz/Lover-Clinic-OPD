@@ -2,7 +2,12 @@
 // Given a window of be_sales + all be_doctors + be_df_groups + be_df_staff_rates,
 // compute per-doctor payout. Reuses the Phase 13.3.1 resolver + computer.
 //
-// Doctor ID source precedence per sale:
+// Doctor ID source precedence per sale (Phase 14.5 update):
+//   0. treatment.detail.dfEntries[] (via treatments[] + linkedSaleId match) —
+//      AUTHORITATIVE. When a treatment carries explicit DF entries, use them
+//      verbatim and skip the sale-inference path below. This is the model
+//      post Phase 14.4 where TreatmentFormPage stores per-doctor per-course
+//      DF via DfEntryModal.
 //   1. sale.sellers[] — each seller.sellerId gets their percent share of each line
 //   2. sale.doctorId (legacy single-doctor sales) — full credit for every line
 //
@@ -34,6 +39,10 @@ function isSaleInRange(sale, startDate, endDate) {
 /**
  * @param {object} args
  * @param {Array} args.sales          - be_sales docs
+ * @param {Array} [args.treatments]   - be_treatments docs. Those with
+ *                                      `detail.dfEntries[]` + `detail.linkedSaleId`
+ *                                      override sale inference for the matching sale
+ *                                      (Phase 14.5).
  * @param {Array} args.doctors        - be_doctors docs
  * @param {Array} args.groups         - be_df_groups docs
  * @param {Array} args.staffOverrides - be_df_staff_rates docs
@@ -43,13 +52,24 @@ function isSaleInRange(sale, startDate, endDate) {
  * @returns {{ rows: Array, summary: { total, doctorCount, saleCount } }}
  */
 export function computeDfPayoutReport({
-  sales = [], doctors = [], groups = [], staffOverrides = [],
+  sales = [], treatments = [], doctors = [], groups = [], staffOverrides = [],
   startDate = '', endDate = '', includeCancelled = false,
 }) {
   const doctorById = new Map(
     (doctors || []).map((d) => [String(d.doctorId || d.id), d]),
   );
   const perDoctor = new Map(); // doctorId → { id, name, dfGroupId, totalDf, saleSet, lineCount, breakdown: [] }
+
+  // Phase 14.5: index treatments by linkedSaleId when they carry explicit
+  // dfEntries. Lookup during the sale loop short-circuits inference.
+  const explicitBySale = new Map();
+  for (const t of (treatments || [])) {
+    const linked = String(t?.detail?.linkedSaleId || '');
+    const entries = Array.isArray(t?.detail?.dfEntries) ? t.detail.dfEntries : [];
+    if (linked && entries.length > 0) {
+      explicitBySale.set(linked, { treatment: t, entries });
+    }
+  }
 
   const ensureRow = (doctorId, doctorName, dfGroupId) => {
     const key = String(doctorId);
@@ -84,6 +104,59 @@ export function computeDfPayoutReport({
       items = [];
     }
     if (items.length === 0) continue;
+
+    // Phase 14.5: if a treatment with explicit dfEntries covers this sale,
+    // aggregate from those entries directly and skip the sale-inference
+    // code path below. Per-row rate comes from the entry row (value + type);
+    // qty + subtotal still come from the sale line (the entry only carries
+    // who + how, not how-much-was-sold).
+    const saleId = String(sale.saleId || sale.id);
+    const explicit = explicitBySale.get(saleId);
+    if (explicit) {
+      const courseIndex = new Map(items.map((it) => [String(it?.courseId || ''), it]));
+      for (const entry of explicit.entries) {
+        const doctorId = String(entry.doctorId || '');
+        if (!doctorId) continue;
+        const doctor = doctorById.get(doctorId);
+        const doctorName = doctor?.name
+          || `${doctor?.firstname || ''} ${doctor?.lastname || ''}`.trim()
+          || doctor?.nickname
+          || entry.doctorName
+          || '';
+        const entryGroupId = String(entry.dfGroupId || '');
+        for (const row of (entry.rows || [])) {
+          if (!row || !row.enabled) continue;
+          const courseId = String(row.courseId || '');
+          if (!courseId) continue;
+          const matchingItem = courseIndex.get(courseId);
+          if (!matchingItem) continue; // row references a course not on the sale
+          const qty = Number(matchingItem.qty) || 0;
+          const sub = lineSubtotal(matchingItem);
+          if (qty <= 0 || sub <= 0) continue;
+          const rate = { value: Number(row.value) || 0, type: row.type, source: 'dfEntry' };
+          const df = computeDfAmount(rate, sub, qty);
+          if (df <= 0) continue;
+          const reportRow = ensureRow(doctorId, doctorName, entryGroupId);
+          reportRow.totalDf += df;
+          reportRow.saleSet.add(saleId);
+          reportRow.lineCount += 1;
+          reportRow.breakdown.push({
+            saleId,
+            saleDate: sale.saleDate,
+            courseId,
+            courseName: matchingItem.name || matchingItem.courseName || '',
+            qty,
+            subtotal: sub,
+            rateValue: rate.value,
+            rateType: rate.type,
+            rateSource: 'dfEntry',
+            share: 1, // explicit entry is authoritative — no share splitting
+            df,
+          });
+        }
+      }
+      continue; // skip legacy sale-inference path for this sale
+    }
 
     // Build list of (doctorId, share) pairs for this sale.
     let assignments = [];

@@ -204,3 +204,142 @@ describe('computeDfPayoutReport — filters + edge cases', () => {
     expect(r.rows[0].totalDf).toBe(66.67);
   });
 });
+
+// ─── Phase 14.5 · treatments[] with explicit dfEntries precedence ─────────
+describe('computeDfPayoutReport — treatments[] with dfEntries (Phase 14.5)', () => {
+  const makeTreatment = (over = {}) => ({
+    treatmentId: 'BT-1',
+    customerId: 'CUST-1',
+    detail: {
+      treatmentDate: '2026-04-24',
+      linkedSaleId: 'INV-1',
+      dfEntries: [
+        {
+          id: 'DFE-1',
+          doctorId: 'D1',
+          doctorName: 'Alice Explicit',
+          dfGroupId: 'DFG-1',
+          rows: [
+            { courseId: 'C1', courseName: 'Laser', enabled: true, value: 777, type: 'baht' },
+          ],
+        },
+      ],
+      ...over.detail,
+    },
+    ...over,
+  });
+
+  it('DP18: treatment with dfEntries overrides sale inference for same linkedSaleId', () => {
+    // Sale path would compute C1 × 20% × 1000 = 200. Explicit entry says 777 baht × qty=1 = 777.
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [makeTreatment()],
+      doctors, groups,
+    });
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].doctorId).toBe('D1');
+    expect(r.rows[0].totalDf).toBe(777);
+    // Breakdown reports rateSource='dfEntry' (distinct from 'group'/'staff').
+    expect(r.rows[0].breakdown[0].rateSource).toBe('dfEntry');
+  });
+
+  it('DP19: disabled rows are skipped even when explicit entry covers the sale', () => {
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [makeTreatment({
+        detail: {
+          treatmentDate: '2026-04-24', linkedSaleId: 'INV-1',
+          dfEntries: [{
+            id: 'DFE-1', doctorId: 'D1', doctorName: 'Alice', dfGroupId: 'DFG-1',
+            rows: [{ courseId: 'C1', courseName: 'Laser', enabled: false, value: 777, type: 'baht' }],
+          }],
+        },
+      })],
+      doctors, groups,
+    });
+    // No enabled rows → nothing added → no row in the output.
+    expect(r.rows).toEqual([]);
+  });
+
+  it('DP20: explicit entry row that references a course not on the sale is silently skipped', () => {
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [makeTreatment({
+        detail: {
+          treatmentDate: '2026-04-24', linkedSaleId: 'INV-1',
+          dfEntries: [{
+            id: 'DFE-1', doctorId: 'D1', doctorName: 'Alice', dfGroupId: 'DFG-1',
+            rows: [{ courseId: 'C-MISSING', courseName: 'Phantom', enabled: true, value: 999, type: 'baht' }],
+          }],
+        },
+      })],
+      doctors, groups,
+    });
+    expect(r.rows).toEqual([]);
+  });
+
+  it('DP21: percent rows compute against sale line subtotal', () => {
+    // Line: 2 × 1000 = 2000 subtotal. Entry row type=percent, value=15 → 300.
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 2, price: 1000 }] })],
+      treatments: [makeTreatment({
+        detail: {
+          treatmentDate: '2026-04-24', linkedSaleId: 'INV-1',
+          dfEntries: [{
+            id: 'DFE-1', doctorId: 'D1', doctorName: 'Alice', dfGroupId: 'DFG-1',
+            rows: [{ courseId: 'C1', courseName: 'Laser', enabled: true, value: 15, type: 'percent' }],
+          }],
+        },
+      })],
+      doctors, groups,
+    });
+    expect(r.rows[0].totalDf).toBe(300);
+    expect(r.rows[0].breakdown[0].rateType).toBe('percent');
+  });
+
+  it('DP22: sale without matching treatment falls back to legacy inference', () => {
+    // Treatment covers INV-9 (not INV-1). Sale INV-1 should use inference.
+    const r = computeDfPayoutReport({
+      sales: [sale({ saleId: 'INV-1', items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [makeTreatment({ detail: { treatmentDate: '2026-04-24', linkedSaleId: 'INV-9', dfEntries: [{ id: 'DFE-9', doctorId: 'D2', doctorName: 'Bob', dfGroupId: 'DFG-2', rows: [{ courseId: 'C1', enabled: true, value: 111, type: 'baht' }] }] } })],
+      doctors, groups,
+    });
+    // Inference path: C1 × DFG-1 × 20% × 1000 = 200.
+    expect(r.rows[0].doctorId).toBe('D1');
+    expect(r.rows[0].totalDf).toBe(200);
+    expect(r.rows[0].breakdown[0].rateSource).toBe('group');
+  });
+
+  it('DP23: multiple treatments each covering distinct sales aggregate independently', () => {
+    const sale1 = sale({ saleId: 'INV-1', items: [{ courseId: 'C1', qty: 1, price: 1000 }] });
+    const sale2 = { ...sale1, saleId: 'INV-2', doctorId: 'D2' };
+    const t1 = makeTreatment({ treatmentId: 'BT-1', detail: { treatmentDate: '2026-04-24', linkedSaleId: 'INV-1', dfEntries: [{ id: 'DFE-A', doctorId: 'D1', doctorName: 'Alice', dfGroupId: 'DFG-1', rows: [{ courseId: 'C1', enabled: true, value: 500, type: 'baht' }] }] } });
+    const t2 = makeTreatment({ treatmentId: 'BT-2', detail: { treatmentDate: '2026-04-24', linkedSaleId: 'INV-2', dfEntries: [{ id: 'DFE-B', doctorId: 'D2', doctorName: 'Bob', dfGroupId: 'DFG-2', rows: [{ courseId: 'C1', enabled: true, value: 600, type: 'baht' }] }] } });
+    const r = computeDfPayoutReport({ sales: [sale1, sale2], treatments: [t1, t2], doctors, groups });
+    expect(r.rows).toHaveLength(2);
+    const byId = Object.fromEntries(r.rows.map((row) => [row.doctorId, row.totalDf]));
+    expect(byId.D1).toBe(500);
+    expect(byId.D2).toBe(600);
+  });
+
+  it('DP24: treatments with empty dfEntries do NOT interfere (inference still runs)', () => {
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [{ treatmentId: 'BT-9', detail: { treatmentDate: '2026-04-24', linkedSaleId: 'INV-1', dfEntries: [] } }],
+      doctors, groups,
+    });
+    // empty dfEntries → not indexed → inference path runs → DFG-1 20% × 1000 = 200.
+    expect(r.rows[0].totalDf).toBe(200);
+    expect(r.rows[0].breakdown[0].rateSource).toBe('group');
+  });
+
+  it('DP25: treatments without linkedSaleId are ignored', () => {
+    const r = computeDfPayoutReport({
+      sales: [sale({ items: [{ courseId: 'C1', qty: 1, price: 1000 }] })],
+      treatments: [{ treatmentId: 'BT-9', detail: { treatmentDate: '2026-04-24', dfEntries: [{ id: 'DFE-X', doctorId: 'D1', doctorName: 'A', dfGroupId: 'DFG-1', rows: [{ courseId: 'C1', enabled: true, value: 999, type: 'baht' }] }] } }],
+      doctors, groups,
+    });
+    // No linkedSaleId → explicit entry isn't applied → inference runs → 200.
+    expect(r.rows[0].totalDf).toBe(200);
+  });
+});

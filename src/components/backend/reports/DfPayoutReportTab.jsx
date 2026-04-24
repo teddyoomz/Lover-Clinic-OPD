@@ -7,7 +7,7 @@ import { Percent } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { computeDfPayoutReport } from '../../../lib/dfPayoutAggregator.js';
-import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
+import { loadSalesByDateRange, loadTreatmentsByDateRange } from '../../../lib/reportsLoaders.js';
 import { listDoctors, listDfGroups, listDfStaffRates } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
@@ -26,6 +26,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
   const [to, setTo] = useState(initialPreset.to);
   const [presetId, setPresetId] = useState(initialPreset.id);
   const [sales, setSales] = useState([]);
+  const [treatments, setTreatments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [groups, setGroups] = useState([]);
   const [overrides, setOverrides] = useState([]);
@@ -38,13 +39,14 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
     setLoading(true); setError('');
     Promise.all([
       loadSalesByDateRange({ from, to }),
+      loadTreatmentsByDateRange({ from, to }).catch(() => []),
       listDoctors().catch(() => []),
       listDfGroups().catch(() => []),
       listDfStaffRates().catch(() => []),
     ])
-      .then(([s, d, g, o]) => {
+      .then(([s, t, d, g, o]) => {
         if (abort) return;
-        setSales(s || []); setDoctors(d || []); setGroups(g || []); setOverrides(o || []);
+        setSales(s || []); setTreatments(t || []); setDoctors(d || []); setGroups(g || []); setOverrides(o || []);
       })
       .catch((err) => { if (!abort) setError(err?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
@@ -52,9 +54,9 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
   }, [from, to, reloadKey]);
 
   const out = useMemo(() => computeDfPayoutReport({
-    sales, doctors, groups, staffOverrides: overrides,
+    sales, treatments, doctors, groups, staffOverrides: overrides,
     startDate: from, endDate: to,
-  }), [sales, doctors, groups, overrides, from, to]);
+  }), [sales, treatments, doctors, groups, overrides, from, to]);
 
   const handleRangeChange = useCallback(({ from: f, to: t, presetId: id }) => {
     setFrom(f); setTo(t); setPresetId(id);
