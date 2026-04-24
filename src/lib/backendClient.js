@@ -2563,14 +2563,19 @@ export async function createStockOrder(data, opts = {}) {
     // First time we see this productId via an order → opt it in to stock tracking.
     // If stockConfig already exists (user set trackStock=false deliberately, or it's
     // already true), leave it alone. Missing stockConfig only.
+    //
+    // Phase 12.2b follow-up (2026-04-24): write to be_products (Rule H-tris
+    // — single source of truth). Legacy master_data fallback kept ONLY for
+    // docs that haven't been migrated yet; if the be_products doc doesn't
+    // exist either, silently skip the opt-in (product likely deleted).
     if (item.productId) {
       try {
         const existing = await _getProductStockConfig(item.productId);
         if (!existing) {
-          const productRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
-          const snap = await getDoc(productRef);
-          if (snap.exists()) {
-            await updateDoc(productRef, {
+          const beRef = doc(db, ...basePath(), 'be_products', String(item.productId));
+          const beSnap = await getDoc(beRef);
+          if (beSnap.exists()) {
+            await updateDoc(beRef, {
               stockConfig: {
                 trackStock: true,
                 minAlert: 0,
@@ -2580,6 +2585,22 @@ export async function createStockOrder(data, opts = {}) {
               _stockConfigSetBy: 'createStockOrder',
               _stockConfigSetAt: now,
             });
+          } else {
+            // Last-chance legacy fallback — should be rare post-Phase 11.9.
+            const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
+            const legacySnap = await getDoc(legacyRef);
+            if (legacySnap.exists()) {
+              await updateDoc(legacyRef, {
+                stockConfig: {
+                  trackStock: true,
+                  minAlert: 0,
+                  unit: String(item.unit || ''),
+                  isControlled: false,
+                },
+                _stockConfigSetBy: 'createStockOrder',
+                _stockConfigSetAt: now,
+              });
+            }
           }
         }
       } catch (e) {
@@ -2920,17 +2941,32 @@ async function _stockLib() {
   return __stockLibCache;
 }
 
-// ─── Master product stockConfig lookup ──────────────────────────────────────
+// ─── Product stockConfig lookup ─────────────────────────────────────────────
 // Returns { trackStock: bool, unit: string, ... } or null if product not found.
-// Default when lookup fails OR stockConfig missing: trackStock=true, empty unit.
+// Phase 12.2b follow-up (2026-04-24): switched from `master_data/products/
+// items/{id}` → `be_products/{id}` per Rule H-tris (backend reads ONLY from
+// be_*). Previously every sale/treatment stock deduction was being silently
+// skipped: the lookup read master_data which is no longer kept in sync after
+// Phase 11.9 migrated products to be_products. skipped movements were
+// written but no batch ever mutated → user sees "ไม่เห็น stock movement"
+// because batch qty didn't change. master_data fallback retained ONLY as a
+// read-through safety for docs that never migrated.
 async function _getProductStockConfig(productId) {
   if (!productId) return null;
   try {
-    const ref = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    const data = snap.data();
-    return data.stockConfig || null;
+    const beRef = doc(db, ...basePath(), 'be_products', String(productId));
+    const beSnap = await getDoc(beRef);
+    if (beSnap.exists()) {
+      const data = beSnap.data();
+      if (data.stockConfig) return data.stockConfig;
+      // be_products doc exists but no stockConfig yet — fall through to
+      // legacy master_data fallback before giving up, in case the
+      // auto-opt-in write landed there under the old code path.
+    }
+    const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
+    const legacySnap = await getDoc(legacyRef);
+    if (!legacySnap.exists()) return null;
+    return legacySnap.data().stockConfig || null;
   } catch {
     return null;
   }
