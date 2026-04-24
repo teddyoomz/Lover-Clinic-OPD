@@ -9,7 +9,8 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
-import { loadSalesByDateRange, loadAllCustomersForReport } from '../../../lib/reportsLoaders.js';
+import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange } from '../../../lib/reportsLoaders.js';
+import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidation.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -46,6 +47,12 @@ export default function SaleReportTab({ clinicSettings, theme }) {
   const [searchText, setSearchText] = useState('');
   const [allSales, setAllSales] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
+  // Phase 12.3 (2026-04-25): load be_sale_insurance_claims in the same
+  // window and aggregate paid claims by saleId. Before this wiring the
+  // "เบิกประกัน" column was always ฿0 (aggregator had claimsBySaleId
+  // optional but nobody passed it). Only 'paid' claims count per
+  // aggregateClaimsBySaleId spec.
+  const [allClaims, setAllClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -57,29 +64,39 @@ export default function SaleReportTab({ clinicSettings, theme }) {
     [viewingSaleId, allSales]
   );
 
-  // Load sales + customers in parallel. Customers list enables HN/name
-  // backfill for legacy sales that were written with empty customerHN
-  // (TreatmentFormPage auto-sale bug pre-2026-04-19 fix).
+  // Load sales + customers + insurance-claims in parallel. Customers enable
+  // HN/name backfill for legacy sales; claims populate the "เบิกประกัน" col
+  // (Phase 12.3, was hardcoded 0 before this wiring). Claims use their own
+  // `claimDate` field to load — a claim may be filed AFTER the sale date
+  // window but we still want it visible against its sale row when present.
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
       loadSalesByDateRange({ from, to, includeCancelled }),
       loadAllCustomersForReport(),
+      loadSaleInsuranceClaimsByDateRange({}),
     ])
-      .then(([s, c]) => { if (!abort) { setAllSales(s); setAllCustomers(c); } })
+      .then(([s, c, cl]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
   }, [from, to, includeCancelled, reloadKey]);
+
+  // Build saleId → paid total map. Only 'paid' claims count (aggregator spec).
+  const claimsBySaleId = useMemo(
+    () => aggregateClaimsBySaleId(allClaims),
+    [allClaims]
+  );
 
   // Aggregate (pure, deterministic — runs in render)
   const out = useMemo(
     () => aggregateSaleReport(allSales, {
       from, to, statusFilter, saleTypeFilter, includeCancelled, searchText,
       customers: allCustomers,
+      claimsBySaleId,
     }),
-    [allSales, allCustomers, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
+    [allSales, allCustomers, claimsBySaleId, from, to, statusFilter, saleTypeFilter, includeCancelled, searchText]
   );
 
   // Single columns array — SAME for table + CSV (AR11)

@@ -44,6 +44,8 @@ import {
   CalendarClock,
   // Phase 13.3 DF groups tab icon (Percent — payment fee context)
   Percent,
+  // Phase 12.3 sale-insurance-claim tab icon
+  Shield,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -71,6 +73,7 @@ export const NAV_SECTIONS = [
       { id: 'sales',         label: 'ขาย / ใบเสร็จ',  icon: ShoppingCart, color: 'rose', palette: 'sale invoice receipt ขาย ใบเสร็จ บิล' },
       { id: 'quotations',    label: 'ใบเสนอราคา',    icon: FileText,     color: 'rose', palette: 'quotation QUO เสนอราคา quote estimate ใบเสนอ' },
       { id: 'online-sales',  label: 'ขายออนไลน์',    icon: Globe2,       color: 'rose', palette: 'online sale transfer slip bank ออนไลน์ โอน สลิป' },
+      { id: 'insurance-claims', label: 'เบิกประกัน',  icon: Shield,       color: 'rose', palette: 'insurance claim reimburse sale เบิกประกัน บริษัทประกัน กรมธรรม์ เคลม' },
     ],
   },
   {

@@ -2028,6 +2028,19 @@ No new UI tab in 12.7. Claim entry lands in SaleDetailModal when Phase 12.9 rewi
 
 Tests: 2722 → 2760 (+38). Build clean.
 
+**Phase 12.3 follow-up (2026-04-25)** — backend shipped in 12.7 without a UI entry point; Phase 12.3 closes the gap:
+- `src/components/backend/SaleInsuranceClaimsTab.jsx` (NEW) — MarketingTabShell list tab with status filter + search. Row actions: อนุมัติ / ชำระเงิน (opens pay modal) / ปฏิเสธ / แก้ไข / ลบ. Empty-state copy cues users to use the create button since MarketingTabShell hides `children` when items=0.
+- `src/components/backend/SaleInsuranceClaimFormModal.jsx` (NEW) — MarketingFormShell modal. Lives OUTSIDE the Tab's shell body slot so it renders on fresh installs (when items=0 and the shell hides its children). saleId dropdown auto-fills customerId / HN / name + defaults claimAmount from `sale.billing.netTotal`.
+- `src/components/backend/reports/SaleReportTab.jsx` — Phase 10.2 "เบิกประกัน" column was hardcoded 0 because nobody passed `claimsBySaleId` to `aggregateSaleReport`. Now: `loadSaleInsuranceClaimsByDateRange` added to the 3-parallel Promise.all, `aggregateClaimsBySaleId` builds the Map, passed into aggregator. Only status=paid claims count (per validator spec).
+- `src/components/backend/nav/navConfig.js` — `sales` section +1 item (insurance-claims) with Shield icon.
+- `src/pages/BackendDashboard.jsx` — routes activeTab='insurance-claims'.
+- `tests/phase12.3-insurance-claim-flow-simulate.test.js` (NEW) — Rule I full-flow simulate: F1 handleSaleChange auto-fill · F2 save-chain validate→normalize · F3 status machine full matrix (pending→approved→paid | rejected) · F4 aggregateClaimsBySaleId paid-only spec · F5 end-to-end claim→SaleReport row · F6 adversarial inputs (huge paidAmount, long note, crypto ID uniqueness) · F7 source-grep regression guards. 40 tests.
+- `tests/phase10-sale-report-tab.test.jsx` — mock extended with `loadSaleInsuranceClaimsByDateRange: vi.fn(async () => [])`.
+
+Runtime verified via `preview_eval` on real Firestore (localhost:5173 dev server): tab renders heading "เบิกประกัน", status filter 5 options, create button opens modal with 51 sale options, picking a sale auto-fills `ลูกค้า: คุณ แพรพร · 000004` + `claimAmount=69900` from real be_sales[0] data. Pure Rule I catches what grep can't: whitelist strips, loader misses, shape mismatches.
+
+Tests: 3959 → 3999 (+40). Build clean.
+
 ---
 
 ## Phase 12.8 — P&L Report + Payment Summary Report (2026-04-20)
