@@ -4,13 +4,14 @@
 // Rule E: no brokerClient import. Rule H: no ProClinic mirror.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle, Receipt } from 'lucide-react';
+import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle, Receipt, CheckCircle2 } from 'lucide-react';
 import {
   listQuotations, deleteQuotation, convertQuotationToSale, getBackendSale,
 } from '../../lib/backendClient.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
 import SalePrintView from './SalePrintView.jsx';
+import SalePaymentModal from './SalePaymentModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/quotationValidation.js';
 
@@ -45,6 +46,8 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const [printing, setPrinting] = useState(null);
   const [printingSale, setPrintingSale] = useState(null);
   const [loadingSale, setLoadingSale] = useState(null);
+  const [paymentFor, setPaymentFor] = useState(null); // loaded sale doc
+  const [loadingPay, setLoadingPay] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [converting, setConverting] = useState(null);
   const [error, setError] = useState('');
@@ -93,6 +96,19 @@ export default function QuotationTab({ clinicSettings, theme }) {
     } catch (e) {
       setError(e.message || 'โหลดใบขายล้มเหลว');
     } finally { setLoadingSale(null); }
+  };
+
+  const handleRecordPayment = async (q) => {
+    const saleId = q.convertedToSaleId;
+    if (!saleId) { setError('ใบเสนอราคานี้ยังไม่ได้แปลงเป็นใบขาย'); return; }
+    setLoadingPay(q.quotationId || q.id); setError('');
+    try {
+      const sale = await getBackendSale(saleId);
+      if (!sale) { setError(`ไม่พบใบขาย ${saleId}`); return; }
+      setPaymentFor(sale);
+    } catch (e) {
+      setError(e.message || 'โหลดใบขายล้มเหลว');
+    } finally { setLoadingPay(null); }
   };
 
   const handleDelete = async (q) => {
@@ -188,17 +204,30 @@ export default function QuotationTab({ clinicSettings, theme }) {
                       <Printer size={14} /> <span className="hidden sm:inline">ใบเสนอราคา</span>
                     </button>
                     {status === 'converted' && q.convertedToSaleId && (
-                      <button onClick={() => handlePrintSale(q)}
-                        disabled={busy || loadingSale === id}
-                        aria-label={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
-                        title={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] text-emerald-400 hover:bg-emerald-900/20 disabled:opacity-50"
-                        data-testid={`quotation-print-sale-${id}`}>
-                        {loadingSale === id
-                          ? <Loader2 size={14} className="animate-spin" />
-                          : <Receipt size={14} />}
-                        <span className="hidden sm:inline">ใบขาย</span>
-                      </button>
+                      <>
+                        <button onClick={() => handleRecordPayment(q)}
+                          disabled={busy || loadingPay === id}
+                          aria-label={`บันทึกชำระใบขาย ${q.convertedToSaleId}`}
+                          title="บันทึกชำระเงิน"
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] font-bold text-emerald-400 hover:bg-emerald-900/20 border border-emerald-700/40 disabled:opacity-50"
+                          data-testid={`quotation-mark-paid-${id}`}>
+                          {loadingPay === id
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <CheckCircle2 size={14} />}
+                          <span className="hidden sm:inline">บันทึกชำระ</span>
+                        </button>
+                        <button onClick={() => handlePrintSale(q)}
+                          disabled={busy || loadingSale === id}
+                          aria-label={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
+                          title={`ปริ๊นใบขาย ${q.convertedToSaleId}`}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded text-[11px] text-emerald-400 hover:bg-emerald-900/20 disabled:opacity-50"
+                          data-testid={`quotation-print-sale-${id}`}>
+                          {loadingSale === id
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <Receipt size={14} />}
+                          <span className="hidden sm:inline">ใบขาย</span>
+                        </button>
+                      </>
                     )}
                     <button onClick={() => handleEdit(q)} disabled={busy} aria-label={`แก้ไขใบเสนอราคา ${id}`}
                       className="p-1.5 rounded text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] hover:text-sky-400 disabled:opacity-50"
@@ -243,6 +272,17 @@ export default function QuotationTab({ clinicSettings, theme }) {
           sale={printingSale}
           clinicSettings={clinicSettings}
           onClose={() => setPrintingSale(null)}
+        />
+      )}
+
+      {paymentFor && (
+        <SalePaymentModal
+          sale={paymentFor}
+          onClose={() => setPaymentFor(null)}
+          onSaved={async () => {
+            setPaymentFor(null);
+            await reload();
+          }}
         />
       )}
     </>

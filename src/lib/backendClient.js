@@ -719,6 +719,57 @@ export async function getBackendSale(saleId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+/**
+ * Record a payment on a sale and update status. Writes to all three shapes
+ * the read-side might inspect (top-level `payments[]` + `totalPaidAmount`,
+ * plus `payment.channels[]` + `payment.status` for legacy SaleTab readers).
+ * Idempotency via append semantics — each call adds another channel row.
+ * Used by the Phase 13.1.4 "บันทึกชำระ" button on converted quotations.
+ *
+ * @param {string} saleId
+ * @param {{ method: string, amount: number|string, refNo?: string, paidAt?: string }} payment
+ * @returns {Promise<{ success: boolean, totalPaid: number, saleStatus: string, paymentStatus: string }>}
+ */
+export async function markSalePaid(saleId, { method, amount, refNo = '', paidAt = '' } = {}) {
+  const id = String(saleId || '');
+  if (!id) throw new Error('saleId required');
+  if (!method) throw new Error('method required');
+  const amt = Math.round((parseFloat(amount) || 0) * 100) / 100;
+  if (!Number.isFinite(amt) || amt <= 0) throw new Error('amount ต้องเป็นจำนวนบวก');
+
+  const snap = await getDoc(saleDoc(id));
+  if (!snap.exists()) throw new Error('Sale not found');
+  const sale = snap.data();
+  const netTotal = Number(sale.billing?.netTotal ?? sale.netTotal) || 0;
+
+  const now = new Date().toISOString();
+  const when = paidAt || now.slice(0, 10);
+  const entry = { method, amount: amt, refNo, paidAt: when };
+  const channelEntry = { ...entry, enabled: true };
+
+  const existingPayments = Array.isArray(sale.payments) ? sale.payments : [];
+  const existingChannels = Array.isArray(sale.payment?.channels) ? sale.payment.channels : [];
+  const newPayments = [...existingPayments, entry];
+  const newChannels = [...existingChannels, channelEntry];
+  const totalPaid = Math.round(
+    newChannels.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0) * 100
+  ) / 100;
+
+  const paymentStatus = totalPaid + 0.01 >= netTotal ? 'paid' : 'split';
+  // Top-level status uses M12 convention (active = fully paid, draft = not).
+  const saleStatus = totalPaid + 0.01 >= netTotal ? 'active' : sale.status || 'draft';
+
+  await updateDoc(saleDoc(id), {
+    payments: newPayments,
+    'payment.channels': newChannels,
+    'payment.status': paymentStatus,
+    totalPaidAmount: totalPaid,
+    status: saleStatus,
+    updatedAt: now,
+  });
+  return { success: true, totalPaid, saleStatus, paymentStatus };
+}
+
 /** Get all sales (sorted by date desc) */
 export async function getAllSales() {
   const snap = await getDocs(salesCol());
