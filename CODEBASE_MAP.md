@@ -2262,3 +2262,15 @@ Tests: 38/38 focused pass in 1.35s. No full regression (per `feedback_test_per_s
 - `tests/staffScheduleCrud.test.js` — 13 focused mocked-Firestore tests (SC1-SC13). Covers save/get/list/delete + list filters (staffId + date range + combined).
 
 Rule E/H ✅. 13/13 focused pass. Build clean.
+
+---
+
+## Phase 13.2.3 — StaffSchedulesTab UI (2026-04-24)
+
+**New files:**
+- `src/components/backend/StaffSchedulesTab.jsx` — inline add/edit form (kept OUTSIDE MarketingTabShell so it stays visible during empty state) + list via shell. Form fields: staff select, date (DateField `locale='ce'`), type select (5 options), and conditionally startTime+endTime (TIME_SLOTS dropdown) OR note. Row display: type badge + date + staff name + time window + note + edit/delete actions.
+- `tests/staffSchedulesUi.test.jsx` — 6 focused tests (SU1-SU6): empty state, row render, type filter, search, holiday toggle hides time, delete confirm + mock.
+
+**Design discovery:** MarketingTabShell hides `children` when `filteredCount === 0` — shows empty-state instead. That broke the inline form in empty state. Fix: render form OUTSIDE shell, list INSIDE. Clean separation of concerns (form always visible; list-with-filters manages its own empty state).
+
+6/6 focused pass. Build clean.
