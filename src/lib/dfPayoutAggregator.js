@@ -71,7 +71,15 @@ export function computeDfPayoutReport({
   // 75%) instead of double-counting or dropping one visit silently.
   const explicitBySale = new Map(); // saleId → Array<{ treatment, entries }>
   for (const t of (treatments || [])) {
-    const linked = String(t?.detail?.linkedSaleId || '');
+    // Phase 12.2b follow-up (2026-04-25): read linkedSaleId from EITHER
+    // `t.detail.linkedSaleId` (where TFP writes via setTreatmentLinkedSaleId)
+    // OR `t.linkedSaleId` (top-level, written by the same helper +
+    // _clearLinkedTreatmentsHasSale). Belt-and-suspenders so legacy docs
+    // that have only one shape still resolve. User-reported bug:
+    // "ค่ามือหมอที่คิด ไม่ได้เชื่อมกับหน้ารายงาน DF" — before this fix
+    // NEITHER shape was ever written, so this lookup returned '' for
+    // every treatment and the aggregator skipped every explicit entry.
+    const linked = String(t?.detail?.linkedSaleId || t?.linkedSaleId || '');
     const entries = Array.isArray(t?.detail?.dfEntries) ? t.detail.dfEntries : [];
     if (linked && entries.length > 0) {
       if (!explicitBySale.has(linked)) explicitBySale.set(linked, []);

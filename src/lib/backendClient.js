@@ -202,6 +202,33 @@ export async function updateBackendTreatment(treatmentId, detail) {
 }
 
 /**
+ * Phase 12.2b follow-up (2026-04-25): link a freshly-created auto-sale
+ * back to its originating treatment. Writes BOTH top-level
+ * `linkedSaleId` (where `_clearLinkedTreatmentsHasSale` queries) AND
+ * `detail.linkedSaleId` (where `dfPayoutAggregator` reads). Without
+ * this helper, TreatmentFormPage's auto-sale flow never stamped the
+ * linkage → DF report couldn't match treatments to sales → the
+ * treatment's dfEntries never contributed and the report showed ฿0
+ * (user-reported bug "ค่ามือหมอที่คิด ไม่ได้เชื่อมกับหน้ารายงาน DF").
+ *
+ * Pass `saleId=null` to clear the linkage (called by
+ * `_clearLinkedTreatmentsHasSale` + delete/cancel cascade).
+ *
+ * @param {string} treatmentId
+ * @param {string|null} saleId
+ */
+export async function setTreatmentLinkedSaleId(treatmentId, saleId) {
+  const id = saleId == null ? null : String(saleId);
+  await updateDoc(treatmentDoc(treatmentId), {
+    linkedSaleId: id,
+    'detail.linkedSaleId': id,
+    'detail.hasSale': id != null,
+    updatedAt: new Date().toISOString(),
+  });
+  return { success: true };
+}
+
+/**
  * Delete a backend treatment.
  *
  * Business rule (2026-04-19, user directive): treatment delete is
@@ -909,6 +936,12 @@ async function _clearLinkedTreatmentsHasSale(saleId) {
     await Promise.all(snap.docs.map(d => updateDoc(d.ref, {
       hasSale: false,
       linkedSaleId: null,
+      // Phase 12.2b follow-up (2026-04-25): also clear detail.linkedSaleId
+      // so the DF payout aggregator (which reads `t.detail.linkedSaleId`)
+      // stops attributing this treatment's dfEntries to the cancelled
+      // sale. Without this, cancelling a sale left stale DF in the report.
+      'detail.linkedSaleId': null,
+      'detail.hasSale': false,
       updatedAt: now,
     })));
   } catch (e) {

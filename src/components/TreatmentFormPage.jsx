@@ -2099,7 +2099,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Auto-create sale invoice when treatment has billing items (hasSale)
         if (hasSale && !isEdit) {
           try {
-            const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints } = await import('../lib/backendClient.js');
+            const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/backendClient.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
             purchasedItems.forEach(p => {
               const t = p.itemType || 'product';
@@ -2141,6 +2141,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               source: 'treatment',
               linkedTreatmentId: result.treatmentId || treatmentId || '',
             }));
+            // Phase 12.2b follow-up (2026-04-25): back-link the treatment
+            // to this sale so `dfPayoutAggregator` can match
+            // `t.detail.linkedSaleId` → `sale.saleId`. Without this,
+            // the treatment's dfEntries[] never contributes to the DF
+            // payout report (user bug: "ค่ามือหมอที่คิด ไม่ได้เชื่อมกับ
+            // หน้ารายงาน DF"). Writes BOTH top-level + detail. fields so
+            // _clearLinkedTreatmentsHasSale + aggregator both see it.
+            try {
+              const tid = result.treatmentId || treatmentId || '';
+              if (tid) await setTreatmentLinkedSaleId(tid, createRes.saleId);
+            } catch (e) { console.warn('[TreatmentForm] setTreatmentLinkedSaleId failed:', e); }
             // Phase 8b — Stock: deduct for auto-sale's products + medications. Fail-fast
             // and delete the sale if stock can't be allocated, so no partial state.
             try {
@@ -2260,7 +2271,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // need to CREATE a sale now. Mirror the create-path saga.
             if (!linkedSale) {
               try {
-                const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, deductStockForSale, deleteBackendSale } = await import('../lib/backendClient.js');
+                const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, deductStockForSale, deleteBackendSale, setTreatmentLinkedSaleId } = await import('../lib/backendClient.js');
                 const newGrouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
                 purchasedItems.forEach(p => {
                   const t = p.itemType || 'product';
@@ -2299,6 +2310,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   source: 'treatment',
                   linkedTreatmentId: result.treatmentId || treatmentId || '',
                 }));
+                // Back-link treatment → sale for DF aggregator (see same
+                // fix in the create-path above).
+                try {
+                  const tid = result.treatmentId || treatmentId || '';
+                  if (tid) await setTreatmentLinkedSaleId(tid, createRes.saleId);
+                } catch (e) { console.warn('[TreatmentForm] setTreatmentLinkedSaleId (edit→sale) failed:', e); }
                 try {
                   await deductStockForSale(createRes.saleId, newGrouped, {
                     customerId, branchId: 'main',
