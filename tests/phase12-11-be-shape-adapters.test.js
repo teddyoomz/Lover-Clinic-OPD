@@ -36,16 +36,18 @@ const mod = await import('../src/lib/backendClient.js');
 beforeEach(() => { vi.resetAllMocks(); });
 
 describe('Phase 12.11 + 11.9 — getBeBackedMasterTypes', () => {
-  it('BE1: exports 13 types covering all Phase 9/11/12 be_* collections', () => {
+  it('BE1: exports 16 types covering all Phase 9/11/12/14 be_* collections', () => {
     const types = mod.getBeBackedMasterTypes();
     const expected = [
       'products', 'courses', 'staff', 'doctors',                   // Phase 12
       'promotions', 'coupons', 'vouchers',                         // Phase 9
       'product_groups', 'product_units', 'medical_instruments',    // Phase 11
       'holidays', 'branches', 'permission_groups',                 // Phase 11
+      // Phase 14.x gap audit (2026-04-24) — added to be_* reader flip:
+      'wallet_types', 'membership_types', 'medicine_labels',
     ];
     expect(types).toEqual(expect.arrayContaining(expected));
-    expect(types).toHaveLength(13);
+    expect(types).toHaveLength(16);
   });
 
   it('BE1a: every listed type maps be_ doc → master_data shape with id field', async () => {

@@ -218,7 +218,9 @@ describe('CourseFormModal', () => {
     mockSaveCourse.mockResolvedValueOnce();
     render(<CourseFormModal course={makeCourse()} onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
     await waitFor(() => expect(screen.getByText('Paracetamol')).toBeInTheDocument());
-    fireEvent.click(screen.getByLabelText(/ลบสินค้า Paracetamol จากคอร์ส/));
+    // Phase 12.2b rewrite (2026-04-24): aria-label shortened from
+    // "ลบสินค้า X จากคอร์ส" → "ลบสินค้า X" in the sub-item table.
+    fireEvent.click(screen.getByLabelText(/ลบสินค้า Paracetamol/));
     fireEvent.click(screen.getByText('บันทึก'));
     await waitFor(() => expect(mockSaveCourse).toHaveBeenCalled());
     const savedForm = mockSaveCourse.mock.calls[0][1];
