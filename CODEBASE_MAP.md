@@ -2393,3 +2393,25 @@ Rule E ✅, H ✅, C3 ✅ (2 collections justified — staff overrides need inde
 **Rule compliance:** E ✅, H ✅, C1 ✅, C2 ✅ (crypto id), C3 ✅ (2 collections justified), D ✅.
 
 **Next**: Phase 13.4 — DF Payout Report (3h, +30 tests, Low risk).
+
+---
+
+## Phase 13.4 — DF Payout Report (2026-04-24) SHIPPED
+
+Consumes the DF matrix from Phase 13.3 to compute per-doctor payout over a date range. Integrates with existing Phase 12 reports infrastructure (ReportShell + DateRangePicker + reportsLoaders + csvExport).
+
+**New files:**
+- `src/lib/dfPayoutAggregator.js` — `computeDfPayoutReport({ sales, doctors, groups, staffOverrides, startDate, endDate, includeCancelled })` → `{ rows, summary }`. Handles 2 doctor-id source patterns (sellers[] split by percent, or legacy `doctorId` full credit), line-subtotal with percent/baht discount, cancelled/refunded filter, lazy row creation (doctors with no DF don't get empty rows), round-to-2-decimals.
+- `src/components/backend/reports/DfPayoutReportTab.jsx` — loads sales + doctors + groups + overrides, renders table (doctorId, name, saleCount, lineCount, totalDf) with footer sum + CSV export via existing `downloadCSV` helper.
+- `tests/dfPayoutAggregator.test.js` — 18 tests (DP1-DP18): empty, percent + baht rates, staff-override wins, multi-seller split with percent, 0-percent skip, date filter, cancelled/refunded exclude, includeCancelled override, product-only item skip, unrated course skip, percent/baht discount reduces DF base, unassigned sale skip, unknown doctor skip, breakdown preserved, rounding.
+
+**Edits:**
+- `navConfig.js`: added `reports-df-payout` item under reports section (after `reports-payment`, `color: 'emerald'`).
+- `BackendDashboard.jsx`: imported DfPayoutReportTab + case branch before the fallback `reports-` prefix.
+
+**Design decisions:**
+- Products don't earn DF in this model — DF is course-only per ProClinic convention (matches `df_group_X_df_course_Y` form field names). If needed later, extend to products with `df_group_X_df_product_Y` pattern.
+- Multi-seller sale splits DF by percent. If one seller has a staff override for course X and the other uses their group rate, both still get their appropriate slice.
+- No firestore.rules change — reads existing collections only.
+
+18/18 aggregator + 25/25 nav-config pass. Build clean. Phase 13.4 closes in ~1h (vs 3h plan). Low risk as expected.

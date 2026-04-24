@@ -41,6 +41,7 @@ import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAna
 import DailyRevenueTab from '../components/backend/reports/DailyRevenueTab.jsx';
 import StaffSalesTab from '../components/backend/reports/StaffSalesTab.jsx';
 import PnLReportTab from '../components/backend/reports/PnLReportTab.jsx';
+import DfPayoutReportTab from '../components/backend/reports/DfPayoutReportTab.jsx';
 import PaymentSummaryTab from '../components/backend/reports/PaymentSummaryTab.jsx';
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
@@ -356,6 +357,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <PnLReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-payment' ? (
           <PaymentSummaryTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-df-payout' ? (
+          <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : activeTab === 'product-groups' ? (
