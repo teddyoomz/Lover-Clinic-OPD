@@ -945,61 +945,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     });
   }, [doctorId, assistantIds, options]);
 
-  // ── Phase 14.4 ask-B (2026-04-24): auto-populate dfEntries[] ──
-  // When the user picks doctor / assistants AND the treatment has any
-  // billable items (purchased-course picks OR direct treatmentItems),
-  // create one dfEntry per person with the resolver's default rows.
-  // No manual "เพิ่มค่ามือ" click required — mirrors the legacy doctorFees
-  // auto-populate above, but scoped to the per-course DF model.
-  //
-  // Respects manual dismissal: when the user deletes an auto-created
-  // entry, its doctorId lands in `dfDismissedIds` so picking the same
-  // doctor again won't resurrect the row.
-  useEffect(() => {
-    if (!options) return;
-    if (treatmentCoursesForDf.length === 0) return;
-    if (!Array.isArray(dfGroups) || dfGroups.length === 0) return;
-    const selectedIds = [doctorId, ...assistantIds].filter(Boolean);
-    if (selectedIds.length === 0) return;
-
-    setDfEntries((prev) => {
-      const existingByDoctor = new Map(prev.map((e) => [String(e.doctorId), e]));
-      const next = [...prev];
-      let changed = false;
-      for (const pid of selectedIds) {
-        const key = String(pid);
-        if (existingByDoctor.has(key)) continue;
-        if (dfDismissedIds.has(key)) continue;
-        const person = treatmentPeopleForDf.find((p) => String(p.id) === key);
-        if (!person) continue;
-        const entryGroupId = person.defaultDfGroupId || '';
-        if (!entryGroupId) continue; // no default group → skip auto-create
-        const rows = buildDefaultRows(
-          treatmentCoursesForDf,
-          key,
-          entryGroupId,
-          dfGroups,
-          dfStaffRates,
-          getRateForStaffCourse,
-        );
-        // Only auto-create if at least one row resolved to a non-zero rate
-        // (otherwise the entry would be all zeros which fails validator
-        // DFE-10 "ต้องเลือกคอร์สอย่างน้อยหนึ่งรายการ" and is meaningless
-        // for the user).
-        if (!rows.some((r) => r.enabled)) continue;
-        next.push({
-          id: generateDfEntryId(),
-          doctorId: key,
-          doctorName: person.name || '',
-          dfGroupId: entryGroupId,
-          rows,
-        });
-        changed = true;
-      }
-      return changed ? next : prev;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doctorId, assistantIds, treatmentCoursesForDf, dfGroups, dfStaffRates, treatmentPeopleForDf]);
+  // Phase 14.4 ask-B auto-populate useEffect was here — MOVED down to
+  // after `treatmentCoursesForDf` + `treatmentPeopleForDf` are declared.
+  // Declaring it above those `const` memos caused a "Cannot access
+  // '<memo>' before initialization" ReferenceError at render time
+  // (TDZ), which crashed the whole TreatmentFormPage with a blank/black
+  // screen on both create + edit paths. User-reported 2026-04-24
+  // post-deploy. Fix: relocate the hook; effect order is unchanged
+  // because React fires them in declaration order AFTER render.
 
   // ── Course item toggle — also update treatment items ──
   const toggleCourseItem = (product) => {
@@ -1637,6 +1590,65 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     }
     return merged;
   }, [options?.doctors, options?.assistants]);
+
+  // ── Phase 14.4 ask-B (2026-04-24): auto-populate dfEntries[] ──
+  // When the user picks doctor / assistants AND the treatment has any
+  // billable items (purchased-course picks OR direct treatmentItems),
+  // create one dfEntry per person with the resolver's default rows.
+  // No manual "เพิ่มค่ามือ" click required — mirrors the legacy doctorFees
+  // auto-populate, but scoped to the per-course DF model.
+  //
+  // PLACEMENT NOTE (bug fix 2026-04-24): this hook MUST live AFTER the
+  // `treatmentCoursesForDf` + `treatmentPeopleForDf` memo declarations
+  // above. Declaring it earlier triggers a TDZ ReferenceError during
+  // render ("Cannot access '<memo>' before initialization") which
+  // crashed TreatmentFormPage with a blank screen on both create +
+  // edit paths.
+  //
+  // Respects manual dismissal: when the user deletes an auto-created
+  // entry, its doctorId lands in `dfDismissedIds` so picking the same
+  // doctor again won't resurrect the row.
+  useEffect(() => {
+    if (!options) return;
+    if (treatmentCoursesForDf.length === 0) return;
+    if (!Array.isArray(dfGroups) || dfGroups.length === 0) return;
+    const selectedIds = [doctorId, ...assistantIds].filter(Boolean);
+    if (selectedIds.length === 0) return;
+
+    setDfEntries((prev) => {
+      const existingByDoctor = new Map(prev.map((e) => [String(e.doctorId), e]));
+      const next = [...prev];
+      let changed = false;
+      for (const pid of selectedIds) {
+        const key = String(pid);
+        if (existingByDoctor.has(key)) continue;
+        if (dfDismissedIds.has(key)) continue;
+        const person = treatmentPeopleForDf.find((p) => String(p.id) === key);
+        if (!person) continue;
+        const entryGroupId = person.defaultDfGroupId || '';
+        if (!entryGroupId) continue; // no default group → skip auto-create
+        const rows = buildDefaultRows(
+          treatmentCoursesForDf,
+          key,
+          entryGroupId,
+          dfGroups,
+          dfStaffRates,
+          getRateForStaffCourse,
+        );
+        if (!rows.some((r) => r.enabled)) continue;
+        next.push({
+          id: generateDfEntryId(),
+          doctorId: key,
+          doctorName: person.name || '',
+          dfGroupId: entryGroupId,
+          rows,
+        });
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, assistantIds, treatmentCoursesForDf, dfGroups, dfStaffRates, treatmentPeopleForDf]);
 
   // Group promotion-linked courses by promotionId with promotion name
   const customerPromotionGroups = useMemo(() => {
