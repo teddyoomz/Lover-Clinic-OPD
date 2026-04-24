@@ -15,6 +15,7 @@ import {
   extractListPagination, extractGenericListPage,
   extractDfGroupList, extractDfGroupRates,
   extractDfStaffList, extractDfStaffRates,
+  extractMedicineLabelList,
 } from './_lib/scraper.js';
 import { withRetry } from './_lib/retry.js';
 import { verifyAuth } from './_lib/auth.js';
@@ -718,6 +719,24 @@ async function handleSyncDfGroups(req, res) {
   });
 }
 
+async function handleSyncMedicineLabels(req, res) {
+  // Phase 14.x gap audit: /admin/medicine-label presets. 2-column table,
+  // per-row id via `data-preset-id` on action buttons (no edit URL).
+  const session = await getSession(req.body);
+  const base = session.origin;
+  const extractFn = (html) => extractMedicineLabelList(html);
+  const { items, totalPages } = await scrapePaginated(
+    session, `${base}/admin/medicine-label`, extractFn,
+  );
+  return res.status(200).json({
+    success: true,
+    type: 'medicine_labels',
+    count: items.length,
+    totalPages,
+    items,
+  });
+}
+
 async function handleSyncPermissionGroups(req, res) {
   return syncGenericList(req, res, {
     type: 'permission_groups',
@@ -762,6 +781,8 @@ export default async function handler(req, res) {
       case 'syncDfGroups':            return await handleSyncDfGroups(req, res);
       // Phase 14.x: per-staff DF rate overrides (doctors + assistants).
       case 'syncDfStaffRates':        return await handleSyncDfStaffRates(req, res);
+      // Phase 14.x: medicine label presets (/admin/medicine-label).
+      case 'syncMedicineLabels':      return await handleSyncMedicineLabels(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

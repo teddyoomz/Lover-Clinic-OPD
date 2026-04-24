@@ -99,6 +99,12 @@ service cloud.firestore {
       match /be_membership_types/{membershipTypeId} {
         allow read, write: if isClinicStaff();
       }
+      // Phase 14.x gap audit: medicine label presets migrated from
+      // master_data/medicine_labels. Consumed by Phase 16 print-label UI
+      // (not shipped yet — collection exists to hold seeded ProClinic data).
+      match /be_medicine_labels/{labelId} {
+        allow read, write: if isClinicStaff();
+      }
       match /be_wallet_transactions/{txId} {
         allow read, create: if isClinicStaff();
         // Wallet transactions are audit records — no update/delete from client.

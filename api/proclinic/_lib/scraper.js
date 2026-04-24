@@ -470,6 +470,29 @@ export function extractDfStaffRates(html, expectedStaffId = '') {
   return rates;
 }
 
+// ─── Master Data: Medicine label presets (Phase 14.x) ────────────────────
+// ProClinic's /admin/medicine-label page lists presets in a 2-column
+// table. No per-row href (edit happens via in-page modal), but the
+// action buttons carry `data-preset-id="{id}"`. The name cell has
+// format `<td>{name}<span class="badge">{type}</span></td>`.
+export function extractMedicineLabelList(html) {
+  const $ = cheerio.load(html);
+  const items = [];
+  $('table tbody tr').each((_, tr) => {
+    const idEl = $(tr).find('[data-preset-id]').first();
+    const id = idEl.attr('data-preset-id');
+    if (!id) return;
+    const cells = $(tr).find('td');
+    if (cells.length === 0) return;
+    // Name cell: text before the <span class="badge"> if present.
+    const nameCell = cells.eq(0);
+    const type = nameCell.find('.badge').first().text().trim();
+    const name = nameCell.clone().children().remove().end().text().trim();
+    items.push({ id: String(id), name, type });
+  });
+  return items;
+}
+
 // ─── Master Data: Products extraction ───────────────────────────────────────
 // Scrapes /admin/product list page — returns array of product objects
 

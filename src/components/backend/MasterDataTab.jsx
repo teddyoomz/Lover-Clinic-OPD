@@ -31,8 +31,9 @@ import {
   migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
   // Phase 14.x: DF groups + per-staff rate overrides (scrape → be_*)
   migrateMasterDfGroupsToBe, migrateMasterDfStaffRatesToBe,
-  // Phase 14.x: gap audit backfill — wallet + membership types migrate
+  // Phase 14.x: gap audit backfill — wallet + membership + medicine-label
   migrateMasterWalletTypesToBe, migrateMasterMembershipTypesToBe,
+  migrateMasterMedicineLabelsToBe,
   // Phase 12.11: debug helper for verifying be_* wiring
   clearMasterDataItems, getBeBackedMasterTypes,
 } from '../../lib/backendClient.js';
@@ -42,8 +43,8 @@ import {
   // Phase 11.8c: 6 master-data sync targets
   syncProductGroups, syncProductUnits, syncMedicalInstruments,
   syncHolidays, syncBranches, syncPermissionGroups,
-  // Phase 14.x: DF groups + per-staff rate overrides
-  syncDfGroups, syncDfStaffRates,
+  // Phase 14.x: DF groups + per-staff rate overrides + medicine labels
+  syncDfGroups, syncDfStaffRates, syncMedicineLabels,
 } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -75,6 +76,7 @@ const SYNC_TYPES = [
   // Phase 14.x: DF groups — tabs + rates matrix per-group
   { key: 'df_groups',            label: 'กลุ่มค่ามือ (DF)',   fn: syncDfGroups,            icon: '💰', color: 'amber' },
   { key: 'df_staff_rates',       label: 'ค่ามือต่อแพทย์/ผู้ช่วย', fn: syncDfStaffRates,       icon: '🩻', color: 'amber' },
+  { key: 'medicine_labels',      label: 'Preset ฉลากยา',        fn: syncMedicineLabels,      icon: '🏷️', color: 'rose' },
 ];
 
 const SYNC_COLOR_MAP_DARK = {
@@ -143,6 +145,11 @@ const COLUMNS = {
     { key: 'staffName', label: 'ชื่อแพทย์/ผู้ช่วย', sticky: true },
     { key: 'position', label: 'ตำแหน่ง', w: 'w-28' },
     { key: 'rates', label: 'จำนวนคอร์ส', w: 'w-24', align: 'text-right', render: (v) => Array.isArray(v) ? String(v.length) : '0' },
+  ],
+  medicine_labels: [
+    { key: 'id', label: 'ID', w: 'w-20' },
+    { key: 'name', label: 'ชื่อ Preset', sticky: true },
+    { key: 'type', label: 'ประเภท', w: 'w-28' },
   ],
   membership_types: [
     { key: 'name', label: 'ชื่อบัตร', sticky: true },
@@ -347,6 +354,7 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     // Phase 14.x gap backfill (2026-04-24) — missing migrates for existing syncs
     { key: 'wallet_types',        label: 'กระเป๋าเงิน → be_wallet_types',             icon: '💼', fn: migrateMasterWalletTypesToBe },
     { key: 'membership_types',    label: 'บัตรสมาชิก → be_membership_types',           icon: '🎫', fn: migrateMasterMembershipTypesToBe },
+    { key: 'medicine_labels',     label: 'Preset ฉลากยา → be_medicine_labels',          icon: '🏷️', fn: migrateMasterMedicineLabelsToBe },
     // Phase 12.1 — seed be_staff + be_doctors from list-page scrape. Password
     // + permission group wiring happens in OUR CRUD after migrate.
     { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },

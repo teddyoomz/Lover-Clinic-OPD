@@ -440,3 +440,5 @@ export function syncPermissionGroups()   { return apiFetch('master', { action: '
 export function syncDfGroups()           { return apiFetch('master', { action: 'syncDfGroups' }); }
 /** Phase 14.x: pull per-staff DF rate overrides (doctors + assistants). */
 export function syncDfStaffRates()       { return apiFetch('master', { action: 'syncDfStaffRates' }); }
+/** Phase 14.x gap audit: pull medicine label presets from /admin/medicine-label. */
+export function syncMedicineLabels()     { return apiFetch('master', { action: 'syncMedicineLabels' }); }

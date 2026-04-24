@@ -1207,6 +1207,9 @@ function beWalletTypeToMasterShape(w) {
 function beMembershipTypeToMasterShape(m) {
   return { ...m, id: m.membershipTypeId || m.id, name: m.name || m.membership_name || '' };
 }
+function beMedicineLabelToMasterShape(l) {
+  return { ...l, id: l.labelId || l.id, name: l.name || '' };
+}
 
 // Types that have be_* canonical backing as of Phase 11.9 (2026-04-20).
 // Every type listed here SHOULD show green "be_*" badge in MasterDataTab
@@ -1232,6 +1235,7 @@ const BE_BACKED_MASTER_TYPES = Object.freeze({
   // Readers now hit be_* transparently once the migration button runs.
   wallet_types:        { col: 'be_wallet_types',        map: beWalletTypeToMasterShape        },
   membership_types:    { col: 'be_membership_types',    map: beMembershipTypeToMasterShape    },
+  medicine_labels:     { col: 'be_medicine_labels',     map: beMedicineLabelToMasterShape     },
 });
 
 async function readBeForMasterType(type) {
@@ -5123,6 +5127,31 @@ export async function migrateMasterMembershipTypesToBe() {
     targetCol: membershipTypesCol,
     targetDocFn: membershipTypeDoc,
     mapper: mapMasterToMembershipType,
+  });
+}
+
+// ─── Phase 14.x gap audit: medicine label presets ─────────────────────────
+const medicineLabelsCol = () => collection(db, ...basePath(), 'be_medicine_labels');
+const medicineLabelDoc = (id) => doc(db, ...basePath(), 'be_medicine_labels', String(id));
+
+function mapMasterToMedicineLabel(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  return {
+    labelId: String(id),
+    name: String(src.name || '').trim() || '(imported)',
+    type: String(src.type || '').trim(),
+    status: 'ใช้งาน',
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterMedicineLabelsToBe() {
+  return runMasterToBeMigration({
+    sourceType: 'medicine_labels',
+    targetCol: medicineLabelsCol,
+    targetDocFn: medicineLabelDoc,
+    mapper: mapMasterToMedicineLabel,
   });
 }
 
