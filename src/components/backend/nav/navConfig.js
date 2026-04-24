@@ -42,6 +42,8 @@ import {
   FileText,
   // Phase 13.2 staff schedules tab icon
   CalendarClock,
+  // Phase 13.3 DF groups tab icon (Percent — payment fee context)
+  Percent,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -137,6 +139,7 @@ export const NAV_SECTIONS = [
       { id: 'products',             label: 'สินค้า',              icon: PackageIcon,   color: 'amber', palette: 'product drug service สินค้า ยา บริการ' },
       { id: 'courses',              label: 'คอร์ส',               icon: BriefcaseIcon, color: 'amber', palette: 'course program package คอร์ส โปรแกรม' },
       { id: 'finance-master',       label: 'ตั้งค่าการเงิน',       icon: Banknote,      color: 'amber', palette: 'bank account expense category ค่าใช้จ่าย บัญชีธนาคาร finance' },
+      { id: 'df-groups',            label: 'กลุ่ม DF (ค่ามือ)',     icon: Percent,       color: 'amber', palette: 'df doctor fee group rate commission ค่ามือ กลุ่ม อัตรา เปอร์เซ็นต์' },
     ],
   },
 ];

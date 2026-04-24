@@ -2359,3 +2359,37 @@ Rule E ✅, H ✅, C3 ✅ (2 collections justified — staff overrides need inde
 - `tests/dfGroupCrud.test.js` — 12 focused tests (DC1-DC12).
 
 12/12 focused pass. Build clean.
+
+## Phase 13.3.3 — DfGroupsTab + FormModal (matrix editor) + nav wiring (2026-04-24)
+
+**New files:**
+- `src/components/backend/DfGroupFormModal.jsx` — header (name+status+note) + course-picker pill list (from `getAllMasterDataItems('courses')`) + rate-row matrix (courseName + value number + type select + remove). Live validate via `validateDfGroupStrict` → `scrollToField` on error.
+- `src/components/backend/DfGroupsTab.jsx` — list via MarketingTabShell, status filter + search, edit/delete row actions.
+- `tests/dfGroupsUi.test.jsx` — 7 focused tests (DU1-DU7): empty state, row render, status filter, modal create/edit titles, rate value preserved in edit, validation blocks empty-name save, rate type switch.
+
+**Edits:**
+- `navConfig.js`: added `Percent` icon import + `df-groups` item in master section after `finance-master`.
+- `BackendDashboard.jsx`: imported DfGroupsTab + added case branch.
+- `backend-nav-config.test.js I4`: appended `'df-groups'` to master section ordering assertion.
+
+**Staff override UI deferred** to a later polish pass — doctor form already has `dfGroupId` (95%+ coverage). Overrides for special cases can be edited via Firestore console until a dedicated UI ships.
+
+32/32 focused + existing nav-config tests pass. Build clean.
+
+---
+
+## Phase 13.3 — SHIPPED (2026-04-24)
+
+| Sub-phase | Commit | Tests |
+|---|---|---:|
+| 13.3.1 validator + resolver | `920f4e0` | +43 |
+| 13.3.2 CRUD + rules | `122e045` | +12 |
+| 13.3.3 UI + nav wiring | this commit | +7 |
+
+**Total delta:** +62 focused tests (plan called for +50; over-delivered). 3 commits over ~1.5h.
+
+**Feature complete:** be_df_groups + be_df_staff_rates collections with validator + CRUD + group editor UI. Resolver helper ready for Phase 13.4 payout report consumption.
+
+**Rule compliance:** E ✅, H ✅, C1 ✅, C2 ✅ (crypto id), C3 ✅ (2 collections justified), D ✅.
+
+**Next**: Phase 13.4 — DF Payout Report (3h, +30 tests, Low risk).

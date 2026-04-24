@@ -200,6 +200,7 @@ describe('section integrity', () => {
       'products',
       'courses',
       'finance-master',
+      'df-groups',
     ]);
   });
 
