@@ -4,8 +4,8 @@
 // Rule E: no brokerClient import. Rule H: no ProClinic mirror.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, FileText, Printer, Loader2 } from 'lucide-react';
-import { listQuotations, deleteQuotation } from '../../lib/backendClient.js';
+import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle } from 'lucide-react';
+import { listQuotations, deleteQuotation, convertQuotationToSale } from '../../lib/backendClient.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -41,6 +41,7 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [printing, setPrinting] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [converting, setConverting] = useState(null);
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
@@ -87,6 +88,22 @@ export default function QuotationTab({ clinicSettings, theme }) {
   };
 
   const handleSaved = async () => { setFormOpen(false); setEditing(null); await reload(); };
+
+  const handleConvert = async (q) => {
+    const id = q.quotationId || q.id;
+    if (!window.confirm(`แปลงใบเสนอราคา "${q.customerName || id}" เป็นใบขาย (draft) ?`)) return;
+    setConverting(id); setError('');
+    try {
+      const res = await convertQuotationToSale(id);
+      if (res.alreadyConverted) {
+        window.alert(`ใบเสนอราคานี้แปลงแล้ว → ใบขาย ${res.saleId}`);
+      } else {
+        window.alert(`แปลงสำเร็จ → ใบขาย ${res.saleId} (draft)`);
+      }
+      await reload();
+    } catch (e) { setError(e.message || 'แปลงไม่สำเร็จ'); }
+    finally { setConverting(null); }
+  };
 
   const extraFilters = (
     <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
@@ -136,6 +153,15 @@ export default function QuotationTab({ clinicSettings, theme }) {
                   </span>
                   <span className="text-lg font-black text-emerald-400 shrink-0">{formatMoney(q.netTotal)}</span>
                   <div className="flex items-center gap-1 shrink-0">
+                    {['draft', 'sent', 'accepted'].includes(status) && (
+                      <button onClick={() => handleConvert(q)} disabled={busy || converting === id}
+                        aria-label={`แปลงใบเสนอราคา ${id} เป็นใบขาย`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-emerald-700/20 border border-emerald-700/40 text-emerald-400 hover:bg-emerald-700/30 disabled:opacity-50"
+                        data-testid={`quotation-convert-${id}`}>
+                        {converting === id ? <Loader2 size={12} className="animate-spin" /> : <ArrowRightCircle size={12} />}
+                        แปลงเป็นใบขาย
+                      </button>
+                    )}
                     <button onClick={() => handlePrint(q)} disabled={busy} aria-label={`ปริ๊นใบเสนอราคา ${id}`}
                       className="p-1.5 rounded text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] hover:text-sky-400 disabled:opacity-50"
                       data-testid={`quotation-print-${id}`}>

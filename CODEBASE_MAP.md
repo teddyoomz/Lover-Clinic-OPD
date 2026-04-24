@@ -2124,3 +2124,55 @@ Tests: focused-only per new feedback rule (`feedback_test_per_subphase`) — 15/
 - Rule 04 ✅ — dd/mm/yyyy ค.ศ. in backend form (DateField locale='ce'); dd เดือน พ.ศ. in customer-facing print.
 
 Tests: 15/15 focused pass. Build clean (`built in 1.84s`). Full regression deferred.
+
+---
+
+## Phase 13.1.4 — Convert Quotation → Sale draft (2026-04-24)
+
+**Context:** OUR feature (not in ProClinic). Turns a quotation into a draft `be_sales` so the seller can finalize payment + sellers + coupon without re-typing line items. Idempotent: re-clicking the button on an already-converted quotation returns the existing saleId, never creates a duplicate.
+
+**Edits:**
+- `src/lib/backendClient.js` — `convertQuotationToSale(quotationId)`:
+  - Idempotency guard via `q.convertedToSaleId` (returns existing saleId immediately)
+  - Status gate — only `draft` / `sent` / `accepted` convertible; `expired` / `rejected` / `cancelled` / `converted` throw
+  - Flattens 4 sub-item categories into sale `items[]`:
+    - courses → `{ courseId, courseName, qty, price, discount, discountType, isVatIncluded }`
+    - products → + `isPremium`
+    - takeawayMeds → + `isPremium`, `isTakeaway: true`, `medication: { genericName, indications, dosageAmount, dosageUnit, timesPerDay, administrationMethod, administrationMethodHour, administrationTimes[] }`
+    - promotions → NOT in items (sale's `promotionId` is single-valued); preserved as a `saleNote` line so seller re-applies manually
+  - Single-seller quotation → `sellers[0] = { sellerId, sellerName, percent: 100, total: netTotal }` (satisfies SA-4 sum=100 and sum=netTotal invariants downstream)
+  - Empty sellerId → `sellers: []` (no invariant violation per SA-4 "applies only when active")
+  - Sale built with `status='draft'`, `source='quotation'`, `sourceDetail=qid`, `saleType='course'`, `linkedQuotationId=qid` for back-ref
+  - After `createBackendSale`, PATCHes quotation: `status='converted'`, `convertedToSaleId`, `convertedAt`, `updatedAt`
+
+- `src/components/backend/QuotationTab.jsx`:
+  - Imports `convertQuotationToSale` + `ArrowRightCircle` icon
+  - `[converting, setConverting]` state for per-row loading
+  - `handleConvert(q)` — confirm → call → success/already-converted alert → reload
+  - "แปลงเป็นใบขาย" button rendered only for `status ∈ {draft, sent, accepted}` (hidden for terminal states, matches Phase-13.1.2 delete-lock guarantee)
+
+**New files:**
+- `tests/quotationConvert.test.js` — 10 focused tests (QCV1-QCV10):
+  - QCV1 empty id rejected
+  - QCV2 missing quotation throws
+  - QCV3 idempotency — second call returns existing saleId, no new write
+  - QCV4 status=expired/rejected/cancelled blocked (3 sub-asserts)
+  - QCV5 4-category flatten → 3 items (promotions dropped; 3/3 expected slots)
+  - QCV6 takeaway med medication object preserved
+  - QCV7 single-seller quotation → sellers[0] at 100%
+  - QCV8 post-convert updateDoc carries status=converted + convertedToSaleId + convertedAt
+  - QCV9 empty sellerId → sellers: [] (no invariant violation)
+  - QCV10 promotions landed in saleNote + source/sourceDetail/linkedQuotationId set
+
+**Design decisions:**
+- **promotions dropped** — sale model has single `promotionId` at header level, not per-item. Adding N promotions would pick "first" arbitrarily → data loss anyway. Explicit saleNote line keeps the seller informed. Alt: invent per-line-item promotion field on sale — rejected (premature schema, Rule C3).
+- **draft status** — sale finalization (payment + coupon + seller %) is the seller's call, not auto. Converting to "active" would lock in whatever the quotation had.
+- **lock after convert** — Phase 13.1.2 delete-lock + 13.1.3 hide-convert-button already enforce; audit trail preserved.
+
+**Rules status:**
+- Rule E ✅ — Firestore-only path (`be_quotations` → `be_sales`).
+- Rule H ✅ — no ProClinic call; both sides OUR data.
+- Rule C1 ✅ — reuses `createBackendSale` (already tested for duplicate-id safety + THB rounding).
+- Rule D (continuous improvement) ✅ — 10 adversarial tests, including 3-state status gate + idempotency + empty-seller edge.
+
+Tests: 25/25 focused (15 UI + 10 convert). Build clean. Full regression deferred.

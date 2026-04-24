@@ -5625,3 +5625,140 @@ export async function deleteQuotation(quotationId) {
   await deleteDoc(quotationDocRef(id));
   return { success: true };
 }
+
+/**
+ * Phase 13.1.4 — Convert a quotation into a be_sales draft.
+ * OUR feature (not in ProClinic). Copies customer + line items + seller
+ * into a new draft sale, then marks the quotation as 'converted' with
+ * `convertedToSaleId` + `convertedAt` set. Idempotent: a second call
+ * returns the existing saleId instead of creating a duplicate.
+ *
+ * @param {string} quotationId
+ * @returns {Promise<{ saleId: string, alreadyConverted: boolean }>}
+ */
+export async function convertQuotationToSale(quotationId) {
+  const qid = String(quotationId || '');
+  if (!qid) throw new Error('quotationId required');
+
+  const qSnap = await getDoc(quotationDocRef(qid));
+  if (!qSnap.exists()) throw new Error('ไม่พบใบเสนอราคา');
+  const q = qSnap.data();
+
+  // Idempotency — if already converted, return the linked saleId.
+  if (q.convertedToSaleId) {
+    return { saleId: q.convertedToSaleId, alreadyConverted: true };
+  }
+
+  // Status gate — only draft/sent/accepted convertible.
+  const CONVERTIBLE_STATES = new Set(['draft', 'sent', 'accepted']);
+  const curStatus = q.status || 'draft';
+  if (!CONVERTIBLE_STATES.has(curStatus)) {
+    throw new Error(`สถานะ "${curStatus}" ไม่สามารถแปลงเป็นใบขายได้`);
+  }
+
+  // Flatten 4 sub-item categories into sale.items[].
+  const items = [];
+  for (const c of (q.courses || [])) {
+    items.push({
+      courseId: c.courseId,
+      courseName: c.courseName,
+      qty: Number(c.qty) || 0,
+      price: Number(c.price) || 0,
+      discount: Number(c.itemDiscount) || 0,
+      discountType: c.itemDiscountType || '',
+      isVatIncluded: !!c.isVatIncluded,
+    });
+  }
+  for (const p of (q.products || [])) {
+    items.push({
+      productId: p.productId,
+      productName: p.productName,
+      qty: Number(p.qty) || 0,
+      price: Number(p.price) || 0,
+      discount: Number(p.itemDiscount) || 0,
+      discountType: p.itemDiscountType || '',
+      isVatIncluded: !!p.isVatIncluded,
+      isPremium: !!p.isPremium,
+    });
+  }
+  for (const m of (q.takeawayMeds || [])) {
+    items.push({
+      productId: m.productId,
+      productName: m.productName,
+      qty: Number(m.qty) || 0,
+      price: Number(m.price) || 0,
+      discount: Number(m.itemDiscount) || 0,
+      discountType: m.itemDiscountType || '',
+      isVatIncluded: !!m.isVatIncluded,
+      isPremium: !!m.isPremium,
+      isTakeaway: true,
+      medication: {
+        genericName: m.genericName || '',
+        indications: m.indications || '',
+        dosageAmount: m.dosageAmount || '',
+        dosageUnit: m.dosageUnit || '',
+        timesPerDay: m.timesPerDay || '',
+        administrationMethod: m.administrationMethod || '',
+        administrationMethodHour: Number(m.administrationMethodHour) || 0,
+        administrationTimes: Array.isArray(m.administrationTimes) ? [...m.administrationTimes] : [],
+      },
+    });
+  }
+
+  // Sellers — quotation has single sellerId; sale model uses 5-seller array.
+  // Put the one seller at 100% / full-total so SA-4 invariants hold downstream.
+  const netTotal = Number(q.netTotal) || 0;
+  const sellers = [];
+  if (q.sellerId) {
+    sellers.push({
+      sellerId: q.sellerId,
+      sellerName: q.sellerName || '',
+      percent: 100,
+      total: netTotal,
+    });
+  }
+
+  // Promotions — sale doesn't carry per-item promotions; preserve as a note
+  // so the seller can re-apply manually when finalizing the sale.
+  const promoNote = (q.promotions || []).length > 0
+    ? `โปรโมชันจากใบเสนอราคา: ${(q.promotions || [])
+        .map((p) => p.promotionName || p.promotionId)
+        .filter(Boolean)
+        .join(', ')}`
+    : '';
+
+  const saleData = {
+    customerId: q.customerId,
+    customerHN: q.customerHN || '',
+    customerName: q.customerName || '',
+    saleDate: q.quotationDate,
+    items,
+    sellers,
+    payments: [],
+    totalPaidAmount: 0,
+    billing: {
+      subtotal: Number(q.subtotal) || 0,
+      discount: Number(q.discount) || 0,
+      discountType: q.discountType || '',
+      netTotal,
+    },
+    status: 'draft',
+    source: 'quotation',
+    sourceDetail: qid,
+    saleType: 'course',
+    saleNote: [q.note, promoNote].filter(Boolean).join('\n'),
+    linkedQuotationId: qid,
+  };
+
+  const { saleId } = await createBackendSale(saleData);
+
+  const now = new Date().toISOString();
+  await updateDoc(quotationDocRef(qid), {
+    status: 'converted',
+    convertedToSaleId: saleId,
+    convertedAt: now,
+    updatedAt: now,
+  });
+
+  return { saleId, alreadyConverted: false };
+}
