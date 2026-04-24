@@ -9,100 +9,91 @@
 
 - **Date last updated**: 2026-04-24 (end-of-session)
 - **Branch**: `master`
-- **Last commit**: `647e2a1 fix(chat): stop phantom notification when no unread remains`
-  (LoverClinic unchanged today — this session was guardrails-only)
-- **Test count**: 2865 / 2865 passing (unchanged — no source touched)
-- **Build**: clean (unchanged)
-- **Deploy state**: production = `c72fd0e` (via `lover-clinic-eg6mk2cgd`, 2026-04-21)
-  - HEAD unchanged since deploy — **no deploy needed**
+- **Last commit**: `f55f62e docs(phase14): extend DF modal brief with save-flow capture findings`
+- **Test count**: 3178 / 3178 passing (was 2865 at session start; +313 this session)
+- **Build**: clean
+- **Deploy state**:
+  - **firestore:rules**: deployed 2026-04-24 (Probe-Deploy-Probe 200×4 both sides)
+  - **Vercel prod**: `ab5a60a` via `vercel --prod` — **8 commits BEHIND HEAD** (quotation fixes + armory docs not deployed)
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅ (verify before wrapping)
+- **Remote sync**: master = origin/master ✅
 
-**Guardrails companion repo (`F:/claude-guardrails`):**
-- HEAD: `f780430 feat(compounding): automate growth loop — 10 leverage points`
-- 2 new commits today (`5894b02` + `f780430`) — still **local only** per user directive
+**Scraper companion (`F:/replicated/`, separate git repo):**
+- `flow-commands.js` NEW + `commands.js` + `opd.js` + 3 recipes in `recipes/` — committed in that repo
+- Commands live: `opd.js flow|har|inspect`
 
 ---
 
 ## What's Done (recent phases)
 
-- ✅ **Phase 1-10** — base app + reports (historical)
-- ✅ **Phase 11.1-11.8** — Master Data Suite scaffold + 6 entity CRUDs + wiring
-- ✅ **Phase 11.9 fix** (2026-04-21) — Product Groups full rewrite (V10 correction): 2-type schema, products[] with pivot.qty, full-field JSON API sync, removed master_data fallback, BE_BACKED_MASTER_TYPES 4→13
-- ✅ **Phase 12.0-12.11** — Financial completeness + adapter bridge + Firebase Admin SDK
-- ✅ **claude-guardrails v0.1 MVP** (2026-04-21) — methodology extracted to `F:/claude-guardrails`
-- ✅ **Handoff skills** (2026-04-21) — `/session-start` + `/session-end` + `/violation-log` in both repos
-- ✅ **Claude-guardrails compounding-loop shipment** (2026-04-24) — 6 new skills + 3 new docs + Rule G.3 + evidence-required template + 2 new hooks. Guardrails upgraded from passive catalog to self-compounding system. See `.agents/sessions/2026-04-24-guardrails-compounding-loop.md`
+- ✅ **Phase 1-11.9** — base app + Master Data Suite (historical)
+- ✅ **Phase 12.0-12.11** — Financial completeness + adapter bridge + Firebase Admin SDK (historical)
+- ✅ **Phase 13.1** (2026-04-24) — Quotations + convert-to-sale + dual-print + payment-record
+- ✅ **Phase 13.2** (2026-04-24) — Staff schedules + AppointmentTab collision warning
+- ✅ **Phase 13.3** (2026-04-24) — DF groups + staff-rate matrix + DfGroupsTab UI
+- ✅ **Phase 13.4** (2026-04-24) — DF Payout Report (aggregator + ReportTab)
+- ✅ **Phase 13.5** (2026-04-24) — Tab-gate scaffolding (pure helpers + stub hook, no wiring yet)
+- ✅ **Phase 13.6** (2026-04-24) — Treatment validator + schema
+- ✅ **V11 logged** (2026-04-24) — mock-shadowed missing export; rule 02 pre-commit updated
+- ✅ **Deployed** (2026-04-24) — firestore:rules (4 new be_* rules) + Vercel prod at ab5a60a
+- ✅ **Armory upgrade** (2026-04-24) — Rule F-bis + /triangle-inspect skill + opd.js flow/har/inspect commands
+- ✅ **Phase 14 Triangle scan DONE** — DF modal brief at `docs/proclinic-scan/df-modal-brief-phase14.md`
 
 ---
 
 ## What's Next
 
-**Phase 13.1 Quotations** (next active work session, ~4h, +40 tests, Medium risk)
+**Phase 14.1 Staff list bug + `defaultDfGroupId` schema** (next active session, ~1h, Low risk)
 
-Full breakdown in `.agents/sessions/2026-04-24-phase13-prep.md`:
+Files to touch (per Triangle brief):
+- `src/components/TreatmentFormPage.jsx:570` — assistant filter misses some positions; add fallback
+- `src/lib/doctorValidation.js:136` — make `defaultDfGroupId` required for positions ผู้ช่วยแพทย์ / แพทย์
+- `src/lib/staffValidation.js` — add `defaultDfGroupId` field
+- `src/components/backend/DoctorFormModal.jsx` + `StaffFormModal.jsx` — add DF group dropdown field
+- `tests/` — extend validator tests (~+10 tests)
 
-- **13.1.1** Validator + normalizer at `src/lib/quotationValidation.js` (~45min, +15 tests)
-- **13.1.2** backendClient CRUD (~30min, +5 tests)
-- **13.1.3** `src/components/backend/QuotationTab.jsx` + `QuotationFormModal.jsx` (~1.5h, +10 tests)
-- **13.1.4** Convert-to-sale handler (~45min, +8 tests) — OUR addition (not a ProClinic feature)
-- **13.1.5** Nav + BackendDashboard wiring (~15min, +2 tests)
+Then Phase 14.2 (already done — Triangle) → 14.3 (DfEntryModal) → 14.4 (TreatmentFormPage wiring) → 14.5 (validator + aggregator update).
 
-Triangle artifacts pre-scanned in `docs/proclinic-scan/admin-quotation-*-phase13_1.json`
-+ `docs/proclinic-scan/detailed-adminquotationcreate.json`.
-
-Success criteria: +40 tests (2865 → 2905), all adversarial cases pass, form
-field parity with ProClinic modal.
+Triangle artefacts:
+- `docs/proclinic-scan/df-modal-brief-phase14.md` — full behavioural capture with hidden `/admin/df/calculate2` API
+- `F:/replicated/output/flows/df-modal-capture-*.json` — 15-step flow trace with apiLog
+- `F:/replicated/output/har/har-*_treatment_3357_edit-*.har` — full HTTP Archive
 
 ---
 
 ## Outstanding User Actions (NOT auto-run)
 
-- [ ] **Test Phase 11.9 end-to-end** — MasterDataTab → Sync สินค้า + คอร์ส
-      → นำเข้า be_products + be_courses → สร้างการรักษาใหม่ → verify
-      ราคา + สินค้าหน้าร้าน dropdown + ยากลับบ้าน label ครบ
-- [ ] **Deploy** (vercel --prod) — only needed if next session ships new code
-      changes. Current HEAD is unchanged since last deploy.
-- [ ] **Optional: copy new guardrails skills into LoverClinic** if wanted
-      locally:
-      ```bash
-      cp -r F:/claude-guardrails/.claude/skills/{audit-rules,audit-health,skill-relevant,research-gap,skill-autoinstall} F:/LoverClinic-app/.claude/skills/
-      ```
-- [ ] **Optional: git push F:/claude-guardrails** — if publishing or sharing;
-      currently local only (commits `5894b02` + `f780430`, 4 commits total)
-- [ ] **Optional: run `/audit-health`** against LoverClinic to see current
-      methodology adoption tier (once copied in)
-- [ ] **firestore:rules deploy** — none pending
+- [ ] **Vercel re-deploy** — HEAD `f55f62e` is 8 commits ahead of prod `ab5a60a`. Includes: dual print fix, print portal fix, บันทึกชำระ modal, logo fix, price fallback, armory docs. User decides when.
+- [ ] **Test Phase 13 features end-to-end on prod** after re-deploy — quotations / staff schedules / DF groups / DF payout report
+- [ ] **Optional Phase 14 Triangle follow-up captures**:
+  - Save POST on a doctor with NO existing entry (dup-guard blocked our capture)
+  - `#editDfModal` flow probe
+- [ ] **Port armory + Rule F-bis to claude-guardrails** — same methodology upgrade benefits every project using guardrails
+- [ ] **firestore:rules deploy** — NONE pending
 
 ---
 
 ## Blockers
 
-None. Ready to proceed with Phase 13.1.
+None.
 
 ---
 
 ## Known Limitations / Technical Debt
 
-- `membership_types` + `wallet_types` still master_data-only (no be_*) —
-  Phase 16 migration candidates. UI reads via `getAllMasterDataItems()`
-  adapter, so migration is zero-code-change when be_ backing added.
-- Legacy master_data/medication_groups + consumable_groups caches still
-  exist as fallback data — no UI reads them after Phase 11.9. Safe to
-  clear via MasterDataTab [A3] debug panel (all 13 types marked be_* now).
-- LoverClinic `.claude/skills/` does NOT yet have the 5 new guardrails
-  skills (`audit-rules`, `audit-health`, `skill-relevant`, `research-gap`,
-  `skill-autoinstall`). They live in `F:/claude-guardrails/.claude/skills/`
-  only. Copy if you want them LoverClinic-invokable.
+- Phase 14 is new scope (DF ↔ Treatment integration). Phase 13 shipped the DATA layer of DF; Phase 14 wires it into TreatmentFormPage.
+- 5 newer guardrails skills exist in `.claude/skills/` (copied earlier this session): `audit-rules`, `audit-health`, `skill-relevant`, `research-gap`, `skill-autoinstall`. Available but not yet used in LoverClinic flow.
+- Production is 8 commits behind HEAD — includes cosmetic fixes + armory docs. Not urgent but prod UX for quotation convert + print shows stale behaviour.
+- `membership_types` + `wallet_types` still master_data-only (Phase 16 migration candidates).
 
 ---
 
 ## Violations This Session
 
-**None** — no LoverClinic source changes this session, so no new V-entries.
-
-Prior session V10 (2026-04-21, Phase 11.2 schema drift) remains the most
-recent entry in `.claude/rules/00-session-start.md`.
+**V11 — 2026-04-24 — Mock-shadowed missing export** (pre-commit near-miss, caught by `npm run build`):
+- `QuotationFormModal` imported `getAllStaff`; real export is `listStaff`
+- `vi.mock()` created the name in the mock → focused tests passed, build caught it
+- Rule 02 VERIFY step augmented + entry added to `.claude/rules/00-session-start.md`
 
 ---
 
@@ -113,33 +104,44 @@ Paste this block into the next Claude session (or just invoke `/session-start`):
 ```
 Resume LoverClinic OPD — continue from 2026-04-24 end-of-session.
 
-/session-start
+Read in order BEFORE any tool call:
+1. CLAUDE.md (stack + env + rule index)
+2. SESSION_HANDOFF.md (this file, cross-session state of truth)
+3. .agents/active.md (hot state — master=f55f62e, 3178 tests)
+4. .claude/rules/00-session-start.md (iron-clad A-H + F-bis + V1-V11)
+5. .agents/sessions/2026-04-24-phase13-ship-armory-upgrade.md (detail checkpoint)
 
-Context snapshot:
-- master = 647e2a1, 2865 tests passing (LoverClinic unchanged this session)
-- Production = c72fd0e (https://lover-clinic-app.vercel.app), no deploy needed
-- claude-guardrails at F:/claude-guardrails commit f780430 — compounding-loop
-  shipment (6 new skills + 3 new docs + Rule G.3 + evidence-required template)
-  Still local-only.
-- This session shipped to guardrails only. LoverClinic source untouched.
+Status summary:
+- master = f55f62e, 3178/3178 tests pass, build clean
+- Production (Vercel): ab5a60a — 8 commits BEHIND HEAD (fix + armory docs)
+- firestore:rules: deployed 2026-04-24 (4 new be_* rules from Phase 13.2-13.3)
+- Scraper armory (F:/replicated/scraper/): opd.js flow | har | inspect NEW
+- Phase 14 Triangle DONE — brief at docs/proclinic-scan/df-modal-brief-phase14.md
 
-After /session-start, suggested next actions:
-A. Phase 13.1 Quotations (validator first — see .agents/sessions/2026-04-24-phase13-prep.md)
-B. Copy new guardrails skills into LoverClinic (audit-rules/audit-health/
-   skill-relevant/research-gap/skill-autoinstall)
-C. Test Phase 11.9 end-to-end via MasterDataTab Sync+Import
-D. Try Research Mode live on a real LoverClinic question (test G.3 prevents guess)
-E. Something else
+Next action (Phase 14.1, ~1h, Low risk):
+A. Fix staff list filter bug at src/components/TreatmentFormPage.jsx:570
+   (assistants filter misses some positions — grep before fix)
+B. Make defaultDfGroupId required in doctorValidation.js + add to staffValidation.js
+C. Add DF group dropdown to DoctorFormModal + StaffFormModal
+D. Extend validator tests (~+10)
+
+Phase 14 roadmap after 14.1: 14.3 DfEntryModal (3h) → 14.4 TreatmentFormPage wiring (2h) → 14.5 validator + aggregator update (1.5h). 14.2 Triangle already DONE.
+
+Outstanding user-triggered actions (NOT auto-run):
+- Vercel re-deploy (8 commits ahead) — user decides when
+- Optional: Phase 14 Triangle follow-ups (save POST + edit modal probe)
+- Optional: port armory + Rule F-bis to claude-guardrails
 
 Rules to remember:
-- No deploy without explicit THIS-turn authorization
-- Probe-Deploy-Probe 4 endpoints before firestore:rules deploy
-- Triangle Rule (universal form) — Evidence + Intention + Existing code
-  before writing anything that depends on external reference
-- Rule D: every bug → test + rule + audit invariant
-- Rule G.3 (NEW in guardrails, not yet copied into LoverClinic):
-  "I think / probably / usually" = gap signal → research-gap + skill-autoinstall
-- Backend = Firestore ONLY, except MasterDataTab bridge
+- No deploy without explicit THIS-turn authorization (V4/V7 repeat)
+- Probe-Deploy-Probe 4 endpoints before any firestore:rules deploy (V1/V9 repeat)
+- Rule F-bis (NEW 2026-04-24): behaviour capture not just shape — use /triangle-inspect skill for any interactive ProClinic replica
+- V11 (NEW 2026-04-24): vi.mock creates names; trust npm run build over focused tests for import resolution
+- Phase 13 feedback_test_per_subphase: focused tests per sub-commit; full regression only at end of major Phase (13/14/15/16)
+- Backend = Firestore ONLY except MasterDataTab (rule E)
+- Every bug → test + rule + audit invariant (rule D)
+
+Invoke /session-start to boot context.
 ```
 
 ---
