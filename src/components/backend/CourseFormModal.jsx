@@ -15,7 +15,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { saveCourse, listProducts } from '../../lib/backendClient.js';
+import { saveCourse, listProducts, listCourses } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS, COURSE_TYPE_OPTIONS, USAGE_TYPE_OPTIONS,
   validateCourse, emptyCourseForm, generateCourseId,
@@ -40,18 +40,64 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [products, setProducts] = useState([]);
+  const [allCourses, setAllCourses] = useState([]);
   const [mainPickerQuery, setMainPickerQuery] = useState('');
   const [subPickerQuery, setSubPickerQuery] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        setProducts(await listProducts());
+        // Phase 12.2b follow-up (2026-04-24): load both products AND all
+        // existing courses so the category + procedureType inputs can
+        // offer datalist suggestions derived from be_courses (Rule H-tris:
+        // read from be_* only, no master_data / ProClinic fallback). If
+        // no existing courses carry a field yet, the datalist is empty
+        // and the user types a new value — that value then becomes a
+        // suggestion for the next course.
+        const [productList, courseList] = await Promise.all([
+          listProducts().catch(() => []),
+          listCourses().catch(() => []),
+        ]);
+        setProducts(productList);
+        setAllCourses(courseList);
       } catch (e) {
         setError(e.message || 'โหลดรายการสินค้าล้มเหลว');
       }
     })();
   }, []);
+
+  // Phase 12.2b follow-up (2026-04-24): distinct existing values from
+  // be_courses power the courseCategory + procedureType datalists.
+  // Collected case-insensitively but preserve the first-seen casing so
+  // duplicates from typos ("botox" vs "Botox") still appear separately
+  // for the user to clean up (rename in the offending course if needed).
+  const existingCategories = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const c of (allCourses || [])) {
+      const v = String(c?.courseCategory || '').trim();
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+    }
+    return out.sort((a, b) => a.localeCompare(b, 'th'));
+  }, [allCourses]);
+
+  const existingProcedureTypes = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const c of (allCourses || [])) {
+      const v = String(c?.procedureType || '').trim();
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+    }
+    return out.sort((a, b) => a.localeCompare(b, 'th'));
+  }, [allCourses]);
 
   const update = useCallback((patch) => setForm((prev) => ({ ...prev, ...patch })), []);
 
@@ -205,14 +251,40 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
           <input type="text" value={form.courseCategory}
             onChange={(e) => update({ courseCategory: e.target.value })}
             placeholder="เช่น Laser / Botox / Filler"
+            list="course-category-options"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+          {/* Phase 12.2b follow-up (2026-04-24): datalist surfaces every
+              distinct courseCategory already on be_courses. Pure suggestion
+              — user can still type a new value; the next course that
+              loads the modal will pick it up. */}
+          <datalist id="course-category-options">
+            {existingCategories.map((cat) => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
+          {existingCategories.length === 0 && (
+            <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">
+              ยังไม่มีหมวดหมู่ใน be_courses — พิมพ์สร้างใหม่ได้ หรือ sync ข้อมูลคอร์สจาก MasterDataTab
+            </p>
+          )}
         </div>
         <div data-field="procedureType">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">ประเภทหัตถการ</label>
           <input type="text" value={form.procedureType}
             onChange={(e) => update({ procedureType: e.target.value })}
             placeholder="เช่น สัก / ฟิลเลอร์ / กายภาพบำบัด"
+            list="procedure-type-options"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+          <datalist id="procedure-type-options">
+            {existingProcedureTypes.map((pt) => (
+              <option key={pt} value={pt} />
+            ))}
+          </datalist>
+          {existingProcedureTypes.length === 0 && (
+            <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">
+              ยังไม่มีประเภทหัตถการใน be_courses — พิมพ์สร้างใหม่ได้ หรือ re-sync คอร์สจาก ProClinic ใน MasterDataTab (Phase 12.2b Step 3 มี field นี้)
+            </p>
+          )}
         </div>
       </div>
 

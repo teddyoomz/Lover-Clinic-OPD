@@ -226,6 +226,87 @@ describe('CourseFormModal', () => {
     const savedForm = mockSaveCourse.mock.calls[0][1];
     expect(savedForm.courseProducts).toHaveLength(0);
   });
+
+  // Phase 12.2b follow-up (2026-04-24): category + procedureType dropdowns
+  // read distinct values from be_courses via listCourses(). Rule H-tris
+  // (be_* only) — no master_data fallback, no ProClinic fetch.
+
+  it('CM4: courseCategory datalist populated from distinct be_courses values', async () => {
+    mockListCourses.mockResolvedValue([
+      makeCourse({ courseId: 'C-A', courseCategory: 'Laser' }),
+      makeCourse({ courseId: 'C-B', courseCategory: 'Botox' }),
+      makeCourse({ courseId: 'C-C', courseCategory: 'Laser' }), // dup → dedup
+    ]);
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => {
+      const datalist = document.getElementById('course-category-options');
+      expect(datalist).toBeTruthy();
+      const options = datalist.querySelectorAll('option');
+      expect(options).toHaveLength(2);
+      const values = Array.from(options).map(o => o.value);
+      expect(values).toContain('Laser');
+      expect(values).toContain('Botox');
+    });
+  });
+
+  it('CM5: empty be_courses → hint suggests sync from MasterDataTab', async () => {
+    mockListCourses.mockResolvedValue([]);
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => expect(screen.getByText(/ยังไม่มีหมวดหมู่ใน be_courses/)).toBeInTheDocument());
+  });
+
+  it('CM6: procedureType datalist populated from distinct be_courses values', async () => {
+    mockListCourses.mockResolvedValue([
+      makeCourse({ courseId: 'C-A', procedureType: 'ฉีดฟิลเลอร์' }),
+      makeCourse({ courseId: 'C-B', procedureType: 'เลเซอร์' }),
+    ]);
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => {
+      const datalist = document.getElementById('procedure-type-options');
+      expect(datalist).toBeTruthy();
+      const options = datalist.querySelectorAll('option');
+      expect(options).toHaveLength(2);
+      const values = Array.from(options).map(o => o.value);
+      expect(values).toContain('ฉีดฟิลเลอร์');
+      expect(values).toContain('เลเซอร์');
+    });
+  });
+
+  it('CM7: case-insensitive dedup preserves first-seen casing', async () => {
+    mockListCourses.mockResolvedValue([
+      makeCourse({ courseId: 'C-A', courseCategory: 'Botox' }),
+      makeCourse({ courseId: 'C-B', courseCategory: 'botox' }), // case variant → dedup
+    ]);
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => {
+      const options = document.querySelectorAll('#course-category-options option');
+      expect(options).toHaveLength(1);
+      expect(options[0].value).toBe('Botox'); // first-seen preserved
+    });
+  });
+
+  it('CM8: datalist skips empty / whitespace courseCategory', async () => {
+    mockListCourses.mockResolvedValue([
+      makeCourse({ courseId: 'C-A', courseCategory: '' }),
+      makeCourse({ courseId: 'C-B', courseCategory: '   ' }),
+      makeCourse({ courseId: 'C-C', courseCategory: 'Real' }),
+    ]);
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => {
+      const options = document.querySelectorAll('#course-category-options option');
+      expect(options).toHaveLength(1);
+      expect(options[0].value).toBe('Real');
+    });
+  });
+
+  it('CM9: listCourses throw → datalist empty, no crash (graceful degrade)', async () => {
+    mockListCourses.mockRejectedValue(new Error('network down'));
+    render(<CourseFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    await waitFor(() => {
+      // Empty-state hint renders in place of datalist options
+      expect(screen.getByText(/ยังไม่มีหมวดหมู่ใน be_courses/)).toBeInTheDocument();
+    });
+  });
 });
 
 /* ─── Rule E + file hygiene ───────────────────────────────────────────── */
@@ -253,5 +334,39 @@ describe('Phase 12.2 — Rule E', () => {
       expect(src).not.toMatch(IMPORT_BROKER);
       expect(src).not.toMatch(FETCH_PROCLINIC);
     }
+  });
+
+  // Phase 12.2b follow-up (2026-04-24): regression guard for the
+  // stockConfig-reads-wrong-collection bug. Previously _getProductStockConfig
+  // read master_data/products/items/{id} but products have lived in
+  // be_products since Phase 11.9 → every sale/treatment stock deduction
+  // was silently skipped. This test fails if anyone reverts the fix
+  // (forces the lookup to read be_products FIRST).
+  it('RE3: stockConfig lookup reads be_products before master_data', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    // Extract the _getProductStockConfig body.
+    const match = src.match(/async function _getProductStockConfig[^{]*\{([\s\S]*?)\n\}/);
+    expect(match).toBeTruthy();
+    const body = match[1];
+    // be_products read MUST come before master_data read.
+    const beIdx = body.indexOf("'be_products'");
+    const masterIdx = body.indexOf("'master_data'");
+    expect(beIdx).toBeGreaterThan(-1);
+    // master_data may still appear as a legacy fallback, but only AFTER be_products.
+    if (masterIdx > -1) {
+      expect(beIdx).toBeLessThan(masterIdx);
+    }
+  });
+
+  it('RE4: createStockOrder auto-opt-in writes stockConfig to be_products', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    // The createStockOrder auto-opt-in block must write to be_products
+    // (not master_data). We assert the string `'be_products'` appears
+    // within 400 chars after the "_stockConfigSetBy: 'createStockOrder'"
+    // sentinel — ensures the fix didn't get split off elsewhere.
+    const sentinelIdx = src.indexOf("_stockConfigSetBy: 'createStockOrder'");
+    expect(sentinelIdx).toBeGreaterThan(-1);
+    const contextBefore = src.slice(Math.max(0, sentinelIdx - 400), sentinelIdx);
+    expect(contextBefore).toContain("'be_products'");
   });
 });
