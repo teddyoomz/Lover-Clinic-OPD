@@ -20,6 +20,7 @@ import {
   buildCustomerPromotionGroups,
   findMissingFillLaterQty,
   resolvePickedCourseEntry,
+  resolvePurchasedCourseForAssign,
 } from '../src/lib/treatmentBuyHelpers.js';
 import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
 import { mapMasterToCourse, beCourseToMasterShape } from '../src/lib/backendClient.js';
@@ -1201,5 +1202,124 @@ describe('Scenario 21 — เลือกสินค้าตามจริง
     expect(twice.needsPickSelection).toBe(false);
     expect(twice.products).toHaveLength(1);
     expect(twice.products[0].productId).toBe('P2');
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // S21.11–S21.16: resolvePurchasedCourseForAssign — the glue that fixes
+  // the "คอร์สคงเหลือไม่พอ" bug (user-reported 2026-04-24 for แฟต 4 เข็ม
+  // → LipoS). When the doctor buys + picks + uses a pick-at-treatment
+  // course in the SAME visit, handleSubmit MUST pass the RESOLVED picks
+  // to assignCourseToCustomer — not the master options list — or
+  // deductCourseItems later can't find the picked product.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('S21.11: resolvePurchasedCourseForAssign returns resolved picks + alreadyResolved=true when doctor picked', () => {
+    const course = {
+      id: 4001, name: 'แฟต 4 เข็ม', courseType: 'เลือกสินค้าตามจริง', qty: 1, unit: 'คอร์ส',
+      products: [ // master options (what purchasedItems carries)
+        { id: 'LipoS', name: 'LipoS', qty: 4, unit: 'เข็ม' },
+        { id: 'LipoF', name: 'LipoF', qty: 4, unit: 'เข็ม' },
+      ],
+    };
+    // After PickProductsModal confirm, options.customerCourses holds the
+    // resolved entry (products populated, needsPickSelection cleared).
+    const customerCourses = [
+      {
+        courseId: 'purchased-course-4001-999',
+        courseName: 'แฟต 4 เข็ม',
+        isAddon: true,
+        purchasedItemId: 4001,
+        needsPickSelection: false,
+        products: [
+          { productId: 'LipoS', name: 'LipoS', remaining: '4', total: '4', unit: 'เข็ม', fillLater: false },
+        ],
+      },
+    ];
+    const out = resolvePurchasedCourseForAssign(course, customerCourses, 1);
+    expect(out.alreadyResolved).toBe(true);
+    expect(out.products).toHaveLength(1);
+    expect(out.products[0]).toMatchObject({ id: 'LipoS', name: 'LipoS', qty: 4, unit: 'เข็ม' });
+  });
+
+  it('S21.12: resolvePurchasedCourseForAssign falls back to master options when doctor has not picked', () => {
+    const course = {
+      id: 4002, name: 'แฟต 4 เข็ม', courseType: 'เลือกสินค้าตามจริง', qty: 1, unit: 'คอร์ส',
+      products: [{ id: 'LipoS', name: 'LipoS', qty: 4, unit: 'เข็ม' }],
+    };
+    // Placeholder exists but pick not confirmed yet
+    const customerCourses = [
+      {
+        courseId: 'purchased-course-4002-999',
+        courseName: 'แฟต 4 เข็ม',
+        isAddon: true,
+        purchasedItemId: 4002,
+        needsPickSelection: true,
+        availableProducts: course.products,
+        products: [],
+      },
+    ];
+    const out = resolvePurchasedCourseForAssign(course, customerCourses, 1);
+    expect(out.alreadyResolved).toBe(false);
+    expect(out.products).toHaveLength(1);
+    // Master options pass through unchanged (just qty multiplied)
+    expect(out.products[0]).toMatchObject({ id: 'LipoS', qty: 4 });
+  });
+
+  it('S21.13: resolvePurchasedCourseForAssign multiplies resolved qty by purchased qty', () => {
+    // Buying 3× of "แฟต 4 เข็ม" → each picked sub-product qty × 3
+    const course = {
+      id: 4003, courseType: 'เลือกสินค้าตามจริง', qty: 3, unit: 'คอร์ส',
+      products: [],
+    };
+    const customerCourses = [
+      {
+        isAddon: true,
+        purchasedItemId: 4003,
+        needsPickSelection: false,
+        products: [
+          { productId: 'LipoS', name: 'LipoS', total: '4', unit: 'เข็ม' },
+        ],
+      },
+    ];
+    const out = resolvePurchasedCourseForAssign(course, customerCourses, 3);
+    expect(out.alreadyResolved).toBe(true);
+    expect(out.products[0].qty).toBe(12); // 4 × 3
+  });
+
+  it('S21.14: resolvePurchasedCourseForAssign non-pick-at-treatment courses use existing path (no alreadyResolved)', () => {
+    const course = {
+      id: 4004, name: 'Botox Premium', courseType: 'ระบุสินค้าและจำนวนสินค้า', qty: 2,
+      products: [{ name: 'Botox 100u', qty: 100, unit: 'U' }],
+    };
+    const out = resolvePurchasedCourseForAssign(course, [], 2);
+    expect(out.alreadyResolved).toBe(false);
+    expect(out.products[0].qty).toBe(200); // 100 × 2
+  });
+
+  it('S21.15: assignCourseToCustomer honors alreadyResolved flag — skips placeholder branch for pick-at-treatment', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    // The placeholder branch must gate on !alreadyResolved so the
+    // in-visit resolved-picks flow bypasses it.
+    expect(src).toMatch(/!masterCourse\.alreadyResolved/);
+    // The guard must live RIGHT BEFORE the courseType === 'เลือกสินค้าตามจริง' check
+    const guardIdx = src.indexOf('!masterCourse.alreadyResolved');
+    const branchIdx = src.indexOf("courseType === 'เลือกสินค้าตามจริง'");
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(branchIdx).toBeGreaterThan(-1);
+    // Guard must be within the same statement as the isPickAtTreatment assignment
+    expect(Math.abs(guardIdx - branchIdx)).toBeLessThan(200);
+  });
+
+  it('S21.16: TreatmentFormPage handleSubmit wires resolvePurchasedCourseForAssign at BOTH call sites', () => {
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    // Must import the helper
+    expect(src).toMatch(/import\s*\{[^}]*resolvePurchasedCourseForAssign[^}]*\}\s*from\s*['"]\.\.\/lib\/treatmentBuyHelpers\.js['"]/);
+    // Must appear at least 2 times (create-path + edit→sale-path)
+    const matches = src.match(/resolvePurchasedCourseForAssign\(/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    // Must pass alreadyResolved through to assignCourseToCustomer
+    // (otherwise the flag never reaches the backend — fix is a no-op)
+    const alreadyResolvedPassMatches = src.match(/assignCourseToCustomer\([^)]*alreadyResolved/g) || [];
+    expect(alreadyResolvedPassMatches.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -502,7 +502,14 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   // that point). Without this special-case the user saw either
   // duplicate rows (N options as N "1/1 ครั้ง" courses) or nothing at
   // all (when options carried qty=0 and the allZero filter dropped them).
-  const isPickAtTreatment = masterCourse.courseType === 'เลือกสินค้าตามจริง';
+  // `alreadyResolved: true` is passed by TreatmentFormPage.handleSubmit
+  // when the doctor already picked products in-visit (via PickProductsModal)
+  // → we must SKIP the placeholder branch and write standard per-product
+  // entries. Without this guard, the picks would be overwritten with the
+  // master options list (user bug 2026-04-24: "คอร์สคงเหลือไม่พอ" after
+  // buying + picking + using in the same treatment).
+  const isPickAtTreatment = masterCourse.courseType === 'เลือกสินค้าตามจริง'
+    && !masterCourse.alreadyResolved;
   if (isPickAtTreatment && products.length > 0) {
     // Persistent courseId survives splice-replace at resolve time so
     // multiple pick-at-treatment placeholders can be resolved

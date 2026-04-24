@@ -303,6 +303,60 @@ export function resolvePickedCourseEntry(placeholder, picks) {
 }
 
 /**
+ * Phase 12.2b follow-up (2026-04-24): resolve a purchased course item
+ * into the shape `assignCourseToCustomer` expects, preferring the
+ * doctor's in-session picks over the master options list.
+ *
+ * Why: the in-visit buy flow for `เลือกสินค้าตามจริง` stores the
+ * resolved picks in `options.customerCourses` (after PickProductsModal
+ * confirm) — NOT in `purchasedItems`. If handleSubmit naively passes
+ * `purchasedItems[i].products` to assignCourseToCustomer, the master
+ * OPTIONS list goes through → the pick-at-treatment placeholder branch
+ * fires → customer.courses gets a placeholder instead of the resolved
+ * picks → deductCourseItems can't find the picked product at save
+ * time → "คอร์สคงเหลือไม่พอ" despite UI showing 4/4 available (user-
+ * reported 2026-04-24 for แฟต 4 เข็ม → LipoS).
+ *
+ * Returns `{products, alreadyResolved}` so the caller can pass
+ * `alreadyResolved: true` to assignCourseToCustomer, telling it to
+ * skip the placeholder branch even when courseType matches.
+ *
+ * @param {object} course — purchasedItems entry: { id, name, products?, unit?, courseType? }
+ * @param {Array<object>} customerCourses — options.customerCourses (in-memory)
+ * @param {number|string} purchasedQty — user-entered buy qty (multiplies master per-product qty)
+ * @returns {{products: Array<object>, alreadyResolved: boolean}}
+ */
+export function resolvePurchasedCourseForAssign(course, customerCourses, purchasedQty) {
+  const pQty = Math.max(1, Number(purchasedQty) || 1);
+  const courseType = String(course?.courseType || '').trim();
+  if (courseType === 'เลือกสินค้าตามจริง') {
+    const resolved = (Array.isArray(customerCourses) ? customerCourses : []).find(cc =>
+      cc && cc.isAddon &&
+      String(cc.purchasedItemId) === String(course.id) &&
+      cc.needsPickSelection === false &&
+      Array.isArray(cc.products) && cc.products.length > 0
+    );
+    if (resolved) {
+      return {
+        products: resolved.products.map(p => ({
+          id: p.productId || null,
+          name: p.name,
+          qty: (Number(p.total) || 1) * pQty,
+          unit: p.unit || 'ครั้ง',
+        })),
+        alreadyResolved: true,
+      };
+    }
+    // No pick made → fall through (placeholder will be persisted so
+    // the customer can pick later — late-visit flow).
+  }
+  const products = (Array.isArray(course?.products) && course.products.length > 0)
+    ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
+    : [{ name: course?.name, qty: pQty, unit: course?.unit || 'ครั้ง' }];
+  return { products, alreadyResolved: false };
+}
+
+/**
  * Phase 12.2b Step 6 (2026-04-24): pure helper extracted from
  * TreatmentFormPage's customerPromotionGroups useMemo so the add-on
  * propagation logic has direct unit test coverage (instead of relying on

@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -2244,11 +2244,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             const linkedTreatmentId = result.treatmentId || treatmentId || '';
             for (const course of grouped.courses) {
               try {
-                const pQty = Number(course.qty) || 1;
-                const prods = course.products?.length
-                  ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
-                  : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId, courseType: course.courseType || '' });
+                // Phase 12.2b follow-up (2026-04-24): for เลือกสินค้าตามจริง
+                // courses, use the RESOLVED picks (if any) from in-memory
+                // customerCourses instead of the master options list.
+                // alreadyResolved=true tells assignCourseToCustomer to
+                // write standard per-product entries, NOT a fresh
+                // placeholder (which would overwrite the just-picked
+                // products and cause deductCourseItems to fail).
+                const { products: prods, alreadyResolved } = resolvePurchasedCourseForAssign(
+                  course, options?.customerCourses, course.qty
+                );
+                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId, courseType: course.courseType || '', alreadyResolved });
               } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
             }
             for (const promo of grouped.promotions) {
@@ -2370,11 +2376,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const linkedTreatmentId2 = result.treatmentId || treatmentId || '';
                 for (const course of newGrouped.courses) {
                   try {
-                    const pQty = Number(course.qty) || 1;
-                    const prods = course.products?.length
-                      ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
-                      : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2, courseType: course.courseType || '' });
+                    const { products: prods, alreadyResolved } = resolvePurchasedCourseForAssign(
+                      course, options?.customerCourses, course.qty
+                    );
+                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2, courseType: course.courseType || '', alreadyResolved });
                   } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
                 }
                 // Mirror create-path: also assign purchased promotions (bundled sub-courses or plain promo).
