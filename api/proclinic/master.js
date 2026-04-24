@@ -434,6 +434,88 @@ async function handleSyncMembershipTypes(req, res) {
 // mapMasterToCourse expects: salePrice + salePriceInclVat + receiptCourseName
 // + courseType + usageType + isVatIncluded + courseProducts with pivot.qty.
 // User directive: "เอามาให้ครบนะ ราคา หน่วย บลาๆๆ ทุกไส้ใน".
+// Phase 12.2b Step 3: ProClinic → OUR master_data translation. ProClinic's
+// `/admin/api/course` returns English usage_type codes ("clinic" | "branch");
+// OUR schema stores Thai labels ("ระดับคลินิก" | "ระดับสาขา") so UI rendering
+// matches ProClinic verbatim. Unknown / empty values round-trip as ''.
+function translateUsageType(raw) {
+  if (raw === 'clinic') return 'ระดับคลินิก';
+  if (raw === 'branch') return 'ระดับสาขา';
+  return String(raw || '').trim();
+}
+
+// Phase 12.2b Step 3: extracted as a pure helper so tests can pin the
+// ProClinic JSON → master_data shape without the HTTP/session round trip.
+// Takes one raw `/admin/api/course` `data[]` row; returns normalized fields
+// in snake_case for master_data consumers + courseProducts[] in mixed-case
+// for mapMasterToCourse. All numeric fields coerce via Number() with null
+// fallback; all boolean fields coerce via !!; unknown values default empty.
+export function normalizeCourseJsonItem(item) {
+  if (!item || typeof item !== 'object') return null;
+  const products = Array.isArray(item.products) ? item.products : [];
+  return {
+    id: item.id,
+    course_code: item.course_code || '',
+    course_name: item.course_name || '',
+    receipt_course_name: item.receipt_course_name || '',
+    course_category: item.course_category_name || '',
+    procedure_type: item.procedure_type_name || '',
+    course_type: item.course_type || '',
+    usage_type: translateUsageType(item.usage_type),
+    // `period` is ProClinic's repeat period (days). We preserve it under
+    // both `period` (Phase 12.2b canonical) and `time` (legacy alias read
+    // by pre-12.2b mapMasterToCourse callers).
+    time: item.period != null ? Number(item.period) : null,
+    period: item.period != null ? Number(item.period) : null,
+    sale_price: item.sale_price != null ? Number(item.sale_price) : null,
+    sale_price_incl_vat: item.sale_price_incl_vat != null ? Number(item.sale_price_incl_vat) : null,
+    price: item.sale_price != null ? Number(item.sale_price) : (item.full_price != null ? Number(item.full_price) : null),
+    full_price: item.full_price != null ? Number(item.full_price) : null,
+    is_vat_included: !!(item.is_vat_included || item.is_including_vat),
+    deduct_cost: item.deduct_cost != null ? Number(item.deduct_cost) : null,
+    days_before_expire: item.days_before_expire != null ? Number(item.days_before_expire) : null,
+    // Main product is the pivot row with is_main_product=1. ProClinic
+    // sometimes omits the id field (older courses) — fall back to product_id.
+    ...(() => {
+      const main = products.find(p => p?.pivot?.is_main_product);
+      return {
+        main_product_id: String(main?.id || main?.product_id || ''),
+        main_product_name: main?.product_name || main?.name || '',
+        qty_per_time: main?.pivot?.qty_per_time != null ? Number(main.pivot.qty_per_time) : null,
+      };
+    })(),
+    main_product_qty: item.main_product_qty != null ? Number(item.main_product_qty) : 0,
+    max_chosen_count: item.max_chosen_count != null ? Number(item.max_chosen_count) : null,
+    max_product_chosen_count: item.max_product_chosen_count != null ? Number(item.max_product_chosen_count) : null,
+    max_product_chosen_qty: item.max_product_chosen_qty != null ? Number(item.max_product_chosen_qty) : null,
+    is_df: !!item.is_df,
+    df_editable_global: !!item.df_editable_global,
+    is_hidden_for_sale: !!item.is_hidden_for_sale,
+    status: item.deleted_at || item.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    // Preserve full product + pivot structure so mapMasterToCourse can read
+    // courseProducts[].qty (ProClinic pivot.qty) + productName for enrichment.
+    courseProducts: products.map(p => ({
+      productId: String(p.id || p.product_id || ''),
+      product_id: String(p.id || p.product_id || ''),
+      productName: p.product_name || p.name || '',
+      product_name: p.product_name || p.name || '',
+      qty: p.pivot?.qty != null ? Number(p.pivot.qty) : (p.qty != null ? Number(p.qty) : 1),
+      qty_per_time: p.pivot?.qty_per_time != null ? Number(p.pivot.qty_per_time) : null,
+      min_qty: p.pivot?.min_qty != null ? Number(p.pivot.min_qty) : null,
+      max_qty: p.pivot?.max_qty != null ? Number(p.pivot.max_qty) : null,
+      is_required: !!p.pivot?.is_required,
+      // Pivot `is_df` overrides product-level default; fall back when absent.
+      is_df: p.pivot?.is_df != null ? !!p.pivot.is_df : !!p.is_df,
+      is_hidden: !!p.pivot?.is_hidden,
+      unit_name: p.unit_name || '',
+      price: p.price != null ? Number(p.price) : null,
+      is_premium: !!p.pivot?.is_premium,
+      is_main_product: !!p.pivot?.is_main_product,
+    })),
+    _source: 'proclinic',
+  };
+}
+
 async function handleSyncCourses(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
@@ -458,42 +540,7 @@ async function handleSyncCourses(req, res) {
     if (p >= (data.last_page || 1) || p >= 100) break;
   }
 
-  const normalized = allItems.map(item => ({
-    id: item.id,
-    course_code: item.course_code || '',
-    course_name: item.course_name || '',
-    receipt_course_name: item.receipt_course_name || '',
-    course_category: item.course_category_name || '',
-    course_type: item.course_type || '',
-    usage_type: item.usage_type || '',
-    time: item.period != null ? Number(item.period) : null,
-    sale_price: item.sale_price != null ? Number(item.sale_price) : null,
-    sale_price_incl_vat: item.sale_price_incl_vat != null ? Number(item.sale_price_incl_vat) : null,
-    price: item.sale_price != null ? Number(item.sale_price) : (item.full_price != null ? Number(item.full_price) : null),
-    full_price: item.full_price != null ? Number(item.full_price) : null,
-    is_vat_included: !!(item.is_vat_included || item.is_including_vat),
-    days_before_expire: item.days_before_expire,
-    main_product_qty: item.main_product_qty != null ? Number(item.main_product_qty) : 0,
-    max_chosen_count: item.max_chosen_count != null ? Number(item.max_chosen_count) : null,
-    is_df: !!item.is_df,
-    is_hidden_for_sale: !!item.is_hidden_for_sale,
-    status: item.deleted_at || item.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
-    // Preserve full product + pivot structure so mapMasterToCourse can read
-    // courseProducts[].qty (ProClinic pivot.qty) + productName for enrichment.
-    courseProducts: (item.products || []).map(p => ({
-      productId: String(p.id || p.product_id || ''),
-      product_id: String(p.id || p.product_id || ''),
-      productName: p.product_name || p.name || '',
-      product_name: p.product_name || p.name || '',
-      qty: p.pivot?.qty != null ? Number(p.pivot.qty) : (p.qty != null ? Number(p.qty) : 1),
-      qty_per_time: p.pivot?.qty_per_time != null ? Number(p.pivot.qty_per_time) : null,
-      unit_name: p.unit_name || '',
-      price: p.price != null ? Number(p.price) : null,
-      is_premium: !!p.pivot?.is_premium,
-      is_main_product: !!p.pivot?.is_main_product,
-    })),
-    _source: 'proclinic',
-  }));
+  const normalized = allItems.map(normalizeCourseJsonItem).filter(Boolean);
 
   return res.status(200).json({
     success: true,

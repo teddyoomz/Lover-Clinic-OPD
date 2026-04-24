@@ -5520,8 +5520,16 @@ function mapMasterToProduct(src, id, now, existingCreatedAt) {
   };
 }
 
-function mapMasterToCourse(src, id, now, existingCreatedAt) {
-  if (!id) return null;
+// Phase 12.2b Step 3 (2026-04-24): extended from 13 → 26 fields to match
+// the ProClinic course edit page 1:1. Accepts both camelCase (OUR shape)
+// and snake_case (ProClinic JSON shape) for every new field so the mapper
+// can run against fresh sync output OR legacy master_data docs written
+// before Phase 12.2b. Default values align with emptyCourseForm() +
+// courseValidation normalizeCourse() — isDf defaults true, booleans default
+// false, numbers default null. Exported so tests/courseMigrate.test.js can
+// exercise the mapper without Firestore.
+export function mapMasterToCourse(src, id, now, existingCreatedAt) {
+  if (!id || !src) return null;
   const products = Array.isArray(src.courseProducts) ? src.courseProducts
                  : Array.isArray(src.products) ? src.products : [];
   // ProClinic master_data sync writes plain `price` / `price_incl_vat`, not
@@ -5539,22 +5547,60 @@ function mapMasterToCourse(src, id, now, existingCreatedAt) {
     if (src.price_incl_vat != null) return Number(src.price_incl_vat);
     return null;
   };
+  const numOrNull = (v) => {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  // Main product fallback — when top-level main_product_id is missing (older
+  // master_data docs) infer from courseProducts entry with is_main_product.
+  let mainId = String(src.mainProductId ?? src.main_product_id ?? '').trim();
+  let mainName = String(src.mainProductName ?? src.main_product_name ?? '').trim();
+  if (!mainId) {
+    const mainItem = products.find(p => p && (p.isMainProduct || p.is_main_product));
+    if (mainItem) {
+      mainId = String(mainItem.productId || mainItem.product_id || mainItem.id || '').trim();
+      mainName = String(mainItem.productName || mainItem.product_name || mainItem.name || '').trim();
+    }
+  }
   return {
     courseId: id,
     courseName: String(src.courseName || src.course_name || src.name || '').trim() || '(imported)',
     courseCode: String(src.courseCode || src.course_code || '').trim(),
     receiptCourseName: String(src.receiptCourseName || src.receipt_course_name || '').trim(),
     courseCategory: String(src.courseCategory || src.course_category || src.category || '').trim(),
+    procedureType: String(src.procedureType || src.procedure_type || src.procedure_type_name || '').trim(),
     courseType: String(src.courseType || src.course_type || '').trim(),
     usageType: String(src.usageType || src.usage_type || '').trim(),
-    time: src.time != null ? Number(src.time) : null,
+    time: numOrNull(src.time),
+    period: numOrNull(src.period),
     salePrice: resolvePrice(),
     salePriceInclVat: resolvePriceInclVat(),
     isVatIncluded: !!(src.isVatIncluded || src.is_vat_included),
+    deductCost: numOrNull(src.deductCost != null ? src.deductCost : src.deduct_cost),
+    mainProductId: mainId,
+    mainProductName: mainName,
+    mainQty: numOrNull(src.mainQty != null ? src.mainQty : src.main_product_qty),
+    qtyPerTime: numOrNull(src.qtyPerTime != null ? src.qtyPerTime : src.qty_per_time),
+    minQty: numOrNull(src.minQty != null ? src.minQty : src.min_qty),
+    maxQty: numOrNull(src.maxQty != null ? src.maxQty : src.max_qty),
+    daysBeforeExpire: numOrNull(src.daysBeforeExpire != null ? src.daysBeforeExpire : src.days_before_expire),
+    // isDf defaults true when BOTH camelCase and snake_case are unset —
+    // matches emptyCourseForm() "มีค่ามือ default on".
+    isDf: (src.isDf == null && src.is_df == null) ? true : !!(src.isDf != null ? src.isDf : src.is_df),
+    dfEditableGlobal: !!(src.dfEditableGlobal || src.df_editable_global),
+    isHidden: !!(src.isHidden || src.is_hidden || src.is_hidden_for_sale),
     courseProducts: products.map(p => ({
       productId: String(p.productId || p.product_id || p.id || '').trim(),
       productName: String(p.productName || p.product_name || p.name || '').trim(),
       qty: Number(p.qty) || 0,
+      qtyPerTime: numOrNull(p.qtyPerTime != null ? p.qtyPerTime : p.qty_per_time),
+      minQty: numOrNull(p.minQty != null ? p.minQty : p.min_qty),
+      maxQty: numOrNull(p.maxQty != null ? p.maxQty : p.max_qty),
+      isRequired: !!(p.isRequired || p.is_required),
+      // Same default-true rule as top-level isDf.
+      isDf: (p.isDf == null && p.is_df == null) ? true : !!(p.isDf != null ? p.isDf : p.is_df),
+      isHidden: !!(p.isHidden || p.is_hidden),
     })).filter(p => p.productId && p.qty > 0),
     orderBy: src.orderBy != null ? Number(src.orderBy) : null,
     status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',

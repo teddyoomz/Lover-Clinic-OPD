@@ -1804,6 +1804,24 @@ Tests: 2493 → 2557 (+64). Build clean.
 
 ---
 
+## Phase 12.2b — Course form ProClinic parity gap-close (2026-04-24)
+
+Retroactive gap-close from Phase 12.2. Phase 12.2 shipped core CRUD (13 fields) but missed the ProClinic course-edit-page feature surface: 4 course types radio, deduct_cost, main-product block, days_before_expire, period, is_df + df_editable_global + is_hidden flags, and 6 new sub-item pivot fields. Rule H-tris triggers: replicate ProClinic verbatim, then backend reads only from `be_*`.
+
+**Step 1 — schema (commit `3a6f8e1`):** `src/lib/courseValidation.js` +10 top-level fields + 6 sub-item fields; `COURSE_TYPE_OPTIONS` + `USAGE_TYPE_OPTIONS` enums (Thai strings verbatim from ProClinic); min ≤ max enforcement; 4 `isXCourse(courseType)` pure helpers (`isRealQty`, `isBuffet`, `isPickAtTreatment`, `isSpecificQty`). +20 tests in `tests/courseValidation.test.js`.
+
+**Step 2 — UI (commit `60b7b5a`):** `src/components/backend/CourseFormModal.jsx` full rewrite — 4-radio selector with type-conditional blocks, main-product picker via `be_products` datalist, sub-item table with 6 pivot-field columns.
+
+**Step 3 — sync mapper (commit pending):**
+- `api/proclinic/master.js` — extracted pure `export function normalizeCourseJsonItem(item)`. Translates `usage_type` "clinic"|"branch" → Thai labels, extracts main product from `products[]` `pivot.is_main_product=1`, preserves 6 new pivot fields on each sub-item, carries `procedure_type_name` / `deduct_cost` / `df_editable_global` / `is_hidden_for_sale`. `handleSyncCourses` calls it via `.map(normalizeCourseJsonItem).filter(Boolean)`.
+- `src/lib/backendClient.js` — `mapMasterToCourse` exported + extended from 13 → 26 output fields, accepts both camelCase (OUR shape) and snake_case (ProClinic shape), inherits main-product fallback from courseProducts when top-level is empty. `isDf` defaults `true` matching `emptyCourseForm()`.
+- `tests/courseSync.test.js` — 40 tests (CS1-CS40): real ProClinic `/admin/api/course` row fixture, usage_type translation, main-product pivot extraction, 6 new pivot fields, edge-case defaults.
+- `tests/courseMigrate.test.js` — 28 tests (CM1-CM28): camelCase + snake_case input acceptance, legacy-shape compatibility, sub-item filter rules, `isDf` default-true behavior.
+
+Steps 5/6/7 pending: DfEntryModal group-switch bug (~30m), TreatmentFormPage `ซื้อเพิ่ม` layout refactor (~1-2h), `courseType === 'เหมาตามจริง'` fill-later flow (~1h).
+
+---
+
 ## Phase 12.3 — be_customers validator + schema enforcement (2026-04-20)
 
 Triangle-verified from `opd.js forms /admin/customer/create` (79+ fields). Validator covers every scanned field at type-level; 40+ fields get strict length bounds; a curated subset gets stricter semantic checks (email regex, Thai citizen-id 13 digits, birthdate ISO, gender enum, height/weight ranges, income ≥ 0).
