@@ -23,6 +23,20 @@ Added after 2026-04-19 `handleSyncCoupons is not defined` runtime crash — rout
    Every case must have a matching def. If not → Edit failed silently (possibly via parameter typo). Reopen + fix.
 5. **END-TO-END on mutation paths**: if you added/changed a function that writes to Firestore or POSTs to ProClinic, trace at least ONE real caller to verify the shape it receives matches what you write. Grep the function name + look at call sites.
 
+6. **🆕 FULL-FLOW SIMULATE mandatory at end of every sub-phase** (added 2026-04-25 after the buffet-expiry + shadow-course + LipoS-pick rounds — each took 3 iterations because helper-only tests passed while the UI was still broken):
+   - **Definition**: a full-flow simulate test chains EVERY step the user exercises — master data read → openBuyModal whitelist → confirmBuy builder → handleSubmit filter routing → assignCourseToCustomer → deductCourseItems/deductStock → customer.courses post-state → re-render. Helper-output-in-isolation is NOT enough.
+   - **Trigger**: end of every sub-phase that touches a user-visible flow (courses, sales, treatments, stock, DF, payment, appointments). Not just "when a bug is reported".
+   - **Required elements in the test**:
+     (a) **Pure simulate mirrors** of inline React logic (e.g. TFP pre-validation, courseItems builder, filter split) so the test can chain 4+ steps without mounting
+     (b) **Runtime verify via preview_eval** on real Firestore data whenever the dev server is live — call the real exported functions against real data + assert shape (catches whitelist-strips that grep can't)
+     (c) **Source-grep regression guards** that lock the fix pattern — e.g. "all N filter sites use `isPurchasedSessionRowId`", "no raw `rowId.startsWith('purchased-')` remains"
+     (d) **Adversarial inputs** — null, empty, zero, negative, Thai text, commas, snake_case vs camelCase, duplicate entries, concurrent mutations
+     (e) **Lifecycle assertions** — after save, what does the stored doc look like? Parse qty, check remaining, check flags
+   - **Anti-pattern (locked by violation log)**: "tests pass → ship" when tests only cover helper OUTPUT. V11 (mock-shadowed export), V12 (shape-migration half-fix), 2026-04-25 rounds 1-3 all share this pattern. Helper-only tests are a necessary but NOT sufficient condition for "done".
+   - **File naming**: `tests/<phase>-<feature>-flow-simulate.test.js` (e.g. `phase12.2b-flow-simulate.test.js`). ONE file per sub-phase's feature domain, NOT one per function.
+   - **Structure inside file**: `describe` blocks F1, F2, … each targeting a flow dimension (rowId contract, mapper branches, buy path × course type × use path matrix, lifecycle, adversarial, source-grep guards).
+   - **When the simulate test catches a bug the unit test missed**: log it as a V-entry in `.claude/rules/00-session-start.md` § 2 so the pattern becomes permanent institutional memory.
+
 Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after only reading the diff. `claude tracks the intent not the output` — Edit tool can silently fail on param typos. Treat every "Edit succeeded" as unverified until grep confirms both sides of a pair exist.
 
 ### Commit + Push

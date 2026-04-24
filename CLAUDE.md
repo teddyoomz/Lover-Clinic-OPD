@@ -17,7 +17,7 @@
 | [`03-stack.md`](.claude/rules/03-stack.md) | Firestore / Vite / React / Backend / ProClinic / Chat gotchas |
 | [`04-thai-ui.md`](.claude/rules/04-thai-ui.md) | UI / colors / dates / Thai culture |
 
-**Iron-clad ย่อ (8 ข้อ ห้ามลืม):**
+**Iron-clad ย่อ (9 ข้อ ห้ามลืม):**
 - **A.** ทำ X แล้ว Y พัง → ถอด X ทันที ไม่ต้องถาม
 - **B.** `firebase deploy --only firestore:rules` ต้อง probe webhook + sync writes ก่อน/หลัง — 403 = revert ทันที
 - **C.** Rule of 3 / crypto tokens / ห้าม uid ใน public doc / ห้าม `allow:if true` ยกเว้น pc_* + chat_conversations
@@ -26,6 +26,7 @@
 - **F. Triangle Rule** — ก่อน/ระหว่างทุก feature: (1) ProClinic จริงผ่าน `opd.js intel|click|fill|network` (2) plan memory (3) grep โค้ดเรา. ขาด 1 = drift. ห้ามเดา URL/method ถ้าไม่ได้ capture.
 - **G.** Dynamic tool/skill loading — โหลด deferred tools via ToolSearch หรือสร้าง skill ใหม่ผ่าน `/skill-creator` ได้ แต่ต้องผ่าน A-F เสมอ
 - **H. 🆕 Data Ownership** — **data ทั้งหมด = ของเราใน Firestore**. ProClinic sync = initial seed only. ทุก master-data (group/unit/instrument/holiday/branch/permission/DF/doc-template/...) ต้องมี CRUD UI ใน backend เก็บใน `be_*`. **เพิ่ม 2026-04-20 หลัง user directive "manage data ทั้งหมดใน data เราเอง"**. Full sitemap scan (`opd.js routes`) ก่อนวางแผนทุก phase — Phase 11 = master-data suite เริ่มจากนี้. ดู `project_phase11_plan.md` + `project_comprehensive_gap_audit.md`.
+- **I. 🆕 Full-Flow Simulate at Sub-Phase End** (2026-04-25) — ทุก sub-phase ที่แตะ user-visible flow ต้องเขียน `tests/<phase>-<feature>-flow-simulate.test.js` chain ตั้งแต่ master-data → UI whitelist → builder → filter → backend write → customer state. Helper-only tests **ไม่พอ** — V11/V12/V13 (2026-04-25 buffet+expiry+shadow 3 rounds) ทั้งหมด test ผ่านแต่ UI พัง. ต้องมี: (a) pure simulate mirrors, (b) `preview_eval` ยืนยันบน Firestore data จริง, (c) source-grep regression guards, (d) adversarial inputs, (e) lifecycle assertions on post-save docs. ดู rule 00 § I + 02 Pre-Commit #6.
 
 ---
 

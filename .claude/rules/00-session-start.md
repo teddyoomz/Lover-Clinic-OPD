@@ -86,6 +86,21 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Audit trigger**: any new `be_*` read in backend UI = grep that the corresponding `master_data/X → be_*` migration exists. If not, add it in the same PR as the feature.
 - **Gap-first rhythm** (user 2026-04-24): "ข้อมูลดิบที่ต้องใช้ในการจำลองต้องมีครบก่อน" — all raw ProClinic master data that exists upstream must have sync + migrate pair shipped BEFORE feature work that consumes it. Completeness > velocity.
 
+**I. Full-Flow Simulate at Sub-Phase End** (added 2026-04-25 after THREE back-to-back rounds of the same user-visible bug — buffet "เหมือนไม่มีวันหมดอายุ" + shadow-course duplicates + LipoS pick-at-treatment — where each round had helper-unit tests passing while the real UI flow was still broken):
+- **MANDATORY** at end of every sub-phase that touches a user-visible flow (courses, sales, treatments, stock, DF, payment, appointments, forms): write a full-flow simulate test that chains EVERY step the user exercises — master-data read → UI whitelist (openBuyModal et al) → buy/form builder → filter routing → handleSubmit → backend write (assignCourseToCustomer/deductCourseItems/deductStock) → customer.courses post-state → re-render next visit.
+- **Helper-output-in-isolation is NOT enough.** V11 (mock-shadowed export), V12 (shape-migration half-fix), V13 (2026-04-25 buffet+expiry+shadow 3 rounds) all passed unit tests while the real chain was broken. Full-flow simulate is the only guard — catches whitelist-strip bugs, missing-field bugs, shape-mismatch bugs that unit tests can't see.
+- **Required elements in every simulate file**:
+  (a) **Pure simulate mirrors** of inline React logic (TFP pre-validation, courseItems builder, filter split, etc.) so the test can chain 4+ steps without mounting React
+  (b) **Runtime-verify via `preview_eval`** on real Firestore data when dev server live — call the REAL exported functions against REAL data and assert shape (catches what grep can't: whitelist strips, stale caches, encoding mismatches)
+  (c) **Source-grep regression guards** that lock the fix pattern (e.g. "all N filter sites use helper X", "no raw `startsWith('Y')` remains")
+  (d) **Adversarial inputs** — null / empty / zero / negative / Thai text / commas / snake↔camel / duplicates / concurrent mutations
+  (e) **Lifecycle assertions** on the post-save stored doc — parse qty, check remaining, check flags, simulate next-visit load
+- **Filename pattern**: `tests/<phase>-<feature>-flow-simulate.test.js`. Describe blocks F1..Fn by flow dimension (rowId contract, mapper branches, buy × course-type × use-path matrix, lifecycle, adversarial, source-grep).
+- **Trigger**: end of every sub-phase. NOT "when a user reports a bug" — BEFORE they do.
+- **If simulate catches a bug unit test missed**: log as V-entry in § 2 so the pattern becomes permanent institutional memory.
+- **Anti-pattern**: "tests pass → commit → push" when tests only cover helper OUTPUT. Always ask: "does this test chain the whole user flow, or just one function?"
+- **Detail + examples**: `rules/02-workflow.md` Pre-Commit Checklist #6.
+
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.
 - **Production release (pre-launch) must STRIP**:
@@ -149,6 +164,20 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - The mental trap that repeats V4: "user just said deploy X and now Y is obviously better than X, surely deploy Y too." NO. Every `vercel --prod` = new explicit ask, no matter how obvious. Read `feedback_dont_deploy_without_permission.md` — it's been updated to flag this exact repeat-offense pattern.
 - Fix: every commit ends at `git push`. For deploy, stop and ask: "พร้อม deploy — ต้องการให้ deploy ไหม?" Even if user just said deploy 10 minutes ago for a different commit.
 - Fix: rule 02 Pre-Commit Checklist now mandates `npm run build` + area audit + grep-pair verification. PostToolUse hook broadcasts this.
+
+### V13 — 2026-04-25 — 3 rounds of the same user-visible bug; helper-unit tests passed each time
+- Session shipped Phase 12.2b buffet display + course expiry field + shadow-course dedup. ALL THREE rounds had passing unit tests + "fix" committed + pushed — user bounced back reporting the SAME symptom every time.
+  - **Round 1** (commit `bc17c28` claimed): "buffet ใน 'คอร์สของฉัน' hide มูลค่าคงเหลือ + show หมดอายุอีก N วัน". Tests F17.1-14 green. User replied: "ก็ยังไม่ขึ้นวันหมดอายุอยู่ดีอะ เทสควยไร มึงไม่ได้ตรวจสอบด้วยซ้ำ".
+  - **Round 2**: discovered that `openBuyModal` (SaleTab:313 + TFP:1338) had a whitelist `{id, name, price, category, itemType, products}` that silently stripped `daysBeforeExpire` + `courseType` + `period` BEFORE confirmBuy could read them. My Round-1 grep-based tests were GREEN because the fields existed *somewhere* in the file — just not in the right whitelist. `preview_eval` on real Firestore data would have caught it in 30 seconds.
+  - **Round 3**: user followed up: "ทำไมคอร์สซ้ำมันเยอะจัง ... ไอ่ราคา 0 มาจากไหน". ProClinic sync emits "shadow" course rows (same name, empty courseType, null price) for 167 of 369 courses (46%!). ProClinic's own modal hides them; we didn't. ANOTHER flow the grep-based tests couldn't catch because the bug was in DATA SHAPE, not in code structure.
+- **Worst part**: Each round I said "tests pass → ship". The user had to manually verify the UI every time because my tests chained helper functions in isolation — not the full chain the user actually exercises. Three user-facing reports of the same symptom is three reports too many.
+- **Recovery + fix**:
+  - Round-2 fix (commit `28b86a0`): openBuyModal whitelist preserves courseType + daysBeforeExpire + period + unit.
+  - Round-3 fix (same commit): openBuyModal filter skips shadow entries — `!ct || price <= 0` rejected.
+  - Tests F17.15-21 + runtime preview_eval confirming 4 buffet matches (matching ProClinic) not 7 (our broken state).
+- **Lesson**: helper-output tests (F1-F14) catch logic bugs inside a single function. They do NOT catch integration bugs that live in the seams — whitelists, filters, data-shape mismatches. Full-flow simulate tests (chain master → whitelist → builder → filter → deduct → customer state) catch those. Helper tests are necessary but not sufficient.
+- **Rule/audit update**: added iron-clad Rule I (`rules/00-session-start.md`) + Pre-Commit Checklist #6 (`rules/02-workflow.md`) mandating full-flow simulate at every sub-phase end. Adversarial inputs, source-grep regression guards, runtime preview_eval verification all required. "Tests pass → ship" is valid ONLY when tests chain the whole user flow.
+- **Related pattern**: V11 (mock-shadowed export) + V12 (shape-migration half-fix) + V13 all share the same failure mode — green unit tests while the real flow is broken. Rule I is the explicit guard against this cluster.
 
 ### V12 — 2026-04-24 — Shape-migration half-fix crashed a sibling reader
 - User reported Phase 13.1.4 bug: converted sale hid promotions from list (only in note). Commit `6bda5d2` fixed the WRITER (quotation→sale converter) by switching from flat `items: [...]` to grouped `items: {promotions,courses,products,medications}` to match SaleTab/SaleDetailModal/aggregator readers.
