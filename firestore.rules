@@ -179,6 +179,11 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 13.1 Quotations (OUR data; no ProClinic mirror) ──
+      match /be_quotations/{quotationId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 8 Stock (Orders / Batches / Movements / Adjustments / Transfers / Withdrawals) ──
       match /be_stock_orders/{orderId} {
         allow read: if isClinicStaff();

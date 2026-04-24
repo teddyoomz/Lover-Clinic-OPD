@@ -5568,3 +5568,60 @@ export async function transitionSaleInsuranceClaim(claimId, nextStatus, extra = 
   await updateDoc(ref, updates);
   return { success: true, status: resolved };
 }
+
+// ─── Quotations CRUD (Phase 13.1.2) ─────────────────────────────────────────
+
+const quotationsCol = () => collection(db, ...basePath(), 'be_quotations');
+const quotationDocRef = (id) => doc(db, ...basePath(), 'be_quotations', String(id));
+
+export async function getQuotation(quotationId) {
+  const id = String(quotationId || '');
+  if (!id) return null;
+  const snap = await getDoc(quotationDocRef(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listQuotations() {
+  const snap = await getDocs(quotationsCol());
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Newest first by quotationDate, then createdAt.
+  items.sort((a, b) => {
+    const da = (b.quotationDate || '').localeCompare(a.quotationDate || '');
+    if (da !== 0) return da;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+export async function saveQuotation(quotationId, data) {
+  const id = String(quotationId || '');
+  if (!id) throw new Error('quotationId required');
+  const { normalizeQuotation, validateQuotationStrict } = await import('./quotationValidation.js');
+  const normalized = normalizeQuotation(data);
+  const fail = validateQuotationStrict(normalized);
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(quotationDocRef(id), {
+    ...normalized,
+    id,
+    quotationId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+  return { success: true, quotationId: id };
+}
+
+export async function deleteQuotation(quotationId) {
+  const id = String(quotationId || '');
+  if (!id) throw new Error('quotationId required');
+  // Rule: locked after convert. If status='converted' + convertedToSaleId exists, block delete.
+  const existing = await getDoc(quotationDocRef(id));
+  if (existing.exists()) {
+    const cur = existing.data();
+    if (cur.status === 'converted' && cur.convertedToSaleId) {
+      throw new Error('ใบเสนอราคาที่แปลงเป็นใบขายแล้ว ลบไม่ได้');
+    }
+  }
+  await deleteDoc(quotationDocRef(id));
+  return { success: true };
+}

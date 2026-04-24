@@ -2072,3 +2072,28 @@ Rule H: no write-back to ProClinic. Quotation is born-in-our-Firestore.
 Tests: 2865 → 2939 PASS (+51 new + delta from concurrent baseline growth). Build clean.
 
 **Next in Phase 13.1**: 13.1.2 backendClient CRUD + firestore.rules → 13.1.3 QuotationTab + FormModal UI → 13.1.4 convert-to-sale → 13.1.5 nav wiring.
+
+---
+
+## Phase 13.1.2 — backendClient CRUD + firestore.rules (2026-04-24)
+
+**Context:** Wires the Firestore persistence layer for `be_quotations`. Thin, validator-integrated CRUD matching the Phase 12.5 bank-accounts pattern — no atomic counter (IDs client-generated via `generateQuotationId`), no cascade delete (quotations are leaf docs).
+
+**Edits:**
+- `src/lib/backendClient.js`:
+  - Added `// ─── Quotations CRUD (Phase 13.1.2) ───` block (appended after Phase 12.7 insurance claims).
+  - `getQuotation(id)` — single-doc read, returns `{ id, ...data }` or `null`.
+  - `listQuotations()` — fetches all, sorts by `quotationDate` desc then `createdAt` desc (newest first).
+  - `saveQuotation(id, data)` — requires non-empty id, runs `normalizeQuotation` + `validateQuotationStrict` (throws on invalid), writes via `setDoc({merge: false})` with auto `id`/`quotationId`/`createdAt`/`updatedAt`.
+  - `deleteQuotation(id)` — blocks deletion when `status === 'converted' AND convertedToSaleId` set (lock rule — protects Phase 13.1.4 convert-to-sale audit trail). Idempotent on non-existent docs.
+- `firestore.rules`: added `match /be_quotations/{quotationId} { allow read, write: if isClinicStaff(); }` block after Phase 12.7 insurance claims.
+
+**New files:**
+- `tests/quotationCrud.test.js` — 15 focused CRUD tests (QC1–QC15) using the mocked `firebase/firestore` pattern from `phase12-11-be-shape-adapters.test.js`. Covers: save rejects empty id, save propagates validator errors, save writes with correct payload + timestamps, get returns null / doc, list sorts correctly, delete respects convert-lock, delete idempotent.
+
+**Rules status:**
+- Rule E ✅ — no brokerClient import in this block, no `/api/proclinic/*` call.
+- Rule H ✅ — be_quotations born in our Firestore, never mirrored to ProClinic.
+- Rule B — firestore.rules edited but NOT deployed this sub-task. Next `firebase deploy --only firestore:rules` requires Probe-Deploy-Probe (4 endpoints) before and after.
+
+Tests: focused-only per new feedback rule (`feedback_test_per_subphase`) — 15/15 pass in 1.5s. Build clean. Full regression deferred to end of Phase 13.1.
