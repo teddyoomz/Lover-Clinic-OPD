@@ -7,91 +7,92 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-24 (end-of-session — Phase 12.2b marathon)
+- **Date last updated**: 2026-04-25 (end-of-session — Rule I + 10 bug fixes + 5 audits + DEPLOYED)
 - **Branch**: `master`
-- **Last commit**: `84f5b0d feat(phase12.2b): เลือกสินค้าตามจริง = two-step pick-at-purchase flow (not unbounded)`
-- **Test count**: 3555 / 3555 passing (was 3306 at session start; **+249 this session**)
+- **Last commit**: `1cb58d5 audit(priority3): fix AV2 + H-bis findings + 18 regression guard tests`
+- **Test count**: 3959 / 3959 passing (was 3306 at session start; **+653 this session**)
 - **Build**: clean
 - **Deploy state**:
-  - **firestore:rules**: unchanged this session (last deploy 2026-04-24 with Probe-Deploy-Probe 200×4)
-  - **Vercel prod**: `148fe0b` via `vercel --prod` — **24 commits BEHIND HEAD** (entire Phase 12.2b marathon awaiting deploy approval)
+  - **firestore:rules**: unchanged this session
+  - **Vercel prod**: `1cb58d5` via `vercel --prod --yes` — **UP-TO-DATE with HEAD** ✅
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
+- **Prod probe**: 200 OK + hasRoot + hasViteBundle verified via preview_eval
 
 ---
 
 ## What's Done (recent phases)
 
 - ✅ **Phase 1-11.9** — base app + Master Data Suite (historical)
-- ✅ **Phase 12.0-12.11** — Financial completeness + adapter bridge + Firebase Admin SDK (historical)
-- ✅ **Phase 13.1-13.6** (2026-04-24 earlier) — Quotations, staff schedules, DF groups, DF payout report, tab-gate scaffolding, treatment validator
-- ✅ **Phase 14 + 14.x** — DF modal Triangle + auto-populate + wallet/membership/medicine-label migrate (historical)
-- ✅ **Phase 12.2b COMPLETE** (2026-04-24) — Course form ProClinic parity end-to-end:
-  - Step 1-2: schema + CourseFormModal rewrite (prior session)
-  - Step 3: syncCourses mapper full ProClinic parity (this session)
-  - Step 5: DfEntryModal group-switch race + no-rate visibility
-  - Step 6: ซื้อเพิ่ม courses under parent headers
-  - Step 7: fill-later (เหมาตามจริง) qty flow + treatment-time validation
-  - Course form: category + procedureType datalist dropdowns from be_courses
-  - Stock config: reads be_products (sale/treatment actually deducts)
-  - sub-item grid alignment + main product in beCourseToMasterShape
-  - auto-populate treatment qty from saved course qty on tick
-  - เหมาตามจริง ProClinic parity — display text + productId + consume-on-use
-  - Late-visit tick flow for เหมาตามจริง
-  - Bug batch (0-baht payment, productId stock carry, DF % baht display)
-  - DF dup non-blocking + summary baht display + expired-tab semantics + purchase history details
-  - Filter consumed courses from treatment form
-  - DF Payout Report id/courseId fallback (฿0 across prod bug)
-  - Partial-usage DF weighting (rate × full course price × usage weight)
-  - 41-test comprehensive scenario file (tests/phase12.2b-scenarios.test.js)
-  - เลือกสินค้าตามจริง two-step pick-at-purchase flow (PickProductsModal)
+- ✅ **Phase 12.0-12.11** — Financial completeness + adapter bridge + Firebase Admin SDK
+- ✅ **Phase 13.1-13.6** — Quotations, staff schedules, DF groups + payout report, tab gates, treatment validator
+- ✅ **Phase 14 + 14.x** — DF modal Triangle + auto-populate + wallet/membership/medicine-label migrate
+- ✅ **Phase 12.2b COMPLETE** (2026-04-24) — Course form ProClinic parity end-to-end for 4 course types
+- ✅ **Phase 12.2b follow-ups 2026-04-25** (this session, all deployed):
+  - pick-at-treatment: nothing shows → fixed (late-visit + in-visit + picked- rowId routing)
+  - buffet display "1/1 U" → "บุฟเฟต์" text + hint + no-decrement behavior + exempt from filters
+  - buffet customer card hide มูลค่าคงเหลือ + show "หมดอายุอีก N วัน" countdown
+  - course expiry sync → migrate → store → buy → assign chain preserves daysBeforeExpire
+  - openBuyModal whitelist preservation + shadow course dedup (ProClinic parity: 4 matches not 7)
+  - DF report linkedSaleId back-link via NEW setTreatmentLinkedSaleId (3-shape reconciled)
+  - blood type dropdown objects shape (was string array → empty dropdown)
+  - AV2: 2 raw <input type="date"> → DateField
+  - H-bis: api/proclinic/explore.js @dev-only banner
+- ✅ **Rule I (iron-clad) established** — mandatory full-flow simulate per sub-phase
+- ✅ **V13 logged** — 3-round helper-only test failure pattern
+- ✅ **Priority 1/2/3 test batches** — 15 full-flow simulate files, +653 tests
+- ✅ **5 Priority-3 audits run** (firestore-correctness, backend-firestore-only, anti-vibe-code, react-patterns, ui-cultural-a11y, reports-accuracy; skip PDPA per user)
 
 ---
 
 ## What's Next
 
-Pick one:
+### Primary: user UI-verify on production
 
-### A. Vercel deploy (most valuable)
+8 items to smoke-test. If any fails → bug report + Rule I debug cycle.
+See "Outstanding User Actions" below for the checklist.
 
-24 commits ready. Tests 3555/3555 pass. Build clean. User authorization
-required THIS turn: `vercel --prod --yes`.
+### If all UI-verify passes
 
-### B. Late-visit support for เลือกสินค้าตามจริง (follow-up, ~1h)
+Pick one per `memory/project_execution_order.md`:
 
-Currently bought-but-unpicked courses don't survive treatment-page
-close — `availableProducts` not persisted to `be_customers`.
-
-Files (per checkpoint):
-- `src/lib/backendClient.js:491` `assignCourseToCustomer` — when
-  `masterCourse.courseType === 'เลือกสินค้าตามจริง'`, write ONE
-  placeholder entry with `availableProducts` + `needsPickSelection: true`
-  instead of per-product entries
-- `src/components/TreatmentFormPage.jsx:572` `customerCoursesForForm` —
-  detect `c.needsPickSelection` + `c.availableProducts` → emit
-  placeholder-shape courseEntry
-- `src/components/backend/CustomerDetailView.jsx` — "เลือกสินค้าเพื่อใช้"
-  badge on CourseItemBar
-- Tests: Scenario 21 end-to-end (assign → persist → late-visit restore → pick → save)
-
-### C. Phase 15 Central Stock Conditional
-
-Per `memory/project_execution_order.md`. Waits behind Phase 14.x finish.
+**A. Phase 15 Central Stock Conditional** — next phase per execution order
+**B. Phase 14.x gap sweep** — if any Phase 14 items still incomplete (check project_comprehensive_gap_audit.md)
+**C. Polish / hardening** — run `/audit-all` for release readiness
 
 ---
 
 ## Outstanding User Actions (NOT auto-run)
 
-- [ ] **Vercel re-deploy** — HEAD `84f5b0d` is 24 commits ahead of prod `148fe0b`. Awaiting explicit "deploy" authorization.
-- [ ] **Manual UI verify** (end-to-end, user-side per `feedback_user_workstyle`):
-  - Buy `เหมาตามจริง` → use in same treatment → stock decrements + course → history
-  - Buy `เหมาตามจริง` → close without using → stays in active as "เหมาตามจริง" violet bar
-  - Buy `เลือกสินค้าตามจริง` → click "เลือกสินค้า" → pick products + qtys → course shows picked sub-rows
-  - 0-baht course save → payment UI hidden, save succeeds
-  - DF % rate → summary card shows baht amount (not just %)
-  - DF Payout Report → rows actually show non-zero ฿ (was ฿0 everywhere before `6e6dd00`)
-  - Purchase history tab → shows item breakdown with course/promo/product/med colors
-  - Customer's "คอร์สของฉัน" → consumed fill-later course hidden; "คอร์สหมดอายุ" date-expired only
+### UI-verify on production (2026-04-25 fixes just deployed)
+
+- [ ] **Buy buffet course via SaleTab** → customer's "คอร์สของฉัน" tab shows
+      - Parent card with violet "บุฟเฟต์" badge on product row
+      - "หมดอายุอีก N วัน" countdown next to the expiry date (not "มูลค่าคงเหลือ ฿X")
+      - Amber color when ≤ 30 days, violet otherwise
+- [ ] **Buy pick-at-treatment inside treatment form** → "เลือกสินค้า" button
+      appears → click → PickProductsModal renders options → tick products
+      + qty → confirm → course shows as tickable rows → treatment save
+      succeeds with NO "คอร์สคงเหลือไม่พอ" error
+- [ ] **Buy pick-at-treatment via SaleTab** → open new treatment for same
+      customer → placeholder with "เลือกสินค้า" button shows in course
+      column → click → pick → save → next visit shows N resolved entries
+- [ ] **Multi-visit buffet** — use buffet 3+ times → course stays in active,
+      qty never drops
+- [ ] **DF Payout Report** — date range covering a backend-created sale
+      with dfEntries → rows show non-zero ฿ (was ฿0 before this session)
+- [ ] **Blood type dropdown** — new treatment page → "ข้อมูลสุขภาพลูกค้า" →
+      กรุ๊ปเลือด dropdown shows A, B, AB, O, ไม่ทราบ (was empty before)
+- [ ] **Search courses "บุฟ"** in buy modal → 4 matches (not 7 with duplicates
+      or ฿0 rows) — matches ProClinic behavior
+- [ ] **Treatment edit** — open saved treatment → change a tick/qty → save →
+      customer.courses state = what a fresh save would produce (reverse+
+      reapply net-zero invariant)
+
+### Report any drift
+
+If any UI-verify item fails → feed exact scenario + screenshot if possible.
+Next session runs Rule I debug cycle (full-flow simulate + preview_eval + grep guards).
 
 ---
 
@@ -103,25 +104,36 @@ None.
 
 ## Known Limitations / Technical Debt
 
-- **Pick-at-treatment late-visit**: bought-but-unpicked courses lose the
-  `availableProducts` list after treatment-form close. Next-session work
-  per "What's Next · B". In-same-treatment pick + use works today.
-- **Partial-pick**: picking a subset consumes all those picks; no reopen
-  flow to add more later. Acceptable MVP.
-- **`assignCourseToCustomer` for pick-at-treatment**: doesn't yet
-  special-case courseType — relies on in-memory
-  `options.customerCourses` + `resolvePickedCourseEntry` for the pick
-  resolution. Only affects late-visit flow.
+- **Pick-at-treatment partial-pick reopen**: user picks subset, can't
+  reopen to add more later (must buy another course). MVP-acceptable.
+- **Period enforcement** (min-interval between uses, e.g. 7 days/visit
+  for Laser buffet 1-year): schema preserves `period` field but no
+  save-time validation yet. Feature for Phase 15+.
+- **React-patterns advisory**: IIFE top-level conditional renders (NOT
+  click-handler crash pattern, pre-existing), silent catches in outer
+  wrappers (non-mutation). Low priority; no bugs traced.
+- **46% of synced courses are "shadow" rows** from ProClinic
+  (empty courseType + null price). Filter at openBuyModal handles them
+  — could move upstream to sync-time in a future polish pass.
 
 ---
 
 ## Violations This Session
 
-None. Rule A (bug-blast revert) exercised cleanly: `f7cb8a8` (limit-gated
-design) → `967d7b2` (revert). No new V-entry needed — the revert
-happened in-session before user acceptance, so the bad design never
-reached production. The in-session design iteration was caught by user
-feedback, exactly as Rule A is meant to handle.
+**V13 added** (`.claude/rules/00-session-start.md` § 2) — 3 back-to-back
+rounds of the same user-visible bug (buffet expiry + shadow courses +
+LipoS pick), each shipped with green helper-unit tests while real UI was
+still broken. Triggered creation of Rule I (iron-clad) mandating full-flow
+simulate at every sub-phase. Cross-ref V11 (mock-shadowed export) + V12
+(shape-migration half-fix) as the same failure-mode cluster.
+
+**Iron-clad rule added — Rule I**:
+Every sub-phase touching a user-visible flow gets a `phase<N>-<feature>-flow-simulate.test.js`
+file. Required elements: (a) pure simulate mirrors of inline React logic,
+(b) preview_eval on real Firestore data when dev server is live,
+(c) source-grep regression guards, (d) adversarial inputs,
+(e) lifecycle assertions on post-save docs. Helper-only tests are
+NECESSARY BUT NOT SUFFICIENT.
 
 ---
 
@@ -130,35 +142,41 @@ feedback, exactly as Rule A is meant to handle.
 Paste this block into the next Claude session (or just invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-24 end-of-session.
+Resume LoverClinic OPD — continue from 2026-04-25 end-of-session.
 
 Read in order BEFORE any tool call:
-1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (this file, cross-session state of truth)
-3. .agents/active.md (hot state — master=84f5b0d, 3555 tests)
-4. .claude/rules/00-session-start.md (iron-clad A-H + F-bis + V1-V12)
-5. .agents/sessions/2026-04-24-phase12.2b-marathon-pick-at-treatment.md (detail checkpoint)
+1. CLAUDE.md (stack + env + rule index including Rule I)
+2. SESSION_HANDOFF.md (cross-session state of truth)
+3. .agents/active.md (hot state — master=1cb58d5, 3959 tests, deployed)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V13)
+5. .agents/sessions/2026-04-25-rule-I-audits-deploy.md (detail checkpoint)
 
 Status summary:
-- master = 84f5b0d, 3555/3555 tests pass, build clean, preview HMR green
-- Production (Vercel): 148fe0b — 24 commits BEHIND HEAD (whole Phase 12.2b marathon awaiting deploy approval)
-- firestore:rules: untouched this session
-- Phase 12.2b COMPLETE end-to-end for all 4 ProClinic course types
-- Last shipped: pick-at-treatment two-step flow (commit 84f5b0d)
+- master = 1cb58d5, 3959/3959 tests PASS, build clean
+- Production = 1cb58d5 (deployed 2026-04-25, 200 OK probe passed)
+- 12 commits this session: 10 user-reported bugs + Rule I + V13 + Priority 1/2/3 tests (+653 tests)
+- 15 full-flow simulate test files exist per Rule I
+- firestore:rules untouched
 
-Next action — pick one:
-A. Deploy the 24 commits (user must say "deploy" THIS turn)
-B. Wire late-visit support for pick-at-treatment courses
-   (assignCourseToCustomer + customerCoursesForForm carry availableProducts
-   through be_customers — see checkpoint section "Next action · B" for
-   file:line breakdown)
-C. Start Phase 15 Central Stock Conditional per project_execution_order.md
+Next action:
+User UI-verifies 8 items on prod (SESSION_HANDOFF "Outstanding User Actions"):
+- Buffet course card: "บุฟเฟต์" + "หมดอายุอีก N วัน"
+- Pick-at-treatment in-visit: PickProductsModal → save succeeds
+- Pick-at-treatment late-visit: placeholder restores, pick + save works
+- Multi-visit buffet: qty pinned
+- DF Payout Report: non-zero ฿
+- Blood type dropdown: 5 options
+- Course search: 4 buffet matches (not 7)
+- Treatment edit: reverse+reapply net-zero
 
-Rules to remember:
-- No deploy without explicit THIS-turn authorization (V4/V7 repeat)
-- Probe-Deploy-Probe 4 endpoints before any firestore:rules deploy (V1/V9)
-- Rule A bug-blast revert worked cleanly this session (f7cb8a8 → 967d7b2)
-- Every bug → test + rule + audit invariant (Rule D)
+If any fails: Rule I debug cycle. If all pass: advance next phase
+per memory/project_execution_order.md (likely Phase 15 Central Stock).
+
+Rules:
+- No deploy unless user says "deploy" THIS turn (V4/V7)
+- Probe-Deploy-Probe 4 endpoints before firestore:rules deploy (V1/V9)
+- Full-flow simulate mandatory at sub-phase end (Rule I)
+- Every bug → test + rule + audit invariant (Rule D + I)
 
 Invoke /session-start to boot context.
 ```
@@ -167,7 +185,7 @@ Invoke /session-start to boot context.
 
 ## How to use this file
 
-- `/session-end` skill auto-updates it. If editing manually, keep under ~200 lines.
+- `/session-end` skill auto-updates it. If editing manually, keep under ~250 lines.
 - Detail lives in `.agents/sessions/YYYY-MM-DD-*.md` checkpoints.
 - Resume Prompt block is the KEY output — user pastes into new chat to boot.
 - Committed to repo (not memory-only) → team-visible + cross-machine synced.
