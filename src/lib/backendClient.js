@@ -5013,6 +5013,42 @@ export async function migrateMasterDfGroupsToBe() {
   });
 }
 
+// ─── Phase 14.x: master_data/df_staff_rates → be_df_staff_rates ───────────
+// Scraped shape: { id, staffId, staffName, position, rates: [...], status }
+// Target be_df_staff_rates shape (Phase 13.3.1 emptyDfStaffRatesForm):
+//   { staffId, staffName, rates: [...] }
+// Doc id = staffId (ProClinic numeric id).
+
+function mapMasterToDfStaffRates(src, id, now, existingCreatedAt) {
+  if (!id) return null;
+  const rates = Array.isArray(src.rates) ? src.rates.map((r) => {
+    const t = String(r?.type || '').toLowerCase();
+    return {
+      courseId: String(r?.courseId ?? r?.course_id ?? '').trim(),
+      courseName: String(r?.courseName ?? r?.course_name ?? '').trim(),
+      value: Math.max(0, Number(r?.value) || 0),
+      type: (t === 'percent' || t === '%') ? 'percent' : 'baht',
+    };
+  }).filter((r) => r.courseId) : [];
+  return {
+    staffId: String(src.staffId || id),
+    staffName: String(src.staffName || src.name || '').trim() || '(imported)',
+    position: String(src.position || '').trim(),
+    rates,
+    createdAt: existingCreatedAt || now,
+    updatedAt: now,
+  };
+}
+
+export async function migrateMasterDfStaffRatesToBe() {
+  return runMasterToBeMigration({
+    sourceType: 'df_staff_rates',
+    targetCol: dfStaffRatesCol,
+    targetDocFn: dfStaffRatesDocRef,
+    mapper: mapMasterToDfStaffRates,
+  });
+}
+
 // ─── Staff CRUD (Phase 12.1) ────────────────────────────────────────────────
 // Entity lives fully in Firestore. Firebase Auth account creation (when email +
 // password supplied) is delegated to /api/admin/users via src/lib/adminUsersClient.js

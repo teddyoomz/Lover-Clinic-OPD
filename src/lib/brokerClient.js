@@ -438,3 +438,5 @@ export function syncBranches()           { return apiFetch('master', { action: '
 export function syncPermissionGroups()   { return apiFetch('master', { action: 'syncPermissionGroups' }); }
 /** Phase 14.x: pull DF group list + per-group rate matrix from ProClinic. */
 export function syncDfGroups()           { return apiFetch('master', { action: 'syncDfGroups' }); }
+/** Phase 14.x: pull per-staff DF rate overrides (doctors + assistants). */
+export function syncDfStaffRates()       { return apiFetch('master', { action: 'syncDfStaffRates' }); }

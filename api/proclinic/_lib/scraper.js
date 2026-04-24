@@ -389,6 +389,87 @@ export function extractDfGroupRates(html, expectedGroupId = '') {
   return rates;
 }
 
+// ─── Master Data: DF per-staff rate overrides (Phase 14.x) ────────────────
+// Mirrors the extractDfGroup* pair above, but for the doctor-level
+// (/admin/df/doctor) and assistant-level (/admin/df/assistance) pages.
+// ProClinic names these inputs `user_{staffId}_df_course_{courseId}` —
+// distinct from df-group's `df_group_` prefix. Same checked-radio
+// semantics for the type selector.
+
+/**
+ * Extract the list of staff (doctor or assistant) from any DF rate page
+ * via `?user_id=X` anchor links. Used for both `/admin/df/doctor` and
+ * `/admin/df/assistance?position=ผู้ช่วยแพทย์`.
+ *
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function extractDfStaffList(html) {
+  const $ = cheerio.load(html);
+  const byId = new Map();
+  $('a[href*="user_id="]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    const m = href.match(/user_id=(\d+)/);
+    if (!m) return;
+    const id = m[1];
+    if (byId.has(id)) return;
+    const raw = $(a).text() || '';
+    const name = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0] || id;
+    byId.set(id, { id, name });
+  });
+  return Array.from(byId.values());
+}
+
+/**
+ * Extract rates[] for one staff member from their DF rate page. Walks
+ * every `user_{S}_df_course_{C}` input + paired `_type` radio.
+ *
+ * @param {string} html
+ * @param {string} [expectedStaffId]
+ * @returns {Array<{courseId: string, value: number, type: 'baht'|'percent'}>}
+ */
+export function extractDfStaffRates(html, expectedStaffId = '') {
+  const $ = cheerio.load(html);
+  const valueByField = new Map();
+  const typeByField = new Map();
+
+  $('input[name^="user_"][name*="_df_course_"]').each((_, el) => {
+    const name = $(el).attr('name') || '';
+    const inputType = ($(el).attr('type') || '').toLowerCase();
+    const m = name.match(/^user_(\d+)_df_course_(\d+)(_type)?$/);
+    if (!m) return;
+    const [, sId, cId, isType] = m;
+    if (expectedStaffId && String(expectedStaffId) !== sId) return;
+    const fieldKey = `user_${sId}_df_course_${cId}`;
+    if (isType) {
+      if (inputType !== 'radio') return;
+      const isChecked = $(el).attr('checked') != null || $(el).is(':checked');
+      if (!isChecked) return;
+      const label = ($(el).attr('aria-label') || $(el).next().text() || '').trim();
+      const valAttr = ($(el).attr('value') || '').trim();
+      const marker = (label + ' ' + valAttr).toLowerCase();
+      typeByField.set(fieldKey, marker.includes('%') || marker.includes('percent') ? 'percent' : 'baht');
+    } else {
+      if (inputType !== 'number') return;
+      const raw = $(el).attr('value');
+      const def = $(el).attr('defaultValue');
+      const v = Number(raw ?? def ?? 0);
+      valueByField.set(fieldKey, Number.isFinite(v) ? v : 0);
+    }
+  });
+
+  const rates = [];
+  for (const [fieldKey, value] of valueByField.entries()) {
+    const m = fieldKey.match(/^user_(\d+)_df_course_(\d+)$/);
+    if (!m) continue;
+    rates.push({
+      courseId: m[2],
+      value,
+      type: typeByField.get(fieldKey) || 'baht',
+    });
+  }
+  return rates;
+}
+
 // ─── Master Data: Products extraction ───────────────────────────────────────
 // Scrapes /admin/product list page — returns array of product objects
 

@@ -14,6 +14,7 @@ import {
   extractProductList, extractDoctorList, extractStaffList, extractCourseList,
   extractListPagination, extractGenericListPage,
   extractDfGroupList, extractDfGroupRates,
+  extractDfStaffList, extractDfStaffRates,
 } from './_lib/scraper.js';
 import { withRetry } from './_lib/retry.js';
 import { verifyAuth } from './_lib/auth.js';
@@ -567,6 +568,79 @@ async function handleSyncBranches(req, res) {
   });
 }
 
+async function handleSyncDfStaffRates(req, res) {
+  // Phase 14.x: sync per-staff DF rate overrides from ProClinic. Two
+  // URLs cover the two sub-pages:
+  //   /admin/df/doctor                                → position 'แพทย์'
+  //   /admin/df/assistance?position=ผู้ช่วยแพทย์     → position 'ผู้ช่วยแพทย์'
+  // Each page is tab-stripped per staff with query `?user_id=X`.
+  const session = await getSession(req.body);
+  const base = session.origin;
+
+  const fetchPage = (url) => withRetry(() => session.fetchText(url, FETCH_OPTS), RETRY_OPTS);
+
+  const SOURCES = [
+    { position: 'แพทย์', listUrl: `${base}/admin/df/doctor` },
+    { position: 'ผู้ช่วยแพทย์', listUrl: `${base}/admin/df/assistance?position=${encodeURIComponent('ผู้ช่วยแพทย์')}` },
+  ];
+
+  const out = [];
+  for (const src of SOURCES) {
+    let listHtml;
+    try { listHtml = await fetchPage(src.listUrl); } catch { continue; }
+    const staffList = extractDfStaffList(listHtml);
+    if (staffList.length === 0) continue;
+
+    // Harvest rates for the default-selected staff from the list page
+    // for free (one less fetch).
+    const ratesByStaffId = new Map();
+    for (const s of staffList) {
+      const rates = extractDfStaffRates(listHtml, s.id);
+      if (rates.length > 0) ratesByStaffId.set(String(s.id), rates);
+    }
+
+    // Parallel-fetch remaining staff's own page (batch 3).
+    const BATCH = 3;
+    const remaining = staffList.filter((s) => !ratesByStaffId.has(String(s.id)));
+    for (let i = 0; i < remaining.length; i += BATCH) {
+      const chunk = remaining.slice(i, i + BATCH);
+      const baseUrl = src.listUrl.split('?')[0];
+      const results = await Promise.all(chunk.map(async (s) => {
+        try {
+          const sep = src.listUrl.includes('?') ? '&' : '?';
+          // /admin/df/doctor?user_id=X or /admin/df/assistance?position=...&user_id=X
+          const url = `${src.listUrl}${sep}user_id=${encodeURIComponent(s.id)}`;
+          const html = await fetchPage(url);
+          return { id: String(s.id), rates: extractDfStaffRates(html, s.id) };
+        } catch {
+          return { id: String(s.id), rates: [] };
+        }
+      }));
+      for (const r of results) ratesByStaffId.set(r.id, r.rates);
+    }
+
+    for (const s of staffList) {
+      out.push({
+        id: String(s.id),
+        staffId: String(s.id),
+        staffName: s.name,
+        position: src.position,
+        rates: ratesByStaffId.get(String(s.id)) || [],
+        status: 'ใช้งาน',
+        _source: 'proclinic',
+      });
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    type: 'df_staff_rates',
+    count: out.length,
+    totalPages: 1,
+    items: out,
+  });
+}
+
 async function handleSyncDfGroups(req, res) {
   // Phase 14.x bug #2: sync DF groups from ProClinic → master_data/df_groups.
   // ProClinic exposes one group's rate matrix per page via
@@ -686,6 +760,8 @@ export default async function handler(req, res) {
       case 'syncPermissionGroups':    return await handleSyncPermissionGroups(req, res);
       // Phase 14.x: DF groups sync (scrapes /admin/df/df-group tabs + rates matrix).
       case 'syncDfGroups':            return await handleSyncDfGroups(req, res);
+      // Phase 14.x: per-staff DF rate overrides (doctors + assistants).
+      case 'syncDfStaffRates':        return await handleSyncDfStaffRates(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
