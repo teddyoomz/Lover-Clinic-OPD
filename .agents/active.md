@@ -1,90 +1,112 @@
 ---
-updated_at: "2026-04-24 (end-of-session via /session-end)"
-status: "Phase 13 SHIPPED + deployed. Phase 14 Triangle brief captured. Armory upgraded (Rule F-bis + /triangle-inspect + opd.js flow/har/inspect). Ready to start Phase 14.1 next session."
-current_focus: "Phase 14 DF ↔ Treatment Form wiring — Triangle captured, 14.1 (staff list bug + defaultDfGroupId) next"
+updated_at: "2026-04-24 (end-of-session — Phase 12.2b marathon CLOSED)"
+status: "Phase 12.2b ProClinic parity COMPLETE for all 4 course types (ระบุสินค้าฯ / บุฟเฟต์ / เหมาตามจริง / เลือกสินค้าตามจริง). 24 commits awaiting Vercel deploy."
+current_focus: "Phase 12.2b closed. Next: deploy OR late-visit pick-at-treatment wiring OR Phase 15."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "f55f62e"
-tests: 3178
+last_commit: "84f5b0d"
+tests: "3555/3555 PASS"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "ab5a60a (2026-04-24) via vercel --prod — 8 commits AHEAD since deploy (fixes + armory)"
-firestore_rules_deployed: "2026-04-24 via firebase deploy --only firestore:rules, Probe-Deploy-Probe 200x4 both sides"
+last_deploy: "148fe0b (2026-04-24) via vercel --prod — 24 commits AHEAD (entire Phase 12.2b marathon pending)"
+firestore_rules_deployed: "no change this session"
 ---
 
 # Active Context
 
 ## Objective
 
-Phase 14 (DF ↔ Treatment Form wiring) starts next active session with 14.1
-(staff list filter bug + `defaultDfGroupId` schema extension). All Triangle
-scanning + brief complete — armed with real data, not guessed.
+Either deploy the 24-commit Phase 12.2b marathon OR wire late-visit
+support for `เลือกสินค้าตามจริง` pick-at-treatment flow OR start
+Phase 15 Central Stock Conditional per `project_execution_order.md`.
 
-## Current State (end of 2026-04-24 session)
+## Current State
 
-- **LoverClinic**: `master = f55f62e`, **3178 tests** passing, build clean.
-- **Deployed this session**:
-  - firestore:rules (4 new be_* rules from Phase 13.2-13.3) after Probe-Deploy-Probe 200x4 both sides
-  - Vercel prod at `ab5a60a` (Phase 13 feature set + quotation fixes). 8 commits ahead since (fix + armory) — production is BEHIND HEAD.
-- **Armory upgraded (F:/replicated/scraper/)** — 3 new commands + 1 test recipe committed in that separate repo:
-  - `flow-commands.js` NEW — flow / har / inspect implementations
-  - `commands.js` + `opd.js` — dispatcher + CLI parser updates
-  - `recipes/smoke-df-doctor.json` + `recipes/df-modal-capture.json` + `recipes/df-save-capture.json`
-  - Smoke-tested: `inspect /admin/df/doctor` returns 211 number inputs (matrix). `flow` recipe runs 15-step capture + apiLog.
-- **Phase 13 commits this session** (14 commits): 13.1 quick fixes → 13.2 staff schedules → 13.3 DF matrix → 13.4 payout report → 13.5 tab-gate scaffold → 13.6 treatment validator + Phase 13 wrap. Then live bug fixes (dual print, print portal, logo, payment, price fallback).
-- **V11 logged** mid-session (mock-shadowed missing export), rule 02 pre-commit checklist updated with V11 near-miss explainer.
+- **master = `84f5b0d`**, 3555/3555 tests PASS, build clean.
+- Phase 12.2b ProClinic parity COMPLETE for all 4 course types:
+  - `ระบุสินค้าและจำนวนสินค้า` — standard (auto-populate qty on tick)
+  - `บุฟเฟต์` — standard (uses same code path; no distinct branch needed)
+  - `เหมาตามจริง` — one-shot, consumed in single treatment, moves to history
+  - `เลือกสินค้าตามจริง` — two-step pick-at-purchase via PickProductsModal
+- Net session delta: +249 tests, 19 net commits, zero deploys (user
+  reverted one design iteration before approving; entire marathon
+  awaits a single explicit deploy authorization).
+- Preview Vite dev server still running at localhost:5173, HMR green.
 
 ## Blockers
 
-None. Phase 14.1 ready to start.
+None.
 
 ## Next Action
 
-**Phase 14.1** — Staff list filter bug + `defaultDfGroupId` schema extension (~1h).
+Pick one:
 
-Files to touch:
-- `src/components/TreatmentFormPage.jsx:570` — `allDoctors.filter(d => d.position?.includes('ผู้ช่วย'))` misses assistants whose position field is empty or differently cased. Add fallback + log missing positions.
-- `src/lib/doctorValidation.js` — `defaultDfGroupId` field already declared at line 136 as optional. **Make it mandatory for position='แพทย์' / 'ผู้ช่วยแพทย์'** + add validator.
-- `src/lib/staffValidation.js` — add same `defaultDfGroupId` field (for non-doctor staff who may also appear in DF list, e.g. ผู้ช่วยทั่วไป).
-- `src/components/backend/DoctorFormModal.jsx` + `StaffFormModal.jsx` — add DF group dropdown (reads `listDfGroups()`), required for roles that appear in treatment DF list.
-- `tests/` — extend doctor/staff validator tests + add new assertions for defaultDfGroupId.
+**A. Vercel deploy** — 24 commits are ready. All pass tests + build.
+Command: `vercel --prod --yes`. Requires explicit user "deploy" THIS
+turn.
 
-Success criteria: doctor save without defaultDfGroupId fails; staff list on TreatmentFormPage shows every active assistant; focused tests pass.
+**B. Late-visit pick-at-treatment wiring** — currently bought-but-
+unpicked pick-at-treatment courses don't survive a treatment-page
+close because `availableProducts` isn't persisted to `be_customers`.
+Files + line-level plan in
+`.agents/sessions/2026-04-24-phase12.2b-marathon-pick-at-treatment.md`
+(section "Next action · B").
 
-## Phase 14 roadmap (not started beyond 14.2 Triangle)
+**C. Phase 15 Central Stock Conditional** per
+`memory/project_execution_order.md`.
 
-| Sub | งาน | Est |
-|---|---|---:|
-| 14.1 | Staff list bug + `defaultDfGroupId` schema | 1h |
-| 14.2 | ✅ Triangle scan (DONE) — brief at `docs/proclinic-scan/df-modal-brief-phase14.md` | — |
-| 14.3 | `DfEntryModal` (add/edit) — dropdown แพทย์ + dropdown group + course rows + override | 3h |
-| 14.4 | TreatmentFormPage wiring (`dfEntries[]` + "เพิ่มค่ามือ" button + auto-compute on change) | 2h |
-| 14.5 | Treatment validator extension + DF-payout consumes explicit `dfEntries[]` | 1.5h |
+## Recent Decisions (this session)
 
-## Recent Decisions (this session, 2026-04-24)
+1. **`เหมาตามจริง` = one-shot**. Customer course assigned with "1/1 unit"
+   sentinel + courseType tag. `deductCourseItems` short-circuits (zero
+   regardless of deductQty). Stock deducts from be_products via
+   `productId` preserved on treatment items. Course → history after 1
+   treatment.
 
-1. **Rule F-bis codified** — behaviour capture required, not just shape. Screenshots + form intel lie by omission. `/triangle-inspect` skill enforces 7-step workflow.
-2. **Armory upgrade committed** to F:/replicated/scraper/ — new commands `flow` (11-action DSL), `har` (HTTP Archive), `inspect` (JS eval). Used immediately to scan DF modal, discovered hidden `/admin/df/calculate2` API we would've missed otherwise.
-3. **Phase 14 design**: client-side DF resolution (reuse Phase 13.3 `getRateForStaffCourse` + `computeDfAmount`). No new server endpoint needed — ProClinic's calculate2 just mirrors what our resolver already does.
-4. **Dup-guard behaviour observed**: ProClinic ADD DF modal rejects doctors already having entries via `#editDfModal`. Our implementation should route existing-doctor editing through edit modal (not allow dup-add).
-5. **Row inputs are unnamed** in ProClinic — JS harvests DOM at submit. Our replica can design `dfEntries[]` shape freely (no ProClinic parity at field-name level needed).
-6. **Production is 8 commits behind HEAD** — fixes (dual print / portal / payment / logo / price) + armory docs not deployed yet. User decides when to re-deploy (awaiting explicit authorization).
+2. **`เลือกสินค้าตามจริง` = two-step pick-at-purchase** (NOT limit-gated
+   — that design shipped then reverted in-session). Buy → placeholder
+   entry with `availableProducts` list. User clicks "เลือกสินค้า" →
+   `PickProductsModal` → picks 1+ products + qtys → `resolvePickedCourseEntry`
+   fills products[]. Course then behaves standardly (normal tick +
+   remaining + stock).
+
+3. **DF Payout Report was showing ฿0 across prod** — `it.courseId` vs
+   `it.id` mismatch in aggregator. Fix: key courseIndex by BOTH,
+   inference path accepts both, `itemType === 'course'` filter to avoid
+   product leakage.
+
+4. **DF % = rate × full course price × usage weight**. Weighted sum
+   across treatments consuming the course = full DF (invariant).
+   Baht rate ignores weight. Aggregator refactored to multi-treatment-
+   per-sale array (was last-wins Map → silently dropped subsequent
+   treatments).
+
+5. **Used-up courses ≠ expired courses**. CustomerDetailView filters
+   strict: active = remaining > 0; expired = date-expired only.
+   Used-up courses traced via Purchase History tab. Treatment-form
+   course column also filters consumed entries (was silently re-ticking
+   for fill-later).
+
+## Session commit list (19 net)
+
+See checkpoint for full list. Key commits:
+- `1744eee` syncCourses mapper
+- `6a7b6d0` CourseFormModal datalist
+- `8d810f4` stockConfig be_products path
+- `93bcf7c` / `c84c2e1` เหมาตามจริง consume-on-use
+- `c245e14` partial-usage DF weighting + 41-test scenario file
+- `6e6dd00` DF Payout Report id fallback (฿0 bug)
+- `f7cb8a8` (reverted) limit-gated pick-at-treatment attempt
+- `967d7b2` revert of above
+- `84f5b0d` two-step pick-at-purchase (CORRECT design)
 
 ## V-log status
 
-- V11 logged this session (`23ad098` in `.claude/rules/00-session-start.md`): mock-shadowed missing export near-miss. Lesson: vi.mock creates export names; builds verify reachability; grep `^export` before writing new imports.
-- No new V-entries pending.
-
-## Optional follow-ups (not blocking)
-
-- [ ] Re-deploy Vercel when user authorizes — 8 commits ahead include cosmetic fixes + armory docs
-- [ ] Capture DF modal SAVE POST on a doctor with no existing entry (dup-guard blocked our first capture)
-- [ ] Probe `#editDfModal` flow (open → inspect → fill → submit)
-- [ ] Document armory in claude-guardrails feedback (compounding-loop across projects)
+No new V-entries this session. Rule A (bug-blast revert) exercised
+successfully — limit-gated design reverted before user acceptance, no
+production pollution.
 
 ## Notes
 
-- **Iron-clad rules** in `.claude/rules/` are unchanged this session except:
-  - `00-session-start.md`: Rule F-bis added + V11 entry
-  - `02-workflow.md`: V11 near-miss explainer added to VERIFY pre-commit step
-- **.agents/** layer + V-log = core institutional memory. Never AI-compress.
-- **Scraper repo** (`F:/replicated/`) is SEPARATE git repo — armory upgrade commits live there, not in LoverClinic-app. Access via `node F:/replicated/scraper/opd.js <cmd>`.
+- `.claude/rules/` untouched this session.
+- `MEMORY.md` index untouched — no new long-lived rules added.
+- Full test suite runs clean in ~38s (99 test files, 3555 tests).

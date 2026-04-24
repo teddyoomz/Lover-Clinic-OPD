@@ -7,20 +7,16 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-24 (end-of-session)
+- **Date last updated**: 2026-04-24 (end-of-session — Phase 12.2b marathon)
 - **Branch**: `master`
-- **Last commit**: `f55f62e docs(phase14): extend DF modal brief with save-flow capture findings`
-- **Test count**: 3178 / 3178 passing (was 2865 at session start; +313 this session)
+- **Last commit**: `84f5b0d feat(phase12.2b): เลือกสินค้าตามจริง = two-step pick-at-purchase flow (not unbounded)`
+- **Test count**: 3555 / 3555 passing (was 3306 at session start; **+249 this session**)
 - **Build**: clean
 - **Deploy state**:
-  - **firestore:rules**: deployed 2026-04-24 (Probe-Deploy-Probe 200×4 both sides)
-  - **Vercel prod**: `ab5a60a` via `vercel --prod` — **8 commits BEHIND HEAD** (quotation fixes + armory docs not deployed)
+  - **firestore:rules**: unchanged this session (last deploy 2026-04-24 with Probe-Deploy-Probe 200×4)
+  - **Vercel prod**: `148fe0b` via `vercel --prod` — **24 commits BEHIND HEAD** (entire Phase 12.2b marathon awaiting deploy approval)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
-
-**Scraper companion (`F:/replicated/`, separate git repo):**
-- `flow-commands.js` NEW + `commands.js` + `opd.js` + 3 recipes in `recipes/` — committed in that repo
-- Commands live: `opd.js flow|har|inspect`
 
 ---
 
@@ -28,48 +24,74 @@
 
 - ✅ **Phase 1-11.9** — base app + Master Data Suite (historical)
 - ✅ **Phase 12.0-12.11** — Financial completeness + adapter bridge + Firebase Admin SDK (historical)
-- ✅ **Phase 13.1** (2026-04-24) — Quotations + convert-to-sale + dual-print + payment-record
-- ✅ **Phase 13.2** (2026-04-24) — Staff schedules + AppointmentTab collision warning
-- ✅ **Phase 13.3** (2026-04-24) — DF groups + staff-rate matrix + DfGroupsTab UI
-- ✅ **Phase 13.4** (2026-04-24) — DF Payout Report (aggregator + ReportTab)
-- ✅ **Phase 13.5** (2026-04-24) — Tab-gate scaffolding (pure helpers + stub hook, no wiring yet)
-- ✅ **Phase 13.6** (2026-04-24) — Treatment validator + schema
-- ✅ **V11 logged** (2026-04-24) — mock-shadowed missing export; rule 02 pre-commit updated
-- ✅ **Deployed** (2026-04-24) — firestore:rules (4 new be_* rules) + Vercel prod at ab5a60a
-- ✅ **Armory upgrade** (2026-04-24) — Rule F-bis + /triangle-inspect skill + opd.js flow/har/inspect commands
-- ✅ **Phase 14 Triangle scan DONE** — DF modal brief at `docs/proclinic-scan/df-modal-brief-phase14.md`
+- ✅ **Phase 13.1-13.6** (2026-04-24 earlier) — Quotations, staff schedules, DF groups, DF payout report, tab-gate scaffolding, treatment validator
+- ✅ **Phase 14 + 14.x** — DF modal Triangle + auto-populate + wallet/membership/medicine-label migrate (historical)
+- ✅ **Phase 12.2b COMPLETE** (2026-04-24) — Course form ProClinic parity end-to-end:
+  - Step 1-2: schema + CourseFormModal rewrite (prior session)
+  - Step 3: syncCourses mapper full ProClinic parity (this session)
+  - Step 5: DfEntryModal group-switch race + no-rate visibility
+  - Step 6: ซื้อเพิ่ม courses under parent headers
+  - Step 7: fill-later (เหมาตามจริง) qty flow + treatment-time validation
+  - Course form: category + procedureType datalist dropdowns from be_courses
+  - Stock config: reads be_products (sale/treatment actually deducts)
+  - sub-item grid alignment + main product in beCourseToMasterShape
+  - auto-populate treatment qty from saved course qty on tick
+  - เหมาตามจริง ProClinic parity — display text + productId + consume-on-use
+  - Late-visit tick flow for เหมาตามจริง
+  - Bug batch (0-baht payment, productId stock carry, DF % baht display)
+  - DF dup non-blocking + summary baht display + expired-tab semantics + purchase history details
+  - Filter consumed courses from treatment form
+  - DF Payout Report id/courseId fallback (฿0 across prod bug)
+  - Partial-usage DF weighting (rate × full course price × usage weight)
+  - 41-test comprehensive scenario file (tests/phase12.2b-scenarios.test.js)
+  - เลือกสินค้าตามจริง two-step pick-at-purchase flow (PickProductsModal)
 
 ---
 
 ## What's Next
 
-**Phase 14.1 Staff list bug + `defaultDfGroupId` schema** (next active session, ~1h, Low risk)
+Pick one:
 
-Files to touch (per Triangle brief):
-- `src/components/TreatmentFormPage.jsx:570` — assistant filter misses some positions; add fallback
-- `src/lib/doctorValidation.js:136` — make `defaultDfGroupId` required for positions ผู้ช่วยแพทย์ / แพทย์
-- `src/lib/staffValidation.js` — add `defaultDfGroupId` field
-- `src/components/backend/DoctorFormModal.jsx` + `StaffFormModal.jsx` — add DF group dropdown field
-- `tests/` — extend validator tests (~+10 tests)
+### A. Vercel deploy (most valuable)
 
-Then Phase 14.2 (already done — Triangle) → 14.3 (DfEntryModal) → 14.4 (TreatmentFormPage wiring) → 14.5 (validator + aggregator update).
+24 commits ready. Tests 3555/3555 pass. Build clean. User authorization
+required THIS turn: `vercel --prod --yes`.
 
-Triangle artefacts:
-- `docs/proclinic-scan/df-modal-brief-phase14.md` — full behavioural capture with hidden `/admin/df/calculate2` API
-- `F:/replicated/output/flows/df-modal-capture-*.json` — 15-step flow trace with apiLog
-- `F:/replicated/output/har/har-*_treatment_3357_edit-*.har` — full HTTP Archive
+### B. Late-visit support for เลือกสินค้าตามจริง (follow-up, ~1h)
+
+Currently bought-but-unpicked courses don't survive treatment-page
+close — `availableProducts` not persisted to `be_customers`.
+
+Files (per checkpoint):
+- `src/lib/backendClient.js:491` `assignCourseToCustomer` — when
+  `masterCourse.courseType === 'เลือกสินค้าตามจริง'`, write ONE
+  placeholder entry with `availableProducts` + `needsPickSelection: true`
+  instead of per-product entries
+- `src/components/TreatmentFormPage.jsx:572` `customerCoursesForForm` —
+  detect `c.needsPickSelection` + `c.availableProducts` → emit
+  placeholder-shape courseEntry
+- `src/components/backend/CustomerDetailView.jsx` — "เลือกสินค้าเพื่อใช้"
+  badge on CourseItemBar
+- Tests: Scenario 21 end-to-end (assign → persist → late-visit restore → pick → save)
+
+### C. Phase 15 Central Stock Conditional
+
+Per `memory/project_execution_order.md`. Waits behind Phase 14.x finish.
 
 ---
 
 ## Outstanding User Actions (NOT auto-run)
 
-- [ ] **Vercel re-deploy** — HEAD `f55f62e` is 8 commits ahead of prod `ab5a60a`. Includes: dual print fix, print portal fix, บันทึกชำระ modal, logo fix, price fallback, armory docs. User decides when.
-- [ ] **Test Phase 13 features end-to-end on prod** after re-deploy — quotations / staff schedules / DF groups / DF payout report
-- [ ] **Optional Phase 14 Triangle follow-up captures**:
-  - Save POST on a doctor with NO existing entry (dup-guard blocked our capture)
-  - `#editDfModal` flow probe
-- [ ] **Port armory + Rule F-bis to claude-guardrails** — same methodology upgrade benefits every project using guardrails
-- [ ] **firestore:rules deploy** — NONE pending
+- [ ] **Vercel re-deploy** — HEAD `84f5b0d` is 24 commits ahead of prod `148fe0b`. Awaiting explicit "deploy" authorization.
+- [ ] **Manual UI verify** (end-to-end, user-side per `feedback_user_workstyle`):
+  - Buy `เหมาตามจริง` → use in same treatment → stock decrements + course → history
+  - Buy `เหมาตามจริง` → close without using → stays in active as "เหมาตามจริง" violet bar
+  - Buy `เลือกสินค้าตามจริง` → click "เลือกสินค้า" → pick products + qtys → course shows picked sub-rows
+  - 0-baht course save → payment UI hidden, save succeeds
+  - DF % rate → summary card shows baht amount (not just %)
+  - DF Payout Report → rows actually show non-zero ฿ (was ฿0 everywhere before `6e6dd00`)
+  - Purchase history tab → shows item breakdown with course/promo/product/med colors
+  - Customer's "คอร์สของฉัน" → consumed fill-later course hidden; "คอร์สหมดอายุ" date-expired only
 
 ---
 
@@ -81,19 +103,25 @@ None.
 
 ## Known Limitations / Technical Debt
 
-- Phase 14 is new scope (DF ↔ Treatment integration). Phase 13 shipped the DATA layer of DF; Phase 14 wires it into TreatmentFormPage.
-- 5 newer guardrails skills exist in `.claude/skills/` (copied earlier this session): `audit-rules`, `audit-health`, `skill-relevant`, `research-gap`, `skill-autoinstall`. Available but not yet used in LoverClinic flow.
-- Production is 8 commits behind HEAD — includes cosmetic fixes + armory docs. Not urgent but prod UX for quotation convert + print shows stale behaviour.
-- `membership_types` + `wallet_types` still master_data-only (Phase 16 migration candidates).
+- **Pick-at-treatment late-visit**: bought-but-unpicked courses lose the
+  `availableProducts` list after treatment-form close. Next-session work
+  per "What's Next · B". In-same-treatment pick + use works today.
+- **Partial-pick**: picking a subset consumes all those picks; no reopen
+  flow to add more later. Acceptable MVP.
+- **`assignCourseToCustomer` for pick-at-treatment**: doesn't yet
+  special-case courseType — relies on in-memory
+  `options.customerCourses` + `resolvePickedCourseEntry` for the pick
+  resolution. Only affects late-visit flow.
 
 ---
 
 ## Violations This Session
 
-**V11 — 2026-04-24 — Mock-shadowed missing export** (pre-commit near-miss, caught by `npm run build`):
-- `QuotationFormModal` imported `getAllStaff`; real export is `listStaff`
-- `vi.mock()` created the name in the mock → focused tests passed, build caught it
-- Rule 02 VERIFY step augmented + entry added to `.claude/rules/00-session-start.md`
+None. Rule A (bug-blast revert) exercised cleanly: `f7cb8a8` (limit-gated
+design) → `967d7b2` (revert). No new V-entry needed — the revert
+happened in-session before user acceptance, so the bad design never
+reached production. The in-session design iteration was caught by user
+feedback, exactly as Rule A is meant to handle.
 
 ---
 
@@ -107,39 +135,30 @@ Resume LoverClinic OPD — continue from 2026-04-24 end-of-session.
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
 2. SESSION_HANDOFF.md (this file, cross-session state of truth)
-3. .agents/active.md (hot state — master=f55f62e, 3178 tests)
-4. .claude/rules/00-session-start.md (iron-clad A-H + F-bis + V1-V11)
-5. .agents/sessions/2026-04-24-phase13-ship-armory-upgrade.md (detail checkpoint)
+3. .agents/active.md (hot state — master=84f5b0d, 3555 tests)
+4. .claude/rules/00-session-start.md (iron-clad A-H + F-bis + V1-V12)
+5. .agents/sessions/2026-04-24-phase12.2b-marathon-pick-at-treatment.md (detail checkpoint)
 
 Status summary:
-- master = f55f62e, 3178/3178 tests pass, build clean
-- Production (Vercel): ab5a60a — 8 commits BEHIND HEAD (fix + armory docs)
-- firestore:rules: deployed 2026-04-24 (4 new be_* rules from Phase 13.2-13.3)
-- Scraper armory (F:/replicated/scraper/): opd.js flow | har | inspect NEW
-- Phase 14 Triangle DONE — brief at docs/proclinic-scan/df-modal-brief-phase14.md
+- master = 84f5b0d, 3555/3555 tests pass, build clean, preview HMR green
+- Production (Vercel): 148fe0b — 24 commits BEHIND HEAD (whole Phase 12.2b marathon awaiting deploy approval)
+- firestore:rules: untouched this session
+- Phase 12.2b COMPLETE end-to-end for all 4 ProClinic course types
+- Last shipped: pick-at-treatment two-step flow (commit 84f5b0d)
 
-Next action (Phase 14.1, ~1h, Low risk):
-A. Fix staff list filter bug at src/components/TreatmentFormPage.jsx:570
-   (assistants filter misses some positions — grep before fix)
-B. Make defaultDfGroupId required in doctorValidation.js + add to staffValidation.js
-C. Add DF group dropdown to DoctorFormModal + StaffFormModal
-D. Extend validator tests (~+10)
-
-Phase 14 roadmap after 14.1: 14.3 DfEntryModal (3h) → 14.4 TreatmentFormPage wiring (2h) → 14.5 validator + aggregator update (1.5h). 14.2 Triangle already DONE.
-
-Outstanding user-triggered actions (NOT auto-run):
-- Vercel re-deploy (8 commits ahead) — user decides when
-- Optional: Phase 14 Triangle follow-ups (save POST + edit modal probe)
-- Optional: port armory + Rule F-bis to claude-guardrails
+Next action — pick one:
+A. Deploy the 24 commits (user must say "deploy" THIS turn)
+B. Wire late-visit support for pick-at-treatment courses
+   (assignCourseToCustomer + customerCoursesForForm carry availableProducts
+   through be_customers — see checkpoint section "Next action · B" for
+   file:line breakdown)
+C. Start Phase 15 Central Stock Conditional per project_execution_order.md
 
 Rules to remember:
 - No deploy without explicit THIS-turn authorization (V4/V7 repeat)
-- Probe-Deploy-Probe 4 endpoints before any firestore:rules deploy (V1/V9 repeat)
-- Rule F-bis (NEW 2026-04-24): behaviour capture not just shape — use /triangle-inspect skill for any interactive ProClinic replica
-- V11 (NEW 2026-04-24): vi.mock creates names; trust npm run build over focused tests for import resolution
-- Phase 13 feedback_test_per_subphase: focused tests per sub-commit; full regression only at end of major Phase (13/14/15/16)
-- Backend = Firestore ONLY except MasterDataTab (rule E)
-- Every bug → test + rule + audit invariant (rule D)
+- Probe-Deploy-Probe 4 endpoints before any firestore:rules deploy (V1/V9)
+- Rule A bug-blast revert worked cleanly this session (f7cb8a8 → 967d7b2)
+- Every bug → test + rule + audit invariant (Rule D)
 
 Invoke /session-start to boot context.
 ```
