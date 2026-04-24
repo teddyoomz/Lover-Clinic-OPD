@@ -12,6 +12,7 @@ import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
+import DfEntryModal from './backend/DfEntryModal.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 //
@@ -258,9 +259,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // browsers, and `.toISOString()` always returns UTC. Canonical helper in utils.js.
   const [treatmentDate, setTreatmentDate] = useState(() => thaiTodayISO());
 
-  // Doctor fees (ค่ามือแพทย์)
+  // Doctor fees (ค่ามือแพทย์) — LEGACY (Phase 12.x flat fee per doctor).
+  // Kept for backward-compat on existing treatments. Phase 14.4 (2026-04-24)
+  // introduces `dfEntries[]` below as the canonical per-doctor-per-course DF
+  // structure; legacy doctorFees is still written in the save payload so
+  // dfPayoutAggregator stays stable until Phase 14.5 migrates it.
   const [doctorFees, setDoctorFees] = useState([]); // [{doctorId, name, fee, groupId}]
   const [dfEditingIdx, setDfEditingIdx] = useState(-1); // -1=none, >=0=editing inline
+
+  // Phase 14.4 (2026-04-24): dfEntries[] — per-doctor per-course DF matching
+  // ProClinic's #addDfModal structure (Triangle capture 2026-04-24). Each
+  // entry has rows[] with {courseId, enabled, value, type}. Resolver in
+  // dfEntryValidation.buildDefaultRows auto-fills from dfGroups + staffRates.
+  const [dfEntries, setDfEntries] = useState([]);
+  const [dfModalState, setDfModalState] = useState(null); // null | { mode: 'add', entry: null } | { mode: 'edit', entry }
+  const [dfGroups, setDfGroups] = useState([]);
+  const [dfStaffRates, setDfStaffRates] = useState([]);
 
   // Health Info
   const [bloodType, setBloodType] = useState('');
@@ -516,12 +530,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       try {
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
-          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer } = await import('../lib/backendClient.js');
-          const [doctorItems, productItems, staffItems] = await Promise.all([
+          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer, listDfGroups, listDfStaffRates } = await import('../lib/backendClient.js');
+          const [doctorItems, productItems, staffItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
             getAllMasterDataItems('doctors'),
             getAllMasterDataItems('products'),
             getAllMasterDataItems('staff'),
+            listDfGroups().catch(() => []),
+            listDfStaffRates().catch(() => []),
           ]);
+          setDfGroups(dfGroupItems || []);
+          setDfStaffRates(dfStaffRatesItems || []);
           const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
           const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
 
@@ -625,6 +643,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.consumables?.length) setConsumables(t.consumables);
               if (t.treatmentItems?.length) setTreatmentItems(t.treatmentItems.map((item, i) => ({ id: `existing-${i}`, name: item.name || '', qty: item.qty || '1', unit: item.unit || '', price: item.price || '' })));
               if (t.doctorFees?.length) setDoctorFees(t.doctorFees);
+              // Phase 14.4: dfEntries restore. Check both top-level
+              // (save path writes here) and detail.dfEntries (future-proof
+              // for treatment validator TR-9 wiring in Phase 14.5).
+              if (Array.isArray(t.dfEntries) && t.dfEntries.length > 0) setDfEntries(t.dfEntries);
+              else if (Array.isArray(t.detail?.dfEntries) && t.detail.dfEntries.length > 0) setDfEntries(t.detail.dfEntries);
               if (t.treatmentFiles?.length) setTreatmentFiles(prev => prev.map(slot => {
                 const found = t.treatmentFiles.find(f => f.slot === slot.slot);
                 return found ? { ...slot, ...found } : slot;
@@ -1463,6 +1486,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     return grouped;
   }, [purchasedItems]);
 
+  // Phase 14.4 (2026-04-24): derive the list of courses selected on this
+  // treatment for the DF modal. DfEntryModal renders ONE row per distinct
+  // course, filtered by what the user has picked (selectedCourseItems Set).
+  // Falls back to empty list when nothing is picked — the modal then shows
+  // a "no courses yet" empty state.
+  const treatmentCoursesForDf = useMemo(() => {
+    const all = options?.customerCourses || [];
+    const seen = new Set();
+    const out = [];
+    for (const c of all) {
+      const hasPicked = (c.products || []).some(p => selectedCourseItems.has(p.rowId));
+      if (!hasPicked) continue;
+      const cid = String(c.courseId || '');
+      if (!cid || seen.has(cid)) continue;
+      seen.add(cid);
+      out.push({ courseId: cid, courseName: c.courseName || cid });
+    }
+    return out;
+  }, [options?.customerCourses, selectedCourseItems]);
+
+  // Combined people list (doctors + assistants) for DfEntryModal picker.
+  // Each carries `position` + `defaultDfGroupId` so the modal can auto-fill
+  // the group dropdown when the user selects a person.
+  const treatmentPeopleForDf = useMemo(() => {
+    const doctors = (options?.doctors || []);
+    const assistants = (options?.assistants || []);
+    const merged = [];
+    const seen = new Set();
+    for (const p of [...doctors, ...assistants]) {
+      const id = String(p.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      merged.push({ id, name: p.name, position: p.position, defaultDfGroupId: p.defaultDfGroupId || '' });
+    }
+    return merged;
+  }, [options?.doctors, options?.assistants]);
+
   // Group promotion-linked courses by promotionId with promotion name
   const customerPromotionGroups = useMemo(() => {
     const allCourses = options?.customerCourses || [];
@@ -1562,6 +1622,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           return { rowId, qty: ti?.qty || '1' };
         }),
         doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, fee: f.fee, groupId: f.groupId })),
+        // Phase 14.4: per-doctor-per-course DF entries (canonical going forward)
+        dfEntries,
         purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
         medications: medications.filter(m => m.name),
         consumables: consumables.filter(c => c.name),
@@ -1688,6 +1750,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
           doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
+          // Phase 14.4: per-doctor-per-course DF entries (canonical)
+          dfEntries,
           treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, fileName: f.fileName })),
           // Billing & Payment (Phase 5A)
           purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
@@ -2222,6 +2286,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
               courseItems: Array.from(selectedCourseItems),
               doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
+              // Phase 14.4: per-doctor-per-course DF entries (canonical)
+              dfEntries,
               treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
               billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
               insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
@@ -2787,44 +2853,56 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             </div>
           </FormSection>
 
-          {/* ── Doctor Fees (ค่ามือแพทย์ & ผู้ช่วยแพทย์) ───────────────────── */}
+          {/* ── DF Entries (Phase 14.4 — per-doctor per-course DF) ─────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="ค่ามือแพทย์ & ผู้ช่วยแพทย์" isDark={isDark} accent="#14b8a6">
-              <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => {
-                const allPeople = [...(options?.doctors || []), ...(options?.assistants || [])];
-                const available = allPeople.filter(p => !doctorFees.some(f => String(f.doctorId) === String(p.id)));
-                if (available.length === 0) return;
-                const name = available[0].name;
-                setDoctorFees(prev => [...prev, { doctorId: available[0].id, name, fee: '0', groupId: available[0].defaultDfGroupId || '' }]);
-              }}>
-                <Plus size={10} /> เพิ่ม
+              <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => setDfModalState({ mode: 'add', entry: null })}>
+                <Plus size={10} /> เพิ่มค่ามือ
               </ActionBtn>
             </SectionHeader>
-            {doctorFees.length === 0 ? (
-              <p className="text-xs text-gray-500 text-center py-3">เลือกแพทย์และผู้ช่วยด้านบน → รายชื่อจะปรากฏที่นี่อัตโนมัติ</p>
+            {dfEntries.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-3">
+                ยังไม่มีรายการค่ามือ — กด "เพิ่มค่ามือ" เพื่อเพิ่มต่อแพทย์ / ผู้ช่วย
+              </p>
             ) : (
               <div className="space-y-1.5">
-                {doctorFees.map((df, i) => (
-                  <div key={df.doctorId} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
-                    <span className="text-xs font-bold flex-1 min-w-0 truncate">{df.name}</span>
-                    {dfEditingIdx === i ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-gray-500">ค่ามือ</span>
-                        <input type="number" value={df.fee} onChange={e => setDoctorFees(prev => prev.map((f, idx) => idx === i ? { ...f, fee: e.target.value } : f))}
-                          className={`${inputCls} !w-20 text-center !py-1`} min="0" step="0.01" autoFocus
-                          onBlur={() => setDfEditingIdx(-1)} onKeyDown={e => e.key === 'Enter' && setDfEditingIdx(-1)} />
-                        <span className="text-xs text-gray-500">บาท</span>
+                {dfEntries.map((e) => {
+                  const groupName = dfGroups.find(g => String(g.groupId || g.id) === String(e.dfGroupId))?.name || e.dfGroupId || '—';
+                  const enabledRows = (e.rows || []).filter(r => r.enabled);
+                  const bahtSum = enabledRows
+                    .filter(r => r.type === 'baht')
+                    .reduce((s, r) => s + (Number(r.value) || 0), 0);
+                  const percentCount = enabledRows.filter(r => r.type === 'percent').length;
+                  return (
+                    <div key={e.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${isDark ? 'bg-[#111]' : 'bg-gray-50'}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold truncate">{e.doctorName || e.doctorId}</div>
+                        <div className="text-[10px] text-gray-500 truncate">
+                          {groupName} · {enabledRows.length} คอร์ส
+                          {bahtSum > 0 && ` · ${bahtSum.toFixed(2)} บาท`}
+                          {percentCount > 0 && ` · ${percentCount} rows %`}
+                        </div>
                       </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 shrink-0">(ค่ามือ {parseFloat(df.fee || 0).toFixed(2)} บาท)</span>
-                    )}
-                    <button onClick={() => setDfEditingIdx(i)} className="text-blue-400 hover:text-blue-300 transition-colors shrink-0"><Edit3 size={11} /></button>
-                    <button onClick={() => setDoctorFees(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 transition-colors shrink-0"><Trash2 size={11} /></button>
-                  </div>
-                ))}
+                      <button
+                        onClick={() => setDfModalState({ mode: 'edit', entry: e })}
+                        className="text-blue-400 hover:text-blue-300 transition-colors shrink-0"
+                        aria-label={`แก้ไข ${e.doctorName}`}
+                      >
+                        <Edit3 size={11} />
+                      </button>
+                      <button
+                        onClick={() => setDfEntries(prev => prev.filter(x => x.id !== e.id))}
+                        className="text-red-400 hover:text-red-300 transition-colors shrink-0"
+                        aria-label={`ลบ ${e.doctorName}`}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
                 <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                  <span style={{ color: '#14b8a6' }}>ยอดรวมค่ามือ</span>
-                  <span className="font-mono" style={{ color: '#14b8a6' }}>{doctorFees.reduce((s, f) => s + (parseFloat(f.fee) || 0), 0).toFixed(2)} บาท</span>
+                  <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น</span>
+                  <span className="font-mono" style={{ color: '#14b8a6' }}>{dfEntries.length} รายการ</span>
                 </div>
               </div>
             )}
@@ -3957,6 +4035,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           </div>
         </div>
       </div>
+
+      {/* ── DF Entry Modal (Phase 14.4) ─────────────────────────────────── */}
+      {dfModalState && (
+        <DfEntryModal
+          entry={dfModalState.entry}
+          treatmentCourses={treatmentCoursesForDf}
+          people={treatmentPeopleForDf}
+          dfGroups={dfGroups}
+          staffRates={dfStaffRates}
+          existingEntries={
+            dfModalState.mode === 'edit'
+              ? dfEntries.filter(e => e.id !== dfModalState.entry?.id)
+              : dfEntries
+          }
+          onSave={(saved) => {
+            setDfEntries(prev => {
+              const idx = prev.findIndex(e => e.id === saved.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = saved;
+                return next;
+              }
+              return [...prev, saved];
+            });
+            setDfModalState(null);
+          }}
+          onClose={() => setDfModalState(null)}
+          clinicSettings={{}}
+        />
+      )}
     </div>
   );
 }
