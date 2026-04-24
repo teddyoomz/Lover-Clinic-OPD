@@ -2439,3 +2439,71 @@ Pure-function permission gate + stub hook. **Scaffolding only** — real user-au
 - BackendDashboard does NOT redirect on forbidden deep-link — same reason. Add `if (!access.canAccess(activeTab)) setActiveTab(access.first())` guard in useEffect when auth integrates.
 
 20/20 focused pass. Build clean. Scope narrower than plan (+30 tests target; 20 delivered) — remaining 10 tests would cover wiring + edge cases that don't exist until auth integrates.
+
+---
+
+## Phase 13.6 — Treatment validator + schema (2026-04-24) SHIPPED
+
+Strict schema gate for `be_treatments/{treatmentId}` docs. TreatmentFormPage is 3200+ LOC with hand-coded state updates — field drift is a known bug vector (V8 historical). Validator imports directly from save-site callers that want hard gating; `saveTreatment` itself stays non-strict to avoid breaking in-flight edits during rollout.
+
+**New files:**
+- `src/lib/treatmentValidation.js` — 10 invariants (TR-1..TR-10). `STATUS_OPTIONS` (draft/completed/cancelled), `PAYMENT_STATUS_OPTIONS` (ProClinic codes: '0' ชำระภายหลัง / '2' ชำระเต็มจำนวน / '4' แบ่งชำระ), `DISCOUNT_TYPE_OPTIONS`. Helpers `validateTreatmentStrict` / `normalizeTreatment` / `emptyTreatmentForm`.
+- `tests/treatmentValidation.test.js` — 32 adversarial tests (TV1-TV32).
+
+**Key invariants enforced:**
+- TR-1 customerId required
+- TR-2 treatmentDate required + YYYY-MM-DD
+- TR-3 billing.netTotal/discount non-negative; discountType valid
+- TR-4 paymentStatus ∈ {'0', '2', '4'}
+- TR-5 paymentStatus='2' (fully paid) + channels present ⇒ sum(channels.amount) = netTotal ± 0.01
+- TR-6 doctorId present ⇒ doctorName also required (display safety — renders nothing otherwise)
+- TR-7 items.courses[] entries have name + qty > 0
+- TR-8 items.products[] entries have productId + qty > 0
+- TR-9 status='cancelled' ⇒ cancelReason required
+- TR-10 hasSale=true ⇒ linkedSaleId required
+
+Normalizer clamps negative money to 0, rounds channel amounts to 2 decimals (THB rounding), coerces invalid enum values to sensible defaults.
+
+32/32 focused pass. Build clean. Non-invasive — existing saveTreatment call sites unchanged; adopters import `validateTreatmentStrict` explicitly.
+
+---
+
+## Phase 13 — SHIPPED (2026-04-24)
+
+**Summary (6 sub-phases, ~6-7h elapsed, 14 commits):**
+
+| Sub-phase | Commits | Tests |
+|---|---|---:|
+| 13.1 Quotations + convert-to-sale | 5 (`f5bff7d`…`d39bd2b`) | +119 |
+| 13.2 Staff schedules + AppointmentTab collision | 5 (`9b9d7eb`…`7f79894`) | +62 |
+| 13.3 DF groups + staff-rate matrix | 3 (`920f4e0`…`ad3645b`) | +62 |
+| 13.4 DF Payout Report | 1 (`8b91c62`) | +18 |
+| 13.5 Permission tab-gate scaffolding | 1 (`c85399a`) | +20 |
+| 13.6 Treatment validator + schema | this commit | +32 |
+
+**Total delta:** 2865 → 3178 tests (+313). Build clean. Full regression 3178/3178.
+
+**firestore.rules edits (NOT yet deployed, bundled for end-of-phase Probe-Deploy-Probe):**
+- be_quotations (13.1.2)
+- be_staff_schedules (13.2.2)
+- be_df_groups + be_df_staff_rates (13.3.2)
+
+**Backend collection net-new:** be_quotations, be_staff_schedules, be_df_groups, be_df_staff_rates (4 new Firestore collections, all OUR data).
+
+**Rule compliance across the phase:**
+- E ✅ — zero brokerClient imports outside MasterDataTab
+- H ✅ — no ProClinic write-back
+- C1 ✅ — shared MarketingFormShell / DateField / scrollToField / generateXxxId pattern
+- C2 ✅ — all IDs via crypto.getRandomValues
+- C3 ✅ — 4 new collections each justified (quotation separate from sale; staff_schedules separate from appointments; df_groups matrix data; df_staff_rates keyed lookup)
+- D ✅ — every sub-phase shipped adversarial tests; V11 logged mid-phase + rule 02 updated
+- 04 ✅ — ค.ศ. in backend form, พ.ศ. in customer-facing print, no red on names/HN
+
+**Deployment queue (requires user "deploy" + "deploy rules" authorization):**
+- Vercel: Phase 13 ships new UI (quotations tab, staff-schedules tab, df-groups tab, df-payout report, collision warning on AppointmentTab)
+- firestore.rules: Probe-Deploy-Probe 4 endpoints before/after, then deploy 4 new be_* rules
+
+**Next:** user decides. Options:
+- Deploy Phase 13 (requires rules + Vercel)
+- Phase 14 (per execution plan)
+- End session + update SESSION_HANDOFF

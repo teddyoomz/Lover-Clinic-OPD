@@ -27,11 +27,12 @@ const REPORT_TAB_IDS = [
 ];
 
 describe('navConfig — Phase 10 + 12.8 report items present', () => {
-  it('reports section has 12 items (P10: 10 + P12.8: 2 new)', () => {
+  it('reports section has 13 items (P10: 10 + P12.8: 2 + P13.4: 1 df-payout)', () => {
     // Phase 12.8 (2026-04-20) appended reports-pnl + reports-payment.
+    // Phase 13.4 (2026-04-24) appended reports-df-payout.
     const reportsSection = NAV_SECTIONS.find(s => s.id === 'reports');
     expect(reportsSection).toBeDefined();
-    expect(reportsSection.items.length).toBe(12);
+    expect(reportsSection.items.length).toBe(13);
   });
 
   it('every report tab id is in ALL_ITEM_IDS whitelist (URL deep-link support)', () => {
