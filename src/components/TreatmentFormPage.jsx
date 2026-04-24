@@ -576,6 +576,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
                   const unit = qtyMatch ? qtyMatch[3].trim() : '';
                   const productName = c.product || c.name;
+                  // Phase 12.2b follow-up (2026-04-24): propagate
+                  // courseType so a bought-but-not-yet-used "เหมาตามจริง"
+                  // course renders with the fill-later display +
+                  // checkbox-and-fill semantics on a later treatment
+                  // visit. productId was captured at assign time →
+                  // carry it through here so the stock-deduct path
+                  // (toggleCourseItem → treatmentItem.productId →
+                  // deductStockForTreatment) resolves a real be_products
+                  // batch instead of falling back to the synthetic rowId.
+                  const courseType = String(c.courseType || '').trim();
+                  const isRealQty = courseType === 'เหมาตามจริง';
                   return {
                     courseId: `be-course-${idx}`,
                     courseName: c.name,
@@ -584,13 +595,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     linkedSaleId: c.linkedSaleId || null,
                     status: c.status || '',
                     expiry: c.expiry || '',
+                    courseType,
+                    isRealQty,
                     products: [{
                       rowId: `be-row-${idx}`,
                       courseIndex: idx, // exact targeting — survives name-collision
+                      productId: c.productId || '',
                       name: productName,
-                      remaining: remaining > 0 ? `${remaining}` : '0',
-                      total: `${total}`,
+                      // Fill-later entries display "เหมาตามจริง" and
+                      // start the treatment row with blank qty — doctor
+                      // enters the real amount used at this visit.
+                      remaining: isRealQty ? '' : (remaining > 0 ? `${remaining}` : '0'),
+                      total: isRealQty ? '' : `${total}`,
                       unit: unit || 'ครั้ง',
+                      fillLater: isRealQty,
                     }],
                   };
                 })

@@ -271,13 +271,29 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
-  const { parseQtyString } = await import('./courseUtils.js');
+  const { parseQtyString, formatQtyString } = await import('./courseUtils.js');
   const preferNewest = !!opts?.preferNewest;
 
   const matchesDed = (c, d) => {
     const nameMatch = d.courseName ? c.name === d.courseName : true;
     const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
     return nameMatch && productMatch;
+  };
+
+  // Phase 12.2b follow-up (2026-04-24): for "เหมาตามจริง" courses the
+  // notion of "remaining" doesn't apply — one treatment = course fully
+  // consumed, regardless of what qty the doctor entered for the actual
+  // stock deduction. Zero out the course entry so it moves to history
+  // (customer's คอร์สคงเหลือ filters remaining>0 only). Skip the
+  // "คอร์สคงเหลือไม่พอ" throw that would otherwise fire because
+  // deductQty (driven by real product usage, e.g. 100 U) is much larger
+  // than the sentinel "1/1 คอร์ส" qty we assigned.
+  const consumeRealQty = (i) => {
+    const c = courses[i];
+    const parsed = parseQtyString(c.qty);
+    const total = parsed.total > 0 ? parsed.total : 1;
+    const unit = parsed.unit || 'ครั้ง';
+    courses[i] = { ...c, qty: formatQtyString(0, total, unit) };
   };
 
   for (const d of deductions) {
@@ -287,6 +303,11 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
     if (typeof d.courseIndex === 'number' && d.courseIndex >= 0 && d.courseIndex < courses.length) {
       const c = courses[d.courseIndex];
       if (matchesDed(c, d)) {
+        // Fill-later short-circuit: zero the entry + skip normal loop.
+        if (c.courseType === 'เหมาตามจริง') {
+          consumeRealQty(d.courseIndex);
+          continue;
+        }
         const parsed = parseQtyString(c.qty);
         if (parsed.remaining > 0) {
           const toDeduct = Math.min(remaining, parsed.remaining);
@@ -301,11 +322,30 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
       const order = preferNewest
         ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
         : Array.from({ length: courses.length }, (_, i) => i);
+      // Fill-later fallback: look for a matching เหมาตามจริง entry
+      // FIRST in the preferred order; if found, consume it and skip the
+      // normal deduction loop entirely (the whole course is one-shot).
+      for (const i of order) {
+        if (i === d.courseIndex) continue;
+        const c = courses[i];
+        if (!matchesDed(c, d)) continue;
+        if (c.courseType === 'เหมาตามจริง') {
+          consumeRealQty(i);
+          remaining = 0;
+          break;
+        }
+      }
+    }
+    if (remaining > 0) {
+      const order = preferNewest
+        ? Array.from({ length: courses.length }, (_, i) => courses.length - 1 - i)
+        : Array.from({ length: courses.length }, (_, i) => i);
       for (const i of order) {
         if (remaining <= 0) break;
         if (i === d.courseIndex) continue; // already handled in Step 1
         const c = courses[i];
         if (!matchesDed(c, d)) continue;
+        if (c.courseType === 'เหมาตามจริง') continue; // already handled above
         const parsed = parseQtyString(c.qty);
         if (parsed.remaining <= 0) continue;
         const toDeduct = Math.min(remaining, parsed.remaining);
@@ -458,6 +498,12 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     courses.push({
       name: masterCourse.name,
       product: p.name,
+      // Phase 12.2b follow-up (2026-04-24): capture the master product
+      // id so a later-visit "tick + fill qty" flow on this customer
+      // course can resolve a real be_products doc → deductStockForTreatment
+      // actually decrements a batch. Without this, a fill-later course
+      // bought now and used 3 weeks from today would skip stock silently.
+      productId: p.id != null ? String(p.id) : (p.productId != null ? String(p.productId) : ''),
       qty,
       status: 'กำลังใช้งาน',
       expiry,

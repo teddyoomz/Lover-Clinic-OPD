@@ -369,4 +369,46 @@ describe('Phase 12.2 — Rule E', () => {
     const contextBefore = src.slice(Math.max(0, sentinelIdx - 400), sentinelIdx);
     expect(contextBefore).toContain("'be_products'");
   });
+
+  // Phase 12.2b follow-up (2026-04-24): fill-later consume-on-use guards.
+  // User directive: "หากกดบันทึกการรักษาของคอร์สเหมาตามจริง จะไม่ต้อง
+  // ไปเช็คว่าลูกค้าเหลือคอร์สติดตัวเท่าไหร่". These regression tests
+  // fail loud if anyone removes the short-circuit.
+
+  it('RE5: deductCourseItems short-circuits fill-later courseType to zero (no remaining check)', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    // Extract the deductCourseItems body.
+    const match = src.match(/export async function deductCourseItems[^{]*\{([\s\S]*?)\n\}/);
+    expect(match).toBeTruthy();
+    const body = match[1];
+    // Must reference courseType === 'เหมาตามจริง' somewhere in the loop
+    // AND a zero-remaining emit via formatQtyString(0, ...).
+    expect(body).toContain("'เหมาตามจริง'");
+    expect(body).toContain('formatQtyString(0');
+  });
+
+  it('RE6: assignCourseToCustomer captures productId on each customer course entry', () => {
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
+    // Look at the assignCourseToCustomer function body.
+    const match = src.match(/export async function assignCourseToCustomer[^{]*\{([\s\S]*?)\n\}/);
+    expect(match).toBeTruthy();
+    const body = match[1];
+    // `productId:` must appear in the pushed entry so late-visit
+    // stock deductions can resolve be_products.
+    expect(body).toContain('productId:');
+    expect(body).toContain('p.id');
+  });
+
+  it('RE7: customerCoursesForForm propagates courseType + isRealQty + fillLater', () => {
+    const src = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf-8');
+    // The customerCoursesForForm builder must carry these three flags so
+    // a bought-but-unused fill-later course renders correctly next visit.
+    const sentinelIdx = src.indexOf('customerCoursesForForm = rawCourses');
+    expect(sentinelIdx).toBeGreaterThan(-1);
+    // Grab 2500 chars of context following the sentinel.
+    const ctx = src.slice(sentinelIdx, sentinelIdx + 2500);
+    expect(ctx).toContain('courseType');
+    expect(ctx).toContain('isRealQty');
+    expect(ctx).toContain('fillLater');
+  });
 });
