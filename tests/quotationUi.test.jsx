@@ -30,7 +30,7 @@ vi.mock('../src/lib/backendClient.js', () => ({
   deleteQuotation: (...a) => mockDeleteQuotation(...a),
   saveQuotation: (...a) => mockSaveQuotation(...a),
   getAllCustomers: (...a) => mockGetAllCustomers(...a),
-  getAllStaff: (...a) => mockGetAllStaff(...a),
+  listStaff: (...a) => mockGetAllStaff(...a),
   getAllMasterDataItems: (...a) => mockGetAllMasterDataItems(...a),
 }));
 

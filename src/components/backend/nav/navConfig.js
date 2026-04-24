@@ -38,6 +38,8 @@ import {
   Banknote,
   // Phase 12.6 online-sale tab icon
   Globe2,
+  // Phase 13.1 quotation tab icon
+  FileText,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -63,6 +65,7 @@ export const NAV_SECTIONS = [
     icon: Briefcase,
     items: [
       { id: 'sales',         label: 'ขาย / ใบเสร็จ',  icon: ShoppingCart, color: 'rose', palette: 'sale invoice receipt ขาย ใบเสร็จ บิล' },
+      { id: 'quotations',    label: 'ใบเสนอราคา',    icon: FileText,     color: 'rose', palette: 'quotation QUO เสนอราคา quote estimate ใบเสนอ' },
       { id: 'online-sales',  label: 'ขายออนไลน์',    icon: Globe2,       color: 'rose', palette: 'online sale transfer slip bank ออนไลน์ โอน สลิป' },
     ],
   },

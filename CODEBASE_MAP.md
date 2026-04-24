@@ -2176,3 +2176,62 @@ Tests: 15/15 focused pass. Build clean (`built in 1.84s`). Full regression defer
 - Rule D (continuous improvement) ✅ — 10 adversarial tests, including 3-state status gate + idempotency + empty-seller edge.
 
 Tests: 25/25 focused (15 UI + 10 convert). Build clean. Full regression deferred.
+
+---
+
+## Phase 13.1.5 — Nav + BackendDashboard wiring (2026-04-24)
+
+**Context:** Final sub-task of Phase 13.1. Registers the quotations tab in navConfig so the Sidebar / Drawer / CmdPalette / deep-link URL (?tab=quotations) all resolve, and wires the route handler in BackendDashboard.
+
+**Edits:**
+- `src/components/backend/nav/navConfig.js`:
+  - Added `FileText` to lucide-react imports
+  - Added `{ id: 'quotations', label: 'ใบเสนอราคา', icon: FileText, color: 'rose', palette: 'quotation QUO เสนอราคา quote estimate ใบเสนอ' }` to the `sales` section between `sales` and `online-sales`
+- `src/pages/BackendDashboard.jsx`:
+  - Added `import QuotationTab from '../components/backend/QuotationTab.jsx'`
+  - Added case branch: `) : activeTab === 'quotations' ? (<QuotationTab clinicSettings={clinicSettings} theme={theme} />)` after `online-sales`
+
+**New files:**
+- `tests/quotationNavWiring.test.js` — 5 focused tests (QN1-QN5):
+  - QN1 ALL_ITEM_IDS whitelist includes quotations (deep-link safe)
+  - QN2 `sectionOf('quotations') === 'sales'`
+  - QN3 item metadata (label/color/icon/palette) well-formed + Thai palette keywords present
+  - QN4 ordering: sales → quotations → online-sales in the sales section
+  - QN5 ITEM_LOOKUP resolves quotations back to the sales section
+
+**Bug caught during sub-phase build check (Rule 02 pre-commit):**
+- `QuotationFormModal.jsx` imported `getAllStaff` but the real export is `listStaff`. Focused tests passed because they mocked `getAllStaff` (overriding reality). `npm run build` caught the MISSING_EXPORT. Fixed both the source import and the test mock. **Lesson:** tests that mock module boundaries verify call-shape but not export-existence; build is the authority. Rule 02 pre-commit checklist's "npm run build → clean" line just saved the branch. Consider this exact case for a V-entry if the same failure mode recurs.
+
+Tests: 5/5 focused + full regression 2984/2984 (end-of-phase per `feedback_test_per_subphase`). Build clean.
+
+---
+
+## Phase 13.1 — SHIPPED (2026-04-24)
+
+**Summary (5 sub-phases, ~3.5 hours, 5 commits):**
+
+| Sub-phase | Commit | Files | New tests |
+|---|---|---|---|
+| 13.1.1 validator + normalizer | `f5bff7d` | +2 src/tests | +51 (QV1-QV51) |
+| 13.1.2 backendClient CRUD + rules | `efe0bc9` | +1 test, edit backendClient/rules/map | +15 (QC1-QC15) |
+| 13.1.3 Tab + FormModal + PrintView | `68635be` | +4 src/tests | +15 (QT/QF/QP1-5) |
+| 13.1.4 convert-to-sale | `c5b1658` | +1 test, edit backendClient/Tab | +10 (QCV1-QCV10) |
+| 13.1.5 Nav + Dashboard wiring | this commit | +1 test, edit navConfig/BackendDashboard | +5 (QN1-QN5) |
+
+**Total delta:** 2865 → 2984 tests (+119). +5 new source files, +5 new test files, 5 files edited. No firestore:rules deploy this phase (file change pending; requires Probe-Deploy-Probe when deployed).
+
+**Feature complete:**
+- `be_quotations` collection — Firestore-owned quotation docs
+- Full admin CRUD via QuotationTab + Modal
+- Customer-facing A4 print view with Thai พ.ศ. dates + clinic branding
+- Convert-to-sale handler (draft, idempotent, status-gated)
+- Lock rule after convert (delete + edit-hidden)
+- Deep-link support via ?tab=quotations
+- 10 validator invariants (QU-1..QU-10) enforced
+
+**Rule compliance across the phase:** E ✅, H ✅, H-bis N/A (no new sync scaffolding), C1 ✅ (reused MarketingShell + DateField + createBackendSale), C2 ✅ (crypto-random QUO IDs), C3 ✅ (single new collection `be_quotations` with clear reader+writer), D ✅ (every sub-phase shipped with adversarial tests), 04 ✅ (ค.ศ. in backend form, พ.ศ. in customer print, no red on names/HN).
+
+**Outstanding for next phase / session:**
+- firestore.rules deploy when next rules change lands (piggyback Probe-Deploy-Probe)
+- Any print-view design polish user wants via `/frontend-design` or `/polish` skills
+- Phase 13.2 next: `be_staff_schedules` + AppointmentTab collision

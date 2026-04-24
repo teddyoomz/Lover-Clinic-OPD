@@ -9,7 +9,7 @@ import { Plus, Trash2, Search } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import {
-  saveQuotation, getAllCustomers, getAllStaff, getAllMasterDataItems,
+  saveQuotation, getAllCustomers, listStaff, getAllMasterDataItems,
 } from '../../lib/backendClient.js';
 import {
   validateQuotationStrict, normalizeQuotation, emptyQuotationForm,
@@ -58,7 +58,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
     setRefLoading(true);
     Promise.all([
       getAllCustomers().catch(() => []),
-      getAllStaff().catch(() => []),
+      listStaff().catch(() => []),
       getAllMasterDataItems('courses').catch(() => []),
       getAllMasterDataItems('products').catch(() => []),
       getAllMasterDataItems('promotions').catch(() => []),
