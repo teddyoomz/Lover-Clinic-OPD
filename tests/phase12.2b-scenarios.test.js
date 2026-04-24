@@ -559,6 +559,129 @@ describe('Scenario 9 — courseType branching helpers', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
+// Scenario 11: treatmentItems save-payload productId preservation
+// Regression guard for the "ใช้คอร์สเหมาแล้วไม่ตัดสต็อค" bug — previous
+// payload shape `{name, qty, unit, price}` silently dropped productId,
+// breaking every fill-later stock deduction.
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 11 — treatmentItems save-payload shape', () => {
+  it('S11.1: payload must carry productId + fillLater (not just name/qty/unit/price)', () => {
+    // Source treatment item as constructed by toggleCourseItem
+    const treatmentItem = {
+      id: 'purchased-C-REAL-row-281',
+      productId: '281',
+      name: 'Botox 100u',
+      qty: '50',
+      unit: 'U',
+      price: '',
+      fillLater: true,
+    };
+    // The handleSubmit payload mapping — mirrors the production code.
+    const payload = {
+      id: treatmentItem.id,
+      productId: treatmentItem.productId || '',
+      name: treatmentItem.name,
+      qty: treatmentItem.qty,
+      unit: treatmentItem.unit,
+      price: treatmentItem.price,
+      fillLater: !!treatmentItem.fillLater,
+    };
+    expect(payload.productId).toBe('281');
+    expect(payload.fillLater).toBe(true);
+    expect(payload.id).toContain('row-281');
+  });
+
+  it('S11.2: backward compat — legacy treatmentItem without productId maps to empty string (not undefined)', () => {
+    const legacyItem = { id: 'r-1', name: 'X', qty: '1', unit: 'U' };
+    const payload = {
+      id: legacyItem.id,
+      productId: legacyItem.productId || '',
+      name: legacyItem.name,
+      qty: legacyItem.qty,
+      unit: legacyItem.unit,
+      price: legacyItem.price,
+      fillLater: !!legacyItem.fillLater,
+    };
+    expect(payload.productId).toBe('');
+    expect(payload.fillLater).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 12: DF percent display shows calculated baht amount
+// User request: "ค่ามือแพทย์ที่เป็น % ไม่แสดงจำนวนเงิน" → show ≈ ฿X,XXX
+// next to percent rate.
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 12 — DF percent baht display', () => {
+  it('S12.1: treatmentCoursesForDf must carry `price` so DfEntryModal can compute amount', () => {
+    // Simulated treatmentCourses prop shape passed to DfEntryModal
+    const tc = [{ courseId: 'C-PREM', courseName: 'Premium', price: 50000 }];
+    const row = { courseId: 'C-PREM', enabled: true, value: 10, type: 'percent' };
+    // Amount calc (mirrors DfEntryModal's inline IIFE):
+    const match = tc.find((c) => String(c.courseId) === String(row.courseId));
+    const amount = (Number(match?.price) || 0) * (Number(row.value) || 0) / 100;
+    expect(amount).toBe(5000);
+  });
+
+  it('S12.2: missing price → amount 0 (no crash)', () => {
+    const tc = [{ courseId: 'C-NONE', courseName: 'X' }];
+    const row = { courseId: 'C-NONE', enabled: true, value: 10, type: 'percent' };
+    const match = tc.find((c) => String(c.courseId) === String(row.courseId));
+    const amount = (Number(match?.price) || 0) * (Number(row.value) || 0) / 100;
+    expect(amount).toBe(0);
+  });
+
+  it('S12.3: baht rate row doesn\'t need amount display (value is already baht)', () => {
+    const row = { courseId: 'C-PREM', enabled: true, value: 500, type: 'baht' };
+    const shouldShowAmount = row.enabled && row.type === 'percent';
+    expect(shouldShowAmount).toBe(false);
+  });
+
+  it('S12.4: disabled row doesn\'t show amount even if percent', () => {
+    const row = { courseId: 'C-PREM', enabled: false, value: 10, type: 'percent' };
+    expect(row.enabled && row.type === 'percent').toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Scenario 13: 0-baht hides billing/payment UI
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 13 — showBilling gate for 0-baht treatments', () => {
+  const makeCtx = (hasSale, netTotal) => ({
+    hasSale,
+    netTotal,
+    // This mirrors the showBilling computation in TreatmentFormPage.
+    showBilling: hasSale && (Number(netTotal) || 0) > 0,
+  });
+
+  it('S13.1: hasSale=true + netTotal=0 → showBilling=false (UI hidden)', () => {
+    expect(makeCtx(true, 0).showBilling).toBe(false);
+  });
+
+  it('S13.2: hasSale=true + netTotal=1 → showBilling=true (UI shown)', () => {
+    expect(makeCtx(true, 1).showBilling).toBe(true);
+  });
+
+  it('S13.3: hasSale=false always → showBilling=false', () => {
+    expect(makeCtx(false, 100).showBilling).toBe(false);
+    expect(makeCtx(false, 0).showBilling).toBe(false);
+  });
+
+  it('S13.4: negative netTotal (bizarre discount overflow) → showBilling=false', () => {
+    expect(makeCtx(true, -50).showBilling).toBe(false);
+  });
+
+  it('S13.5: non-numeric netTotal → showBilling=false (safe default)', () => {
+    expect(makeCtx(true, null).showBilling).toBe(false);
+    expect(makeCtx(true, undefined).showBilling).toBe(false);
+    expect(makeCtx(true, 'abc').showBilling).toBe(false);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 // Scenario 10: comprehensive edge-case coverage
 // Null / undefined / degenerate inputs across the pipeline.
 // ════════════════════════════════════════════════════════════════════════

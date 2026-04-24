@@ -285,6 +285,25 @@ export default function DfEntryModal({
                     <option key={t} value={t}>{t === 'baht' ? 'บาท' : '%'}</option>
                   ))}
                 </select>
+                {/* Phase 12.2b follow-up (2026-04-24): show the computed
+                    baht amount when rate is percent so the doctor/admin
+                    can see how much they're actually earning without
+                    mental math. Uses course.price from treatmentCourses
+                    prop (TreatmentFormPage passes full course price). */}
+                {r.enabled && r.type === 'percent' && (() => {
+                  const tc = (treatmentCourses || []).find((c) => String(c.courseId) === String(r.courseId));
+                  const priceNum = Number(tc?.price) || 0;
+                  const rateNum = Number(r.value) || 0;
+                  const amount = priceNum * rateNum / 100;
+                  return (
+                    <span
+                      className="text-[11px] font-mono text-emerald-400 tabular-nums whitespace-nowrap w-20 text-right"
+                      title={`${rateNum}% × ฿${priceNum.toLocaleString('th-TH')}`}
+                    >
+                      ≈ ฿{amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  );
+                })()}
               </div>
             ))}
           </div>

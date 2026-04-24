@@ -1593,12 +1593,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const treatmentCoursesForDf = useMemo(() => {
     const seen = new Set();
     const out = [];
-    const push = (cid, name) => {
+    // Phase 12.2b follow-up (2026-04-24): carry course `price` so
+    // DfEntryModal can show the calculated baht amount next to percent
+    // rates ("10%" → "฿5,000" for a ฿50,000 course). User request:
+    // "ค่ามือแพทย์ที่เป็น % ไม่แสดงจำนวนเงิน".
+    const push = (cid, name, price) => {
       const key = String(cid || '');
       if (!key || seen.has(key)) return;
       seen.add(key);
-      out.push({ courseId: key, courseName: name || key });
+      const priceNum = Number(price) || 0;
+      out.push({ courseId: key, courseName: name || key, price: priceNum });
     };
+
+    // Price map from purchasedItems (this-visit buys) — indexed by course
+    // name for cross-lookup with customerCourses entries.
+    const priceByName = new Map();
+    for (const p of (purchasedItems || [])) {
+      if (p.itemType !== 'course') continue;
+      const n = String(p.name || '').trim();
+      if (!n) continue;
+      const unitPrice = Number(p.unitPrice) || Number(p.price) || 0;
+      const qty = Number(p.qty) || 1;
+      priceByName.set(n, unitPrice * qty);
+    }
 
     // Source 1: customer's purchased courses picked this visit (deducted).
     const all = options?.customerCourses || [];
@@ -1608,7 +1625,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       const name = String(c.courseName || '').trim();
       const masterId = masterCourseIdByName.get(name) || '';
       const cid = masterId || String(c.courseId || name);
-      push(cid, name);
+      // Price fallback order: this-visit purchase → parsed `value`
+      // string on customer.courses entry (e.g. "50000 บาท").
+      let price = priceByName.get(name) || 0;
+      if (!price && c.value) {
+        const m = String(c.value).match(/([\d,.]+)/);
+        if (m) price = parseFloat(m[1].replace(/,/g, '')) || 0;
+      }
+      push(cid, name, price);
     }
 
     // Phase 14.4 ask-A (2026-04-24): Source 2 — items directly added on
@@ -1621,10 +1645,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       const name = String(ti?.name || '').trim();
       if (!name) continue;
       const masterId = masterCourseIdByName.get(name) || '';
-      push(masterId || name, name);
+      const price = priceByName.get(name) || (Number(ti.price) || 0);
+      push(masterId || name, name, price);
     }
     return out;
-  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, treatmentItems]);
+  }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, treatmentItems, purchasedItems]);
 
   // Combined people list (doctors + assistants) for DfEntryModal picker.
   // Each carries `position` + `defaultDfGroupId` so the modal can auto-fill
@@ -1734,6 +1759,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // ── Submit ──────────────────────────────────────────────────────────────
   const hasSale = purchasedItems.length > 0 || medications.length > 0 || consumables.length > 0;
+  // Phase 12.2b follow-up (2026-04-24): hide every billing-related UI
+  // section when the net payable is 0 (free course, fully-discounted,
+  // or gift). User request: "หากเงินเป็น 0 บาท ไม่ต้องส่วนของขึ้น
+  // การคิดเงินในหน้าสร้างการรักษา". Covers: insurance claim, expense
+  // summary, sale note + date, payment channels, sellers. The rest of
+  // the treatment save still runs (doctor DF, course deductions).
+  const showBilling = hasSale && (Number(billing?.netTotal) || 0) > 0;
 
   const scrollToError = (fieldAttr, msg) => {
     alert(msg);
@@ -1941,7 +1973,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail,
           beforeImages, afterImages, otherImages,
           charts: charts.filter(c => c.dataUrl).map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson, templateId: c.templateId })),
-          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ name: t.name, qty: t.qty, unit: t.unit, price: t.price })),
+          // Phase 12.2b follow-up (2026-04-24): preserve productId +
+          // fillLater on the save payload so deductStockForTreatment's
+          // _normalizeStockItems can resolve real be_products batches
+          // instead of falling back to the synthetic rowId. Without
+          // this, fill-later treatments silently skipped stock and the
+          // user reported "ใช้คอร์สเหมาแล้วไม่ตัดสต็อค".
+          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater })),
           medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
@@ -2484,7 +2522,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
               // Phase 14.4: per-doctor-per-course DF entries (canonical)
               dfEntries,
-              treatmentItems: treatmentItems.map(t => ({ id: t.id, name: t.name, qty: t.qty, unit: t.unit })),
+              treatmentItems: treatmentItems.map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater })),
               billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
               insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
               payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },
@@ -3992,7 +4030,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           </FormSection>
 
           {/* ── Insurance (เบิกประกัน) — only when there's a sale ─────────── */}
-          {hasSale && (
+          {showBilling && (
           <FormSection isDark={isDark}>
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -4016,7 +4054,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           )}
 
           {/* ── Expense Summary (สรุปค่าใช้จ่าย) ───────────────────────────── */}
-          {hasSale && (
+          {showBilling && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="สรุปค่าใช้จ่าย" isDark={isDark} accent="#10b981" />
             <div className="space-y-1 text-xs">
@@ -4181,7 +4219,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           )}
 
           {/* ── Sale Note + Date — only when there's a sale ─────────────────── */}
-          {hasSale && (
+          {showBilling && (
           <FormSection isDark={isDark}>
             <div className="space-y-3">
               <div>
@@ -4197,7 +4235,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           )}
 
           {/* ── Payment (การชำระเงิน) — only when there's a sale ────────────── */}
-          {hasSale && (
+          {showBilling && (
           <FormSection isDark={isDark}>
             <SectionHeader icon={CreditCard} title="การชำระเงิน" isDark={isDark} accent="#ec4899" />
 
@@ -4258,7 +4296,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           )}
 
           {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
-          {hasSale && (
+          {showBilling && (
           <div data-field="sellers"><FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
