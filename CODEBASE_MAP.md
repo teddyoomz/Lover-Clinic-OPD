@@ -2334,3 +2334,17 @@ Nav wiring intentionally places `staff-schedules` next to `staff` (same person-e
 **Rule compliance:** E ✅, H ✅, C1 ✅ (reused Thai-TZ id gen pattern + MarketingTabShell), C2 ✅ (crypto id), D ✅, 04 ✅ (ค.ศ. backend, no red on names).
 
 **Next**: Phase 13.3 — be_df_groups + be_df_staff_rates (DF payout matrix, 5h, +50 tests, High risk).
+
+---
+
+## Phase 13.3.1 — DF group + staff-rate validator + resolver (2026-04-24)
+
+**Context:** Pure-function layer for Phase 13.3 Doctor-Fee matrix. Two collections (`be_df_groups` with embedded rates[], `be_df_staff_rates` keyed by staffId with rates[]) + a resolver function the payout report (Phase 13.4) will call.
+
+**New files:**
+- `src/lib/dfGroupValidation.js` — validators `validateDfGroupStrict` (DFG-1..DFG-7) + `validateDfStaffRatesStrict` (DSR-1..DSR-5). Helpers `normalizeDfGroup` / `normalizeDfStaffRates` with invalid-type fallback to 'baht' and snake→camel coercion. `generateDfGroupId` → `DFG-{MMYY}-{8hex}`. **Resolver** `getRateForStaffCourse(staffId, courseId, dfGroupId, groups, staffRatesDocs)` → staff-override > group fallback > null. **Computer** `computeDfAmount(rate, subtotal, qty)` — percent = subtotal × %, baht = value × qty.
+- `tests/dfGroupValidation.test.js` — 43 tests (DFGV1-DFGV26 group, DSR1-DSR6 staff, R1-R6 resolver, C1-C5 computer).
+
+**Schema decision:** embedded `rates[]` on group doc vs separate per-rate collection. Chose embedded — realistic volume (5 groups × 200 courses = 1000 entries × ~60 bytes = 60KB) stays well under 1MB Firestore limit. Staff override doc keyed by `staffId` for O(1) lookup.
+
+Rule E ✅, H ✅, C3 ✅ (2 collections justified — staff overrides need independent CRUD). 43/43 focused pass.
