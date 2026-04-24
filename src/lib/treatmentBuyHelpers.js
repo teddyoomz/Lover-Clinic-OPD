@@ -131,6 +131,29 @@ export function flattenPromotionsForStockDeduction(items) {
 }
 
 /**
+ * Phase 12.2b Step 7 (2026-04-24): save-time validator for fill-later
+ * treatment items. Returns the FIRST treatment item whose fillLater
+ * flag is set AND whose qty is missing or ≤ 0, or null when all
+ * fill-later rows have a positive qty. Pure — no side effects — so
+ * handleSubmit can branch on the return value to scroll + error.
+ *
+ * Non-fill-later items are ignored (their qty can legitimately be 0 /
+ * empty depending on context, not our concern here).
+ *
+ * @param {Array<object>} treatmentItems — [{ id, name, qty, fillLater? }]
+ * @returns {object|null} first offender or null
+ */
+export function findMissingFillLaterQty(treatmentItems) {
+  if (!Array.isArray(treatmentItems)) return null;
+  return treatmentItems.find(t => {
+    if (!t || !t.fillLater) return false;
+    if (t.qty === '' || t.qty == null) return true;
+    const n = Number(t.qty);
+    return !Number.isFinite(n) || n <= 0;
+  }) || null;
+}
+
+/**
  * Phase 12.2b Step 7 (2026-04-24): pure helper that builds the synthetic
  * customerCourses entry for a newly-purchased course (buy-modal confirm).
  * Extracted from TreatmentFormPage.confirmBuyModal so the courseType-aware

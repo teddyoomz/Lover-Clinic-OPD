@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty } from '../lib/treatmentBuyHelpers.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -956,11 +956,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   // ── Course item toggle — also update treatment items ──
   const toggleCourseItem = (product) => {
-    // Block if remaining ≤ 0
-    const rem = parseFloat(product.remaining);
-    if (!selectedCourseItems.has(product.rowId) && (isNaN(rem) || rem <= 0)) {
-      alert(`"${product.name}" คงเหลือ 0 — ไม่สามารถเลือกได้`);
-      return;
+    // Phase 12.2b Step 7 (2026-04-24): fill-later products (เหมาตามจริง /
+    // เลือกสินค้าตามจริง) have product.fillLater=true with remaining='' —
+    // bypass the "remaining ≤ 0" guard since there's no pre-set qty to
+    // consume. Doctor enters qty during treatment via the treatmentItem
+    // input, validated at handleSubmit.
+    if (!product.fillLater) {
+      const rem = parseFloat(product.remaining);
+      if (!selectedCourseItems.has(product.rowId) && (isNaN(rem) || rem <= 0)) {
+        alert(`"${product.name}" คงเหลือ 0 — ไม่สามารถเลือกได้`);
+        return;
+      }
     }
     setSelectedCourseItems(prev => {
       const next = new Set(prev);
@@ -975,9 +981,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           return [...ti, {
             id: product.rowId,
             name: product.name,
-            qty: '1',
+            // Fill-later → qty starts blank; doctor must enter before
+            // save (handleSubmit validation blocks empty qty with a
+            // specific Thai error + scrollToError to this row).
+            qty: product.fillLater ? '' : '1',
             unit: product.unit || '',
             price: '',
+            fillLater: !!product.fillLater,
           }];
         });
       }
@@ -1704,6 +1714,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const handleSubmit = async () => {
     if (!doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
     if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
+    // Phase 12.2b Step 7 (2026-04-24): fill-later treatment items (from
+    // เหมาตามจริง / เลือกสินค้าตามจริง courses) must have qty entered
+    // before save. qty was left blank at toggle-time; doctor fills it
+    // in during treatment. Empty qty → block save with a specific error
+    // targeting the first offender. Validator lives in treatmentBuyHelpers
+    // so the logic is unit-tested without TreatmentFormPage mount.
+    const fillLaterMissing = findMissingFillLaterQty(treatmentItems);
+    if (fillLaterMissing) {
+      scrollToError(fillLaterMissing.id, `กรุณาระบุจำนวน "${fillLaterMissing.name}" ก่อนบันทึก (คอร์สเหมาตามจริง)`);
+      return;
+    }
     if (hasSale) {
       if (!pmSellers.some(s => s.enabled && s.id)) { scrollToError('sellers', 'กรุณาเลือกพนักงานขาย'); return; }
       if (paymentStatus === '2' || paymentStatus === '4') {
@@ -3513,20 +3534,41 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
                       {treatmentItems.length === 0 ? (
                         <p className="text-xs text-gray-500 text-center py-4">เลือกรายการจากคอร์ส/โปรโมชันด้านซ้าย</p>
-                      ) : treatmentItems.map(item => (
-                        <div key={item.id} className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'}`}>
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-orange-400' : ''}`}>
-                              {item.name}
-                              {item.source === 'purchased' && <span className="text-[11px] text-orange-500 ml-1">(ซื้อเพิ่ม)</span>}
-                            </span>
+                      ) : treatmentItems.map(item => {
+                        // Phase 12.2b Step 7 (2026-04-24): fill-later rows
+                        // highlight the qty input (amber + required) and
+                        // carry a data-field anchor for scrollToError when
+                        // the doctor tries to save without entering qty.
+                        const needsQty = item.fillLater && (!item.qty || Number(item.qty) <= 0);
+                        return (
+                          <div
+                            key={item.id}
+                            data-field={item.id}
+                            className={`flex items-center gap-2 px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-50'} ${needsQty ? 'bg-amber-500/10' : ''}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <span className={`text-xs font-medium truncate block ${item.source === 'purchased' ? 'text-orange-400' : ''}`}>
+                                {item.name}
+                                {item.source === 'purchased' && <span className="text-[11px] text-orange-500 ml-1">(ซื้อเพิ่ม)</span>}
+                                {item.fillLater && (
+                                  <span className="text-[11px] text-amber-500 ml-1 italic">(ระบุจำนวนตามจริง)</span>
+                                )}
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              value={item.qty}
+                              onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
+                              className={`${inputCls} !w-24 text-center !py-1 shrink-0 ${needsQty ? '!border-amber-500 !ring-1 !ring-amber-500/50' : ''}`}
+                              min="0"
+                              placeholder={item.fillLater ? 'ระบุ' : ''}
+                              aria-label={`จำนวน ${item.name}${item.fillLater ? ' (ต้องระบุก่อนบันทึก)' : ''}`}
+                            />
+                            <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
+                            <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
                           </div>
-                          <input type="number" value={item.qty} onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
-                            className={`${inputCls} !w-24 text-center !py-1 shrink-0`} min="0" />
-                          <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
-                          <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

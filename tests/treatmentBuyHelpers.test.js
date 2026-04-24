@@ -10,6 +10,7 @@ import {
   flattenPromotionsForStockDeduction,
   buildCustomerPromotionGroups,
   buildPurchasedCourseEntry,
+  findMissingFillLaterQty,
 } from '../src/lib/treatmentBuyHelpers.js';
 
 describe('mapPromotionProductsToConsumables', () => {
@@ -270,5 +271,71 @@ describe('buildPurchasedCourseEntry — Phase 12.2b Step 7 (เหมาตา�
   it('BPCE12 courseType stamped on top-level entry (downstream DF-modal reads this)', () => {
     const out = buildPurchasedCourseEntry({ id: 'Z', name: 'Z', qty: 1, courseType: 'เหมาตามจริง' });
     expect(out.courseType).toBe('เหมาตามจริง');
+  });
+});
+
+describe('findMissingFillLaterQty — Phase 12.2b Step 7 save-time validator', () => {
+  it('FMFLQ1 null/undefined/non-array input → null (no offender)', () => {
+    expect(findMissingFillLaterQty(null)).toBeNull();
+    expect(findMissingFillLaterQty(undefined)).toBeNull();
+    expect(findMissingFillLaterQty('str')).toBeNull();
+  });
+
+  it('FMFLQ2 empty array → null', () => {
+    expect(findMissingFillLaterQty([])).toBeNull();
+  });
+
+  it('FMFLQ3 non-fill-later items with empty qty are ignored (not our concern)', () => {
+    const items = [{ id: 'r1', name: 'X', qty: '', fillLater: false }];
+    expect(findMissingFillLaterQty(items)).toBeNull();
+  });
+
+  it('FMFLQ4 fill-later item with empty string qty → offender', () => {
+    const items = [{ id: 'r1', name: 'X', qty: '', fillLater: true }];
+    const out = findMissingFillLaterQty(items);
+    expect(out?.id).toBe('r1');
+    expect(out?.name).toBe('X');
+  });
+
+  it('FMFLQ5 fill-later item with null/undefined qty → offender', () => {
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: null, fillLater: true }])?.id).toBe('r1');
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: undefined, fillLater: true }])?.id).toBe('r1');
+  });
+
+  it('FMFLQ6 fill-later item with qty "0" → offender (must be > 0)', () => {
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: '0', fillLater: true }])?.id).toBe('r1');
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: 0, fillLater: true }])?.id).toBe('r1');
+  });
+
+  it('FMFLQ7 fill-later item with non-numeric qty → offender', () => {
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: 'abc', fillLater: true }])?.id).toBe('r1');
+  });
+
+  it('FMFLQ8 fill-later item with valid qty → null', () => {
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: '2', fillLater: true }])).toBeNull();
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: 5, fillLater: true }])).toBeNull();
+    expect(findMissingFillLaterQty([{ id: 'r1', qty: '0.5', fillLater: true }])).toBeNull();
+  });
+
+  it('FMFLQ9 returns the FIRST offender when multiple are missing', () => {
+    const items = [
+      { id: 'ok', qty: '3', fillLater: true },
+      { id: 'bad1', qty: '', fillLater: true },
+      { id: 'bad2', qty: '0', fillLater: true },
+    ];
+    expect(findMissingFillLaterQty(items)?.id).toBe('bad1');
+  });
+
+  it('FMFLQ10 null/undefined entries in array skipped defensively', () => {
+    const items = [null, undefined, { id: 'r1', qty: '', fillLater: true }];
+    expect(findMissingFillLaterQty(items)?.id).toBe('r1');
+  });
+
+  it('FMFLQ11 mixed items: returns only fill-later offender, ignores empty non-fill-later', () => {
+    const items = [
+      { id: 'std-empty', qty: '', fillLater: false }, // ignored (not fill-later)
+      { id: 'real-bad', qty: '', fillLater: true },
+    ];
+    expect(findMissingFillLaterQty(items)?.id).toBe('real-bad');
   });
 });
