@@ -24,6 +24,7 @@ const mockDeleteDoctor = vi.fn();
 const mockSaveDoctor = vi.fn();
 const mockListBranches = vi.fn();
 const mockListPermissionGroups = vi.fn();
+const mockListDfGroups = vi.fn();
 
 vi.mock('../src/lib/backendClient.js', () => ({
   listStaff: (...a) => mockListStaff(...a),
@@ -34,6 +35,7 @@ vi.mock('../src/lib/backendClient.js', () => ({
   saveDoctor: (...a) => mockSaveDoctor(...a),
   listBranches: (...a) => mockListBranches(...a),
   listPermissionGroups: (...a) => mockListPermissionGroups(...a),
+  listDfGroups: (...a) => mockListDfGroups(...a),
   getStaff: vi.fn(),
   getDoctor: vi.fn(),
 }));
@@ -72,7 +74,7 @@ function makeDoctor(o = {}) {
     firstnameEn: 'Dr.', lastnameEn: 'Smith', nickname: '',
     email: 'dr@clinic.com', position: 'แพทย์', professionalLicense: 'ว.12345',
     permissionGroupId: '', branchIds: [], color: '', backgroundColor: '',
-    hourlyIncome: 2000, dfGroupId: '', dfPaidType: '', minimumDfType: '',
+    hourlyIncome: 2000, defaultDfGroupId: 'DFG-TEST', dfPaidType: '', minimumDfType: '',
     hasSales: true, disabled: false, firebaseUid: '', note: '', status: 'ใช้งาน',
     createdAt: '2026-04-20', updatedAt: '2026-04-20', ...o,
   };
@@ -85,6 +87,7 @@ describe('StaffTab', () => {
     vi.clearAllMocks();
     mockListBranches.mockResolvedValue([]);
     mockListPermissionGroups.mockResolvedValue([]);
+    mockListDfGroups.mockResolvedValue([{ id: 'DFG-TEST', name: 'ทดสอบ' }]);
   });
 
   it('ST1: empty state', async () => {
@@ -162,6 +165,7 @@ describe('StaffFormModal', () => {
     vi.clearAllMocks();
     mockListBranches.mockResolvedValue([{ branchId: 'BR-1', name: 'สาขาหลัก' }]);
     mockListPermissionGroups.mockResolvedValue([{ permissionGroupId: 'PG-1', name: 'Admin' }]);
+    mockListDfGroups.mockResolvedValue([{ id: 'DFG-TEST', name: 'ทดสอบ' }]);
   });
 
   it('SM1: create mode blank', async () => {
@@ -225,6 +229,7 @@ describe('DoctorsTab', () => {
     vi.clearAllMocks();
     mockListBranches.mockResolvedValue([]);
     mockListPermissionGroups.mockResolvedValue([]);
+    mockListDfGroups.mockResolvedValue([{ id: 'DFG-TEST', name: 'ทดสอบ' }]);
   });
 
   it('DT1: renders doctor card with English name + license', async () => {
@@ -267,6 +272,7 @@ describe('DoctorFormModal', () => {
     vi.clearAllMocks();
     mockListBranches.mockResolvedValue([]);
     mockListPermissionGroups.mockResolvedValue([]);
+    mockListDfGroups.mockResolvedValue([{ id: 'DFG-TEST', name: 'ทดสอบ' }]);
   });
 
   it('DM1: edit mode preserves id + English names', async () => {
@@ -282,11 +288,16 @@ describe('DoctorFormModal', () => {
   it('DM2: create mode with ผู้ช่วยแพทย์ generates ASST-* id', async () => {
     mockSaveDoctor.mockResolvedValueOnce();
     render(<DoctorFormModal onClose={() => {}} onSaved={() => {}} clinicSettings={{}} />);
+    // Wait for dfGroups to load so the dropdown has a selectable option.
+    await waitFor(() => expect(document.querySelector('[data-field="defaultDfGroupId"] select option[value="DFG-TEST"]')).toBeTruthy());
     const firstInput = document.querySelector('[data-field="firstname"] input');
     fireEvent.change(firstInput, { target: { value: 'ผู้ช่วยใหม่' } });
     // Switch position to ผู้ช่วยแพทย์
     const posSel = document.querySelector('[data-field="position"] select');
     fireEvent.change(posSel, { target: { value: 'ผู้ช่วยแพทย์' } });
+    // Phase 14.1: defaultDfGroupId required for any doctor/assistant save.
+    const dfSel = document.querySelector('[data-field="defaultDfGroupId"] select');
+    fireEvent.change(dfSel, { target: { value: 'DFG-TEST' } });
     fireEvent.click(screen.getByText('สร้าง'));
     await waitFor(() => expect(mockSaveDoctor).toHaveBeenCalled());
     expect(mockSaveDoctor.mock.calls[0][0]).toMatch(/^ASST-/);

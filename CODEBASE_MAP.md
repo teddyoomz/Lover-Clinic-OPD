@@ -1755,7 +1755,7 @@ Tests: 2373 → 2401 (+28). Build clean.
 
 **New files:**
 - `src/lib/staffValidation.js` — `validateStaff` / `normalizeStaff` / `emptyStaffForm` / `generateStaffId` (STAFF-{b36ts}-{16-hex} via crypto). Password policy matches ProClinic's `^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{8,}$`. Position enum: ผู้จัดการ/พนักงานต้อนรับ/พนักงานดำเนินการ/รีเซฟชั่น/เคาเตอร์/เจ้าหน้าที่คลังกลาง.
-- `src/lib/doctorValidation.js` — same shape + position enum (แพทย์/ผู้ช่วยแพทย์) + bilingual names (firstname/lastname + firstnameEn/lastnameEn) + professionalLicense + DF scaffolding (hourlyIncome/dfGroupId/dfPaidType/minimumDfType — validated only for type, strict wiring in Phase 13.3 be_df_groups). `generateDoctorId(position)` prefixes DOC- or ASST-.
+- `src/lib/doctorValidation.js` — same shape + position enum (แพทย์/ผู้ช่วยแพทย์) + bilingual names (firstname/lastname + firstnameEn/lastnameEn) + professionalLicense + DF scaffolding (hourlyIncome/defaultDfGroupId/dfPaidType/minimumDfType). Phase 14.1 (2026-04-24) makes `defaultDfGroupId` REQUIRED for both positions — the TreatmentFormPage DF modal pre-fills from this field. Runtime `dfEntries[]` on be_treatments use `dfGroupId` (resolved at entry creation — may differ from default). `generateDoctorId(position)` prefixes DOC- or ASST-.
 - `src/lib/adminUsersClient.js` — wraps `/api/admin/users` with Firebase idToken injection. `listAdminUsers`, `getAdminUser`, `createAdminUser`, `updateAdminUser`, `deleteAdminUser`, `grantAdmin`, `revokeAdmin`.
 - `src/components/backend/StaffTab.jsx` — MarketingTabShell reuse #10. Firestore-only; delete cascades to `/api/admin/users` when `firebaseUid` is set.
 - `src/components/backend/StaffFormModal.jsx` — Firebase account creation BEFORE Firestore save when email+password supplied (so `firebaseUid` lands on saved doc atomically from the UI's POV). Password optional on edit.
@@ -2372,7 +2372,7 @@ Rule E ✅, H ✅, C3 ✅ (2 collections justified — staff overrides need inde
 - `BackendDashboard.jsx`: imported DfGroupsTab + added case branch.
 - `backend-nav-config.test.js I4`: appended `'df-groups'` to master section ordering assertion.
 
-**Staff override UI deferred** to a later polish pass — doctor form already has `dfGroupId` (95%+ coverage). Overrides for special cases can be edited via Firestore console until a dedicated UI ships.
+**Staff override UI deferred** to a later polish pass — doctor form already has `defaultDfGroupId` (Phase 14.1 makes it required). Overrides for special cases can be edited via Firestore console until a dedicated UI ships.
 
 32/32 focused + existing nav-config tests pass. Build clean.
 

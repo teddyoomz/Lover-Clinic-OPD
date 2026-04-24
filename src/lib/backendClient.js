@@ -5144,7 +5144,7 @@ function mapMasterToDoctor(src, id, now, existingCreatedAt) {
     color: String(src.color || '').trim(),
     backgroundColor: '',
     hourlyIncome: Number.isFinite(hourly) ? hourly : null,
-    dfGroupId: '',
+    defaultDfGroupId: '',
     dfPaidType: '',
     minimumDfType: '',
     hasSales: false,

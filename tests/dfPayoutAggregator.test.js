@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { computeDfPayoutReport } from '../src/lib/dfPayoutAggregator.js';
 
 const doctors = [
-  { doctorId: 'D1', firstname: 'Alice', lastname: 'A', dfGroupId: 'DFG-1' },
-  { doctorId: 'D2', firstname: 'Bob', lastname: 'B', dfGroupId: 'DFG-2' },
+  { doctorId: 'D1', firstname: 'Alice', lastname: 'A', defaultDfGroupId: 'DFG-1' },
+  { doctorId: 'D2', firstname: 'Bob', lastname: 'B', defaultDfGroupId: 'DFG-2' },
 ];
 const groups = [
   { id: 'DFG-1', rates: [
@@ -177,7 +177,7 @@ describe('computeDfPayoutReport — filters + edge cases', () => {
       sales: [sale({ doctorId: 'D-UNKNOWN' })],
       doctors, groups: [{ id: 'DFG-X', rates: [{ courseId: 'C1', value: 50, type: 'percent' }] }],
     });
-    // No dfGroupId for unknown doctor → no rate → no row.
+    // No defaultDfGroupId for unknown doctor → no rate → no row.
     expect(r.rows).toEqual([]);
   });
 

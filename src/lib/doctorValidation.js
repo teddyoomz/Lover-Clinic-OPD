@@ -10,9 +10,18 @@
 // Position enum: 'แพทย์' (doctor) / 'ผู้ช่วยแพทย์' (assistant). One collection
 // with position discriminator per v5 wiring-matrix recommendation.
 //
-// DF fields (hourlyIncome, dfGroupId, dfPaidType, minimumDfType) are kept
-// in the schema but NOT validated/required here — Phase 13 will add a
-// stricter `validateDoctorDFCompleteness` pass once be_df_groups ships.
+// DF fields (hourlyIncome, defaultDfGroupId, dfPaidType, minimumDfType) are
+// defined here. Phase 14.1 (2026-04-24) makes `defaultDfGroupId` REQUIRED for
+// both positions (แพทย์ / ผู้ช่วยแพทย์) because the DF entry modal on
+// TreatmentFormPage auto-populates the group dropdown from this field — a
+// doctor without a default DF group cannot contribute to DF calculation
+// without forcing the user to pick a group for every entry. `dfPaidType`
+// + `minimumDfType` stay informational until Phase 14.5 wires them into
+// payout math.
+// Field name note: the be_doctors canonical field is `defaultDfGroupId`.
+// Runtime `dfEntries[]` on be_treatments use `dfGroupId` (resolved at entry
+// creation — may differ from the doctor's default if user picks a different
+// group for a specific treatment).
 
 export const STATUS_OPTIONS = Object.freeze(['ใช้งาน', 'พักใช้งาน']);
 
@@ -101,6 +110,21 @@ export function validateDoctor(form) {
     return ['dfPaidType', 'ประเภทการจ่ายค่ามือไม่ถูกต้อง'];
   }
 
+  // Phase 14.1: defaultDfGroupId required for both positions. The DF entry
+  // modal pre-fills the group dropdown from this field; without it the
+  // doctor can't participate in client-side DF calculation without forcing
+  // per-entry group selection.
+  if (form.defaultDfGroupId != null && typeof form.defaultDfGroupId !== 'string') {
+    return ['defaultDfGroupId', 'defaultDfGroupId ต้องเป็น string'];
+  }
+  const isDoctorRole = form.position === 'แพทย์' || form.position === 'ผู้ช่วยแพทย์';
+  if (isDoctorRole) {
+    const dfGid = String(form.defaultDfGroupId || '').trim();
+    if (!dfGid) {
+      return ['defaultDfGroupId', 'กรุณาเลือกกลุ่มค่ามือเริ่มต้น (จำเป็นสำหรับแพทย์ / ผู้ช่วยแพทย์)'];
+    }
+  }
+
   if (form.hasSales != null && typeof form.hasSales !== 'boolean') {
     return ['hasSales', 'hasSales ต้องเป็น boolean'];
   }
@@ -133,7 +157,7 @@ export function emptyDoctorForm() {
     color: '',
     backgroundColor: '',
     hourlyIncome: '',
-    dfGroupId: '',
+    defaultDfGroupId: '',
     dfPaidType: '',
     minimumDfType: '',
     hasSales: false,
@@ -162,7 +186,7 @@ export function normalizeDoctor(form) {
     color: trim(form.color),
     backgroundColor: trim(form.backgroundColor),
     hourlyIncome: coerceNum(form.hourlyIncome),
-    dfGroupId: trim(form.dfGroupId),
+    defaultDfGroupId: trim(form.defaultDfGroupId),
     dfPaidType: form.dfPaidType || '',
     minimumDfType: trim(form.minimumDfType),
     hasSales: !!form.hasSales,

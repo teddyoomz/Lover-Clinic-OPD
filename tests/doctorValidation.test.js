@@ -5,7 +5,11 @@ import {
   STATUS_OPTIONS, POSITION_OPTIONS, DF_PAID_TYPE_OPTIONS,
 } from '../src/lib/doctorValidation.js';
 
-const base = () => ({ ...emptyDoctorForm(), firstname: 'สมชาย', position: 'แพทย์' });
+// Phase 14.1 (2026-04-24): defaultDfGroupId is now required for position
+// 'แพทย์' / 'ผู้ช่วยแพทย์'. Tests that don't specifically target DF
+// validation use `base()` with a placeholder group to isolate the field
+// under test.
+const base = () => ({ ...emptyDoctorForm(), firstname: 'สมชาย', position: 'แพทย์', defaultDfGroupId: 'DFG-TEST' });
 
 describe('validateDoctor — required + length', () => {
   it('DV1: rejects non-object form', () => {
@@ -78,6 +82,52 @@ describe('validateDoctor — DF fields', () => {
     for (const t of DF_PAID_TYPE_OPTIONS) {
       expect(validateDoctor({ ...base(), dfPaidType: t })).toBeNull();
     }
+  });
+});
+
+describe('validateDoctor — defaultDfGroupId (Phase 14.1)', () => {
+  // Phase 14.1 wiring: without defaultDfGroupId the DF modal on
+  // TreatmentFormPage cannot auto-populate the group dropdown, so doctors
+  // must pick a default before they can save.
+  it('DV26: rejects empty defaultDfGroupId for position=แพทย์', () => {
+    const r = validateDoctor({ ...base(), defaultDfGroupId: '' });
+    expect(r?.[0]).toBe('defaultDfGroupId');
+  });
+  it('DV27: rejects empty defaultDfGroupId for position=ผู้ช่วยแพทย์', () => {
+    const r = validateDoctor({ ...base(), position: 'ผู้ช่วยแพทย์', defaultDfGroupId: '' });
+    expect(r?.[0]).toBe('defaultDfGroupId');
+  });
+  it('DV28: rejects whitespace-only defaultDfGroupId', () => {
+    const r = validateDoctor({ ...base(), defaultDfGroupId: '   ' });
+    expect(r?.[0]).toBe('defaultDfGroupId');
+  });
+  it('DV29: rejects non-string defaultDfGroupId', () => {
+    const r = validateDoctor({ ...base(), defaultDfGroupId: 42 });
+    expect(r?.[0]).toBe('defaultDfGroupId');
+  });
+  it('DV30: accepts any non-empty string defaultDfGroupId', () => {
+    expect(validateDoctor({ ...base(), defaultDfGroupId: 'DFG-A' })).toBeNull();
+    expect(validateDoctor({ ...base(), defaultDfGroupId: 'anything' })).toBeNull();
+  });
+  it('DV31: returns Thai error message pointing at กลุ่มค่ามือ', () => {
+    const r = validateDoctor({ ...base(), defaultDfGroupId: '' });
+    expect(r?.[1]).toMatch(/กลุ่มค่ามือ/);
+  });
+});
+
+describe('normalizeDoctor — defaultDfGroupId (Phase 14.1)', () => {
+  it('DN5: trims defaultDfGroupId whitespace', () => {
+    const n = normalizeDoctor({ ...base(), defaultDfGroupId: '  DFG-A  ' });
+    expect(n.defaultDfGroupId).toBe('DFG-A');
+  });
+  it('DN6: empty defaultDfGroupId stays empty string', () => {
+    const n = normalizeDoctor({ firstname: 'x', defaultDfGroupId: '' });
+    expect(n.defaultDfGroupId).toBe('');
+  });
+  it('DN7: emptyDoctorForm exposes defaultDfGroupId (not legacy dfGroupId)', () => {
+    const f = emptyDoctorForm();
+    expect('defaultDfGroupId' in f).toBe(true);
+    expect('dfGroupId' in f).toBe(false);
   });
 });
 

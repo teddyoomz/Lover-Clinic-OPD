@@ -565,9 +565,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
+          // Phase 14.1 (2026-04-24): exact-match assistant position + pass
+          // defaultDfGroupId so DF modal can auto-populate group on pick.
+          // Legacy data with missing/unknown position is logged (dev only) so
+          // the user can fix it in DoctorFormModal — silent-drop would hide
+          // active assistants from the picker.
+          const assistantPositionNames = ['ผู้ช่วยแพทย์'];
+          const doctorPositionNames = ['แพทย์'];
+          if (import.meta.env?.DEV) {
+            const unknown = allDoctors.filter(d => {
+              const p = String(d.position || '').trim();
+              return !doctorPositionNames.includes(p) && !assistantPositionNames.includes(p);
+            });
+            if (unknown.length) {
+              console.warn('[TreatmentForm] doctors with missing/unknown position — will not appear in assistant picker:',
+                unknown.map(d => ({ id: d.id, name: d.name, position: d.position })));
+            }
+          }
           const backendOptions = {
-            doctors: allDoctors.map(d => ({ id: d.id, name: d.name, position: d.position })),
-            assistants: allDoctors.filter(d => d.position?.includes('ผู้ช่วย')).map(d => ({ id: d.id, name: d.name })),
+            doctors: allDoctors.map(d => ({
+              id: d.id, name: d.name, position: d.position,
+              defaultDfGroupId: d.defaultDfGroupId || '',
+            })),
+            assistants: allDoctors
+              .filter(d => assistantPositionNames.includes(String(d.position || '').trim()))
+              .map(d => ({ id: d.id, name: d.name, defaultDfGroupId: d.defaultDfGroupId || '' })),
             bloodTypeOptions: ['A', 'B', 'AB', 'O', 'ไม่ทราบ'],
             products: productItems,
             customerCourses: customerCoursesForForm,
@@ -879,7 +901,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         .filter(id => !kept.some(f => String(f.doctorId) === String(id)))
         .map(id => {
           const doc = allDoctors.find(d => String(d.id) === String(id)) || allAssistants.find(a => String(a.id) === String(id));
-          return { doctorId: id, name: doc?.name || '', fee: '0', groupId: doc?.dfGroupId || '' };
+          return { doctorId: id, name: doc?.name || '', fee: '0', groupId: doc?.defaultDfGroupId || '' };
         });
       return [...kept, ...newEntries];
     });
@@ -2773,7 +2795,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const available = allPeople.filter(p => !doctorFees.some(f => String(f.doctorId) === String(p.id)));
                 if (available.length === 0) return;
                 const name = available[0].name;
-                setDoctorFees(prev => [...prev, { doctorId: available[0].id, name, fee: '0', groupId: available[0].dfGroupId || '' }]);
+                setDoctorFees(prev => [...prev, { doctorId: available[0].id, name, fee: '0', groupId: available[0].defaultDfGroupId || '' }]);
               }}>
                 <Plus size={10} /> เพิ่ม
               </ActionBtn>

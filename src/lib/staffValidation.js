@@ -83,6 +83,14 @@ export function validateStaff(form) {
     return ['permissionGroupId', 'permissionGroupId ต้องเป็น string'];
   }
 
+  // Phase 14.1: defaultDfGroupId optional on staff (only required on doctors).
+  // Some non-doctor staff roles (e.g. ผู้ช่วยทั่วไป if added later) may still
+  // participate in DF lists; keeping the field here lets those staff opt-in
+  // without a schema migration.
+  if (form.defaultDfGroupId != null && typeof form.defaultDfGroupId !== 'string') {
+    return ['defaultDfGroupId', 'defaultDfGroupId ต้องเป็น string'];
+  }
+
   if (form.color && !HEX_COLOR_RE.test(String(form.color))) {
     return ['color', 'สีต้องเป็นรหัสสี hex'];
   }
@@ -121,6 +129,7 @@ export function emptyStaffForm() {
     branchIds: [],
     color: '',
     backgroundColor: '',
+    defaultDfGroupId: '',
     hasSales: false,
     disabled: false,
     note: '',
@@ -143,6 +152,7 @@ export function normalizeStaff(form) {
     branchIds: Array.isArray(form.branchIds) ? form.branchIds.map(b => trim(b)).filter(Boolean) : [],
     color: trim(form.color),
     backgroundColor: trim(form.backgroundColor),
+    defaultDfGroupId: trim(form.defaultDfGroupId),
     hasSales: !!form.hasSales,
     disabled: !!form.disabled,
     note: trim(form.note),

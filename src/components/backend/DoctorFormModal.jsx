@@ -1,13 +1,13 @@
 // ─── Doctor Form Modal — Phase 12.1 CRUD ───────────────────────────────────
 // Shared doctor/assistant form discriminated by position. Thai + English name
 // pair (for documents). Optional Firebase account via /api/admin/users. DF
-// fields (dfGroupId/dfPaidType/hourlyIncome/minimumDfType) are inputs here
-// for forward-compat with Phase 13.3 but aren't validated beyond basic type
-// checks until be_df_groups lands.
+// fields (defaultDfGroupId/dfPaidType/hourlyIncome/minimumDfType) are inputs
+// here. Phase 14.1 (2026-04-24) makes `defaultDfGroupId` required for both
+// positions — picked from be_df_groups via listDfGroups().
 
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { saveDoctor, listBranches, listPermissionGroups } from '../../lib/backendClient.js';
+import { saveDoctor, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
 import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
 import {
   STATUS_OPTIONS, POSITION_OPTIONS, DF_PAID_TYPE_OPTIONS,
@@ -22,13 +22,15 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
   const [error, setError] = useState('');
   const [branches, setBranches] = useState([]);
   const [permissionGroups, setPermissionGroups] = useState([]);
+  const [dfGroups, setDfGroups] = useState([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [bs, pg] = await Promise.all([listBranches(), listPermissionGroups()]);
+        const [bs, pg, dfg] = await Promise.all([listBranches(), listPermissionGroups(), listDfGroups()]);
         setBranches(bs);
         setPermissionGroups(pg);
+        setDfGroups(dfg);
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลอ้างอิงล้มเหลว');
       }
@@ -200,9 +202,25 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
         )}
       </div>
 
-      {/* DF — inputs only, Phase 13.3 wires validation */}
+      {/* DF — Phase 14.1: defaultDfGroupId required; hourly/paidType informational */}
       <div className="rounded-xl border border-dashed border-[var(--bd)] p-3">
-        <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-2 uppercase tracking-wider">ค่ามือ (DF) — รายละเอียดเต็มใน Phase 13</p>
+        <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-2 uppercase tracking-wider">ค่ามือ (DF)</p>
+        <div data-field="defaultDfGroupId" className="mb-3">
+          <label className="block text-xs text-[var(--tx-muted)] mb-1">
+            กลุ่มค่ามือเริ่มต้น <span className="text-red-400">*</span>
+          </label>
+          <select value={form.defaultDfGroupId || ''} onChange={(e) => update({ defaultDfGroupId: e.target.value })}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]">
+            <option value="">— เลือกกลุ่มค่ามือ —</option>
+            {dfGroups.map(g => {
+              const gid = g.groupId || g.id;
+              return <option key={gid} value={gid}>{g.name || gid}</option>;
+            })}
+          </select>
+          {dfGroups.length === 0 && (
+            <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">ยังไม่มีกลุ่มค่ามือ — สร้างที่ "ข้อมูลพื้นฐาน → กลุ่มค่ามือ"</p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div data-field="hourlyIncome">
             <label className="block text-xs text-[var(--tx-muted)] mb-1">รายได้รายชั่วโมง</label>

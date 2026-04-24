@@ -93,7 +93,7 @@ export function computeDfPayoutReport({
       const doctorName = doctor?.name
         || `${doctor?.firstname || ''} ${doctor?.lastname || ''}`.trim()
         || doctor?.nickname || '';
-      const dfGroupId = doctor?.dfGroupId || '';
+      const dfGroupId = doctor?.defaultDfGroupId || '';
 
       for (const it of items) {
         if (!it) continue;

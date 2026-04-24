@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { saveStaff, listBranches, listPermissionGroups } from '../../lib/backendClient.js';
+import { saveStaff, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
 import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
 import {
   STATUS_OPTIONS, POSITION_OPTIONS,
@@ -22,13 +22,15 @@ export default function StaffFormModal({ staff, onClose, onSaved, clinicSettings
   const [error, setError] = useState('');
   const [branches, setBranches] = useState([]);
   const [permissionGroups, setPermissionGroups] = useState([]);
+  const [dfGroups, setDfGroups] = useState([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [bs, pg] = await Promise.all([listBranches(), listPermissionGroups()]);
+        const [bs, pg, dfg] = await Promise.all([listBranches(), listPermissionGroups(), listDfGroups()]);
         setBranches(bs);
         setPermissionGroups(pg);
+        setDfGroups(dfg);
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลอ้างอิงล้มเหลว');
       }
@@ -168,6 +170,20 @@ export default function StaffFormModal({ staff, onClose, onSaved, clinicSettings
         {isEdit && form.firebaseUid && (
           <p className="text-[10px] text-[var(--tx-muted)] mt-1">Firebase UID: <code>{form.firebaseUid}</code></p>
         )}
+      </div>
+
+      {/* DF group (optional on staff) — Phase 14.1 */}
+      <div data-field="defaultDfGroupId">
+        <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">กลุ่มค่ามือเริ่มต้น (ถ้ามี)</label>
+        <select value={form.defaultDfGroupId || ''} onChange={(e) => update({ defaultDfGroupId: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]">
+          <option value="">— ไม่ระบุ —</option>
+          {dfGroups.map(g => {
+            const gid = g.groupId || g.id;
+            return <option key={gid} value={gid}>{g.name || gid}</option>;
+          })}
+        </select>
+        <p className="text-[10px] text-[var(--tx-muted)] mt-1 italic">ใช้เมื่อพนักงานมีส่วนแบ่งค่ามือจากคอร์ส — ปล่อยว่างได้ถ้าไม่เกี่ยว</p>
       </div>
 
       {/* Branches */}

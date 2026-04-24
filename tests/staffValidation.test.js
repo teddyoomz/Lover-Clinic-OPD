@@ -90,6 +90,36 @@ describe('validateStaff — enums + refs', () => {
   });
 });
 
+describe('validateStaff — defaultDfGroupId (Phase 14.1)', () => {
+  // Staff defaultDfGroupId is OPTIONAL (unlike doctors, where it's required).
+  // Supports future non-doctor roles that may participate in DF lists.
+  it('SV26: allows empty defaultDfGroupId', () => {
+    expect(validateStaff({ ...base(), defaultDfGroupId: '' })).toBeNull();
+  });
+  it('SV27: allows undefined defaultDfGroupId', () => {
+    expect(validateStaff({ ...base() })).toBeNull();
+  });
+  it('SV28: allows non-empty string defaultDfGroupId', () => {
+    expect(validateStaff({ ...base(), defaultDfGroupId: 'DFG-A' })).toBeNull();
+  });
+  it('SV29: rejects non-string defaultDfGroupId', () => {
+    expect(validateStaff({ ...base(), defaultDfGroupId: 42 })?.[0]).toBe('defaultDfGroupId');
+    expect(validateStaff({ ...base(), defaultDfGroupId: ['x'] })?.[0]).toBe('defaultDfGroupId');
+  });
+});
+
+describe('normalizeStaff — defaultDfGroupId (Phase 14.1)', () => {
+  it('SN5: trims defaultDfGroupId', () => {
+    const n = normalizeStaff({ ...base(), defaultDfGroupId: '  DFG-A  ' });
+    expect(n.defaultDfGroupId).toBe('DFG-A');
+  });
+  it('SN6: emptyStaffForm exposes defaultDfGroupId', () => {
+    const f = emptyStaffForm();
+    expect('defaultDfGroupId' in f).toBe(true);
+    expect(f.defaultDfGroupId).toBe('');
+  });
+});
+
 describe('validateStaff — colors + booleans', () => {
   it('SV23: rejects invalid hex color', () => {
     expect(validateStaff({ ...base(), color: 'red' })?.[0]).toBe('color');
