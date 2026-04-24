@@ -246,15 +246,18 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
               onChange={(e) => {
                 const sid = e.target.value;
                 const s = staff.find((x) => (x.staffId || x.id) === sid);
-                const sName = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.name || '' : '';
+                const full = s ? `${s.firstname || ''} ${s.lastname || ''}`.trim() : '';
+                const sName = full || s?.nickname || s?.name || '';
                 setForm((prev) => ({ ...prev, sellerId: sid, sellerName: sName }));
               }}
               className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] focus:outline-none focus:border-[var(--accent)]">
               <option value="">— ไม่ระบุ</option>
               {staff.slice(0, 500).map((s) => {
                 const sid = s.staffId || s.id;
-                const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.name || sid;
-                return <option key={sid} value={sid}>{name}</option>;
+                const full = `${s.firstname || ''} ${s.lastname || ''}`.trim();
+                const nick = s.nickname ? ` (${s.nickname})` : '';
+                const display = full ? `${full}${nick}` : (s.nickname || s.name || sid);
+                return <option key={sid} value={sid}>{display}</option>;
               })}
             </select>
           </div>
