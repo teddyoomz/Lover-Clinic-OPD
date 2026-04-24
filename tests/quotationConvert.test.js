@@ -105,29 +105,50 @@ describe('Phase 13.1.4 — convertQuotationToSale', () => {
     }
   });
 
-  it('QCV5: flattens all 4 sub-item categories into sale.items[]', async () => {
+  // Phase 14.x (2026-04-24): sale.items is now the GROUPED SaleTab shape
+  // { promotions, courses, products, medications } — flat was a bug that
+  // caused SaleTab/reports to silently show empty lists.
+  const findSalePayload = (setDoc) => {
+    const saleCalls = setDoc.mock.calls.filter((c) => (
+      c[1] && c[1].items && !Array.isArray(c[1].items) && Array.isArray(c[1].items.courses)
+    ));
+    return saleCalls[0]?.[1] || null;
+  };
+
+  it('QCV5: groups all 4 sub-item categories into sale.items {promotions,courses,products,medications}', async () => {
     const { getDoc, setDoc, updateDoc } = await import('firebase/firestore');
     getDoc.mockResolvedValueOnce({
       exists: () => true,
       data: () => validQ({
         courses: [{ courseId: 'C1', courseName: 'Laser', qty: 1, price: 1000 }],
         products: [{ productId: 'P1', productName: 'Cream', qty: 2, price: 500, isPremium: false }],
-        promotions: [{ promotionId: 'PR1', promotionName: 'Combo', qty: 1, price: 0 }],
+        promotions: [{ promotionId: 'PR1', promotionName: 'Combo', qty: 1, price: 1500 }],
         takeawayMeds: [{ productId: 'M1', productName: 'Paracetamol', qty: 1, price: 30 }],
       }),
     });
-    // Sale counter runs inside a transaction — mock default returns seq=1 already set.
     await mod.convertQuotationToSale('QUO-0426-x');
-    expect(setDoc).toHaveBeenCalled();
-    // The last setDoc (sale write) payload should have items.
-    const saleCalls = setDoc.mock.calls.filter((c) => c[1] && Array.isArray(c[1].items));
-    expect(saleCalls.length).toBeGreaterThan(0);
-    const [, salePayload] = saleCalls[0];
-    // courses + products + takeawayMeds = 3 items. Promotions dropped (no productId/courseId slot).
-    expect(salePayload.items.length).toBe(3);
-    expect(salePayload.items.find((i) => i.courseId === 'C1')).toBeTruthy();
-    expect(salePayload.items.find((i) => i.productId === 'P1')).toBeTruthy();
-    expect(salePayload.items.find((i) => i.productId === 'M1')?.isTakeaway).toBe(true);
+    const salePayload = findSalePayload(setDoc);
+    expect(salePayload).toBeTruthy();
+    // Promotion now lives in items.promotions[] (no longer dropped).
+    expect(salePayload.items.promotions).toHaveLength(1);
+    expect(salePayload.items.promotions[0].promotionId).toBe('PR1');
+    expect(salePayload.items.promotions[0].name).toBe('Combo');
+    expect(salePayload.items.promotions[0].unitPrice).toBe(1500);
+    expect(salePayload.items.promotions[0].itemType).toBe('promotion');
+    // Course + product remain in their respective buckets.
+    expect(salePayload.items.courses).toHaveLength(1);
+    expect(salePayload.items.courses[0].courseId).toBe('C1');
+    expect(salePayload.items.courses[0].name).toBe('Laser');
+    expect(salePayload.items.courses[0].itemType).toBe('course');
+    // Takeaway meds ride in products[] with isTakeaway flag (SaleTab's contract).
+    expect(salePayload.items.products).toHaveLength(2);
+    const cream = salePayload.items.products.find((p) => p.productId === 'P1');
+    const med = salePayload.items.products.find((p) => p.productId === 'M1');
+    expect(cream.name).toBe('Cream');
+    expect(cream.isTakeaway).toBeFalsy();
+    expect(med.isTakeaway).toBe(true);
+    // Empty medications bucket (no in-clinic meds come from a quotation).
+    expect(salePayload.items.medications).toEqual([]);
     expect(updateDoc).toHaveBeenCalled();
   });
 
@@ -147,9 +168,8 @@ describe('Phase 13.1.4 — convertQuotationToSale', () => {
       }),
     });
     await mod.convertQuotationToSale('QUO-0426-x');
-    const saleCalls = setDoc.mock.calls.filter((c) => c[1] && Array.isArray(c[1].items));
-    const [, salePayload] = saleCalls[0];
-    const med = salePayload.items[0];
+    const salePayload = findSalePayload(setDoc);
+    const med = salePayload.items.products[0];
     expect(med.isTakeaway).toBe(true);
     expect(med.medication.genericName).toBe('Acetaminophen');
     expect(med.medication.administrationMethod).toBe('after_meal');
@@ -163,8 +183,7 @@ describe('Phase 13.1.4 — convertQuotationToSale', () => {
       data: () => validQ({ sellerId: 'S-1', sellerName: 'พนักงาน A', netTotal: 2500 }),
     });
     await mod.convertQuotationToSale('QUO-0426-x');
-    const saleCalls = setDoc.mock.calls.filter((c) => c[1] && Array.isArray(c[1].items));
-    const [, salePayload] = saleCalls[0];
+    const salePayload = findSalePayload(setDoc);
     expect(salePayload.sellers.length).toBe(1);
     expect(salePayload.sellers[0].sellerId).toBe('S-1');
     expect(salePayload.sellers[0].percent).toBe(100);
@@ -193,16 +212,19 @@ describe('Phase 13.1.4 — convertQuotationToSale', () => {
       data: () => validQ({ sellerId: '', sellerName: '' }),
     });
     await mod.convertQuotationToSale('QUO-0426-x');
-    const saleCalls = setDoc.mock.calls.filter((c) => c[1] && Array.isArray(c[1].items));
-    const [, salePayload] = saleCalls[0];
+    const salePayload = findSalePayload(setDoc);
     expect(salePayload.sellers).toEqual([]);
   });
 
-  it('QCV10: promotions dropped into saleNote for seller review', async () => {
+  // Phase 14.x: promotions now ride in items.promotions[] — no longer
+  // dumped into saleNote. User reported 2026-04-24 that the old behaviour
+  // hid promos from the sale's item list.
+  it('QCV10: promotions preserved in items.promotions[] (not saleNote)', async () => {
     const { getDoc, setDoc } = await import('firebase/firestore');
     getDoc.mockResolvedValueOnce({
       exists: () => true,
       data: () => validQ({
+        note: 'Customer prefers evening appts',
         promotions: [
           { promotionId: 'PR1', promotionName: 'Combo A', qty: 1, price: 1000 },
           { promotionId: 'PR2', promotionName: 'Combo B', qty: 1, price: 2000 },
@@ -210,10 +232,14 @@ describe('Phase 13.1.4 — convertQuotationToSale', () => {
       }),
     });
     await mod.convertQuotationToSale('QUO-0426-x');
-    const saleCalls = setDoc.mock.calls.filter((c) => c[1] && Array.isArray(c[1].items));
-    const [, salePayload] = saleCalls[0];
-    expect(salePayload.saleNote).toContain('Combo A');
-    expect(salePayload.saleNote).toContain('Combo B');
+    const salePayload = findSalePayload(setDoc);
+    // Promotions visible in the items list (matches SaleTab's grouped reader).
+    expect(salePayload.items.promotions).toHaveLength(2);
+    expect(salePayload.items.promotions.map((p) => p.name)).toEqual(['Combo A', 'Combo B']);
+    // saleNote carries ONLY the quotation's own note — no "โปรโมชันจาก..." fallback.
+    expect(salePayload.saleNote).toBe('Customer prefers evening appts');
+    expect(salePayload.saleNote).not.toMatch(/Combo/);
+    // Provenance metadata preserved.
     expect(salePayload.source).toBe('quotation');
     expect(salePayload.sourceDetail).toBe('QUO-0426-x');
     expect(salePayload.linkedQuotationId).toBe('QUO-0426-x');
