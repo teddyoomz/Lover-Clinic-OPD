@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest';
 import {
   validateCourse, emptyCourseForm, normalizeCourse, generateCourseId,
   STATUS_OPTIONS,
+  COURSE_TYPE_OPTIONS, USAGE_TYPE_OPTIONS,
+  isRealQtyCourse, isBuffetCourse, isPickAtTreatmentCourse, isSpecificQtyCourse,
 } from '../src/lib/courseValidation.js';
 
 const base = () => ({ ...emptyCourseForm(), courseName: 'Laser 1 ครั้ง' });
@@ -89,6 +91,105 @@ describe('normalizeCourse', () => {
     const n = normalizeCourse({ ...base(), courseName: '  X  ', courseCode: '  CODE  ' });
     expect(n.courseName).toBe('X');
     expect(n.courseCode).toBe('CODE');
+  });
+});
+
+describe('validateCourse — Phase 12.2b fields (course types + parity)', () => {
+  it('CV12: unknown courseType rejected', () => {
+    expect(validateCourse({ ...base(), courseType: 'custom' })?.[0]).toBe('courseType');
+  });
+  it('CV13: all 4 enumerated courseType values accepted', () => {
+    for (const t of COURSE_TYPE_OPTIONS) {
+      expect(validateCourse({ ...base(), courseType: t })).toBeNull();
+    }
+  });
+  it('CV14: unknown usageType rejected', () => {
+    expect(validateCourse({ ...base(), usageType: 'global' })?.[0]).toBe('usageType');
+  });
+  it('CV15: each usageType option accepted', () => {
+    for (const u of USAGE_TYPE_OPTIONS) {
+      expect(validateCourse({ ...base(), usageType: u })).toBeNull();
+    }
+  });
+  it('CV16: negative deductCost rejected', () => {
+    expect(validateCourse({ ...base(), deductCost: -1 })?.[0]).toBe('deductCost');
+  });
+  it('CV17: minQty > maxQty rejected', () => {
+    expect(validateCourse({ ...base(), minQty: 10, maxQty: 5 })?.[0]).toBe('minQty');
+  });
+  it('CV18: minQty = maxQty accepted (equal bounds)', () => {
+    expect(validateCourse({ ...base(), minQty: 5, maxQty: 5 })).toBeNull();
+  });
+  it('CV19: negative daysBeforeExpire rejected', () => {
+    expect(validateCourse({ ...base(), daysBeforeExpire: -1 })?.[0]).toBe('daysBeforeExpire');
+  });
+  it('CV20: non-boolean isDf rejected', () => {
+    expect(validateCourse({ ...base(), isDf: 'yes' })?.[0]).toBe('isDf');
+  });
+  it('CV21: sub-item minQty > maxQty rejected', () => {
+    const r = validateCourse({ ...base(), courseProducts: [{ productId: 'P1', qty: 1, minQty: 5, maxQty: 2 }] });
+    expect(r?.[0]).toBe('courseProducts');
+  });
+  it('CV22: sub-item non-boolean isRequired rejected', () => {
+    const r = validateCourse({ ...base(), courseProducts: [{ productId: 'P1', qty: 1, isRequired: 'yes' }] });
+    expect(r?.[0]).toBe('courseProducts');
+  });
+});
+
+describe('normalizeCourse — Phase 12.2b defaults', () => {
+  it('CN3: missing/unknown courseType defaults to ระบุสินค้าและจำนวนสินค้า', () => {
+    expect(normalizeCourse({ ...base() }).courseType).toBe('ระบุสินค้าและจำนวนสินค้า');
+    expect(normalizeCourse({ ...base(), courseType: '' }).courseType).toBe('ระบุสินค้าและจำนวนสินค้า');
+    expect(normalizeCourse({ ...base(), courseType: 'bogus' }).courseType).toBe('ระบุสินค้าและจำนวนสินค้า');
+  });
+  it('CN4: missing/unknown usageType defaults to ระดับคลินิก', () => {
+    expect(normalizeCourse({ ...base(), usageType: '' }).usageType).toBe('ระดับคลินิก');
+    expect(normalizeCourse({ ...base(), usageType: 'global' }).usageType).toBe('ระดับคลินิก');
+  });
+  it('CN5: isDf default to true when omitted', () => {
+    const { isDf, ...rest } = base();
+    expect(normalizeCourse(rest).isDf).toBe(true);
+  });
+  it('CN6: numeric Phase 12.2b fields coerce via numOrNull', () => {
+    const n = normalizeCourse({ ...base(), deductCost: '150', mainQty: '10', qtyPerTime: '2', minQty: '1', maxQty: '5', daysBeforeExpire: '30', period: '7' });
+    expect(n.deductCost).toBe(150);
+    expect(n.mainQty).toBe(10);
+    expect(n.qtyPerTime).toBe(2);
+    expect(n.daysBeforeExpire).toBe(30);
+    expect(n.period).toBe(7);
+  });
+  it('CN7: sub-item flag defaults (isRequired=false, isDf=true, isHidden=false)', () => {
+    const n = normalizeCourse({ ...base(), courseProducts: [{ productId: 'P1', qty: 1 }] });
+    expect(n.courseProducts[0].isRequired).toBe(false);
+    expect(n.courseProducts[0].isDf).toBe(true);
+    expect(n.courseProducts[0].isHidden).toBe(false);
+  });
+});
+
+describe('course-type gate helpers (Phase 12.2b)', () => {
+  it('CT1: isRealQtyCourse matches only เหมาตามจริง', () => {
+    expect(isRealQtyCourse('เหมาตามจริง')).toBe(true);
+    for (const t of COURSE_TYPE_OPTIONS) {
+      if (t !== 'เหมาตามจริง') expect(isRealQtyCourse(t)).toBe(false);
+    }
+  });
+  it('CT2: isBuffetCourse matches only บุฟเฟต์', () => {
+    expect(isBuffetCourse('บุฟเฟต์')).toBe(true);
+    for (const t of COURSE_TYPE_OPTIONS) {
+      if (t !== 'บุฟเฟต์') expect(isBuffetCourse(t)).toBe(false);
+    }
+  });
+  it('CT3: isPickAtTreatmentCourse matches only เลือกสินค้าตามจริง', () => {
+    expect(isPickAtTreatmentCourse('เลือกสินค้าตามจริง')).toBe(true);
+    for (const t of COURSE_TYPE_OPTIONS) {
+      if (t !== 'เลือกสินค้าตามจริง') expect(isPickAtTreatmentCourse(t)).toBe(false);
+    }
+  });
+  it('CT4: isSpecificQtyCourse matches ระบุสินค้าและจำนวนสินค้า + empty (legacy default)', () => {
+    expect(isSpecificQtyCourse('ระบุสินค้าและจำนวนสินค้า')).toBe(true);
+    expect(isSpecificQtyCourse('')).toBe(true);
+    expect(isSpecificQtyCourse(undefined)).toBe(true);
+    expect(isSpecificQtyCourse('บุฟเฟต์')).toBe(false);
   });
 });
 
