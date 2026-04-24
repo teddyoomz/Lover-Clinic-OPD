@@ -180,20 +180,33 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
   const isRealQty = courseType === 'เหมาตามจริง';
   const isPickAtTreatment = courseType === 'เลือกสินค้าตามจริง';
   const fillLater = isRealQty || isPickAtTreatment;
+  // Phase 12.2b Step 7 follow-up (2026-04-24): preserve the master
+  // productId on each sub-product so the downstream stock path
+  // (_normalizeStockItems → _deductOneItem) can look up the real
+  // be_products doc. Before this, only `rowId` was set ("purchased-
+  // <courseId>-row-<productId>") and _normalizeStockItems fell back to
+  // `t.id` which was the rowId → productId mismatch → skipped movement
+  // → user sees "ไม่เห็น stock movement" even after the previous fix.
   const products = (Array.isArray(item.products) && item.products.length > 0)
-    ? item.products.map(p => ({
-        rowId: `purchased-${item.id}-row-${p.id || Math.random().toString(36).slice(2, 6)}`,
-        name: p.name || item.name,
-        // Real-qty / pick-at-treatment → leave qty markers empty so UI can
-        // swap in "ระบุตอนรักษา" hint. Other types retain the 1-unit
-        // fallback (pre-12.2b behavior) so existing installs keep working.
-        remaining: fillLater ? '' : String(p.qty || item.qty || 1),
-        total: fillLater ? '' : String(p.qty || item.qty || 1),
-        unit: p.unit || item.unit || 'ครั้ง',
-        fillLater,
-      }))
+    ? item.products.map(p => {
+        const pid = p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : '');
+        return {
+          rowId: `purchased-${item.id}-row-${pid || Math.random().toString(36).slice(2, 6)}`,
+          productId: pid,
+          name: p.name || item.name,
+          // Real-qty / pick-at-treatment → leave qty markers empty so UI
+          // can swap in the fill-later badge. Other types retain the
+          // 1-unit fallback (pre-12.2b behavior) so existing installs
+          // keep working.
+          remaining: fillLater ? '' : String(p.qty || item.qty || 1),
+          total: fillLater ? '' : String(p.qty || item.qty || 1),
+          unit: p.unit || item.unit || 'ครั้ง',
+          fillLater,
+        };
+      })
     : [{
         rowId: `purchased-${item.id}-row-self`,
+        productId: '', // No sub-product master id for self-fallback row
         name: item.name,
         remaining: fillLater ? '' : String(item.qty || 1),
         total: fillLater ? '' : String(item.qty || 1),

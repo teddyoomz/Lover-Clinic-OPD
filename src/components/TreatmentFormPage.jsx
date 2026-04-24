@@ -980,6 +980,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           if (ti.some(t => t.id === product.rowId)) return ti;
           return [...ti, {
             id: product.rowId,
+            // Phase 12.2b Step 7 follow-up (2026-04-24): carry real
+            // master productId onto the treatment item so
+            // deductStockForTreatment → _normalizeStockItems can
+            // resolve the actual be_products doc + its batch instead
+            // of falling back to rowId (which is synthetic and never
+            // matches anything in be_products).
+            productId: product.productId || '',
             name: product.name,
             // Fill-later → qty starts blank; doctor must enter before
             // save (handleSubmit validation blocks empty qty with a
@@ -2108,7 +2115,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const prods = course.products?.length
                   ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                   : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
+                await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId, courseType: course.courseType || '' });
               } catch (e) { console.error('[TreatmentForm] course assign error:', e); }
             }
             for (const promo of grouped.promotions) {
@@ -2234,7 +2241,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     const prods = course.products?.length
                       ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
                       : [{ name: course.name, qty: pQty, unit: course.unit || 'ครั้ง' }];
-                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
+                    await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'treatment', parentName: `คอร์ส: ${course.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2, courseType: course.courseType || '' });
                   } catch (e) { console.error('[TreatmentForm] course assign (edit→sale) error:', e); }
                 }
                 // Mirror create-path: also assign purchased promotions (bundled sub-courses or plain promo).
@@ -3448,7 +3455,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                                 </div>
                                 <span className="text-xs text-gray-500 shrink-0 ml-2 whitespace-nowrap font-mono">
                                   {product.fillLater
-                                    ? <span className="italic text-amber-500">ระบุตอนรักษา</span>
+                                    ? <span className="italic text-amber-500">เหมาตามจริง</span>
                                     : `${product.remaining} / ${product.total} ${product.unit}`}
                                 </span>
                               </label>

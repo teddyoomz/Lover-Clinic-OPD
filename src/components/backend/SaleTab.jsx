@@ -568,7 +568,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               const prods = course.products?.length
                 ? course.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
                 : [{ name: course.name, qty: purchasedQty, unit: course.unit || 'ครั้ง' }];
-              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}`, linkedSaleId: newSaleId });
+              // Phase 12.2b Step 7 follow-up (2026-04-24): carry
+              // courseType so assignCourseToCustomer can apply the
+              // one-shot qty override for "เหมาตามจริง" (single
+              // treatment consumes the whole course → moves to history).
+              await assignCourseToCustomer(customerId, { name: course.name, products: prods, price: course.unitPrice, source: 'sale', parentName: `คอร์ส: ${course.name}`, linkedSaleId: newSaleId, courseType: course.courseType || '' });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
           }
           for (const promo of grouped.promotions) {

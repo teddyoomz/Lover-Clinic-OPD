@@ -440,11 +440,25 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
   const linkedSaleId = masterCourse.linkedSaleId || null;
   const linkedTreatmentId = masterCourse.linkedTreatmentId || null;
 
+  // Phase 12.2b Step 7 follow-up (2026-04-24): when a ProClinic-style
+  // "เหมาตามจริง" course is assigned, mark each sub-product as a one-
+  // shot credit (qty "1/1 <unit>") so a single treatment's
+  // deductCourseItems call consumes it to 0 remaining → course auto-
+  // moves into the customer's "ประวัติ" (ใช้หมดแล้ว) instead of staying
+  // in the active list forever. ProClinic contract: "คอร์สเหมาคือซื้อ
+  // ครั้งเดียวแล้วใช้หมดเลยทีเดียว".
+  const isRealQty = masterCourse.courseType === 'เหมาตามจริง'
+    || masterCourse.isRealQty === true;
+  const courseTypeTag = masterCourse.courseType ? String(masterCourse.courseType) : '';
+
   for (const p of products) {
+    const qty = isRealQty
+      ? buildQtyString(1, p.unit || 'ครั้ง')
+      : buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง');
     courses.push({
       name: masterCourse.name,
       product: p.name,
-      qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
+      qty,
       status: 'กำลังใช้งาน',
       expiry,
       value: masterCourse.price ? `${masterCourse.price} บาท` : '',
@@ -452,6 +466,7 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       source,
       linkedSaleId,
       linkedTreatmentId,
+      courseType: courseTypeTag,
       assignedAt: new Date().toISOString(),
     });
   }
@@ -469,6 +484,7 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       source,
       linkedSaleId,
       linkedTreatmentId,
+      courseType: courseTypeTag,
       assignedAt: new Date().toISOString(),
     });
   }
