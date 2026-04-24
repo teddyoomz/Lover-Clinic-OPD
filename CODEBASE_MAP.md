@@ -2235,3 +2235,17 @@ Tests: 5/5 focused + full regression 2984/2984 (end-of-phase per `feedback_test_
 - firestore.rules deploy when next rules change lands (piggyback Probe-Deploy-Probe)
 - Any print-view design polish user wants via `/frontend-design` or `/polish` skills
 - Phase 13.2 next: `be_staff_schedules` + AppointmentTab collision
+
+---
+
+## Phase 13.2.1 — be_staff_schedules validator + collision helper (2026-04-24)
+
+**Context:** First sub-task of Phase 13.2. Pure-function layer for staff work-schedule + holiday/leave tracking. One collection `be_staff_schedules` covers BOTH doctor and employee schedules (role lives on the referenced be_staff/be_doctors doc). Includes a pure `checkAppointmentCollision` helper that Phase 13.2.4 will wire into AppointmentTab.
+
+**New files:**
+- `src/lib/staffScheduleValidation.js` — 7 invariants (SS-1..SS-7). 5-type enum (work/halfday/holiday/leave/sick), HH:MM time regex, TIME_SLOTS constant (08:30–22:00 at 30-min steps, matches ProClinic dropdown), `generateStaffScheduleId` → `STFSCH-{MMYY}-{8hex}`. `checkAppointmentCollision(staffId, date, aptStart, aptEnd, entries)` returns `{ available, reason, entry }` — no-entry = available (legacy), holiday/leave/sick = blocked, work/halfday = check fit entirely inside range.
+- `tests/staffScheduleValidation.test.js` — 38 adversarial tests (SV1-SV28 validator + CC1-CC10 collision helper).
+
+Rule E ✅ · H ✅ · C1 ✅ (Thai TZ shift for id gen reused from quotationValidation) · C2 ✅ (crypto id) · D ✅ (38 adversarial including time-boundary + cross-staff + malformed).
+
+Tests: 38/38 focused pass in 1.35s. No full regression (per `feedback_test_per_subphase` — end-of-Phase-13 only).
