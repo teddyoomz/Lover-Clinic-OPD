@@ -5870,61 +5870,54 @@ export async function convertQuotationToSale(quotationId) {
     throw new Error(`สถานะ "${curStatus}" ไม่สามารถแปลงเป็นใบขายได้`);
   }
 
-  // Phase 14.x bug fix (2026-04-24): sale.items is a GROUPED object
-  // ({promotions, courses, products, medications}) — that's the shape
-  // SaleTab/SaleDetailModal read + every aggregator (saleReport,
-  // revenueAnalysis) aggregates by category. Phase 13.1.4's original
-  // flatten-into-array silently dropped everything because SaleTab's
-  // reader does `sale.items?.promotions ?? []`, and a flat array has
-  // no .promotions/.courses/.products properties. User-reported
-  // (2026-04-24): "promotion หายไปจาก list ในใบขาย" — plus courses +
-  // products in the same boat. Field names also remapped to SaleTab's
-  // contract (`name` / `unitPrice` / `itemType`), not quotation's
-  // `courseName` / `price`.
-  const toItem = (src, kind, nameField, idField) => ({
-    [idField]: src[idField] || '',
-    name: src[nameField] || '',
-    unitPrice: Number(src.price) || 0,
-    qty: Number(src.qty) || 0,
-    itemDiscount: Number(src.itemDiscount) || 0,
-    itemDiscountType: src.itemDiscountType || '',
-    isVatIncluded: !!src.isVatIncluded,
-    itemType: kind,
-  });
-
-  const items = {
-    promotions: (q.promotions || []).map((p) => ({
-      ...toItem(p, 'promotion', 'promotionName', 'promotionId'),
-    })),
-    courses: (q.courses || []).map((c) => ({
-      ...toItem(c, 'course', 'courseName', 'courseId'),
-    })),
-    products: [
-      ...(q.products || []).map((p) => ({
-        ...toItem(p, 'product', 'productName', 'productId'),
-        isPremium: !!p.isPremium,
-      })),
-      // Takeaway meds ride in products[] with isTakeaway + medication subobject
-      // (matching SaleTab's intent: in-clinic meds → items.medications[],
-      // take-home meds → items.products[] flagged).
-      ...(q.takeawayMeds || []).map((m) => ({
-        ...toItem(m, 'product', 'productName', 'productId'),
-        isPremium: !!m.isPremium,
-        isTakeaway: true,
-        medication: {
-          genericName: m.genericName || '',
-          indications: m.indications || '',
-          dosageAmount: m.dosageAmount || '',
-          dosageUnit: m.dosageUnit || '',
-          timesPerDay: m.timesPerDay || '',
-          administrationMethod: m.administrationMethod || '',
-          administrationMethodHour: Number(m.administrationMethodHour) || 0,
-          administrationTimes: Array.isArray(m.administrationTimes) ? [...m.administrationTimes] : [],
-        },
-      })),
-    ],
-    medications: [], // no separate in-clinic-consumed meds from a quotation
-  };
+  // Flatten 4 sub-item categories into sale.items[].
+  const items = [];
+  for (const c of (q.courses || [])) {
+    items.push({
+      courseId: c.courseId,
+      courseName: c.courseName,
+      qty: Number(c.qty) || 0,
+      price: Number(c.price) || 0,
+      discount: Number(c.itemDiscount) || 0,
+      discountType: c.itemDiscountType || '',
+      isVatIncluded: !!c.isVatIncluded,
+    });
+  }
+  for (const p of (q.products || [])) {
+    items.push({
+      productId: p.productId,
+      productName: p.productName,
+      qty: Number(p.qty) || 0,
+      price: Number(p.price) || 0,
+      discount: Number(p.itemDiscount) || 0,
+      discountType: p.itemDiscountType || '',
+      isVatIncluded: !!p.isVatIncluded,
+      isPremium: !!p.isPremium,
+    });
+  }
+  for (const m of (q.takeawayMeds || [])) {
+    items.push({
+      productId: m.productId,
+      productName: m.productName,
+      qty: Number(m.qty) || 0,
+      price: Number(m.price) || 0,
+      discount: Number(m.itemDiscount) || 0,
+      discountType: m.itemDiscountType || '',
+      isVatIncluded: !!m.isVatIncluded,
+      isPremium: !!m.isPremium,
+      isTakeaway: true,
+      medication: {
+        genericName: m.genericName || '',
+        indications: m.indications || '',
+        dosageAmount: m.dosageAmount || '',
+        dosageUnit: m.dosageUnit || '',
+        timesPerDay: m.timesPerDay || '',
+        administrationMethod: m.administrationMethod || '',
+        administrationMethodHour: Number(m.administrationMethodHour) || 0,
+        administrationTimes: Array.isArray(m.administrationTimes) ? [...m.administrationTimes] : [],
+      },
+    });
+  }
 
   // Sellers — quotation has single sellerId; sale model uses 5-seller array.
   // Put the one seller at 100% / full-total so SA-4 invariants hold downstream.
@@ -5939,10 +5932,14 @@ export async function convertQuotationToSale(quotationId) {
     });
   }
 
-  // Phase 14.x: promotions now ride in items.promotions[] (above) — no
-  // need for the fallback "โปรโมชันจากใบเสนอราคา: ..." note that used to
-  // carry them. Leaving the note field for q.note only (the quotation's
-  // own text note).
+  // Promotions — sale doesn't carry per-item promotions; preserve as a note
+  // so the seller can re-apply manually when finalizing the sale.
+  const promoNote = (q.promotions || []).length > 0
+    ? `โปรโมชันจากใบเสนอราคา: ${(q.promotions || [])
+        .map((p) => p.promotionName || p.promotionId)
+        .filter(Boolean)
+        .join(', ')}`
+    : '';
 
   const saleData = {
     customerId: q.customerId,
@@ -5963,7 +5960,7 @@ export async function convertQuotationToSale(quotationId) {
     source: 'quotation',
     sourceDetail: qid,
     saleType: 'course',
-    saleNote: q.note || '',
+    saleNote: [q.note, promoNote].filter(Boolean).join('\n'),
     linkedQuotationId: qid,
   };
 
