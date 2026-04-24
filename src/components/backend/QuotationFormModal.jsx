@@ -80,6 +80,24 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
   // ── Sub-item helpers: add / remove / update qty / update field ──
   const addSubItem = useCallback((category, item) => {
     if (!item) return;
+    // Price field differs per master_data shape:
+    //   - products: `price` (from beProductToMasterShape)
+    //   - courses:  `price` (beCourseToMasterShape maps salePrice -> price)
+    //   - promotions: `sale_price` ONLY (bePromotionToMasterShape just spreads
+    //     the raw be_promotion doc — no `price` key). This is why earlier
+    //     versions defaulted promotions to 0.
+    // Fall through every known variant + take the first positive number.
+    const pickPrice = (it) => {
+      const keys = ['price', 'sale_price', 'salePrice',
+        'sale_price_incl_vat', 'priceInclVat', 'price_incl_vat'];
+      for (const k of keys) {
+        const v = it?.[k];
+        if (v == null || v === '') continue;
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      return 0;
+    };
     setForm((prev) => {
       const list = prev[category] || [];
       const idKey = category === 'courses' ? 'courseId'
@@ -89,7 +107,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
       if (list.some((x) => String(x[idKey]) === String(item.id))) return prev;
       const base = {
         qty: 1,
-        price: Number(item.price) || 0,
+        price: pickPrice(item),
         itemDiscount: 0,
         itemDiscountType: '',
         isVatIncluded: false,
