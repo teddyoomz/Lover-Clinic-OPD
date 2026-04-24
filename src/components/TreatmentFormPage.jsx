@@ -576,6 +576,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   const total = qtyMatch ? parseFloat(qtyMatch[2].replace(/,/g, '')) : 0;
                   const unit = qtyMatch ? qtyMatch[3].trim() : '';
                   const productName = c.product || c.name;
+                  // Phase 12.2b follow-up (2026-04-24, user-reported): skip
+                  // fully-consumed courses so they don't re-appear as
+                  // selectable in the treatment form. User saw "อ๋อม
+                  // เหมา" in the new-treatment course column even though
+                  // it wasn't in คอร์สของฉัน — the entry was still in
+                  // customer.courses with qty "0/1 U" (consumed).
+                  // CustomerDetailView.activeCourses already filters this
+                  // way; treatment form now matches. Fill-later (เหมา
+                  // ตามจริง) consumed courses are especially bad because
+                  // the render's exhausted check bypasses fillLater, so
+                  // the checkbox stays enabled and the user could tick +
+                  // save → stock deducts AGAIN against a zero-qty entry.
+                  if (total > 0 && remaining <= 0) return null;
                   // Phase 12.2b follow-up (2026-04-24): propagate
                   // courseType so a bought-but-not-yet-used "เหมาตามจริง"
                   // course renders with the fill-later display +

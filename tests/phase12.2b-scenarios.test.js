@@ -891,6 +891,74 @@ describe('Scenario 17 — purchase history item breakdown', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════
+// Scenario 18: customerCoursesForForm filters consumed courses
+// User-reported 2026-04-24 (customer 2853): a consumed "อ๋อมเหมา" fill-
+// later course re-appeared in the new-treatment course column even
+// though it wasn't in คอร์สของฉัน. If left selectable, ticking + saving
+// would deduct stock a SECOND time against a zero-qty entry. Matches
+// CustomerDetailView.activeCourses filter (remaining > 0) so both views
+// agree.
+// ════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 18 — consumed courses filtered out of treatment form', () => {
+  // Mirrors TreatmentFormPage.customerCoursesForForm's new skip guard.
+  // total > 0 AND remaining <= 0 → fully consumed → return null.
+  const isConsumed = (qtyStr) => {
+    const m = String(qtyStr || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+    if (!m) return false;
+    const remaining = parseFloat(m[1].replace(/,/g, ''));
+    const total = parseFloat(m[2].replace(/,/g, ''));
+    return total > 0 && remaining <= 0;
+  };
+
+  it('S18.1: consumed fill-later course "0/1 U" is filtered out', () => {
+    expect(isConsumed('0/1 U')).toBe(true);
+    expect(isConsumed('0 / 1 U')).toBe(true);
+  });
+
+  it('S18.2: partially-used course stays visible', () => {
+    expect(isConsumed('5/10 U')).toBe(false);
+    expect(isConsumed('267/500 ซีซี')).toBe(false);
+  });
+
+  it('S18.3: fresh course stays visible', () => {
+    expect(isConsumed('100/100 U')).toBe(false);
+    expect(isConsumed('1/1 คอร์ส')).toBe(false);
+  });
+
+  it('S18.4: course with 0 total (unparseable) stays visible (degenerate)', () => {
+    // Courses without proper qty string shouldn't silently disappear —
+    // better to render + let the user reconcile.
+    expect(isConsumed('')).toBe(false);
+    expect(isConsumed(null)).toBe(false);
+    expect(isConsumed('invalid')).toBe(false);
+  });
+
+  it('S18.5: "0/0 ครั้ง" edge case → shown (total=0 means not really a course)', () => {
+    // total=0 means the course never had a meaningful qty. Don't hide
+    // it — it's more likely a data entry bug than a consumed course.
+    expect(isConsumed('0/0 ครั้ง')).toBe(false);
+  });
+
+  it('S18.6: invariant: activeCourses filter and treatment-form filter agree', () => {
+    const cases = ['5/10 U', '0/1 U', '100/100 U', '3/5 ครั้ง', ''];
+    for (const qty of cases) {
+      const m = String(qty || '').match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+      const remaining = m ? parseFloat(m[1].replace(/,/g, '')) : 0;
+      const total = m ? parseFloat(m[2].replace(/,/g, '')) : 0;
+      // CustomerDetailView.activeCourses: remaining > 0
+      const activeTabShows = remaining > 0;
+      // TreatmentFormPage.customerCoursesForForm: skip when total > 0 AND remaining <= 0
+      const treatmentFormShows = !(total > 0 && remaining <= 0);
+      // They agree UNLESS the qty is unparseable (no match → both default 0, both hide-vs-show).
+      if (m) {
+        expect(activeTabShows).toBe(treatmentFormShows);
+      }
+    }
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
 // Scenario 10: comprehensive edge-case coverage
 // Null / undefined / degenerate inputs across the pipeline.
 // ════════════════════════════════════════════════════════════════════════
