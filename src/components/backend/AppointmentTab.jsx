@@ -10,10 +10,11 @@ import {
 import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
   getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems,
-  listHolidays,
+  listHolidays, listStaffSchedules,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
+import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
 import DateField from '../DateField.jsx';
 
 
@@ -338,6 +339,30 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         setFormError(`ช่วงเวลานี้ชน: ${who} มีนัด ${o.startTime}–${o.endTime || o.startTime} (${o.customerName || o.customerHN || 'อีกนัด'}) อยู่แล้ว`);
         setFormSaving(false);
         return;
+      }
+
+      // Phase 13.2.4: staff schedule collision (warning, not blocking).
+      // Only runs when a doctor is assigned. Skips if no be_staff_schedules
+      // entry exists for the date (legacy behaviour — assumes available).
+      if (formData.doctorId) {
+        try {
+          const entries = await listStaffSchedules({
+            staffId: formData.doctorId,
+            startDate: targetDate,
+            endDate: targetDate,
+          });
+          const check = checkAppointmentCollision(
+            formData.doctorId, targetDate, newStart, newEnd, entries,
+          );
+          if (!check.available) {
+            const who = formData.doctorName || formData.doctorId;
+            const msg = `แพทย์ "${who}" ${check.reason} ในช่วงเวลาที่เลือก (${newStart}–${newEnd}).\n\nต้องการจองต่อหรือไม่?`;
+            if (!window.confirm(msg)) { setFormSaving(false); return; }
+          }
+        } catch (e) {
+          // Schedule fetch failure is non-fatal — log + continue (legacy path).
+          console.warn('[AppointmentTab] staff schedule check failed:', e);
+        }
       }
       const clean = JSON.parse(JSON.stringify({
         customerId:formData.customerId, customerName:formData.customerName, customerHN:formData.customerHN,

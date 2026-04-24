@@ -2274,3 +2274,20 @@ Rule E/H ✅. 13/13 focused pass. Build clean.
 **Design discovery:** MarketingTabShell hides `children` when `filteredCount === 0` — shows empty-state instead. That broke the inline form in empty state. Fix: render form OUTSIDE shell, list INSIDE. Clean separation of concerns (form always visible; list-with-filters manages its own empty state).
 
 6/6 focused pass. Build clean.
+
+---
+
+## Phase 13.2.4 — AppointmentTab staff-schedule collision (2026-04-24)
+
+**Edits:**
+- `src/components/backend/AppointmentTab.jsx`:
+  - Imported `listStaffSchedules` from backendClient + `checkAppointmentCollision` from staffScheduleValidation.
+  - After the existing room/doctor-overlap block in `handleSave`, added a staff-schedule check. If `formData.doctorId` is set, fetch schedule entries for (doctorId, targetDate) and call `checkAppointmentCollision`. If `!available`, show a `window.confirm` warning with the reason (วันหยุด / ลา / ลาป่วย / นอกเวลาทำงาน) and the time window.
+  - **Warning, not blocking** — user can override via OK (real-world flexibility: schedule might be incomplete, business case for last-minute bookings). Cancel → abort save. No entries for the date → fall through (legacy "assumed available" behaviour).
+  - Schedule fetch failure is non-fatal: logged + continues (keeps appointment flow resilient when schedule tab isn't used).
+
+**Why warn vs block:** schedules aren't source-of-truth for "can accept appointment" (clinic reality). Admin may have pencilled the wrong day as holiday. Hard block would create friction; warning preserves signal while letting the operator decide.
+
+**Test coverage:** 13.2.1 CC1-CC10 covers the pure helper. No new UI integration test — AppointmentTab is 827 LOC with heavy grid dependencies, and the helper's contract is fully exercised by unit tests.
+
+Build clean. Rule E ✅ (backendClient-only read path, no broker).
