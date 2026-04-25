@@ -7,15 +7,15 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 EOD session 2 — V21 lightbox fix + 14.7.H-D 6-collection wireup + EFG quick wins (period + finance listener + TDZ guard)
+- **Date last updated**: 2026-04-26 session 3 — pre-launch audit-all sweep (22 audits, 237 invariants) + TZ1 P0 + AP1 P1 + RP5 P1 + AV3 P2 + C3 design-lock fixes
 - **Branch**: `master`
-- **Last commit**: `7a9c62d feat(phase14.7.H-followup-EFG): pre-Phase-15 quick wins (period + finance listener + TDZ guard)`
-- **Test count**: 4679/4679 (+93 this session — 6 BC2.spread + 15 TL9 + 32 PD + 22 LC6/LC7 + 14 TFP-HG + small adjustments)
+- **Last commit**: `b870b40 fix(audit-2026-04-26): TZ1 P0 + AP1 P1 + RP5 P1 + AV3 P2 + C3 design lock`
+- **Test count**: 4848/4848 (+169 cumulative across this 24h session — listener cluster H + pick-reopen + debugLog + audit-fix batch)
 - **Build**: clean
-- **Deploy state**: ⚠️ **PARTIAL — production at `791b2de` (V21 + 14.7.H-D); EFG quick wins (`7a9c62d`) NOT YET DEPLOYED**
-  - **firestore:rules**: idempotent fire (no diff this round). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
-  - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app (built 11s, deploy 32s).
-  - **Pending deploy**: `7a9c62d` (period enforcement + listenToCustomerFinance + TFP TDZ guard) — user must say "deploy" THIS turn per V18.
+- **Deploy state**: ⚠️ **5 commits ahead of prod** — production at `791b2de`; pending deploy of `7a9c62d` + `b1032bf` + `55b5919` + `65ba420` + `b870b40`
+  - **firestore:rules**: NOT changed this session — no probe-deploy-probe needed
+  - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app
+  - **Pending deploy**: 5 commits — user must say "deploy" THIS turn per V18 (V15 combined would ship all 5)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -32,6 +32,13 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 3 (5 commits, `7a9c62d` → `b870b40`) — 24h pre-launch pass
+- ✅ **Phase 14.7.H Follow-up H** — listener cluster: `listenToHolidays` + bounded `listenToAllSales(opts.since)`; 3 holiday consumer migrations; LC8/LC9 (29 tests) (`b1032bf`) **NOT YET DEPLOYED**
+- ✅ **Phase 14.7.H Follow-up I** — pick-at-treatment **reopen-add** (last V12.2b deferred): `addPicksToResolvedGroup` backend helper + `_pickGroupOptions` snapshot on 1st sibling + reopen UI in TFP; F18 (46 tests) (`55b5919`) **NOT YET DEPLOYED**
+- ✅ **Phase 14.7.H Follow-up J** — `debugLog` helper + 9 high-value silent-catch wirings across api/proclinic/{customer,appointment,treatment,deposit}.js; DL1-DL3 (35 tests) (`65ba420`) **NOT YET DEPLOYED**
+- ✅ **Audit-all sweep + fixes (2026-04-26)** — 22 audits / 237 invariants via 6 parallel agents → docs/audit-2026-04-26-sweep.md. Verified raw findings, downgraded 6 false positives. Shipped: TZ1 P0 (SalePaymentModal paidAt + StockReportTab CSV filename + medicalInstrumentValidation default-today, all to thaiTodayISO), AP1 P1 (server-side appointment collision check w/ AP1_COLLISION error code + Thai message), RP5 P1 (6 TFP + 3 ChartTemplateSelector outer silent catches → debugLog), AV3 P2 (txId/ptxId crypto.getRandomValues with Math.random fallback), C3 P2 (design-intent regression test for deleteBackendTreatment); 54 tests across 2 files (`b870b40`) **NOT YET DEPLOYED**
+- **False positives ruled out by verification**: C3 stock orphan (design intent comment 270-281), CL1 dedup (already implemented at cloneOrchestrator:91-116), CL3 silent fail (per-appointment errors[] handled), FF3 scrollToError gap (data-field attrs exist at 4478+4511), RP1 IIFE JSX (CLAUDE.md bug was about CLICK HANDLERS specifically; render-time IIFEs work), PV1-PV5 PDPA (explicitly deferred per user directive)
 
 ### Session 2026-04-26 session 2 (3 production commits, `2ee6eeb` → `7a9c62d`)
 - ✅ **Phase 14.7.H Follow-up D** — wire branchId in 6 branch-future collections (be_quotations / be_vendor_sales / be_online_sales / be_sale_insurance_claims / be_expenses / be_staff_schedules); 6 form modals refactored + 6 BC2.spread tests + 6 matrix flips; mirrors AppointmentFormModal pattern from 14.7.H-A (`370854a`) **DEPLOYED**
@@ -85,14 +92,33 @@
 
 ## What's Next
 
-### Primary: P0 user-gated deploy — `7a9c62d` (EFG quick wins) ready to ship
-Production at `791b2de` (V21 + 14.7.H-D). master 1 commit ahead with EFG quick wins. User says "deploy" → V15 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe).
+### Primary: P0 user-gated deploy — 5 commits ready to ship (`7a9c62d` → `b870b40`)
+Production at `791b2de`. Master 5 commits ahead. User says "deploy" → V15 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe). Note: firestore:rules is unchanged this round so probe will be a no-diff fire. Bundle includes:
+1. `7a9c62d` EFG quick wins (period + finance listener + TDZ guard)
+2. `b1032bf` listener cluster H (listenToHolidays + bounded listenToAllSales)
+3. `55b5919` pick-at-treatment reopen-add (last V12.2b deferred item)
+4. `65ba420` debugLog helper + 9 silent-catch wirings
+5. `b870b40` audit-2026-04-26 batch (TZ1 P0 + AP1 P1 + RP5 P1 + AV3 P2 + C3 design lock)
 
-### P1 polish queue (deferred to next session)
-- Pick-at-treatment partial-pick reopen (V12.2b note) — M (3-4h) — **last remaining V12.2b deferred item**
-- `listenToHolidays` + `listenToAllSales` — S each (continue listener-cluster pattern)
-- TreatmentTimelineModal virtualization (only if 122-row customer reports lag) — M
-- Debug-level logging for ProClinic API silent-catch sites — M
+### P1 polish queue — drained this session
+- ✅ Pick-at-treatment partial-pick reopen — DONE (`55b5919`)
+- ✅ `listenToHolidays` + bounded `listenToAllSales` — DONE (`b1032bf`)
+- ✅ Debug-level logging for ProClinic API silent-catch — DONE (`65ba420` + extended in `b870b40`)
+- (deferred) TreatmentTimelineModal virtualization — only if 122-row customer reports lag (not observed yet)
+
+### P2 polish remaining (defer until next pre-launch pass)
+- IIFE JSX refactor at TFP:3286 + 4580 — works today (4848 tests + clean build); aligned to CLAUDE.md rule when convenient
+- Remaining brokerClient silent catches (lines 54, 233, 245, 253) — most impactful sites already migrated
+- BackendDashboard 1.2MB code-split via React.lazy per tab — perceived perf only
+- TFP refactor — split 3200 LOC into 7-8 sub-components (high leverage, M-XL effort, defer)
+- UC1 weekend red labels in calendar — cultural review (borderline, calendar weekend coloring is global convention)
+- M9 customer doc summary drift — mitigated by tx-log; nightly reconciler implicit
+- Doc 10/11/12 ProClinic-fidelity sweep — our-own designs; no immediate ProClinic-parity demand
+- Permission system end-to-end (Phase 13.5 deferred) — `hasPermission(user, key)` gate at every tab render entry
+
+### P3 explicitly out-of-scope
+- PV1-PV5 PDPA (consent UI / audit log / data-export / data-erasure) — user-deferred per CLAUDE.md memory
+- AV6 open Firestore rules — all justified by webhook/extension/public-link needs (locked by Rule B comments)
 
 ### Phase 15 readiness — UNBLOCKED ✓
 - `be_branches` collection ✓
@@ -137,7 +163,7 @@ Production at `791b2de` (V21 + 14.7.H-D). master 1 commit ahead with EFG quick w
 
 ## Outstanding User Actions (NOT auto-run)
 
-- **`vercel --prod` for `7a9c62d`** — EFG quick wins (period enforcement + listenToCustomerFinance + TFP TDZ guard) committed + pushed but NOT yet deployed. User must say "deploy" THIS turn for next deploy. Per V18 — no roll-over. V15 combined: "deploy" = vercel + firestore:rules in parallel with Probe-Deploy-Probe.
+- **`vercel --prod` for 5 commits `7a9c62d` → `b870b40`** — EFG quick wins + listener cluster H + pick-reopen + debugLog + audit-2026-04-26 batch all committed + pushed but NOT yet deployed. User must say "deploy" THIS turn for next deploy. Per V18 — no roll-over. V15 combined: "deploy" = vercel + firestore:rules in parallel with Probe-Deploy-Probe (rules unchanged → no-diff fire expected).
 
 ---
 
