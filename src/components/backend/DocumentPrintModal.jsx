@@ -451,7 +451,73 @@ export default function DocumentPrintModal({
                         field={f}
                         value={values[f.key] || ''}
                         list={list}
-                        onChange={(v) => setValues(vs => ({ ...vs, [f.key]: v }))}
+                        onChange={(displayName, record) => {
+                          // 2026-04-25 — generic auto-fill. When a doctor/
+                          // staff/assistant is picked, populate ALL related
+                          // fields the template has from the be_doctors /
+                          // be_staff record. Per user directive: "ใช้ความ
+                          // ฉลาดเช็คด้วยว่า มีอะไรดึงมาได้ auto อีกบ้าง".
+                          // Field-key convention: <baseKey><Suffix>
+                          //   doctorName  → doctorLicenseNo, doctorPhone,
+                          //                 doctorEmail, doctorPosition,
+                          //                 doctorNameEn
+                          //   staffName   → staffLicenseNo, staffPhone, ...
+                          //   assistantName → assistant{LicenseNo,Phone,...}
+                          setValues(vs => {
+                            const next = { ...vs, [f.key]: displayName };
+                            if (!record) return next;
+                            const baseKey = f.key.replace(/Name$/, '');
+                            const seedFields = selected.fields || [];
+                            const has = (k) => seedFields.some(sf => sf.key === k);
+                            const firstNonEmpty = (...keys) => {
+                              for (const k of keys) if (record[k]) return record[k];
+                              return '';
+                            };
+                            // License (multiple aliases for be_doctors vs be_staff)
+                            const licKey = `${baseKey}LicenseNo`;
+                            if (has(licKey)) {
+                              const v = firstNonEmpty('licenseNo', 'medicalLicenseNo', 'staffLicenseNo');
+                              if (v) next[licKey] = v;
+                            }
+                            // Phone
+                            const phoneKey = `${baseKey}Phone`;
+                            if (has(phoneKey)) {
+                              const v = firstNonEmpty('phone', 'tel', 'mobile');
+                              if (v) next[phoneKey] = v;
+                            }
+                            // Email
+                            const emailKey = `${baseKey}Email`;
+                            if (has(emailKey)) {
+                              const v = firstNonEmpty('email');
+                              if (v) next[emailKey] = v;
+                            }
+                            // Position / role
+                            const posKey = `${baseKey}Position`;
+                            if (has(posKey)) {
+                              const v = firstNonEmpty('position', 'role');
+                              if (v) next[posKey] = v;
+                            }
+                            // English name (fit-to-fly, bilingual certs)
+                            const enKey = `${baseKey}NameEn`;
+                            if (has(enKey)) {
+                              const en = `${record.firstnameEn || record.firstNameEn || ''} ${record.lastnameEn || record.lastNameEn || ''}`.trim();
+                              if (en) next[enKey] = en;
+                            }
+                            // Department
+                            const deptKey = `${baseKey}Department`;
+                            if (has(deptKey)) {
+                              const v = firstNonEmpty('department', 'section');
+                              if (v) next[deptKey] = v;
+                            }
+                            // Signature image (template can use {{{doctorSignature}}}
+                            // raw-HTML to embed an <img>)
+                            const sigKey = `${baseKey}Signature`;
+                            if (has(sigKey) && record.signatureUrl) {
+                              next[sigKey] = `<img src="${record.signatureUrl}" alt="signature" style="max-height:60px"/>`;
+                            }
+                            return next;
+                          });
+                        }}
                       />
                     );
                   }
