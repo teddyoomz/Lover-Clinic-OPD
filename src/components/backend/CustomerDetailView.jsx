@@ -17,6 +17,7 @@ import {
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
+import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
 import {
   TREATMENT_CERT_DOC_TYPES,
   TREATMENT_PRINT_DOC_TYPES,
@@ -92,8 +93,6 @@ export default function CustomerDetailView({
   customer, accentColor, theme, clinicSettings,
   onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment,
   onCustomerUpdated, onCreateSale, onOpenFinance,
-  // Phase 14.7.D — placeholder; real handler ships in 14.7.E timeline modal.
-  onShowTimeline,
 }) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
@@ -112,6 +111,9 @@ export default function CustomerDetailView({
   // both page + expansion in one setState.
   const TREATMENT_PAGE_SIZE = 5;
   const [treatmentPage, setTreatmentPage] = useState(1);
+  // Phase 14.7.E (2026-04-26) — controls "ดูไทม์ไลน์" modal open/close.
+  // Modal renders the same treatments[] array in a wider image-led layout.
+  const [showTimeline, setShowTimeline] = useState(false);
   const [addQtyModal, setAddQtyModal] = useState(null);
   const [addQtyValue, setAddQtyValue] = useState('');
   const [addQtySaving, setAddQtySaving] = useState(false);
@@ -534,15 +536,14 @@ export default function CustomerDetailView({
                     <Plus size={11} /> บันทึกการรักษา
                   </button>
                 )}
-                {/* Phase 14.7.E placeholder — orange matches ProClinic
-                    btn-secondary #FF9F1C (verified via opd.js scan
-                    2026-04-26). Real timeline handler ships in 14.7.E;
-                    button stays disabled until parent passes onShowTimeline. */}
-                <button onClick={() => onShowTimeline?.()} disabled={!onShowTimeline}
+                {/* Phase 14.7.E (live as of 2026-04-26) — orange matches
+                    ProClinic btn-secondary #FF9F1C (verified opd.js scan).
+                    Opens TreatmentTimelineModal with image-led 3/9 grid. */}
+                <button onClick={() => setShowTimeline(true)}
                   data-testid="show-timeline-btn"
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
                   style={{ background: 'linear-gradient(135deg, #FF9F1C, #E17B0A)' }}
-                  title={onShowTimeline ? 'ดูไทม์ไลน์รวม' : 'ดูไทม์ไลน์ — เร็วๆ นี้'}>
+                  title="ดูไทม์ไลน์รวม (รูป Before/After/อื่นๆ)">
                   <Activity size={11} /> ดูไทม์ไลน์
                 </button>
               </div>
@@ -1140,6 +1141,21 @@ export default function CustomerDetailView({
             setApptFormModal(null);
             await reloadCustomerAppointments();
           }}
+        />
+      )}
+
+      {/* Phase 14.7.E — "ดูไทม์ไลน์" modal. Re-uses already-loaded
+          treatments[] (no extra fetch). Image-led wide layout. */}
+      {showTimeline && (
+        <TreatmentTimelineModal
+          customer={customer}
+          treatmentSummary={treatmentSummary}
+          treatments={treatments}
+          treatmentsLoading={treatmentsLoading}
+          theme={theme}
+          accentColor={ac}
+          onClose={() => setShowTimeline(false)}
+          onEditTreatment={onEditTreatment}
         />
       )}
     </div>
