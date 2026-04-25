@@ -799,31 +799,112 @@ describe('F12: per-doc end-to-end render — all 16 docTypes', () => {
       mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี', 'A001 Cholera', 'TEST-2026-001'],
     },
     'medical-certificate-for-driver-license': {
-      mustContain: ['ใบรับรองแพทย์', 'ใบอนุญาตขับรถ', 'ส่วนที่ 1', 'ส่วนที่ 2', 'มีความเหมาะสม'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic
+      // /admin/medical-certificate-for-driver-license .print-area extraction.
+      mustContain: [
+        'ใบรับรองแพทย์', 'ใบอนุญาตขับรถ', 'ส่วนที่ 1', 'ส่วนที่ 2', 'มีความเหมาะสม',
+        'น้ำหนักตัว', 'ความสูง', 'ความดันโลหิต', 'ชีพจร',
+        'สภาพร่างกายทั่วไปอยู่ในเกณฑ์',
+        'ผลการตรวจการมองเห็น', 'ตาบอดสี',
+        'ขอรับรองว่าบุคคลดังกล่าว',
+        'โรคเรื้อนในระยะติดต่อ', 'วัณโรคในระยะอันตราย', 'โรคเท้าช้าง',
+        'สรุปความเห็นและข้อแนะนำของแพทย์',
+        // 3 footnotes specific to driver-license
+        'หมายเหตุ',
+        'ต้องเป็นแพทย์ซึ่งได้ขึ้นทะเบียน',
+        'ใบรับรองแพทย์ฉบับนี้ให้ใช้ได้ 1 เดือน',
+        'แบบฟอร์มนี้ได้รับการรับรองจากมติคณะกรรมการแพทยสภา',
+      ],
       mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี', 'มีความเหมาะสม'],
     },
     'medical-opinion': {
-      mustContain: ['ใบรับรองแพทย์ลาป่วย', 'ความเห็น/อาการ', 'การวินิจฉัย'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/medical-opinion
+      // .print-area extraction.
+      mustContain: [
+        'ใบรับรองแพทย์ลาป่วย',
+        'อาการ', 'วินิจฉัย',
+        'สรุปความเห็นและข้อแนะนำของแพทย์',
+        'ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง',
+        'ให้หยุดพัก ตั้งแต่วันที่',
+        'อื่นๆ (ระบุ)',
+      ],
       mustHaveValue: ['ผู้ป่วยมีอาการไข้', 'A001 Cholera'],
     },
     'physical-therapy-certificate': {
-      mustContain: ['ใบรับรองกายภาพบำบัด', 'อาการ', 'การบำบัดที่ได้รับ'],
-      mustHaveValue: ['ปวดคอ', 'นวดประคบ'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/physical-therapy-certificate
+      // .print-area extraction.
+      mustContain: [
+        'ใบรับรองกายภาพบำบัด',
+        'อาการ', 'วินิจฉัย',
+        'สรุปความเห็นและข้อแนะนำของนักกายภาพบำบัด',
+        'ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง',
+        'ให้หยุดพัก ตั้งแต่วันที่',
+        'อื่นๆ (ระบุ)',
+        'นักกายภาพบำบัด', 'กภ.',
+        'ใบอนุญาตประกอบวิชาชีพกายภาพบำบัด',
+      ],
+      mustHaveValue: ['ปวดคอ'],
     },
     'thai-traditional-medicine-medical-certificate': {
-      mustContain: ['ใบรับรองแพทย์แผนไทยประยุกต์', 'จากการประเมินพบว่า', 'สรุปความเห็น'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/thai-traditional-medicine-medical-certificate
+      mustContain: [
+        'ใบรับรองแพทย์แผนไทยประยุกต์',
+        'จากการประเมินพบว่า',
+        'ผลการตรวจทางการแพทย์แผนไทยประยุกต์',
+        'ได้ทำการรักษาโดย',
+        'สรุปความเห็นและข้อแนะนำของแพทย์แผนไทยประยุกต์',
+        'ใบอนุญาตประกอบวิชาชีพแพทย์แผนไทยประยุกต์',
+      ],
       mustHaveValue: ['ตรวจร่างกายปกติ'],
     },
     'chinese-traditional-medicine-medical-certificate': {
-      mustContain: ['ใบรับรองแพทย์แผนจีน', 'อาการ'],
+      // Phase 14.2.E (2026-04-25) — ProClinic-replicated.
+      mustContain: [
+        'ใบรับรองแพทย์แผนจีน',
+        'ข้าพเจ้า แพทย์แผนจีน',
+        'ใบอนุญาตประกอบวิชาชีพ',
+        'ได้ทำการตรวจรักษา',
+        'สรุปความเห็นของแพทย์',
+        'อาการ',
+      ],
       mustHaveValue: ['ปวดคอ'],
     },
     'fit-to-fly': {
-      mustContain: ['FIT-TO-FLY CERTIFICATE', 'Patient Name', 'Flight No.'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/fit-to-fly .print-area extraction
+      mustContain: [
+        'Medical Certificate for Air Travel',
+        'No.:', 'Date:',
+        'Name', 'Gender', 'Age',
+        'Nationality', 'Passport Number/ID Number',
+        'Airline', 'Flight no', 'Depart', 'Arrival', 'Transit',
+        "Patient's History:",
+        'Recent infection:', 'Recent Fever:',
+        'Being treated for any conditions',
+        'Diagnosis:', 'Treatment:',
+        'Recommendation for air travel',
+        'Fit for air travel', 'Not fit for air travel',
+        'Medical License no',
+        'Passenger', 'Attending Physician',
+      ],
       mustHaveValue: ['Mrs. Somying Raksa', 'AA1234567', 'TG-103'],
     },
     'patient-referral': {
-      mustContain: ['ใบส่งตัวผู้ป่วย', 'Patient Referral Letter', 'ส่งต่อไปยัง'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/patient-referral .print-area extraction
+      mustContain: [
+        'ใบส่งตัวผู้ป่วย',
+        'จาก', 'ถึง',
+        'พร้อมหนังสือนี้ ขอส่งผู้ป่วยชื่อ',
+        'มาเพื่อโปรด',
+        'รับไว้รักษาต่อ', 'ตรวจชันสูตร', 'คุมไว้สังเกต', 'ขอทราบผล',
+        '1.ประวัติการป่วยในอดีต',
+        '2.ประวัติการป่วยปัจจุบัน',
+        '3.ผลการตรวจชันสูตรของห้องทดลองที่สำคัญ',
+        '4.การวินิจฉัยขั้นต้น',
+        '5.การรักษาที่ให้ไว้แล้ว',
+        '6.สาเหตุที่ส่ง',
+        '7.รายละเอียดอื่นๆ',
+        'แพทย์ผู้ตรวจ',
+      ],
       mustHaveValue: ['รพ.รามาธิบดี', 'ส่งต่อเพื่อ MRI'],
     },
     'medicine-label': {
@@ -995,8 +1076,9 @@ describe('F11: full ProClinic-replicated rendering', () => {
     const html = renderTemplate(seed.htmlTemplate, ctx);
     expect(html).not.toContain('中医医疗证明');
     expect(html).not.toContain('症状');
-    // TH-only label still shown
-    expect(html).toContain('การวินิจฉัยแพทย์จีน');
+    // TH-only label still shown — Phase 14.2.E: ProClinic chinese-traditional
+    // has just "สรุปความเห็นของแพทย์" header, sub-labels only in EN/bilingual mode
+    expect(html).toContain('สรุปความเห็นของแพทย์');
   });
 
   it('F11.6: medicine-label still works (no toggles)', () => {
@@ -1131,6 +1213,17 @@ function buildPrefillForTreatment({ customer, treatment, summary, today }) {
     bodyAbnormalMark: '☐',
     bodyAbnormalDetail: '',
     otherConditions: '',
+    // Phase 14.2.E — medical-opinion checkbox marks
+    checkAttendedMark: '☑',
+    checkRestMark:     '☐',
+    checkOtherMark:    '☐',
+    otherDetail:       '',
+    // Phase 14.2.E — patient-referral 4 reason checkboxes
+    checkAdmitMark:       '☐',
+    checkInvestigateMark: '☐',
+    checkObserveMark:     '☐',
+    checkResultMark:      '☐',
+    labResults: '',
   };
 }
 

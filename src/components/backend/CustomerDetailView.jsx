@@ -878,6 +878,17 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
           bodyAbnormalMark: '☐',
           bodyAbnormalDetail: '',
           otherConditions: '',
+          // Phase 14.2.E (2026-04-25) — medical-opinion checkbox marks
+          checkAttendedMark: '☑',  // default checked — patient DID attend
+          checkRestMark:     '☐',
+          checkOtherMark:    '☐',
+          otherDetail:       '',
+          // Phase 14.2.E — patient-referral 4 reason checkboxes
+          checkAdmitMark:       '☐',
+          checkInvestigateMark: '☐',
+          checkObserveMark:     '☐',
+          checkResultMark:      '☐',
+          labResults: '',
           // Clinical fields (treatment-history right panel)
           symptoms: d.symptoms || d.cc || summary?.cc || '',
           physicalExam: d.physicalExam || d.pe || '',

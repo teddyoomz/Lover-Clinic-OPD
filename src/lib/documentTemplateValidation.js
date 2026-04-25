@@ -132,7 +132,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 9;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -542,22 +542,58 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0">ที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{clinicAddress}}</span></div>
       <div style="margin:8px 0">ได้ตรวจร่างกาย นาย/นาง/นางสาว: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{customerName}}</span></div>
       <div style="margin:6px 0">แล้วเมื่อวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> เดือน <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> พ.ศ. <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> มีรายละเอียดดังนี้</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin:10px 0">
-        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> กก.</div>
-        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> ซม.</div>
-        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> mmHg</div>
-        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> ครั้ง/นาที</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin:10px 0">
+        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
+        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
+        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
+        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
       </div>
-      <div style="margin:8px 0">ผลการตรวจการมองเห็น: ตาขวา <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> ตาซ้าย <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> ตาบอดสี: ☐ ปกติ ☐ ผิดปกติ</div>
+      <div style="margin:10px 0">
+        <span>สภาพร่างกายทั่วไปอยู่ในเกณฑ์</span>
+        {{bodyNormalMark}} ปกติ &nbsp;
+        {{bodyAbnormalMark}} ผิดปกติ ระบุ:
+        <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
+      </div>
+      <div style="margin:8px 0">ผลการตรวจการมองเห็น: ตาขวา <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionRight}}</span> ตาซ้าย <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionLeft}}</span> ตาบอดสี: {{colorBlindMark}}</div>
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic-replicated 4-disease certification clause + summary marker. Captured via Chrome MCP from /admin/medical-certificate-for-driver-license .print-area. -->
+      <div style="margin:14px 0 6px 0;font-weight:600">ขอรับรองว่าบุคคลดังกล่าว ไม่เป็นผู้มีร่างกายทุพพลภาพจนไม่สามารถปฏิบัติหน้าที่ได้ ไม่ปรากฏอาการของโรคจิต หรือจิตฟั่นเฟือน หรือปัญญาอ่อน ไม่ปรากฏอาการของการติดยาเสพติดให้โทษ และอาการของโรคพิษสุราเรื้อรัง:</div>
+      <div style="margin:6px 0 6px 16px">
+        <div style="margin:4px 0">1. โรคเรื้อนในระยะติดต่อ หรือในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
+        <div style="margin:4px 0">2. วัณโรคในระยะอันตราย</div>
+        <div style="margin:4px 0">3. โรคเท้าช้างในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
+        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
+      </div>
       <div style="margin:8px 0"><strong>ผลการตรวจ:</strong> {{findings}}</div>
       <div style="margin:8px 0"><strong>การวินิจฉัย:</strong> {{diagnosis}}</div>
       <div style="margin:14px 0;font-weight:bold;text-align:center">ขอรับรองว่าผู้ป่วยรายนี้ {{fitVerdict}} ที่จะขับขี่ยานพาหนะ</div>
-    ` + DOCTOR_SIGNATURE,
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">(2) สรุปความเห็นและข้อแนะนำของแพทย์:</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{recommendation}}</div>
+    ` + DOCTOR_SIGNATURE + `
+      <hr style="border:0;border-top:1px solid #b71c1c;margin:18px 0 8px 0" />
+      <div style="font-size:10px;color:#444;line-height:1.5">
+        <div style="font-weight:bold;color:#b71c1c">หมายเหตุ</div>
+        <div style="margin:2px 0">(1) ต้องเป็นแพทย์ซึ่งได้ขึ้นทะเบียนรับใบอนุญาตประกอบวิชาชีพเวชกรรม</div>
+        <div style="margin:2px 0">(2) ให้แสดงว่าผู้ตรวจมีร่างกายสมบูรณ์เพียงใด ใบรับรองแพทย์ฉบับนี้ให้ใช้ได้ 1 เดือน นับจากวันที่ตรวจร่างกาย</div>
+        <div style="margin:2px 0">(3) คำรับรองนี้เป็นการตรวจวินิจฉัยเบื้องต้น และใบรับรองแพทย์นี้ใช้สำหรับใบอนุญาตขับรถและการปฏิบัติหน้าที่เป็นผู้ประจำรถ</div>
+        <div style="margin-top:6px;text-align:center;font-style:italic">แบบฟอร์มนี้ได้รับการรับรองจากมติคณะกรรมการแพทยสภา ในการประชุมครั้งที่ 2/2564 วันที่ 4 กุมภาพันธ์ 2564</div>
+      </div>
+    `,
     fields: [
       ...COMMON_CERT_FIELDS,
       ...COMMON_HISTORY_FIELDS,
-      { key: 'certBookNumber', label: 'เล่มที่', type: 'text' },
-      { key: 'fitVerdict',   label: 'สรุป (เช่น "มีความเหมาะสม")', type: 'text', required: true },
+      { key: 'certBookNumber',     label: 'เล่มที่', type: 'text' },
+      { key: 'fitVerdict',         label: 'สรุป (เช่น "มีความเหมาะสม")', type: 'text', required: true },
+      { key: 'vitalsWeight',       label: 'น้ำหนักตัว (กก.)', type: 'text' },
+      { key: 'vitalsHeight',       label: 'ความสูง (ซม.)', type: 'text' },
+      { key: 'bp',                 label: 'ความดันโลหิต (มม.ปรอท.)', type: 'text' },
+      { key: 'pr',                 label: 'ชีพจร (ครั้ง/นาที)', type: 'text' },
+      { key: 'bodyNormalMark',     label: '☑/☐ ปกติ', type: 'text' },
+      { key: 'bodyAbnormalMark',   label: '☑/☐ ผิดปกติ', type: 'text' },
+      { key: 'bodyAbnormalDetail', label: 'ผิดปกติ ระบุ', type: 'text' },
+      { key: 'visionRight',        label: 'ตาขวา', type: 'text' },
+      { key: 'visionLeft',         label: 'ตาซ้าย', type: 'text' },
+      { key: 'colorBlindMark',     label: 'ตาบอดสี', type: 'text' },
+      { key: 'otherConditions',    label: 'โรคอื่นๆ (ถ้ามี)', type: 'text' },
     ],
     toggles: NO_TOGGLES,
   },
@@ -573,11 +609,16 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0"><strong>ได้ทำการตรวจร่างกายของ นาย/นาง/นางสาว:</strong> {{customerName}}</div>
       <div style="margin:6px 0"><strong>หมายเลขบัตรประชาชน:</strong> {{nationalId}} &nbsp; <strong>HN:</strong> {{customerHN}}</div>
       <div style="margin:6px 0"><strong>เมื่อวันที่:</strong> {{today}}</div>
-      <div style="margin:14px 0 6px 0"><strong>ความเห็น/อาการ:</strong></div>
-      <div style="min-height:60px;border-bottom:1px dotted #000;margin-bottom:8px">{{opinion}}</div>
-      <div style="margin:8px 0"><strong>การวินิจฉัย:</strong> {{diagnosis}}</div>
-      <div style="margin:8px 0">เห็นควรให้หยุดพักรักษาตัวเป็นเวลา <strong>{{restDays}}</strong> วัน ตั้งแต่วันที่ {{restFrom}} ถึง {{restTo}}</div>
-      {{#if recommendation}}<div style="margin:8px 0"><strong>คำแนะนำเพิ่มเติม:</strong> {{recommendation}}</div>{{/if}}
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/medical-opinion .print-area replicated. -->
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">อาการ</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{opinion}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">วินิจฉัย</div>
+      <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์</div>
+      <div style="margin:6px 0">{{checkAttendedMark}} ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง</div>
+      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
+      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
+      {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
     ` + DOCTOR_SIGNATURE,
     // medical-opinion uses `opinion` instead of `findings` — drop findings
     // from the cert-fields baseline so the F2 test (required-field-in-HTML)
@@ -586,12 +627,17 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorName',      label: 'แพทย์ผู้ตรวจ',       type: 'text', required: true },
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาตแพทย์',   type: 'text' },
       { key: 'certNumber',      label: 'เลขที่ใบรับรอง',      type: 'text' },
-      { key: 'opinion',         label: 'ความเห็น/อาการ',      type: 'textarea', required: true },
-      { key: 'diagnosis',       label: 'การวินิจฉัย',         type: 'text', required: true },
+      { key: 'opinion',         label: 'อาการ',               type: 'textarea', required: true },
+      { key: 'diagnosis',       label: 'วินิจฉัย',            type: 'text', required: true },
       { key: 'recommendation',  label: 'คำแนะนำเพิ่มเติม',    type: 'textarea' },
       { key: 'restDays',        label: 'จำนวนวันพัก',         type: 'number' },
       { key: 'restFrom',        label: 'พักตั้งแต่',           type: 'date' },
       { key: 'restTo',          label: 'ถึง',                 type: 'date' },
+      // Phase 14.2.E ProClinic checkboxes for the 3 conclusion items
+      { key: 'checkAttendedMark', label: '☑/☐ มาตรวจวันนี้จริง', type: 'text' },
+      { key: 'checkRestMark',     label: '☑/☐ ให้หยุดพัก',       type: 'text' },
+      { key: 'checkOtherMark',    label: '☑/☐ อื่นๆ',           type: 'text' },
+      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',           type: 'text' },
     ],
     toggles: TOGGLE_OPINION_PT,
   },
@@ -603,27 +649,44 @@ export const SEED_TEMPLATES = Object.freeze([
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองกายภาพบำบัด</h2>
       ${CERT_NUMBER_LINE}
-      <div style="margin:8px 0"><strong>ข้าพเจ้า นักกายภาพ:</strong> {{doctorName}} &nbsp; <strong>เลขใบอนุญาต:</strong> {{doctorLicenseNo}}</div>
-      <div style="margin:6px 0"><strong>ได้ทำการประเมินและบำบัดให้ผู้ป่วย:</strong> {{customerName}} (HN {{customerHN}})</div>
-      <div style="margin:6px 0"><strong>วันที่:</strong> {{today}}</div>
-      <div style="margin:14px 0 6px 0"><strong>อาการ:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{symptoms}}</div>
-      <div style="margin:8px 0 4px 0"><strong>ผลการตรวจประเมิน:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{evaluation}}</div>
-      <div style="margin:8px 0 4px 0"><strong>การบำบัดที่ได้รับ:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{treatments}}</div>
-      <div style="margin:8px 0"><strong>จำนวนครั้งที่บำบัด:</strong> {{sessionCount}} ครั้ง</div>
-      {{#if recommendation}}<div style="margin:8px 0"><strong>คำแนะนำ:</strong> {{recommendation}}</div>{{/if}}
-    ` + DOCTOR_SIGNATURE,
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/physical-therapy-certificate .print-area replicated. Layout mirrors medical-opinion with PT-specific labels. -->
+      <div style="margin:8px 0"><strong>ข้าพเจ้า กภ.:</strong> {{doctorName}} &nbsp; <strong>ใบอนุญาตประกอบวิชาชีพกายภาพบำบัดเลขที่:</strong> {{doctorLicenseNo}}</div>
+      <div style="margin:6px 0"><strong>ได้ตรวจร่างกาย นาย/นาง/นางสาว:</strong> {{customerName}} (HN {{customerHN}})</div>
+      <div style="margin:6px 0"><strong>สถานที่อยู่ (ที่ติดต่อได้):</strong> {{patientAddress}}</div>
+      <div style="margin:6px 0"><strong>หมายเลขบัตรประจำตัวประชาชน:</strong> {{nationalId}}</div>
+      <div style="margin:6px 0"><strong>แล้วเมื่อวันที่:</strong> {{today}}</div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">อาการ</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{symptoms}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">วินิจฉัย</div>
+      <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของนักกายภาพบำบัด</div>
+      <div style="margin:6px 0">{{checkAttendedMark}} ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง</div>
+      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
+      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
+      {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
+    ` + `
+      <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
+        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div style="margin-top:2px">( {{doctorName}} )</div>
+        <div style="font-style:italic;color:#444">นักกายภาพบำบัด</div>
+        <div>วันที่ {{today}}</div>
+      </div>
+    `,
     fields: [
       { key: 'doctorName',     label: 'นักกายภาพ', type: 'text', required: true },
       { key: 'doctorLicenseNo',label: 'เลขใบอนุญาตประกอบวิชาชีพ', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบรับรอง', type: 'text' },
+      { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
       { key: 'symptoms',       label: 'อาการ', type: 'textarea', required: true },
-      { key: 'evaluation',     label: 'ผลการตรวจประเมิน', type: 'textarea' },
-      { key: 'treatments',     label: 'การบำบัด', type: 'textarea', required: true },
-      { key: 'sessionCount',   label: 'จำนวนครั้ง', type: 'number' },
+      { key: 'diagnosis',      label: 'วินิจฉัย', type: 'text', required: true },
       { key: 'recommendation', label: 'คำแนะนำ', type: 'textarea' },
+      { key: 'restDays',       label: 'จำนวนวันพัก', type: 'number' },
+      { key: 'restFrom',       label: 'พักตั้งแต่', type: 'date' },
+      { key: 'restTo',         label: 'ถึง', type: 'date' },
+      { key: 'checkAttendedMark', label: '☑/☐ มาตรวจวันนี้จริง', type: 'text' },
+      { key: 'checkRestMark',     label: '☑/☐ ให้หยุดพัก',       type: 'text' },
+      { key: 'checkOtherMark',    label: '☑/☐ อื่นๆ',           type: 'text' },
+      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',           type: 'text' },
     ],
     toggles: TOGGLE_OPINION_PT,
   },
@@ -641,17 +704,19 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0"><strong>สถานที่อยู่ (ที่ติดต่อได้):</strong> {{patientAddress}}</div>
       <div style="margin:6px 0"><strong>หมายเลขบัตรประจำตัวประชาชน:</strong> {{nationalId}}</div>
       <div style="margin:6px 0"><strong>แล้วเมื่อวันที่:</strong> {{today}}</div>
-      <div style="margin:12px 0 6px 0"><strong>จากการประเมินพบว่า</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{findings}}</div>
-      <div style="margin:8px 0 4px 0"><strong>ผลการตรวจทางการแพทย์แผนไทยประยุกต์</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{tcmExam}}</div>
-      <div style="margin:8px 0 4px 0"><strong>ได้ทำการรักษาโดย</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{treatment}}</div>
-      <div style="margin:8px 0 4px 0"><strong>สรุปความเห็นและข้อแนะนำของแพทย์แผนไทยประยุกต์</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{recommendation}}</div>
-      <div style="margin-top:32px;text-align:right">
-        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> แพทย์แผนไทยประยุกต์</div>
+      <div style="margin:12px 0 6px 0;font-weight:600;color:#b71c1c">จากการประเมินพบว่า</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{findings}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">ผลการตรวจทางการแพทย์แผนไทยประยุกต์</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{tcmExam}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">ได้ทำการรักษาโดย</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
+      <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์แผนไทยประยุกต์</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{recommendation}}</div>
+      <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
+        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
+        <div style="font-style:italic;color:#444">แพทย์แผนไทยประยุกต์</div>
+        <div>วันที่ {{today}}</div>
       </div>
     `,
     fields: [
@@ -674,21 +739,33 @@ export const SEED_TEMPLATES = Object.freeze([
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์แผนจีน{{#lang en}} / 中医医疗证明{{/lang}}</h2>
       ${CERT_NUMBER_LINE}
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/chinese-traditional-medicine-medical-certificate .print-area replicated. Single-freeform conclusion (matches ProClinic). -->
       <div style="margin:8px 0"><strong>ข้าพเจ้า แพทย์แผนจีน{{#lang en}} / TCM Doctor{{/lang}}:</strong> {{doctorName}}</div>
-      <div style="margin:6px 0"><strong>ใบอนุญาตประกอบวิชาชีพแพทย์แผนจีนเลขที่:</strong> {{doctorLicenseNo}}</div>
-      <div style="margin:6px 0"><strong>ได้ทำการตรวจประเมินทางการแพทย์แผนจีน นาย/นาง/นางสาว:</strong> {{customerName}} (HN {{customerHN}})</div>
-      <div style="margin:6px 0"><strong>เมื่อวันที่:</strong> {{today}}</div>
-      <div style="margin:14px 0 6px 0"><strong>อาการ{{#lang en}} / 症状{{/lang}}:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{symptoms}}</div>
-      <div style="margin:8px 0 4px 0"><strong>การวินิจฉัยแพทย์จีน{{#lang en}} / 中医诊断{{/lang}}:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{tcmDiagnosis}}</div>
-      <div style="margin:8px 0 4px 0"><strong>การรักษา{{#lang en}} / 治疗{{/lang}}:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{treatment}}</div>
-    ` + DOCTOR_SIGNATURE,
+      <div style="margin:6px 0"><strong>ใบอนุญาตประกอบวิชาชีพ :</strong> {{doctorLicenseNo}}</div>
+      <div style="margin:6px 0"><strong>ได้ทำการตรวจรักษา นาย/นาง/นางสาว:</strong> {{customerName}} (HN {{customerHN}})</div>
+      <div style="margin:6px 0"><strong>สถานที่อยู่ (ที่ติดต่อได้):</strong> {{patientAddress}}</div>
+      <div style="margin:6px 0"><strong>หมายเลขบัตรประจำตัวประชาชน:</strong> {{nationalId}}</div>
+      <div style="margin:6px 0"><strong>แล้วเมื่อวันที่:</strong> {{today}}</div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นของแพทย์{{#lang en}} / Doctor's Summary{{/lang}}</div>
+      {{#lang en}}<div style="margin:4px 0;color:#444;font-size:13px">อาการ / 症状 / Symptoms:</div>{{/lang}}
+      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{symptoms}}</div>
+      {{#lang en}}<div style="margin:4px 0;color:#444;font-size:13px">การวินิจฉัย / 中医诊断 / TCM Diagnosis:</div>{{/lang}}
+      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{tcmDiagnosis}}</div>
+      {{#lang en}}<div style="margin:4px 0;color:#444;font-size:13px">การรักษา / 治疗 / Treatment:</div>{{/lang}}
+      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
+    ` + `
+      <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
+        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div style="margin-top:2px">( {{doctorName}} )</div>
+        <div style="font-style:italic;color:#444">แพทย์แผนจีน{{#lang en}} / TCM Doctor{{/lang}}</div>
+        <div>วันที่ {{today}}</div>
+      </div>
+    `,
     fields: [
       { key: 'doctorName',     label: 'แพทย์จีน', type: 'text', required: true },
       { key: 'doctorLicenseNo',label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบรับรอง', type: 'text' },
+      { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
       { key: 'symptoms',       label: 'อาการ / 症状', type: 'textarea' },
       { key: 'tcmDiagnosis',   label: 'การวินิจฉัยแพทย์จีน / 中医诊断', type: 'textarea' },
       { key: 'treatment',      label: 'การรักษา / 治疗', type: 'textarea' },
@@ -701,39 +778,77 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'bilingual',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0 4px 0;color:#b71c1c">FIT-TO-FLY CERTIFICATE</h2>
-      <h3 style="text-align:center;font-weight:normal;margin-bottom:14px">ใบรับรองความพร้อมในการเดินทางทางอากาศ</h3>
-      ${CERT_NUMBER_LINE}
-      <div style="margin:8px 0"><strong>Patient Name / ชื่อผู้ป่วย:</strong> {{customerNameEn}} ({{customerName}})</div>
-      <div style="margin:6px 0"><strong>Passport No. / หนังสือเดินทาง:</strong> {{passport}} &nbsp; <strong>Nationality / สัญชาติ:</strong> {{nationality}}</div>
-      <div style="margin:6px 0"><strong>Date of Birth / วันเกิด:</strong> {{dob}} &nbsp; <strong>HN:</strong> {{customerHN}}</div>
-      <div style="margin:6px 0"><strong>Flight No. / เที่ยวบิน:</strong> {{flightNo}} &nbsp; <strong>Date / วันที่:</strong> {{flightDate}}</div>
-      <div style="margin:6px 0"><strong>Route / เส้นทาง:</strong> {{route}}</div>
-      <div style="margin:14px 0">
-        I hereby certify that I have examined the above-named patient on {{today}} and certify that the patient is fit to travel by commercial flight.<br>
-        ข้าพเจ้าได้ตรวจร่างกายผู้ป่วยข้างต้นเมื่อ {{today}} และขอรับรองว่ามีความพร้อมในการเดินทางทางอากาศ
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/fit-to-fly .print-area replicated. EN-only labels matching ProClinic exactly. -->
+      <h2 style="text-align:center;margin:14px 0;color:#b71c1c;letter-spacing:0.02em">Medical Certificate for Air Travel</h2>
+      <h3 style="text-align:center;font-weight:normal;font-size:14px;margin:0 0 14px 0;color:#444">FIT-TO-FLY CERTIFICATE / ใบรับรองความพร้อมในการเดินทางทางอากาศ</h3>
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong style="color:#b71c1c">No.:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">Date:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
       </div>
-      <div style="margin:8px 0"><strong>Findings / ผลการตรวจ:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{findings}}</div>
-      <div style="margin:8px 0"><strong>Vital signs / สัญญาณชีพ:</strong> BP {{bp}} mmHg, Pulse {{pulse}}/min, Temp {{temp}} °C</div>
-      <div style="margin:8px 0"><strong>Diagnosis / การวินิจฉัย:</strong> {{diagnosis}}</div>
-    ` + DOCTOR_SIGNATURE,
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin:8px 0">
+        <div><strong>Name:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{customerNameEn}}</span></div>
+        <div><strong>Gender:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
+        <div><strong>Age:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{age}}</span> year <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{ageMonth}}</span> month</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
+        <div><strong>Nationality:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{nationality}}</span></div>
+        <div><strong>Passport Number/ID Number:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 4px">{{passport}}</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin:8px 0">
+        <div><strong>Airline:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{airline}}</span></div>
+        <div><strong>Flight no:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{flightNo}}</span></div>
+        <div><strong>Depart:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{departCity}}</span></div>
+        <div><strong>Arrival:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{arrivalCity}}</span></div>
+        <div><strong>Transit:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{transitCity}}</span></div>
+      </div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">Patient's History:</div>
+      <div style="margin:6px 0"><strong>Recent infection:</strong> {{recentInfectionMark}} Yes / {{recentInfectionNoMark}} No</div>
+      <div style="margin:6px 0"><strong>Recent Fever:</strong> {{recentFeverMark}} Yes / {{recentFeverNoMark}} No</div>
+      <div style="margin:6px 0"><strong>Being treated for any conditions:</strong> {{conditionMark}} Yes / {{conditionNoMark}} No &nbsp; if yes explain: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{conditionDetail}}</span></div>
+      <div style="margin:10px 0 4px 0;font-weight:600">Diagnosis:</div>
+      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
+      <div style="margin:8px 0 4px 0;font-weight:600">Treatment:</div>
+      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">Recommendation for air travel</div>
+      <div style="margin:6px 0">{{fitMark}} Fit for air travel &nbsp; {{notFitMark}} Not fit for air travel</div>
+      <div style="margin-top:24px"><strong>Medical License no:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{doctorLicenseNo}}</span></div>
+      <div style="margin-top:32px;display:flex;justify-content:space-between;border-top:1px solid #b71c1c;padding-top:14px">
+        <div style="text-align:center">
+          <div>Signature <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
+          <div style="margin-top:2px">( {{customerNameEn}} )</div>
+          <div style="font-style:italic;color:#444">Passenger</div>
+        </div>
+        <div style="text-align:center">
+          <div>Signature <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
+          <div style="margin-top:2px">( {{doctorName}} )</div>
+          <div style="font-style:italic;color:#444">Attending Physician</div>
+        </div>
+      </div>
+    `,
     fields: [
-      { key: 'customerNameEn', label: 'Patient Name (English)', type: 'text', required: true },
-      { key: 'passport',       label: 'Passport / ID', type: 'text' },
-      { key: 'nationality',    label: 'Nationality', type: 'text' },
-      { key: 'dob',            label: 'Date of Birth', type: 'date' },
-      { key: 'flightNo',       label: 'Flight No.', type: 'text' },
-      { key: 'flightDate',     label: 'Flight Date', type: 'date' },
-      { key: 'route',          label: 'Route', type: 'text' },
-      { key: 'bp',             label: 'BP (mmHg)', type: 'text' },
-      { key: 'pulse',          label: 'Pulse (/min)', type: 'number' },
-      { key: 'temp',           label: 'Temperature (°C)', type: 'text' },
-      { key: 'findings',       label: 'Findings', type: 'textarea' },
-      { key: 'diagnosis',      label: 'Diagnosis', type: 'text' },
-      { key: 'doctorName',     label: 'Doctor', type: 'text', required: true },
-      { key: 'doctorLicenseNo',label: 'License No.', type: 'text' },
-      { key: 'certNumber',     label: 'Certificate No.', type: 'text' },
+      { key: 'customerNameEn',     label: 'Patient Name (English)', type: 'text', required: true },
+      { key: 'passport',           label: 'Passport / ID', type: 'text' },
+      { key: 'nationality',        label: 'Nationality', type: 'text' },
+      { key: 'ageMonth',           label: 'Age (months)', type: 'text' },
+      { key: 'airline',            label: 'Airline', type: 'text' },
+      { key: 'flightNo',           label: 'Flight No.', type: 'text' },
+      { key: 'departCity',         label: 'Depart from', type: 'text' },
+      { key: 'arrivalCity',        label: 'Arrival', type: 'text' },
+      { key: 'transitCity',        label: 'Transit', type: 'text' },
+      { key: 'diagnosis',          label: 'Diagnosis', type: 'textarea' },
+      { key: 'treatment',          label: 'Treatment', type: 'textarea' },
+      { key: 'doctorName',         label: 'Doctor', type: 'text', required: true },
+      { key: 'doctorLicenseNo',    label: 'License No.', type: 'text' },
+      { key: 'certNumber',         label: 'Certificate No.', type: 'text' },
+      { key: 'recentInfectionMark',  label: '☑/☐ Recent infection Yes', type: 'text' },
+      { key: 'recentInfectionNoMark',label: '☑/☐ Recent infection No', type: 'text' },
+      { key: 'recentFeverMark',      label: '☑/☐ Recent Fever Yes', type: 'text' },
+      { key: 'recentFeverNoMark',    label: '☑/☐ Recent Fever No', type: 'text' },
+      { key: 'conditionMark',        label: '☑/☐ Being treated Yes', type: 'text' },
+      { key: 'conditionNoMark',      label: '☑/☐ Being treated No', type: 'text' },
+      { key: 'conditionDetail',      label: 'Condition detail', type: 'text' },
+      { key: 'fitMark',              label: '☑/☐ Fit for air travel', type: 'text' },
+      { key: 'notFitMark',           label: '☑/☐ Not fit', type: 'text' },
     ],
     toggles: NO_TOGGLES,
   },
@@ -938,44 +1053,78 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'bilingual',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0 4px 0;color:#b71c1c">ใบส่งตัวผู้ป่วย</h2>
-      <h3 style="text-align:center;font-weight:normal;margin-bottom:14px">Patient Referral Letter</h3>
-      ${CERT_NUMBER_LINE}
-      <div style="margin:8px 0"><strong>ส่งต่อไปยัง / Refer to:</strong> {{referTo}}</div>
-      <div style="margin:6px 0"><strong>แพทย์ผู้รับ / Attending Physician:</strong> {{referDoctor}}</div>
-      <div style="margin:14px 0 6px 0;border-top:1px dashed #000;padding-top:8px">
-        <strong>ข้อมูลผู้ป่วย / Patient Information</strong>
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/patient-referral .print-area replicated. 4 referral checkboxes + 7 numbered clinical history sections. -->
+      <h2 style="text-align:center;margin:14px 0;color:#b71c1c;letter-spacing:0.02em">ใบส่งตัวผู้ป่วย{{#lang en}} / Patient Referral Letter{{/lang}}</h2>
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
       </div>
-      <div style="margin:6px 0"><strong>ชื่อ-นามสกุล / Name:</strong> {{customerName}} ({{customerNameEn}}) &nbsp; <strong>HN:</strong> {{customerHN}}</div>
-      <div style="margin:6px 0"><strong>เพศ / Gender:</strong> {{gender}} &nbsp; <strong>อายุ / Age:</strong> {{age}} &nbsp; <strong>เลขบัตรประชาชน:</strong> {{nationalId}}</div>
-      <div style="margin:6px 0"><strong>ที่อยู่ / Address:</strong> {{patientAddress}}</div>
-      <div style="margin:14px 0 6px 0"><strong>อาการสำคัญ / Chief Complaint:</strong></div>
-      <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px">{{cc}}</div>
-      <div style="margin:8px 0 4px 0"><strong>ประวัติ / History:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{history}}</div>
-      <div style="margin:8px 0 4px 0"><strong>การตรวจร่างกาย / Examination:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{examination}}</div>
-      <div style="margin:8px 0"><strong>การวินิจฉัยเบื้องต้น / Provisional Dx:</strong> {{diagnosis}}</div>
-      <div style="margin:8px 0 4px 0"><strong>การรักษาที่ทำไปแล้ว / Treatment given:</strong></div>
-      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{treatmentGiven}}</div>
-      <div style="margin:8px 0 4px 0"><strong>เหตุที่ส่งต่อ / Reason for referral:</strong></div>
-      <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px">{{referralReason}}</div>
-      <div style="margin:14px 0;font-style:italic">ขอความกรุณาให้การดูแลรักษาต่อ &nbsp;/&nbsp; Please continue the care for this patient.</div>
-    ` + DOCTOR_SIGNATURE,
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0">
+        <div>
+          <div style="font-weight:600;color:#b71c1c">จาก</div>
+          <div>{{clinicName}}</div>
+          <div style="color:#444;font-size:11px">(โทรศัพท์) {{clinicPhone}}</div>
+        </div>
+        <div>
+          <div style="font-weight:600;color:#b71c1c">ถึง</div>
+          <div><span style="display:inline-block;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{referTo}}</span></div>
+        </div>
+      </div>
+      <div style="margin:10px 0">พร้อมหนังสือนี้ ขอส่งผู้ป่วยชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{customerName}}</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin:6px 0">
+        <div>เพศ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
+        <div>อายุ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{age}}</span> ปี</div>
+        <div>HN <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{customerHN}}</span></div>
+      </div>
+      <div style="margin:6px 0">ที่อยู่: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 4px">{{patientAddress}}</span></div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">มาเพื่อโปรด</div>
+      <div style="display:flex;gap:24px;margin:6px 0;flex-wrap:wrap">
+        <div>{{checkAdmitMark}} รับไว้รักษาต่อ</div>
+        <div>{{checkInvestigateMark}} ตรวจชันสูตร</div>
+        <div>{{checkObserveMark}} คุมไว้สังเกต</div>
+        <div>{{checkResultMark}} ขอทราบผล</div>
+      </div>
+      <div style="margin:14px 0 6px 0">
+        <div style="margin:6px 0">1.ประวัติการป่วยในอดีต และประวัติครอบครัว</div>
+        <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{history}}</div>
+        <div style="margin:6px 0">2.ประวัติการป่วยปัจจุบัน</div>
+        <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{cc}}</div>
+        <div style="margin:6px 0">3.ผลการตรวจชันสูตรของห้องทดลองที่สำคัญ</div>
+        <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{labResults}}</div>
+        <div style="margin:6px 0">4.การวินิจฉัยขั้นต้น</div>
+        <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
+        <div style="margin:6px 0">5.การรักษาที่ให้ไว้แล้ว</div>
+        <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatmentGiven}}</div>
+        <div style="margin:6px 0">6.สาเหตุที่ส่ง</div>
+        <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{referralReason}}</div>
+        <div style="margin:6px 0">7.รายละเอียดอื่นๆ</div>
+        <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{otherDetail}}</div>
+      </div>
+    ` + `
+      <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
+        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div style="margin-top:2px">( {{doctorName}} )</div>
+        <div style="font-style:italic;color:#444">แพทย์ผู้ตรวจ</div>
+        <div>วันที่ {{today}}</div>
+      </div>
+    `,
     fields: [
-      { key: 'referTo',        label: 'ส่งต่อไปยัง (คลินิก/รพ.)', type: 'text', required: true },
-      { key: 'referDoctor',    label: 'แพทย์ผู้รับ', type: 'text' },
-      { key: 'customerNameEn', label: 'ชื่อภาษาอังกฤษ', type: 'text' },
-      { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
-      { key: 'cc',             label: 'อาการสำคัญ', type: 'text' },
-      { key: 'history',        label: 'ประวัติ', type: 'textarea' },
-      { key: 'examination',    label: 'ผลการตรวจ', type: 'textarea' },
-      { key: 'diagnosis',      label: 'วินิจฉัยเบื้องต้น', type: 'text' },
-      { key: 'treatmentGiven', label: 'การรักษาที่ทำไปแล้ว', type: 'textarea' },
-      { key: 'referralReason', label: 'เหตุที่ส่งต่อ', type: 'textarea', required: true },
-      { key: 'doctorName',     label: 'แพทย์ผู้ส่งต่อ', type: 'text', required: true },
-      { key: 'doctorLicenseNo',label: 'เลขใบอนุญาต', type: 'text' },
-      { key: 'certNumber',     label: 'เลขที่ใบส่งตัว', type: 'text' },
+      { key: 'referTo',          label: 'ส่งต่อไปยัง (คลินิก/รพ.)', type: 'text', required: true },
+      { key: 'patientAddress',   label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
+      { key: 'history',          label: '1. ประวัติการป่วยในอดีต และครอบครัว', type: 'textarea' },
+      { key: 'cc',               label: '2. ประวัติการป่วยปัจจุบัน', type: 'textarea' },
+      { key: 'labResults',       label: '3. ผลตรวจชันสูตร', type: 'textarea' },
+      { key: 'diagnosis',        label: '4. การวินิจฉัยขั้นต้น', type: 'text' },
+      { key: 'treatmentGiven',   label: '5. การรักษาที่ให้ไว้แล้ว', type: 'textarea' },
+      { key: 'referralReason',   label: '6. สาเหตุที่ส่ง', type: 'textarea', required: true },
+      { key: 'otherDetail',      label: '7. รายละเอียดอื่นๆ', type: 'textarea' },
+      { key: 'doctorName',       label: 'แพทย์ผู้ส่งต่อ', type: 'text', required: true },
+      { key: 'doctorLicenseNo',  label: 'เลขใบอนุญาต', type: 'text' },
+      { key: 'certNumber',       label: 'เลขที่ใบส่งตัว', type: 'text' },
+      { key: 'checkAdmitMark',        label: '☑/☐ รับไว้รักษาต่อ', type: 'text' },
+      { key: 'checkInvestigateMark',  label: '☑/☐ ตรวจชันสูตร', type: 'text' },
+      { key: 'checkObserveMark',      label: '☑/☐ คุมไว้สังเกต', type: 'text' },
+      { key: 'checkResultMark',       label: '☑/☐ ขอทราบผล', type: 'text' },
     ],
     toggles: NO_TOGGLES,
   },
