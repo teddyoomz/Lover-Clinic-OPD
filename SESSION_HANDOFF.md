@@ -7,12 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 3 — pre-launch audit-all sweep + TZ1+AP1+RP5+AV3+C3 batch + IIFE refactor + BackendDashboard code-split (-26% bundle)
+- **Date last updated**: 2026-04-26 session 3 — full audit-all sweep + 2 fix passes + design audit + UI click-test + E2E spec authoring
 - **Branch**: `master`
-- **Last commit**: `4d4529b perf(audit P2): code-split BackendDashboard via React.lazy + Suspense`
-- **Test count**: 4893/4893 (+214 cumulative this 24h session)
+- **Last commit**: `24b82ac a11y(audit-design): :focus-visible global rule restores keyboard focus across all backend inputs`
+- **Test count**: 4893/4893 vitest + new E2E specs (`backend-all-tabs-smoke` 41 tests + `marketing-tabs-actions` 3 + `reports-tabs-render` 13 + `master-data-actions` 12 = 69 new E2E tests)
 - **Build**: clean. **BackendDashboard chunk: 1216 KB → 899 KB (-26% / -317 KB; gzip 224 → 162 KB / -28%)** after code-split
-- **Deploy state**: ⚠️ **9 commits ahead of prod** — production at `791b2de`; pending deploy of `7a9c62d` + `b1032bf` + `55b5919` + `65ba420` + `b870b40` + `902b9d9` + `5b790e4` + `4d4529b` (+ docs commits)
+- **UI click-test**: 41/41 backend tabs verified loading via preview_eval. 0 console errors during sidebar walkthrough.
+- **Design audit**: 5 parallel agents reviewed 95 backend component files. Top issue (145-site `:focus-visible` gap) shipped via single CSS rule.
+- **Deploy state**: ⚠️ **10 commits ahead of prod** — production at `791b2de`
   - **firestore:rules**: NOT changed this session — no probe-deploy-probe needed
   - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app
   - **Pending deploy**: 5 commits — user must say "deploy" THIS turn per V18 (V15 combined would ship all 5)

@@ -63,6 +63,48 @@ export async function goToBackend(page) {
 }
 
 /**
+ * Expand every collapsible nav section so leaf tab buttons (under
+ * "ลูกค้า", "การขาย", "การตลาด", "รายงาน", "ข้อมูลพื้นฐาน") are
+ * visible + clickable. Idempotent — clicking an already-expanded
+ * section just toggles the chevron back; we re-click as needed.
+ *
+ * Used by audit 2026-04-26 design-pass smoke specs which must reach
+ * all 41 tabs.
+ */
+export async function expandAllNavSections(page) {
+  // Includes "คลังสินค้า" + "การเงิน" — sections with single leaves where
+  // the section header is also a clickable container.
+  const SECTION_LABELS = ['ลูกค้า', 'การขาย', 'คลังสินค้า', 'การเงิน', 'การตลาด', 'รายงาน', 'ข้อมูลพื้นฐาน'];
+  for (const label of SECTION_LABELS) {
+    // Section header buttons HAVE aria-expanded; leaves do NOT. Filter
+    // by attribute to disambiguate when section + leaf share a name.
+    const btn = page.locator(`nav button[aria-expanded]:has-text("${label}")`).first();
+    const visible = await btn.isVisible({ timeout: 2000 }).catch(() => false);
+    if (!visible) continue;
+    const ariaExp = await btn.getAttribute('aria-expanded').catch(() => null);
+    if (ariaExp === 'false') {
+      await btn.click();
+      await page.waitForTimeout(250);
+    }
+  }
+}
+
+/**
+ * Click a LEAF tab button (one without aria-expanded). Disambiguates
+ * from section headers that share a name (e.g. "การเงิน" leaf vs
+ * "การเงิน" section header). Used by the smoke spec to click each
+ * leaf reliably regardless of sidebar state.
+ */
+export async function clickLeafTab(page, label) {
+  // CSS :not([aria-expanded]) excludes section headers
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const leaf = page.locator('nav button:not([aria-expanded])')
+    .filter({ hasText: new RegExp(`^${escaped}$`) })
+    .first();
+  await leaf.click();
+}
+
+/**
  * Navigate to a specific customer detail page.
  */
 export async function goToCustomer(page, customerId) {
