@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
@@ -64,7 +64,12 @@ export default function DocumentPrintModal({
     if (!open) return;
     setStep(STEP_PICK); setSelected(null); setValues({}); setQuery('');
     setLoading(true); setError('');
-    listDocumentTemplates({ activeOnly: true })
+    // 2026-04-25 — auto-upgrade system templates if SCHEMA_VERSION in code
+    // is newer than what's stored. Without this, users only get the latest
+    // hidden/staff-select fields after visiting DocumentTemplatesTab. Best-
+    // effort: failure here just means stale templates show, not crash.
+    upgradeSystemDocumentTemplates().catch(() => {})
+      .then(() => listDocumentTemplates({ activeOnly: true }))
       .then(list => {
         const filtered = docTypeFilter.length > 0
           ? list.filter(t => docTypeFilter.includes(t.docType))
@@ -73,6 +78,18 @@ export default function DocumentPrintModal({
       })
       .catch(e => setError(e.message || 'โหลดเทมเพลตล้มเหลว'))
       .finally(() => setLoading(false));
+    // 2026-04-25 — lazy-load doctor + staff lists ONCE on modal open. Cached
+    // for the session so any template can use them without re-fetch. Errors
+    // (permission denied / network) gracefully fall back to empty list so
+    // the dropdown doesn't stay stuck on "กำลังโหลด...".
+    listDoctors().then(setDoctorList).catch((err) => {
+      console.warn('[DocumentPrintModal] listDoctors failed:', err?.message || err);
+      setDoctorList([]);
+    });
+    listStaff().then(setStaffList).catch((err) => {
+      console.warn('[DocumentPrintModal] listStaff failed:', err?.message || err);
+      setStaffList([]);
+    });
   }, [open, docTypeFilter.join(',')]);
 
   const filteredTemplates = useMemo(() => {
@@ -102,18 +119,8 @@ export default function DocumentPrintModal({
       // leaving a blank space where the user expects ☐.
       else if (f.type === 'checkbox') initial[f.key] = '☐';
     }
-    // 2026-04-25 — lazy-load doctor/staff lists if any field needs them
-    const fields = t.fields || [];
-    const needsDoctors = fields.some(f => f.type === 'staff-select' && (f.source === 'doctors' || f.source === 'doctors+staff'));
-    const needsStaff   = fields.some(f => f.type === 'staff-select' && (f.source === 'staff'   || f.source === 'doctors+staff'));
-    const promises = [];
-    if (needsDoctors && doctorList === null) {
-      promises.push(listDoctors().then(setDoctorList).catch(() => setDoctorList([])));
-    }
-    if (needsStaff && staffList === null) {
-      promises.push(listStaff().then(setStaffList).catch(() => setStaffList([])));
-    }
-    if (promises.length) Promise.all(promises); // fire-and-forget; UI shows loading inside the dropdown
+    // (Doctor/staff lists already loaded by modal-open useEffect — no need
+    // to re-fetch here. Cached across template picks within a session.)
     // Phase 14.2.B — auto-generate cert# if the template has a `certNumber`
     // field and the user hasn't provided one via prefill. Uses runTransaction
     // for race-safety (matches the invoice-counter pattern). Best-effort:

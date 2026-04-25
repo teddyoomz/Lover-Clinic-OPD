@@ -137,7 +137,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
