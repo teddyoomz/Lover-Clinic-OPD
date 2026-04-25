@@ -21,6 +21,7 @@
 //   createdAt / updatedAt — ISO strings
 
 export const DOC_TYPES = Object.freeze([
+  // Phase 14.1 — medical certificates (8) + system templates (4) + referral (1)
   'medical-certificate',
   'medical-certificate-for-driver-license',
   'medical-opinion',
@@ -34,22 +35,74 @@ export const DOC_TYPES = Object.freeze([
   'treatment',
   'sale-cancelation',
   'patient-referral',
+  // Phase 14.2.B (2026-04-25) — treatment-record print docs surfaced under
+  // ProClinic's "พิมพ์การรักษา ▾" dropdown per treatment row.
+  'treatment-history',     // ประวัติการรักษา (A4)
+  'treatment-referral',    // ใบส่งตัวทรีตเมนต์ (A5)
+  'course-deduction',      // ใบตัดคอร์ส
 ]);
 
 export const DOC_TYPE_LABELS = Object.freeze({
   'medical-certificate':                                'ใบรับรองแพทย์ (ทั่วไป)',
-  'medical-certificate-for-driver-license':             'ใบรับรองแพทย์ทำใบขับขี่',
-  'medical-opinion':                                    'ความเห็นแพทย์',
+  'medical-certificate-for-driver-license':             'ใบรับรองแพทย์สำหรับใบอนุญาตขับรถ',
+  'medical-opinion':                                    'ใบรับรองแพทย์ลาป่วย',
   'physical-therapy-certificate':                       'ใบรับรองกายภาพบำบัด',
   'thai-traditional-medicine-medical-certificate':      'ใบรับรองแพทย์แผนไทย',
   'chinese-traditional-medicine-medical-certificate':   'ใบรับรองแพทย์แผนจีน',
-  'fit-to-fly':                                         'ใบรับรอง Fit-to-fly',
+  'fit-to-fly':                                         'ใบรับรองแพทย์ Fit to fly',
   'medicine-label':                                     'ฉลากยา',
   'chart':                                              'เทมเพลต Chart',
   'consent':                                            'เทมเพลตความยินยอม (Consent)',
   'treatment':                                          'เทมเพลตการรักษา',
   'sale-cancelation':                                   'เทมเพลตยกเลิกการขาย',
   'patient-referral':                                   'ใบส่งตัวผู้ป่วย',
+  'treatment-history':                                  'ประวัติการรักษา (A4)',
+  'treatment-referral':                                 'ใบส่งตัวทรีตเมนต์ (A5)',
+  'course-deduction':                                   'ใบตัดคอร์ส',
+});
+
+// Phase 14.2.B — group docTypes by where they surface in the UI:
+//  - "พิมพ์ใบรับรองแพทย์ ▾" dropdown per treatment row (8 cert types per ProClinic)
+//  - "พิมพ์การรักษา ▾" dropdown per treatment row (3 treatment-record types)
+// Other docTypes (consent / chart / treatment / sale-cancelation / medicine-label)
+// surface elsewhere (sale-detail / pharmacy / general docs picker).
+export const TREATMENT_CERT_DOC_TYPES = Object.freeze([
+  'medical-opinion',
+  'medical-certificate',
+  'medical-certificate-for-driver-license',
+  'physical-therapy-certificate',
+  'thai-traditional-medicine-medical-certificate',
+  'chinese-traditional-medicine-medical-certificate',
+  'patient-referral',
+  'fit-to-fly',
+]);
+
+export const TREATMENT_PRINT_DOC_TYPES = Object.freeze([
+  'treatment-history',
+  'treatment-referral',
+  'course-deduction',
+]);
+
+// Buckets used when ProClinic-style cert numbers are auto-issued. Each
+// bucket is a separate counter so MED-202604-0001 doesn't collide with
+// REF-202604-0001 even though they share the YYYY-MM segment.
+export const CERT_NUMBER_PREFIX = Object.freeze({
+  'medical-certificate':                                'MC',
+  'medical-certificate-for-driver-license':             'DL',
+  'medical-opinion':                                    'MO',
+  'physical-therapy-certificate':                       'PT',
+  'thai-traditional-medicine-medical-certificate':      'TT',
+  'chinese-traditional-medicine-medical-certificate':   'CT',
+  'fit-to-fly':                                         'FF',
+  'patient-referral':                                   'PR',
+  'treatment-history':                                  'TH',
+  'treatment-referral':                                 'TR',
+  'course-deduction':                                   'CD',
+  'consent':                                            'CN',
+  'chart':                                              'CH',
+  'treatment':                                          'TX',
+  'sale-cancelation':                                   'SC',
+  'medicine-label':                                     'ML',
 });
 
 export const LANGUAGES = Object.freeze(['th', 'en', 'bilingual']);
@@ -65,7 +118,13 @@ export const MAX_TOGGLES = 10;
 // Phase 14.2 — schema version. Bump when seed templates change so the
 // re-seed mechanism (seedDocumentTemplatesIfNewer) can detect drift and
 // upgrade existing system-default templates without losing user edits.
-export const SCHEMA_VERSION = 2;
+//   v1 (Phase 14.1) — initial 13 simplified templates
+//   v2 (Phase 14.2) — toggles + bilingual + ProClinic-fidelity HTML
+//   v3 (Phase 14.2.B 2026-04-25) — per-cert toggle config (NO_TOGGLES vs
+//       TOGGLE_OPINION_PT) + always-on cert# block for medical-cert/driver/
+//       fit-to-fly/patient-referral + 3 NEW treatment-record docTypes
+//       (treatment-history, treatment-referral, course-deduction)
+export const SCHEMA_VERSION = 3;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -269,6 +328,27 @@ const HEADER_CLINIC = `
   <hr style="border:0;border-top:1px solid #000;margin:6px 0 14px 0" />
 `;
 
+// Always-on patient signature block (used by certs without the
+// showPatientSignature toggle — i.e. medical-certificate / driver-license /
+// patient-referral / fit-to-fly where the signature is part of the doc).
+const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
+  <h4 style="margin:14px 0 8px 0;background:#000;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 1</h4>
+  <span style="margin-left:8px">ของผู้ขอรับใบรับรองสุขภาพ</span>
+  <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
+  <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
+  <div style="margin:10px 0 6px 0">ข้าพเจ้าขอรับใบรับรองสุขภาพโดยมีประวัติสุขภาพดังนี้:</div>
+  <div style="margin:4px 0;display:flex"><span style="min-width:240px">1. โรคประจำตัว</span><span>{{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} ไม่มี &nbsp; {{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} มี ระบุ: {{chronicDisease}}</span></div>
+  <div style="margin:4px 0;display:flex"><span style="min-width:240px">2. อุบัติเหตุและผ่าตัด</span><span>{{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} ไม่มี &nbsp; {{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} มี ระบุ: {{accidentsDetails}}</span></div>
+  <div style="margin:4px 0;display:flex"><span style="min-width:240px">3. เคยเข้ารับการรักษาในโรงพยาบาล</span><span>{{#if hasHospitalized}}☑{{/if}}{{#unless hasHospitalized}}☐{{/unless}} ไม่มี &nbsp; {{#if hasHospitalized}}☑{{/if}}{{#unless hasHospitalized}}☐{{/unless}} มี ระบุ: {{hospitalizedDetails}}</span></div>
+  <div style="margin:4px 0;display:flex"><span style="min-width:240px">4. โรคลมชัก<sup>*</sup></span><span>{{#if hasEpilepsy}}☑{{/if}}{{#unless hasEpilepsy}}☐{{/unless}} ไม่มี &nbsp; {{#if hasEpilepsy}}☑{{/if}}{{#unless hasEpilepsy}}☐{{/unless}} มี ระบุ: {{epilepsyDetails}}</span></div>
+  <div style="margin:4px 0">5. ประวัติอื่นที่สำคัญ {{otherHistory}}</div>
+  <div style="margin-top:14px;display:flex;justify-content:space-around;padding:0 40px">
+    <div>ลงชื่อ: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
+    <div>วัน / เดือน / ปี: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px"></span></div>
+  </div>
+  <div style="font-size:10px;color:#a00;margin-top:6px;text-align:center"><sup>*</sup> ในกรณีที่เด็กไม่สามารถรับรองตนเองได้ ให้ผู้ปกครองลงนามรับรองแทน</div>
+`;
+
 // Common section-1 patient self-declaration block — shared by 3 medical
 // certificates that have it (general / driver-license / fit-to-fly extended).
 const SECTION_1_PATIENT_DECLARATION = `
@@ -328,15 +408,19 @@ const CERT_NUMBER_LINE = `
   {{/unless}}
 `;
 
-// Common cert-page top-toggle bar — replicated from ProClinic.
-// Renders as a hint at top of the page when previewing in print engine.
-const TOGGLE_HINT_TOP = `
-  {{#if showCertNumber}}{{/if}}{{#unless showCertNumber}}{{/unless}}
-`;
-
-const SECTION_FILL_LINE = (label, key) => `
-  <div style="margin:6px 0"><strong>${label}:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{${key}}}</span></div>
-`;
+// Phase 14.2.B (2026-04-25) — per-cert toggle config replicated from
+// ProClinic screenshots. Different cert pages expose different toggle bars:
+//  - medical-certificate / driver-license / fit-to-fly / patient-referral:
+//    only TH/EN language switch (no show/hide toggles — full doc always rendered)
+//  - medical-opinion / PT / Thai-traditional / Chinese-traditional:
+//    + showCertNumber + showPatientSignature toggles
+//  - sale-cancelation / consent / chart / treatment / medicine-label:
+//    no toggles (form-fill driven instead)
+const TOGGLE_OPINION_PT = Object.freeze([
+  { key: 'showCertNumber',       labelTh: 'แสดงเลขที่ใบรับรองแพทย์', labelEn: 'Show certificate number', defaultOn: false },
+  { key: 'showPatientSignature', labelTh: 'แสดงลายเซ็นคนไข้',         labelEn: 'Show patient signature',  defaultOn: false },
+]);
+const NO_TOGGLES = Object.freeze([]);
 
 const COMMON_CERT_FIELDS = [
   { key: 'certNumber',      label: 'เลขที่ใบรับรอง',     type: 'text' },
@@ -366,43 +450,67 @@ const COMMON_HISTORY_FIELDS = [
 export const SEED_TEMPLATES = Object.freeze([
   {
     docType: 'medical-certificate',
-    name: 'ใบรับรองแพทย์ (ทั่วไป)',
+    name: 'ใบรับรองแพทย์ (5 โรค)',
     language: 'th',
     paperSize: 'A4',
+    // Per ProClinic screenshot: TH/EN language switch only — no show/hide
+    // toggles. cert# field, patient signature footnote, sec1+sec2 always
+    // rendered. Patient signature shown via { showPatientSignature: true }
+    // baked into the seed as default ON in COMMON_TOGGLES → flipped to no-
+    // toggles here so the block always renders.
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;letter-spacing:0.05em">ใบรับรองแพทย์</h2>
-      ${CERT_NUMBER_LINE}
-      ${SECTION_1_PATIENT_DECLARATION}
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
+        <div><strong>วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+      </div>
+      ${SECTION_1_PATIENT_DECLARATION_ALWAYS}
       ${SECTION_2_DOCTOR_BLOCK}
     ` + DOCTOR_SIGNATURE,
     fields: [...COMMON_CERT_FIELDS, ...COMMON_HISTORY_FIELDS],
-    toggles: COMMON_TOGGLES,
+    toggles: NO_TOGGLES,
   },
   {
     docType: 'medical-certificate-for-driver-license',
-    name: 'ใบรับรองแพทย์ (สำหรับทำใบอนุญาตขับขี่)',
+    name: 'ใบรับรองแพทย์ (สำหรับใบอนุญาตขับรถ)',
     language: 'th',
     paperSize: 'A4',
+    // Per ProClinic screenshot: TH/EN only. Black-bg badges for ส่วนที่ 1 / 2.
+    // Special: เลขบัตรประชาชนแบบ box-grid (1-4-5-2-1 split). วันที่ในรูปแบบ
+    // วันที่ ___ เดือน ___ พ.ศ. ___
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์ (สำหรับทำใบอนุญาตขับขี่)</h2>
-      ${CERT_NUMBER_LINE}
-      ${SECTION_1_PATIENT_DECLARATION}
-      ${SECTION_2_DOCTOR_BLOCK}
-      <div style="margin-top:8px"><strong>สัญญาณชีพ:</strong> ความดันโลหิต {{bp}} mmHg &nbsp; ชีพจร {{pulse}} ครั้ง/นาที</div>
-      <div style="margin-top:6px"><strong>การมองเห็น:</strong> ตาขวา {{visionRight}} &nbsp; ตาซ้าย {{visionLeft}} &nbsp; ตาบอดสี: {{#if colorBlind}}มี{{/if}}{{#unless colorBlind}}ไม่มี{{/unless}}</div>
-      <div style="margin-top:8px;font-weight:bold">ขอรับรองว่าผู้ป่วยรายนี้ {{fitVerdict}} ที่จะขับขี่ยานพาหนะ</div>
+      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์ (สำหรับใบอนุญาตขับรถ)</h2>
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong>เล่มที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certBookNumber}}</span></div>
+        <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certNumber}}</span></div>
+      </div>
+      ${SECTION_1_PATIENT_DECLARATION_ALWAYS}
+      <h4 style="margin:18px 0 8px 0;background:#000;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 2</h4>
+      <span style="margin-left:8px">ของแพทย์</span>
+      <div style="margin:10px 0"><strong>สถานที่ตรวจ:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{clinicAddress}}</span> <strong>วันที่</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> <strong>เดือน</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> <strong>พ.ศ.</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span></div>
+      <div style="margin:8px 0">(1) ข้าพเจ้า นายแพทย์/แพทย์หญิง: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{doctorName}}</span></div>
+      <div style="margin:6px 0">ใบอนุญาตประกอบวิชาชีพเวชกรรมเลขที่: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 6px">{{doctorLicenseNo}}</span> &nbsp; สถานพยาบาลชื่อ: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{clinicName}}</span></div>
+      <div style="margin:6px 0">ที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{clinicAddress}}</span></div>
+      <div style="margin:8px 0">ได้ตรวจร่างกาย นาย/นาง/นางสาว: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{customerName}}</span></div>
+      <div style="margin:6px 0">แล้วเมื่อวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> เดือน <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> พ.ศ. <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> มีรายละเอียดดังนี้</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin:10px 0">
+        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> กก.</div>
+        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> ซม.</div>
+        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> mmHg</div>
+        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> ครั้ง/นาที</div>
+      </div>
+      <div style="margin:8px 0">ผลการตรวจการมองเห็น: ตาขวา <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> ตาซ้าย <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> ตาบอดสี: ☐ ปกติ ☐ ผิดปกติ</div>
+      <div style="margin:8px 0"><strong>ผลการตรวจ:</strong> {{findings}}</div>
+      <div style="margin:8px 0"><strong>การวินิจฉัย:</strong> {{diagnosis}}</div>
+      <div style="margin:14px 0;font-weight:bold;text-align:center">ขอรับรองว่าผู้ป่วยรายนี้ {{fitVerdict}} ที่จะขับขี่ยานพาหนะ</div>
     ` + DOCTOR_SIGNATURE,
     fields: [
       ...COMMON_CERT_FIELDS,
       ...COMMON_HISTORY_FIELDS,
-      { key: 'bp',           label: 'ความดันโลหิต (mmHg)', type: 'text' },
-      { key: 'pulse',        label: 'ชีพจร (ครั้ง/นาที)', type: 'number' },
-      { key: 'visionRight',  label: 'การมองเห็นตาขวา', type: 'text' },
-      { key: 'visionLeft',   label: 'การมองเห็นตาซ้าย', type: 'text' },
-      { key: 'colorBlind',   label: 'ตาบอดสี (boolean)', type: 'select', options: ['', 'true', 'false'] },
+      { key: 'certBookNumber', label: 'เล่มที่', type: 'text' },
       { key: 'fitVerdict',   label: 'สรุป (เช่น "มีความเหมาะสม")', type: 'text', required: true },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: NO_TOGGLES,
   },
   {
     docType: 'medical-opinion',
@@ -436,7 +544,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'restFrom',        label: 'พักตั้งแต่',           type: 'date' },
       { key: 'restTo',          label: 'ถึง',                 type: 'date' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: TOGGLE_OPINION_PT,
   },
   {
     docType: 'physical-therapy-certificate',
@@ -468,7 +576,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'sessionCount',   label: 'จำนวนครั้ง', type: 'number' },
       { key: 'recommendation', label: 'คำแนะนำ', type: 'textarea' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: TOGGLE_OPINION_PT,
   },
   {
     docType: 'thai-traditional-medicine-medical-certificate',
@@ -507,7 +615,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'treatment',      label: 'ได้ทำการรักษาโดย', type: 'textarea' },
       { key: 'recommendation', label: 'สรุปความเห็นและข้อแนะนำ', type: 'textarea' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: TOGGLE_OPINION_PT,
   },
   {
     docType: 'chinese-traditional-medicine-medical-certificate',
@@ -536,7 +644,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'tcmDiagnosis',   label: 'การวินิจฉัยแพทย์จีน / 中医诊断', type: 'textarea' },
       { key: 'treatment',      label: 'การรักษา / 治疗', type: 'textarea' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: TOGGLE_OPINION_PT,
   },
   {
     docType: 'fit-to-fly',
@@ -578,7 +686,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorLicenseNo',label: 'License No.', type: 'text' },
       { key: 'certNumber',     label: 'Certificate No.', type: 'text' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: NO_TOGGLES,
   },
   {
     docType: 'medicine-label',
@@ -643,7 +751,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',  label: 'เลขที่เอกสาร', type: 'text' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: NO_TOGGLES,
   },
   {
     docType: 'consent',
@@ -819,6 +927,129 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorLicenseNo',label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบส่งตัว', type: 'text' },
     ],
-    toggles: COMMON_TOGGLES,
+    toggles: NO_TOGGLES,
+  },
+  // ─── Phase 14.2.B treatment-record print docs ──────────────────────────
+  // Surfaced under "พิมพ์การรักษา ▾" dropdown per treatment row in
+  // CustomerDetailView. Templates fill from treatment context (treatmentDate,
+  // doctorName, products, dose, totalAmount, etc.) auto-piped from the
+  // treatment record at print-time.
+  {
+    docType: 'treatment-history',
+    name: 'ประวัติการรักษา (A4)',
+    language: 'th',
+    paperSize: 'A4',
+    htmlTemplate: HEADER_CLINIC + `
+      <h2 style="text-align:center;margin:14px 0">ประวัติการรักษา</h2>
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong>HN:</strong> {{customerHN}} &nbsp; <strong>ชื่อ-นามสกุล:</strong> {{customerName}}</div>
+        <div><strong>วันที่รักษา:</strong> {{treatmentDate}}</div>
+      </div>
+      <div style="margin:6px 0"><strong>เพศ:</strong> {{gender}} &nbsp; <strong>อายุ:</strong> {{age}} ปี &nbsp; <strong>เลขบัตรประชาชน:</strong> {{nationalId}}</div>
+      <div style="margin:6px 0"><strong>โทรศัพท์:</strong> {{phone}}</div>
+      <hr style="border:0;border-top:1px solid #000;margin:10px 0" />
+      <div style="margin:8px 0"><strong>แพทย์ผู้รักษา:</strong> {{doctorName}} &nbsp; <strong>ผู้ช่วย:</strong> {{assistantName}}</div>
+      <div style="margin:8px 0"><strong>รายการรักษา:</strong></div>
+      <div style="border:1px solid #000;padding:8px;min-height:80px;margin:6px 0;background:#fafafa">{{treatmentItems}}</div>
+      <div style="margin:8px 0"><strong>หมายเหตุการรักษา (Dr. Note):</strong></div>
+      <div style="border-bottom:1px dotted #000;min-height:60px;margin:6px 0">{{drNote}}</div>
+      <div style="margin:8px 0"><strong>ผลข้างเคียง / อาการเฝ้าระวัง:</strong></div>
+      <div style="border-bottom:1px dotted #000;min-height:40px;margin:6px 0">{{sideEffects}}</div>
+      <div style="margin:8px 0"><strong>นัดครั้งถัดไป:</strong> {{nextAppointment}}</div>
+    ` + DOCTOR_SIGNATURE,
+    fields: [
+      { key: 'treatmentDate',  label: 'วันที่รักษา', type: 'date' },
+      { key: 'treatmentItems', label: 'รายการรักษา (auto-fill จาก treatment)', type: 'textarea' },
+      { key: 'drNote',         label: 'หมายเหตุแพทย์', type: 'textarea' },
+      { key: 'sideEffects',    label: 'ผลข้างเคียง', type: 'textarea' },
+      { key: 'nextAppointment',label: 'นัดครั้งถัดไป', type: 'date' },
+      { key: 'doctorName',     label: 'แพทย์ผู้รักษา', type: 'text', required: true },
+      { key: 'assistantName',  label: 'ผู้ช่วย', type: 'text' },
+    ],
+    toggles: NO_TOGGLES,
+  },
+  {
+    docType: 'treatment-referral',
+    name: 'ใบส่งตัวทรีตเมนต์ (A5)',
+    language: 'th',
+    paperSize: 'A5',
+    htmlTemplate: `
+      <div style="text-align:center;margin-bottom:10px">
+        <div style="font-weight:bold;font-size:16px">{{clinicName}}</div>
+        <div style="font-size:10px;color:#444">โทร. {{clinicPhone}}</div>
+      </div>
+      <hr style="border:0;border-top:1.5px solid #000;margin:6px 0 10px 0" />
+      <h3 style="text-align:center;margin:8px 0">ใบส่งตัวทรีตเมนต์</h3>
+      <div style="margin:6px 0"><strong>เลขที่:</strong> {{certNumber}} &nbsp; <strong>วันที่:</strong> {{treatmentDate}}</div>
+      <div style="margin:6px 0"><strong>ลูกค้า:</strong> {{customerName}} (HN {{customerHN}})</div>
+      <div style="margin:6px 0"><strong>เพศ/อายุ:</strong> {{gender}} / {{age}} ปี</div>
+      <hr style="border:0;border-top:1px dashed #000;margin:8px 0" />
+      <div style="margin:6px 0"><strong>ทรีตเมนต์ที่จะรับ:</strong></div>
+      <div style="border:1px solid #000;padding:6px;min-height:50px;margin:4px 0;font-size:12px">{{treatmentItems}}</div>
+      <div style="margin:6px 0"><strong>แพทย์ผู้สั่ง:</strong> {{doctorName}}</div>
+      <div style="margin:6px 0"><strong>ผู้ทำหัตถการ:</strong> {{assistantName}}</div>
+      <div style="margin:6px 0"><strong>หมายเหตุ:</strong> {{drNote}}</div>
+      <div style="margin-top:14px;text-align:right;font-size:11px">
+        ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px"></span> ผู้รับ
+      </div>
+    `,
+    fields: [
+      { key: 'treatmentDate',  label: 'วันที่รักษา', type: 'date' },
+      { key: 'treatmentItems', label: 'ทรีตเมนต์', type: 'textarea' },
+      { key: 'drNote',         label: 'หมายเหตุ', type: 'textarea' },
+      { key: 'doctorName',     label: 'แพทย์', type: 'text', required: true },
+      { key: 'assistantName',  label: 'ผู้ช่วย', type: 'text' },
+      { key: 'certNumber',     label: 'เลขที่', type: 'text' },
+    ],
+    toggles: NO_TOGGLES,
+  },
+  {
+    docType: 'course-deduction',
+    name: 'ใบตัดคอร์ส',
+    language: 'th',
+    paperSize: 'A4',
+    htmlTemplate: HEADER_CLINIC + `
+      <h2 style="text-align:center;margin:14px 0">ใบตัดคอร์ส</h2>
+      <div style="display:flex;justify-content:space-between;margin:10px 0">
+        <div><strong>เลขที่:</strong> {{certNumber}}</div>
+        <div><strong>วันที่:</strong> {{treatmentDate}}</div>
+      </div>
+      <div style="margin:6px 0"><strong>HN:</strong> {{customerHN}} &nbsp; <strong>ชื่อ-นามสกุล:</strong> {{customerName}}</div>
+      <hr style="border:0;border-top:1px solid #000;margin:10px 0" />
+      <table style="width:100%;border-collapse:collapse;margin:10px 0">
+        <thead>
+          <tr style="background:#f0f0f0">
+            <th style="border:1px solid #000;padding:6px;text-align:left">คอร์ส / สินค้า</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right">ตัด</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right">คงเหลือก่อน</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right">คงเหลือหลัง</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{deductionRows}}
+        </tbody>
+      </table>
+      <div style="margin:10px 0"><strong>หมายเหตุ:</strong> {{note}}</div>
+      <div style="margin:10px 0"><strong>ผู้ทำหัตถการ:</strong> {{doctorName}}</div>
+      <div style="margin-top:30px;display:flex;justify-content:space-between">
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span> ลูกค้า</div>
+          <div style="margin-top:2px">( {{customerName}} )</div>
+        </div>
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span> เจ้าหน้าที่</div>
+          <div style="margin-top:2px">( {{staffName}} )</div>
+        </div>
+      </div>
+    `,
+    fields: [
+      { key: 'treatmentDate',  label: 'วันที่ตัด', type: 'date' },
+      { key: 'deductionRows',  label: 'รายการที่ตัด (HTML rows auto-fill)', type: 'textarea' },
+      { key: 'note',           label: 'หมายเหตุ', type: 'textarea' },
+      { key: 'doctorName',     label: 'ผู้ทำหัตถการ', type: 'text', required: true },
+      { key: 'staffName',      label: 'เจ้าหน้าที่', type: 'text', required: true },
+      { key: 'certNumber',     label: 'เลขที่', type: 'text' },
+    ],
+    toggles: NO_TOGGLES,
   },
 ]);

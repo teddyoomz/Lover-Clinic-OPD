@@ -6271,6 +6271,41 @@ export async function seedDocumentTemplatesIfEmpty() {
 }
 
 /**
+ * Phase 14.2.B — auto-generate the next certificate number for a docType.
+ * Format: `{prefix}-{YYYYMM}-{seq}` where seq is per-(docType,month) and
+ * starts at 0001. Counters live in `clinic_settings/cert_counters`:
+ *
+ *   clinic_settings/cert_counters: {
+ *     'MC:202604': 12,    // 12 medical-cert issued in 2026-04
+ *     'MO:202604': 3,
+ *     'TR:202605': 0,
+ *     ...
+ *   }
+ *
+ * Uses runTransaction so two simultaneous prints don't collide on the
+ * same number (race-safe per Rule C2 / iron-clad invoice-race lesson).
+ */
+export async function getNextCertNumber(docType) {
+  const { CERT_NUMBER_PREFIX } = await import('./documentTemplateValidation.js');
+  const prefix = CERT_NUMBER_PREFIX[docType] || 'GEN';
+  const now = new Date();
+  const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const counterKey = `${prefix}:${yyyymm}`;
+
+  const ref = doc(db, ...basePath(), 'clinic_settings', 'cert_counters');
+  const next = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists() ? snap.data() : {};
+    const current = Number(data[counterKey]) || 0;
+    const nextSeq = current + 1;
+    tx.set(ref, { [counterKey]: nextSeq }, { merge: true });
+    return nextSeq;
+  });
+  const seq = String(next).padStart(4, '0');
+  return `${prefix}-${yyyymm}-${seq}`;
+}
+
+/**
  * Phase 14.2 — schema upgrade. Detects existing system-default templates
  * with an outdated schemaVersion and rewrites them with the latest seed
  * HTML + fields + toggles. User-edited templates (isSystemDefault=false)

@@ -94,10 +94,10 @@ describe('F1: validateDocumentTemplate covers every legal + illegal edge', () =>
 /* ─── F2: seed templates ────────────────────────────────────────────────── */
 
 describe('F2: every SEED_TEMPLATE passes strict validator', () => {
-  it('F2.1: 13 seeds for 13 docTypes (no missing, no duplicates)', () => {
+  it('F2.1: 16 seeds for 16 docTypes (13 originals + 3 treatment-record from Phase 14.2.B)', () => {
     const docTypes = SEED_TEMPLATES.map(s => s.docType);
-    expect(docTypes.length).toBe(13);
-    expect(new Set(docTypes).size).toBe(13);
+    expect(docTypes.length).toBe(16);
+    expect(new Set(docTypes).size).toBe(16);
     for (const t of DOC_TYPES) expect(docTypes).toContain(t);
   });
 
@@ -505,9 +505,15 @@ describe('F9: validateDocumentTemplate toggles', () => {
     }
   });
 
-  it('F9.8: toggle keys referenced in template HTML must exist in toggle list', () => {
-    // Lock the contract: if HTML uses {{#if showCertNumber}}, the template
-    // must declare a toggle with key=showCertNumber.
+  it('F9.8: toggle keys referenced in template HTML must exist in toggle list OR universal toggle names', () => {
+    // Universal toggle names (always-on when not exposed to user). The
+    // print modal pre-populates these as TRUE when the template's toggles
+    // array is empty, so {{#if showCertNumber}} blocks render even on
+    // certs without an explicit user-facing toggle (e.g., fit-to-fly,
+    // patient-referral always show cert# per ProClinic).
+    const UNIVERSAL_TOGGLE_KEYS = new Set([
+      'showCertNumber', 'showPatientSignature',
+    ]);
     const HARDCODED_CTX_KEYS = new Set([
       'language', 'today', 'todayISO', 'todayBE',
       'clinicName', 'clinicNameEn', 'clinicAddress', 'clinicAddressEn',
@@ -523,7 +529,8 @@ describe('F9: validateDocumentTemplate toggles', () => {
       const fieldKeys = new Set((seed.fields || []).map(f => f.key));
       const toggleKeys = new Set((seed.toggles || []).map(t => t.key));
       for (const ck of conditionalKeys) {
-        const known = fieldKeys.has(ck) || toggleKeys.has(ck) || HARDCODED_CTX_KEYS.has(ck);
+        const known = fieldKeys.has(ck) || toggleKeys.has(ck)
+          || HARDCODED_CTX_KEYS.has(ck) || UNIVERSAL_TOGGLE_KEYS.has(ck);
         expect(`${seed.docType}::${ck}::known=${known}`).toBe(`${seed.docType}::${ck}::known=true`);
       }
     }
@@ -583,26 +590,26 @@ describe('F10: schemaVersion + context spread', () => {
 /* ─── F11: full-flow render — replicated seeds with all options ────────── */
 
 describe('F11: full ProClinic-replicated rendering', () => {
-  it('F11.1: medical-cert with showCertNumber off + showPatientSignature off', () => {
+  it('F11.1: medical-certificate (5 โรค) — Phase 14.2.B always-on layout (no toggles per ProClinic)', () => {
     const seed = SEED_TEMPLATES.find(s => s.docType === 'medical-certificate');
+    // Per ProClinic screenshot: medical-cert (5 โรค) has TH/EN switch only,
+    // no show/hide toggles — full doc always rendered including cert#,
+    // section 1+2, patient signature footnote.
+    expect(seed.toggles).toEqual([]);
     const ctx = buildPrintContext({
       clinic: { clinicName: 'Lover Clinic', clinicAddress: '67/12 ทดสอบ', clinicPhone: '02-000', clinicLicenseNo: '11102000999' },
       customer: { proClinicHN: 'HN-9', patientData: { firstName: 'สมชาย', lastName: 'ใจดี' } },
-      values: { findings: 'ปกติ', diagnosis: 'หวัด', doctorName: 'นพ.A', doctorLicenseNo: 'L-A' },
-      toggles: { showCertNumber: false, showPatientSignature: false },
+      values: { findings: 'ปกติ', diagnosis: 'หวัด', doctorName: 'นพ.A', doctorLicenseNo: 'L-A', certNumber: 'CERT-A1' },
     });
     const html = renderTemplate(seed.htmlTemplate, ctx);
     expect(html).toContain('Lover Clinic');
     expect(html).toContain('11102000999'); // license shown in header
     expect(html).toContain('นพ.A');
-    // Cert# block hidden — its specific markup is `<strong>เลขที่:</strong>`
-    // (the unique pattern in CERT_NUMBER_LINE). The header has
-    // `เลขที่ใบอนุญาต:` for clinic license which is fine to leave.
-    expect(html).not.toContain('<strong>เลขที่:</strong>');
-    // Patient signature block hidden — the specific footnote text "ผู้ปกครอง"
-    // only appears inside that block.
-    expect(html).not.toContain('ผู้ปกครอง');
-    // Date still shown via top date line
+    // Cert# block ALWAYS shown
+    expect(html).toContain('<strong>เลขที่:</strong>');
+    expect(html).toContain('CERT-A1');
+    // Patient signature footnote ALWAYS shown (no toggle gate)
+    expect(html).toContain('ผู้ปกครอง');
     expect(html).toMatch(/วันที่รักษา/);
   });
 

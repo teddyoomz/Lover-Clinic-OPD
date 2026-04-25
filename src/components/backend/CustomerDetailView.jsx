@@ -13,6 +13,10 @@ import {
   getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
+import {
+  TREATMENT_CERT_DOC_TYPES,
+  TREATMENT_PRINT_DOC_TYPES,
+} from '../../lib/documentTemplateValidation.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
@@ -103,6 +107,12 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
   const [shareModal, setShareModal] = useState(null); // { courseIndex, course }
   // Phase 14.5 — print document modal
   const [printDocOpen, setPrintDocOpen] = useState(false);
+  // Phase 14.2.B (2026-04-25) — per-treatment-row print modal:
+  //   { treatmentId, type: 'cert' | 'record' }
+  // 'cert' filters to TREATMENT_CERT_DOC_TYPES (8 medical-cert variants).
+  // 'record' filters to TREATMENT_PRINT_DOC_TYPES (3 treatment-record types).
+  // Prefill values come from the treatment data (date / doctor / items / dose).
+  const [printPerTreatment, setPrintPerTreatment] = useState(null);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -477,6 +487,24 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
                               <p className="text-xs text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
                             </div>
                           )}
+                          {/* Phase 14.2.B (2026-04-25) — Per-treatment dual print
+                              dropdowns matching ProClinic: blue "พิมพ์ใบรับรองแพทย์"
+                              (8 medical-cert variants) + green "พิมพ์การรักษา"
+                              (3 treatment-record types). Both open the shared
+                              DocumentPrintModal with docTypeFilter applied +
+                              treatment data pre-filled into the form. */}
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'cert' })}
+                              data-testid={`treatment-print-cert-${t.id}`}
+                              className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-sky-700 hover:bg-sky-600 text-white transition-all">
+                              <Printer size={12} /> พิมพ์ใบรับรองแพทย์ ▾
+                            </button>
+                            <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'record' })}
+                              data-testid={`treatment-print-record-${t.id}`}
+                              className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
+                              <Printer size={12} /> พิมพ์การรักษา ▾
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -734,17 +762,42 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
           />}
         </div>
       </div>
-      {/* Phase 14.5 — print document modal (shared component).
-          Phase 14.2 — passes ALL clinicSettings fields (clinicName,
-          clinicNameEn, clinicAddress, clinicAddressEn, clinicPhone,
-          clinicLicenseNo, clinicTaxId, clinicEmail) so templates
-          can render the full ProClinic letterhead. */}
+      {/* Phase 14.5 — top-level "พิมพ์เอกสาร" (general docs picker, all 16 types). */}
       <DocumentPrintModal
         open={printDocOpen}
         onClose={() => setPrintDocOpen(false)}
         clinicSettings={clinicSettings || { accentColor: ac }}
         customer={customer}
       />
+      {/* Phase 14.2.B — per-treatment-row print modals (filtered + prefilled). */}
+      {printPerTreatment && (() => {
+        const tr = treatments.find(x => x.treatmentId === printPerTreatment.treatmentId || x.id === printPerTreatment.treatmentId);
+        const summary = treatmentSummary.find(x => x.id === printPerTreatment.treatmentId);
+        const filter = printPerTreatment.type === 'cert' ? TREATMENT_CERT_DOC_TYPES : TREATMENT_PRINT_DOC_TYPES;
+        // Pre-fill from treatment data so the user doesn't re-type basics.
+        const prefill = {
+          treatmentDate: summary?.date || tr?.treatmentDate || tr?.detail?.treatmentDate || thaiTodayISO(),
+          doctorName: summary?.doctor || tr?.detail?.doctorName || '',
+          assistantName: (summary?.assistants || []).join(', ') || (tr?.detail?.assistants || []).join(', ') || '',
+          findings: summary?.cc || tr?.detail?.cc || '',
+          diagnosis: summary?.dx || tr?.detail?.dx || '',
+          drNote: tr?.detail?.note || tr?.detail?.drNote || '',
+          treatmentItems: (tr?.detail?.courseItems || tr?.detail?.products || [])
+            .map(p => `${p.name || p.productName || ''} ${p.qty ? `× ${p.qty}` : ''}`.trim())
+            .filter(Boolean)
+            .join('\n') || '',
+        };
+        return (
+          <DocumentPrintModal
+            open={true}
+            onClose={() => setPrintPerTreatment(null)}
+            clinicSettings={clinicSettings || { accentColor: ac }}
+            customer={customer}
+            docTypeFilter={filter}
+            prefillValues={prefill}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
@@ -72,17 +72,36 @@ export default function DocumentPrintModal({
   const [toggles, setToggles] = useState({});
   const [language, setLanguage] = useState('th');
 
-  const handlePick = (t) => {
+  const handlePick = async (t) => {
     setSelected(t);
     const initial = {};
     for (const f of (t.fields || [])) {
       if (prefillValues[f.key] != null) initial[f.key] = prefillValues[f.key];
     }
+    // Phase 14.2.B — auto-generate cert# if the template has a `certNumber`
+    // field and the user hasn't provided one via prefill. Uses runTransaction
+    // for race-safety (matches the invoice-counter pattern). Best-effort:
+    // if Firestore is unavailable / rules block, leave field empty.
+    const hasCertNumberField = (t.fields || []).some(f => f.key === 'certNumber');
+    if (hasCertNumberField && !initial.certNumber) {
+      try {
+        initial.certNumber = await getNextCertNumber(t.docType);
+      } catch (_e) { /* leave empty if counter not writable */ }
+    }
     setValues(initial);
-    // Initialize toggles from template's defaultOn flags
+    // Initialize toggles. Phase 14.2.B (2026-04-25): when a template has
+    // NO toggles array (i.e. cert is "always-on" per ProClinic — fit-to-fly,
+    // patient-referral, medical-cert, driver-license), default the universal
+    // toggle keys to TRUE so {{#if showCertNumber}} / {{#if showPatientSignature}}
+    // blocks in the shared sub-templates render. Templates with explicit
+    // toggles use their declared defaultOn instead.
     const initToggles = {};
-    for (const tog of (t.toggles || [])) {
-      initToggles[tog.key] = !!tog.defaultOn;
+    const declared = Array.isArray(t.toggles) ? t.toggles : [];
+    if (declared.length === 0) {
+      initToggles.showCertNumber = true;
+      initToggles.showPatientSignature = true;
+    } else {
+      for (const tog of declared) initToggles[tog.key] = !!tog.defaultOn;
     }
     setToggles(initToggles);
     setLanguage(t.language || 'th');
