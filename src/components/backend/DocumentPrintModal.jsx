@@ -91,6 +91,11 @@ export default function DocumentPrintModal({
     const initial = {};
     for (const f of (t.fields || [])) {
       if (prefillValues[f.key] != null) initial[f.key] = prefillValues[f.key];
+      // 2026-04-25 — checkbox fields default to '☐' (visible empty box) so
+      // the printed doc renders the box even when the user hasn't toggled
+      // the checkbox. Without this, an empty value renders as nothing,
+      // leaving a blank space where the user expects ☐.
+      else if (f.type === 'checkbox') initial[f.key] = '☐';
     }
     // Phase 14.2.B — auto-generate cert# if the template has a `certNumber`
     // field and the user hasn't provided one via prefill. Uses runTransaction
@@ -324,44 +329,70 @@ export default function DocumentPrintModal({
                 <div className="text-xs text-[var(--tx-muted)]">
                   กรอกข้อมูลที่จำเป็น — ค่าอื่นๆ ระบบเติมอัตโนมัติจากข้อมูลลูกค้า/คลินิก
                 </div>
-                {(selected.fields || []).map((f) => (
-                  <div key={f.key} className="space-y-1">
-                    <label className="block text-xs text-[var(--tx-muted)]">
-                      {f.label || f.key}{f.required && <span className="text-red-400"> *</span>}
-                    </label>
-                    {f.type === 'textarea' ? (
-                      <textarea
-                        value={values[f.key] || ''}
-                        onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                        rows={3}
-                        className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-                        data-field={f.key}
-                      />
-                    ) : f.type === 'date' ? (
-                      <DateField
-                        value={values[f.key] || ''}
-                        onChange={(v) => setValues(vs => ({ ...vs, [f.key]: v }))}
-                        fieldClassName="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-                      />
-                    ) : f.type === 'number' ? (
-                      <input
-                        type="number"
-                        value={values[f.key] || ''}
-                        onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                        className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-                        data-field={f.key}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={values[f.key] || ''}
-                        onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                        className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-                        data-field={f.key}
-                      />
-                    )}
-                  </div>
-                ))}
+                {/* 2026-04-25 — skip `hidden: true` fields (auto-fill HTML
+                    blocks like treatmentRecordRows / homeMedicationRows /
+                    deductionRows). Render checkbox type as a real toggle
+                    (was previously rendered as raw text — UX disaster). */}
+                {(selected.fields || []).filter(f => !f.hidden).map((f) => {
+                  // Checkbox: toggles between '☑' and '' (empty = unchecked).
+                  // Template uses {{markKey}} which renders the symbol or
+                  // nothing — keeps the rendered HTML semantically correct.
+                  if (f.type === 'checkbox') {
+                    const checked = values[f.key] === '☑';
+                    return (
+                      <label key={f.key} className="flex items-center gap-2 px-2 py-1.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors text-xs">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.checked ? '☑' : '☐' }))}
+                          className="cursor-pointer accent-red-600"
+                          data-field={f.key}
+                        />
+                        <span className="text-[var(--tx-primary)]">
+                          {f.label || f.key}{f.required && <span className="text-red-400"> *</span>}
+                        </span>
+                      </label>
+                    );
+                  }
+                  return (
+                    <div key={f.key} className="space-y-1">
+                      <label className="block text-xs text-[var(--tx-muted)]">
+                        {f.label || f.key}{f.required && <span className="text-red-400"> *</span>}
+                      </label>
+                      {f.type === 'textarea' ? (
+                        <textarea
+                          value={values[f.key] || ''}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                          rows={3}
+                          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+                          data-field={f.key}
+                        />
+                      ) : f.type === 'date' ? (
+                        <DateField
+                          value={values[f.key] || ''}
+                          onChange={(v) => setValues(vs => ({ ...vs, [f.key]: v }))}
+                          fieldClassName="px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+                        />
+                      ) : f.type === 'number' ? (
+                        <input
+                          type="number"
+                          value={values[f.key] || ''}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+                          data-field={f.key}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={values[f.key] || ''}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+                          data-field={f.key}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {/* Preview — Phase 14.x: full-page scale-to-fit + user zoom.
                   Renders the template at TRUE paper size (A4/A5/label-57x32

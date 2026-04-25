@@ -108,7 +108,9 @@ export const CERT_NUMBER_PREFIX = Object.freeze({
 export const LANGUAGES = Object.freeze(['th', 'en', 'bilingual']);
 export const PAPER_SIZES = Object.freeze(['A4', 'A5', 'label-57x32']);
 
-export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select']);
+// 2026-04-25 — added 'checkbox' for ☑/☐ checkbox marks (was being shown as
+// raw text to users, which made the form unusable).
+export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select', 'checkbox']);
 
 export const NAME_MAX_LENGTH = 200;
 export const HTML_MAX_LENGTH = 50000; // ~50KB — plenty for any single-page cert
@@ -132,7 +134,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -170,6 +172,13 @@ export function validateDocumentTemplate(form, opts = {}) {
       seenKeys.add(f.key);
       if (typeof f.label !== 'string') return [`fields[${i}].label`, 'field label ต้องเป็น string'];
       if (!FIELD_TYPES.includes(f.type)) return [`fields[${i}].type`, 'field type ไม่ถูกต้อง'];
+      // Phase 14.x — `hidden: true` flag for fields that are auto-populated
+      // from context (HTML row builders) or are internal sentinel marks.
+      // Hidden fields don't render in the print form UI but still appear
+      // in the rendered template.
+      if (f.hidden != null && typeof f.hidden !== 'boolean') {
+        return [`fields[${i}].hidden`, 'field hidden ต้องเป็น boolean'];
+      }
     }
   }
 
@@ -512,8 +521,8 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'vitalsHeight',       label: 'ความสูง (ซม.)', type: 'text' },
       { key: 'bp',                 label: 'ความดันโลหิต (มม.ปรอท.)', type: 'text' },
       { key: 'pr',                 label: 'ชีพจร (ครั้ง/นาที)', type: 'text' },
-      { key: 'bodyNormalMark',     label: '☑/☐ ปกติ', type: 'text' },
-      { key: 'bodyAbnormalMark',   label: '☑/☐ ผิดปกติ', type: 'text' },
+      { key: 'bodyNormalMark',     label: 'สภาพร่างกาย: ปกติ', type: 'checkbox' },
+      { key: 'bodyAbnormalMark',   label: 'สภาพร่างกาย: ผิดปกติ', type: 'checkbox' },
       { key: 'bodyAbnormalDetail', label: 'ผิดปกติ ระบุ', type: 'text' },
       { key: 'otherConditions',    label: 'โรคอื่นๆ (ถ้ามี)', type: 'text' },
     ],
@@ -587,12 +596,12 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'vitalsHeight',       label: 'ความสูง (ซม.)', type: 'text' },
       { key: 'bp',                 label: 'ความดันโลหิต (มม.ปรอท.)', type: 'text' },
       { key: 'pr',                 label: 'ชีพจร (ครั้ง/นาที)', type: 'text' },
-      { key: 'bodyNormalMark',     label: '☑/☐ ปกติ', type: 'text' },
-      { key: 'bodyAbnormalMark',   label: '☑/☐ ผิดปกติ', type: 'text' },
+      { key: 'bodyNormalMark',     label: 'สภาพร่างกาย: ปกติ', type: 'checkbox' },
+      { key: 'bodyAbnormalMark',   label: 'สภาพร่างกาย: ผิดปกติ', type: 'checkbox' },
       { key: 'bodyAbnormalDetail', label: 'ผิดปกติ ระบุ', type: 'text' },
       { key: 'visionRight',        label: 'ตาขวา', type: 'text' },
       { key: 'visionLeft',         label: 'ตาซ้าย', type: 'text' },
-      { key: 'colorBlindMark',     label: 'ตาบอดสี', type: 'text' },
+      { key: 'colorBlindMark',     label: 'ตาบอดสี (ปกติ/ผิดปกติ)', type: 'text' },
       { key: 'otherConditions',    label: 'โรคอื่นๆ (ถ้ามี)', type: 'text' },
     ],
     toggles: NO_TOGGLES,
@@ -634,10 +643,10 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'restFrom',        label: 'พักตั้งแต่',           type: 'date' },
       { key: 'restTo',          label: 'ถึง',                 type: 'date' },
       // Phase 14.2.E ProClinic checkboxes for the 3 conclusion items
-      { key: 'checkAttendedMark', label: '☑/☐ มาตรวจวันนี้จริง', type: 'text' },
-      { key: 'checkRestMark',     label: '☑/☐ ให้หยุดพัก',       type: 'text' },
-      { key: 'checkOtherMark',    label: '☑/☐ อื่นๆ',           type: 'text' },
-      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',           type: 'text' },
+      { key: 'checkAttendedMark', label: 'ผู้ป่วยมารับการตรวจวันนี้จริง', type: 'checkbox' },
+      { key: 'checkRestMark',     label: 'ให้หยุดพัก',                 type: 'checkbox' },
+      { key: 'checkOtherMark',    label: 'อื่นๆ',                       type: 'checkbox' },
+      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',                  type: 'text' },
     ],
     toggles: TOGGLE_OPINION_PT,
   },
@@ -683,10 +692,10 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'restDays',       label: 'จำนวนวันพัก', type: 'number' },
       { key: 'restFrom',       label: 'พักตั้งแต่', type: 'date' },
       { key: 'restTo',         label: 'ถึง', type: 'date' },
-      { key: 'checkAttendedMark', label: '☑/☐ มาตรวจวันนี้จริง', type: 'text' },
-      { key: 'checkRestMark',     label: '☑/☐ ให้หยุดพัก',       type: 'text' },
-      { key: 'checkOtherMark',    label: '☑/☐ อื่นๆ',           type: 'text' },
-      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',           type: 'text' },
+      { key: 'checkAttendedMark', label: 'ผู้ป่วยมารับการตรวจวันนี้จริง', type: 'checkbox' },
+      { key: 'checkRestMark',     label: 'ให้หยุดพัก',                 type: 'checkbox' },
+      { key: 'checkOtherMark',    label: 'อื่นๆ',                       type: 'checkbox' },
+      { key: 'otherDetail',       label: 'อื่นๆ ระบุ',                  type: 'text' },
     ],
     toggles: TOGGLE_OPINION_PT,
   },
@@ -840,15 +849,15 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorName',         label: 'Doctor', type: 'text', required: true },
       { key: 'doctorLicenseNo',    label: 'License No.', type: 'text' },
       { key: 'certNumber',         label: 'Certificate No.', type: 'text' },
-      { key: 'recentInfectionMark',  label: '☑/☐ Recent infection Yes', type: 'text' },
-      { key: 'recentInfectionNoMark',label: '☑/☐ Recent infection No', type: 'text' },
-      { key: 'recentFeverMark',      label: '☑/☐ Recent Fever Yes', type: 'text' },
-      { key: 'recentFeverNoMark',    label: '☑/☐ Recent Fever No', type: 'text' },
-      { key: 'conditionMark',        label: '☑/☐ Being treated Yes', type: 'text' },
-      { key: 'conditionNoMark',      label: '☑/☐ Being treated No', type: 'text' },
+      { key: 'recentInfectionMark',  label: 'Recent infection: Yes', type: 'checkbox' },
+      { key: 'recentInfectionNoMark',label: 'Recent infection: No',  type: 'checkbox' },
+      { key: 'recentFeverMark',      label: 'Recent Fever: Yes',     type: 'checkbox' },
+      { key: 'recentFeverNoMark',    label: 'Recent Fever: No',      type: 'checkbox' },
+      { key: 'conditionMark',        label: 'Being treated: Yes',    type: 'checkbox' },
+      { key: 'conditionNoMark',      label: 'Being treated: No',     type: 'checkbox' },
       { key: 'conditionDetail',      label: 'Condition detail', type: 'text' },
-      { key: 'fitMark',              label: '☑/☐ Fit for air travel', type: 'text' },
-      { key: 'notFitMark',           label: '☑/☐ Not fit', type: 'text' },
+      { key: 'fitMark',              label: 'Fit for air travel',     type: 'checkbox' },
+      { key: 'notFitMark',           label: 'Not fit for air travel', type: 'checkbox' },
     ],
     toggles: NO_TOGGLES,
   },
@@ -1121,10 +1130,10 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'doctorName',       label: 'แพทย์ผู้ส่งต่อ', type: 'text', required: true },
       { key: 'doctorLicenseNo',  label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',       label: 'เลขที่ใบส่งตัว', type: 'text' },
-      { key: 'checkAdmitMark',        label: '☑/☐ รับไว้รักษาต่อ', type: 'text' },
-      { key: 'checkInvestigateMark',  label: '☑/☐ ตรวจชันสูตร', type: 'text' },
-      { key: 'checkObserveMark',      label: '☑/☐ คุมไว้สังเกต', type: 'text' },
-      { key: 'checkResultMark',       label: '☑/☐ ขอทราบผล', type: 'text' },
+      { key: 'checkAdmitMark',        label: 'รับไว้รักษาต่อ', type: 'checkbox' },
+      { key: 'checkInvestigateMark',  label: 'ตรวจชันสูตร',   type: 'checkbox' },
+      { key: 'checkObserveMark',      label: 'คุมไว้สังเกต',  type: 'checkbox' },
+      { key: 'checkResultMark',       label: 'ขอทราบผล',      type: 'checkbox' },
     ],
     toggles: NO_TOGGLES,
   },
@@ -1246,8 +1255,8 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'treatment',         label: 'Treatment', type: 'textarea' },
       { key: 'treatmentPlan',     label: 'Treatment Plan', type: 'textarea' },
       { key: 'additionalNote',    label: 'Additional note', type: 'textarea' },
-      { key: 'treatmentRecordRows', label: 'Treatment record (HTML rows auto-fill)', type: 'textarea' },
-      { key: 'homeMedicationRows',  label: 'Home medication (HTML rows auto-fill)', type: 'textarea' },
+      { key: 'treatmentRecordRows', label: 'Treatment record', type: 'textarea', hidden: true },
+      { key: 'homeMedicationRows',  label: 'Home medication',  type: 'textarea', hidden: true },
     ],
     toggles: NO_TOGGLES,
   },
@@ -1327,7 +1336,7 @@ export const SEED_TEMPLATES = Object.freeze([
     `,
     fields: [
       { key: 'treatmentDate',  label: 'วันที่ตัด', type: 'date' },
-      { key: 'deductionRows',  label: 'รายการที่ตัด (HTML rows auto-fill)', type: 'textarea' },
+      { key: 'deductionRows',  label: 'รายการที่ตัด', type: 'textarea', hidden: true },
       { key: 'note',           label: 'หมายเหตุ', type: 'textarea' },
       { key: 'doctorName',     label: 'ผู้ทำหัตถการ', type: 'text', required: true },
       { key: 'staffName',      label: 'เจ้าหน้าที่', type: 'text', required: true },
