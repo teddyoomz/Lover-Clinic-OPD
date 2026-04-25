@@ -1,14 +1,14 @@
 ---
-updated_at: "2026-04-26 (Phase 14.7.C AppointmentTab refactor + 14.7.D treatment-history redesign + 14.7.E plan)"
-status: "14.7.C — AppointmentTab now uses shared AppointmentFormModal (550 LoC inline form removed; staff-schedule check ported with skipStaffScheduleCheck gate). 14.7.D — treatment-history card redesigned per ProClinic scan: pagination 5/page (prev/next + compact page-number nav), action chips always-visible, ล่าสุด badge, empty state, ProClinic-fidelity colors (cyan #56CCF2 บันทึกการรักษา + orange #FF9F1C ดูไทม์ไลน์ placeholder). 14.7.E — timeline modal plan in project_treatment_timeline_plan.md (memory). 15 commits queued; production stuck on 0735a50."
-current_focus: "Production deploy + Phase 14.7.E impl. 15 commits ahead — both deferred until user authorizes."
+updated_at: "2026-04-26 (Phase 14.7.C/D/E — AppointmentTab refactor + treatment-history redesign + Treatment Timeline Modal LIVE)"
+status: "14.7.C — AppointmentTab now uses shared AppointmentFormModal (skipStaffScheduleCheck gates the Phase 13.2.4 schedule check). 14.7.D — treatment-history pagination 5/page + ProClinic-fidelity colors (cyan #56CCF2 + orange #FF9F1C). 14.7.E LIVE — TreatmentTimelineModal in `src/components/backend/TreatmentTimelineModal.jsx`: ProClinic 3/9 grid replica with per-row image carousel (OPD-อื่นๆ / Before / After), medications + consumables accordions, Esc/backdrop/close all close. 50 TL1-TL8 tests. Preview-verified on 122-treatment customer. 17 commits queued; production stuck on 0735a50."
+current_focus: "Production deploy. 17 commits ahead — awaiting user 'deploy' authorization (V4/V7/V18 — never roll-over)."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "4f9e13e"
-tests: "4366/4366 full suite | +9 customer-appointments-flow F5.11+F6 (14.7.C) + +39 customer-treatment-history-redesign H1-H6 (14.7.D)"
+last_commit: "f16cce2"
+tests: "4416/4416 full suite | +9 (14.7.C F5.11+F6) + +39 (14.7.D H1-H6) + +50 (14.7.E TL1-TL8)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "0735a50 (2026-04-25 mid-session preview-zoom + clinicEmail) — 15 commits ahead, awaiting auth"
-firestore_rules_deployed: "v9 deployed (last deploy). No rules diff in 14.7.C/D. v15 schema still propagating via upgradeSystemDocumentTemplates auto-fire on print-modal open."
+last_deploy: "0735a50 (2026-04-25 mid-session preview-zoom + clinicEmail) — 17 commits ahead, awaiting auth"
+firestore_rules_deployed: "v9 deployed (last deploy). No rules diff in 14.7.C/D/E. v15 schema still propagating via upgradeSystemDocumentTemplates auto-fire on print-modal open."
 ---
 
 # Active Context

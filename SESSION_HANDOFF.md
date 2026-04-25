@@ -7,14 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 (Phase 14.7.C AppointmentTab refactor + Phase 14.7.D treatment-history redesign + Phase 14.7.E plan)
+- **Date last updated**: 2026-04-26 (Phase 14.7.C/D/E — AppointmentTab refactor + treatment-history redesign + Treatment Timeline Modal LIVE)
 - **Branch**: `master`
-- **Last commit**: `4f9e13e feat(phase14.7.D): treatment-history redesign — pagination + ProClinic-fidelity colors + ดูไทม์ไลน์ button placeholder`
-- **Test count**: 4366/4366 full suite (added 9 in 14.7.C + 39 in 14.7.D)
+- **Last commit**: `f16cce2 feat(phase14.7.E): TreatmentTimelineModal — ProClinic ดูไทม์ไลน์ replication`
+- **Test count**: 4416/4416 full suite (+9 in 14.7.C + 39 in 14.7.D + 50 in 14.7.E)
 - **Build**: clean
 - **Deploy state**:
-  - **firestore:rules**: deployed at v9 (no rules changes since — `4f9e13e` has same rules as `0735a50`).
-  - **Vercel prod**: `0735a50` (preview-zoom + clinicEmail). **NOT up-to-date** — **15 commits queued** waiting deploy auth (was 13 + 14.7.C `5897b59` + 14.7.D `4f9e13e`).
+  - **firestore:rules**: deployed at v9 (no rules changes since — `f16cce2` has same rules as `0735a50`).
+  - **Vercel prod**: `0735a50` (preview-zoom + clinicEmail). **NOT up-to-date** — **17 commits queued** waiting deploy auth.
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -71,12 +71,8 @@
 - `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe per Rule B (no rules changes since last deploy, but V15 combined-deploy fires both regardless)
 - 4-endpoint pre/post-probe with `/artifacts/loverclinic-opd-4c39b/public/data` path prefix (NOT root — V1/V9 lesson)
 
-### Phase 14.7.E (next code task — gated by user authorization)
-Implement the "ดูไทม์ไลน์" treatment-timeline modal. Plan at `~/.claude/projects/F--LoverClinic-app/memory/project_treatment_timeline_plan.md`. Reference scan at `docs/proclinic-scan/customer-detail-treatment-history-and-timeline.md`.
-- Create `src/components/backend/TreatmentTimelineModal.jsx` (≈400-500 LoC).
-- Wire `showTimeline` state in CustomerDetailView; placeholder button (`data-testid="show-timeline-btn"`, ProClinic orange `#FF9F1C`) is already in place — just flip from `disabled={!onShowTimeline}` to a real handler.
-- Pre-implementation: `preview_eval` real customer to verify image data shape (`detail.opdImages` / `detail.beforeImages` / `detail.afterImages`).
-- 35+ tests in `tests/customer-treatment-timeline-flow.test.js` per Rule I.
+### ~~Phase 14.7.E~~ — DONE (commit `f16cce2`)
+TreatmentTimelineModal shipped 2026-04-26. Customer-detail "ดูไทม์ไลน์" button now opens a wide ProClinic-replica modal: per-row 3/9 grid, image carousel for OPD-อื่นๆ/Before/After (3 cells), accordions for medications + consumables, Esc/backdrop/close-button all close. 50 source-grep + helper tests in `tests/customer-treatment-timeline-flow.test.js`. Preview-verified on customer 000004 (122 rows, 16 accordions, 8 image-thumbs). No new fetches — reuses already-loaded `treatments[]`.
 
 ### Phase 14 Doc verification queue (10 done / 6 remaining)
 - [x] Doc 1/16 — treatment-history Medical History ✅
@@ -111,8 +107,7 @@ Implement the "ดูไทม์ไลน์" treatment-timeline modal. Plan at
 
 ## Outstanding User Actions (NOT auto-run)
 
-1. **`vercel --prod` + `firebase deploy --only firestore:rules`** of `4f9e13e` (V15 combined deploy). **15 commits queued**. REQUIRES USER TYPING "deploy" THIS TURN (V4/V7/V18 — never roll-over).
-2. **(planned, gated)** Phase 14.7.E — implement TreatmentTimelineModal per `project_treatment_timeline_plan.md`. Triangle-verified scan at `docs/proclinic-scan/customer-detail-treatment-history-and-timeline.md`. Run `preview_eval` first to lock the image-data shape, then 4-step build per the plan.
+1. **`vercel --prod` + `firebase deploy --only firestore:rules`** of `f16cce2` (V15 combined deploy). **17 commits queued**. REQUIRES USER TYPING "deploy" THIS TURN (V4/V7/V18 — never roll-over).
 
 ---
 
