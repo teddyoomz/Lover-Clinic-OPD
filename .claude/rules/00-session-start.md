@@ -197,6 +197,23 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - Lesson: For every new import of an existing module, grep `^export (async )?function <name>` in the target before writing code. Don't trust test mocks to catch export-existence errors — mocks verify call-shape, builds verify reachability. Rule 02 build-check is the backstop.
 - Rule/audit update: `.claude/rules/02-workflow.md` Pre-Commit Checklist now calls out this specific near-miss pattern in the build-check subsection (see commit following this entry).
 
+### V14 — 2026-04-25 — `options: undefined` rejected by Firestore setDoc (Phase 14.1 seed)
+- `src/lib/documentTemplateValidation.js` `normalizeDocumentTemplate` returned `{ ...field, options: Array.isArray(f.options) ? f.options.map(String) : undefined }` for fields without options. `setDoc()` rejects undefined fields: "Function setDoc() called with invalid data. Unsupported field value: undefined".
+- 73/73 helper-output tests + full-flow simulate F1-F7 all GREEN. The bug was 100% INVISIBLE to pure-helper tests because they only checked output shape — they never called the actual `setDoc()` against Firestore.
+- **Caught by**: Rule I item (b) — "Runtime-verify via preview_eval on real Firestore data when dev server live". The seed-on-first-load fired during preview_eval verification on localhost:5173 → Firestore SDK rejected the write → red-banner error visible in the browser, NOT in tests.
+- Fix: rebuild field shape so absent values are OMITTED, not undefined. Empty options array also stripped (defensive). Rule D regression guard added as F6.6: "normalize output has NO undefined values (Firestore setDoc compatibility)" — walks the entire normalized tree looking for undefined leaves on every seed AND on adversarial mixed-shape inputs.
+- **Worst part**: Helper tests lied. Even with 13 separate "every seed passes strict validator" assertions in F2, this still slipped through because the validator doesn't exercise serialization — only shape. V14 reaffirms V13's lesson: helper-output tests are NECESSARY BUT NOT SUFFICIENT. Rule I's preview_eval requirement (b) was the only thing standing between this bug and a shipped seed that would silently fail in every customer's first-load.
+- Audit update: every backend write helper (normalizer / mapper / serializer) added going forward must include a regression guard that walks the output tree for undefined leaves. Pattern locked in F6.6 as a copy-paste template. Apply to: anything that writes to Firestore via setDoc / updateDoc / addDoc.
+
+### V15 — 2026-04-25 — Combined `vercel --prod` + `firebase deploy --only firestore:rules` rule
+- User directive: "ต่อไป vercel --prod กับ deploy rules ให้ทำด้วยกันไม่ต้องแยก ใส่ไว้ในกฎ" — combined deploy as default workflow.
+- **Not a violation** — process improvement entry to lock the new flow. From this point: `"deploy"` = parallel run of `vercel --prod --yes` AND `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe (Rule B iron-clad still applies — never skip the 4-endpoint pre+post probes).
+- Sub-commands preserved for finer control:
+  - `"deploy vercel only"` → vercel only
+  - `"deploy rules only"` → firestore:rules only (probe-deploy-probe still mandatory)
+  - `"deploy"` (default) → both, in parallel
+- Rule update: `.claude/rules/02-workflow.md` Deploy section rewritten 2026-04-25.
+
 ---
 
 ## 3. TOOLS — WHEN TO REACH FOR WHICH

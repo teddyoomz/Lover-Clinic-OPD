@@ -304,6 +304,56 @@ describe('F6: adversarial inputs', () => {
     // Rough sanity — 999 not stripped by accident
     expect(out).toContain('999');
   });
+
+  it('F6.6: normalize output has NO undefined values (Firestore setDoc compatibility)', () => {
+    // V14-class bug 2026-04-25: seed shipped a normalize() that returned
+    // `options: undefined` on fields without options → Firestore setDoc()
+    // rejected with "Unsupported field value: undefined". Helper-only tests
+    // (which only checked output keys/values) didn't catch it because they
+    // never touched setDoc. This guard locks the fix: every normalized
+    // field must omit absent values, not undefined them.
+    function findUndefined(obj, path = '$') {
+      if (obj === undefined) return path;
+      if (obj === null || typeof obj !== 'object') return null;
+      if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+          const r = findUndefined(obj[i], `${path}[${i}]`);
+          if (r) return r;
+        }
+        return null;
+      }
+      for (const [k, v] of Object.entries(obj)) {
+        const r = findUndefined(v, `${path}.${k}`);
+        if (r) return r;
+      }
+      return null;
+    }
+    for (const seed of SEED_TEMPLATES) {
+      const norm = normalizeDocumentTemplate({ ...seed, isSystemDefault: true });
+      const undef = findUndefined(norm);
+      expect(undef).toBe(null); // any non-null path = an undefined leak
+    }
+    // Also: explicitly construct fields with mixed-shape inputs
+    const norm = normalizeDocumentTemplate({
+      docType: 'medical-certificate',
+      name: 'x',
+      htmlTemplate: '<p>x</p>',
+      language: 'th',
+      paperSize: 'A4',
+      fields: [
+        { key: 'a', label: 'A', type: 'text' },                       // no options, no placeholder
+        { key: 'b', label: 'B', type: 'select', options: ['X', 'Y'] },// has options
+        { key: 'c', label: 'C', type: 'text', placeholder: 'พิมพ์'   }, // has placeholder
+        { key: 'd', label: 'D', type: 'text', options: [] },          // empty array — should NOT serialize
+      ],
+    });
+    expect(findUndefined(norm)).toBe(null);
+    expect(norm.fields[0]).not.toHaveProperty('options');
+    expect(norm.fields[0]).not.toHaveProperty('placeholder');
+    expect(norm.fields[1].options).toEqual(['X', 'Y']);
+    expect(norm.fields[2].placeholder).toBe('พิมพ์');
+    expect(norm.fields[3]).not.toHaveProperty('options'); // empty array stripped
+  });
 });
 
 /* ─── F7: source-grep regression guards ────────────────────────────────── */

@@ -45,14 +45,31 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
 3. Push direct to `master` ตามแบบ repo นี้ (ไม่มี PR workflow สำหรับ owner). Branch: `develop` → merge → `master` ก่อน deploy.
 4. ห้าม `--no-verify` / `--no-gpg-sign` ยกเว้น user สั่ง
 
-### Deploy (Vercel)
-1. `vercel --prod` **รอ user สั่งทุกครั้ง** — push ≠ deploy. Prior authorization ไม่ roll over.
-2. **ห้าม deploy โดยไม่ commit ก่อน**
-3. Backend files = commit + push อย่างเดียว, **ไม่ deploy** (ประหยัด Vercel cost, ทดสอบ local):
+### Deploy — `vercel --prod` + `firebase deploy --only firestore:rules` รวมเป็นคำสั่งเดียว
+**กฎใหม่ 2026-04-25** (user directive "ต่อไป vercel --prod กับ deploy rules ให้ทำด้วยกันไม่ต้องแยก ใส่ไว้ในกฎ"):
+
+1. **"deploy" = combined workflow** — เมื่อ user สั่ง "deploy" / "push + deploy" / "deploy เลย" → รัน **ทั้งคู่**ใน turn เดียว:
+   - `vercel --prod --yes` (ฝั่ง frontend bundle)
+   - **AND** `firebase deploy --only firestore:rules` ห่อด้วย Probe-Deploy-Probe (Rule B iron-clad — ห้ามข้าม)
+2. **ทำงาน parallel**: vercel deploy + firestore probe-deploy-probe ไม่ชนกัน. Run ใน background พร้อมกัน, รอ both สำเร็จ.
+3. **Probe-Deploy-Probe sequence ต้องครบ** (Rule B):
+   - **Pre-probe**: curl POST `chat_conversations` + PATCH `pc_appointments` + PATCH `clinic_settings/proclinic_session` + PATCH `clinic_settings/proclinic_session_trial` → ทุกตัว 200
+   - `firebase deploy --only firestore:rules`
+   - **Post-probe**: curl ซ้ำทั้ง 4 → ถ้า 403 ตัวใด revert ทันที
+   - **Cleanup**: ลบ probe docs + strip probe field จาก clinic_settings
+4. **Even if firestore.rules ไม่ได้แก้** — ยัง deploy ทุกครั้งที่ user สั่ง "deploy" (idempotent + ป้องกัน Console-side drift V1/V9)
+5. `vercel --prod` **รอ user สั่งทุกครั้ง** — push ≠ deploy. Prior authorization ไม่ roll over (V4/V7).
+6. **ห้าม deploy โดยไม่ commit ก่อน**
+7. Backend files = commit + push อย่างเดียว, **ไม่ deploy** (ประหยัด Vercel cost, ทดสอบ local):
    - `src/components/backend/**`
    - `src/pages/BackendDashboard.jsx`
-4. `cookie-relay/` = commit อย่างเดียว (Chrome Extension, reload ที่ `chrome://extensions` เอง)
-5. ถ้า user สั่ง "deploy" / "push + deploy" / "deploy เลย" → ได้. ยกเว้น authorization ของ deploy ครั้งนั้น ครั้งเดียว.
+   - **ยกเว้น**: ถ้า user สั่ง "deploy" → ก็ deploy ตามคำสั่ง (override default-no-deploy)
+8. `cookie-relay/` = commit อย่างเดียว (Chrome Extension, reload ที่ `chrome://extensions` เอง)
+9. **Deploy ส่วนเดียว (ไม่รวม)** — ถ้า user สั่งเฉพาะอย่างใดอย่างหนึ่ง:
+   - "deploy vercel only" → vercel เท่านั้น
+   - "deploy rules only" → firestore:rules เท่านั้น (probe-deploy-probe เต็ม)
+   - "deploy" (ไม่ระบุ) → **combined ทั้งคู่**
+10. **Deploy fail แบบไหนก็ตาม** → revert immediately, รายงาน user, รอคำสั่งต่อ.
 
 ### Testing
 1. **`npm test` ALL PASS ก่อน commit** เสมอ — test fail แก้โค้ดไม่ใช่แก้ test

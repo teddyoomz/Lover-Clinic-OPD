@@ -134,14 +134,24 @@ export function normalizeDocumentTemplate(form) {
   const safeFields = Array.isArray(form.fields)
     ? form.fields
         .filter(f => f && typeof f === 'object')
-        .map(f => ({
-          key: trim(f.key),
-          label: trim(f.label),
-          type: FIELD_TYPES.includes(f.type) ? f.type : 'text',
-          required: !!f.required,
-          options: Array.isArray(f.options) ? f.options.map(String) : undefined,
-          placeholder: trim(f.placeholder),
-        }))
+        .map(f => {
+          // Build field object WITHOUT undefined values — Firestore setDoc()
+          // rejects `undefined` (caught 2026-04-25 during seed: "Unsupported
+          // field value: undefined"). Only include `options` when it's a
+          // real array; only include `placeholder` when non-empty.
+          const out = {
+            key: trim(f.key),
+            label: trim(f.label),
+            type: FIELD_TYPES.includes(f.type) ? f.type : 'text',
+            required: !!f.required,
+          };
+          if (Array.isArray(f.options) && f.options.length > 0) {
+            out.options = f.options.map(String);
+          }
+          const ph = trim(f.placeholder);
+          if (ph) out.placeholder = ph;
+          return out;
+        })
         .filter(f => f.key)
     : [];
   return {
