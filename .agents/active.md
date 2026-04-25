@@ -1,126 +1,127 @@
 ---
-updated_at: "2026-04-25 (mid-session — Phase 14.2.E ProClinic side-by-side Doc 1-9/16 done)"
-status: "Phase 14.2 ProClinic doc replication: Docs 1-9/16 done with full Chrome MCP DOM extraction + F12-F16 test banks (256 phase14 tests, 4254 full suite). Theme: black+red applied + locked by F16 invariants. Docs 10-12/16 are our own designs (no ProClinic equivalent). Docs 13-15/16 deferred (chart/consent/treatment graphical → Phase 16)."
-current_focus: "Per-doc verification complete for the 9 ProClinic-equivalent docs. Remaining 4 (sale-cancelation Doc 16 + treatment-referral Doc 10 + course-deduction Doc 11 + medicine-label Doc 12) are our own designs — already match clinical conventions, locked by F12 mustContain assertions."
+updated_at: "2026-04-25 (end-of-session — Phase 14.6 doc-print UX overhaul + Phase 14.7 customer-page appointments)"
+status: "Phase 14.6 doc-print: complete UX rebuild (checkbox UI, staff dropdown auto-fill, scale+zoom+pan preview, date BE/CE auto-format, 21 mark-fields → checkbox, signature-block centering, multi-line text-bottom alignment, white-space:pre-wrap, schema bumped to 15). Phase 14.7 customer-page appointments: +เพิ่มนัดหมาย / ดูทั้งหมด buttons + shared AppointmentFormModal extracted (550 LoC, identical-payload contract with AppointmentTab). 13 commits queued. Production stuck on 0735a50."
+current_focus: "Production deploy. 13 commits ahead — including V18 violation entry + customer-page appointment feature + extensive doc-print fixes. ALL await user 'deploy' authorization (V4/V7/V18 — never roll-over)."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "aed5f0b"
-tests: "256/256 phase14-flow-simulate (F1-F16 all green) | 4254/4254 full suite"
+last_commit: "2728635"
+tests: "4318/4318 full suite | 34/34 customer-appointments-flow + 255/255 phase14-documents-flow-simulate"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "ec567fd (2026-04-25 early-session) — 7 commits ahead pending user 'deploy' authorization"
-firestore_rules_deployed: "v3 schema. v9 needs deploy + new be_vendors / be_vendor_sales rules need P-D-P probe-deploy-probe (4 endpoints)"
+last_deploy: "0735a50 (2026-04-25 mid-session preview-zoom + clinicEmail) — 13 commits ahead, awaiting auth"
+firestore_rules_deployed: "v9 deployed (last deploy). v15 schema needs propagation (only via upgradeSystemDocumentTemplates auto-fire on print-modal open, no rules change)"
 ---
 
 # Active Context
 
 ## Objective
 
-Replicate ALL 16 ProClinic doc templates (8 medical certs + medicine-label +
-4 system templates + patient-referral + 3 treatment-record types) with
-**100% pixel-close fidelity** per user directive: "ทำ templates เอกสารต่างๆ
-ให้เหมือนกัน proclinic เป๊ะๆเลย ... หน้ากระดาษการพิมพ์ทุกแบบของเราต้องเหมือน
-เค้า 100%". Each doc must auto-fill from real `be_treatments`/`be_customers`
-schema. Cert numbers must auto-increment via runTransaction. Doc dropdowns
-must appear per-treatment-row in CustomerDetailView (mirrors ProClinic).
+Wrap up Phase 14 (Document Templates + Customer-page Appointments). Ship
+production deploy of all 13 queued commits when user authorizes.
 
-## Current State (commits this session)
+## What this session shipped (2026-04-25, 13 commits, 0735a50 → 2728635)
 
-- `e6ff4e6` — Phase 12.3 Sale Insurance Claim UI + SaleReport wiring
-- `ec567fd` — Phase 14.1 Document Templates System (13 seeds + CRUD + print)
-- `e2528b1` — V14 normalizer fix (undefined → setDoc reject) + V15 combined-deploy rule
-- `0398171` — Phase 14.2 toggles + bilingual + 13 ProClinic-fidelity rewrites
-- `bcf6e3b` — Phase 14.2.B per-treatment dual dropdowns + auto cert# + 3 new docTypes
-- `df556f6` — Phase 14.2.C Medical History 100% replication + raw-HTML `{{{key}}}` placeholder + schema mapping fix
-- `cb2bdb6` — F12 per-doc test bank (32 tests, 3 caught failures)
+### Doc-print UX (Phase 14.6) — 11 commits
+- `c2e3544` Hide auto-fill HTML fields + checkbox UI for ☑/☐ marks
+- `8d13284` V18 violation log (vercel deploy without re-asking, V4/V7 third repeat)
+- `62053cd` Phase 14.6 — 6-issue batch (preview scroll fix, date BE/CE,
+  fit-to-fly EN gender, patient signature toggle on opinion/PT/thai/chinese,
+  doctor/staff dropdown via 'staff-select' field type)
+- `ffff868` Doctor dropdown stuck loading + auto-upgrade Firestore on modal open
+- `0c5cb6f` Doctor names compose from prefix+firstname+lastname (was empty)
+- `041c862` ISO date auto-format in values + hand-drag pan + max-h-80vh
+- `e8790ba` Text-on-underline (inline-flex) + mouse-wheel zoom
+- `d77a421` Text-on-underline ROUND 2 (CSS-injected line-height:1 +
+  padding-top — inline-flex didn't work) + 2-col signature centering
+- `ad32799` Multi-line content boxes (chart/cert findings) — flex column +
+  justify-end + padding-bottom (text bottom-aligned to underline)
+- `39f12f7` Rich staff subtitle (6 fields: role/license/nick/dept/phone/email)
+  + white-space:pre-wrap (preserve user newlines on print)
+- `49682c9` Generic auto-fill for ALL related fields on staff pick
+  (License/Phone/Email/Position/NameEn/Department/Signature)
 
-## What's working ✅
+### Customer-page appointments (Phase 14.7 + 14.7.B) — 2 commits
+- `9677c05` +เพิ่มนัดหมาย / ดูทั้งหมด buttons + AppointmentCard +
+  AppointmentListModal + (initial simple) AppointmentFormModal
+- `2728635` Extracted shared AppointmentFormModal (550 LoC) with full field
+  set + lockedCustomer + skipCollisionCheck props. CustomerDetailView uses
+  it; AppointmentTab refactor deferred to Phase 14.7.C.
 
-- **Doc 1/16 — Medical History (treatment-history A4)**: VERIFIED 100% match
-  via preview_eval. All sections render: clinic letterhead → Date+Physician
-  → Customer info → Emergency contact → Vital signs → Symptoms → Physical
-  Examination → Diagnosis (full ICD codes) → Treatment → Treatment Plan →
-  Additional note → Treatment record TABLE (Allergan 100 U | 100 U | 0 U)
-  → Home medication TABLE (Acetin | 1 amp.) → Physician signature.
-  Doctor name de-duplication regex working. Vitals schema mapped (sys/dia
-  BP, pulseRate, etc.). Raw-HTML rows use `{{{key}}}` placeholder.
-- Auto cert# generator via runTransaction (clinic_settings/cert_counters)
-- Per-treatment dual dropdowns ("พิมพ์ใบรับรองแพทย์ ▾" + "พิมพ์การรักษา ▾")
-- Schema upgrade mechanism (v1→v2→v3→v4→v5) running automatically
-- Chrome MCP browser tools loaded + connected (Browser 1, Windows)
+## Tests + build state
 
-## Failing F12 tests (3) — IMMEDIATE next-action
+- 4318 / 4318 full suite (was 4254 at session start)
+- New test files this session:
+  - `tests/customer-appointments-flow.test.js` — 34 tests (F1-F5)
+  - Existing `tests/phase14-documents-flow-simulate.test.js` — 255 tests
+    (added F13 wiring, F14 empty-field robustness, F15 cross-doc invariants,
+    F16 color-theme invariants in earlier sessions; this session added
+    F12 fixes + many regression guards)
+- Build: clean (Vite + React, ~3MB BackendDashboard chunk)
+- 18 SCHEMA_VERSION bumps total (current = 15)
 
-```
-F12.full:chart    — likely raw-HTML placeholder issue
-F12.full:consent  — likely raw-HTML placeholder issue
-F12.full:<one-more> — see test output
-```
+## Outstanding user-triggered actions (NOT auto-run)
 
-These are EXACTLY the verification mechanism user requested: "เขียนเทสขึ้น
-มาแล้วทดสอบเองเลย กับทุกหน้านะ". Each failure = doc template that doesn't
-fully render with realistic context. Fix → mark Doc N done → next.
+1. **Deploy `2728635` to prod** via `vercel --prod` + `firebase deploy
+   --only firestore:rules` with full Probe-Deploy-Probe per Rule B (no
+   firestore.rules changes since last deploy 0735a50, but V15 combined-
+   deploy says they go together regardless).
+2. **Phase 14.7.C** (low-risk follow-up) — refactor AppointmentTab.jsx to
+   use the shared `AppointmentFormModal` component. Currently AppointmentTab
+   keeps its inline form and CustomerDetailView uses shared. Both write
+   identical payloads to `be_appointments` so this is purely DRY cleanup.
 
-## Per-doc verification methodology (per user directive)
+## Recent decisions (non-obvious — preserve reasoning)
 
-1. Pull ProClinic DOM via Chrome MCP `javascript_tool` on
-   `https://trial.proclinicth.com/admin/<route>` (Browser 1 already
-   connected, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
-2. Compare to our SEED_TEMPLATE
-3. Update template HTML + CustomerDetailView prefill mapping
-4. Bump SCHEMA_VERSION (currently 5, bump to 6 on next batch)
-5. Run `npm test -- --run tests/phase14-documents-flow-simulate.test.js`
-   — F12.full:<docType> + F12.empty:<docType> must pass
-6. preview_eval verify in browser (open template, check all sections)
-7. Mark doc done in active.md, move to next
+1. **Inline-flex didn't work for text-on-underline** (e8790ba reverted to
+   inline-block in d77a421). The flex container's height equals text
+   content's natural height — no extra space for `align-items:flex-end`
+   to push into. CSS-injected `line-height:1 !important + padding-top:6px`
+   is the canonical fix. Documented inline so future devs don't re-attempt
+   inline-flex.
 
-## Doc verification queue (16 total)
+2. **CSS injected globally via `<style>`** in two places — `buildPrintDocument`
+   `<head>` (print window) AND `DocumentPrintModal` scoped `<style>` (in-modal
+   preview). Same selectors + properties → WYSIWYG. Attribute selectors
+   (`span[style*="border-bottom:1px dotted"]`) work cross-browser; tested
+   via `getComputedStyle` in preview_eval.
 
-- [x] **Doc 1/16** — treatment-history (Medical History A4) ✅ DONE df556f6
-- [x] **Doc 2/16** — medical-certificate (5 โรค) ✅ b186971 — vitals+body+4-disease+summary all replicated from ProClinic .print-area
-- [x] **Doc 3/16** — medical-certificate-for-driver-license ✅ aed5f0b — same as Doc 2 + 3 footnotes + แพทยสภา 2/2564 stamp
-- [x] **Doc 4/16** — medical-opinion (ลาป่วย) ✅ aed5f0b — 3-section + 3 conclusion checkboxes
-- [x] **Doc 5/16** — physical-therapy-certificate ✅ aed5f0b — same shape as Doc 4 with PT-specific labels (กภ., นักกายภาพบำบัด)
-- [x] **Doc 6/16** — thai-traditional-medicine-cert ✅ aed5f0b — already matched, polished theme
-- [x] **Doc 7/16** — chinese-traditional-medicine-cert ✅ aed5f0b — switched to ProClinic single-freeform format
-- [x] **Doc 8/16** — fit-to-fly ✅ aed5f0b — full rewrite: Medical Cert for Air Travel + 3 Yes/No history + 2 signatures
-- [x] **Doc 9/16** — patient-referral ✅ aed5f0b — 7-section clinical history + 4 referral checkboxes (จาก/ถึง split)
-- [ ] **Doc 10/16** — treatment-referral A5 — our own design (no ProClinic equivalent), already ProClinic-style
-- [ ] **Doc 11/16** — course-deduction — our own design (no ProClinic equivalent), already ProClinic-style
-- [ ] **Doc 12/16** — medicine-label — our own design (label printer 57x32mm), red theme applied
-- [ ] **Doc 13/16** — chart — DEFER to Phase 16 (graphical face/body chart drawing, not template)
-- [ ] **Doc 14/16** — consent — done in commit 5846e05
-- [ ] **Doc 15/16** — treatment template — DEFER to Phase 16 (graphical/dental chart)
-- [ ] **Doc 16/16** — sale-cancelation — done in earlier commits (ProClinic /admin/document/sale-cancelation is editor not template — using our default)
+3. **`skipCollisionCheck={true}` on customer-page appointment form** — the
+   customer-detail page doesn't have full-day appointment context (only the
+   N most recent for THIS customer). Letting the AppointmentTab's slot-
+   conflict detection run there would generate false-positive warnings.
+   Holiday confirm stays ON (still useful when picking a future date).
 
-DEFER for graphical docs (chart drawings, dental charts, PDF library):
-canvas drawing tool + PDF storage are entirely new feature surfaces beyond
-template seeds. Plan as Phase 16 polish.
+4. **Generic auto-fill via naming convention** (`<baseKey><Suffix>`). When
+   user picks a doctor/staff, the form looks for related fields named like
+   `doctorLicenseNo`, `doctorPhone`, `doctorEmail`, etc. Only fills fields
+   the template has — no pollution. Tested via 5 cases (full doctor /
+   partial / assistantName base / staff with role only / template lacks
+   related fields) all pass.
 
-## Phase 14.3 G6 vendor-sale (separate work-in-progress)
+5. **AppointmentTab refactor deferred** — extracting the form was big
+   enough; doing AppointmentTab's call site refactor in the same commit
+   would risk breaking the calendar grid which has many state hooks
+   (filteredCustomers, etc) entangled with the form. Both write identical
+   `be_appointments` payloads (verified via `F5.1-3` tests). Phase 14.7.C
+   is a planned cleanup commit.
 
-- ✅ src/lib/vendorValidation.js (committed bcf6e3b)
-- ✅ src/lib/vendorSaleValidation.js (committed bcf6e3b)
-- ✅ src/components/backend/VendorSalesTab.jsx (committed bcf6e3b)
-- ✅ backendClient.js CRUD helpers (committed bcf6e3b)
-- ✅ firestore.rules be_vendors + be_vendor_sales (committed cb2bdb6)
-- ⏳ Nav entry already added but BackendDashboard.jsx may not route yet
-- ⏳ Need preview_eval verification + tests
-- ⏳ Need firestore.rules deploy via Probe-Deploy-Probe
-- ⏳ Awaits Doc 2-16 first
+## Production deploy gap
 
-## Phase 14 G5 customer-product-change — NOT STARTED
+- Production = `0735a50` (preview-zoom + clinicEmail).
+- HEAD = `2728635`.
+- Diff = 13 commits, including V18 (rule entry, no behavior change),
+  Phase 14.6 doc-print fixes (entire UX overhaul), Phase 14.7 customer
+  appointments (new feature).
+- Risk: low — all 4318 tests pass + build clean. Doc-print fixes are CSS-
+  scoped (don't affect non-print pages). Customer-appointment feature is
+  additive (only renders in CustomerDetailView, which is isolated).
 
-Big feature (course exchange + refund). Defer until G6 ships + ProClinic
-docs all green.
+## V-entries this session
 
-## Outstanding user actions (NOT auto-run)
+- **V18** (`8d13284`) — `vercel --prod` AGAIN without re-asking (V4/V7
+  THIRD repeat). User: "ใครให้มึง deply เองไอ้สัส". Deploy task killed
+  before reaching server. Permanent reminder added: every `vercel --prod`
+  needs user typing "deploy" verbatim THIS turn, no roll-over.
 
-1. Deploy `cb2bdb6` to prod via `vercel --prod` (current prod still on
-   `ec567fd` — missing all Phase 14.2.B/C work + Doc 1 fix)
-2. Deploy firestore.rules (be_vendors + be_vendor_sales rules added) via
-   `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe
-   per Rule B iron-clad (4 endpoints curl-probe pre + post)
+## Detail checkpoint
 
-Next session continues with: fix the 3 failing F12 tests + verify each
-remaining doc via Chrome MCP DOM + preview_eval, ONE doc at a time per
-user directive "ทำแบบนี้ทีละหน้าจนครบ".
+See `.agents/sessions/2026-04-25-phase14.6-and-14.7.md` (this session).
