@@ -2086,6 +2086,36 @@ Runtime verified end-to-end (preview_eval localhost:5173 with deployed firestore
 
 Tests: 4072 → 4098 (+26 net after F2/F5/F11 test refinements). Build clean.
 
+**Phase 14.2.B (2026-04-25, commit bcf6e3b)** — Per-treatment dual dropdowns + auto cert# + 3 NEW docTypes:
+- 16 docTypes total (13 originals + treatment-history A4 + treatment-referral A5 + course-deduction). Per-cert toggle config (NO_TOGGLES vs TOGGLE_OPINION_PT vs single-toggle for consent/treatment) replaces shared COMMON_TOGGLES.
+- `src/lib/backendClient.js` — `getNextCertNumber(docType)` with runTransaction-safe counter at `clinic_settings/cert_counters` keyed by `{prefix}:{YYYYMM}`. Format `MC-202604-0001`. Race-safe per Rule C2.
+- `src/components/backend/CustomerDetailView.jsx` — per-treatment row dual dropdowns: blue "พิมพ์ใบรับรองแพทย์ ▾" (filters to 8 cert types) + emerald "พิมพ์การรักษา ▾" (filters to 3 treatment-record types). Both DocumentPrintModal instances pre-fill from treatment context.
+- `src/components/backend/DocumentPrintModal.jsx` — auto-fetches cert# on template pick if certNumber field exists + not prefilled. Best-effort (silent fallback). Universal toggles default-on for templates with empty toggles array (showCertNumber + showPatientSignature → true) so {{#if X}} blocks in shared sub-templates render.
+
+**Phase 14.2.C (2026-04-25, commit df556f6)** — Doc 1/16 Medical History 100% replication:
+- Per user directive "ทำ templates เอกสารต่างๆ ให้เหมือนกัน proclinic เป๊ะๆเลย" + "ใบประวัติการรักษาจากเคสเดียวกัน ของเราโค่ดจะกาก".
+- `src/lib/documentPrintEngine.js` — NEW raw-HTML placeholder `{{{key}}}` (3 braces) bypasses htmlEscape. Critical fix: tables previously rendered as escaped text `&lt;tr&gt;&lt;td&gt;...`. Pass order: lang → unless → if → raw-HTML → escaped.
+- `src/lib/documentTemplateValidation.js` — SCHEMA_VERSION 4→5. treatment-history (Medical History A4) rewritten 100% per ProClinic page: 2-column layout, customer info LEFT (HN | name + Tel/Gender/Birthdate/Blood/Address) + Emergency contact + Vital signs (BT/PR/RR/BP/SpO2). RIGHT panel: Symptoms + Physical Examination + Diagnosis (full ICD codes) + Treatment + Treatment Plan + Additional note. Treatment record TABLE + Home medication TABLE using `{{{key}}}` raw-HTML rows.
+- `src/components/backend/CustomerDetailView.jsx` — comprehensive prefill mapping verified via preview_eval on real be_treatments docs:
+  - `treatmentItems` (NOT courseItems) → "Treatment record" table
+  - `consumables` + `medications` → "Home medication" table
+  - `vitals = { systolicBP, diastolicBP, pulseRate, respiratoryRate, temperature, oxygenSaturation, weight, height }` — combine sys/dia for BP display
+  - `doctorName` field gets concatenated 3x (primary+co-doctor+assistant) → strip via `/^[^)]+\)/`
+  - `symptoms`, `physicalExam`, `diagnosis`, `treatmentPlan`, `additionalNote` all top-level on detail object
+  - All raw-HTML row strings (treatmentRecordRows, homeMedicationRows, deductionRows) built in CustomerDetailView and passed via prefillValues
+
+**Phase 14.2 F12 test bank (2026-04-25, commit cb2bdb6)** — 32 automated tests (16 docTypes × 2: full + empty context). Asserts: no `{{key}}` placeholder leak, no escaped `<tr/<td/<table` text leak, mustContain[] strings present, mustHaveValue[] populated values appear. Per user directive "เขียนเทสขึ้นมาแล้วทดสอบเองเลย กับทุกหน้านะ". Currently 29 PASS, 3 FAIL (chart, consent, +1) = next-session work.
+
+**Phase 14.3 G6 vendor-sale scaffolding (2026-04-25, commits bcf6e3b + cb2bdb6, NOT yet wired)**:
+- `src/lib/vendorValidation.js` (NEW) — vendor master CRUD validator (name, taxId, address, phone, contactName, email, isActive)
+- `src/lib/vendorSaleValidation.js` (NEW) — B2B sale validator: vendorId + saleDate + items[] (productId/name/qty/unitPrice/lineTotal) + discount + totalAmount. Status machine: draft→confirmed→cancelled.
+- `src/lib/backendClient.js` — listVendors / saveVendor / deleteVendor + listVendorSales / saveVendorSale / deleteVendorSale / transitionVendorSale.
+- `src/components/backend/VendorSalesTab.jsx` (NEW) — combined Tab: vendor master CRUD (small modal) + vendor sale CRUD (list + form modal with sub-tabs). Mirrors ProClinic /admin/sale/vendor/create.
+- `firestore.rules` — `be_vendors` + `be_vendor_sales` rules added (NOT deployed yet).
+- TODO: nav entry + BackendDashboard route + tests + preview verify + firestore.rules deploy.
+
+Tests: 4098 → 4101+ (Doc 1 + F12 contributions). Build clean. firestore:rules at v3 (be_document_templates only). Phase 14.2.B/C + F12 + vendor scaffolding queued for `vercel --prod` + `firebase deploy --only firestore:rules` (per V15 combined-deploy rule, both run together when user says "deploy" with full Probe-Deploy-Probe).
+
 ---
 
 ## Phase 12.8 — P&L Report + Payment Summary Report (2026-04-20)
