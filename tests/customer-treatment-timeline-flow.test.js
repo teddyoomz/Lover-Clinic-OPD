@@ -126,9 +126,16 @@ describe('TL2: image grid (0 / 1 / N images per slot)', () => {
     expect(SRC).toMatch(/label="After"\s+images=\{afterImages\}/);
   });
 
-  it('TL2.6: lightbox via target="_blank" rel="noopener"', () => {
-    expect(SRC).toMatch(/target="_blank"/);
-    expect(SRC).toMatch(/rel="noopener noreferrer"/);
+  it('TL2.6: image preview via in-modal Lightbox (V21 — <a target="_blank"> blocked by Chrome for data: URLs)', () => {
+    // V21 (2026-04-26): images stored as base64 dataUrls; Chrome blocks
+    // top-frame navigation to data: URLs from <a href>. Replaced anchor
+    // wrapper with <button onClick={() => onZoom(src, label)}> + lightbox.
+    expect(SRC).toMatch(/data-testid="timeline-img-zoom"/);
+    expect(SRC).toMatch(/onZoom\?\.\(/);
+    expect(SRC).toMatch(/cursor-zoom-in/);
+    // Anti-regression: NO <a target="_blank"> wrapper around timeline images.
+    // (Other anchors elsewhere in the codebase are fine — this is file-scoped.)
+    expect(SRC).not.toMatch(/<a [^>]*target="_blank"[^>]*>\s*<img/);
   });
 
   it('TL2.7: thumbnail click resets to that index (controlled state)', () => {
@@ -191,8 +198,11 @@ describe('TL4: empty state (zero treatments)', () => {
 // ─── TL5: edit wire-through ────────────────────────────────────────────────
 
 describe('TL5: wire-through to existing CustomerDetailView handlers', () => {
-  it('TL5.1: onEditTreatment optional, called with treatment id when set', () => {
-    expect(SRC).toMatch(/onClick=\{\(\)\s*=>\s*onEditTreatment\(t\.id\)\}/);
+  it('TL5.1: onEditTreatment optional; closes modal first then calls handler (V21 — TreatmentFormPage z-80 was hidden behind modal z-100)', () => {
+    // V21 (2026-04-26): edit button must close timeline modal BEFORE
+    // navigating to TreatmentFormPage, otherwise the modal (z-100) covers
+    // the edit page (z-80) and user sees nothing change.
+    expect(SRC).toMatch(/onClick=\{\(\)\s*=>\s*\{\s*onClose\?\.\(\);\s*onEditTreatment\(t\.id\);\s*\}\}/);
     expect(SRC).toMatch(/data-testid=\{`timeline-edit-\$\{t\.id\}`\}/);
   });
 
@@ -356,5 +366,100 @@ describe('TL8: source-grep regression guards (Rule I)', () => {
 
   it('TL8.8: Phase 14.7.E version marker present in file header', () => {
     expect(SRC).toMatch(/Phase 14\.7\.E/);
+  });
+});
+
+// ─── TL9: V21 lightbox + close-on-edit guards ─────────────────────────────
+//
+// V21 (2026-04-26): two user-reported bugs in the shipped 14.7.E modal:
+//   (1) "กดรูปแล้วไม่เปิดรูป" — Chrome blocks <a href="data:..."> top-frame
+//       navigation since 2017+, and our images are stored as base64 dataUrls
+//   (2) "กดแก้ไขรูปแล้วไม่เด้งไปหน้า edit" — TreatmentFormPage at z-[80]
+//       was hidden behind TreatmentTimelineModal at z-[100]
+// Fix: in-modal Lightbox helper at z-[110] + onClose() call before
+// onEditTreatment() so the modal yields to the edit page.
+
+describe('TL9: V21 lightbox + close-on-edit', () => {
+  it('TL9.1: Lightbox helper component declared in same file (no extra import surface)', () => {
+    expect(SRC).toMatch(/function Lightbox\(/);
+  });
+
+  it('TL9.2: Lightbox renders only when src truthy (early-return on null)', () => {
+    expect(SRC).toMatch(/if\s*\(!src\)\s*return null/);
+  });
+
+  it('TL9.3: Lightbox is z-[110] (above modal z-[100])', () => {
+    expect(SRC).toMatch(/z-\[110\][\s\S]{0,400}data-testid="timeline-lightbox"/);
+  });
+
+  it('TL9.4: Lightbox a11y — role="dialog" + aria-modal + aria-label', () => {
+    // Lightbox aria-label uses interpolation
+    expect(SRC).toMatch(/role="dialog"[\s\S]{0,300}data-testid="timeline-lightbox"/);
+    expect(SRC).toMatch(/aria-label=\{`ขยายรูป \$\{label \|\| ''\}`\}/);
+  });
+
+  it('TL9.5: lightbox state initialized to null + setLightbox setter', () => {
+    expect(SRC).toMatch(/\[lightbox,\s*setLightbox\]\s*=\s*useState\(null\)/);
+  });
+
+  it('TL9.6: Esc handler closes lightbox first; modal close only when no lightbox', () => {
+    // Pattern: if (lightbox) setLightbox(null); else onClose?.();
+    expect(SRC).toMatch(/if\s*\(lightbox\)\s*setLightbox\(null\)/);
+    expect(SRC).toMatch(/else\s*onClose\?\.\(\)/);
+  });
+
+  it('TL9.7: backdrop click on lightbox stops propagation (no double-close to modal)', () => {
+    // Lightbox outer onClick: e.stopPropagation() THEN onClose()
+    expect(SRC).toMatch(/onClick=\{\(e\)\s*=>\s*\{\s*e\.stopPropagation\(\);\s*onClose\?\.\(\);\s*\}\}/);
+  });
+
+  it('TL9.8: lightbox close X button + image inner stop-propagation (image click does NOT close)', () => {
+    expect(SRC).toMatch(/data-testid="timeline-lightbox-close"/);
+    // Image element has its own stopPropagation so clicking the image
+    // doesn't bubble to the backdrop close.
+    expect(SRC).toMatch(/<img[\s\S]{0,400}onClick=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/);
+  });
+
+  it('TL9.9: ImageGridColumn accepts onZoom prop + fires it on big-image click', () => {
+    expect(SRC).toMatch(/function ImageGridColumn\(\{[^}]*onZoom[^}]*\}\)/);
+    // Both single-image and carousel-active-image variants fire onZoom.
+    const occurrences = SRC.match(/onZoom\?\.\(/g) || [];
+    expect(occurrences.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('TL9.10: parent passes onZoom to all 3 ImageGridColumn instances (OPD/อื่นๆ + Before + After)', () => {
+    // Setter must wrap into the {src, label} shape the lightbox state expects.
+    const grids = SRC.match(/<ImageGridColumn\b/g) || [];
+    expect(grids.length).toBe(3);
+    const wirings = SRC.match(/onZoom=\{[^}]*setLightbox\([^)]*\)[^}]*\}/g) || [];
+    expect(wirings.length).toBe(3);
+  });
+
+  it('TL9.11: zoom-button uses cursor-zoom-in + button (not anchor) so dataUrl works', () => {
+    expect(SRC).toMatch(/cursor-zoom-in/);
+    expect(SRC).toMatch(/<button[\s\S]{0,300}data-testid="timeline-img-zoom"/);
+  });
+
+  it('TL9.12: NO <a target="_blank"> wrapping a timeline image (anti-regression)', () => {
+    expect(SRC).not.toMatch(/<a [^>]*target="_blank"[^>]*>\s*<img/);
+  });
+
+  it('TL9.13: edit button onClick closes modal AND calls onEditTreatment in one handler', () => {
+    expect(SRC).toMatch(/onClick=\{\(\)\s*=>\s*\{\s*onClose\?\.\(\);\s*onEditTreatment\(t\.id\);\s*\}\}/);
+  });
+
+  it('TL9.14: V21 marker present in file (so future readers see why the indirection)', () => {
+    expect(SRC).toMatch(/V21/);
+  });
+
+  it('TL9.15: TreatmentFormPage z-[80] still less than timeline modal z-[100] — wireup proves dependency', () => {
+    // Anti-regression sanity: if TreatmentFormPage z-index were ever raised
+    // above 100, the close-on-edit dance would still work but be unnecessary.
+    // We assert the current ordering so a refactor that bumps both z-indexes
+    // is at least surfaced.
+    const tfp = READ('src/components/TreatmentFormPage.jsx');
+    expect(tfp).toMatch(/z-\[80\]/);
+    expect(SRC).toMatch(/z-\[100\]/);
+    expect(SRC).toMatch(/z-\[110\]/); // lightbox above modal
   });
 });

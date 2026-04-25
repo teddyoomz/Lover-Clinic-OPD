@@ -42,7 +42,12 @@ function imageUrl(img) {
 
 // ─── Image grid column (3 of these per treatment row) ──────────────────────
 
-function ImageGridColumn({ label, images, isDark }) {
+// V21 (2026-04-26): images are stored as base64 dataUrls; Chrome blocks
+// top-frame navigation to data: URLs from <a href> for security. Replaced
+// the <a target="_blank"> wrapper with a <button> that fires `onZoom(src)`,
+// which the parent renders as an in-modal lightbox (z-110, above this
+// modal's z-100). Same pattern works for legacy http(s) URLs too.
+function ImageGridColumn({ label, images, isDark, onZoom }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const valid = (images || []).filter(img => imageUrl(img));
   // Reset thumbnail index when image count changes (e.g. parent reload)
@@ -66,9 +71,12 @@ function ImageGridColumn({ label, images, isDark }) {
     return (
       <div>
         <h6 className="text-xs font-bold text-[var(--tx-secondary)] mb-2">{heading}</h6>
-        <a href={src} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all">
+        <button type="button" onClick={() => onZoom?.(src, label)}
+          data-testid="timeline-img-zoom"
+          aria-label={`ขยาย ${label}`}
+          className="block w-full aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all p-0 cursor-zoom-in bg-transparent">
           <img src={src} alt={label} className="w-full h-full object-cover" loading="lazy" />
-        </a>
+        </button>
       </div>
     );
   }
@@ -78,16 +86,19 @@ function ImageGridColumn({ label, images, isDark }) {
   return (
     <div>
       <h6 className="text-xs font-bold text-[var(--tx-secondary)] mb-2">{heading}</h6>
-      <a href={activeSrc} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all mb-2">
+      <button type="button" onClick={() => onZoom?.(activeSrc, label)}
+        data-testid="timeline-img-zoom"
+        aria-label={`ขยาย ${label} ${activeIdx + 1}`}
+        className="block w-full aspect-[4/3] rounded-lg overflow-hidden border border-[var(--bd)] hover:ring-2 hover:ring-orange-500 transition-all mb-2 p-0 cursor-zoom-in bg-transparent">
         <img src={activeSrc} alt={`${label} ${activeIdx + 1}`} className="w-full h-full object-cover" loading="lazy" />
-      </a>
+      </button>
       <div className="flex flex-wrap gap-1">
         {valid.map((img, i) => {
           const src = imageUrl(img);
           if (!src) return null;
           const isActive = i === activeIdx;
           return (
-            <button key={i} onClick={() => setActiveIdx(i)}
+            <button key={i} type="button" onClick={() => setActiveIdx(i)}
               data-testid={`timeline-img-thumb-${i}`}
               aria-label={`รูปที่ ${i + 1}`}
               aria-current={isActive ? 'true' : undefined}
@@ -97,6 +108,36 @@ function ImageGridColumn({ label, images, isDark }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── Lightbox overlay (rendered above the modal at z-110) ─────────────────
+// V21 fix companion: in-modal image preview that handles dataUrl images
+// (which Chrome refuses to top-frame-navigate via <a href>).
+function Lightbox({ src, label, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  if (!src) return null;
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`ขยายรูป ${label || ''}`}
+      data-testid="timeline-lightbox"
+      onClick={(e) => { e.stopPropagation(); onClose?.(); }}>
+      <img src={src} alt={label || 'รูปขยาย'}
+        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+        onClick={(e) => e.stopPropagation()} />
+      <button onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+        data-testid="timeline-lightbox-close"
+        aria-label="ปิดรูปขยาย"
+        className="absolute top-4 right-4 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-all">
+        <X size={20} />
+      </button>
     </div>
   );
 }
@@ -150,13 +191,19 @@ export default function TreatmentTimelineModal({
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
+  // V21 (2026-04-26): in-modal lightbox state for zoomed image preview.
+  const [lightbox, setLightbox] = useState(null); // { src, label } | null
 
-  // Esc to close + click-outside to close (delegated to backdrop onClick).
+  // Esc to close. If lightbox is open, Esc closes the lightbox first.
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (lightbox) setLightbox(null);
+      else onClose?.();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, lightbox]);
 
   // Index treatments by id once for O(1) detail lookup
   const treatmentsById = useMemo(() => {
@@ -317,7 +364,7 @@ export default function TreatmentTimelineModal({
                       <div className="flex items-center justify-between mb-3">
                         <h5 className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider">รูปภาพการรักษา</h5>
                         {onEditTreatment && (
-                          <button onClick={() => onEditTreatment(t.id)}
+                          <button onClick={() => { onClose?.(); onEditTreatment(t.id); }}
                             data-testid={`timeline-edit-${t.id}`}
                             className="text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-all hover:bg-[var(--bg-hover)]"
                             style={{ color: '#2EC4B6' }}>
@@ -331,9 +378,12 @@ export default function TreatmentTimelineModal({
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <ImageGridColumn label="OPD/อื่นๆ" images={otherImages} isDark={isDark} />
-                          <ImageGridColumn label="Before" images={beforeImages} isDark={isDark} />
-                          <ImageGridColumn label="After" images={afterImages} isDark={isDark} />
+                          <ImageGridColumn label="OPD/อื่นๆ" images={otherImages} isDark={isDark}
+                            onZoom={(src, lbl) => setLightbox({ src, label: lbl })} />
+                          <ImageGridColumn label="Before" images={beforeImages} isDark={isDark}
+                            onZoom={(src, lbl) => setLightbox({ src, label: lbl })} />
+                          <ImageGridColumn label="After" images={afterImages} isDark={isDark}
+                            onZoom={(src, lbl) => setLightbox({ src, label: lbl })} />
                         </div>
                       )}
                     </div>
@@ -353,6 +403,11 @@ export default function TreatmentTimelineModal({
           </button>
         </div>
       </div>
+
+      {/* V21 — In-modal image zoom (above modal at z-110). */}
+      {lightbox && (
+        <Lightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />
+      )}
     </div>
   );
 }
