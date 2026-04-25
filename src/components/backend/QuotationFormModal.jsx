@@ -16,6 +16,7 @@ import {
   generateQuotationId, DOSAGE_UNITS, ADMINISTRATION_METHODS, ADMINISTRATION_TIMES,
 } from '../../lib/quotationValidation.js';
 import { scrollToField } from '../../lib/marketingUiUtils.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const ADMIN_METHOD_LABEL = {
   before_meal_30min: 'ก่อนอาหาร 30 นาที',
@@ -28,6 +29,8 @@ const ADMIN_TIME_LABEL = {
 
 export default function QuotationFormModal({ quotation, onClose, onSaved, clinicSettings }) {
   const isEdit = !!quotation;
+  // Phase 14.7.H follow-up D — branch-aware quotation writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [form, setForm] = useState(() => {
     const base = { ...emptyQuotationForm(), ...(quotation || {}) };
     base.courses = Array.isArray(base.courses) ? base.courses : [];
@@ -183,6 +186,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
       const id = isEdit ? (quotation.quotationId || quotation.id) : generateQuotationId();
       await saveQuotation(id, {
         ...normalized,
+        branchId: selectedBranchId,
         createdAt: isEdit ? (quotation.createdAt || new Date().toISOString()) : new Date().toISOString(),
       });
       onSaved?.();

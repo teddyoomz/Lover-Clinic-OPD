@@ -53,10 +53,10 @@ const COLLECTION_MATRIX = {
   'be_stock_withdrawals':  { scope: 'branch',         source: 'cross-branch withdrawal (source + dest)' },
   // ─── Branch-aware via data spread (caller threads branchId; covered in F-set) ──
   'be_appointments':       { scope: 'branch-spread',  source: 'AppointmentFormModal; createBackendAppointment spreads data' },
-  'be_quotations':         { scope: 'branch-future',  source: 'QuotationsTab; helper spreads ...normalized — UI form needs branchId' },
-  'be_vendor_sales':       { scope: 'branch-future',  source: 'VendorSalesTab; helper spreads — UI form needs branchId' },
-  'be_online_sales':       { scope: 'branch-future',  source: 'OnlineSalesTab; helper spreads — UI form needs branchId' },
-  'be_sale_insurance_claims': { scope: 'branch-future', source: 'InsuranceClaimsTab; helper spreads — UI form needs branchId' },
+  'be_quotations':         { scope: 'branch-spread',  source: 'QuotationFormModal; saveQuotation spreads ...normalized — wired Phase 14.7.H-D' },
+  'be_vendor_sales':       { scope: 'branch-spread',  source: 'VendorSaleFormModal (in VendorSalesTab); saveVendorSale spreads — wired Phase 14.7.H-D' },
+  'be_online_sales':       { scope: 'branch-spread',  source: 'OnlineSalesTab; saveOnlineSale spreads — wired Phase 14.7.H-D' },
+  'be_sale_insurance_claims': { scope: 'branch-spread', source: 'SaleInsuranceClaimFormModal; saveSaleInsuranceClaim spreads — wired Phase 14.7.H-D' },
 
   // ─── Global (no branchId) ──
   'be_customers':          { scope: 'global',  reason: 'Customer can visit any branch' },
@@ -91,8 +91,8 @@ const COLLECTION_MATRIX = {
   'be_point_transactions': { scope: 'global',  reason: 'Audit log for points; ties to customerId' },
   'be_deposits':           { scope: 'global',  reason: 'Customer-owned; deposit records branchId of capture, sale uses it' },
   'be_memberships':        { scope: 'global',  reason: 'Customer membership state' },
-  'be_expenses':           { scope: 'branch-future', source: 'ExpensesTab; branch-scoped P&L (UI needs branchId thread)' },
-  'be_staff_schedules':    { scope: 'branch-future', source: 'StaffScheduleTab; helper spreads — UI form needs branchId' },
+  'be_expenses':           { scope: 'branch-spread', source: 'FinanceMasterTab ExpensesSection; saveExpense spreads — wired Phase 14.7.H-D' },
+  'be_staff_schedules':    { scope: 'branch-spread', source: 'StaffSchedulesTab; saveStaffSchedule spreads — wired Phase 14.7.H-D' },
 };
 
 // ─── Scope coverage tests ─────────────────────────────────────────────────
@@ -172,17 +172,53 @@ describe('BC2: branch-scoped collections — branchId presence per scope class',
     expect(src).toMatch(/SELECTED_BRANCH_ID/);
   });
 
+  // ─── Phase 14.7.H follow-up D — 6 branch-future collections wired ───────
+  // Each form modal imports useSelectedBranch + threads branchId into its
+  // saveX(...) payload. Source-grep guards lock the wireup so a future
+  // refactor cannot silently strip it.
+  it('BC2.spread.be_quotations: QuotationFormModal payload includes branchId', () => {
+    const src = READ('src/components/backend/QuotationFormModal.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
+  it('BC2.spread.be_vendor_sales: VendorSaleFormModal (in VendorSalesTab) payload includes branchId', () => {
+    const src = READ('src/components/backend/VendorSalesTab.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
+  it('BC2.spread.be_online_sales: OnlineSalesTab payload includes branchId', () => {
+    const src = READ('src/components/backend/OnlineSalesTab.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
+  it('BC2.spread.be_sale_insurance_claims: SaleInsuranceClaimFormModal payload includes branchId', () => {
+    const src = READ('src/components/backend/SaleInsuranceClaimFormModal.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
+  it('BC2.spread.be_expenses: FinanceMasterTab ExpensesSection payload includes branchId', () => {
+    const src = READ('src/components/backend/FinanceMasterTab.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
+  it('BC2.spread.be_staff_schedules: StaffSchedulesTab payload includes branchId', () => {
+    const src = READ('src/components/backend/StaffSchedulesTab.jsx');
+    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  });
+
   // BRANCH-FUTURE: collection has rule support but UI form not yet wired.
-  // We assert these collections are TRACKED (not silently skipped).
-  it('BC2.future: branch-future collections are documented in this matrix', () => {
+  // After Phase 14.7.H-D, NO collections remain in this state. The loop
+  // stays as a guard for any future additions: if a new collection lands
+  // as branch-future, it must have a source description so the next
+  // wireup phase knows what UI to touch.
+  it('BC2.future: any branch-future collections are documented (currently 0 after 14.7.H-D)', () => {
     const future = Object.entries(COLLECTION_MATRIX)
       .filter(([, v]) => v.scope === 'branch-future').map(([k]) => k);
-    // Each entry must have a `source:` describing what UI needs the wireup.
     for (const k of future) {
       expect(COLLECTION_MATRIX[k].source).toBeTruthy();
     }
-    // Sanity: list is non-empty (we know a few exist as of this commit)
-    expect(future.length).toBeGreaterThan(0);
+    // After 14.7.H-D the list is empty. Comment is here so a future
+    // contributor doesn't reflexively re-add the >0 assertion.
   });
 });
 

@@ -14,6 +14,7 @@ import {
   TYPE_OPTIONS, TYPE_LABEL, TIME_SLOTS,
 } from '../../lib/staffScheduleValidation.js';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const TYPE_BADGE = {
   work:    { cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -37,6 +38,8 @@ function staffDisplayName(s) {
 }
 
 export default function StaffSchedulesTab({ clinicSettings }) {
+  // Phase 14.7.H follow-up D — branch-aware staff-schedule writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -90,6 +93,7 @@ export default function StaffSchedulesTab({ clinicSettings }) {
       await saveStaffSchedule(id, {
         ...form,
         staffName: s ? staffDisplayName(s) : form.staffName,
+        branchId: selectedBranchId,
       });
       handleClear();
       await reload();

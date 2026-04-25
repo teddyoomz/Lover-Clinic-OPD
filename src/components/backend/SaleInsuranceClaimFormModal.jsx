@@ -21,6 +21,7 @@ import {
   generateSaleInsuranceClaimId,
   STATUS_OPTIONS,
 } from '../../lib/saleInsuranceClaimValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const STATUS_LABEL = {
   pending: 'รออนุมัติ',
@@ -49,6 +50,8 @@ export default function SaleInsuranceClaimFormModal({
   clinicSettings,
 }) {
   const isEdit = !!claim;
+  // Phase 14.7.H follow-up D — branch-aware insurance-claim writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [form, setForm] = useState(() => ({
     ...emptySaleInsuranceClaimForm(),
     ...(claim || {}),
@@ -81,7 +84,7 @@ export default function SaleInsuranceClaimFormModal({
     setSaving(true);
     try {
       const id = isEdit ? (claim.claimId || claim.id) : generateSaleInsuranceClaimId();
-      await saveSaleInsuranceClaim(id, form, { strict: true });
+      await saveSaleInsuranceClaim(id, { ...form, branchId: selectedBranchId }, { strict: true });
       onSaved?.();
       onClose?.();
     } catch (e) {

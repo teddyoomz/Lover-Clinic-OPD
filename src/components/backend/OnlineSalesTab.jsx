@@ -14,6 +14,7 @@ import {
   STATUS_OPTIONS, emptyOnlineSaleForm, generateOnlineSaleId,
 } from '../../lib/onlineSaleValidation.js';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const STATUS_BADGE = {
   pending:   { label: 'รอชำระ',   cls: 'bg-amber-700/20 border-amber-700/40 text-amber-400',   icon: Clock },
@@ -23,6 +24,8 @@ const STATUS_BADGE = {
 };
 
 export default function OnlineSalesTab({ clinicSettings, theme }) {
+  // Phase 14.7.H follow-up D — branch-aware online-sale writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -68,6 +71,7 @@ export default function OnlineSalesTab({ clinicSettings, theme }) {
       const bank = bankAccounts.find(b => (b.bankAccountId || b.id) === form.bankAccountId);
       await saveOnlineSale(id, {
         ...form,
+        branchId: selectedBranchId,
         customerName: cust ? `${cust.patientData?.firstName || ''} ${cust.patientData?.lastName || ''}`.trim() : form.customerName,
         customerHN: cust?.proClinicHN || cust?.hn || form.customerHN,
         bankAccountLabel: bank ? `${bank.bankName} ${bank.accountNumber.slice(-4) || ''}` : form.bankAccountLabel,

@@ -26,6 +26,7 @@ import {
 import {
   emptyExpenseForm, generateExpenseId,
 } from '../../lib/expenseValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 export default function FinanceMasterTab({ clinicSettings, theme }) {
   const [tab, setTab] = useState('bank');
   return (
@@ -225,6 +226,8 @@ function ExpenseCategoriesSection() {
 /* ─── Expenses section ──────────────────────────────────────────────────── */
 
 function ExpensesSection() {
+  // Phase 14.7.H follow-up D — branch-aware expense writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyExpenseForm());
@@ -248,7 +251,7 @@ function ExpensesSection() {
     try {
       const id = editingId || generateExpenseId();
       const cat = categories.find(c => (c.categoryId || c.id) === form.categoryId);
-      await saveExpense(id, { ...form, categoryName: cat?.name || '' }, { strict: true });
+      await saveExpense(id, { ...form, categoryName: cat?.name || '', branchId: selectedBranchId }, { strict: true });
       setForm(emptyExpenseForm());
       setEditingId(null);
       await reload();

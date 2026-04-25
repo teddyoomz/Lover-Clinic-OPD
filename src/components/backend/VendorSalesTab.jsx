@@ -26,6 +26,7 @@ import {
 } from '../../lib/vendorSaleValidation.js';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const STATUS_BADGE = {
   draft:     { label: 'ร่าง',       cls: 'bg-amber-700/20 border-amber-700/40 text-amber-400',     icon: Clock },
@@ -320,6 +321,8 @@ function VendorFormModal({ vendor, onClose, onSaved, clinicSettings }) {
 
 function VendorSaleFormModal({ sale, vendors, products, onClose, onSaved, clinicSettings }) {
   const isEdit = !!sale;
+  // Phase 14.7.H follow-up D — branch-aware vendor-sale writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [form, setForm] = useState(() => ({ ...emptyVendorSaleForm(), ...(sale || {}) }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -347,7 +350,7 @@ function VendorSaleFormModal({ sale, vendors, products, onClose, onSaved, clinic
 
   const handleSave = async () => {
     setError('');
-    const formWithTotal = { ...form, totalAmount: total };
+    const formWithTotal = { ...form, totalAmount: total, branchId: selectedBranchId };
     const fail = validateVendorSale(formWithTotal, { strict: true });
     if (fail) { setError(fail[1]); return; }
     setSaving(true);
