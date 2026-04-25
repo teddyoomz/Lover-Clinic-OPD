@@ -80,7 +80,7 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, theme, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale, onOpenFinance }) {
+export default function CustomerDetailView({ customer, accentColor, theme, clinicSettings, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale, onOpenFinance }) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -734,14 +734,15 @@ export default function CustomerDetailView({ customer, accentColor, theme, onBac
           />}
         </div>
       </div>
-      {/* Phase 14.5 — print document modal (shared component) */}
+      {/* Phase 14.5 — print document modal (shared component).
+          Phase 14.2 — passes ALL clinicSettings fields (clinicName,
+          clinicNameEn, clinicAddress, clinicAddressEn, clinicPhone,
+          clinicLicenseNo, clinicTaxId, clinicEmail) so templates
+          can render the full ProClinic letterhead. */}
       <DocumentPrintModal
         open={printDocOpen}
         onClose={() => setPrintDocOpen(false)}
-        clinicSettings={{
-          clinicName: customer?.clinicName,
-          accentColor: ac,
-        }}
+        clinicSettings={clinicSettings || { accentColor: ac }}
         customer={customer}
       />
     </div>

@@ -224,6 +224,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             customer={viewingCustomer}
             accentColor={ac}
             theme={theme}
+            clinicSettings={clinicSettings}
             onBack={() => setViewingCustomer(null)}
             onCreateTreatment={() => setTreatmentFormMode({
               mode: 'create',

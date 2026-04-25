@@ -65,16 +65,27 @@ export default function DocumentPrintModal({
     });
   }, [templates, query]);
 
+  // Phase 14.2 — toggles + language live alongside fill values. Toggles
+  // are reset to the template's defaultOn per pick. Language defaults to
+  // template.language (th/en/bilingual). Both surface as UI controls
+  // before the fill form so staff can mirror ProClinic's print options.
+  const [toggles, setToggles] = useState({});
+  const [language, setLanguage] = useState('th');
+
   const handlePick = (t) => {
     setSelected(t);
-    // Pre-fill each field from prefillValues + customer shortcuts. Rendering
-    // logic (buildPrintContext) also auto-fills from clinic/customer, but
-    // exposing the values in the form lets staff edit before print.
     const initial = {};
     for (const f of (t.fields || [])) {
       if (prefillValues[f.key] != null) initial[f.key] = prefillValues[f.key];
     }
     setValues(initial);
+    // Initialize toggles from template's defaultOn flags
+    const initToggles = {};
+    for (const tog of (t.toggles || [])) {
+      initToggles[tog.key] = !!tog.defaultOn;
+    }
+    setToggles(initToggles);
+    setLanguage(t.language || 'th');
     setStep(STEP_FILL);
   };
 
@@ -95,6 +106,8 @@ export default function DocumentPrintModal({
         clinic: clinicSettings || {},
         customer: customer || {},
         values,
+        language,
+        toggles,
       });
       if (!win) {
         setError('ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาตป๊อปอัพ');
@@ -111,9 +124,11 @@ export default function DocumentPrintModal({
       clinic: clinicSettings || {},
       customer: customer || {},
       values,
+      language,
+      toggles,
     });
     return renderTemplate(selected.htmlTemplate || '', ctx);
-  }, [selected, values, clinicSettings, customer]);
+  }, [selected, values, clinicSettings, customer, language, toggles]);
 
   if (!open) return null;
 
@@ -199,6 +214,35 @@ export default function DocumentPrintModal({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Fill form */}
               <div className="space-y-3" data-testid="document-print-fill-form">
+                {/* Phase 14.2 — top toggle bar (mirrors ProClinic): per-template
+                    show/hide gates + TH/EN/bilingual language switch. */}
+                <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]">
+                  {(selected.toggles || []).map(tog => (
+                    <label key={tog.key} className="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+                      data-testid={`document-print-toggle-${tog.key}`}>
+                      <input type="checkbox"
+                        checked={!!toggles[tog.key]}
+                        onChange={(e) => setToggles(prev => ({ ...prev, [tog.key]: e.target.checked }))}
+                        className="cursor-pointer" />
+                      <span>{tog.labelTh}</span>
+                    </label>
+                  ))}
+                  <div className="ml-auto flex items-center gap-1 text-xs">
+                    <span className="text-[var(--tx-muted)]">ภาษา:</span>
+                    {['th', 'en', 'bilingual'].map(lang => (
+                      <button key={lang}
+                        onClick={() => setLanguage(lang)}
+                        data-testid={`document-print-lang-${lang}`}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase transition-colors ${
+                          language === lang
+                            ? 'bg-violet-700 text-white'
+                            : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)]'
+                        }`}>
+                        {lang === 'bilingual' ? 'TH/EN' : lang}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="text-xs text-[var(--tx-muted)]">
                   กรอกข้อมูลที่จำเป็น — ค่าอื่นๆ ระบบเติมอัตโนมัติจากข้อมูลลูกค้า/คลินิก
                 </div>

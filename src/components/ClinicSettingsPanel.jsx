@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download, DoorOpen } from 'lucide-react';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download, DoorOpen, FileText } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -122,6 +122,12 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), {
         clinicName: settings.clinicName.trim() || DEFAULT_CLINIC_SETTINGS.clinicName,
+        // Phase 14.2 — clinic info for document templates
+        clinicNameEn: settings.clinicNameEn?.trim() || '',
+        clinicAddress: settings.clinicAddress?.trim() || '',
+        clinicAddressEn: settings.clinicAddressEn?.trim() || '',
+        clinicLicenseNo: settings.clinicLicenseNo?.trim() || '',
+        clinicTaxId: settings.clinicTaxId?.trim() || '',
         clinicSubtitle: settings.clinicSubtitle.trim(),
         logoUrl: settings.logoUrl,
         logoUrlLight: settings.logoUrlLight || '',
@@ -361,6 +367,61 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
             placeholder="02-xxx-xxxx หรือ 08x-xxx-xxxx"
             className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono"
           />
+        </div>
+
+        {/* Phase 14.2 — Clinic info for document templates (medical-cert / fit-to-fly / referral / etc.) */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
+          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <FileText size={14} style={{color: ac}}/> ข้อมูลคลินิก (สำหรับใบรับรองแพทย์/เอกสาร)
+          </h3>
+          <p className="text-[11px] text-gray-600 mb-4">
+            ข้อมูลเหล่านี้ปรากฏบนเอกสารที่พิมพ์ออกมา (ใบรับรองแพทย์ / ฉลากยา / Fit-to-fly / ใบส่งตัว ฯลฯ).
+            ฟิลด์ภาษาอังกฤษใช้กับเอกสารแบบ bilingual.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-gray-600 mb-1">ชื่อคลินิกภาษาอังกฤษ (Clinic Name EN)</label>
+              <input type="text"
+                value={settings.clinicNameEn || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicNameEn: e.target.value }))}
+                placeholder="e.g. Lover Clinic"
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-600 mb-1">เลขที่ใบอนุญาตประกอบกิจการสถานพยาบาล</label>
+              <input type="text"
+                value={settings.clinicLicenseNo || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicLicenseNo: e.target.value }))}
+                placeholder="เช่น 11102000xxx"
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-600 mb-1">เลขประจำตัวผู้เสียภาษี</label>
+              <input type="text"
+                value={settings.clinicTaxId || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicTaxId: e.target.value }))}
+                placeholder="เช่น 0xxxxxxxxxxxxx"
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-gray-600 mb-1">ที่อยู่คลินิก (Address TH)</label>
+              <textarea
+                value={settings.clinicAddress || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicAddress: e.target.value }))}
+                placeholder="เลขที่ ซอย ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
+                rows={2}
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-gray-600 mb-1">Address (English)</label>
+              <textarea
+                value={settings.clinicAddressEn || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicAddressEn: e.target.value }))}
+                placeholder="No., Soi, Road, Sub-district, District, Province, Postal code"
+                rows={2}
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
+            </div>
+          </div>
         </div>
 
         {/* Patient Sync Cooldown */}

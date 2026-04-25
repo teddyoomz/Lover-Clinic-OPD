@@ -2,6 +2,15 @@ export const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 export const DEFAULT_CLINIC_SETTINGS = {
   clinicName: 'Lover Clinic',
+  // Phase 14.2 (2026-04-25) — clinic info needed for ProClinic-fidelity
+  // document templates (medical-cert / fit-to-fly / referral / etc.).
+  // English fields surface on bilingual templates; license + tax ID are
+  // legal requirements for printed certs in Thailand.
+  clinicNameEn: '',
+  clinicAddress: '',
+  clinicAddressEn: '',
+  clinicLicenseNo: '',  // เลขที่ใบอนุญาตประกอบกิจการสถานพยาบาล
+  clinicTaxId: '',
   clinicSubtitle: '',
   logoUrl: '',
   logoUrlLight: '',

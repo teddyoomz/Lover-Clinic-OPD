@@ -15,6 +15,7 @@ import {
   listDocumentTemplates,
   deleteDocumentTemplate,
   seedDocumentTemplatesIfEmpty,
+  upgradeSystemDocumentTemplates,
 } from '../../lib/backendClient.js';
 import {
   DOC_TYPES,
@@ -38,22 +39,32 @@ export default function DocumentTemplatesTab({ clinicSettings }) {
   const reload = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const list = await listDocumentTemplates();
+      let list = await listDocumentTemplates();
       if (list.length === 0) {
-        // First-load seed. Idempotent (no-op if ANY template already exists
-        // after a parallel tab seeded). Separate error banner so users know
-        // when seeding blocked (e.g., firestore.rules not deployed yet).
+        // First-load seed.
         setSeeding(true);
         try {
           const res = await seedDocumentTemplatesIfEmpty();
           if (res.seeded) {
-            setItems(await listDocumentTemplates());
-            return;
+            list = await listDocumentTemplates();
           }
         } catch (seedErr) {
           setError(`เพิ่มเทมเพลตเริ่มต้นล้มเหลว: ${seedErr.message || seedErr}`);
         } finally {
           setSeeding(false);
+        }
+      } else {
+        // Phase 14.2 — schema upgrade pass. Rewrites system-default templates
+        // whose schemaVersion is older than the current SEED_TEMPLATES.
+        // User-customized templates (isSystemDefault=false) are NEVER touched.
+        try {
+          const res = await upgradeSystemDocumentTemplates();
+          if (res.upgraded > 0 || res.added > 0) {
+            list = await listDocumentTemplates();
+          }
+        } catch (upErr) {
+          // Soft-fail — user can still use existing templates. Log to console.
+          console.warn('[DocumentTemplates] schema upgrade failed:', upErr);
         }
       }
       setItems(list);

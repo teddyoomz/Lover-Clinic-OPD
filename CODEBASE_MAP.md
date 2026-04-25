@@ -2067,6 +2067,25 @@ Runtime verified (preview_eval localhost:5173): DocumentTemplatesTab heading + c
 
 Tests: 3999 → 4071 (+72). Build clean.
 
+**Phase 14.2 follow-up (2026-04-25)** — ProClinic-fidelity replication. Initial Phase 14.1 seeds were "good-enough" placeholders; this pass replicates the actual ProClinic layout for all 13 docs based on screenshot + form intel:
+- `src/lib/documentTemplateValidation.js` — added `SCHEMA_VERSION=2`, `MAX_TOGGLES=10`, `toggles` array schema (`{key, labelTh, labelEn, defaultOn}`), `schemaVersion` field, validator extended for toggles. Replicated 13 SEED_TEMPLATES with shared HEADER_CLINIC + SECTION_1_PATIENT_DECLARATION + SECTION_2_DOCTOR_BLOCK + DOCTOR_SIGNATURE blocks. ProClinic patterns: clinic letterhead with logo+name+address+phone+license, centered title, optional cert# section (toggle), section 1 (patient self-declaration with 5 history checkboxes), section 2 (doctor's exam findings + diagnosis + rest period), signature footer. Common toggles: `showCertNumber` + `showPatientSignature`. Bilingual via `{{#lang th}}...{{/lang}}` blocks.
+- `src/lib/documentPrintEngine.js` — `renderTemplate` extended with conditional blocks: `{{#if key}}...{{/if}}` (truthy gate), `{{#unless key}}...{{/unless}}` (falsy gate), `{{#lang th|en|bilingual}}...{{/lang}}` (language switch). Order: lang → unless → if. `buildPrintContext` accepts `language` + `toggles` and spreads toggle keys at top level so `{{#if showCertNumber}}` works without nested objects. Clinic context expanded to cover full ProClinic header set: `clinicName / clinicNameEn / clinicAddress / clinicAddressEn / clinicPhone / clinicEmail / clinicTaxId / clinicLicenseNo`.
+- `src/lib/backendClient.js` — `upgradeSystemDocumentTemplates()` (NEW): idempotent schema migration for system-default templates. Reads existing be_document_templates, finds system-defaults whose `schemaVersion < SCHEMA_VERSION`, rewrites HTML+fields+toggles in-place (preserves ID + createdAt). User-customized templates (`isSystemDefault: false`) NEVER touched. `DocumentTemplatesTab` now calls upgrade on every reload (silent soft-fail on permission errors).
+- `src/components/backend/DocumentPrintModal.jsx` — toggle bar above fill form: per-template checkbox controls + TH/EN/bilingual language selector. Toggle state + language threaded through `printDocument({ template, clinic, customer, values, language, toggles })`. Live preview updates as toggles flip.
+- `src/components/ClinicSettingsPanel.jsx` — new "ข้อมูลคลินิก (สำหรับใบรับรองแพทย์/เอกสาร)" section: Thai+English clinic name, Thai+English address (textareas), license number, tax ID. All saved to `clinic_settings/main` doc + read by `buildPrintContext` for letterhead.
+- `src/constants.js` — `DEFAULT_CLINIC_SETTINGS` extended: `clinicNameEn`, `clinicAddress`, `clinicAddressEn`, `clinicLicenseNo`, `clinicTaxId`.
+- `src/components/backend/CustomerDetailView.jsx` — passes full `clinicSettings` (not just clinicName) to DocumentPrintModal so letterhead surfaces.
+- `src/pages/BackendDashboard.jsx` — passes `clinicSettings` prop to CustomerDetailView (was missing before).
+- `tests/phase14-documents-flow-simulate.test.js` — F8 conditional block engine (6 tests), F9 toggle schema validation (8 tests), F10 schemaVersion + buildPrintContext spread (5 tests), F11 full ProClinic-replicated rendering (7 tests covering medical-cert / thai-traditional / chinese (TH/EN) / medicine-label / patient-referral). Total Phase 14 tests: 73 → 99.
+
+Runtime verified end-to-end (preview_eval localhost:5173 with deployed firestore:rules):
+- Schema upgrade ran automatically on tab open: 13/13 templates now schemaVersion=2 with full ProClinic HTML
+- DocumentPrintModal: cert# toggle on → block appears in preview with filled value; signature toggle on → ผู้ปกครอง footnote appears; language switch th→en → English/Chinese chars surface
+- Letterhead shows real clinic name + phone + license fed from clinic_settings
+- All 4098/4098 tests passing
+
+Tests: 4072 → 4098 (+26 net after F2/F5/F11 test refinements). Build clean.
+
 ---
 
 ## Phase 12.8 — P&L Report + Payment Summary Report (2026-04-20)

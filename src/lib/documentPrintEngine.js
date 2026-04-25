@@ -34,17 +34,39 @@ export function htmlEscape(v) {
 /**
  * Build the union of default context values (customer/clinic/today) + the
  * per-document fill values. Per-document values win on collision.
+ *
+ * Phase 14.2 — accepts `language` ('th' | 'en' | 'bilingual') and `toggles`
+ * (Object<key, bool>) so {{#lang}} and {{#if/unless}} blocks in the
+ * template render correctly. Both are surfaced as top-level context keys.
+ *
  * Exported for unit test.
  */
-export function buildPrintContext({ clinic = {}, customer = {}, values = {} } = {}) {
+export function buildPrintContext({ clinic = {}, customer = {}, values = {}, language = '', toggles = {} } = {}) {
   const ctx = {};
 
-  // Clinic defaults
+  // Language selector — used by {{#lang th}}/{{#lang en}}/{{#lang bilingual}}.
+  ctx.language = ['th', 'en', 'bilingual'].includes(language) ? language : 'th';
+
+  // Toggles — boolean keys spliced into context so {{#if showCertNumber}}
+  // works without nested objects.
+  if (toggles && typeof toggles === 'object') {
+    for (const [k, v] of Object.entries(toggles)) {
+      if (k && typeof k === 'string') ctx[k] = !!v;
+    }
+  }
+
+  // Clinic defaults — Phase 14.2: full ProClinic-cert header set.
+  // Accept both legacy keys (address/phone/taxId/email) and the new
+  // ClinicSettingsPanel keys (clinicAddress / clinicPhone / clinicTaxId /
+  // clinicEmail / clinicLicenseNo / clinicNameEn / clinicAddressEn).
   ctx.clinicName     = clinic.clinicName || clinic.name || 'คลินิก';
-  ctx.clinicAddress  = clinic.address || '';
-  ctx.clinicPhone    = clinic.phone || '';
-  ctx.clinicEmail    = clinic.email || '';
-  ctx.clinicTaxId    = clinic.taxId || '';
+  ctx.clinicNameEn   = clinic.clinicNameEn || clinic.nameEn || '';
+  ctx.clinicAddress  = clinic.clinicAddress || clinic.address || '';
+  ctx.clinicAddressEn = clinic.clinicAddressEn || clinic.addressEn || '';
+  ctx.clinicPhone    = clinic.clinicPhone || clinic.phone || '';
+  ctx.clinicEmail    = clinic.clinicEmail || clinic.email || '';
+  ctx.clinicTaxId    = clinic.clinicTaxId || clinic.taxId || '';
+  ctx.clinicLicenseNo = clinic.clinicLicenseNo || clinic.licenseNo || '';
 
   // Customer defaults
   const pd = customer.patientData || {};
@@ -72,8 +94,24 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {} } = 
 }
 
 /**
- * Replace {{key}} tokens in the template with context values. Unknown
- * placeholders are emptied (not left as literal `{{key}}`).
+ * Render a template with {{key}} replacement + conditional blocks.
+ *
+ * Phase 14.2 (2026-04-25): added `{{#if key}}...{{/if}}` blocks to
+ * support ProClinic-style toggles (เลขที่ on/off · ลายเซ็นคนไข้ on/off ·
+ * etc.). Blocks render their inner content ONLY if `context[key]` is
+ * truthy; otherwise the entire block is dropped. Unknown {{key}} tokens
+ * still empty out as before.
+ *
+ * Token grammar:
+ *  - Replacement: {{name}} where name = /[a-zA-Z_][a-zA-Z0-9_]*  /
+ *  - Conditional block: {{#if name}}...{{/if}}
+ *  - Conditional inverse: {{#unless name}}...{{/unless}} (rendered when key falsy)
+ *  - Language block: {{#lang th}}...{{/lang}} renders only when context.language === 'th'
+ *    (or 'bilingual'). Same for {{#lang en}}.
+ *
+ * Conditional blocks may NOT be nested in this implementation — keeps the
+ * parser simple. If nesting becomes necessary, switch to a real template
+ * lib (Mustache/Handlebars) in a follow-up.
  *
  * @param {string} template
  * @param {Record<string, any>} context
@@ -81,11 +119,34 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {} } = 
  */
 export function renderTemplate(template, context = {}) {
   if (typeof template !== 'string') return '';
-  return template.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, key) => {
+
+  // 1) Strip conditional blocks first (so any {{key}} they contain is also
+  //    dropped). Order: lang → unless → if.
+  let out = template;
+
+  out = out.replace(/\{\{#lang\s+(th|en|bilingual)\}\}([\s\S]*?)\{\{\/lang\}\}/g, (_m, blockLang, body) => {
+    const lang = String(context.language || 'th');
+    if (blockLang === 'bilingual') return body;
+    if (lang === 'bilingual') return body; // bilingual context renders both blocks
+    return blockLang === lang ? body : '';
+  });
+
+  out = out.replace(/\{\{#unless\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}([\s\S]*?)\{\{\/unless\}\}/g, (_m, key, body) => {
+    return context[key] ? '' : body;
+  });
+
+  out = out.replace(/\{\{#if\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_m, key, body) => {
+    return context[key] ? body : '';
+  });
+
+  // 2) Then simple replacements — escape values, drop unknowns.
+  out = out.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, key) => {
     const v = context[key];
     if (v == null || v === '') return '';
     return htmlEscape(v);
   });
+
+  return out;
 }
 
 /** Build full HTML document (DOCTYPE + head + body) for print. */
@@ -156,15 +217,19 @@ export function openPrintWindow({ template, context, paperSize, language, title 
  * @param {object} [opts.clinic] — clinic_settings
  * @param {object} [opts.customer] — be_customers record
  * @param {object} [opts.values] — per-document fillable values (from form)
+ * @param {string} [opts.language] — override language ('th' | 'en' | 'bilingual'),
+ *                                   defaults to template.language
+ * @param {Record<string, boolean>} [opts.toggles] — show/hide gate values
  */
-export function printDocument({ template, clinic, customer, values } = {}) {
+export function printDocument({ template, clinic, customer, values, language, toggles } = {}) {
   if (!template || typeof template !== 'object') throw new Error('template required');
-  const context = buildPrintContext({ clinic, customer, values });
+  const finalLang = language || template.language || 'th';
+  const context = buildPrintContext({ clinic, customer, values, language: finalLang, toggles });
   return openPrintWindow({
     template: template.htmlTemplate || '',
     context,
     paperSize: template.paperSize || 'A4',
-    language: template.language || 'th',
+    language: finalLang,
     title: template.name || 'Document',
   });
 }

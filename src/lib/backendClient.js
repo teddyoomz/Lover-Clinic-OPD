@@ -6270,6 +6270,73 @@ export async function seedDocumentTemplatesIfEmpty() {
   return { seeded: true, count };
 }
 
+/**
+ * Phase 14.2 — schema upgrade. Detects existing system-default templates
+ * with an outdated schemaVersion and rewrites them with the latest seed
+ * HTML + fields + toggles. User-edited templates (isSystemDefault=false)
+ * are NEVER touched.
+ *
+ * Strategy:
+ *  - Load all existing templates
+ *  - For each docType in SEED_TEMPLATES: find the system-default with
+ *    matching docType. If schemaVersion < current OR doesn't exist, rewrite.
+ *  - User-customized templates (isSystemDefault=false) are preserved entirely.
+ *  - Idempotent: running twice has no effect after the first.
+ */
+export async function upgradeSystemDocumentTemplates() {
+  const {
+    SEED_TEMPLATES,
+    generateDocumentTemplateId,
+    normalizeDocumentTemplate,
+    SCHEMA_VERSION,
+  } = await import('./documentTemplateValidation.js');
+  const snap = await getDocs(documentTemplatesCol());
+  const existing = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const systemByType = new Map();
+  for (const t of existing) {
+    if (t.isSystemDefault && t.docType) systemByType.set(t.docType, t);
+  }
+
+  const now = new Date().toISOString();
+  let upgraded = 0;
+  let added = 0;
+
+  for (const seed of SEED_TEMPLATES) {
+    const current = systemByType.get(seed.docType);
+    const currentVersion = Number(current?.schemaVersion) || 1;
+    if (current && currentVersion >= SCHEMA_VERSION) continue; // already up to date
+
+    const normalized = normalizeDocumentTemplate({
+      ...seed,
+      isSystemDefault: true,
+      isActive: current?.isActive !== false,
+    });
+
+    if (current) {
+      // In-place upgrade: keep ID + createdAt, rewrite body + bump version.
+      await setDoc(documentTemplateDoc(current.templateId || current.id), {
+        ...normalized,
+        templateId: current.templateId || current.id,
+        createdAt: current.createdAt || now,
+        updatedAt: now,
+      }, { merge: false });
+      upgraded++;
+    } else {
+      // New docType in seed list (shouldn't normally happen unless we add a
+      // new type). Insert with a fresh ID.
+      const id = generateDocumentTemplateId(seed.docType);
+      await setDoc(documentTemplateDoc(id), {
+        ...normalized,
+        templateId: id,
+        createdAt: now,
+        updatedAt: now,
+      }, { merge: false });
+      added++;
+    }
+  }
+  return { upgraded, added };
+}
+
 // ─── Quotations CRUD (Phase 13.1.2) ─────────────────────────────────────────
 
 const quotationsCol = () => collection(db, ...basePath(), 'be_quotations');

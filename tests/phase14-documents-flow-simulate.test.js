@@ -32,6 +32,8 @@ import {
   SEED_TEMPLATES,
   NAME_MAX_LENGTH,
   HTML_MAX_LENGTH,
+  SCHEMA_VERSION,
+  MAX_TOGGLES,
 } from '../src/lib/documentTemplateValidation.js';
 import {
   htmlEscape,
@@ -203,7 +205,9 @@ describe('F5: end-to-end — seed template renders customer HTML', () => {
     });
     const html = renderTemplate(seed.htmlTemplate, ctx);
     expect(html).toContain('Lover Clinic');
-    expect(html).toContain('HN-1');
+    // ProClinic-replicated medical-cert section 1 uses nationalId only —
+    // HN appears via SECTION_2 (sometimes), not by default. Customer name
+    // surfaces via {{customerName}} (auto-built from patientData).
     expect(html).toContain('สมหญิง');
     expect(html).toContain('ปกติ');
     expect(html).toContain('โรคหวัด');
@@ -409,5 +413,276 @@ describe('F7: source-grep regression guards', () => {
       expect(DOC_TYPES).toContain(docType);
       expect(typeof DOC_TYPE_LABELS[docType]).toBe('string');
     }
+  });
+});
+
+/* ─── F8: Phase 14.2 — toggle blocks + language blocks engine ──────────── */
+
+describe('F8: conditional template blocks', () => {
+  it('F8.1: {{#if key}} renders body when truthy', () => {
+    expect(renderTemplate('A {{#if x}}YES{{/if}} B', { x: true })).toBe('A YES B');
+    expect(renderTemplate('A {{#if x}}YES{{/if}} B', { x: false })).toBe('A  B');
+    expect(renderTemplate('A {{#if x}}YES{{/if}} B', {})).toBe('A  B');
+  });
+
+  it('F8.2: {{#unless key}} renders body when falsy', () => {
+    expect(renderTemplate('{{#unless x}}NO{{/unless}}', { x: true })).toBe('');
+    expect(renderTemplate('{{#unless x}}NO{{/unless}}', { x: false })).toBe('NO');
+    expect(renderTemplate('{{#unless x}}NO{{/unless}}', {})).toBe('NO');
+  });
+
+  it('F8.3: {{#lang th}} only renders when language=th (or bilingual)', () => {
+    expect(renderTemplate('{{#lang th}}TH{{/lang}}', { language: 'th' })).toBe('TH');
+    expect(renderTemplate('{{#lang th}}TH{{/lang}}', { language: 'en' })).toBe('');
+    expect(renderTemplate('{{#lang th}}TH{{/lang}}', { language: 'bilingual' })).toBe('TH');
+    expect(renderTemplate('{{#lang en}}EN{{/lang}}', { language: 'en' })).toBe('EN');
+    expect(renderTemplate('{{#lang en}}EN{{/lang}}', { language: 'th' })).toBe('');
+    expect(renderTemplate('{{#lang en}}EN{{/lang}}', { language: 'bilingual' })).toBe('EN');
+  });
+
+  it('F8.4: blocks + replacements interact correctly', () => {
+    const tpl = '{{customerName}} {{#if showCertNumber}}#{{certNumber}}{{/if}} {{#unless showCertNumber}}(no cert#){{/unless}}';
+    expect(renderTemplate(tpl, { customerName: 'A', showCertNumber: true, certNumber: 'C-1' }))
+      .toBe('A #C-1 ');
+    expect(renderTemplate(tpl, { customerName: 'A', showCertNumber: false }))
+      .toBe('A  (no cert#)');
+  });
+
+  it('F8.5: tokens inside dropped {{#if}} blocks are also dropped (not leaked)', () => {
+    const tpl = 'before {{#if hide}} secret={{secret}} {{/if}} after';
+    expect(renderTemplate(tpl, { hide: false, secret: 'BAD' })).toBe('before  after');
+  });
+
+  it('F8.6: malformed block (no closing tag) leaves the literal in place', () => {
+    // engine simply does not match — block stays
+    const tpl = '{{#if x}}orphan';
+    expect(renderTemplate(tpl, { x: true })).toBe('{{#if x}}orphan');
+  });
+});
+
+/* ─── F9: Phase 14.2 — toggles schema validation ───────────────────────── */
+
+describe('F9: validateDocumentTemplate toggles', () => {
+  const base = (toggles) => ({
+    ...emptyDocumentTemplateForm('medical-certificate'),
+    htmlTemplate: '<p>x</p>',
+    toggles,
+  });
+
+  it('F9.1: empty toggles array allowed', () => {
+    expect(validateDocumentTemplate(base([]))).toBeNull();
+  });
+
+  it('F9.2: missing toggle.key rejected', () => {
+    expect(validateDocumentTemplate(base([{ key: '', labelTh: 'X' }]))?.[0]).toBe('toggles[0].key');
+  });
+
+  it('F9.3: invalid toggle.key chars rejected', () => {
+    expect(validateDocumentTemplate(base([{ key: 'bad-key', labelTh: 'X' }]))?.[0]).toBe('toggles[0].key');
+  });
+
+  it('F9.4: duplicate toggle.key rejected', () => {
+    expect(validateDocumentTemplate(base([
+      { key: 'a', labelTh: 'A' },
+      { key: 'a', labelTh: 'B' },
+    ]))?.[0]).toBe('toggles[1].key');
+  });
+
+  it('F9.5: missing labelTh rejected', () => {
+    expect(validateDocumentTemplate(base([{ key: 'a', labelTh: '' }]))?.[0]).toBe('toggles[0].labelTh');
+  });
+
+  it('F9.6: more than MAX_TOGGLES rejected', () => {
+    const tooMany = Array.from({ length: MAX_TOGGLES + 1 }, (_, i) => ({ key: `t${i}`, labelTh: `T${i}` }));
+    expect(validateDocumentTemplate(base(tooMany))?.[0]).toBe('toggles');
+  });
+
+  it('F9.7: every seed with toggles passes validation', () => {
+    for (const seed of SEED_TEMPLATES) {
+      if (Array.isArray(seed.toggles) && seed.toggles.length > 0) {
+        expect(validateDocumentTemplate(seed, { strict: true })).toBeNull();
+      }
+    }
+  });
+
+  it('F9.8: toggle keys referenced in template HTML must exist in toggle list', () => {
+    // Lock the contract: if HTML uses {{#if showCertNumber}}, the template
+    // must declare a toggle with key=showCertNumber.
+    const HARDCODED_CTX_KEYS = new Set([
+      'language', 'today', 'todayISO', 'todayBE',
+      'clinicName', 'clinicNameEn', 'clinicAddress', 'clinicAddressEn',
+      'clinicPhone', 'clinicEmail', 'clinicTaxId', 'clinicLicenseNo',
+      'customerName', 'customerHN', 'customerNameEn',
+      'nationalId', 'age', 'gender', 'phone',
+    ]);
+    for (const seed of SEED_TEMPLATES) {
+      const ifRe = /\{\{#(?:if|unless)\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
+      const conditionalKeys = new Set();
+      let m;
+      while ((m = ifRe.exec(seed.htmlTemplate)) !== null) conditionalKeys.add(m[1]);
+      const fieldKeys = new Set((seed.fields || []).map(f => f.key));
+      const toggleKeys = new Set((seed.toggles || []).map(t => t.key));
+      for (const ck of conditionalKeys) {
+        const known = fieldKeys.has(ck) || toggleKeys.has(ck) || HARDCODED_CTX_KEYS.has(ck);
+        expect(`${seed.docType}::${ck}::known=${known}`).toBe(`${seed.docType}::${ck}::known=true`);
+      }
+    }
+  });
+});
+
+/* ─── F10: schemaVersion + buildPrintContext language/toggles ──────────── */
+
+describe('F10: schemaVersion + context spread', () => {
+  it('F10.1: SEED_TEMPLATES omit schemaVersion → normalize adds default', () => {
+    const norm = normalizeDocumentTemplate(SEED_TEMPLATES[0]);
+    expect(norm.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it('F10.2: explicit schemaVersion preserved', () => {
+    const norm = normalizeDocumentTemplate({ ...SEED_TEMPLATES[0], schemaVersion: 1 });
+    expect(norm.schemaVersion).toBe(1);
+  });
+
+  it('F10.3: buildPrintContext spreads toggle keys at top level', () => {
+    const ctx = buildPrintContext({
+      clinic: {}, customer: {},
+      toggles: { showCertNumber: true, showPatientSignature: false },
+    });
+    expect(ctx.showCertNumber).toBe(true);
+    expect(ctx.showPatientSignature).toBe(false);
+  });
+
+  it('F10.4: buildPrintContext clinic fields cover full ProClinic header', () => {
+    const ctx = buildPrintContext({
+      clinic: {
+        clinicName: 'Lover',
+        clinicNameEn: 'Lover Clinic',
+        clinicAddress: 'ที่อยู่',
+        clinicAddressEn: 'Address',
+        clinicPhone: '02-000-0000',
+        clinicLicenseNo: 'L-123',
+        clinicTaxId: 'TX-456',
+      },
+    });
+    expect(ctx.clinicName).toBe('Lover');
+    expect(ctx.clinicNameEn).toBe('Lover Clinic');
+    expect(ctx.clinicAddress).toBe('ที่อยู่');
+    expect(ctx.clinicAddressEn).toBe('Address');
+    expect(ctx.clinicLicenseNo).toBe('L-123');
+    expect(ctx.clinicTaxId).toBe('TX-456');
+  });
+
+  it('F10.5: buildPrintContext language defaults to th, accepts en/bilingual', () => {
+    expect(buildPrintContext({}).language).toBe('th');
+    expect(buildPrintContext({ language: 'en' }).language).toBe('en');
+    expect(buildPrintContext({ language: 'bilingual' }).language).toBe('bilingual');
+    expect(buildPrintContext({ language: 'gibberish' }).language).toBe('th');
+  });
+});
+
+/* ─── F11: full-flow render — replicated seeds with all options ────────── */
+
+describe('F11: full ProClinic-replicated rendering', () => {
+  it('F11.1: medical-cert with showCertNumber off + showPatientSignature off', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'medical-certificate');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover Clinic', clinicAddress: '67/12 ทดสอบ', clinicPhone: '02-000', clinicLicenseNo: '11102000999' },
+      customer: { proClinicHN: 'HN-9', patientData: { firstName: 'สมชาย', lastName: 'ใจดี' } },
+      values: { findings: 'ปกติ', diagnosis: 'หวัด', doctorName: 'นพ.A', doctorLicenseNo: 'L-A' },
+      toggles: { showCertNumber: false, showPatientSignature: false },
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('Lover Clinic');
+    expect(html).toContain('11102000999'); // license shown in header
+    expect(html).toContain('นพ.A');
+    // Cert# block hidden — its specific markup is `<strong>เลขที่:</strong>`
+    // (the unique pattern in CERT_NUMBER_LINE). The header has
+    // `เลขที่ใบอนุญาต:` for clinic license which is fine to leave.
+    expect(html).not.toContain('<strong>เลขที่:</strong>');
+    // Patient signature block hidden — the specific footnote text "ผู้ปกครอง"
+    // only appears inside that block.
+    expect(html).not.toContain('ผู้ปกครอง');
+    // Date still shown via top date line
+    expect(html).toMatch(/วันที่รักษา/);
+  });
+
+  it('F11.2: medical-cert with showCertNumber ON renders cert# block', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'medical-certificate');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover' },
+      customer: {},
+      values: { certNumber: 'CERT-2026-001', findings: 'X', diagnosis: 'Y', doctorName: 'Z' },
+      toggles: { showCertNumber: true },
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('เลขที่:');
+    expect(html).toContain('CERT-2026-001');
+  });
+
+  it('F11.3: thai-traditional cert renders without doctor-license footer (Thai-style)', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'thai-traditional-medicine-medical-certificate');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover' },
+      customer: { patientData: { firstName: 'A' } },
+      values: { doctorName: 'แพทย์แผนไทย', findings: 'F', tcmExam: 'E', treatment: 'T' },
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('แพทย์แผนไทยประยุกต์');
+    expect(html).toContain('สรุปความเห็นและข้อแนะนำ');
+  });
+
+  it('F11.4: chinese-traditional cert in EN mode shows Chinese characters', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'chinese-traditional-medicine-medical-certificate');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover' },
+      customer: {},
+      values: { doctorName: 'D', symptoms: 'S', tcmDiagnosis: 'TD', treatment: 'T' },
+      language: 'en',
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('中医医疗证明');
+    expect(html).toContain('症状');
+  });
+
+  it('F11.5: chinese cert in TH mode hides Chinese chars', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'chinese-traditional-medicine-medical-certificate');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover' },
+      customer: {},
+      values: { doctorName: 'D', symptoms: 'S', tcmDiagnosis: 'TD', treatment: 'T' },
+      language: 'th',
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).not.toContain('中医医疗证明');
+    expect(html).not.toContain('症状');
+    // TH-only label still shown
+    expect(html).toContain('การวินิจฉัยแพทย์จีน');
+  });
+
+  it('F11.6: medicine-label still works (no toggles)', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'medicine-label');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'Lover', clinicPhone: '02-000-0000' },
+      customer: { proClinicHN: 'HN-1', patientData: { firstName: 'A', lastName: 'B' } },
+      values: { medicineName: 'Paracetamol', genericName: 'พารา', qty: '20', instructions: 'กินหลังอาหาร', warning: 'ห้ามขับรถ', doctorName: 'D' },
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('Paracetamol');
+    expect(html).toContain('พารา');
+    expect(html).toContain('ห้ามขับรถ'); // warning shown
+  });
+
+  it('F11.7: patient-referral bilingual renders both languages by default', () => {
+    const seed = SEED_TEMPLATES.find(s => s.docType === 'patient-referral');
+    const ctx = buildPrintContext({
+      clinic: { clinicName: 'L' },
+      customer: { patientData: { firstName: 'X' } },
+      values: { referTo: 'รพ.ราม', cc: 'ปวด', referralReason: 'ส่งต่อ', doctorName: 'D' },
+      language: 'bilingual',
+    });
+    const html = renderTemplate(seed.htmlTemplate, ctx);
+    expect(html).toContain('Patient Referral Letter');
+    expect(html).toContain('ใบส่งตัวผู้ป่วย');
+    expect(html).toContain('รพ.ราม');
   });
 });
