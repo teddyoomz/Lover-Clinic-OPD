@@ -3,8 +3,12 @@ import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
-// DEBUG: expose auth for console API calls
-window.__auth = auth;
+// DEBUG: expose auth for console API calls (DEV ONLY — Vite tree-shakes
+// the entire `if` block in prod builds; closes Rule C2 security exposure
+// surfaced by pre-Phase-15 survey scout 2026-04-26).
+if (import.meta.env.DEV) {
+  window.__auth = auth;
+}
 import { DEFAULT_CLINIC_SETTINGS } from './constants.js';
 import { applyThemeColor, hexToRgb } from './utils.js';
 import { useTheme } from './hooks/useTheme.js';

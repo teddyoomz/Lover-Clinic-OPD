@@ -7,14 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 (Phase 14.7.F bug fix — image-only edit no longer triggers stock-reverse permission error)
+- **Date last updated**: 2026-04-26 (P0 cleanup batch — window.__auth gated + handoff refreshed; 14.7.G timeline-listener fix queued for deploy)
 - **Branch**: `master`
-- **Last commit**: `93fffca fix(phase14.7.F): image-only edit no longer triggers stock-reverse permission error`
-- **Test count**: 4452/4452 full suite (+36 in 14.7.F S1-S3 stock-diff + rules guards)
+- **Last commit**: TBD — P0 cleanup batch landing this turn (window.__auth gate + tests + handoff refresh). Master before this turn = `772ee8a fix(phase14.7.G): timeline modal real-time refresh`.
+- **Test count**: 4477/4477 (+4 from `tests/app-debug-exposure.test.js`)
 - **Build**: clean
-- **Deploy state**: ✅ **UP TO DATE** (second V15 combined deploy 2026-04-26)
-  - **firestore:rules**: deployed with be_stock_movements update narrowed (was `allow update: if false`, now allows ONLY reversedByMovementId field). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
-  - **Vercel prod**: `93fffca` aliased to https://lover-clinic-app.vercel.app — built 11s, deploy 32s.
+- **Deploy state**: ⚠️ **OUT OF DATE** — production at `93fffca`; **3+ commits queued** (14.7.G listener fix + V19 audit doc + P0 cleanup). Awaiting user "deploy" authorization (V18).
+  - **firestore:rules**: live at v10 deployed 2026-04-26 (be_stock_movements update narrowed). No rules diff in queued commits.
+  - **Vercel prod**: `93fffca` aliased to https://lover-clinic-app.vercel.app.
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -32,7 +32,16 @@
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
 
-### This session (2026-04-25 EOD, 0735a50 → 2728635)
+### Session 2026-04-26 EOD (so far, `0735a50` → P0 cleanup landing this turn)
+- ✅ **Phase 14.7.C** AppointmentTab refactor → shared AppointmentFormModal (`5897b59`)
+- ✅ **Phase 14.7.D** Treatment-history redesign + 5/page pagination + ProClinic-fidelity colors (`4f9e13e`)
+- ✅ **Phase 14.7.E** TreatmentTimelineModal — full ProClinic ดูไทม์ไลน์ replication, 50 TL1-TL8 tests (`f16cce2`)
+- ✅ **Phase 14.7.F** Image-only edit stock-reverse permission fix — pure helper + firestore.rules narrow + 36 tests (`93fffca`) **DEPLOYED**
+- ✅ **Phase 14.7.G** Treatment listener — onSnapshot real-time refresh on edit (no F5), 21 tests (`772ee8a`) — queued for deploy
+- ✅ **V19 violation entry** + comprehensive firestore-rules audit (zero new bugs across all audit-immutable collections) (`fc8125b`)
+- ✅ **P0 cleanup batch** (THIS turn) — window.__auth gated by import.meta.env.DEV + 4 regression tests + this handoff refresh
+
+### Session 2026-04-25 (carried over, 0735a50 → 2728635)
 - ✅ **Phase 14.6 doc-print UX overhaul** (11 commits, c2e3544 → 49682c9)
   - Hide auto-fill HTML fields + checkbox UI for ☑/☐ marks (was emoji-paste)
   - V18 violation logged (vercel-without-asking, V4/V7 third repeat)
@@ -65,14 +74,31 @@
 
 ## What's Next
 
-### Primary: Production deploy
-**15 commits queued** (0735a50 → 4f9e13e). Deploy when user authorizes:
+### Primary: Production deploy of queued commits (3+)
+Awaiting user "deploy" authorization for V15 combined deploy:
 - `vercel --prod --yes` (frontend bundle)
-- `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe per Rule B (no rules changes since last deploy, but V15 combined-deploy fires both regardless)
-- 4-endpoint pre/post-probe with `/artifacts/loverclinic-opd-4c39b/public/data` path prefix (NOT root — V1/V9 lesson)
+- `firebase deploy --only firestore:rules` (no diff this round — idempotent fire per V15)
+- Full Probe-Deploy-Probe (4 endpoints with `/artifacts/loverclinic-opd-4c39b/public/data` prefix)
+- Cleanup probe docs
 
-### ~~Phase 14.7.E~~ — DONE (commit `f16cce2`)
-TreatmentTimelineModal shipped 2026-04-26. Customer-detail "ดูไทม์ไลน์" button now opens a wide ProClinic-replica modal: per-row 3/9 grid, image carousel for OPD-อื่นๆ/Before/After (3 cells), accordions for medications + consumables, Esc/backdrop/close-button all close. 50 source-grep + helper tests in `tests/customer-treatment-timeline-flow.test.js`. Preview-verified on customer 000004 (122 rows, 16 accordions, 8 image-thumbs). No new fetches — reuses already-loaded `treatments[]`.
+### Phase 15 readiness — Follow-up A (next code task)
+**Branch-selector global wire-up** — user 2026-04-26: "ตอนนี้มี 1 สาขา อยากทำให้รองรับการเปิดสาขาเพิ่มเติมแบบเต็มรูปแบบทีเดียวไปเลย" (currently single-branch; want full multi-branch infra ready). Touch points:
+- `BranchSelectorContext` provider in `BackendDashboard.jsx` (default = first `be_branches` doc with `isDefault=true`)
+- Replace hardcoded `BRANCH_ID` constant in 5 sites: SaleTab.jsx (lines 535, 571), AppointmentTab.jsx, TreatmentFormPage.jsx, StockTab.jsx
+- Add `branchId` filter param to `getAllSales`, `getAppointmentsByDate`, `listStaffSchedules`, etc. so reports can filter by branch
+- ~3-6h. Unblocks Phase 15 Central Stock.
+
+### Follow-up B — listener cluster (P1 from survey)
+Same fix shape as 14.7.G applied to 3 more sites:
+- `listenToCustomerSales(customerId)` → fix purchase-history staleness in CustomerDetailView
+- `listenToCustomerAppointments(customerId)` → fix nextUpcomingAppt staleness
+- `listenToAppointmentsByDate(dateStr)` → fix multi-admin calendar collision risk in AppointmentTab
+- ~2h.
+
+### Follow-up C — G6 vendor-sale route wiring (P1, 95% done)
+`VendorSalesTab.jsx` exists + `navConfig.js` lists it; just needs `BackendDashboard.jsx` import + render case + 15 tests. ~1-2h.
+
+### Follow-up D — Phase 15 Central Stock (after A + B + C)
 
 ### Phase 14 Doc verification queue (10 done / 6 remaining)
 - [x] Doc 1/16 — treatment-history Medical History ✅
@@ -107,7 +133,7 @@ TreatmentTimelineModal shipped 2026-04-26. Customer-detail "ดูไทม์�
 
 ## Outstanding User Actions (NOT auto-run)
 
-_None._ Production is up-to-date with master `a0f7dc4`. Next code work awaits user direction.
+1. **`vercel --prod` + `firebase deploy --only firestore:rules`** — V15 combined deploy of queued commits (3+ since prod `93fffca`). REQUIRES user typing "deploy" THIS TURN (V4/V7/V18 — never roll-over).
 
 ---
 
@@ -119,12 +145,13 @@ None code-side. Production deploy gap of 13 commits (Phase 14.6 entire UX overha
 
 ## Known Limitations / Tech Debt (carry over)
 
-- **Phase 14.7.C pending** — AppointmentTab still uses inline form (works, identical payload to shared component, just DRY violation).
 - **Doc 13/15 deferred to Phase 16** — chart (canvas drawing) / treatment-template (dental chart) are graphical surfaces beyond seed templates.
-- **Phase 14.3 G6 incomplete** — Tab + validators committed earlier, but BackendDashboard.jsx route + tests + preview verify still pending.
-- **Phase 14.4 G5 customer-product-change NOT STARTED** — bigger feature (course exchange + refund).
-- **Pick-at-treatment partial-pick reopen** (V12.2b note) — user picks subset, can't reopen to add more.
-- **Period enforcement** (V12.2b) — schema preserves field, no save-time validation.
+- **Phase 14.4 G5 customer-product-change NOT STARTED** — bigger feature (course exchange + refund). XL effort.
+- **Pick-at-treatment partial-pick reopen** (V12.2b note) — user picks subset, can't reopen to add more. M effort, defer to polish.
+- **Period enforcement** (V12.2b) — schema preserves field, no save-time validation. S effort, defer to polish.
+- **Phase 14.8/9/10/11 print-form roadmap** — pre-flight + signature canvas + PDF export + audit log + watermark + email/LINE delivery + bulk print + QR embed + visual designer. Tracked in `~/.claude/projects/F--LoverClinic-app/memory/project_print_form_world_class_roadmap.md`. XL each, defer.
+- **Hook-order TDZ in TreatmentFormPage:1694** — fragile placement of `dfEntry` auto-populate hook (must follow specific memo decls else blank-screen crash). No lint protection. S to add JSDoc guard.
+- **ProClinic API silent-catch logging** — 35+ intentional `/* best effort */` blocks; debug observability gap. M to add structured logger.
 
 ---
 
