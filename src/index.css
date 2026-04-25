@@ -6,6 +6,37 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* =====================================================
+   AUDIT 2026-04-26 — A11Y FOCUS-VISIBLE FALLBACK
+   ===================================================== */
+/* The audit flagged 145 inputs/buttons across backend tabs that use
+   Tailwind `focus:outline-none` without a `focus:ring-*` companion → keyboard
+   users see no focus state. Mass-editing each site is brittle; this CSS
+   rule restores a visible focus ring whenever an input/button/select/
+   textarea/role-button is focused VIA KEYBOARD (`:focus-visible`).
+   Mouse clicks do NOT trigger it (preserves the design for mouse users).
+   The accent color comes from the active theme so it stays branded. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent, #06b6d4) !important;
+  outline-offset: 2px !important;
+  border-radius: inherit;
+}
+/* Disabled / read-only elements do NOT need focus rings — they're not
+   actionable. */
+input:disabled:focus-visible,
+button:disabled:focus-visible,
+input[readonly]:focus-visible {
+  outline: none !important;
+}
+
+/* =====================================================
    THEME SYSTEM — CSS Custom Properties
    Default: dark  |  Supports: dark, light, auto
    ===================================================== */
