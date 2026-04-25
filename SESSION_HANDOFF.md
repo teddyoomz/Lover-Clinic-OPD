@@ -7,14 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-25 (end-of-session — Phase 14.6 doc-print UX overhaul + Phase 14.7 customer-page appointments)
+- **Date last updated**: 2026-04-26 (Phase 14.7.C AppointmentTab refactor + Phase 14.7.D treatment-history redesign + Phase 14.7.E plan)
 - **Branch**: `master`
-- **Last commit**: `2728635 feat(phase14.7.B): shared AppointmentFormModal — full form with lockedCustomer`
-- **Test count**: 4318/4318 full suite (255 phase14-flow-simulate + 34 customer-appointments-flow + everything else)
+- **Last commit**: `4f9e13e feat(phase14.7.D): treatment-history redesign — pagination + ProClinic-fidelity colors + ดูไทม์ไลน์ button placeholder`
+- **Test count**: 4366/4366 full suite (added 9 in 14.7.C + 39 in 14.7.D)
 - **Build**: clean
 - **Deploy state**:
-  - **firestore:rules**: deployed at v9 (mid-session). No rules changes since — `2728635` has the same rules as `0735a50`.
-  - **Vercel prod**: `0735a50` (preview-zoom + clinicEmail). **NOT up-to-date** — 13 commits queued waiting deploy auth.
+  - **firestore:rules**: deployed at v9 (no rules changes since — `4f9e13e` has same rules as `0735a50`).
+  - **Vercel prod**: `0735a50` (preview-zoom + clinicEmail). **NOT up-to-date** — **15 commits queued** waiting deploy auth (was 13 + 14.7.C `5897b59` + 14.7.D `4f9e13e`).
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -66,16 +66,17 @@
 ## What's Next
 
 ### Primary: Production deploy
-**13 commits queued** (0735a50 → 2728635). Deploy when user authorizes:
+**15 commits queued** (0735a50 → 4f9e13e). Deploy when user authorizes:
 - `vercel --prod --yes` (frontend bundle)
 - `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe per Rule B (no rules changes since last deploy, but V15 combined-deploy fires both regardless)
 - 4-endpoint pre/post-probe with `/artifacts/loverclinic-opd-4c39b/public/data` path prefix (NOT root — V1/V9 lesson)
 
-### Phase 14.7.C (low-risk follow-up)
-Refactor `AppointmentTab.jsx` to use the shared `AppointmentFormModal` component.
-- Touch points: remove formMode/formData/formError/formSaving/customerSearch/defaultFormData/openCreate/openEdit/handleSave + replace inline form JSX (lines 616-849) with `<AppointmentFormModal mode={...} appt={...} existingAppointments={dayAppts} initialDate={selectedDate} onSaved={...} onClose={...} />`.
-- Both writers currently produce IDENTICAL `be_appointments` payloads — verified via F5.1-3 tests.
-- Pure DRY cleanup, no behavior change.
+### Phase 14.7.E (next code task — gated by user authorization)
+Implement the "ดูไทม์ไลน์" treatment-timeline modal. Plan at `~/.claude/projects/F--LoverClinic-app/memory/project_treatment_timeline_plan.md`. Reference scan at `docs/proclinic-scan/customer-detail-treatment-history-and-timeline.md`.
+- Create `src/components/backend/TreatmentTimelineModal.jsx` (≈400-500 LoC).
+- Wire `showTimeline` state in CustomerDetailView; placeholder button (`data-testid="show-timeline-btn"`, ProClinic orange `#FF9F1C`) is already in place — just flip from `disabled={!onShowTimeline}` to a real handler.
+- Pre-implementation: `preview_eval` real customer to verify image data shape (`detail.opdImages` / `detail.beforeImages` / `detail.afterImages`).
+- 35+ tests in `tests/customer-treatment-timeline-flow.test.js` per Rule I.
 
 ### Phase 14 Doc verification queue (10 done / 6 remaining)
 - [x] Doc 1/16 — treatment-history Medical History ✅
@@ -110,8 +111,8 @@ Refactor `AppointmentTab.jsx` to use the shared `AppointmentFormModal` component
 
 ## Outstanding User Actions (NOT auto-run)
 
-1. **`vercel --prod` + `firebase deploy --only firestore:rules`** of `2728635` (V15 combined deploy). 13 commits queued. **REQUIRES USER TYPING "deploy" THIS TURN** (V4/V7/V18 — never roll-over).
-2. **(optional, low risk)** authorize Phase 14.7.C — refactor AppointmentTab to use shared `AppointmentFormModal`. Pure DRY cleanup.
+1. **`vercel --prod` + `firebase deploy --only firestore:rules`** of `4f9e13e` (V15 combined deploy). **15 commits queued**. REQUIRES USER TYPING "deploy" THIS TURN (V4/V7/V18 — never roll-over).
+2. **(planned, gated)** Phase 14.7.E — implement TreatmentTimelineModal per `project_treatment_timeline_plan.md`. Triangle-verified scan at `docs/proclinic-scan/customer-detail-treatment-history-and-timeline.md`. Run `preview_eval` first to lock the image-data shape, then 4-step build per the plan.
 
 ---
 
