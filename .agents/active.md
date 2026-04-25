@@ -1,14 +1,15 @@
 ---
-updated_at: "2026-04-26 (session 3 — 24h pre-launch audit-all sweep + fixes)"
-status: "Pre-launch audit pass complete. 22 audits / 237 invariants run via 6 parallel agents → docs/audit-2026-04-26-sweep.md. Triage: 1 P0 + 4 P1 + 2 P2 fixed; 6 false positives ruled out (each verified by reading the cited code). 5 commits ready to deploy. Test suite at 4848 (+169 across the 24h pass)."
-current_focus: "Idle. Audit-all sweep complete + remediation shipped. P0 (TZ1 paidAt drift) closed; P1 batch (AP1 collision check, RP5 silent catches, listener cluster H, pick-reopen, debugLog) all closed. Next decision: deploy 5-commit batch OR continue P2/P3 polish (IIFE refactor, code-split, permission system)."
+updated_at: "2026-04-26 (session 3 — 24h pre-launch audit + remediation + perf code-split)"
+status: "Pre-launch audit + 2 bonus polish rounds complete. 22 audits / 237 invariants run; 1 P0 + 4 P1 + 4 P2 shipped + 6 false positives documented. BackendDashboard bundle dropped 26% via code-split. 8 commits ready to deploy."
+current_focus: "Idle. All in-scope audit work shipped + verified live. Next decision: deploy 8-commit batch OR start a deeper item (TFP refactor, permission system) that needs explicit user input before commit."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "b870b40"
-tests: "4848/4848 full suite"
+last_commit: "4d4529b"
+tests: "4893/4893 full suite (+214 across this 24h pass)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "791b2de (2026-04-26 V15 combined deploy — V21 fix + 14.7.H-D wireup). 5 commits 7a9c62d → b870b40 pushed but NOT deployed."
+last_deploy: "791b2de (2026-04-26 V15 combined deploy — V21 fix + 14.7.H-D wireup). 8 commits 7a9c62d → 4d4529b pushed but NOT deployed."
 firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F per V19; UNCHANGED this session — re-deploy will be no-diff fire)"
+bundle: "BackendDashboard: 1216 KB → 899 KB (-26%, gzip 224 → 162 KB / -28%) after lazy-loading 17 of 44 tabs"
 ---
 
 # Active Context
