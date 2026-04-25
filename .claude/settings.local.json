@@ -6,7 +6,11 @@
       "Bash(cat firestore.indexes.json)",
       "Bash(ls firestore.*)",
       "Bash(npx vitest *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(grep -E \"^\\(audit-rules|audit-health|skill-relevant|research-gap|skill-autoinstall\\)$\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   },
   "enableAllProjectMcpServers": true,

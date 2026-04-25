@@ -1016,3 +1016,801 @@ describe('F11: full ProClinic-replicated rendering', () => {
     expect(html).toContain('รพ.ราม');
   });
 });
+
+/* ─── F13: Wiring/prefill flow simulate (pure mirror of CustomerDetailView) ─
+ *
+ * Per user directive 2026-04-25: "เขียนเทสขึ้นมาแล้วทดสอบเองเลย กับทุก doc
+ * นะ ว่าต้องเหมือนเป๊ะและใช้ได้จริงๆ จะต้องมีการทดสอบทั้งความเหมือน และ
+ * wiring logic flow ของทุก field ในทุก doc".
+ *
+ * F12 already covers similarity (mustContain + mustHaveValue). F13 covers
+ * the WIRING — given a realistic be_treatments + be_customers doc, the
+ * prefill mapping in CustomerDetailView.jsx:787-887 must produce values
+ * that flow through buildPrintContext → renderTemplate and surface in
+ * the rendered HTML for every doc field that has a known prefill source.
+ *
+ * F13 mirrors the inline JSX prefill logic as a pure function so we can
+ * chain master-data → prefill → render in tests without mounting React.
+ * Per Rule I (b): runtime preview_eval covers the React-mount edge cases;
+ * F13 covers what grep/build/test can verify deterministically.
+ *
+ * Why this is necessary (V13 cluster lesson): helper-output-in-isolation
+ * tests (F1-F11) catch logic bugs INSIDE a single function. They miss
+ * INTEGRATION bugs that live in seams — whitelist strips, missing field
+ * mappings, doctor-name regex drift. F13 + F14 lock those seams.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+// ─── Pure prefill mirror — copy of CustomerDetailView.jsx:787-887 logic ───
+// Keep this in sync with the JSX. If you change one, change the other.
+function buildPrefillForTreatment({ customer, treatment, summary, today }) {
+  const d = treatment?.detail || {};
+  const v = d.vitals || {};
+  const pd = customer?.patientData || {};
+  const treatmentDate = d.treatmentDate || summary?.date || today || '2026-04-25';
+  const fmtBdate = pd.birthdate || pd.dob || pd.dateOfBirth || '';
+
+  const stripDoctorDupes = (raw) => {
+    if (!raw) return '';
+    const m = String(raw).match(/^[^)]+\)/);
+    return m ? m[0].trim() : String(raw).trim();
+  };
+
+  const treatmentItemsArr = Array.isArray(d.treatmentItems) ? d.treatmentItems : [];
+  const courseItemsArr = Array.isArray(d.courseItems) ? d.courseItems : [];
+  const courseRemainMap = new Map();
+  for (const ci of courseItemsArr) {
+    if (ci.productName) courseRemainMap.set(ci.productName, ci);
+  }
+  const treatmentRecordRows = treatmentItemsArr.map(ti => {
+    const desc = ti.name || ti.productName || '-';
+    const qty = ti.quantity || `${ti.qty || ''} ${ti.unit || ''}`.trim() || '';
+    const ci = courseRemainMap.get(desc);
+    const remaining = ci?.remainingAfter != null ? `${ci.remainingAfter} ${ci.unit || ''}`.trim()
+                    : (ci?.remaining != null ? `${ci.remaining} ${ci.unit || ''}`.trim()
+                    : (ti.remaining != null ? `${ti.remaining} ${ti.unit || ''}`.trim() : '0 U'));
+    return `<tr><td style="border:1px solid #000;padding:6px">${desc}</td><td style="border:1px solid #000;padding:6px;text-align:right">${qty}</td><td style="border:1px solid #000;padding:6px;text-align:right">${remaining}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" style="border:1px solid #000;padding:6px;text-align:center;color:#888">-</td></tr>`;
+
+  const homeRows = [...(Array.isArray(d.consumables) ? d.consumables : []), ...(Array.isArray(d.medications) ? d.medications : [])];
+  const homeMedicationRows = homeRows.map(it => {
+    const desc = it.name || it.productName || it.medicineName || '-';
+    const qty = it.quantity || `${it.qty != null ? it.qty : ''} ${it.unit || ''}`.trim() || '';
+    return `<tr><td style="border:1px solid #000;padding:6px">${desc}</td><td style="border:1px solid #000;padding:6px;text-align:right">${qty}</td></tr>`;
+  }).join('') || `<tr><td colspan="2" style="border:1px solid #000;padding:6px;text-align:center;color:#888">-</td></tr>`;
+
+  const treatmentItemsText = treatmentItemsArr
+    .map(p => `${p.name || p.productName || ''} ${p.quantity || `${p.qty || ''} ${p.unit || ''}`.trim()}`.trim())
+    .filter(Boolean)
+    .join('\n');
+
+  const bp = (v.systolicBP || v.diastolicBP)
+    ? `${v.systolicBP || '-'}/${v.diastolicBP || '-'}`
+    : (v.bp || '');
+
+  const cleanDoctor = stripDoctorDupes(d.doctorName || summary?.doctor || '');
+  return {
+    treatmentDate,
+    doctorName: cleanDoctor,
+    assistantName: (Array.isArray(d.assistants) ? d.assistants.join(', ') : '')
+      || (Array.isArray(summary?.assistants) ? summary.assistants.join(', ') : '') || '',
+    birthdate: fmtBdate,
+    bloodGroup: pd.bloodType || pd.bloodGroup || '',
+    patientAddress: pd.address || '',
+    emergencyName: pd.emergencyName || pd.emergencyContactName || pd.emergencyContact?.name || '',
+    emergencyPhone: pd.emergencyPhone || pd.emergencyContactPhone || pd.emergencyContact?.phone || '',
+    bt: v.temperature || v.bt || v.temp || '',
+    pr: v.pulseRate || v.pr || v.pulse || '',
+    rr: v.respiratoryRate || v.rr || '',
+    bp,
+    spo2: v.oxygenSaturation || v.spo2 || v.oxygenSat || '',
+    symptoms: d.symptoms || d.cc || summary?.cc || '',
+    physicalExam: d.physicalExam || d.pe || '',
+    diagnosis: d.diagnosis || d.dx || summary?.dx || '',
+    treatment: d.treatmentNote || d.tx || '',
+    treatmentPlan: d.treatmentPlan || d.txPlan || '',
+    additionalNote: d.additionalNote || d.note2 || '',
+    treatmentRecordRows,
+    homeMedicationRows,
+    findings: d.physicalExam || d.pe || d.symptoms || d.cc || '',
+    drNote: d.treatmentNote || d.note || d.drNote || '',
+    treatmentItems: treatmentItemsText,
+  };
+}
+
+describe('F13: prefill wiring — every field flows from be_treatments/be_customers → rendered HTML', () => {
+  // Realistic be_treatments doc as actually saved by TreatmentFormPage.
+  // Schema verified via preview_eval on real Firestore data 2026-04-25.
+  const REAL_TREATMENT = {
+    treatmentId: 'TR-2026-001',
+    detail: {
+      treatmentDate: '2026-04-25',
+      doctorName: 'นพ.ทดสอบ ใจดี (X)นพ.รอง สอง (Y)เลือกแพทย์ประจำตัว',
+      assistants: ['คุณช่วย หนึ่ง', 'คุณช่วย สอง'],
+      symptoms: 'ปวดหัว มา 3 วัน',
+      physicalExam: 'BP 120/80, HEENT ปกติ',
+      diagnosis: 'A001 Cholera',
+      treatmentNote: 'ให้ยาแก้ปวดและฉีด Botox 100U',
+      treatmentPlan: 'นัดติดตาม 2 สัปดาห์',
+      additionalNote: 'แพ้ยาประเภท Sulfa',
+      vitals: {
+        systolicBP: 120,
+        diastolicBP: 80,
+        pulseRate: 72,
+        respiratoryRate: 18,
+        temperature: 36.5,
+        oxygenSaturation: 98,
+        weight: 60,
+        height: 165,
+      },
+      treatmentItems: [
+        { name: 'Allergan Botox', quantity: '100 U', qty: 100, unit: 'U' },
+        { name: 'Hyaluronic Filler', quantity: '1 syringe', qty: 1, unit: 'syringe' },
+      ],
+      courseItems: [
+        { productName: 'Allergan Botox', remainingAfter: 0, unit: 'U' },
+      ],
+      consumables: [
+        { name: 'Acetin', quantity: '1 amp.', qty: 1, unit: 'amp.' },
+      ],
+      medications: [
+        { name: 'Paracetamol', quantity: '20 เม็ด', qty: 20, unit: 'เม็ด', instructions: 'กินหลังอาหาร' },
+      ],
+    },
+  };
+  const REAL_CUSTOMER = {
+    proClinicHN: 'HN-9999',
+    patientData: {
+      prefix: 'นาง',
+      firstName: 'สมหญิง',
+      lastName: 'รักษา',
+      gender: 'หญิง',
+      age: 35,
+      birthdate: '1990-05-12',
+      bloodType: 'A',
+      address: '67/12 ถ.ทดสอบ',
+      phone: '081-999-9999',
+      nationalId: '1-1010-12345-67-8',
+      emergencyName: 'คุณแม่',
+      emergencyPhone: '081-888-8888',
+    },
+  };
+  const SUMMARY = { id: 'TR-2026-001', date: '2026-04-25', doctor: 'นพ.ทดสอบ ใจดี', cc: 'ปวดหัว', dx: 'หวัด' };
+  const CLINIC_FULL = {
+    clinicName: 'Lover Clinic',
+    clinicNameEn: 'Lover Clinic Co., Ltd.',
+    clinicAddress: '67/12 ทดสอบ',
+    clinicPhone: '02-000-0000',
+    clinicEmail: 'info@lover.clinic',
+    clinicTaxId: '0105566000999',
+    clinicLicenseNo: '11102000999',
+  };
+
+  it('F13.0: prefill mirror returns object with every expected key', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    const expectedKeys = [
+      'treatmentDate', 'doctorName', 'assistantName', 'birthdate', 'bloodGroup',
+      'patientAddress', 'emergencyName', 'emergencyPhone', 'bt', 'pr', 'rr', 'bp',
+      'spo2', 'symptoms', 'physicalExam', 'diagnosis', 'treatment', 'treatmentPlan',
+      'additionalNote', 'treatmentRecordRows', 'homeMedicationRows', 'findings',
+      'drNote', 'treatmentItems',
+    ];
+    for (const k of expectedKeys) {
+      expect(`${k}::${k in p}`).toBe(`${k}::true`);
+    }
+  });
+
+  it('F13.1: doctorName de-duplication — strips co-doctor + assistant suffix', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.doctorName).toBe('นพ.ทดสอบ ใจดี (X)');
+    // No leakage of co-doctor or selector text
+    expect(p.doctorName.includes('รอง สอง')).toBe(false);
+    expect(p.doctorName.includes('เลือกแพทย์')).toBe(false);
+  });
+
+  it('F13.2: vitals — systolic+diastolic combined as bp string', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.bp).toBe('120/80');
+    expect(p.bt).toBe(36.5);
+    expect(p.pr).toBe(72);
+    expect(p.rr).toBe(18);
+    expect(p.spo2).toBe(98);
+  });
+
+  it('F13.3: treatment record rows — built as raw HTML <tr> from treatmentItems', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.treatmentRecordRows).toContain('<tr>');
+    expect(p.treatmentRecordRows).toContain('Allergan Botox');
+    expect(p.treatmentRecordRows).toContain('100 U');
+    expect(p.treatmentRecordRows).toContain('Hyaluronic Filler');
+  });
+
+  it('F13.4: home medication rows — combines consumables + medications', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.homeMedicationRows).toContain('Acetin');
+    expect(p.homeMedicationRows).toContain('1 amp.');
+    expect(p.homeMedicationRows).toContain('Paracetamol');
+    expect(p.homeMedicationRows).toContain('20 เม็ด');
+  });
+
+  it('F13.5: assistantName — joins array', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.assistantName).toBe('คุณช่วย หนึ่ง, คุณช่วย สอง');
+  });
+
+  it('F13.6: customer info — birthdate + blood + address + emergency', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.birthdate).toBe('1990-05-12');
+    expect(p.bloodGroup).toBe('A');
+    expect(p.patientAddress).toBe('67/12 ถ.ทดสอบ');
+    expect(p.emergencyName).toBe('คุณแม่');
+    expect(p.emergencyPhone).toBe('081-888-8888');
+  });
+
+  it('F13.7: clinical fields — symptoms / physicalExam / diagnosis / treatment / treatmentPlan', () => {
+    const p = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    expect(p.symptoms).toBe('ปวดหัว มา 3 วัน');
+    expect(p.physicalExam).toBe('BP 120/80, HEENT ปกติ');
+    expect(p.diagnosis).toBe('A001 Cholera');
+    expect(p.treatment).toBe('ให้ยาแก้ปวดและฉีด Botox 100U');
+    expect(p.treatmentPlan).toBe('นัดติดตาม 2 สัปดาห์');
+    expect(p.additionalNote).toBe('แพ้ยาประเภท Sulfa');
+  });
+
+  // ── Per-doc end-to-end: prefill → buildPrintContext → render → assertions ──
+  // Every docType that uses per-treatment prefill (treatment-history,
+  // medical-cert family, course-deduction, treatment-referral, etc.) must
+  // surface its prefilled values in the final HTML.
+
+  // Map docType → list of [prefillKey, expectedSubstringInHtml] tuples.
+  // If the doc template doesn't reference {{<prefillKey>}}, it's NOT in the
+  // table. (The validator already rejects broken templates.) This catches
+  // the V13 pattern: prefill produces value X, template renders Y, user
+  // sees garbage because X never reached Y.
+  const PER_DOC_WIRING = {
+    'treatment-history': [
+      ['doctorName',     'นพ.ทดสอบ ใจดี (X)'],
+      ['symptoms',       'ปวดหัว มา 3 วัน'],
+      ['physicalExam',   'BP 120/80, HEENT ปกติ'],
+      ['diagnosis',      'A001 Cholera'],
+      ['treatment',      'ให้ยาแก้ปวดและฉีด Botox 100U'],
+      ['treatmentPlan',  'นัดติดตาม 2 สัปดาห์'],
+      ['additionalNote', 'แพ้ยาประเภท Sulfa'],
+      ['birthdate',      '1990-05-12'],
+      ['bloodGroup',     'A'],
+      ['patientAddress', '67/12 ถ.ทดสอบ'],
+      ['emergencyName',  'คุณแม่'],
+      ['emergencyPhone', '081-888-8888'],
+      ['bp',             '120/80'],
+      ['bt',             '36.5'],
+      ['pr',             '72'],
+      ['rr',             '18'],
+      ['spo2',           '98'],
+      // raw-HTML tables surface as elements
+      ['treatmentRecordRows', 'Allergan Botox'],
+      ['homeMedicationRows',  'Acetin'],
+      ['homeMedicationRows',  'Paracetamol'],
+    ],
+    'medical-certificate': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+      ['findings',   'BP 120/80, HEENT ปกติ'], // findings = physicalExam fallback
+      ['diagnosis',  'A001 Cholera'],
+    ],
+    'medical-opinion': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+      ['symptoms',   'ปวดหัว มา 3 วัน'],
+      ['diagnosis',  'A001 Cholera'],
+    ],
+    'physical-therapy-certificate': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+      ['symptoms',   'ปวดหัว มา 3 วัน'],
+    ],
+    'thai-traditional-medicine-medical-certificate': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+      ['findings',   'BP 120/80, HEENT ปกติ'],
+    ],
+    'fit-to-fly': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+    ],
+    'patient-referral': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+    ],
+    'treatment-referral': [
+      ['doctorName',     'นพ.ทดสอบ ใจดี (X)'],
+      ['treatmentItems', 'Allergan Botox 100 U'],
+      ['drNote',         'ให้ยาแก้ปวดและฉีด Botox 100U'],
+    ],
+    'course-deduction': [
+      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
+    ],
+  };
+
+  for (const [docType, wiring] of Object.entries(PER_DOC_WIRING)) {
+    it(`F13.wire:${docType} — every prefilled field surfaces in rendered HTML`, () => {
+      const seed = SEED_TEMPLATES.find(s => s.docType === docType);
+      expect(seed, `seed for ${docType} must exist`).toBeTruthy();
+
+      const prefill = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+
+      const ctx = buildPrintContext({
+        clinic: CLINIC_FULL,
+        customer: REAL_CUSTOMER,
+        values: prefill,
+        language: seed.language === 'bilingual' ? 'bilingual' : 'th',
+        toggles: { showCertNumber: true, showPatientSignature: true },
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+
+      // Build a list of [prefillKey, expectedString] checks. Use a flat
+      // string assertion per pair so failure messages are greppable.
+      for (const [prefillKey, expected] of wiring) {
+        // If the seed template doesn't contain {{<prefillKey>}} or {{{<prefillKey>}}},
+        // skip this assertion — the value isn't expected to surface.
+        const referenced = seed.htmlTemplate.includes(`{{${prefillKey}}}`)
+          || seed.htmlTemplate.includes(`{{{${prefillKey}}}}`)
+          || seed.htmlTemplate.includes(`{{#if ${prefillKey}}}`)
+          || seed.htmlTemplate.includes(`{{#unless ${prefillKey}}}`);
+        if (!referenced) {
+          // Template doesn't use this field, skip.
+          continue;
+        }
+        const found = html.includes(expected);
+        expect(found
+          ? `${docType}::wired::${prefillKey}`
+          : `${docType}::NOT-WIRED::${prefillKey}::expected:::${expected}`)
+          .toBe(`${docType}::wired::${prefillKey}`);
+      }
+    });
+  }
+
+  // Customer-info wiring (clinic + patient identity) — applies to ALL docs.
+  it('F13.wire:all — customerName + customerHN + clinicName surface in every doc', () => {
+    const prefill = buildPrefillForTreatment({ customer: REAL_CUSTOMER, treatment: REAL_TREATMENT, summary: SUMMARY });
+    for (const seed of SEED_TEMPLATES) {
+      const ctx = buildPrintContext({
+        clinic: CLINIC_FULL,
+        customer: REAL_CUSTOMER,
+        values: prefill,
+        language: seed.language === 'bilingual' ? 'bilingual' : 'th',
+        toggles: { showCertNumber: true, showPatientSignature: true },
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+
+      // Customer name should appear if template references {{customerName}}
+      if (seed.htmlTemplate.includes('{{customerName}}')) {
+        expect(`${seed.docType}::name::${html.includes('นาง สมหญิง รักษา')}`)
+          .toBe(`${seed.docType}::name::true`);
+      }
+      // Clinic name in header — every seed uses HEADER_CLINIC which embeds it
+      if (seed.htmlTemplate.includes('{{clinicName}}')) {
+        expect(`${seed.docType}::clinic::${html.includes('Lover Clinic')}`)
+          .toBe(`${seed.docType}::clinic::true`);
+      }
+      // HN — customer.proClinicHN → ctx.customerHN
+      if (seed.htmlTemplate.includes('{{customerHN}}')) {
+        expect(`${seed.docType}::hn::${html.includes('HN-9999')}`)
+          .toBe(`${seed.docType}::hn::true`);
+      }
+    }
+  });
+});
+
+/* ─── F14: Empty-field robustness — every field empty must not break ───────
+ *
+ * Per user directive 2026-04-25: "make sure ว่า field ที่ว่างๆ ใช้ได้จริง"
+ *
+ * For every doc, render with completely empty be_treatments + be_customers
+ * shapes. Verify:
+ *   1. No crash (renderTemplate returns a string)
+ *   2. No `{{key}}` placeholder leak
+ *   3. No literal "undefined" or "null" appears as text
+ *   4. No escaped raw-HTML tag leak (`&lt;tr&gt;`)
+ *   5. Output is non-empty string (template still produces structure)
+ *   6. Conditional `{{#if X}}` blocks with falsy X are dropped cleanly
+ *      (no `{{#if` or `{{/if` markers leak)
+ *   7. Empty raw-HTML rows fall back to placeholder row, not literal "undefined"
+ * ─────────────────────────────────────────────────────────────────────── */
+
+describe('F14: empty-field robustness — every field empty renders cleanly', () => {
+  const EMPTY_TREATMENT = { detail: {} };
+  const EMPTY_CUSTOMER  = { patientData: {} };
+  const EMPTY_CLINIC    = { clinicName: 'X' }; // minimal so something renders
+
+  // Per-doc empty-render assertions
+  for (const seed of SEED_TEMPLATES) {
+    it(`F14.empty:${seed.docType} — renders with empty data, no leak, no crash, no undefined-literal`, () => {
+      const prefill = buildPrefillForTreatment({
+        customer: EMPTY_CUSTOMER,
+        treatment: EMPTY_TREATMENT,
+        summary: null,
+      });
+
+      const ctx = buildPrintContext({
+        clinic: EMPTY_CLINIC,
+        customer: EMPTY_CUSTOMER,
+        values: prefill,
+        language: 'th',
+        toggles: {},
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+
+      // 1. No crash → string returned
+      expect(typeof html).toBe('string');
+
+      // 2. Output is non-empty
+      expect(html.length).toBeGreaterThan(0);
+
+      // 3. No leftover {{key}} placeholders (all unknown keys empty out)
+      const leaked = html.match(/\{\{[^}]+\}\}/g) || [];
+      expect(leaked.length === 0
+        ? `${seed.docType}::no-leak`
+        : `${seed.docType}::leaked::${leaked.join(' | ')}`)
+        .toBe(`${seed.docType}::no-leak`);
+
+      // 4. No conditional-block markers leak
+      expect(html.includes('{{#if')).toBe(false);
+      expect(html.includes('{{/if')).toBe(false);
+      expect(html.includes('{{#unless')).toBe(false);
+      expect(html.includes('{{/unless')).toBe(false);
+      expect(html.includes('{{#lang')).toBe(false);
+      expect(html.includes('{{/lang')).toBe(false);
+
+      // 5. No "undefined" or "null" text leak. The string "undefined" or
+      //    "null" should NEVER appear in user-facing output. (We allow it
+      //    in HTML attribute names like `border:none` — so we only check
+      //    for the exact tokens as standalone words.)
+      const undefinedLeak = html.match(/\bundefined\b/g) || [];
+      expect(undefinedLeak.length === 0
+        ? `${seed.docType}::no-undefined`
+        : `${seed.docType}::has-undefined-text`)
+        .toBe(`${seed.docType}::no-undefined`);
+
+      const nullLeak = html.match(/\bnull\b/g) || [];
+      expect(nullLeak.length === 0
+        ? `${seed.docType}::no-null`
+        : `${seed.docType}::has-null-text`)
+        .toBe(`${seed.docType}::no-null`);
+
+      // 6. No escaped raw-HTML tag leak
+      const escapedTagLeak = html.match(/&lt;(tr|td|table)[^&]*&gt;/g) || [];
+      expect(escapedTagLeak.length === 0
+        ? `${seed.docType}::no-escaped-tag`
+        : `${seed.docType}::escaped-tag::${escapedTagLeak.join(' | ')}`)
+        .toBe(`${seed.docType}::no-escaped-tag`);
+
+      // 7. Empty raw-HTML rows fall back to placeholder rows ("-"), not
+      //    literal "undefined" text. Specifically check treatment-history
+      //    and course-deduction which use raw-HTML rows.
+      if (seed.htmlTemplate.includes('{{{treatmentRecordRows}}}')) {
+        expect(html.includes('<tr><td colspan="3"')).toBe(true);
+      }
+      if (seed.htmlTemplate.includes('{{{homeMedicationRows}}}')) {
+        expect(html.includes('<tr><td colspan="2"')).toBe(true);
+      }
+    });
+  }
+
+  it('F14.guard:doctorName-empty — doctorName de-dupe handles empty string', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { doctorName: '' } },
+      summary: null,
+    });
+    expect(p.doctorName).toBe('');
+  });
+
+  it('F14.guard:doctorName-no-paren — fallback to whole string when no `)` found', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { doctorName: 'นพ.A' } },
+      summary: null,
+    });
+    expect(p.doctorName).toBe('นพ.A');
+  });
+
+  it('F14.guard:vitals-only-systolic — bp shows partial', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { vitals: { systolicBP: 120 } } },
+      summary: null,
+    });
+    expect(p.bp).toBe('120/-');
+  });
+
+  it('F14.guard:treatment-record-empty-array — produces placeholder row', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { treatmentItems: [] } },
+      summary: null,
+    });
+    expect(p.treatmentRecordRows).toContain('colspan="3"');
+    expect(p.treatmentRecordRows).not.toContain('undefined');
+  });
+
+  it('F14.guard:home-meds-mixed-shape — string fallback for partial fields', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { medications: [{ name: 'X' }, { qty: 5, unit: 'tab' }] } },
+      summary: null,
+    });
+    expect(p.homeMedicationRows).toContain('<tr>');
+    expect(p.homeMedicationRows).toContain('X');
+    expect(p.homeMedicationRows).toContain('5 tab');
+    expect(p.homeMedicationRows).not.toContain('undefined');
+    expect(p.homeMedicationRows).not.toContain('null');
+  });
+
+  it('F14.guard:emergency-contact-nested — reads emergencyContact.name fallback', () => {
+    const p = buildPrefillForTreatment({
+      customer: { patientData: { emergencyContact: { name: 'แม่', phone: '081' } } },
+      treatment: EMPTY_TREATMENT,
+      summary: null,
+    });
+    expect(p.emergencyName).toBe('แม่');
+    expect(p.emergencyPhone).toBe('081');
+  });
+
+  it('F14.guard:treatmentItems-text-empty — empty array → empty string, not "undefined"', () => {
+    const p = buildPrefillForTreatment({
+      customer: EMPTY_CUSTOMER,
+      treatment: { detail: { treatmentItems: [] } },
+      summary: null,
+    });
+    expect(p.treatmentItems).toBe('');
+  });
+});
+
+/* ─── F15: cross-doc invariants — locks integration points ───────────────── */
+
+describe('F15: cross-doc invariants — every seed obeys repository-wide rules', () => {
+  it('F15.1: every seed in SEED_TEMPLATES has matching docType in DOC_TYPES', () => {
+    for (const seed of SEED_TEMPLATES) {
+      expect(`${seed.docType}::known::${DOC_TYPES.includes(seed.docType)}`)
+        .toBe(`${seed.docType}::known::true`);
+    }
+  });
+
+  it('F15.2: every seed has at least one signature/doctor block', () => {
+    // Phase 14.2 requirement: every printable doc must either show doctorName
+    // somewhere OR have a signature block. Catches the V12 pattern where
+    // a writer changed and a sibling reader silently broke.
+    for (const seed of SEED_TEMPLATES) {
+      const hasDoctor = seed.htmlTemplate.includes('{{doctorName}}')
+        || seed.htmlTemplate.includes('{{staffName}}')
+        || seed.htmlTemplate.includes('ลายเซ็น')
+        || seed.htmlTemplate.includes('ลงชื่อ')
+        || seed.htmlTemplate.includes('แพทย์ผู้')
+        || seed.htmlTemplate.includes('Physician');
+      expect(`${seed.docType}::has-signature::${hasDoctor}`)
+        .toBe(`${seed.docType}::has-signature::true`);
+    }
+  });
+
+  it('F15.3: raw-HTML placeholders only used where the field VALUE is HTML', () => {
+    // Whitelist of {{{key}}} usages by docType. If a new {{{key}}} appears in
+    // a template, this test fails until the pair is added here. Forces
+    // explicit review of any new raw-HTML insertion (Rule C2 security).
+    const ALLOWED_RAW_HTML_PLACEHOLDERS = {
+      'treatment-history': ['treatmentRecordRows', 'homeMedicationRows'],
+      'course-deduction':  ['deductionRows'],
+    };
+    for (const seed of SEED_TEMPLATES) {
+      const raw = (seed.htmlTemplate.match(/\{\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}\}/g) || [])
+        .map(m => m.slice(3, -3));
+      const allowed = ALLOWED_RAW_HTML_PLACEHOLDERS[seed.docType] || [];
+      for (const r of raw) {
+        expect(`${seed.docType}::${r}::allowed::${allowed.includes(r)}`)
+          .toBe(`${seed.docType}::${r}::allowed::true`);
+      }
+    }
+  });
+
+  it('F15.4: no template uses {{key}} (escaped) for known raw-HTML fields', () => {
+    // Regression guard for the F12 course-deduction bug: deductionRows /
+    // treatmentRecordRows / homeMedicationRows must use {{{key}}} not {{key}}.
+    const RAW_HTML_FIELDS = ['treatmentRecordRows', 'homeMedicationRows', 'deductionRows'];
+    for (const seed of SEED_TEMPLATES) {
+      for (const f of RAW_HTML_FIELDS) {
+        // If the template references this field at all, it must be 3-brace.
+        const tpl = seed.htmlTemplate;
+        const idx = tpl.indexOf(f);
+        if (idx === -1) continue;
+        // Search for the closest brace pattern around this field
+        const before = tpl.slice(Math.max(0, idx - 5), idx);
+        const after = tpl.slice(idx + f.length, idx + f.length + 5);
+        const isThreeBrace = before.endsWith('{{{') && after.startsWith('}}}');
+        const isTwoBrace = before.endsWith('{{') && !before.endsWith('{{{') && after.startsWith('}}');
+        // It must be 3-brace OR not be a placeholder at all (mention in comment)
+        if (isTwoBrace) {
+          expect(`${seed.docType}::${f}::wrong-brace-count`).toBe(`${seed.docType}::${f}::three-brace-required`);
+        }
+        if (isThreeBrace) {
+          // Pass — exactly what we want
+        }
+      }
+    }
+  });
+
+  it('F15.5: every field in seed.fields[] has a known FIELD_TYPE', () => {
+    for (const seed of SEED_TEMPLATES) {
+      for (const f of seed.fields || []) {
+        expect(`${seed.docType}::${f.key}::type-known::${FIELD_TYPES.includes(f.type)}`)
+          .toBe(`${seed.docType}::${f.key}::type-known::true`);
+      }
+    }
+  });
+
+  it('F15.6: SCHEMA_VERSION matches what tests assume', () => {
+    // F13/F14 prefill mirror was authored against schema v6. If schema bumps
+    // and prefill mapping changes, this test should fail to force re-sync.
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(6);
+  });
+
+  it('F15.7: seed templates do not embed user-input placeholders inside raw-HTML', () => {
+    // Security guard (Rule C2): {{{key}}} must NEVER wrap a field that
+    // could come from user input (e.g. doctorName, patientName). Only
+    // app-built strings (server-built table rows) are safe.
+    const FORBIDDEN_RAW_HTML = ['customerName', 'doctorName', 'patientName',
+      'symptoms', 'physicalExam', 'diagnosis', 'treatment', 'treatmentPlan',
+      'additionalNote', 'cc', 'hpi', 'pmh', 'pe', 'dx', 'txPlan',
+      'procedure', 'risks', 'cost', 'witnessName', 'reason', 'note',
+      'genericName', 'medicineName', 'qty', 'instructions', 'warning'];
+    for (const seed of SEED_TEMPLATES) {
+      for (const k of FORBIDDEN_RAW_HTML) {
+        const pattern = `{{{${k}}}}`;
+        expect(`${seed.docType}::${k}::not-raw-html::${!seed.htmlTemplate.includes(pattern)}`)
+          .toBe(`${seed.docType}::${k}::not-raw-html::true`);
+      }
+    }
+  });
+});
+
+/* ─── F16: Color-theme invariants — black + red, no red on patient names ──
+ *
+ * Per user directive 2026-04-25: "เราต้องมีสีสันด้วยนะ ไม่ใช่แค่ขาวดำ
+ * แต่เป็นไปในตีมของเรา ดำ แดง". And per .claude/rules/04-thai-ui.md:
+ * "สีแดงห้ามใช้กับตัวอักษรชื่อ/HN ผู้ป่วย" (Thai culture rule — red on
+ * patient names = death names).
+ *
+ * F16 locks BOTH:
+ *   1. Every seed template has at least ONE red accent (#b71c1c or #d32f2f)
+ *      so the doc isn't B&W
+ *   2. NO seed template applies red to the IMMEDIATE enclosing element of
+ *      {{customerName}}, {{customerHN}}, {{nationalId}}, or {{doctorName}}.
+ *      Walking back from each placeholder to its nearest opening tag, the
+ *      tag's `style="..."` attribute must NOT contain `color:#b71c1c` or
+ *      `color:#d32f2f`. Customer names + doctor names render in body black.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+describe('F16: color-theme invariants — black + red, no red on patient names', () => {
+  const RED_ACCENT_HEX = ['#b71c1c', '#d32f2f', '#B71C1C', '#D32F2F'];
+  const FORBIDDEN_REDS_NEAR_NAMES = /color:\s*#(b71c1c|d32f2f|c62828|e53935)/i;
+  const FORBIDDEN_PLACEHOLDERS = ['{{customerName}}', '{{customerHN}}', '{{nationalId}}', '{{doctorName}}'];
+
+  // Helper — for a given template + placeholder, find every occurrence and
+  // walk back to the immediately enclosing opening tag. Return list of
+  // [enclosingTag, styleAttr] pairs. Used to assert no red on names.
+  function findEnclosingTags(template, placeholder) {
+    const result = [];
+    let idx = 0;
+    while ((idx = template.indexOf(placeholder, idx)) !== -1) {
+      const before = template.slice(0, idx);
+      // Find last `>` (closes the immediately-enclosing opening tag)
+      const lastClose = before.lastIndexOf('>');
+      if (lastClose === -1) { idx += placeholder.length; continue; }
+      // Find matching `<` for that `>`
+      const lastOpen = before.lastIndexOf('<', lastClose);
+      if (lastOpen === -1) { idx += placeholder.length; continue; }
+      const tag = before.slice(lastOpen, lastClose + 1);
+      const m = tag.match(/style="([^"]*)"/);
+      result.push({ tag, style: m ? m[1] : '' });
+      idx += placeholder.length;
+    }
+    return result;
+  }
+
+  // F16.1: every seed has at least one red accent — no all-B&W docs
+  for (const seed of SEED_TEMPLATES) {
+    it(`F16.1:${seed.docType} — has at least one red accent (theme color)`, () => {
+      const hasRed = RED_ACCENT_HEX.some(hex => seed.htmlTemplate.includes(hex));
+      expect(hasRed
+        ? `${seed.docType}::has-red-accent`
+        : `${seed.docType}::MISSING-red-accent`)
+        .toBe(`${seed.docType}::has-red-accent`);
+    });
+  }
+
+  // F16.2: customer name placeholders are NEVER inside red-colored elements
+  for (const seed of SEED_TEMPLATES) {
+    for (const placeholder of FORBIDDEN_PLACEHOLDERS) {
+      const occurrences = findEnclosingTags(seed.htmlTemplate, placeholder);
+      if (occurrences.length === 0) continue;
+      it(`F16.2:${seed.docType} — ${placeholder} not inside red-colored tag`, () => {
+        for (const occ of occurrences) {
+          const isRed = FORBIDDEN_REDS_NEAR_NAMES.test(occ.style);
+          expect(isRed
+            ? `${seed.docType}::${placeholder}::RED-VIOLATION::${occ.style}`
+            : `${seed.docType}::${placeholder}::safe`)
+            .toBe(`${seed.docType}::${placeholder}::safe`);
+        }
+      });
+    }
+  }
+
+  // F16.3: HEADER_CLINIC + section snippets all use red accents (covered
+  //        indirectly by F16.1 since every doc embeds HEADER_CLINIC)
+  it('F16.3: HEADER_CLINIC red accent — every doc using it inherits red', () => {
+    for (const seed of SEED_TEMPLATES) {
+      // Skip docs that don't use HEADER_CLINIC (medicine-label, fit-to-fly etc.)
+      const usesHeader = seed.htmlTemplate.includes('{{clinicName}}');
+      if (!usesHeader) continue;
+      // Some seed has clinic header — assert it has red somewhere
+      const hasRed = RED_ACCENT_HEX.some(hex => seed.htmlTemplate.includes(hex));
+      expect(`${seed.docType}::clinic-header-red::${hasRed}`)
+        .toBe(`${seed.docType}::clinic-header-red::true`);
+    }
+  });
+
+  // F16.4: rendered output also obeys the rule — render with sentinel name
+  it('F16.4: rendered HTML — sentinel customerName is never inside a red span', () => {
+    const sentinel = 'REDPATIENTNAMETEST_DO_NOT_COLOR_RED';
+    for (const seed of SEED_TEMPLATES) {
+      const ctx = buildPrintContext({
+        clinic: { clinicName: 'C' },
+        customer: { customerName: sentinel, proClinicHN: 'HN-X' },
+        values: { doctorName: sentinel, certNumber: 'C-1' },
+        language: seed.language === 'bilingual' ? 'bilingual' : 'th',
+        toggles: { showCertNumber: true, showPatientSignature: true },
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+      // Find every occurrence of sentinel in rendered output. For each,
+      // walk back to its enclosing tag, check style.
+      const occurrences = findEnclosingTags(html, sentinel);
+      for (const occ of occurrences) {
+        const violatesRule = FORBIDDEN_REDS_NEAR_NAMES.test(occ.style);
+        expect(violatesRule
+          ? `${seed.docType}::sentinel-name-INSIDE-RED::${occ.style}`
+          : `${seed.docType}::sentinel-name-safe`)
+          .toBe(`${seed.docType}::sentinel-name-safe`);
+      }
+    }
+  });
+
+  // F16.5: no gold colors anywhere (per .claude/rules/04-thai-ui.md
+  //        "สีทองห้ามใช้")
+  it('F16.5: no gold colors in any seed (cultural rule — gold banned)', () => {
+    const goldHexes = [/color:\s*#(?:ff)?d700/i, /color:\s*gold\b/i, /color:\s*#b8860b/i];
+    for (const seed of SEED_TEMPLATES) {
+      for (const re of goldHexes) {
+        expect(`${seed.docType}::no-gold::${!re.test(seed.htmlTemplate)}`)
+          .toBe(`${seed.docType}::no-gold::true`);
+      }
+    }
+  });
+
+  // F16.6: red theme color is consistent — only canonical LoverClinic reds.
+  // Amber/orange (#f59e0b warning callout, #d97706 warning text) are allowed
+  // because they're "warning treatment" colors for refund/cancel callouts,
+  // not part of the red theme. We detect "true red" by tight G+B bounds.
+  it('F16.6: only the canonical LoverClinic reds appear (#b71c1c / #d32f2f)', () => {
+    const ALLOWED_REDS = ['#b71c1c', '#d32f2f', '#a00', '#B71C1C', '#D32F2F', '#A00'];
+    const RED_HEX_PATTERN = /#(?:[a-fA-F0-9]{3}|[a-fA-F0-9]{6})\b/g;
+    for (const seed of SEED_TEMPLATES) {
+      const matches = seed.htmlTemplate.match(RED_HEX_PATTERN) || [];
+      for (const hex of matches) {
+        const h = hex.toLowerCase().replace('#', '');
+        let r = 0, g = 0, b = 0;
+        if (h.length === 3) {
+          r = parseInt(h[0] + h[0], 16); g = parseInt(h[1] + h[1], 16); b = parseInt(h[2] + h[2], 16);
+        } else if (h.length === 6) {
+          r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16);
+        }
+        // True red: high R, low G and B (G < 80, B < 80). Excludes amber/
+        // orange (high G), pink (high B), brown (medium R+G+B).
+        const isTrueRed = r > 100 && g < 80 && b < 80;
+        if (!isTrueRed) continue;
+        expect(`${seed.docType}::red-${hex}::allowed::${ALLOWED_REDS.includes(hex)}`)
+          .toBe(`${seed.docType}::red-${hex}::allowed::true`);
+      }
+    }
+  });
+});

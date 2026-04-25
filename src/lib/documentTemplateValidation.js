@@ -132,7 +132,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -323,24 +323,34 @@ export function extractTemplatePlaceholders(html) {
 // Shared header — clinic letterhead. Logo placeholder removed (URLs from
 // clinic_settings.logoUrl can be added in future). Address + license + tax
 // ID surface from clinic settings (nullable; empty lines stay blank).
+// Phase 14.2.D (2026-04-25) — LoverClinic black+red color theme per user
+// directive: "ต้องมีสีสันด้วยนะ ไม่ใช่แค่ขาวดำ แต่เป็นไปในตีมของเรา ดำ แดง".
+// Theme colors (also locked by F16 invariants):
+//   Primary red  : #b71c1c (deep — prints as gray on B&W, distinct on color)
+//   Accent red   : #d32f2f (lighter, for emphasis)
+//   Body black   : #000
+//   Sub-text gray: #444
+// Cultural rule (.claude/rules/04-thai-ui.md): NEVER apply red to
+// customerName / customerHN / patient names / doctor names. Red lives ONLY
+// on accents (headers, dividers, table thead, label prefixes).
 const HEADER_CLINIC = `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-    <div>
-      <div style="font-weight:bold;font-size:18px">{{clinicName}}</div>
-      {{#lang en}}<div style="font-size:13px">{{clinicNameEn}}</div>{{/lang}}
+    <div style="border-left:4px solid #b71c1c;padding-left:10px">
+      <div style="font-weight:bold;font-size:18px;color:#000">{{clinicName}}</div>
+      {{#lang en}}<div style="font-size:13px;color:#444">{{clinicNameEn}}</div>{{/lang}}
       <div style="font-size:11px;color:#444;margin-top:2px">{{clinicAddress}}</div>
       {{#lang en}}<div style="font-size:11px;color:#444">{{clinicAddressEn}}</div>{{/lang}}
-      <div style="font-size:11px;color:#444">โทร. {{clinicPhone}}{{#if clinicLicenseNo}} &nbsp; เลขที่ใบอนุญาต: {{clinicLicenseNo}}{{/if}}</div>
+      <div style="font-size:11px;color:#444">โทร. {{clinicPhone}}{{#if clinicLicenseNo}} &nbsp; <span style="color:#b71c1c;font-weight:bold">เลขที่ใบอนุญาต:</span> {{clinicLicenseNo}}{{/if}}</div>
     </div>
   </div>
-  <hr style="border:0;border-top:1px solid #000;margin:6px 0 14px 0" />
+  <hr style="border:0;border-top:2px solid #b71c1c;margin:6px 0 14px 0" />
 `;
 
 // Always-on patient signature block (used by certs without the
 // showPatientSignature toggle — i.e. medical-certificate / driver-license /
 // patient-referral / fit-to-fly where the signature is part of the doc).
 const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
-  <h4 style="margin:14px 0 8px 0;background:#000;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 1</h4>
+  <h4 style="margin:14px 0 8px 0;background:#b71c1c;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 1</h4>
   <span style="margin-left:8px">ของผู้ขอรับใบรับรองสุขภาพ</span>
   <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
   <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
@@ -360,7 +370,7 @@ const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
 // Common section-1 patient self-declaration block — shared by 3 medical
 // certificates that have it (general / driver-license / fit-to-fly extended).
 const SECTION_1_PATIENT_DECLARATION = `
-  <h4 style="margin:14px 0 8px 0">ส่วนที่ 1 ของผู้ขอรับใบรับรองสุขภาพ</h4>
+  <h4 style="margin:14px 0 8px 0;color:#b71c1c;border-bottom:2px solid #b71c1c;padding-bottom:4px">ส่วนที่ 1 ของผู้ขอรับใบรับรองสุขภาพ</h4>
   <div style="margin-bottom:6px"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
   <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
   <div style="margin:10px 0 6px 0">ข้าพเจ้าขอรับใบรับรองสุขภาพโดยมีประวัติสุขภาพดังนี้:</div>
@@ -380,7 +390,7 @@ const SECTION_1_PATIENT_DECLARATION = `
 
 // Common doctor's section-2 footer (with signature block).
 const SECTION_2_DOCTOR_BLOCK = `
-  <h4 style="margin:18px 0 8px 0">ส่วนที่ 2 ของแพทย์</h4>
+  <h4 style="margin:18px 0 8px 0;color:#b71c1c;border-bottom:2px solid #b71c1c;padding-bottom:4px">ส่วนที่ 2 ของแพทย์</h4>
   <div style="margin-bottom:6px"><strong>สถานที่ตรวจ:</strong> {{clinicAddress}} &nbsp; <strong>วัน/เดือน/ปี:</strong> {{today}}</div>
   <div style="margin-bottom:6px"><strong>ข้าพเจ้า นายแพทย์/แพทย์หญิง:</strong> {{doctorName}} &nbsp; <strong>ใบอนุญาตประกอบวิชาชีพเวชกรรมเลขที่:</strong> {{doctorLicenseNo}}</div>
   <div style="margin-bottom:6px"><strong>สถานที่ประกอบวิชาชีพเวชกรรม:</strong> {{clinicName}} &nbsp; <strong>ได้ตรวจร่างกาย:</strong> {{customerName}}</div>
@@ -392,7 +402,7 @@ const SECTION_2_DOCTOR_BLOCK = `
 `;
 
 const DOCTOR_SIGNATURE = `
-  <div style="margin-top:32px;text-align:right">
+  <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
     <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> {{#lang en}}/ Sign{{/lang}}</div>
     <div style="margin-top:2px">( {{doctorName}} )</div>
     <div>{{#lang en}}Date{{/lang}}{{#lang th}}วันที่{{/lang}} {{today}}</div>
@@ -407,12 +417,12 @@ const COMMON_TOGGLES = [
 const CERT_NUMBER_LINE = `
   {{#if showCertNumber}}
   <div style="display:flex;justify-content:space-between;margin:10px 0">
-    <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
-    <div><strong>วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+    <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
+    <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
   </div>
   {{/if}}
   {{#unless showCertNumber}}
-  <div style="text-align:right;margin:10px 0"><strong>วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+  <div style="text-align:right;margin:10px 0"><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
   {{/unless}}
 `;
 
@@ -467,7 +477,7 @@ export const SEED_TEMPLATES = Object.freeze([
     // baked into the seed as default ON in COMMON_TOGGLES → flipped to no-
     // toggles here so the block always renders.
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0;letter-spacing:0.05em">ใบรับรองแพทย์</h2>
+      <h2 style="text-align:center;margin:16px 0;letter-spacing:0.05em;color:#b71c1c">ใบรับรองแพทย์</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
         <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
         <div><strong>วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
@@ -487,7 +497,7 @@ export const SEED_TEMPLATES = Object.freeze([
     // Special: เลขบัตรประชาชนแบบ box-grid (1-4-5-2-1 split). วันที่ในรูปแบบ
     // วันที่ ___ เดือน ___ พ.ศ. ___
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์ (สำหรับใบอนุญาตขับรถ)</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์ (สำหรับใบอนุญาตขับรถ)</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
         <div><strong>เล่มที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certBookNumber}}</span></div>
         <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certNumber}}</span></div>
@@ -526,7 +536,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์ลาป่วย</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์ลาป่วย</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ข้าพเจ้า นายแพทย์/แพทย์หญิง:</strong> {{doctorName}} &nbsp; <strong>ใบอนุญาตประกอบวิชาชีพเลขที่:</strong> {{doctorLicenseNo}}</div>
       <div style="margin:6px 0"><strong>ได้ทำการตรวจร่างกายของ นาย/นาง/นางสาว:</strong> {{customerName}}</div>
@@ -560,7 +570,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองกายภาพบำบัด</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองกายภาพบำบัด</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ข้าพเจ้า นักกายภาพ:</strong> {{doctorName}} &nbsp; <strong>เลขใบอนุญาต:</strong> {{doctorLicenseNo}}</div>
       <div style="margin:6px 0"><strong>ได้ทำการประเมินและบำบัดให้ผู้ป่วย:</strong> {{customerName}} (HN {{customerHN}})</div>
@@ -592,7 +602,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์แผนไทยประยุกต์</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์แผนไทยประยุกต์</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ข้าพเจ้า แพทย์แผนไทยประยุกต์:</strong> {{doctorName}}</div>
       <div style="margin:6px 0"><strong>ใบอนุญาตประกอบวิชาชีพแพทย์แผนไทยประยุกต์ :</strong> {{doctorLicenseNo}}</div>
@@ -631,7 +641,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'bilingual',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบรับรองแพทย์แผนจีน{{#lang en}} / 中医医疗证明{{/lang}}</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์แผนจีน{{#lang en}} / 中医医疗证明{{/lang}}</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ข้าพเจ้า แพทย์แผนจีน{{#lang en}} / TCM Doctor{{/lang}}:</strong> {{doctorName}}</div>
       <div style="margin:6px 0"><strong>ใบอนุญาตประกอบวิชาชีพแพทย์แผนจีนเลขที่:</strong> {{doctorLicenseNo}}</div>
@@ -660,7 +670,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'bilingual',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0 4px 0">FIT-TO-FLY CERTIFICATE</h2>
+      <h2 style="text-align:center;margin:14px 0 4px 0;color:#b71c1c">FIT-TO-FLY CERTIFICATE</h2>
       <h3 style="text-align:center;font-weight:normal;margin-bottom:14px">ใบรับรองความพร้อมในการเดินทางทางอากาศ</h3>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>Patient Name / ชื่อผู้ป่วย:</strong> {{customerNameEn}} ({{customerName}})</div>
@@ -702,11 +712,11 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'label-57x32',
     htmlTemplate: `
-<div style="font-family:'Sarabun','Noto Sans Thai',sans-serif;padding:1.5mm;font-size:9px;line-height:1.25">
-  <div style="font-weight:bold;font-size:10px">{{clinicName}}</div>
-  <div style="font-size:8px">โทร. {{clinicPhone}}</div>
-  <div style="border-top:1px solid #000;margin:1.5mm 0;padding-top:1mm;font-weight:bold">{{customerName}} &nbsp; HN {{customerHN}}</div>
-  <div style="font-weight:bold;font-size:10px;margin-top:1mm">{{medicineName}}</div>
+<div style="font-family:'Sarabun','Noto Sans Thai',sans-serif;padding:1.5mm;font-size:9px;line-height:1.25;border-left:2px solid #b71c1c">
+  <div style="font-weight:bold;font-size:10px;color:#000">{{clinicName}}</div>
+  <div style="font-size:8px;color:#444">โทร. {{clinicPhone}}</div>
+  <div style="border-top:1px solid #b71c1c;margin:1.5mm 0;padding-top:1mm;font-weight:bold">{{customerName}} &nbsp; HN {{customerHN}}</div>
+  <div style="font-weight:bold;font-size:10px;margin-top:1mm;color:#b71c1c">{{medicineName}}</div>
   {{#if genericName}}<div style="font-size:8px;color:#444">({{genericName}})</div>{{/if}}
   <div style="margin-top:1mm">จำนวน: <strong>{{qty}}</strong></div>
   <div style="font-size:8px;margin-top:1mm">วิธีใช้: {{instructions}}</div>
@@ -732,7 +742,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบประวัติการรักษา (Patient Chart)</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบประวัติการรักษา (Patient Chart)</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:6px 0"><strong>ผู้ป่วย:</strong> {{customerName}} (HN {{customerHN}}) &nbsp; <strong>เพศ:</strong> {{gender}} &nbsp; <strong>อายุ:</strong> {{age}} ปี</div>
       <div style="margin:6px 0"><strong>วันที่:</strong> {{today}}</div>
@@ -744,7 +754,7 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px">{{pmh}}</div>
       <div style="margin:8px 0 4px 0"><strong>PE (Physical Exam):</strong></div>
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{pe}}</div>
-      <div style="margin:8px 0"><strong>Diagnosis:</strong> {{dx}}</div>
+      <div style="margin:8px 0"><strong>Dx (Diagnosis):</strong> {{dx}}</div>
       <div style="margin:8px 0 4px 0"><strong>Tx Plan:</strong></div>
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px">{{txPlan}}</div>
     ` + DOCTOR_SIGNATURE,
@@ -767,11 +777,12 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">หนังสือยินยอมรับการรักษา</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">หนังสือยินยอมรับการรักษา</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0">ข้าพเจ้า <strong>{{customerName}}</strong> &nbsp; HN: <strong>{{customerHN}}</strong> &nbsp; เลขบัตรประชาชน: {{nationalId}}</div>
       <div style="margin:6px 0">ที่อยู่: {{patientAddress}}</div>
       <div style="margin:14px 0">ขอแสดงความยินยอมให้แพทย์ <strong>{{doctorName}}</strong> และทีมงานคลินิก <strong>{{clinicName}}</strong> ทำการรักษา/หัตถการดังต่อไปนี้:</div>
+      <div style="margin:6px 0;font-weight:bold">หัตถการ/การรักษา:</div>
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:6px;background:#fafafa">{{procedure}}</div>
       <div style="margin:14px 0 6px 0;font-weight:bold">ข้าพเจ้าได้รับคำอธิบายอย่างชัดเจนเกี่ยวกับ:</div>
       <ul style="margin:6px 0;padding-left:24px">
@@ -815,7 +826,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">แผนการรักษา</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">แผนการรักษา</h2>
       ${CERT_NUMBER_LINE}
       <div style="margin:6px 0"><strong>ผู้ป่วย:</strong> {{customerName}} (HN {{customerHN}}) &nbsp; <strong>วันที่:</strong> {{today}}</div>
       <div style="margin:14px 0 6px 0"><strong>ภาวะที่ต้องรักษา:</strong></div>
@@ -852,7 +863,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:16px 0">ใบยกเลิกการขาย</h2>
+      <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบยกเลิกการขาย</h2>
       <div style="text-align:right;margin-bottom:10px"><strong>วันที่ยกเลิก:</strong> {{today}}</div>
       <div style="margin:8px 0"><strong>เลขที่ใบเสร็จเดิม:</strong> {{originalSaleId}} &nbsp; <strong>วันที่ขายเดิม:</strong> {{saleDate}}</div>
       <div style="margin:6px 0"><strong>ลูกค้า:</strong> {{customerName}} (HN {{customerHN}})</div>
@@ -896,7 +907,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'bilingual',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0 4px 0">ใบส่งตัวผู้ป่วย</h2>
+      <h2 style="text-align:center;margin:14px 0 4px 0;color:#b71c1c">ใบส่งตัวผู้ป่วย</h2>
       <h3 style="text-align:center;font-weight:normal;margin-bottom:14px">Patient Referral Letter</h3>
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ส่งต่อไปยัง / Refer to:</strong> {{referTo}}</div>
@@ -963,7 +974,7 @@ export const SEED_TEMPLATES = Object.freeze([
           {{#if clinicTaxId}}<div style="font-size:11px;color:#444">Tax ID: {{clinicTaxId}}</div>{{/if}}
         </div>
         <div style="text-align:right;flex:0 0 auto;min-width:240px">
-          <h2 style="margin:0;font-size:24px">Medical History</h2>
+          <h2 style="margin:0;font-size:24px;color:#b71c1c">Medical History</h2>
           <div style="margin-top:8px"><strong>Date:</strong> {{treatmentDate}}</div>
           <div><strong>Physician:</strong> {{doctorName}}</div>
         </div>
@@ -1012,7 +1023,7 @@ export const SEED_TEMPLATES = Object.freeze([
       <h4 style="margin:18px 0 6px 0">Treatment record</h4>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
-          <tr style="background:#f0f0f0">
+          <tr style="background:#b71c1c;color:#fff">
             <th style="border:1px solid #000;padding:6px;text-align:left">Treatment Description</th>
             <th style="border:1px solid #000;padding:6px;text-align:right;width:120px">Quantity</th>
             <th style="border:1px solid #000;padding:6px;text-align:right;width:140px">Remaining Balance</th>
@@ -1023,7 +1034,7 @@ export const SEED_TEMPLATES = Object.freeze([
       <h4 style="margin:18px 0 6px 0">Home medication</h4>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
-          <tr style="background:#f0f0f0">
+          <tr style="background:#b71c1c;color:#fff">
             <th style="border:1px solid #000;padding:6px;text-align:left">Treatment Description</th>
             <th style="border:1px solid #000;padding:6px;text-align:right;width:120px">Quantity</th>
           </tr>
@@ -1066,12 +1077,12 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A5',
     htmlTemplate: `
-      <div style="text-align:center;margin-bottom:10px">
-        <div style="font-weight:bold;font-size:16px">{{clinicName}}</div>
+      <div style="text-align:center;margin-bottom:10px;border-left:3px solid #b71c1c;padding-left:8px">
+        <div style="font-weight:bold;font-size:16px;color:#000">{{clinicName}}</div>
         <div style="font-size:10px;color:#444">โทร. {{clinicPhone}}</div>
       </div>
-      <hr style="border:0;border-top:1.5px solid #000;margin:6px 0 10px 0" />
-      <h3 style="text-align:center;margin:8px 0">ใบส่งตัวทรีตเมนต์</h3>
+      <hr style="border:0;border-top:2px solid #b71c1c;margin:6px 0 10px 0" />
+      <h3 style="text-align:center;margin:8px 0;color:#b71c1c;border-bottom:1px solid #b71c1c;padding-bottom:4px">ใบส่งตัวทรีตเมนต์</h3>
       <div style="margin:6px 0"><strong>เลขที่:</strong> {{certNumber}} &nbsp; <strong>วันที่:</strong> {{treatmentDate}}</div>
       <div style="margin:6px 0"><strong>ลูกค้า:</strong> {{customerName}} (HN {{customerHN}})</div>
       <div style="margin:6px 0"><strong>เพศ/อายุ:</strong> {{gender}} / {{age}} ปี</div>
@@ -1101,7 +1112,7 @@ export const SEED_TEMPLATES = Object.freeze([
     language: 'th',
     paperSize: 'A4',
     htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0">ใบตัดคอร์ส</h2>
+      <h2 style="text-align:center;margin:14px 0;color:#b71c1c;border-bottom:2px solid #b71c1c;padding-bottom:6px">ใบตัดคอร์ส</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
         <div><strong>เลขที่:</strong> {{certNumber}}</div>
         <div><strong>วันที่:</strong> {{treatmentDate}}</div>
@@ -1110,7 +1121,7 @@ export const SEED_TEMPLATES = Object.freeze([
       <hr style="border:0;border-top:1px solid #000;margin:10px 0" />
       <table style="width:100%;border-collapse:collapse;margin:10px 0">
         <thead>
-          <tr style="background:#f0f0f0">
+          <tr style="background:#b71c1c;color:#fff">
             <th style="border:1px solid #000;padding:6px;text-align:left">คอร์ส / สินค้า</th>
             <th style="border:1px solid #000;padding:6px;text-align:right">ตัด</th>
             <th style="border:1px solid #000;padding:6px;text-align:right">คงเหลือก่อน</th>
@@ -1118,7 +1129,7 @@ export const SEED_TEMPLATES = Object.freeze([
           </tr>
         </thead>
         <tbody>
-          {{deductionRows}}
+          {{{deductionRows}}}
         </tbody>
       </table>
       <div style="margin:10px 0"><strong>หมายเหตุ:</strong> {{note}}</div>
