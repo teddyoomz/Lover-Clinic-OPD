@@ -244,9 +244,18 @@ service cloud.firestore {
       }
       match /be_stock_movements/{movementId} {
         allow read, create: if isClinicStaff();
-        // MOVEMENTS ARE IMMUTABLE — MOPH audit requires append-only ledger.
-        // Reversals create a NEW entry with reversedByMovementId pointing back.
-        allow update, delete: if false;
+        // MOVEMENTS ARE IMMUTABLE EXCEPT for the reversal-link field.
+        // _reverseOneMovement creates a new compensating movement and then
+        // sets `reversedByMovementId` on the original to point to it. That
+        // single-field update is the only legitimate write; everything else
+        // stays locked for MOPH audit integrity.
+        // Phase 14.7.F (2026-04-26) — narrowed from `allow update: if false`
+        // after bug "คืนสต็อกการรักษาเดิมไม่สำเร็จ: Missing or insufficient
+        // permissions" surfaced when an edit-treatment legitimately reversed
+        // its prior stock movements.
+        allow update: if isClinicStaff() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reversedByMovementId']);
+        allow delete: if false;
       }
       match /be_stock_adjustments/{adjustId} {
         allow read, create: if isClinicStaff();

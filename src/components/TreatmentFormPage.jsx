@@ -374,6 +374,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Course items — selected rowIds
   const [selectedCourseItems, setSelectedCourseItems] = useState(new Set());
   const [existingCourseItems, setExistingCourseItems] = useState([]); // saved courseItems from edit mode
+  // Phase 14.7.F (2026-04-26) — snapshot of the stock-bearing fields at edit-load
+  // time. handleSubmit diffs against this to skip the reverse+rededuct path
+  // when the user only edited non-stock fields (images, charts, dr.note, etc.).
+  // Bug report 2026-04-26: "คืนสต็อกการรักษาเดิมไม่สำเร็จ: Missing or insufficient
+  // permissions" while the user just edited a Before/After photo — the legacy
+  // path called reverseStockForTreatment unconditionally, which tried to update
+  // be_stock_movements (blocked by `allow update: if false`).
+  const [existingStockSnapshot, setExistingStockSnapshot] = useState(null);
 
   // Treatment items — items shown in รายการรักษา panel (from courses or manual)
   const [treatmentItems, setTreatmentItems] = useState([]);
@@ -646,6 +654,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.medications?.length) setMedications(t.medications);
               if (t.consumables?.length) setConsumables(t.consumables);
               if (t.treatmentItems?.length) setTreatmentItems(t.treatmentItems.map((item, i) => ({ id: `existing-${i}`, name: item.name || '', qty: item.qty || '1', unit: item.unit || '', price: item.price || '' })));
+              // Phase 14.7.F — snapshot stock-bearing arrays for diff-on-save.
+              // Captured AFTER setters so the comparison normalizer has the same
+              // shape both old and new go through. Stored as raw doc shape (not
+              // form-state shape) for fidelity to what was actually persisted.
+              setExistingStockSnapshot({
+                treatmentItems: t.treatmentItems || [],
+                consumables: t.consumables || [],
+                medications: t.medications || [],
+              });
               if (t.doctorFees?.length) setDoctorFees(t.doctorFees);
               // Phase 14.4: dfEntries restore. Check both top-level
               // (save path writes here) and detail.dfEntries (future-proof
@@ -2037,9 +2054,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
 
         // Phase 8b — Stock: on EDIT, reverse old treatment stock BEFORE the doc update.
-        // reverseStockForTreatment queries by linkedTreatmentId so it's safe to call
-        // before the doc changes. Idempotent.
-        if (isEdit) {
+        // Phase 14.7.F (2026-04-26) — gate the reverse+rededuct on a stock-shape
+        // diff. Image-only / chart-only / dr-note-only edits previously triggered
+        // this path unconditionally, which (a) churned write ops needlessly and
+        // (b) hit `allow update: if false` on be_stock_movements when trying to
+        // set reversedByMovementId on the original movement. The pure helper
+        // hasStockChange returns true iff treatmentItems / consumables /
+        // medications differ in length, content, or order vs the snapshot
+        // captured at edit-load time.
+        const { hasStockChange } = await import('../lib/treatmentStockDiff.js');
+        const stockChanged = !isEdit || hasStockChange(existingStockSnapshot, {
+          treatmentItems: backendDetail.treatmentItems || [],
+          consumables: backendDetail.consumables || [],
+          medications: backendDetail.medications || [],
+        });
+        if (isEdit && stockChanged) {
           try {
             const { reverseStockForTreatment } = await import('../lib/backendClient.js');
             await reverseStockForTreatment(treatmentId);
@@ -2072,18 +2101,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const stockUtilsMod = await import('../lib/stockUtils.js');
         const TREATMENT_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT;       // 6
         const TREATMENT_MED_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT_MED; // 7
+        // Phase 14.7.F gate — skip both the consumables/items deduct AND the
+        // medications deduct when stock was already in the right state for
+        // this treatment (i.e. only image/chart/note fields changed). The
+        // `stockChanged` flag was computed before the doc update and OR'd
+        // with `!isEdit` so create-mode always deducts.
         try {
           // 1) consumables + treatmentItems → type 6
-          await deductStockForTreatment(newTreatmentId, {
-            consumables: backendDetail.consumables || [],
-            treatmentItems: backendDetail.treatmentItems || [],
-          }, {
-            customerId, branchId: 'main',
-            movementType: TREATMENT_TYPE,
-            user: { userId: '', userName: '' },
-          });
+          if (stockChanged) {
+            await deductStockForTreatment(newTreatmentId, {
+              consumables: backendDetail.consumables || [],
+              treatmentItems: backendDetail.treatmentItems || [],
+            }, {
+              customerId, branchId: 'main',
+              movementType: TREATMENT_TYPE,
+              user: { userId: '', userName: '' },
+            });
+          }
           // 2) take-home meds → type 7 (only when no auto-sale takes them)
-          if (!hasSale && (backendDetail.medications || []).length > 0) {
+          if (stockChanged && !hasSale && (backendDetail.medications || []).length > 0) {
             await deductStockForTreatment(newTreatmentId, {
               medications: backendDetail.medications || [],
             }, {
