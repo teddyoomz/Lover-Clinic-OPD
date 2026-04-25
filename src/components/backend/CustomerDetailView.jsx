@@ -11,8 +11,11 @@ import {
 import {
   getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
   getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
+  // Phase 14.7 — appointments-on-customer-detail (+ เพิ่มนัดหมาย, ดูทั้งหมด, etc.)
+  getCustomerAppointments, createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
+import DateField from '../DateField.jsx';
 import {
   TREATMENT_CERT_DOC_TYPES,
   TREATMENT_PRINT_DOC_TYPES,
@@ -113,6 +116,43 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
   // 'record' filters to TREATMENT_PRINT_DOC_TYPES (3 treatment-record types).
   // Prefill values come from the treatment data (date / doctor / items / dose).
   const [printPerTreatment, setPrintPerTreatment] = useState(null);
+
+  // Phase 14.7 (2026-04-25) — Customer-page appointments. Mirrors ProClinic
+  // behavior: by default show only the NEXT upcoming appointment, with
+  // "+ เพิ่มนัดหมาย" + "ดูทั้งหมด" buttons in the header. The list modal
+  // shows every appointment for this customer, the form modal opens
+  // pre-filled with this customer (saves the user from re-typing).
+  const [customerAppointments, setCustomerAppointments] = useState([]);
+  const [apptLoading, setApptLoading] = useState(false);
+  const [showApptListModal, setShowApptListModal] = useState(false);
+  const [apptFormModal, setApptFormModal] = useState(null); // { mode: 'create'|'edit', appt? }
+  const reloadCustomerAppointments = useMemo(() => {
+    return () => {
+      if (!customer?.proClinicId) return Promise.resolve([]);
+      setApptLoading(true);
+      return getCustomerAppointments(customer.proClinicId)
+        .then(list => {
+          setCustomerAppointments(Array.isArray(list) ? list : []);
+          return list;
+        })
+        .catch(() => { setCustomerAppointments([]); return []; })
+        .finally(() => setApptLoading(false));
+    };
+  }, [customer?.proClinicId]);
+  useEffect(() => {
+    reloadCustomerAppointments();
+  }, [reloadCustomerAppointments]);
+  // Compute next upcoming appointment (date >= today, sorted ascending)
+  const nextUpcomingAppt = useMemo(() => {
+    const today = thaiTodayISO();
+    const upcoming = (customerAppointments || [])
+      .filter(a => a && a.date && a.date >= today && a.status !== 'cancelled')
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (a.startTime || '').localeCompare(b.startTime || '');
+      });
+    return upcoming[0] || null;
+  }, [customerAppointments]);
 
   // Load treatment details from be_treatments
   useEffect(() => {
@@ -365,32 +405,60 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
         {/* ════════════════════ CENTER: Medical ════════════════════ */}
         <div className="space-y-4 min-w-0">
 
-          {/* Appointments Card */}
-          {appointments.length > 0 && (
-            <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
-                <Calendar size={16} className="text-sky-400" />
-                <h3 className="text-sm font-bold text-[var(--tx-heading)]">นัดหมาย</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>{appointments.length}</span>
-              </div>
-              <div className="divide-y divide-[var(--bd)]">
-                {appointments.map((appt, i) => (
-                  <div key={i} className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-[var(--tx-heading)]">
-                      <Calendar size={13} className="text-sky-400" />
-                      {appt.date} {appt.time && `| ${appt.time}`}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--tx-muted)]">
-                      {appt.branch && <span>{appt.branch}</span>}
-                      {appt.doctor && <span>{appt.doctor}</span>}
-                      {appt.room && <span>{appt.room}</span>}
-                    </div>
-                    {appt.notes && <p className="mt-1 text-xs text-[var(--tx-muted)]">{appt.notes}</p>}
-                  </div>
-                ))}
+          {/* Phase 14.7 — Appointments Card (ProClinic-replicated).
+              Header shows "นัดหมายครั้งถัดไป" + "ดูทั้งหมด" / "+ เพิ่มนัดหมาย".
+              Body shows ONLY the next upcoming appointment (next non-cancelled
+              with date >= today). Empty state if none. "ดูทั้งหมด" opens a
+              modal with all appointments. "+ เพิ่มนัดหมาย" opens form
+              pre-filled with this customer. */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2 flex-wrap">
+              <Calendar size={16} className="text-sky-400" />
+              <h3 className="text-sm font-bold text-[var(--tx-heading)]">นัดหมายครั้งถัดไป</h3>
+              {customerAppointments.length > 0 && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}
+                  data-testid="customer-appt-count">{customerAppointments.length}</span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => setShowApptListModal(true)}
+                  data-testid="customer-appt-view-all"
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${isDark ? 'bg-orange-900/20 border-orange-800/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'}`}
+                  title="ดูนัดหมายทั้งหมดของลูกค้านี้">
+                  <Calendar size={12} /> ดูทั้งหมด
+                </button>
+                <button
+                  onClick={() => setApptFormModal({ mode: 'create' })}
+                  data-testid="customer-appt-add"
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${isDark ? 'bg-emerald-900/20 border-emerald-800/40 text-emerald-400 hover:bg-emerald-900/30' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
+                  title="เพิ่มนัดหมายให้ลูกค้านี้">
+                  <Plus size={12} /> เพิ่มนัดหมาย
+                </button>
               </div>
             </div>
-          )}
+            <div className="px-4 py-3">
+              {apptLoading ? (
+                <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)]">
+                  <Loader2 size={12} className="animate-spin" /> กำลังโหลดนัดหมาย...
+                </div>
+              ) : nextUpcomingAppt ? (
+                <AppointmentCard
+                  appt={nextUpcomingAppt}
+                  isDark={isDark}
+                  onEdit={() => setApptFormModal({ mode: 'edit', appt: nextUpcomingAppt })}
+                  onCancel={async () => {
+                    if (!confirm('ยกเลิกนัดหมายนี้?')) return;
+                    await deleteBackendAppointment(nextUpcomingAppt.appointmentId || nextUpcomingAppt.id);
+                    reloadCustomerAppointments();
+                  }}
+                />
+              ) : (
+                <div className="text-xs text-[var(--tx-muted)] py-2 text-center" data-testid="customer-no-upcoming-appt">
+                  ไม่มีนัดหมายครั้งถัดไป
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Treatment Timeline */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
@@ -915,6 +983,34 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
           />
         );
       })()}
+      {/* Phase 14.7 — appointment list + form modals */}
+      {showApptListModal && (
+        <AppointmentListModal
+          appointments={customerAppointments}
+          customer={customer}
+          isDark={isDark}
+          onClose={() => setShowApptListModal(false)}
+          onEdit={(appt) => { setShowApptListModal(false); setApptFormModal({ mode: 'edit', appt }); }}
+          onCancel={async (appt) => {
+            if (!confirm('ยกเลิกนัดหมายนี้?')) return;
+            await deleteBackendAppointment(appt.appointmentId || appt.id);
+            await reloadCustomerAppointments();
+          }}
+        />
+      )}
+      {apptFormModal && (
+        <AppointmentFormModal
+          mode={apptFormModal.mode}
+          appt={apptFormModal.appt}
+          customer={customer}
+          isDark={isDark}
+          onClose={() => setApptFormModal(null)}
+          onSaved={async () => {
+            setApptFormModal(null);
+            await reloadCustomerAppointments();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1570,4 +1666,268 @@ function formatUnderlying(pd) {
   if (pd.ud_blood) items.push('โรคเลือด');
   if (pd.ud_other && pd.ud_otherDetail) items.push(pd.ud_otherDetail);
   return items.length > 0 ? items.join(', ') : pd.ud_otherDetail || '-';
+}
+
+// ─── Phase 14.7 (2026-04-25) — Appointment Card / List Modal / Form Modal ──
+// Used by CustomerDetailView's appointments section to mirror ProClinic
+// behavior: + เพิ่มนัดหมาย, ดูทั้งหมด, single next-upcoming card with print/
+// edit/cancel actions.
+
+/**
+ * Format a HH:MM time range. Tolerates missing endTime.
+ */
+function fmtApptTime(appt) {
+  if (!appt) return '';
+  if (appt.startTime && appt.endTime) return `${appt.startTime} - ${appt.endTime}`;
+  return appt.startTime || appt.time || '';
+}
+
+/**
+ * Render one appointment row. Used both in the next-upcoming card and the
+ * "view all" modal list. Action buttons: print / edit / cancel.
+ */
+function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = false }) {
+  if (!appt) return null;
+  const dateStr = appt.date ? formatThaiDateFull(appt.date) : '-';
+  const time = fmtApptTime(appt);
+  const doctor = appt.doctorName || '';
+  const branch = appt.branch || appt.branchName || '';
+  const room = appt.roomName || '';
+  const note = appt.notes || appt.customerNote || '';
+  return (
+    <div className={`${dense ? 'p-3' : 'p-3'} rounded-lg border ${isDark ? 'border-[var(--bd)] bg-black/20' : 'border-gray-200 bg-white'}`} data-testid="customer-appt-row">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm font-bold text-[var(--tx-heading)]">
+            <Calendar size={13} className="text-sky-400" />
+            <span>{dateStr}{time && ` | ${time}`}</span>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--tx-muted)]">
+            {doctor && <span className="flex items-center gap-1"><Users size={11} />{doctor}</span>}
+            {branch && <span className="flex items-center gap-1"><MapPin size={11} />{branch}</span>}
+            {room && <span>{room}</span>}
+          </div>
+          {note && (
+            <div className="mt-1 text-xs text-[var(--tx-muted)]">โน๊ต: {note}</div>
+          )}
+        </div>
+        {onPrint && (
+          <button onClick={onPrint}
+            data-testid="customer-appt-print"
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${isDark ? 'bg-sky-900/20 border-sky-800/40 text-sky-400 hover:bg-sky-900/30' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'}`}>
+            <Printer size={11} /> พิมพ์ใบนัด
+          </button>
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={onEdit}
+          data-testid="customer-appt-edit"
+          className={`flex-1 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${isDark ? 'bg-orange-900/20 border-orange-800/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-100 border-orange-300 text-orange-700 hover:bg-orange-200'}`}>
+          แก้ไขนัด
+        </button>
+        <button onClick={onCancel}
+          data-testid="customer-appt-cancel"
+          className={`flex-1 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${isDark ? 'bg-red-900/10 border-red-800/40 text-red-400 hover:bg-red-900/20' : 'bg-white border-red-300 text-red-600 hover:bg-red-50'}`}>
+          ยกเลิกนัด
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit, onCancel }) {
+  // Sort: upcoming-asc first, then past-desc
+  const today = thaiTodayISO();
+  const sorted = useMemo(() => {
+    const upcoming = (appointments || []).filter(a => a.date >= today && a.status !== 'cancelled')
+      .sort((a, b) => (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || '')));
+    const past = (appointments || []).filter(a => a.date < today || a.status === 'cancelled')
+      .sort((a, b) => (b.date + (b.startTime || '')).localeCompare(a.date + (a.startTime || '')));
+    return [...upcoming, ...past];
+  }, [appointments, today]);
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-list-title" onClick={onClose}>
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()} data-testid="customer-appt-list-modal">
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)]">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-sky-400" />
+            <h3 id="appt-list-title" className="text-sm font-bold text-[var(--tx-heading)]">นัดหมายทั้งหมด</h3>
+            <span className="text-xs text-[var(--tx-muted)]">({sorted.length} รายการ)</span>
+          </div>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {sorted.length === 0 ? (
+            <div className="text-center py-12 text-[var(--tx-muted)] text-sm" data-testid="customer-appt-list-empty">
+              ยังไม่มีนัดหมาย
+            </div>
+          ) : (
+            sorted.map((appt) => (
+              <AppointmentCard
+                key={appt.appointmentId || appt.id}
+                appt={appt}
+                isDark={isDark}
+                onEdit={() => onEdit(appt)}
+                onCancel={() => onCancel(appt)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Light appointment form — only the fields a customer-page user typically
+ * needs. Heavier features (recurring, holiday-gate, slot conflict) live in
+ * the dedicated AppointmentTab. Pre-fills customer from props so the user
+ * doesn't re-pick.
+ */
+function AppointmentFormModal({ mode, appt, customer, isDark, onClose, onSaved }) {
+  const cid = customer?.proClinicId || '';
+  const cname = `${customer?.patientData?.prefix || ''} ${customer?.patientData?.firstName || ''} ${customer?.patientData?.lastName || ''}`.trim();
+  const chn = customer?.proClinicHN || '';
+  const [date, setDate] = useState(appt?.date || thaiTodayISO());
+  const [startTime, setStartTime] = useState(appt?.startTime || '10:00');
+  const [endTime, setEndTime] = useState(appt?.endTime || '10:30');
+  const [doctorName, setDoctorName] = useState(appt?.doctorName || '');
+  const [doctorId, setDoctorId] = useState(appt?.doctorId || '');
+  const [roomName, setRoomName] = useState(appt?.roomName || '');
+  const [notes, setNotes] = useState(appt?.notes || '');
+  const [appointmentType, setAppointmentType] = useState(appt?.appointmentType || 'sales');
+  const [doctors, setDoctors] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getAllMasterDataItems('doctors').then(d => setDoctors(d.filter(x => x.status !== 'พักใช้งาน'))).catch(() => setDoctors([]));
+  }, []);
+
+  const handleSubmit = async () => {
+    setError('');
+    if (!cid) { setError('ไม่พบข้อมูลลูกค้า'); return; }
+    if (!date) { setError('กรุณาเลือกวันที่'); return; }
+    if (!startTime) { setError('กรุณาเลือกเวลาเริ่ม'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        date, startTime, endTime: endTime || startTime,
+        customerId: cid, customerName: cname, customerHN: chn,
+        appointmentType,
+        doctorId, doctorName,
+        roomName,
+        notes,
+        status: appt?.status || 'pending',
+      };
+      if (mode === 'edit' && appt) {
+        await updateBackendAppointment(appt.appointmentId || appt.id, payload);
+      } else {
+        await createBackendAppointment(payload);
+      }
+      await onSaved();
+    } catch (e) {
+      setError(e?.message || 'บันทึกล้มเหลว');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-form-title" onClick={onClose}>
+      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()} data-testid="customer-appt-form-modal">
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-emerald-400" />
+            <h3 id="appt-form-title" className="text-sm font-bold text-[var(--tx-heading)]">
+              {mode === 'edit' ? 'แก้ไขนัดหมาย' : 'เพิ่มนัดหมาย'}
+            </h3>
+          </div>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-900/30 border border-red-700/50 text-red-300 text-xs">{error}</div>
+          )}
+          <div className={`px-3 py-2 rounded-lg ${isDark ? 'bg-emerald-900/10 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-[var(--tx-muted)]">ลูกค้า</div>
+            <div className="text-sm font-bold text-[var(--tx-heading)]">{cname || '(ไม่พบชื่อ)'} {chn && <span className="text-xs text-[var(--tx-muted)]">{chn}</span>}</div>
+          </div>
+          <div data-testid="customer-appt-form-date">
+            <label className="block text-xs text-[var(--tx-muted)] mb-1">วันที่ <span className="text-red-400">*</span></label>
+            <DateField
+              value={date}
+              onChange={(v) => setDate(v)}
+              fieldClassName="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-[var(--tx-muted)] mb-1">เวลาเริ่ม <span className="text-red-400">*</span></label>
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+                data-testid="customer-appt-form-start"
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--tx-muted)] mb-1">เวลาสิ้นสุด</label>
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+                data-testid="customer-appt-form-end"
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--tx-muted)] mb-1">แพทย์ / ผู้ดูแล</label>
+            <select value={doctorId} onChange={e => {
+              const id = e.target.value;
+              setDoctorId(id);
+              const d = doctors.find(x => String(x.id) === id);
+              if (d) {
+                const composed = [d.prefix, d.firstname, d.lastname].filter(Boolean).join(' ').trim() || d.name || d.nickname || '';
+                setDoctorName(composed);
+              } else {
+                setDoctorName('');
+              }
+            }}
+              data-testid="customer-appt-form-doctor"
+              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="">— ไม่ระบุ —</option>
+              {doctors.map(d => {
+                const composed = [d.prefix, d.firstname, d.lastname].filter(Boolean).join(' ').trim() || d.name || d.nickname || '(ไม่มีชื่อ)';
+                return <option key={d.id} value={String(d.id)}>{composed}{d.position ? ` · ${d.position}` : ''}</option>;
+              })}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--tx-muted)] mb-1">ประเภท</label>
+            <select value={appointmentType} onChange={e => setAppointmentType(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="sales">ขาย</option>
+              <option value="followup">ติดตาม</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--tx-muted)] mb-1">ห้อง</label>
+            <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)}
+              placeholder="เช่น ห้องหัตถการ 1"
+              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--tx-muted)] mb-1">โน๊ต</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              rows={3}
+              placeholder="หมายเหตุเพิ่มเติม"
+              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-[var(--bd)] flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs bg-neutral-700 text-white hover:bg-neutral-600">ยกเลิก</button>
+          <button onClick={handleSubmit} disabled={saving}
+            data-testid="customer-appt-form-save"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 inline-flex items-center gap-1 disabled:opacity-50">
+            {saving ? <><Loader2 size={12} className="animate-spin" /> กำลังบันทึก...</> : <><Check size={12} /> บันทึก</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
