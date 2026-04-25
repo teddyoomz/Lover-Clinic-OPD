@@ -7,14 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 (Phase 14.7.C/D/E — AppointmentTab refactor + treatment-history redesign + Treatment Timeline Modal LIVE)
+- **Date last updated**: 2026-04-26 (Phase 14.7.F bug fix — image-only edit no longer triggers stock-reverse permission error)
 - **Branch**: `master`
-- **Last commit**: `f16cce2 feat(phase14.7.E): TreatmentTimelineModal — ProClinic ดูไทม์ไลน์ replication`
-- **Test count**: 4416/4416 full suite (+9 in 14.7.C + 39 in 14.7.D + 50 in 14.7.E)
+- **Last commit**: `93fffca fix(phase14.7.F): image-only edit no longer triggers stock-reverse permission error`
+- **Test count**: 4452/4452 full suite (+36 in 14.7.F S1-S3 stock-diff + rules guards)
 - **Build**: clean
-- **Deploy state**: ✅ **UP TO DATE** (V15 combined deploy fired 2026-04-26)
-  - **firestore:rules**: re-deployed (no rules diff; idempotent per V15). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
-  - **Vercel prod**: `a0f7dc4` aliased to https://lover-clinic-app.vercel.app — built in 11s, deploy completed in 33s.
+- **Deploy state**: ✅ **UP TO DATE** (second V15 combined deploy 2026-04-26)
+  - **firestore:rules**: deployed with be_stock_movements update narrowed (was `allow update: if false`, now allows ONLY reversedByMovementId field). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
+  - **Vercel prod**: `93fffca` aliased to https://lover-clinic-app.vercel.app — built 11s, deploy 32s.
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
