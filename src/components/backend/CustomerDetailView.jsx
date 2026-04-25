@@ -16,6 +16,7 @@ import {
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import DateField from '../DateField.jsx';
+import AppointmentFormModal from './AppointmentFormModal.jsx';
 import {
   TREATMENT_CERT_DOC_TYPES,
   TREATMENT_PRINT_DOC_TYPES,
@@ -1002,8 +1003,11 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
         <AppointmentFormModal
           mode={apptFormModal.mode}
           appt={apptFormModal.appt}
-          customer={customer}
-          isDark={isDark}
+          lockedCustomer={customer}
+          theme={theme}
+          // Customer-page modal: skip collision check (no calendar context).
+          // Holiday confirm still useful — keep on by default.
+          skipCollisionCheck={true}
           onClose={() => setApptFormModal(null)}
           onSaved={async () => {
             setApptFormModal(null);
@@ -1772,160 +1776,6 @@ function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit,
               />
             ))
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Light appointment form — only the fields a customer-page user typically
- * needs. Heavier features (recurring, holiday-gate, slot conflict) live in
- * the dedicated AppointmentTab. Pre-fills customer from props so the user
- * doesn't re-pick.
- */
-function AppointmentFormModal({ mode, appt, customer, isDark, onClose, onSaved }) {
-  const cid = customer?.proClinicId || '';
-  const cname = `${customer?.patientData?.prefix || ''} ${customer?.patientData?.firstName || ''} ${customer?.patientData?.lastName || ''}`.trim();
-  const chn = customer?.proClinicHN || '';
-  const [date, setDate] = useState(appt?.date || thaiTodayISO());
-  const [startTime, setStartTime] = useState(appt?.startTime || '10:00');
-  const [endTime, setEndTime] = useState(appt?.endTime || '10:30');
-  const [doctorName, setDoctorName] = useState(appt?.doctorName || '');
-  const [doctorId, setDoctorId] = useState(appt?.doctorId || '');
-  const [roomName, setRoomName] = useState(appt?.roomName || '');
-  const [notes, setNotes] = useState(appt?.notes || '');
-  const [appointmentType, setAppointmentType] = useState(appt?.appointmentType || 'sales');
-  const [doctors, setDoctors] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    getAllMasterDataItems('doctors').then(d => setDoctors(d.filter(x => x.status !== 'พักใช้งาน'))).catch(() => setDoctors([]));
-  }, []);
-
-  const handleSubmit = async () => {
-    setError('');
-    if (!cid) { setError('ไม่พบข้อมูลลูกค้า'); return; }
-    if (!date) { setError('กรุณาเลือกวันที่'); return; }
-    if (!startTime) { setError('กรุณาเลือกเวลาเริ่ม'); return; }
-    setSaving(true);
-    try {
-      const payload = {
-        date, startTime, endTime: endTime || startTime,
-        customerId: cid, customerName: cname, customerHN: chn,
-        appointmentType,
-        doctorId, doctorName,
-        roomName,
-        notes,
-        status: appt?.status || 'pending',
-      };
-      if (mode === 'edit' && appt) {
-        await updateBackendAppointment(appt.appointmentId || appt.id, payload);
-      } else {
-        await createBackendAppointment(payload);
-      }
-      await onSaved();
-    } catch (e) {
-      setError(e?.message || 'บันทึกล้มเหลว');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-form-title" onClick={onClose}>
-      <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()} data-testid="customer-appt-form-modal">
-        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-emerald-400" />
-            <h3 id="appt-form-title" className="text-sm font-bold text-[var(--tx-heading)]">
-              {mode === 'edit' ? 'แก้ไขนัดหมาย' : 'เพิ่มนัดหมาย'}
-            </h3>
-          </div>
-          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ปิด"><X size={18} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
-          {error && (
-            <div className="px-3 py-2 rounded-lg bg-red-900/30 border border-red-700/50 text-red-300 text-xs">{error}</div>
-          )}
-          <div className={`px-3 py-2 rounded-lg ${isDark ? 'bg-emerald-900/10 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-[var(--tx-muted)]">ลูกค้า</div>
-            <div className="text-sm font-bold text-[var(--tx-heading)]">{cname || '(ไม่พบชื่อ)'} {chn && <span className="text-xs text-[var(--tx-muted)]">{chn}</span>}</div>
-          </div>
-          <div data-testid="customer-appt-form-date">
-            <label className="block text-xs text-[var(--tx-muted)] mb-1">วันที่ <span className="text-red-400">*</span></label>
-            <DateField
-              value={date}
-              onChange={(v) => setDate(v)}
-              fieldClassName="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-[var(--tx-muted)] mb-1">เวลาเริ่ม <span className="text-red-400">*</span></label>
-              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                data-testid="customer-appt-form-start"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--tx-muted)] mb-1">เวลาสิ้นสุด</label>
-              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                data-testid="customer-appt-form-end"
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--tx-muted)] mb-1">แพทย์ / ผู้ดูแล</label>
-            <select value={doctorId} onChange={e => {
-              const id = e.target.value;
-              setDoctorId(id);
-              const d = doctors.find(x => String(x.id) === id);
-              if (d) {
-                const composed = [d.prefix, d.firstname, d.lastname].filter(Boolean).join(' ').trim() || d.name || d.nickname || '';
-                setDoctorName(composed);
-              } else {
-                setDoctorName('');
-              }
-            }}
-              data-testid="customer-appt-form-doctor"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-              <option value="">— ไม่ระบุ —</option>
-              {doctors.map(d => {
-                const composed = [d.prefix, d.firstname, d.lastname].filter(Boolean).join(' ').trim() || d.name || d.nickname || '(ไม่มีชื่อ)';
-                return <option key={d.id} value={String(d.id)}>{composed}{d.position ? ` · ${d.position}` : ''}</option>;
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--tx-muted)] mb-1">ประเภท</label>
-            <select value={appointmentType} onChange={e => setAppointmentType(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-              <option value="sales">ขาย</option>
-              <option value="followup">ติดตาม</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--tx-muted)] mb-1">ห้อง</label>
-            <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)}
-              placeholder="เช่น ห้องหัตถการ 1"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--tx-muted)] mb-1">โน๊ต</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)}
-              rows={3}
-              placeholder="หมายเหตุเพิ่มเติม"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-          </div>
-        </div>
-        <div className="px-5 py-3 border-t border-[var(--bd)] flex items-center justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs bg-neutral-700 text-white hover:bg-neutral-600">ยกเลิก</button>
-          <button onClick={handleSubmit} disabled={saving}
-            data-testid="customer-appt-form-save"
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 inline-flex items-center gap-1 disabled:opacity-50">
-            {saving ? <><Loader2 size={12} className="animate-spin" /> กำลังบันทึก...</> : <><Check size={12} /> บันทึก</>}
-          </button>
         </div>
       </div>
     </div>

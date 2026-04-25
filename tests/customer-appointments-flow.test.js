@@ -148,11 +148,12 @@ describe('F3: backendClient appointment helpers shape', () => {
 describe('F4: CustomerDetailView wiring (source-grep regression guards)', () => {
   const src = READ('src/components/backend/CustomerDetailView.jsx');
 
-  it('F4.1: imports the 4 appointment helpers', () => {
+  it('F4.1: imports the 4 appointment helpers + shared form modal', () => {
     expect(src).toMatch(/getCustomerAppointments/);
     expect(src).toMatch(/createBackendAppointment/);
     expect(src).toMatch(/updateBackendAppointment/);
     expect(src).toMatch(/deleteBackendAppointment/);
+    expect(src).toMatch(/from\s*['"]\.\/AppointmentFormModal\.jsx['"]/);
   });
 
   it('F4.2: state hooks are present', () => {
@@ -179,61 +180,89 @@ describe('F4: CustomerDetailView wiring (source-grep regression guards)', () => 
     expect(src).toMatch(/showApptListModal\s*&&[\s\S]*?<AppointmentListModal/);
   });
 
-  it('F4.7: AppointmentFormModal renders for both create and edit', () => {
+  it('F4.7: AppointmentFormModal renders with lockedCustomer + skipCollisionCheck', () => {
     expect(src).toMatch(/apptFormModal\s*&&[\s\S]*?<AppointmentFormModal/);
     expect(src).toMatch(/mode={apptFormModal\.mode}/);
-  });
-
-  it('F4.8: AppointmentFormModal pre-fills customer from props (cid + cname + chn)', () => {
-    expect(src).toMatch(/customer\?\.proClinicId/);
-    expect(src).toMatch(/customer\?\.patientData\?\.firstName/);
-  });
-
-  it('F4.9: AppointmentFormModal uses createBackendAppointment for create + updateBackendAppointment for edit', () => {
-    expect(src).toMatch(/await\s+createBackendAppointment\(payload\)/);
-    expect(src).toMatch(/await\s+updateBackendAppointment\(appt\.appointmentId/);
+    expect(src).toMatch(/lockedCustomer={customer}/);
+    expect(src).toMatch(/skipCollisionCheck={true}/);
   });
 
   it('F4.10: cancel handler calls deleteBackendAppointment + reload', () => {
     expect(src).toMatch(/await deleteBackendAppointment\(.+?\.appointmentId/);
   });
 
-  it('F4.11: AppointmentCard test ids exposed (edit, cancel, optional print)', () => {
+  it('F4.11: AppointmentCard test ids exposed (edit, cancel)', () => {
     expect(src).toMatch(/data-testid="customer-appt-edit"/);
     expect(src).toMatch(/data-testid="customer-appt-cancel"/);
   });
-
-  it('F4.12: form modal exposes test ids for date/start/end/doctor/save', () => {
-    expect(src).toMatch(/data-testid="customer-appt-form-date"/);
-    expect(src).toMatch(/data-testid="customer-appt-form-start"/);
-    expect(src).toMatch(/data-testid="customer-appt-form-end"/);
-    expect(src).toMatch(/data-testid="customer-appt-form-doctor"/);
-    expect(src).toMatch(/data-testid="customer-appt-form-save"/);
-  });
 });
 
-describe('F5: payload contract — created appointment shape', () => {
-  const src = READ('src/components/backend/CustomerDetailView.jsx');
+describe('F5: shared AppointmentFormModal — wiring + payload contract', () => {
+  const src = READ('src/components/backend/AppointmentFormModal.jsx');
 
-  it('F5.1: payload includes customerId/customerName/customerHN', () => {
-    expect(src).toMatch(/customerId:\s*cid/);
-    expect(src).toMatch(/customerName:\s*cname/);
-    expect(src).toMatch(/customerHN:\s*chn/);
+  it('F5.0: shared module exports default function', () => {
+    expect(src).toMatch(/export default function AppointmentFormModal/);
+  });
+
+  it('F5.1: payload includes customerId/customerName/customerHN from formData', () => {
+    expect(src).toMatch(/customerId:\s*formData\.customerId/);
+    expect(src).toMatch(/customerName:\s*formData\.customerName/);
+    expect(src).toMatch(/customerHN:\s*formData\.customerHN/);
   });
 
   it('F5.2: payload includes date + startTime + endTime', () => {
-    const m = src.match(/const payload = \{[\s\S]+?\};/);
-    expect(m).toBeTruthy();
-    expect(m[0]).toMatch(/date,/);
-    expect(m[0]).toMatch(/startTime,/);
-    expect(m[0]).toMatch(/endTime:/);
+    expect(src).toMatch(/date:\s*formData\.date/);
+    expect(src).toMatch(/startTime:\s*formData\.startTime/);
+    expect(src).toMatch(/endTime:\s*formData\.endTime\s*\|\|\s*formData\.startTime/);
   });
 
-  it('F5.3: payload defaults endTime to startTime when blank (no NaN range)', () => {
-    expect(src).toMatch(/endTime:\s*endTime\s*\|\|\s*startTime/);
+  it('F5.3: payload includes all AppointmentTab fields verbatim (advisor/doctor/assistants/room/channel/etc)', () => {
+    expect(src).toMatch(/advisorId:\s*formData\.advisorId/);
+    expect(src).toMatch(/advisorName:\s*formData\.advisorName/);
+    expect(src).toMatch(/doctorId:\s*formData\.doctorId/);
+    expect(src).toMatch(/doctorName:\s*formData\.doctorName/);
+    expect(src).toMatch(/assistantIds:\s*formData\.assistantIds/);
+    expect(src).toMatch(/roomName:\s*formData\.roomName/);
+    expect(src).toMatch(/channel:\s*formData\.channel/);
+    expect(src).toMatch(/appointmentTo:\s*formData\.appointmentTo/);
+    expect(src).toMatch(/expectedSales:\s*formData\.expectedSales/);
+    expect(src).toMatch(/preparation:\s*formData\.preparation/);
+    expect(src).toMatch(/customerNote:\s*formData\.customerNote/);
+    expect(src).toMatch(/notes:\s*formData\.notes/);
+    expect(src).toMatch(/appointmentColor:\s*formData\.appointmentColor/);
+    expect(src).toMatch(/lineNotify:\s*!!formData\.lineNotify/);
   });
 
-  it('F5.4: payload preserves status on edit, defaults pending on create', () => {
-    expect(src).toMatch(/status:\s*appt\?\.status\s*\|\|\s*['"]pending['"]/);
+  it('F5.4: payload status defaults pending on create, preserves on edit', () => {
+    expect(src).toMatch(/status:\s*formData\.status\s*\|\|\s*['"]pending['"]/);
+  });
+
+  it('F5.5: lockedCustomer mode pre-fills customerId/Name/HN AND hides search picker', () => {
+    expect(src).toMatch(/lockedCustomer\s*\?\s*\{[\s\S]+?proClinicId/);
+    expect(src).toMatch(/lockedCustomer \|\| formData\.customerName/);
+    // No clear-button on locked mode (X icon hidden)
+    expect(src).toMatch(/!lockedCustomer && \(/);
+  });
+
+  it('F5.6: skipCollisionCheck=true bypasses overlap warning', () => {
+    expect(src).toMatch(/if\s*\(\s*!skipCollisionCheck\s*\)/);
+  });
+
+  it('F5.7: skipHolidayCheck=true bypasses holiday confirm', () => {
+    expect(src).toMatch(/if\s*\(\s*mode === ['"]create['"]\s*&&\s*!skipHolidayCheck\s*\)/);
+  });
+
+  it('F5.8: edit-mode dispatches updateBackendAppointment, create-mode createBackendAppointment', () => {
+    expect(src).toMatch(/updateBackendAppointment\(appt\.appointmentId\s*\|\|\s*appt\.id/);
+    expect(src).toMatch(/createBackendAppointment\(payload\)/);
+  });
+
+  it('F5.9: recurring multi-write loop fires only on create + recurringOption=multiple', () => {
+    expect(src).toMatch(/formData\.recurringOption === ['"]multiple['"]/);
+    expect(src).toMatch(/for\s*\(\s*let\s+i\s*=\s*0;\s*i\s*<\s*times/);
+  });
+
+  it('F5.10: lockedCustomer mode does NOT fetch all customers (memory savings)', () => {
+    expect(src).toMatch(/if\s*\(\s*!lockedCustomer\s*\)\s*\{\s*getAllCustomers/);
   });
 });
