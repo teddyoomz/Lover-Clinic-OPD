@@ -290,6 +290,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Holds the courseId of the customer-course entry whose availableProducts
   // list is being picked. null = modal closed.
   const [pickModalCourseId, setPickModalCourseId] = useState(null);
+  // Phase 14.7.H follow-up I (2026-04-26) — reopen-add for previously-picked
+  // courses. Holds { pickedFromCourseId, courseName, options } when the user
+  // clicks "+ เพิ่มสินค้าจากคอร์สเดียวกัน". Modal lets them ADD new picks
+  // (not edit existing — see addPicksToResolvedGroup JSDoc).
+  const [reopenPickGroup, setReopenPickGroup] = useState(null);
   const [dfGroups, setDfGroups] = useState([]);
   const [dfStaffRates, setDfStaffRates] = useState([]);
   const [masterCourses, setMasterCourses] = useState([]);
@@ -3700,7 +3705,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             <p className={`text-[11px] italic text-center py-2 px-3 border-b ${isDark ? 'border-[#1a1a1a] text-teal-400/70' : 'border-gray-50 text-teal-600'}`}>
                               ยังไม่ได้เลือกสินค้า — กด "เลือกสินค้า" ด้านบน
                             </p>
-                          ) : course.products.map(product => {
+                          ) : (<>{course.products.map(product => {
                             const isSelected = selectedCourseItems.has(product.rowId);
                             const remainingNum = parseFloat(product.remaining) || 0;
                             const totalNum = parseFloat(product.total) || 0;
@@ -3729,6 +3734,29 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                               </label>
                             );
                           })}
+                          {/* Phase 14.7.H follow-up I (2026-04-26) — reopen-add.
+                              Show on courses that originated as pick-at-treatment
+                              and still carry the options snapshot (1st sibling).
+                              Lets the doctor pick MORE products from the same
+                              original course at a later visit. Add-only — does
+                              not edit existing entry qty (preserves deduction
+                              math). */}
+                          {course._pickGroupOptions && course._pickedFromCourseId && (
+                            <button
+                              type="button"
+                              onClick={() => setReopenPickGroup({
+                                pickedFromCourseId: course._pickedFromCourseId,
+                                courseName: course.courseName,
+                                options: course._pickGroupOptions,
+                              })}
+                              className={`flex items-center justify-center gap-1 w-full px-3 py-1.5 text-[11px] font-semibold border-b transition-colors ${isDark ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 border-[#1a1a1a]' : 'bg-teal-50 text-teal-600 hover:bg-teal-100 border-gray-50'}`}
+                              data-testid={`reopen-pick-${course._pickedFromCourseId}`}
+                              aria-label={`เพิ่มสินค้าจากคอร์ส ${course.courseName}`}
+                            >
+                              <Check size={10} /> เพิ่มสินค้าจากคอร์สเดียวกัน
+                            </button>
+                          )}
+                          </>)}
                         </div>
                       ))}
                       {customerCourses.filter(c => !c.promotionId).length === 0 && (
@@ -4594,6 +4622,39 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           />
         );
       })()}
+
+      {/* Phase 14.7.H follow-up I (2026-04-26) — reopen pick modal. */}
+      {reopenPickGroup && (
+        <PickProductsModal
+          courseName={reopenPickGroup.courseName + ' (เพิ่ม)'}
+          availableProducts={reopenPickGroup.options || []}
+          onCancel={() => setReopenPickGroup(null)}
+          onConfirm={async (picks) => {
+            // Persist new picks to be_customers as additional siblings,
+            // then re-fetch the customer doc + re-run mapRawCoursesToForm
+            // so options.customerCourses reflects the new entries on next
+            // render (without remounting TFP). Mirrors the load path at
+            // lines ~595-603 of this file.
+            if (saveTarget === 'backend' && customerId && reopenPickGroup.pickedFromCourseId) {
+              try {
+                const { addPicksToResolvedGroup, getCustomer: getBackendCustomer } =
+                  await import('../lib/backendClient.js');
+                await addPicksToResolvedGroup(
+                  customerId,
+                  reopenPickGroup.pickedFromCourseId,
+                  picks,
+                );
+                const fresh = await getBackendCustomer(customerId);
+                const newCustomerCourses = mapRawCoursesToForm(fresh?.courses || []);
+                setOptions(prev => ({ ...prev, customerCourses: newCustomerCourses }));
+              } catch (e) {
+                console.error('[TreatmentForm] reopen-add pick failed:', e);
+              }
+            }
+            setReopenPickGroup(null);
+          }}
+        />
+      )}
     </div>
   );
 }

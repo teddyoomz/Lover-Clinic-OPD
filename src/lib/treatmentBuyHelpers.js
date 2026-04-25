@@ -394,6 +394,13 @@ export function mapRawCoursesToForm(rawCourses) {
         courseType,
         isRealQty,
         isBuffet,
+        // Phase 14.7.H follow-up I (2026-04-26) — reopen-add wiring.
+        // Carry the group-id on EVERY sibling so the UI can detect "this
+        // course was originally a pick-at-treatment with N siblings". Carry
+        // the options snapshot only when present (1st sibling) so the UI
+        // can decide which entry surfaces the reopen button.
+        _pickedFromCourseId: c.pickedFromCourseId || null,
+        _pickGroupOptions: Array.isArray(c._pickGroupOptions) ? c._pickGroupOptions : null,
         products: [{
           rowId: `be-row-${idx}`,
           courseIndex: idx,

@@ -717,27 +717,107 @@ export async function resolvePickedCourseInCustomer(customerId, courseKey, picks
   if (valid.length === 0) throw new Error('No valid picks provided');
 
   const {
-    availableProducts: _discardOptions,
+    availableProducts: discardedOptions,
     needsPickSelection: _discardFlag,
     product: _discardProduct,
     qty: _discardQty,
-    courseId: _discardPickId,
+    courseId: discardedPickId,
     ...basePlaceholder
   } = placeholder;
 
+  // Phase 14.7.H follow-up I (2026-04-26) — reopen-add capability.
+  // Stamp `pickedFromCourseId` (= placeholder's stable id) on every
+  // resolved entry so siblings can be discovered later. The FIRST sibling
+  // additionally carries `_pickGroupOptions` — a snapshot of the original
+  // availableProducts list — so a later visit can revive the pick modal
+  // without re-fetching the master course (whose options may have been
+  // edited by an admin). Other siblings omit `_pickGroupOptions` to avoid
+  // bloating the customer doc with redundant copies.
+  const pickGroupOptions = Array.isArray(discardedOptions)
+    ? discardedOptions.map(p => ({ ...p }))
+    : null;
+
   const now = new Date().toISOString();
-  const resolvedEntries = valid.map(p => ({
+  const resolvedEntries = valid.map((p, i) => ({
     ...basePlaceholder,
     product: p.name || '',
     productId: p.productId != null ? String(p.productId) : '',
     qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
     status: 'กำลังใช้งาน',
     assignedAt: basePlaceholder.assignedAt || now,
+    pickedFromCourseId: discardedPickId || null,
+    ...(i === 0 && pickGroupOptions ? { _pickGroupOptions: pickGroupOptions } : {}),
   }));
 
   courses.splice(idx, 1, ...resolvedEntries);
   await updateCustomer(customerId, { courses });
   return { success: true, courses };
+}
+
+/**
+ * Phase 14.7.H follow-up I (2026-04-26) — reopen-add for pick-at-treatment.
+ *
+ * After an initial pick has been resolved (placeholder spliced into N
+ * standard entries), the customer may want to use MORE products from the
+ * same original course at a later visit. This helper appends new resolved
+ * entries beside the existing siblings without disturbing prior usage.
+ *
+ * Trade-off chosen (NOT supporting in-place qty edit): once an entry has
+ * deductions against it, retroactively changing its `total` would corrupt
+ * the deduction-history math. Adding new entries is additive and clean.
+ *
+ * @param {string} customerId
+ * @param {string} pickedFromCourseId — the placeholder's original courseId
+ *   (carried on every sibling as `pickedFromCourseId`).
+ * @param {Array<{productId, name, qty, unit}>} additionalPicks
+ * @returns {Promise<{success:boolean, courses:object[], appended:number}>}
+ */
+export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, additionalPicks) {
+  if (!pickedFromCourseId) throw new Error('pickedFromCourseId required');
+  const snap = await getDoc(customerDoc(customerId));
+  if (!snap.exists()) throw new Error('Customer not found');
+  const courses = [...(snap.data().courses || [])];
+
+  const siblings = courses.filter(c => c && c.pickedFromCourseId === pickedFromCourseId);
+  if (siblings.length === 0) {
+    throw new Error('No existing picked entries for group ' + pickedFromCourseId);
+  }
+  const valid = (Array.isArray(additionalPicks) ? additionalPicks : [])
+    .filter(p => p && Number(p.qty) > 0 && (p.name || p.productId));
+  if (valid.length === 0) throw new Error('No valid picks provided');
+
+  // Use first sibling as template — carries the inherited base meta from
+  // the original placeholder (parentName, source, linkedSaleId, expiry,
+  // courseType, isAddon, etc). Strip per-entry-mutating fields + the
+  // 1st-sibling-only `_pickGroupOptions` since new entries are NOT the
+  // first sibling.
+  const template = siblings[0];
+  const {
+    product: _stripProduct,
+    productId: _stripProductId,
+    qty: _stripQty,
+    status: _stripStatus,
+    assignedAt: _stripAssigned,
+    _pickGroupOptions: _stripOptions,
+    ...baseTpl
+  } = template;
+
+  const now = new Date().toISOString();
+  const newEntries = valid.map(p => ({
+    ...baseTpl,
+    product: p.name || '',
+    productId: p.productId != null ? String(p.productId) : '',
+    qty: buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง'),
+    status: 'กำลังใช้งาน',
+    assignedAt: now,
+    pickedFromCourseId,
+  }));
+
+  // Append at end — keeps existing siblings in place + their indexes stable
+  // (so any in-flight references to siblings[i] still resolve correctly).
+  courses.push(...newEntries);
+  await updateCustomer(customerId, { courses });
+  return { success: true, courses, appended: newEntries.length };
 }
 
 /** Exchange a product within a customer's course */
