@@ -16,6 +16,12 @@ import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
+// Phase 14.7.H follow-up A — branch-aware sale + stock writes (defensive
+// import: TreatmentFormPage is reachable both in BackendDashboard's
+// BranchProvider AND from AdminDashboard's create-treatment overlay where
+// no provider exists. The hook falls back to 'main' when no provider is
+// mounted, preserving legacy behavior.).
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 //
@@ -243,6 +249,10 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
 export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
+  // Phase 14.7.H follow-up A — resolve current branch for sale + stock writes.
+  // Falls back to 'main' when no BranchProvider is mounted (e.g. when
+  // TreatmentFormPage is opened from AdminDashboard create-treatment flow).
+  const { branchId: SELECTED_BRANCH_ID } = useSelectedBranch();
   const inputCls = `w-full rounded-lg px-3 py-2.5 text-sm outline-none border transition-all ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
   const labelCls = 'text-xs font-semibold text-gray-500 mb-1 block';
   const selectCls = inputCls;
@@ -2113,7 +2123,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               consumables: backendDetail.consumables || [],
               treatmentItems: backendDetail.treatmentItems || [],
             }, {
-              customerId, branchId: 'main',
+              customerId, branchId: SELECTED_BRANCH_ID,
               movementType: TREATMENT_TYPE,
               user: { userId: '', userName: '' },
             });
@@ -2123,7 +2133,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             await deductStockForTreatment(newTreatmentId, {
               medications: backendDetail.medications || [],
             }, {
-              customerId, branchId: 'main',
+              customerId, branchId: SELECTED_BRANCH_ID,
               movementType: TREATMENT_MED_TYPE,
               user: { userId: '', userName: '' },
             });
@@ -2193,7 +2203,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             try {
               const { deductStockForSale, deleteBackendSale } = await import('../lib/backendClient.js');
               await deductStockForSale(createRes.saleId, grouped, {
-                customerId, branchId: 'main',
+                customerId, branchId: SELECTED_BRANCH_ID,
                 user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
               });
             } catch (stockErr) {
@@ -2354,7 +2364,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 } catch (e) { console.warn('[TreatmentForm] setTreatmentLinkedSaleId (edit→sale) failed:', e); }
                 try {
                   await deductStockForSale(createRes.saleId, newGrouped, {
-                    customerId, branchId: 'main',
+                    customerId, branchId: SELECTED_BRANCH_ID,
                     user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
                   });
                 } catch (stockErr) {
@@ -2495,7 +2505,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               //     don't leave the sale in a half-reversed state silently.
               try {
                 await deductStockForSale(saleId, editGrouped, {
-                  customerId, branchId: 'main',
+                  customerId, branchId: SELECTED_BRANCH_ID,
                   user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
                 });
               } catch (stockErr) {

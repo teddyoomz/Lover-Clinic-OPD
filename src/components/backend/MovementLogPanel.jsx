@@ -8,8 +8,7 @@ import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-
 import { listStockMovements, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
-
-const BRANCH_ID = 'main';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 // Tailwind needs explicit class names in source for JIT — no dynamic `bg-${color}`.
 const BADGE_CLASSES = {
@@ -60,6 +59,8 @@ function fmtQty(n) {
 }
 
 export default function MovementLogPanel({ clinicSettings, theme }) {
+  // Phase 14.7.H follow-up A — branch-scoped audit log queries.
+  const { branchId: BRANCH_ID } = useSelectedBranch();
   const isDark = theme === 'dark';
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);

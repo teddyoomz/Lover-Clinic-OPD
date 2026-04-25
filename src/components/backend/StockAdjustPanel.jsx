@@ -17,8 +17,7 @@ import {
   getFirestore, collection, getDocs, query, where,
 } from 'firebase/firestore';
 import { db, appId, auth } from '../../firebase.js';
-
-const BRANCH_ID = 'main';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -33,6 +32,8 @@ function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFrac
 
 export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
+  // Phase 14.7.H follow-up A — branch-scoped batch lookups + adjust writes.
+  const { branchId: BRANCH_ID } = useSelectedBranch();
   const [adjustments, setAdjustments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);

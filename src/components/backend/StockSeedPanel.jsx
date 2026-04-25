@@ -17,8 +17,7 @@ import {
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO } from '../../utils.js';
-
-const BRANCH_ID = 'main';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -31,6 +30,8 @@ function currentAuditUser() {
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockSeedPanel({ onClose, onSaved }) {
+  // Phase 14.7.H follow-up A — branch-scoped seed batch creation.
+  const { branchId: BRANCH_ID } = useSelectedBranch();
   const today = thaiTodayISO();
   const [vendorName, setVendorName] = useState('ยอดยกมา');
   const [importedDate, setImportedDate] = useState(today);

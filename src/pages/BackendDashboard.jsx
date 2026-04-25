@@ -18,6 +18,8 @@ import { useTheme } from '../hooks/useTheme.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
 import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
+import { BranchProvider } from '../lib/BranchContext.jsx';
+import BranchSelector from '../components/backend/BranchSelector.jsx';
 
 import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
@@ -181,17 +183,22 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       >
         {linkCopied ? <><Check size={10} className="text-emerald-400" /> คัดลอกแล้ว</> : <><Link2 size={10} /> คัดลอกลิงก์</>}
       </button>
+      {/* Phase 14.7.H follow-up A — branch selector (auto-hides when <2 branches) */}
+      <BranchSelector className="hidden lg:flex" />
       {/* Desktop theme toggle in breadcrumb for a11y — mobile has one in TopBar */}
       <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
     </div>
   ) : (
-    // Desktop: show theme toggle in a tiny slot (mobile TopBar handles it).
-    <div className="hidden lg:flex items-center justify-end">
+    // Desktop: show theme toggle in a tiny slot (mobile TopBar handles it) +
+    // branch selector when ≥2 branches exist (auto-hides via BranchSelector).
+    <div className="hidden lg:flex items-center justify-end gap-3">
+      <BranchSelector />
       <ThemeToggle theme={theme} setTheme={setTheme} />
     </div>
   );
 
   return (
+    <BranchProvider>
     <BackendNav
       activeTabId={activeTab}
       onNavigate={handleNavigate}
@@ -431,6 +438,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         />
       )}
     </BackendNav>
+    </BranchProvider>
   );
 }
 

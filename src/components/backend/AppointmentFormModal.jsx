@@ -35,6 +35,7 @@ import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.j
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 // Constants — duplicated from AppointmentTab (will collapse into a shared
 // constants module in a follow-up Rule-of-3 sweep). Keep values identical.
@@ -122,6 +123,8 @@ export default function AppointmentFormModal({
   onClose,
 }) {
   const isDark = theme !== 'light';
+  // Phase 14.7.H follow-up A — branch-aware appointment writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
 
   // ── Form data ──
   const [formData, setFormData] = useState(() => {
@@ -315,6 +318,8 @@ export default function AppointmentFormModal({
         appointmentColor: formData.appointmentColor || '',
         lineNotify: !!formData.lineNotify,
         status: formData.status || 'pending',
+        // Phase 14.7.H follow-up A — branch-aware appointment writes.
+        branchId: selectedBranchId,
       };
 
       if (mode === 'edit' && appt) {

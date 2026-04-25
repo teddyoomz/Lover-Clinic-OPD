@@ -29,14 +29,15 @@ function currentAuditUser() {
 import DateField from '../DateField.jsx';
 import StockSeedPanel from './StockSeedPanel.jsx';
 import OrderDetailModal from './OrderDetailModal.jsx';
-
-const BRANCH_ID = 'main';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 // fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
+  // Phase 14.7.H follow-up A — branch-scoped order list + create.
+  const { branchId: BRANCH_ID } = useSelectedBranch();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);

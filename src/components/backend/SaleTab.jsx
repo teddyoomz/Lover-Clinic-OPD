@@ -21,9 +21,11 @@ import {
   findCouponByCode, listPromotions,
 } from '../../lib/backendClient.js';
 
-// Single-branch scaffold — matches DEFAULT_BRANCH_ID in src/lib/stockUtils.js.
-// Phase 8f will introduce a UI selector; until then every sale hits "main".
-const BRANCH_ID = 'main';
+// Phase 14.7.H follow-up A (2026-04-26) — branchId now resolved via
+// `useSelectedBranch()` hook from BranchContext. Single-branch clinics
+// fall back to 'main' (BranchContext's default), so existing behavior
+// is preserved 100%.
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { LocalInput, LocalTextarea } from '../form/LocalField.jsx';
@@ -62,6 +64,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  // Phase 14.7.H follow-up A — branch-aware sale writes.
+  const { branchId: BRANCH_ID } = useSelectedBranch();
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-rose-500' : 'bg-white border-gray-200 text-gray-800 focus:border-rose-400'}`;
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
 
