@@ -162,8 +162,12 @@ describe('F4: CustomerDetailView wiring (source-grep regression guards)', () => 
     expect(src).toMatch(/apptFormModal,\s*setApptFormModal/);
   });
 
-  it('F4.3: useEffect calls reloadCustomerAppointments on mount', () => {
-    expect(src).toMatch(/useEffect\(\(\)\s*=>\s*\{\s*reloadCustomerAppointments\(\)/);
+  it('F4.3: useEffect subscribes to listenToCustomerAppointments on mount (Phase 14.7.H follow-up B)', () => {
+    // Was: useEffect(() => { reloadCustomerAppointments() }, [reloadCustomerAppointments])
+    // Now: useEffect(() => { ...listenToCustomerAppointments(customer.proClinicId, ...) }, [customer?.proClinicId])
+    // Reload-callback retained as no-op shim for legacy callsites.
+    expect(src).toMatch(/listenToCustomerAppointments\(\s*customer\.proClinicId/);
+    expect(src).toMatch(/const\s+reloadCustomerAppointments/);
   });
 
   it('F4.4: + เพิ่มนัดหมาย button wired to setApptFormModal({mode:"create"})', () => {

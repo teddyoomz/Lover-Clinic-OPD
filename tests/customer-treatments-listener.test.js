@@ -155,12 +155,17 @@ describe('L3: CustomerDetailView uses the listener (not one-shot fetch)', () => 
   });
 
   it('L3.4: useEffect dep array DOES NOT include treatmentCount (the original bug source)', () => {
-    // The dep should be the customer ID alone — the listener handles updates.
-    // Test must fail if anyone re-adds treatmentCount to the deps.
-    const m = SRC.match(/listenToCustomerTreatments[\s\S]+?\}\,\s*\[([^\]]+)\]\s*\)/);
-    expect(m).toBeTruthy();
-    expect(m[1]).toMatch(/customer\?\.proClinicId/);
-    expect(m[1]).not.toMatch(/treatmentCount/);
+    // The dep should be `[customer?.proClinicId]` alone — the listener handles updates.
+    // First occurrence of `listenToCustomerTreatments` is the import; we want
+    // the CALL site which is the assignment `const unsubscribe = listenToCustomerTreatments(...)`.
+    const callIdx = SRC.indexOf('const unsubscribe = listenToCustomerTreatments');
+    expect(callIdx).toBeGreaterThan(-1);
+    const region = SRC.slice(callIdx, callIdx + 600);
+    // The useEffect's dep array is the FIRST `}, [...])` after the call.
+    const depMatch = region.match(/\},\s*\[([^\]]+)\]\s*\)/);
+    expect(depMatch).toBeTruthy();
+    expect(depMatch[1]).toMatch(/customer\?\.proClinicId/);
+    expect(depMatch[1]).not.toMatch(/treatmentCount/);
   });
 
   it('L3.5: onChange callback sets treatments + clears loading', () => {

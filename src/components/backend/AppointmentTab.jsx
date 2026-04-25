@@ -14,7 +14,7 @@ import {
   CalendarDays, CalendarX,
 } from 'lucide-react';
 import {
-  getAppointmentsByMonth, getAppointmentsByDate, listHolidays,
+  getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listHolidays,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
@@ -105,16 +105,34 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   }, [monthStr]);
 
   // ── Load day appointments (for time grid) ──
-  const loadDay = useCallback(async (d) => {
-    setDayLoading(true);
-    try {
-      const appts = await getAppointmentsByDate(d);
-      setDayAppts(appts);
-    } catch { setDayAppts([]); }
-    finally { setDayLoading(false); }
+  // Phase 14.7.H follow-up B (2026-04-26) — switched from one-shot fetch
+  // to onSnapshot listener via `listenToAppointmentsByDate`. Closes the
+  // multi-admin collision risk: previously two admins viewing the same
+  // day couldn't see each other's bookings without nav-and-back. Now any
+  // booking from any admin's tab surfaces here within ~1s.
+  // The legacy `loadDay` callback is preserved as a no-op shim so existing
+  // post-save callbacks (refreshAfterSave) don't need refactoring; the
+  // listener already ensures the data is fresh.
+  const loadDay = useCallback(async () => {
+    return Promise.resolve();
   }, []);
 
-  useEffect(() => { if (selectedDate) loadDay(selectedDate); }, [selectedDate, loadDay]);
+  useEffect(() => {
+    if (!selectedDate) return;
+    setDayLoading(true);
+    const unsubscribe = listenToAppointmentsByDate(
+      selectedDate,
+      (appts) => {
+        setDayAppts(appts);
+        setDayLoading(false);
+      },
+      () => {
+        setDayAppts([]);
+        setDayLoading(false);
+      },
+    );
+    return () => unsubscribe();
+  }, [selectedDate]);
 
   // ── Derived: rooms, doctors for the day ──
   // Cumulative across month navigation + persistent via localStorage. Bug

@@ -9,10 +9,13 @@ import {
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer
 } from 'lucide-react';
 import {
-  getCustomerTreatments, listenToCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
+  getCustomerTreatments, listenToCustomerTreatments,
+  getCustomerSales, listenToCustomerSales,
+  addCourseRemainingQty, getCustomer, getAllMasterDataItems,
   getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
   // Phase 14.7 — appointments-on-customer-detail (+ เพิ่มนัดหมาย, ดูทั้งหมด, etc.)
-  getCustomerAppointments, createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
+  getCustomerAppointments, listenToCustomerAppointments,
+  createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import DateField from '../DateField.jsx';
@@ -140,22 +143,32 @@ export default function CustomerDetailView({
   const [apptLoading, setApptLoading] = useState(false);
   const [showApptListModal, setShowApptListModal] = useState(false);
   const [apptFormModal, setApptFormModal] = useState(null); // { mode: 'create'|'edit', appt? }
+  // Phase 14.7.H follow-up B (2026-04-26) — appointments now flow via
+  // onSnapshot listener so creating a new appointment in AppointmentTab
+  // (or another tab) auto-refreshes the customer-page card without F5.
+  // The `reloadCustomerAppointments` callback is kept as a no-op fallback
+  // so callsites that explicitly trigger a reload after save (e.g. delete
+  // confirmation flows) still work — the listener already covers the
+  // refresh, so the manual reload is redundant but harmless.
   const reloadCustomerAppointments = useMemo(() => {
-    return () => {
-      if (!customer?.proClinicId) return Promise.resolve([]);
-      setApptLoading(true);
-      return getCustomerAppointments(customer.proClinicId)
-        .then(list => {
-          setCustomerAppointments(Array.isArray(list) ? list : []);
-          return list;
-        })
-        .catch(() => { setCustomerAppointments([]); return []; })
-        .finally(() => setApptLoading(false));
-    };
-  }, [customer?.proClinicId]);
+    return () => Promise.resolve(customerAppointments);
+  }, [customerAppointments]);
   useEffect(() => {
-    reloadCustomerAppointments();
-  }, [reloadCustomerAppointments]);
+    if (!customer?.proClinicId) return;
+    setApptLoading(true);
+    const unsubscribe = listenToCustomerAppointments(
+      customer.proClinicId,
+      (data) => {
+        setCustomerAppointments(Array.isArray(data) ? data : []);
+        setApptLoading(false);
+      },
+      () => {
+        setCustomerAppointments([]);
+        setApptLoading(false);
+      },
+    );
+    return () => unsubscribe();
+  }, [customer?.proClinicId]);
   // Compute next upcoming appointment (date >= today, sorted ascending)
   const nextUpcomingAppt = useMemo(() => {
     const today = thaiTodayISO();
@@ -224,12 +237,18 @@ export default function CustomerDetailView({
   useEffect(() => {
     if (!customer?.proClinicId) return;
     setSalesError('');
-    getCustomerSales(customer.proClinicId)
-      .then(setCustomerSales)
-      .catch(err => {
-        console.error('[CustomerDetailView] sales load failed:', err);
+    // Phase 14.7.H follow-up B (2026-04-26) — listener variant. Any sale
+    // created in SaleTab (this tab or another) auto-surfaces in the
+    // "ประวัติการซื้อ" tab without F5.
+    const unsubscribe = listenToCustomerSales(
+      customer.proClinicId,
+      setCustomerSales,
+      (err) => {
+        console.error('[CustomerDetailView] sales listener failed:', err);
         setSalesError('โหลดประวัติการซื้อไม่สำเร็จ');
-      });
+      },
+    );
+    return () => unsubscribe();
   }, [customer?.proClinicId]);
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';

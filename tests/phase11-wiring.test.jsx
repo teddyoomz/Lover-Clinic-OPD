@@ -32,6 +32,13 @@ vi.mock('../src/lib/backendClient.js', () => ({
   deleteBackendAppointment: vi.fn(),
   getAppointmentsByMonth: vi.fn(() => Promise.resolve({})),
   getAppointmentsByDate: vi.fn(() => Promise.resolve([])),
+  // Phase 14.7.H follow-up B — listener variant. Mock returns the same
+  // shape as onSnapshot: returns an unsubscribe function. Calls onChange
+  // synchronously with [] so the component lands in a stable empty state.
+  listenToAppointmentsByDate: (date, onChange) => {
+    if (onChange) onChange([]);
+    return () => {};
+  },
   getAllCustomers: vi.fn(() => Promise.resolve([])),
   getAllMasterDataItems: vi.fn(() => Promise.resolve({})),
   listHolidays: (...a) => mockListHolidays(...a),

@@ -855,6 +855,20 @@ export async function getCustomerAppointments(customerId) {
   return appts;
 }
 
+/**
+ * Real-time listener variant of `getCustomerAppointments`. Returns
+ * unsubscribe. Mirrors `listenToCustomerTreatments` shape (Phase 14.7.G).
+ * Phase 14.7.H follow-up B (2026-04-26).
+ */
+export function listenToCustomerAppointments(customerId, onChange, onError) {
+  const q = query(appointmentsCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    appts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    onChange(appts);
+  }, onError);
+}
+
 /** Get all appointments for a specific date (YYYY-MM-DD).
  *
  * Client-side filter via normalizeApptDate to tolerate drifted date formats
@@ -871,6 +885,35 @@ export async function getAppointmentsByDate(dateStr) {
     .map(a => ({ ...a, date: target })); // normalize outbound shape too
   appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
   return appts;
+}
+
+/**
+ * Real-time listener variant of `getAppointmentsByDate`. Returns
+ * unsubscribe. Phase 14.7.H follow-up B (2026-04-26) — closes the
+ * multi-admin calendar collision risk where two admins viewing the
+ * same day couldn't see each other's bookings without nav-and-back.
+ *
+ * Listens on the WHOLE collection (Firestore can't index by client-
+ * normalized date), then filters client-side by `normalizeApptDate(a.date)
+ * === target`. Cost: every appointment write fires the snapshot — for a
+ * clinic with thousands of appts this is non-trivial. Mitigation: the
+ * AppointmentTab caller subscribes per-day so this only runs when the
+ * tab is open and only one date is being watched.
+ */
+export function listenToAppointmentsByDate(dateStr, onChange, onError) {
+  const target = normalizeApptDate(dateStr);
+  if (!target) {
+    onChange?.([]);
+    return () => {};
+  }
+  return onSnapshot(appointmentsCol(), (snap) => {
+    const appts = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => normalizeApptDate(a.date) === target)
+      .map(a => ({ ...a, date: target }));
+    appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    onChange(appts);
+  }, onError);
 }
 
 // ─── Sale CRUD ──────────────────────────────────────────────────────────────
@@ -1072,6 +1115,21 @@ export async function getCustomerSales(customerId) {
   const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
   return sales;
+}
+
+/**
+ * Real-time listener variant of `getCustomerSales`. Returns unsubscribe.
+ * Phase 14.7.H follow-up B (2026-04-26) — closes the staleness gap where
+ * a sale created in SaleTab in another tab didn't surface in CustomerDetailView's
+ * "ประวัติการซื้อ" without F5. Mirrors `listenToCustomerTreatments` shape.
+ */
+export function listenToCustomerSales(customerId, onChange, onError) {
+  const q = query(salesCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
+    onChange(sales);
+  }, onError);
 }
 
 /** Get the sale auto-created from a treatment (by linkedTreatmentId). */
