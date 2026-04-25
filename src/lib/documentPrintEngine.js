@@ -229,13 +229,21 @@ export function buildPrintDocument({ template, context, paperSize = 'A4', langua
      <div> with min-height + border-bottom that act like textarea-style
      fill areas. Without the rule, text sits at TOP of the box. Use flex
      column + justify-content:flex-end so text grows from bottom up,
-     last line sitting just above the underline. */
+     last line sitting just above the underline.
+     white-space: pre-wrap preserves user-typed newlines as actual line
+     breaks on the printed page. */
   div[style*="border-bottom:1px dotted"][style*="min-height"],
   div[style*="border-bottom: 1px dotted"][style*="min-height"] {
     display: flex !important;
     flex-direction: column !important;
     justify-content: flex-end !important;
     padding-bottom: 2px !important;
+    white-space: pre-wrap !important;
+  }
+  /* Same line-break preservation for any other field-content box that
+     might receive multi-line user input (defensive). */
+  span[style*="border-bottom:1px dotted"][style*="display:inline-block"] {
+    white-space: pre-wrap !important;
   }
   /* Signature blocks — name + date below the signature line should be
      centered horizontally under the line, not left-aligned. Apply to

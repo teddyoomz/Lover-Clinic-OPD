@@ -585,6 +585,10 @@ export default function DocumentPrintModal({
                     flex-direction: column !important;
                     justify-content: flex-end !important;
                     padding-bottom: 2px !important;
+                    white-space: pre-wrap !important;
+                  }
+                  [data-testid="document-print-preview"] span[style*="border-bottom:1px dotted"][style*="display:inline-block"] {
+                    white-space: pre-wrap;
                   }
                   [data-testid="document-print-preview"] .sig-col,
                   [data-testid="document-print-preview"] .signature-col { text-align: center; }
@@ -689,11 +693,24 @@ function StaffSelectField({ field, value, list, onChange }) {
     if (p.nickname) return p.nickname;
     return '(ไม่มีชื่อ)';
   };
+  // 2026-04-25 — show ALL useful staff/doctor info as subtitle: position
+  // / license / nickname / email / branch. Helps user pick the right
+  // person when there are 27+ in the list. Each piece separated by " · ".
   const showSubtitle = (p) => {
-    const lic = p.licenseNo || p.medicalLicenseNo || '';
+    const parts = [];
     const role = p.position || p.role || '';
-    if (lic && role) return `${lic} · ${role}`;
-    return lic || role || '';
+    const lic = p.licenseNo || p.medicalLicenseNo || p.staffLicenseNo || '';
+    const nick = p.nickname || '';
+    const email = p.email || '';
+    const dept = p.department || p.section || '';
+    const phone = p.phone || p.tel || '';
+    if (role) parts.push(role);
+    if (lic) parts.push(`เลขที่ ${lic}`);
+    if (nick) parts.push(`ชื่อเล่น ${nick}`);
+    if (dept) parts.push(dept);
+    if (phone) parts.push(phone);
+    if (email) parts.push(email);
+    return parts.join(' · ');
   };
   // Filter by query — match composed name OR licenseNo
   const q = query.toLowerCase().trim();
