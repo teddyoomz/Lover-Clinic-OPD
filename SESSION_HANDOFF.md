@@ -7,14 +7,15 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 EOD — Phase 14.7.H multi-branch infrastructure shipped + comprehensive isolation testing
+- **Date last updated**: 2026-04-26 EOD session 2 — V21 lightbox fix + 14.7.H-D 6-collection wireup + EFG quick wins (period + finance listener + TDZ guard)
 - **Branch**: `master`
-- **Last commit**: `39ab33b feat(phase14.7.H-followup-A): multi-branch infrastructure (Option 1)`
-- **Test count**: 4586/4586 (+73 in 14.7.H — 47 BR + 26 BC; +27 in B; +8 in C; +4 in P0)
+- **Last commit**: `7a9c62d feat(phase14.7.H-followup-EFG): pre-Phase-15 quick wins (period + finance listener + TDZ guard)`
+- **Test count**: 4679/4679 (+93 this session — 6 BC2.spread + 15 TL9 + 32 PD + 22 LC6/LC7 + 14 TFP-HG + small adjustments)
 - **Build**: clean
-- **Deploy state**: ✅ **UP TO DATE** (third V15 combined deploy 2026-04-26)
-  - **firestore:rules**: idempotent fire (no diff this round; rule file already up-to-date). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
-  - **Vercel prod**: `a6ddc6c` aliased to https://lover-clinic-app.vercel.app — built 11s, deploy 32s.
+- **Deploy state**: ⚠️ **PARTIAL — production at `791b2de` (V21 + 14.7.H-D); EFG quick wins (`7a9c62d`) NOT YET DEPLOYED**
+  - **firestore:rules**: idempotent fire (no diff this round). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
+  - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app (built 11s, deploy 32s).
+  - **Pending deploy**: `7a9c62d` (period enforcement + listenToCustomerFinance + TFP TDZ guard) — user must say "deploy" THIS turn per V18.
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -32,10 +33,17 @@
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
 
-### Session 2026-04-26 EOD (full session, `0735a50` → `39ab33b`)
+### Session 2026-04-26 session 2 (3 production commits, `2ee6eeb` → `7a9c62d`)
+- ✅ **Phase 14.7.H Follow-up D** — wire branchId in 6 branch-future collections (be_quotations / be_vendor_sales / be_online_sales / be_sale_insurance_claims / be_expenses / be_staff_schedules); 6 form modals refactored + 6 BC2.spread tests + 6 matrix flips; mirrors AppointmentFormModal pattern from 14.7.H-A (`370854a`) **DEPLOYED**
+- ✅ **V21 violation entry + fix** — TreatmentTimelineModal lightbox (Chrome blocks `<a href="data:">`) + close-on-edit (modal z-100 was hiding TFP z-80); 15 TL9 tests + lessons (TL2.6+TL5.1 had encoded broken behavior in source-grep) (`791b2de`) **DEPLOYED via V15 combined deploy**
+- ✅ **Phase 14.7.H Follow-up E** — period + daysBeforeExpire integer/bound enforcement + buffet-must-have-expiry rule (V12.2b deferred); 32 PD1-PD6 tests + live preview_eval (12/12 cases pass) (`7a9c62d`) **NOT YET DEPLOYED**
+- ✅ **Phase 14.7.H Follow-up F** — listenToCustomerFinance bundle (4 inner listeners with coalesce: deposits + wallets + customer-doc-points + memberships); replaces Promise.all in CustomerDetailView; reloadCustomerFinance shim added; 22 LC6+LC7 tests + live preview_eval on customer 2853 (`7a9c62d`) **NOT YET DEPLOYED**
+- ✅ **Phase 14.7.H Follow-up G** — JSDoc HOOK-ORDER INVARIANT guard for TreatmentFormPage:1697 dfEntry useEffect (locks ordering vs upstream useMemo); 14 TFP-HG tests including line-number arithmetic guard (`7a9c62d`) **NOT YET DEPLOYED**
+
+### Session 2026-04-26 EOD session 1 (full session, `0735a50` → `39ab33b`)
 - ✅ **Phase 14.7.C** AppointmentTab refactor → shared AppointmentFormModal (`5897b59`)
 - ✅ **Phase 14.7.D** Treatment-history redesign + 5/page pagination + ProClinic-fidelity colors (`4f9e13e`)
-- ✅ **Phase 14.7.E** TreatmentTimelineModal — full ProClinic ดูไทม์ไลน์ replication, 50 TL1-TL8 tests (`f16cce2`)
+- ✅ **Phase 14.7.E** TreatmentTimelineModal — full ProClinic ดูไทม์ไลน์ replication, 50 TL1-TL8 tests (`f16cce2`) — **had 2 latent bugs fixed in V21**
 - ✅ **Phase 14.7.F** Image-only edit stock-reverse permission fix — pure helper + firestore.rules narrow + 36 tests (`93fffca`) **DEPLOYED**
 - ✅ **Phase 14.7.G** Treatment listener — onSnapshot real-time refresh on edit (no F5), 21 tests (`772ee8a`)
 - ✅ **V19 violation entry** + comprehensive firestore-rules audit (`fc8125b`)
@@ -77,33 +85,23 @@
 
 ## What's Next
 
-### Primary: Idle — production matches master, no code task in flight.
-
-### When user opens 2nd clinic branch (P1 — branch-future wireups)
-Six collections currently `branch-future` per `tests/branch-collection-coverage.test.js BC2.future` — their `firestore.rules` permit `branchId` filtering but their CRUD UIs don't yet thread it through. When the clinic actually uses multi-branch:
-- `be_quotations` — QuotationsTab form
-- `be_vendor_sales` — VendorSalesTab form
-- `be_online_sales` — OnlineSalesTab form
-- `be_sale_insurance_claims` — InsuranceClaimsTab form
-- `be_expenses` — ExpensesTab form
-- `be_staff_schedules` — StaffScheduleTab form
-
-Each is ~30-60min: add `useSelectedBranch()` in form modal + thread `branchId` into the `saveX(data)` payload + add a source-grep test (mirror `BC2.spread.be_appointments` pattern).
+### Primary: P0 user-gated deploy — `7a9c62d` (EFG quick wins) ready to ship
+Production at `791b2de` (V21 + 14.7.H-D). master 1 commit ahead with EFG quick wins. User says "deploy" → V15 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe).
 
 ### P1 polish queue (deferred to next session)
-- Pick-at-treatment partial-pick reopen (V12.2b note) — M (3-4h)
-- Period enforcement save-time validation (V12.2b note) — S (0.5-1h)
-- Bundle `listenToCustomerFinance` for deposits/wallets/points/membership — M (1h)
-- `listenToHolidays` + `listenToAllSales` — S each
+- Pick-at-treatment partial-pick reopen (V12.2b note) — M (3-4h) — **last remaining V12.2b deferred item**
+- `listenToHolidays` + `listenToAllSales` — S each (continue listener-cluster pattern)
 - TreatmentTimelineModal virtualization (only if 122-row customer reports lag) — M
-- JSDoc guard on TreatmentFormPage:1694 hook-order TDZ — S
 - Debug-level logging for ProClinic API silent-catch sites — M
 
-### Phase 15 readiness — UNBLOCKED
+### Phase 15 readiness — UNBLOCKED ✓
 - `be_branches` collection ✓
 - ProductGroups + Units ✓
-- BRANCH_ID hardcode REMOVED (this session) ✓
+- BRANCH_ID hardcode REMOVED ✓
 - Multi-branch reports filtering ✓ (queries accept branchId filter)
+- **All 13 branch-aware collections wired** (7 from 14.7.H-A + 6 from 14.7.H-D) ✓
+- **Period enforcement (V12.2b deferred)** ✓
+- **Real-time finance listener** ✓
 - **Phase 15 Central Stock can now be planned + started.** Skip if clinic stays single-branch.
 
 ### Phase 14 Doc verification queue (10 done / 6 remaining)
@@ -139,13 +137,13 @@ Each is ~30-60min: add `useSelectedBranch()` in form modal + thread `branchId` i
 
 ## Outstanding User Actions (NOT auto-run)
 
-_None._ Production is up-to-date with master `a6ddc6c`. Multi-branch infrastructure live (auto-hidden until clinic adds a 2nd branch). Next code work awaits user direction.
+- **`vercel --prod` for `7a9c62d`** — EFG quick wins (period enforcement + listenToCustomerFinance + TFP TDZ guard) committed + pushed but NOT yet deployed. User must say "deploy" THIS turn for next deploy. Per V18 — no roll-over. V15 combined: "deploy" = vercel + firestore:rules in parallel with Probe-Deploy-Probe.
 
 ---
 
 ## Blockers
 
-None code-side. Production deploy gap of 13 commits (Phase 14.6 entire UX overhaul + Phase 14.7 customer appointments) — invisible to live users until deploy.
+None code-side. Production deploy gap of 1 commit (EFG quick wins) — invisible to live users until next deploy.
 
 ---
 
@@ -153,17 +151,18 @@ None code-side. Production deploy gap of 13 commits (Phase 14.6 entire UX overha
 
 - **Doc 13/15 deferred to Phase 16** — chart (canvas drawing) / treatment-template (dental chart) are graphical surfaces beyond seed templates.
 - **Phase 14.4 G5 customer-product-change NOT STARTED** — bigger feature (course exchange + refund). XL effort.
-- **Pick-at-treatment partial-pick reopen** (V12.2b note) — user picks subset, can't reopen to add more. M effort, defer to polish.
-- **Period enforcement** (V12.2b) — schema preserves field, no save-time validation. S effort, defer to polish.
+- **Pick-at-treatment partial-pick reopen** (V12.2b note) — user picks subset, can't reopen to add more. M effort, defer to polish. **Last remaining V12.2b deferred item.**
+- ~~Period enforcement (V12.2b)~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-E).
+- ~~Hook-order TDZ JSDoc guard on TreatmentFormPage:1694~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-G).
+- ~~Bundle `listenToCustomerFinance`~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-F).
 - **Phase 14.8/9/10/11 print-form roadmap** — pre-flight + signature canvas + PDF export + audit log + watermark + email/LINE delivery + bulk print + QR embed + visual designer. Tracked in `~/.claude/projects/F--LoverClinic-app/memory/project_print_form_world_class_roadmap.md`. XL each, defer.
-- **Hook-order TDZ in TreatmentFormPage:1694** — fragile placement of `dfEntry` auto-populate hook (must follow specific memo decls else blank-screen crash). No lint protection. S to add JSDoc guard.
 - **ProClinic API silent-catch logging** — 35+ intentional `/* best effort */` blocks; debug observability gap. M to add structured logger.
 
 ---
 
 ## Violations This Session
 
-- **V18** (`8d13284`, 2026-04-25) — `vercel --prod` AGAIN without re-asking (V4/V7 THIRD repeat). User: "ใครให้มึง deply เองไอ้สัส". Killed task before reaching production. Permanent reminder: every `vercel --prod` requires user typing "deploy" verbatim THIS turn, no roll-over from previous deploys.
+- **V21** (`791b2de`, 2026-04-26) — Two latent UI bugs in shipped TreatmentTimelineModal: image click blocked by Chrome `<a href="data:">` policy + edit button hidden behind modal stacking (z-100 covers TFP z-80). Source-grep tests TL2.6/TL5.1 had **encoded broken behavior** in their assertions. **Lesson**: any new click handler test must pair shape grep with runtime outcome assertion (preview_eval or RTL). 15 TL9 tests + V-entry locked.
 
 ---
 
@@ -172,42 +171,41 @@ None code-side. Production deploy gap of 13 commits (Phase 14.6 entire UX overha
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-26 end-of-session.
+Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 2.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — this file)
-3. .agents/active.md (hot state — production at a6ddc6c)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V20)
-5. .agents/sessions/2026-04-26-phase14.7H-multi-branch-isolation.md (full session detail)
+2. SESSION_HANDOFF.md (cross-session state of truth — master = 7a9c62d)
+3. .agents/active.md (hot state — production at 791b2de, master 1 ahead)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V21)
+5. .agents/sessions/2026-04-26-pre-phase15-quickwins.md (this session detail)
 
 Status summary:
-- master = 2ee6eeb, 4586/4586 tests passing, build clean
-- Production: a6ddc6c LIVE — 14.7.C/D/E/F/G + 14.7.H-A/B/C all deployed
-- Multi-branch infrastructure (Option 1) shipped + comprehensive isolation
-  testing proven against real Firestore (cross-branch transfer A→B with
-  movement.branchId attribution correct on each leg)
-- 6 collections classified as `branch-future` per BC2.future — wireup
-  deferred until clinic opens 2nd branch
-- V19 + V20 entries logged
+- master = 7a9c62d, 4679/4679 tests passing, build clean
+- Production: 791b2de LIVE — V21 fix + 14.7.H-D wireup deployed
+- master 1 commit ahead with EFG quick wins (period enforcement +
+  listenToCustomerFinance + TFP hook-order JSDoc guard) NOT YET DEPLOYED
+- V21 entry logged
+- Phase 15 (Central Stock Conditional) is now technically UNBLOCKED
 
 Next action (when user gives go-ahead):
-- If clinic opens 2nd branch: ship branch-future wireups for the 6
-  collections (be_quotations / be_vendor_sales / be_online_sales /
-  be_sale_insurance_claims / be_expenses / be_staff_schedules). Each is
-  30-60min: add useSelectedBranch + thread branchId + source-grep test.
-- Else: tackle P1 polish per .agents/sessions/2026-04-26-*.md "Next todo":
-  partial-pick reopen, period enforcement, finSummary listener, etc.
+- If user wants EFG live: V15 combined deploy of 7a9c62d (vercel +
+  firestore:rules with full Probe-Deploy-Probe per Rule B)
+- If user wants more polish before Phase 15: pick-at-treatment
+  partial-pick reopen (last V12.2b deferred, M ~3-4h)
+- If user wants to start Phase 15: Central Stock Conditional planning
 
 Outstanding user-triggered actions (NOT auto-run):
-None. Production matches master.
+- vercel --prod for 7a9c62d (EFG quick wins)
 
 Rules:
 - No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
 - V15 combined: "deploy" = vercel + firestore:rules in parallel
-- Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix (V1/V9)
+- Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix (V1/V9/V19)
 - Multi-branch decision is locked at Option 1 (V20) — don't re-debate
 - be_stock_movements update narrowed to reversedByMovementId only (V19)
+- V21 lesson: source-grep tests can encode broken behavior — pair with
+  runtime outcome assertions (preview_eval or RTL)
 - Every bug → test + audit invariant + V-entry (Rule D + Rule I)
 
 Invoke /session-start to boot context.
