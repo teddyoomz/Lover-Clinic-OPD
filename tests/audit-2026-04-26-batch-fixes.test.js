@@ -261,6 +261,47 @@ describe('AB4: RP5 silent catches migrated to debugLog', () => {
 // don't "fix" by adding reverseStockForTreatment.
 // ═══════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════
+// AB6 — RP1/AV1 IIFE JSX refactor: render-time IIFEs at TFP:3286 + 4580
+// extracted to component-scope useMemo + plain conditional render. Locks
+// the rule-alignment fix so future contributors don't reintroduce the
+// pattern.
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('AB6: RP1/AV1 IIFE JSX refactor', () => {
+  const SRC = READ('src/components/TreatmentFormPage.jsx');
+
+  it('AB6.1: dfGrandTotal extracted to component-scope useMemo', () => {
+    expect(SRC).toMatch(/const dfGrandTotal = useMemo\(\(\) => \{[\s\S]+?\}, \[dfEntries, treatmentCoursesForDf\]\)/);
+  });
+
+  it('AB6.2: pickModalCourse extracted to component-scope useMemo', () => {
+    expect(SRC).toMatch(/const pickModalCourse = useMemo\(\(\) => \{[\s\S]+?\}, \[pickModalCourseId, options\?\.customerCourses\]\)/);
+  });
+
+  it('AB6.3: render uses dfGrandTotal directly (no IIFE wrapper)', () => {
+    expect(SRC).toMatch(/dfGrandTotal\.toLocaleString\(['"]th-TH['"]/);
+  });
+
+  it('AB6.4: render uses {pickModalCourse && (...)} pattern (no IIFE)', () => {
+    expect(SRC).toMatch(/\{pickModalCourse\s*&&\s*\(\s*<PickProductsModal/);
+  });
+
+  it('AB6.5: ANTI-REGRESSION — no IIFE JSX in TFP (any `{(() =>` followed by `})()}`)', () => {
+    // Pattern to catch: `{(() => { ... })()}` in JSX. Must remain ZERO
+    // matches after the refactor. Future drift = test fails.
+    const matches = SRC.match(/\{\s*\(\(\)\s*=>\s*\{[\s\S]+?\}\)\(\)\s*\}/g) || [];
+    expect(matches).toHaveLength(0);
+  });
+
+  it('AB6.6: Esc/conditional pattern preserved (no JSX behavior regression)', () => {
+    // Verify the modal still gates on pickModalCourse truthy + that the
+    // grand-total still gates on dfEntries.length > 0
+    expect(SRC).toMatch(/\{pickModalCourse\s*&&/);
+    expect(SRC).toMatch(/\{dfEntries\.length\s*>\s*0\s*&&/);
+  });
+});
+
 describe('AB5: C3 deleteBackendTreatment design-intent lock', () => {
   const SRC = READ('src/lib/backendClient.js');
 

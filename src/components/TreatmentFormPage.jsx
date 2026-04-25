@@ -1683,6 +1683,34 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     return out;
   }, [options?.customerCourses, selectedCourseItems, masterCourseIdByName, treatmentItems, purchasedItems]);
 
+  // Audit P2 (2026-04-26 RP1/AV1): pick-modal course lookup. Extracted
+  // from render-time IIFE at TFP:4589 (anti-IIFE-JSX rule alignment).
+  // Returns null when modal closed OR course not found in customerCourses.
+  const pickModalCourse = useMemo(() => {
+    if (!pickModalCourseId) return null;
+    return (options?.customerCourses || []).find(c => c.courseId === pickModalCourseId) || null;
+  }, [pickModalCourseId, options?.customerCourses]);
+
+  // Audit P2 (2026-04-26 RP1/AV1): grand-total baht sum across all DF
+  // entries (percent + baht combined). Extracted from a render-time IIFE
+  // at TFP:3287 to align with CLAUDE.md anti-IIFE-JSX rule. Pure compute
+  // depending on dfEntries + treatmentCoursesForDf — useMemo memoises so
+  // the render-loop cost stays bounded.
+  const dfGrandTotal = useMemo(() => {
+    const priceByCourseId = new Map(
+      (treatmentCoursesForDf || []).map(c => [String(c.courseId), Number(c.price) || 0])
+    );
+    return dfEntries.reduce((sum, e) => {
+      const enabled = (e.rows || []).filter(r => r.enabled);
+      const bahtSum = enabled.filter(r => r.type === 'baht').reduce((s, r) => s + (Number(r.value) || 0), 0);
+      const percentSum = enabled.filter(r => r.type === 'percent').reduce((s, r) => {
+        const price = priceByCourseId.get(String(r.courseId)) || 0;
+        return s + (price * (Number(r.value) || 0) / 100);
+      }, 0);
+      return sum + bahtSum + percentSum;
+    }, 0);
+  }, [dfEntries, treatmentCoursesForDf]);
+
   // Combined people list (doctors + assistants) for DfEntryModal picker.
   // Each carries `position` + `defaultDfGroupId` so the modal can auto-fill
   // the group dropdown when the user selects a person.
@@ -3283,29 +3311,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   );
                 })}
                 {/* Phase 12.2b follow-up (2026-04-24): grand-total baht
-                    sum across all entries (percent + baht combined). */}
-                {(() => {
-                  const priceByCourseId = new Map(
-                    (treatmentCoursesForDf || []).map(c => [String(c.courseId), Number(c.price) || 0])
-                  );
-                  const grandTotal = dfEntries.reduce((sum, e) => {
-                    const enabled = (e.rows || []).filter(r => r.enabled);
-                    const bahtSum = enabled.filter(r => r.type === 'baht').reduce((s, r) => s + (Number(r.value) || 0), 0);
-                    const percentSum = enabled.filter(r => r.type === 'percent').reduce((s, r) => {
-                      const price = priceByCourseId.get(String(r.courseId)) || 0;
-                      return s + (price * (Number(r.value) || 0) / 100);
-                    }, 0);
-                    return sum + bahtSum + percentSum;
-                  }, 0);
-                  return (
-                    <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
-                      <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น · {dfEntries.length} รายการ</span>
-                      <span className="font-mono tabular-nums" style={{ color: '#14b8a6' }}>
-                        ฿{grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  );
-                })()}
+                    sum across all entries (percent + baht combined).
+                    Audit 2026-04-26 RP1/AV1: extracted to dfGrandTotal
+                    useMemo at component scope (~line 1690). */}
+                {dfEntries.length > 0 && (
+                  <div className={`flex justify-between pt-2 mt-1 border-t text-xs font-bold ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+                    <span style={{ color: '#14b8a6' }}>รวมทั้งสิ้น · {dfEntries.length} รายการ</span>
+                    <span className="font-mono tabular-nums" style={{ color: '#14b8a6' }}>
+                      ฿{dfGrandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </FormSection>
@@ -4577,52 +4593,51 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         />
       )}
 
-      {/* ── Pick Products Modal (Phase 12.2b เลือกสินค้าตามจริง) ────────── */}
-      {pickModalCourseId && (() => {
-        const course = (options?.customerCourses || []).find(c => c.courseId === pickModalCourseId);
-        if (!course) return null;
-        return (
-          <PickProductsModal
-            courseName={course.courseName}
-            availableProducts={course.availableProducts || []}
-            onCancel={() => setPickModalCourseId(null)}
-            onConfirm={async (picks) => {
-              // Phase 12.2b follow-up (2026-04-24): resolve the
-              // placeholder entry with the user's picks — populate
-              // products[] and clear needsPickSelection. Courses then
-              // render as standard sub-rows with remaining tracking,
-              // tick-to-treat, stock deduction.
-              setOptions((prev) => {
-                if (!prev) return prev;
-                const list = (prev.customerCourses || []).map((c) => {
-                  if (c.courseId !== pickModalCourseId) return c;
-                  return resolvePickedCourseEntry(c, picks);
-                });
-                return { ...prev, customerCourses: list };
+      {/* ── Pick Products Modal (Phase 12.2b เลือกสินค้าตามจริง) ──────────
+          Audit 2026-04-26 RP1/AV1: refactored from render-time IIFE to
+          useMemo + conditional render. pickModalCourse defined at
+          ~line 1696. */}
+      {pickModalCourse && (
+        <PickProductsModal
+          courseName={pickModalCourse.courseName}
+          availableProducts={pickModalCourse.availableProducts || []}
+          onCancel={() => setPickModalCourseId(null)}
+          onConfirm={async (picks) => {
+            // Phase 12.2b follow-up (2026-04-24): resolve the
+            // placeholder entry with the user's picks — populate
+            // products[] and clear needsPickSelection. Courses then
+            // render as standard sub-rows with remaining tracking,
+            // tick-to-treat, stock deduction.
+            setOptions((prev) => {
+              if (!prev) return prev;
+              const list = (prev.customerCourses || []).map((c) => {
+                if (c.courseId !== pickModalCourseId) return c;
+                return resolvePickedCourseEntry(c, picks);
               });
-              // Persist to be_customers when the placeholder came from
-              // an earlier-visit sale (i.e. it's a be_customers.courses
-              // entry, not an in-visit ซื้อเพิ่ม item). `_beCourseId` /
-              // `_beCourseIndex` are stamped by customerCoursesForForm
-              // only in that case. Prefer the persistent courseId —
-              // it survives index shift from resolving OTHER
-              // placeholders on the same customer in the same session.
-              const isPersistedPlaceholder = course._beCourseId != null
-                || typeof course._beCourseIndex === 'number';
-              if (saveTarget === 'backend' && customerId && isPersistedPlaceholder) {
-                try {
-                  const { resolvePickedCourseInCustomer } = await import('../lib/backendClient.js');
-                  const key = course._beCourseId || course._beCourseIndex;
-                  await resolvePickedCourseInCustomer(customerId, key, picks);
-                } catch (e) {
-                  console.error('[TreatmentForm] persist pick-at-treatment pick failed:', e);
-                }
+              return { ...prev, customerCourses: list };
+            });
+            // Persist to be_customers when the placeholder came from
+            // an earlier-visit sale (i.e. it's a be_customers.courses
+            // entry, not an in-visit ซื้อเพิ่ม item). `_beCourseId` /
+            // `_beCourseIndex` are stamped by customerCoursesForForm
+            // only in that case. Prefer the persistent courseId —
+            // it survives index shift from resolving OTHER
+            // placeholders on the same customer in the same session.
+            const isPersistedPlaceholder = pickModalCourse._beCourseId != null
+              || typeof pickModalCourse._beCourseIndex === 'number';
+            if (saveTarget === 'backend' && customerId && isPersistedPlaceholder) {
+              try {
+                const { resolvePickedCourseInCustomer } = await import('../lib/backendClient.js');
+                const key = pickModalCourse._beCourseId || pickModalCourse._beCourseIndex;
+                await resolvePickedCourseInCustomer(customerId, key, picks);
+              } catch (e) {
+                console.error('[TreatmentForm] persist pick-at-treatment pick failed:', e);
               }
-              setPickModalCourseId(null);
-            }}
-          />
-        );
-      })()}
+            }
+            setPickModalCourseId(null);
+          }}
+        />
+      )}
 
       {/* Phase 14.7.H follow-up I (2026-04-26) — reopen pick modal. */}
       {reopenPickGroup && (

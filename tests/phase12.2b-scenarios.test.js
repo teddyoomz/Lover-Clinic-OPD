@@ -1184,9 +1184,12 @@ describe('Scenario 21 — เลือกสินค้าตามจริง
     const ctx = src.slice(Math.max(0, onConfirmIdx - 800), onConfirmIdx + 200);
     expect(ctx).toMatch(/saveTarget\s*===\s*'backend'/);
     expect(ctx).toContain('customerId');
-    // Must pass either the persistent courseId OR the index fallback
-    expect(ctx).toContain('course._beCourseId');
-    expect(ctx).toContain('course._beCourseIndex');
+    // Must pass either the persistent courseId OR the index fallback.
+    // Audit 2026-04-26 RP1/AV1: variable was renamed `course` →
+    // `pickModalCourse` after IIFE-JSX refactor; field-access pattern
+    // is what matters, not the holder name.
+    expect(ctx).toMatch(/(?:course|pickModalCourse)\._beCourseId/);
+    expect(ctx).toMatch(/(?:course|pickModalCourse)\._beCourseIndex/);
   });
 
   it('S21.9: buildPurchasedCourseEntry pick-at-treatment with empty products → empty availableProducts', () => {
