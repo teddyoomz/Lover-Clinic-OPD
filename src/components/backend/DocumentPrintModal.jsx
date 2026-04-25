@@ -579,6 +579,13 @@ export default function DocumentPrintModal({
                     padding-bottom: 2px !important;
                     vertical-align: bottom !important;
                   }
+                  [data-testid="document-print-preview"] div[style*="border-bottom:1px dotted"][style*="min-height"],
+                  [data-testid="document-print-preview"] div[style*="border-bottom: 1px dotted"][style*="min-height"] {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    justify-content: flex-end !important;
+                    padding-bottom: 2px !important;
+                  }
                   [data-testid="document-print-preview"] .sig-col,
                   [data-testid="document-print-preview"] .signature-col { text-align: center; }
                 `}</style>

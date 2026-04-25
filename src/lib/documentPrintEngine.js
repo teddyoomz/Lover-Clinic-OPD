@@ -224,6 +224,19 @@ export function buildPrintDocument({ template, context, paperSize = 'A4', langua
     padding-bottom: 2px !important;
     vertical-align: bottom !important;
   }
+  /* 2026-04-25 — multi-line content boxes (chart CC/HPI/PMH/PE/Tx Plan,
+     plus cert findings/recommendation/treatment fields). These are
+     <div> with min-height + border-bottom that act like textarea-style
+     fill areas. Without the rule, text sits at TOP of the box. Use flex
+     column + justify-content:flex-end so text grows from bottom up,
+     last line sitting just above the underline. */
+  div[style*="border-bottom:1px dotted"][style*="min-height"],
+  div[style*="border-bottom: 1px dotted"][style*="min-height"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    padding-bottom: 2px !important;
+  }
   /* Signature blocks — name + date below the signature line should be
      centered horizontally under the line, not left-aligned. Apply to
      every direct child div of a flex signature column. */
