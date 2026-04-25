@@ -11,6 +11,7 @@ export const DEFAULT_CLINIC_SETTINGS = {
   clinicAddressEn: '',
   clinicLicenseNo: '',  // เลขที่ใบอนุญาตประกอบกิจการสถานพยาบาล
   clinicTaxId: '',
+  clinicEmail: '',      // อีเมลคลินิกสำหรับเอกสารและการติดต่อ
   clinicSubtitle: '',
   logoUrl: '',
   logoUrlLight: '',

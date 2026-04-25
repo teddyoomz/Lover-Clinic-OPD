@@ -128,6 +128,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         clinicAddressEn: settings.clinicAddressEn?.trim() || '',
         clinicLicenseNo: settings.clinicLicenseNo?.trim() || '',
         clinicTaxId: settings.clinicTaxId?.trim() || '',
+        clinicEmail: settings.clinicEmail?.trim() || '',
         clinicSubtitle: settings.clinicSubtitle.trim(),
         logoUrl: settings.logoUrl,
         logoUrlLight: settings.logoUrlLight || '',
@@ -420,6 +421,14 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
                 placeholder="No., Soi, Road, Sub-district, District, Province, Postal code"
                 rows={2}
                 className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-gray-600 mb-1">อีเมลคลินิก (Clinic Email — สำหรับเอกสารและการติดต่อ)</label>
+              <input type="email"
+                value={settings.clinicEmail || ''}
+                onChange={e => setSettings(prev => ({ ...prev, clinicEmail: e.target.value }))}
+                placeholder="info@clinic.com"
+                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
             </div>
           </div>
         </div>

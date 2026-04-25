@@ -9,8 +9,8 @@
 //
 // Rule E: Firestore-only — reads be_document_templates, no ProClinic calls.
 
-import { useState, useEffect, useMemo } from 'react';
-import { FileText, Printer, ChevronLeft, X, Loader2, Search } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import { listDocumentTemplates, getNextCertNumber } from '../../lib/backendClient.js';
 import {
@@ -20,6 +20,20 @@ import { printDocument, buildPrintContext, renderTemplate } from '../../lib/docu
 
 const STEP_PICK = 'pick';
 const STEP_FILL = 'fill';
+
+// Phase 14.x — paper size dimensions (in mm) for the in-modal preview.
+// Used to render preview at TRUE paper size + scale-to-fit so the user
+// always sees the entire page regardless of monitor / browser zoom.
+// Keep in sync with documentTemplateValidation.PAPER_SIZES.
+const PAPER_DIMENSIONS_MM = {
+  'A4':            { width: 210, height: 297, padding: 15 },
+  'A5':            { width: 148, height: 210, padding: 12 },
+  'label-57x32':   { width:  57, height:  32, padding:  2 },
+};
+// Defensive fallback (unknown paper size → A4 layout)
+const PAPER_FALLBACK = PAPER_DIMENSIONS_MM.A4;
+// 1mm = 96 / 25.4 css px (standard CSS unit conversion)
+const MM_TO_PX = 96 / 25.4;
 
 export default function DocumentPrintModal({
   open,
@@ -148,6 +162,51 @@ export default function DocumentPrintModal({
     });
     return renderTemplate(selected.htmlTemplate || '', ctx);
   }, [selected, values, clinicSettings, customer, language, toggles]);
+
+  // Phase 14.x — paper-size-aware preview scaling. The preview pane should
+  // ALWAYS show the entire page (A4/A5/label) regardless of monitor size or
+  // browser zoom. Approach: render the preview content at TRUE mm dimensions,
+  // then transform: scale() it to fit the available container width. The
+  // outer wrapper takes the scaled space so layout flows correctly.
+  const paper = selected?.paperSize && PAPER_DIMENSIONS_MM[selected.paperSize]
+    ? PAPER_DIMENSIONS_MM[selected.paperSize]
+    : PAPER_FALLBACK;
+  const previewContainerRef = useRef(null);
+  const [previewScale, setPreviewScale] = useState(0.5);
+  // Phase 14.x — manual zoom multiplier. Stacks on top of the auto-fit scale.
+  // Aspect ratio is automatically preserved because we apply one uniform
+  // scale value to both width and height. zoomMultiplier=1 means "fit".
+  const [zoomMultiplier, setZoomMultiplier] = useState(1);
+  const ZOOM_STEP = 0.25;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 5;
+  const effectiveScale = previewScale * zoomMultiplier;
+  // Reset zoom when switching templates (different paper size = different fit)
+  useEffect(() => { setZoomMultiplier(1); }, [selected?.id]);
+  useLayoutEffect(() => {
+    if (!previewContainerRef.current) return;
+    const updateScale = () => {
+      const el = previewContainerRef.current;
+      if (!el) return;
+      // Subtract container padding (16px on each side from p-4)
+      const containerInnerWidth = el.clientWidth - 32;
+      const paperWidthPx = paper.width * MM_TO_PX;
+      if (paperWidthPx <= 0 || containerInnerWidth <= 0) return;
+      // Always fit width. Cap at 1.0 so we never scale up beyond paper size.
+      const next = Math.min(1, containerInnerWidth / paperWidthPx);
+      setPreviewScale(prev => Math.abs(prev - next) > 0.01 ? next : prev);
+    };
+    updateScale();
+    const ro = new ResizeObserver(updateScale);
+    ro.observe(previewContainerRef.current);
+    // Also re-fit on window resize (covers zoom changes which don't always
+    // fire ResizeObserver depending on browser).
+    window.addEventListener('resize', updateScale);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
+  }, [paper.width]);
 
   if (!open) return null;
 
@@ -304,15 +363,93 @@ export default function DocumentPrintModal({
                   </div>
                 ))}
               </div>
-              {/* Preview */}
+              {/* Preview — Phase 14.x: full-page scale-to-fit + user zoom.
+                  Renders the template at TRUE paper size (A4/A5/label-57x32
+                  in mm) and scales it via transform: scale() to always show
+                  the entire document. User can zoom in for detail; aspect
+                  ratio is locked (single uniform scale value). */}
               <div className="space-y-2">
-                <div className="text-xs text-[var(--tx-muted)]">พรีวิว</div>
+                <div className="flex items-center justify-between gap-2 text-xs text-[var(--tx-muted)]">
+                  <span>พรีวิว ({selected?.paperSize || 'A4'})</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setZoomMultiplier(z => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
+                      disabled={zoomMultiplier <= ZOOM_MIN + 0.001}
+                      className="p-1 rounded hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="ซูมออก"
+                      aria-label="ซูมออก"
+                      data-testid="document-print-zoom-out"
+                    >
+                      <ZoomOut size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoomMultiplier(1)}
+                      className="px-2 py-1 rounded hover:bg-[var(--bg-hover)] font-mono text-[11px] min-w-[56px] text-center"
+                      title="พอดีหน้า (Fit)"
+                      data-testid="document-print-zoom-fit"
+                    >
+                      {Math.round(effectiveScale * 100)}%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoomMultiplier(z => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
+                      disabled={zoomMultiplier >= ZOOM_MAX - 0.001}
+                      className="p-1 rounded hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="ซูมเข้า"
+                      aria-label="ซูมเข้า"
+                      data-testid="document-print-zoom-in"
+                    >
+                      <ZoomIn size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoomMultiplier(1)}
+                      className="p-1 rounded hover:bg-[var(--bg-hover)] ml-1"
+                      title="รีเซ็ตเป็นพอดีหน้า"
+                      aria-label="รีเซ็ตซูม"
+                      data-testid="document-print-zoom-reset"
+                    >
+                      <Maximize2 size={14} />
+                    </button>
+                  </div>
+                </div>
                 <div
-                  className="p-4 rounded-lg bg-white text-black text-xs leading-relaxed max-h-[60vh] overflow-auto"
-                  style={{ fontFamily: "'Sarabun', 'Noto Sans Thai', sans-serif" }}
-                  data-testid="document-print-preview"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
+                  ref={previewContainerRef}
+                  className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[70vh] overflow-auto flex justify-center"
+                  data-testid="document-print-preview-container"
+                >
+                  {/* Scaled wrapper takes the visible scaled space so the
+                      surrounding layout flows correctly. Single scale =
+                      aspect-ratio-safe (height & width scale together). */}
+                  <div
+                    style={{
+                      width:  `${paper.width  * effectiveScale}mm`,
+                      height: `${paper.height * effectiveScale}mm`,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width:  `${paper.width}mm`,
+                        minHeight: `${paper.height}mm`,
+                        padding: `${paper.padding}mm`,
+                        boxSizing: 'border-box',
+                        background: '#ffffff',
+                        color: '#000000',
+                        fontFamily: "'Sarabun', 'Noto Sans Thai', sans-serif",
+                        fontSize: '12px',
+                        lineHeight: 1.5,
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+                        transform: `scale(${effectiveScale})`,
+                        transformOrigin: 'top left',
+                      }}
+                      data-testid="document-print-preview"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
