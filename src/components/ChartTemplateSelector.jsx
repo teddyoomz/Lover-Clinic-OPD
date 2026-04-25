@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, FileImage, Download, Upload, Loader2, Plus, Pencil, Check, ArrowUp, ArrowDown, Trash2, Image as ImageIcon } from 'lucide-react';
 import { defaultChartTemplates, chartCategories } from '../data/chartTemplates.js';
 import * as broker from '../lib/brokerClient.js';
+import { debugLog } from '../lib/debugLog.js';
 
 const FIRESTORE_DOC = 'pc_chart_templates';
 
@@ -34,7 +35,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
             try {
               const saved = JSON.parse(snap.data().templates);
               if (saved.length > 0) { setTemplates(saved); setLoaded(true); return; }
-            } catch (_) {}
+            } catch (e) { debugLog('chart-template-load', 'JSON.parse of saved templates failed; falling back to defaults', e); }
           }
           // Seed from defaults
           setTemplates([...defaultChartTemplates]);
@@ -107,11 +108,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
               body: JSON.stringify({ action: 'proxyImage', url: tmpl.imageUrl }),
             });
             if (res.ok) { blobMap[tmpl.id] = URL.createObjectURL(await res.blob()); }
-          } catch (_) {}
+          } catch (e) { debugLog('chart-template-pc', `proxyImage failed for template ${tmpl.id}`, e); }
         }));
         setPcBlobUrls(blobMap);
       }
-    } catch (_) {}
+    } catch (e) { debugLog('chart-template-pc', 'unexpected error loading ProClinic chart templates', e); }
     setPcLoading(false);
   };
 

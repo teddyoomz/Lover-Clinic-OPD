@@ -356,7 +356,14 @@ export default function AppointmentFormModal({
       }
       await onSaved?.();
     } catch (e) {
-      setError(e?.message || 'บันทึกล้มเหลว');
+      // Audit P1 (2026-04-26 AP1): server-side last-mile collision check
+      // surfaces a friendly Thai message instead of the raw English code.
+      if (e?.code === 'AP1_COLLISION') {
+        const c = e.collision || {};
+        setError(`ช่วงเวลานี้ถูกจองให้แพทย์ท่านนี้แล้ว: ${c.startTime || ''}-${c.endTime || ''} (${c.date || ''}). กรุณาเลือกเวลาอื่น`);
+      } else {
+        setError(e?.message || 'บันทึกล้มเหลว');
+      }
     } finally {
       setSaving(false);
     }

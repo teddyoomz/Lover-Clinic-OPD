@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { X, CheckCircle2, Loader2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import { markSalePaid } from '../../lib/backendClient.js';
+import { thaiTodayISO } from '../../utils.js';
 
 const METHOD_OPTIONS = Object.freeze([
   'เงินสด', 'โอน', 'บัตรเครดิต', 'บัตรสมาชิก', 'Wallet',
@@ -21,7 +22,11 @@ export default function SalePaymentModal({ sale, onClose, onSaved }) {
 
   const [method, setMethod] = useState('เงินสด');
   const [amount, setAmount] = useState(String(remaining.toFixed(2)));
-  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
+  // Audit P0 (2026-04-26 TZ1): paidAt MUST use Bangkok TZ helper.
+  // Raw UTC slice would drift to YESTERDAY during 00:00-07:00 Bangkok →
+  // reports filter wrong day → money record dated wrong (V12-class TZ
+  // off-by-one bug pattern). thaiTodayISO is the canonical helper.
+  const [paidAt, setPaidAt] = useState(thaiTodayISO());
   const [refNo, setRefNo] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

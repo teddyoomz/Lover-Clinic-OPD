@@ -856,13 +856,58 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
 const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(id));
 
-/** Create a new backend appointment */
+/** Create a new backend appointment.
+ *
+ * Audit P1 (2026-04-26 AP1): server-side last-mile collision check before
+ * writing. Client-side `checkAppointmentCollision` runs in
+ * AppointmentFormModal but two admins racing can both pass client check
+ * before either writes. This pre-write read+filter catches the race window
+ * down to ~50ms (read+write latency). Not perfectly atomic — Firestore SDK
+ * doesn't allow queries inside transactions — but combined with the
+ * client-side check + 1s listener freshness (Phase 14.7.H-B
+ * `listenToAppointmentsByDate`) covers the realistic clinic-pace gap.
+ *
+ * Throws Error with `code='AP1_COLLISION'` + `collision` property when a
+ * non-cancelled appointment for the same doctor on the same date overlaps
+ * the new time range. Caller can `catch (e) { if (e.code === 'AP1_COLLISION')`
+ * to surface a friendly UI message.
+ *
+ * Pass `data.skipServerCollisionCheck = true` to bypass — used for legacy
+ * imports or scripted bulk creates where pre-validated collisions are
+ * already resolved upstream.
+ */
 export async function createBackendAppointment(data) {
+  const targetDate = normalizeApptDate(data?.date);
+  const targetDoctorId = String(data?.doctorId || data?.doctor?.id || '').trim();
+  const targetStart = String(data?.startTime || '').trim();
+  const targetEnd = String(data?.endTime || data?.startTime || '').trim();
+
+  if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
+    const existing = await getAppointmentsByDate(targetDate);
+    const collision = existing.find(a => {
+      const otherDoctorId = String(a.doctorId || a.doctor?.id || '').trim();
+      if (otherDoctorId !== targetDoctorId) return false;
+      if (a.status === 'cancelled') return false;
+      const otherStart = String(a.startTime || '').trim();
+      const otherEnd = String(a.endTime || a.startTime || '').trim();
+      // Time-range overlap: targetStart < otherEnd AND targetEnd > otherStart
+      return targetStart < otherEnd && targetEnd > otherStart;
+    });
+    if (collision) {
+      const err = new Error(`AP1_COLLISION: doctor ${targetDoctorId} already booked ${collision.startTime}-${collision.endTime} on ${targetDate}`);
+      err.code = 'AP1_COLLISION';
+      err.collision = collision;
+      throw err;
+    }
+  }
+
   const appointmentId = `BA-${Date.now()}`;
   const now = new Date().toISOString();
+  // Strip the gate flag so it never leaks into the persisted doc.
+  const { skipServerCollisionCheck: _stripGate, ...persistData } = data || {};
   await setDoc(appointmentDoc(appointmentId), {
     appointmentId,
-    ...data,
+    ...persistData,
     createdAt: now,
     updatedAt: now,
   });
@@ -2280,7 +2325,22 @@ export async function getWalletBalance(customerId, walletTypeId) {
   return Number(snap.data().balance) || 0;
 }
 
-function txId() { return `WTX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+// Audit P2 (2026-04-26 AV3): wallet-transaction IDs are part of the audit
+// chain. Date.now() prefix gives ms-precision uniqueness; the suffix uses
+// crypto.getRandomValues so the per-ms entropy is 128 bits (collision
+// probability negligible at any clinic scale). Falls back to Math.random
+// in environments without crypto (legacy node tests).
+function txId() {
+  let suffix = '';
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    suffix = Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 4);
+  } else {
+    suffix = Math.random().toString(36).slice(2, 6);
+  }
+  return `WTX-${Date.now()}-${suffix}`;
+}
 
 /** Top up a customer's wallet (adds to balance, creates WTX record). */
 export async function topUpWallet(customerId, walletTypeId, {
@@ -2784,7 +2844,19 @@ export async function deleteMembership(membershipId) {
 const pointTxCol = () => collection(db, ...basePath(), 'be_point_transactions');
 const pointTxDoc = (id) => doc(db, ...basePath(), 'be_point_transactions', String(id));
 
-function ptxId() { return `PTX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+// Audit P2 (2026-04-26 AV3): point-transaction IDs share txId's audit-chain
+// concern. Same crypto.getRandomValues hardening with Math.random fallback.
+function ptxId() {
+  let suffix = '';
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    suffix = Array.from(bytes).map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 4);
+  } else {
+    suffix = Math.random().toString(36).slice(2, 6);
+  }
+  return `PTX-${Date.now()}-${suffix}`;
+}
 
 /** Read customer's current point balance (from customer doc). */
 export async function getPointBalance(customerId) {

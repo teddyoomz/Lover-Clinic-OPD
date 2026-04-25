@@ -7,6 +7,8 @@
 // We extend with `status`, `note`, and `maintenanceLog[]` for OUR clinic-use
 // workflow (log of past service events per instrument).
 
+import { thaiTodayISO } from '../utils.js';
+
 export const STATUS_OPTIONS = Object.freeze(['ใช้งาน', 'พักใช้งาน', 'ซ่อมบำรุง']);
 
 export const NAME_MAX_LENGTH = 120;
@@ -165,7 +167,11 @@ export function normalizeMedicalInstrument(form) {
  */
 export function daysUntilMaintenance(nextMaintenanceDate, today) {
   if (!nextMaintenanceDate || !ISO_DATE_RE.test(String(nextMaintenanceDate))) return null;
-  const t = today || new Date().toISOString().slice(0, 10);
+  // Audit P2 (2026-04-26 TZ1 medium): default fallback uses Bangkok TZ
+  // helper instead of UTC `.toISOString().slice(0,10)` so a Bangkok admin
+  // viewing the maintenance list at 02:00 doesn't see "due tomorrow"
+  // become "due today" purely from the UTC date roll-over.
+  const t = today || thaiTodayISO();
   // Treat both as UTC-midnight; difference in calendar days is accurate within
   // same TZ assumption (backend uses admin's local — per rule we'd use
   // thaiTodayISO at the caller site; the helper itself is pure).

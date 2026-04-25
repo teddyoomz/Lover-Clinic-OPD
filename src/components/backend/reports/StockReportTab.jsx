@@ -22,6 +22,7 @@ import { getAllMasterDataItems } from '../../../lib/backendClient.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
+import { thaiTodayISO } from '../../../utils.js';
 
 const SORTABLE = {
   productName:     { key: 'productName',     type: 'string', label: 'ชื่อสินค้า' },
@@ -120,7 +121,10 @@ export default function StockReportTab({ clinicSettings, theme }) {
   );
 
   const handleExport = useCallback(() => {
-    downloadCSV(`stock-report_${new Date().toISOString().slice(0, 10)}`, out.rows, columns);
+    // Audit P2 (2026-04-26 TZ1 medium): use Bangkok TZ helper so CSV
+    // filenames match the operator's calendar (admin downloading at 02:00
+    // Bangkok would otherwise see yesterday's date in the filename).
+    downloadCSV(`stock-report_${thaiTodayISO()}`, out.rows, columns);
   }, [out.rows, columns]);
 
   const handleRefresh = useCallback(() => setReloadKey(k => k + 1), []);

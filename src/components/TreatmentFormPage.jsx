@@ -10,6 +10,7 @@ import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm } from '../lib/treatmentBuyHelpers.js';
+import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
@@ -1080,7 +1081,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
       }
-    } catch (_) {}
+    } catch (e) { debugLog('tfp-medmodal-load', 'unexpected error opening medication modal (open path)', e); }
     setMedModalLoading(false);
   };
   const medFilteredProducts = useMemo(() => {
@@ -1153,7 +1154,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           const found = (data.products || []).find(p => p.id === med.id);
           if (found) setMedModalSelected(found);
         }
-      } catch (_) {}
+      } catch (e) { debugLog('tfp-medmodal-load', 'unexpected error re-fetching products on medication edit', e); }
       setMedModalLoading(false);
     }
   };
@@ -1189,7 +1190,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
       }
       } // close else (ProClinic mode)
-    } catch (_) {}
+    } catch (e) { debugLog('tfp-medgroup-load', 'unexpected error opening medication-group modal', e); }
     setMedGroupLoading(false);
   };
   const selectedGroupProducts = useMemo(() => {
@@ -1256,7 +1257,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
       }
-    } catch (_) {}
+    } catch (e) { debugLog('tfp-cons-load', 'unexpected error opening consumable modal', e); }
     setConsModalLoading(false);
   };
   const consFilteredProducts = useMemo(() => {
@@ -1313,7 +1314,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
       }
-    } catch (_) {}
+    } catch (e) { debugLog('tfp-consgroup-load', 'unexpected error opening consumable-group modal', e); }
     setConsGroupLoading(false);
   };
   const selectedConsGroupProducts = useMemo(() => {
@@ -1432,7 +1433,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
       }
       } // close else (ProClinic mode)
-    } catch (_) {}
+    } catch (e) { debugLog('tfp-buy-load', 'unexpected error opening buy-modal', e); }
     setBuyLoading(false);
   };
   const [buyShowLimit, setBuyShowLimit] = useState(50);
