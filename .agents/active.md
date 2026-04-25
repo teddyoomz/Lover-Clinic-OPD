@@ -1,14 +1,14 @@
 ---
 updated_at: "2026-04-26 (Phase 14.7.C/D/E — AppointmentTab refactor + treatment-history redesign + Treatment Timeline Modal LIVE)"
 status: "14.7.C — AppointmentTab now uses shared AppointmentFormModal (skipStaffScheduleCheck gates the Phase 13.2.4 schedule check). 14.7.D — treatment-history pagination 5/page + ProClinic-fidelity colors (cyan #56CCF2 + orange #FF9F1C). 14.7.E LIVE — TreatmentTimelineModal in `src/components/backend/TreatmentTimelineModal.jsx`: ProClinic 3/9 grid replica with per-row image carousel (OPD-อื่นๆ / Before / After), medications + consumables accordions, Esc/backdrop/close all close. 50 TL1-TL8 tests. Preview-verified on 122-treatment customer. 17 commits queued; production stuck on 0735a50."
-current_focus: "Production deploy. 17 commits ahead — awaiting user 'deploy' authorization (V4/V7/V18 — never roll-over)."
+current_focus: "Production up-to-date with master a0f7dc4. Awaiting next user direction."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "f16cce2"
+last_commit: "a0f7dc4"
 tests: "4416/4416 full suite | +9 (14.7.C F5.11+F6) + +39 (14.7.D H1-H6) + +50 (14.7.E TL1-TL8)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "0735a50 (2026-04-25 mid-session preview-zoom + clinicEmail) — 17 commits ahead, awaiting auth"
-firestore_rules_deployed: "v9 deployed (last deploy). No rules diff in 14.7.C/D/E. v15 schema still propagating via upgradeSystemDocumentTemplates auto-fire on print-modal open."
+last_deploy: "a0f7dc4 (2026-04-26 V15 combined deploy — vercel + firestore:rules) — Probe-Deploy-Probe all 200, deploy completed 33s"
+firestore_rules_deployed: "v9 redeployed 2026-04-26 (idempotent per V15; no rules diff). Probe-Deploy-Probe ✅ all 4 endpoints 200."
 ---
 
 # Active Context
