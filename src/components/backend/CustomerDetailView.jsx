@@ -769,23 +769,121 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
         clinicSettings={clinicSettings || { accentColor: ac }}
         customer={customer}
       />
-      {/* Phase 14.2.B — per-treatment-row print modals (filtered + prefilled). */}
+      {/* Phase 14.2.C (2026-04-25) — per-treatment-row print modals.
+          Prefill maps every ProClinic Medical History field from the actual
+          be_treatments / be_customers schema (verified via preview_eval):
+            be_treatments.detail = {
+              treatmentDate, doctorName, assistants[], symptoms (CC),
+              physicalExam (PE), diagnosis (DX), treatmentNote (Tx),
+              treatmentPlan, additionalNote, vitals{bp,pulse,temp,rr,spo2,
+              weight,height}, courseItems[{courseName,productName,deductQty,
+              unit,rowId}], medications[], consumables[], purchasedItems[]
+            }
+            be_customers.patientData = {
+              prefix, firstName, lastName, gender, birthdate (or dob),
+              bloodType, address, phone (or tel), nationalId,
+              emergencyName/Phone (optional)
+            } */}
       {printPerTreatment && (() => {
         const tr = treatments.find(x => x.treatmentId === printPerTreatment.treatmentId || x.id === printPerTreatment.treatmentId);
         const summary = treatmentSummary.find(x => x.id === printPerTreatment.treatmentId);
         const filter = printPerTreatment.type === 'cert' ? TREATMENT_CERT_DOC_TYPES : TREATMENT_PRINT_DOC_TYPES;
-        // Pre-fill from treatment data so the user doesn't re-type basics.
+        const d = tr?.detail || {};
+        const v = d.vitals || {};
+        const pd = customer?.patientData || {};
+        const treatmentDate = d.treatmentDate || summary?.date || thaiTodayISO();
+        const fmtBdate = pd.birthdate || pd.dob || pd.dateOfBirth || '';
+
+        // Phase 14.2.C (2026-04-25) — Schema mapping verified via preview_eval
+        // on real be_treatments doc:
+        //   ProClinic "Treatment record" → our `treatmentItems` (NOT courseItems!)
+        //   ProClinic "Home medication"  → our `consumables` + `medications`
+        //   vitals = { systolicBP, diastolicBP, pulseRate, respiratoryRate,
+        //              temperature, oxygenSaturation, weight, height }
+        //   doctorName field gets concatenated 3x (primary+co-doctor+assistant
+        //     fields stored as single string with format
+        //     "Name (X)Name (X)Name (X)เลือกแพทย์ประจำตัว") — strip duplicates,
+        //     keep just first "Name (X)" occurrence for cert display.
+        const stripDoctorDupes = (raw) => {
+          if (!raw) return '';
+          const m = String(raw).match(/^[^)]+\)/);
+          return m ? m[0].trim() : String(raw).trim();
+        };
+
+        // Treatment record rows: from treatmentItems[].quantity (string) +
+        // treatmentItems[].name. Remaining balance from item.remaining or
+        // computed if courseItems has matching deduct row.
+        const treatmentItemsArr = Array.isArray(d.treatmentItems) ? d.treatmentItems : [];
+        const courseItemsArr = Array.isArray(d.courseItems) ? d.courseItems : [];
+        // Build courseItems lookup by productName for remaining-balance lookup
+        const courseRemainMap = new Map();
+        for (const ci of courseItemsArr) {
+          if (ci.productName) courseRemainMap.set(ci.productName, ci);
+        }
+        const treatmentRecordRows = treatmentItemsArr.map(ti => {
+          const desc = ti.name || ti.productName || '-';
+          const qty = ti.quantity || `${ti.qty || ''} ${ti.unit || ''}`.trim() || '';
+          const ci = courseRemainMap.get(desc);
+          const remaining = ci?.remainingAfter != null ? `${ci.remainingAfter} ${ci.unit || ''}`.trim()
+                          : (ci?.remaining != null ? `${ci.remaining} ${ci.unit || ''}`.trim()
+                          : (ti.remaining != null ? `${ti.remaining} ${ti.unit || ''}`.trim() : '0 U'));
+          return `<tr><td style="border:1px solid #000;padding:6px">${desc}</td><td style="border:1px solid #000;padding:6px;text-align:right">${qty}</td><td style="border:1px solid #000;padding:6px;text-align:right">${remaining}</td></tr>`;
+        }).join('') || `<tr><td colspan="3" style="border:1px solid #000;padding:6px;text-align:center;color:#888">-</td></tr>`;
+
+        // Home medication: consumables + medications (drugs prescribed for take-home)
+        const homeRows = [...(Array.isArray(d.consumables) ? d.consumables : []), ...(Array.isArray(d.medications) ? d.medications : [])];
+        const homeMedicationRows = homeRows.map(it => {
+          const desc = it.name || it.productName || it.medicineName || '-';
+          const qty = it.quantity || `${it.qty != null ? it.qty : ''} ${it.unit || ''}`.trim() || '';
+          return `<tr><td style="border:1px solid #000;padding:6px">${desc}</td><td style="border:1px solid #000;padding:6px;text-align:right">${qty}</td></tr>`;
+        }).join('') || `<tr><td colspan="2" style="border:1px solid #000;padding:6px;text-align:center;color:#888">-</td></tr>`;
+
+        // For older treatment-referral / course-deduction templates: simple text join
+        const treatmentItemsText = treatmentItemsArr
+          .map(p => `${p.name || p.productName || ''} ${p.quantity || `${p.qty || ''} ${p.unit || ''}`.trim()}`.trim())
+          .filter(Boolean)
+          .join('\n');
+
+        // Vital signs — combine systolic/diastolic for BP display
+        const bp = (v.systolicBP || v.diastolicBP)
+          ? `${v.systolicBP || '-'}/${v.diastolicBP || '-'}`
+          : (v.bp || '');
+
+        // For CERT templates: customer signs/symptoms commonly map to findings/diagnosis
+        const cleanDoctor = stripDoctorDupes(d.doctorName || summary?.doctor || '');
         const prefill = {
-          treatmentDate: summary?.date || tr?.treatmentDate || tr?.detail?.treatmentDate || thaiTodayISO(),
-          doctorName: summary?.doctor || tr?.detail?.doctorName || '',
-          assistantName: (summary?.assistants || []).join(', ') || (tr?.detail?.assistants || []).join(', ') || '',
-          findings: summary?.cc || tr?.detail?.cc || '',
-          diagnosis: summary?.dx || tr?.detail?.dx || '',
-          drNote: tr?.detail?.note || tr?.detail?.drNote || '',
-          treatmentItems: (tr?.detail?.courseItems || tr?.detail?.products || [])
-            .map(p => `${p.name || p.productName || ''} ${p.qty ? `× ${p.qty}` : ''}`.trim())
-            .filter(Boolean)
-            .join('\n') || '',
+          treatmentDate,
+          doctorName: cleanDoctor,
+          assistantName: (Array.isArray(d.assistants) ? d.assistants.join(', ') : '')
+            || (Array.isArray(summary?.assistants) ? summary.assistants.join(', ') : '') || '',
+          // Customer info for treatment-history left panel
+          birthdate: fmtBdate,
+          bloodGroup: pd.bloodType || pd.bloodGroup || '',
+          patientAddress: pd.address || '',
+          emergencyName: pd.emergencyName || pd.emergencyContactName || pd.emergencyContact?.name || '',
+          emergencyPhone: pd.emergencyPhone || pd.emergencyContactPhone || pd.emergencyContact?.phone || '',
+          // Vital signs from treatment.detail.vitals (ACTUAL schema:
+          // {systolicBP,diastolicBP,pulseRate,respiratoryRate,temperature,
+          //  oxygenSaturation,weight,height})
+          bt: v.temperature || v.bt || v.temp || '',
+          pr: v.pulseRate || v.pr || v.pulse || '',
+          rr: v.respiratoryRate || v.rr || '',
+          bp,
+          spo2: v.oxygenSaturation || v.spo2 || v.oxygenSat || '',
+          // Clinical fields (treatment-history right panel)
+          symptoms: d.symptoms || d.cc || summary?.cc || '',
+          physicalExam: d.physicalExam || d.pe || '',
+          diagnosis: d.diagnosis || d.dx || summary?.dx || '',
+          treatment: d.treatmentNote || d.tx || '',
+          treatmentPlan: d.treatmentPlan || d.txPlan || '',
+          additionalNote: d.additionalNote || d.note2 || '',
+          // Tables (HTML rows pre-built)
+          treatmentRecordRows,
+          homeMedicationRows,
+          // Cert-form mappings (legacy field names used by older cert templates)
+          findings: d.physicalExam || d.pe || d.symptoms || d.cc || '',
+          drNote: d.treatmentNote || d.note || d.drNote || '',
+          treatmentItems: treatmentItemsText,
         };
         return (
           <DocumentPrintModal

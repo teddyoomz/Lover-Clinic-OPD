@@ -76,6 +76,7 @@ export const NAV_SECTIONS = [
       { id: 'quotations',    label: 'ใบเสนอราคา',    icon: FileText,     color: 'rose', palette: 'quotation QUO เสนอราคา quote estimate ใบเสนอ' },
       { id: 'online-sales',  label: 'ขายออนไลน์',    icon: Globe2,       color: 'rose', palette: 'online sale transfer slip bank ออนไลน์ โอน สลิป' },
       { id: 'insurance-claims', label: 'เบิกประกัน',  icon: Shield,       color: 'rose', palette: 'insurance claim reimburse sale เบิกประกัน บริษัทประกัน กรมธรรม์ เคลม' },
+      { id: 'vendor-sales',  label: 'ขายให้คู่ค้า (B2B)', icon: BriefcaseIcon, color: 'rose', palette: 'vendor b2b wholesale supplier ขาย คู่ค้า ผู้ขาย ผู้จัดจำหน่าย B2B' },
     ],
   },
   {

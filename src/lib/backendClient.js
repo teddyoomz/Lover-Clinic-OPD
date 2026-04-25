@@ -6372,6 +6372,94 @@ export async function upgradeSystemDocumentTemplates() {
   return { upgraded, added };
 }
 
+// ─── Vendors + Vendor Sales CRUD (Phase 14.3 / G6, 2026-04-25) ─────────────
+
+const vendorsCol = () => collection(db, ...basePath(), 'be_vendors');
+const vendorDoc = (id) => doc(db, ...basePath(), 'be_vendors', String(id));
+const vendorSalesCol = () => collection(db, ...basePath(), 'be_vendor_sales');
+const vendorSaleDoc = (id) => doc(db, ...basePath(), 'be_vendor_sales', String(id));
+
+export async function listVendors({ activeOnly = false } = {}) {
+  const snap = await getDocs(vendorsCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (activeOnly) items = items.filter(v => v.isActive !== false);
+  items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return items;
+}
+
+export async function saveVendor(vendorId, data, opts = {}) {
+  const id = String(vendorId || '');
+  if (!id) throw new Error('vendorId required');
+  const { normalizeVendor, validateVendor } = await import('./vendorValidation.js');
+  const normalized = normalizeVendor(data);
+  const fail = validateVendor(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(vendorDoc(id), {
+    ...normalized,
+    vendorId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteVendor(vendorId) {
+  const id = String(vendorId || '');
+  if (!id) throw new Error('vendorId required');
+  await deleteDoc(vendorDoc(id));
+}
+
+export async function listVendorSales({ vendorId, status, startDate, endDate } = {}) {
+  const snap = await getDocs(vendorSalesCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (vendorId) items = items.filter(s => s.vendorId === vendorId);
+  if (status) items = items.filter(s => s.status === status);
+  if (startDate) items = items.filter(s => (s.saleDate || '') >= startDate);
+  if (endDate) items = items.filter(s => (s.saleDate || '') <= endDate);
+  items.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+  return items;
+}
+
+export async function saveVendorSale(saleId, data, opts = {}) {
+  const id = String(saleId || '');
+  if (!id) throw new Error('saleId required');
+  const { normalizeVendorSale, validateVendorSale } = await import('./vendorSaleValidation.js');
+  const normalized = normalizeVendorSale(data);
+  const fail = validateVendorSale(normalized, { strict: !!opts.strict });
+  if (fail) throw new Error(fail[1]);
+  const now = new Date().toISOString();
+  await setDoc(vendorSaleDoc(id), {
+    ...normalized,
+    vendorSaleId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteVendorSale(saleId) {
+  const id = String(saleId || '');
+  if (!id) throw new Error('saleId required');
+  await deleteDoc(vendorSaleDoc(id));
+}
+
+export async function transitionVendorSale(saleId, nextStatus, extra = {}) {
+  const id = String(saleId || '');
+  if (!id) throw new Error('saleId required');
+  const { applyVendorSaleStatusTransition } = await import('./vendorSaleValidation.js');
+  const ref = vendorSaleDoc(id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('vendor sale not found');
+  const cur = snap.data();
+  const resolved = applyVendorSaleStatusTransition(cur.status || 'draft', nextStatus);
+  const now = new Date().toISOString();
+  const updates = { status: resolved, updatedAt: now };
+  if (resolved === 'confirmed' && !cur.confirmedAt) updates.confirmedAt = now;
+  if (resolved === 'cancelled' && !cur.cancelledAt) updates.cancelledAt = now;
+  if (extra.cancelReason != null) updates.cancelReason = String(extra.cancelReason);
+  await updateDoc(ref, updates);
+  return { success: true, status: resolved };
+}
+
 // ─── Quotations CRUD (Phase 13.1.2) ─────────────────────────────────────────
 
 const quotationsCol = () => collection(db, ...basePath(), 'be_quotations');

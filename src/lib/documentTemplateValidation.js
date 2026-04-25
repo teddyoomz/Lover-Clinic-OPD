@@ -124,7 +124,15 @@ export const MAX_TOGGLES = 10;
 //       TOGGLE_OPINION_PT) + always-on cert# block for medical-cert/driver/
 //       fit-to-fly/patient-referral + 3 NEW treatment-record docTypes
 //       (treatment-history, treatment-referral, course-deduction)
-export const SCHEMA_VERSION = 3;
+//   v4 (Phase 14.2.C 2026-04-25) — Medical-History (treatment-history)
+//       full ProClinic replication: 2-column layout with customer info +
+//       emergency contact + vital signs (BT/PR/RR/BP/SpO2) + Symptoms +
+//       Physical Exam + Diagnosis + Treatment + Treatment Plan + Additional
+//       note + Treatment record table + Home medication table.
+//   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
+//       so HTML rows aren't escaped. Without this fix, treatment record +
+//       home medication rendered as literal `<tr><td>` text in print.
+export const SCHEMA_VERSION = 5;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -936,35 +944,119 @@ export const SEED_TEMPLATES = Object.freeze([
   // treatment record at print-time.
   {
     docType: 'treatment-history',
-    name: 'ประวัติการรักษา (A4)',
+    name: 'ประวัติการรักษา (Medical History) A4',
     language: 'th',
     paperSize: 'A4',
-    htmlTemplate: HEADER_CLINIC + `
-      <h2 style="text-align:center;margin:14px 0">ประวัติการรักษา</h2>
-      <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong>HN:</strong> {{customerHN}} &nbsp; <strong>ชื่อ-นามสกุล:</strong> {{customerName}}</div>
-        <div><strong>วันที่รักษา:</strong> {{treatmentDate}}</div>
+    // ProClinic-replicated 2026-04-25: top-right "Medical History" title +
+    // Date + Physician (column-2 header). 2-column body grid: LEFT (customer
+    // info + emergency contact + vital signs) / RIGHT (Symptoms / Physical
+    // Exam / Diagnosis / Treatment / Treatment Plan / Additional note).
+    // Below: Treatment record table + Home medication table. Bottom-right:
+    // Physician signature + (name) + date.
+    htmlTemplate: `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-weight:bold;font-size:16px">{{clinicName}}</div>
+          <div style="font-size:11px;color:#444">Address: {{clinicAddress}}</div>
+          <div style="font-size:11px;color:#444">Tel: {{clinicPhone}}</div>
+          {{#if clinicLicenseNo}}<div style="font-size:11px;color:#444">Clinic License No: {{clinicLicenseNo}}</div>{{/if}}
+          {{#if clinicTaxId}}<div style="font-size:11px;color:#444">Tax ID: {{clinicTaxId}}</div>{{/if}}
+        </div>
+        <div style="text-align:right;flex:0 0 auto;min-width:240px">
+          <h2 style="margin:0;font-size:24px">Medical History</h2>
+          <div style="margin-top:8px"><strong>Date:</strong> {{treatmentDate}}</div>
+          <div><strong>Physician:</strong> {{doctorName}}</div>
+        </div>
       </div>
-      <div style="margin:6px 0"><strong>เพศ:</strong> {{gender}} &nbsp; <strong>อายุ:</strong> {{age}} ปี &nbsp; <strong>เลขบัตรประชาชน:</strong> {{nationalId}}</div>
-      <div style="margin:6px 0"><strong>โทรศัพท์:</strong> {{phone}}</div>
-      <hr style="border:0;border-top:1px solid #000;margin:10px 0" />
-      <div style="margin:8px 0"><strong>แพทย์ผู้รักษา:</strong> {{doctorName}} &nbsp; <strong>ผู้ช่วย:</strong> {{assistantName}}</div>
-      <div style="margin:8px 0"><strong>รายการรักษา:</strong></div>
-      <div style="border:1px solid #000;padding:8px;min-height:80px;margin:6px 0;background:#fafafa">{{treatmentItems}}</div>
-      <div style="margin:8px 0"><strong>หมายเหตุการรักษา (Dr. Note):</strong></div>
-      <div style="border-bottom:1px dotted #000;min-height:60px;margin:6px 0">{{drNote}}</div>
-      <div style="margin:8px 0"><strong>ผลข้างเคียง / อาการเฝ้าระวัง:</strong></div>
-      <div style="border-bottom:1px dotted #000;min-height:40px;margin:6px 0">{{sideEffects}}</div>
-      <div style="margin:8px 0"><strong>นัดครั้งถัดไป:</strong> {{nextAppointment}}</div>
-    ` + DOCTOR_SIGNATURE,
+      <hr style="border:0;border-top:1px solid #ddd;margin:6px 0 14px 0" />
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div>
+          <h4 style="margin:0 0 6px 0">Customer information</h4>
+          <div style="font-weight:bold">HN{{customerHN}} | {{customerName}}</div>
+          <div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px">
+            <div>Tel:</div><div>{{phone}}</div>
+            <div>Gender:</div><div>{{gender}}</div>
+            <div>Birthdate:</div><div>{{birthdate}}</div>
+            <div>Blood group:</div><div>{{bloodGroup}}</div>
+            <div>Address:</div><div>{{patientAddress}}</div>
+          </div>
+          <h4 style="margin:14px 0 6px 0">Emergency contact</h4>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px">
+            <div>name:</div><div>{{emergencyName}}</div>
+            <div>Tel:</div><div>{{emergencyPhone}}</div>
+          </div>
+          <h4 style="margin:14px 0 6px 0">Vital signs</h4>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px">
+            <div>Body Temperature (BT):</div><div>{{bt}} °C</div>
+            <div>Pulse Rate (PR):</div><div>{{pr}} bpm</div>
+            <div>Respiratory Rate (RR):</div><div>{{rr}} bpm</div>
+            <div>Blood Pressure (BP):</div><div>{{bp}} mmHg</div>
+            <div>Oxygen Saturation (SpO<sub>2</sub>):</div><div>{{spo2}} %</div>
+          </div>
+        </div>
+        <div>
+          <h4 style="margin:0 0 6px 0">Symptoms</h4>
+          <div style="min-height:24px;font-size:13px">{{symptoms}}</div>
+          <h4 style="margin:14px 0 6px 0">Physical Examination</h4>
+          <div style="min-height:24px;font-size:13px">{{physicalExam}}</div>
+          <h4 style="margin:14px 0 6px 0">Diagnosis</h4>
+          <div style="min-height:36px;font-size:13px">{{diagnosis}}</div>
+          <h4 style="margin:14px 0 6px 0">Treatment</h4>
+          <div style="min-height:36px;font-size:13px">{{treatment}}</div>
+          <h4 style="margin:14px 0 6px 0">Treatment Plan</h4>
+          <div style="min-height:24px;font-size:13px">{{treatmentPlan}}</div>
+          <h4 style="margin:14px 0 6px 0">Additional note</h4>
+          <div style="min-height:24px;font-size:13px">{{additionalNote}}</div>
+        </div>
+      </div>
+      <h4 style="margin:18px 0 6px 0">Treatment record</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f0f0f0">
+            <th style="border:1px solid #000;padding:6px;text-align:left">Treatment Description</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right;width:120px">Quantity</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right;width:140px">Remaining Balance</th>
+          </tr>
+        </thead>
+        <tbody>{{{treatmentRecordRows}}}</tbody>
+      </table>
+      <h4 style="margin:18px 0 6px 0">Home medication</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f0f0f0">
+            <th style="border:1px solid #000;padding:6px;text-align:left">Treatment Description</th>
+            <th style="border:1px solid #000;padding:6px;text-align:right;width:120px">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>{{{homeMedicationRows}}}</tbody>
+      </table>
+      <div style="margin-top:30px;text-align:right">
+        <div style="margin-bottom:30px">Physician</div>
+        <div>( {{doctorName}} )</div>
+        <div>{{today}}</div>
+      </div>
+    `,
     fields: [
-      { key: 'treatmentDate',  label: 'วันที่รักษา', type: 'date' },
-      { key: 'treatmentItems', label: 'รายการรักษา (auto-fill จาก treatment)', type: 'textarea' },
-      { key: 'drNote',         label: 'หมายเหตุแพทย์', type: 'textarea' },
-      { key: 'sideEffects',    label: 'ผลข้างเคียง', type: 'textarea' },
-      { key: 'nextAppointment',label: 'นัดครั้งถัดไป', type: 'date' },
-      { key: 'doctorName',     label: 'แพทย์ผู้รักษา', type: 'text', required: true },
-      { key: 'assistantName',  label: 'ผู้ช่วย', type: 'text' },
+      { key: 'treatmentDate',     label: 'วันที่รักษา', type: 'date' },
+      { key: 'doctorName',        label: 'แพทย์ผู้รักษา', type: 'text', required: true },
+      { key: 'birthdate',         label: 'วันเกิด', type: 'text' },
+      { key: 'bloodGroup',        label: 'กรุ๊ปเลือด', type: 'text' },
+      { key: 'patientAddress',    label: 'ที่อยู่', type: 'textarea' },
+      { key: 'emergencyName',     label: 'ผู้ติดต่อฉุกเฉิน', type: 'text' },
+      { key: 'emergencyPhone',    label: 'โทรฉุกเฉิน', type: 'text' },
+      { key: 'bt',                label: 'BT (°C)', type: 'text' },
+      { key: 'pr',                label: 'PR (bpm)', type: 'text' },
+      { key: 'rr',                label: 'RR (bpm)', type: 'text' },
+      { key: 'bp',                label: 'BP (mmHg)', type: 'text' },
+      { key: 'spo2',              label: 'SpO2 (%)', type: 'text' },
+      { key: 'symptoms',          label: 'อาการ (CC)', type: 'textarea' },
+      { key: 'physicalExam',      label: 'Physical Examination (PE)', type: 'textarea' },
+      { key: 'diagnosis',         label: 'Diagnosis (DX)', type: 'textarea' },
+      { key: 'treatment',         label: 'Treatment', type: 'textarea' },
+      { key: 'treatmentPlan',     label: 'Treatment Plan', type: 'textarea' },
+      { key: 'additionalNote',    label: 'Additional note', type: 'textarea' },
+      { key: 'treatmentRecordRows', label: 'Treatment record (HTML rows auto-fill)', type: 'textarea' },
+      { key: 'homeMedicationRows',  label: 'Home medication (HTML rows auto-fill)', type: 'textarea' },
     ],
     toggles: NO_TOGGLES,
   },

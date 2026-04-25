@@ -139,7 +139,17 @@ export function renderTemplate(template, context = {}) {
     return context[key] ? body : '';
   });
 
-  // 2) Then simple replacements — escape values, drop unknowns.
+  // 2) Phase 14.2.C — raw-HTML placeholder `{{{key}}}` (3 braces). Used for
+  //    pre-rendered table rows / lists where the value IS HTML and must NOT
+  //    be escaped. Bypasses htmlEscape entirely. Use sparingly — only for
+  //    fields built by app code (never user input).
+  out = out.replace(/\{\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}\}/g, (_m, key) => {
+    const v = context[key];
+    if (v == null || v === '') return '';
+    return String(v);
+  });
+
+  // 3) Then simple replacements — escape values, drop unknowns.
   out = out.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (_m, key) => {
     const v = context[key];
     if (v == null || v === '') return '';
