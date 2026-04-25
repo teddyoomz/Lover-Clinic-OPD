@@ -12,9 +12,9 @@
 - **Last commit**: `39ab33b feat(phase14.7.H-followup-A): multi-branch infrastructure (Option 1)`
 - **Test count**: 4586/4586 (+73 in 14.7.H — 47 BR + 26 BC; +27 in B; +8 in C; +4 in P0)
 - **Build**: clean
-- **Deploy state**: ⚠️ **OUT OF DATE** — production at `93fffca`; **6+ commits queued** (14.7.G listener + V19 audit + P0 cleanup + Follow-up B + Follow-up C + Follow-up A multi-branch). Awaiting user "deploy" authorization (V18 + conditional self-deploy authorization received earlier this session "ถ้าจำเป็นต้อง deploy เพื่อเทส" — testing done in dev, not strictly needed).
-  - **firestore:rules**: live at v10 deployed 2026-04-26 (be_stock_movements update narrowed). No rules diff in queued commits.
-  - **Vercel prod**: `93fffca` aliased to https://lover-clinic-app.vercel.app.
+- **Deploy state**: ✅ **UP TO DATE** (third V15 combined deploy 2026-04-26)
+  - **firestore:rules**: idempotent fire (no diff this round; rule file already up-to-date). Probe-Deploy-Probe ✅ — all 4 endpoints 200 pre + post.
+  - **Vercel prod**: `a6ddc6c` aliased to https://lover-clinic-app.vercel.app — built 11s, deploy 32s.
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -136,7 +136,7 @@ Same fix shape as 14.7.G applied to 3 more sites:
 
 ## Outstanding User Actions (NOT auto-run)
 
-1. **`vercel --prod` + `firebase deploy --only firestore:rules`** — V15 combined deploy of queued commits (3+ since prod `93fffca`). REQUIRES user typing "deploy" THIS TURN (V4/V7/V18 — never roll-over).
+_None._ Production is up-to-date with master `a6ddc6c`. Multi-branch infrastructure live (auto-hidden until clinic adds a 2nd branch). Next code work awaits user direction.
 
 ---
 
