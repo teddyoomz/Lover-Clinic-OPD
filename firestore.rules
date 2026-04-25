@@ -203,6 +203,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
+      match /be_vendors/{vendorId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_vendor_sales/{saleId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 13.1 Quotations (OUR data; no ProClinic mirror) ──
       match /be_quotations/{quotationId} {
         allow read, write: if isClinicStaff();

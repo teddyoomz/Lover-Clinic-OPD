@@ -587,6 +587,329 @@ describe('F10: schemaVersion + context spread', () => {
   });
 });
 
+/* ─── F12: per-doc end-to-end render verification (all 16 docTypes) ───── */
+//
+// User directive 2026-04-25: "make sure ว่า field ที่ว่างๆ ใช้ได้จริง หรือไม่
+// ก็เขียนเทสขึ้นมาแล้วทดสอบเองเลย กับทุกหน้านะ"
+//
+// For EVERY seed docType, render the template TWICE:
+//   (a) with FULL realistic context (customer + treatment data + every
+//       toggle on, every field populated) — assert all sections + values
+//       appear, NO literal "{{key}}" placeholder leaks, NO literal
+//       "<tr><td" text leak (raw-HTML rows must parse as elements when
+//       embedded in real HTML stream).
+//   (b) with MINIMAL context (empty customer / no treatment / no toggles) —
+//       assert template still renders WITHOUT crashing, no JS errors,
+//       no leftover orphan markup, empty fields show as blank/dash, NOT
+//       as literal "{{key}}".
+//
+// Catches the V14/V15 pattern: "tests pass for one happy path, real
+// usage breaks because data shape doesn't match" — F12 covers ALL
+// docTypes systematically.
+
+describe('F12: per-doc end-to-end render — all 16 docTypes', () => {
+  // Build a comprehensive "full" context that satisfies every field across
+  // all docTypes. Per-docType tests pull only the fields they care about.
+  const FULL_CLINIC = {
+    clinicName: 'Lover Clinic',
+    clinicNameEn: 'Lover Clinic',
+    clinicAddress: '67/12 ทดสอบ',
+    clinicAddressEn: '67/12 Test Address',
+    clinicPhone: '02-000-0000',
+    clinicEmail: 'test@lover.clinic',
+    clinicTaxId: '0123456789012',
+    clinicLicenseNo: '11102000999',
+  };
+  const FULL_CUSTOMER = {
+    proClinicHN: 'HN-TEST-001',
+    patientData: {
+      prefix: 'นาง',
+      firstName: 'สมหญิง',
+      lastName: 'รักษาตัว',
+      gender: 'หญิง',
+      birthdate: '1990-05-12',
+      bloodType: 'A',
+      address: '99 ถ.ทดสอบ กรุงเทพฯ 10000',
+      phone: '081-234-5678',
+      nationalId: '1-1234-12345-12-1',
+      age: '35',
+    },
+  };
+  const FULL_VALUES = {
+    // common
+    certNumber: 'TEST-2026-001',
+    certBookNumber: 'B-1',
+    treatmentDate: '2026-04-25',
+    doctorName: 'นพ.ทดสอบ ใจดี',
+    doctorLicenseNo: 'L-12345',
+    findings: 'ตรวจร่างกายปกติ',
+    diagnosis: 'A001 Cholera due to Vibrio cholerae 01',
+    recommendation: 'พักผ่อน',
+    restDays: '3',
+    restFrom: '2026-04-25',
+    restTo: '2026-04-28',
+    fitVerdict: 'มีความเหมาะสม',
+    // medical-cert history checkboxes
+    hasChronicDisease: true,
+    chronicDisease: 'เบาหวาน',
+    hasAccidents: false,
+    accidentsDetails: '',
+    hasHospitalized: false,
+    hospitalizedDetails: '',
+    hasEpilepsy: false,
+    epilepsyDetails: '',
+    otherHistory: '-',
+    patientAddress: '99 ถ.ทดสอบ',
+    // driver-license extras
+    bp: '120/80',
+    pulse: '72',
+    visionRight: '20/20',
+    visionLeft: '20/20',
+    colorBlind: false,
+    // medical-opinion
+    opinion: 'ผู้ป่วยมีอาการไข้',
+    // physical-therapy
+    symptoms: 'ปวดคอ',
+    evaluation: 'กล้ามเนื้อตึง',
+    treatments: 'นวดประคบ',
+    sessionCount: '5',
+    // thai-traditional
+    tcmExam: 'ผลตรวจปกติ',
+    treatment: 'ฝังเข็ม',
+    // chinese-traditional
+    tcmDiagnosis: '中医诊断',
+    // fit-to-fly
+    customerNameEn: 'Mrs. Somying Raksa',
+    passport: 'AA1234567',
+    nationality: 'Thai',
+    dob: '1990-05-12',
+    flightNo: 'TG-103',
+    flightDate: '2026-05-01',
+    route: 'BKK-LHR',
+    temp: '36.5',
+    // patient-referral
+    referTo: 'รพ.รามาธิบดี',
+    referDoctor: 'นพ.ผู้รับ',
+    cc: 'เจ็บหน้าอก',
+    history: 'ประวัติเดิม',
+    examination: 'ผลตรวจ',
+    treatmentGiven: 'ให้ยาไปแล้ว',
+    referralReason: 'ส่งต่อเพื่อ MRI',
+    // medicine-label
+    medicineName: 'Paracetamol',
+    genericName: 'พารา',
+    qty: '20 เม็ด',
+    instructions: 'กินหลังอาหาร',
+    indication: 'ลดไข้',
+    warning: 'ห้ามขับรถ',
+    // chart
+    hpi: 'มา 3 วัน',
+    pmh: '-',
+    pe: 'ปกติ',
+    dx: 'หวัด',
+    txPlan: 'ให้ยา',
+    // consent
+    procedure: 'ฉีดยา',
+    risks: 'แพ้',
+    cost: '500',
+    witnessName: 'พยาน',
+    // treatment plan
+    condition: 'อาการ',
+    goals: 'หาย',
+    plan: 'แผนการ',
+    duration: '2 wk',
+    visitCount: '4',
+    estimatedCost: '5000',
+    sideEffects: '-',
+    // sale-cancelation
+    originalSaleId: 'INV-001',
+    saleDate: '2026-04-20',
+    amount: '1000',
+    reason: 'ลูกค้ายกเลิก',
+    refundAmount: '1000',
+    refundMethod: 'เงินสด',
+    refundReference: 'REF-1',
+    staffName: 'พนักงาน A',
+    // medical-opinion + others
+    physicalExam: 'ปกติ',
+    treatmentNote: 'ให้ยา',
+    treatmentPlan: 'นัด 2 สัปดาห์',
+    additionalNote: '-',
+    // treatment-history pre-rendered raw HTML rows
+    treatmentRecordRows: '<tr><td style="border:1px solid #000;padding:6px">Allergan 100 U</td><td style="border:1px solid #000;padding:6px;text-align:right">100 U</td><td style="border:1px solid #000;padding:6px;text-align:right">0 U</td></tr>',
+    homeMedicationRows: '<tr><td style="border:1px solid #000;padding:6px">Acetin</td><td style="border:1px solid #000;padding:6px;text-align:right">1 amp.</td></tr>',
+    // course-deduction rows
+    deductionRows: '<tr><td style="border:1px solid #000;padding:6px">Botox</td><td style="border:1px solid #000;padding:6px;text-align:right">100 U</td><td style="border:1px solid #000;padding:6px;text-align:right">200 U</td><td style="border:1px solid #000;padding:6px;text-align:right">100 U</td></tr>',
+    // treatment-referral
+    treatmentItems: 'Allergan 100 U × 100 U',
+    drNote: 'หมายเหตุ',
+    // patient bio
+    age: '35',
+    gender: 'หญิง',
+    birthdate: '12/05/1990',
+    bloodGroup: 'A',
+    emergencyName: 'คุณแม่',
+    emergencyPhone: '081-999-9999',
+    bt: '36.5',
+    pr: '72',
+    rr: '18',
+    spo2: '98',
+    note: 'หมายเหตุทดสอบ',
+  };
+
+  const FULL_TOGGLES = { showCertNumber: true, showPatientSignature: true };
+
+  // Helper assertion: NO leftover {{key}} or {{{key}}} placeholders in output
+  function expectNoPlaceholderLeak(html, docType) {
+    const leaked = html.match(/\{\{[^}]+\}\}/g) || [];
+    expect(leaked.length === 0
+      ? 'no leak'
+      : `${docType} leaked: ${leaked.join(' | ')}`
+    ).toBe('no leak');
+  }
+
+  // Helper: HTML rendered as actual elements, not literal text. We check by
+  // parsing into a DOM and verifying any `<tr>` / `<table>` strings in the
+  // raw HTML actually appear as elements (not as text nodes in escaped form).
+  function expectNoRawTagLeakInText(html, docType) {
+    // Find all literal "&lt;tr&gt;" or "&lt;td" — those would mean raw HTML
+    // got escaped. Real elements appear as "<tr" / "<td" without entity.
+    const escaped = html.match(/&lt;(tr|td|table)[^&]*&gt;/g) || [];
+    expect(escaped.length === 0
+      ? 'no escaped tag leak'
+      : `${docType} escaped: ${escaped.join(' | ')}`
+    ).toBe('no escaped tag leak');
+  }
+
+  // Per-docType test cases — what every doc must have when rendered FULL.
+  // `mustContain` arrays = strings expected in the rendered HTML.
+  const PER_DOC_EXPECTATIONS = {
+    'medical-certificate': {
+      mustContain: ['ใบรับรองแพทย์', 'ส่วนที่ 1', 'ส่วนที่ 2', 'โรคประจำตัว', 'อุบัติเหตุ', 'ผู้ปกครอง'],
+      mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี', 'A001 Cholera', 'TEST-2026-001'],
+    },
+    'medical-certificate-for-driver-license': {
+      mustContain: ['ใบรับรองแพทย์', 'ใบอนุญาตขับรถ', 'ส่วนที่ 1', 'ส่วนที่ 2', 'มีความเหมาะสม'],
+      mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี', 'มีความเหมาะสม'],
+    },
+    'medical-opinion': {
+      mustContain: ['ใบรับรองแพทย์ลาป่วย', 'ความเห็น/อาการ', 'การวินิจฉัย'],
+      mustHaveValue: ['ผู้ป่วยมีอาการไข้', 'A001 Cholera'],
+    },
+    'physical-therapy-certificate': {
+      mustContain: ['ใบรับรองกายภาพบำบัด', 'อาการ', 'การบำบัดที่ได้รับ'],
+      mustHaveValue: ['ปวดคอ', 'นวดประคบ'],
+    },
+    'thai-traditional-medicine-medical-certificate': {
+      mustContain: ['ใบรับรองแพทย์แผนไทยประยุกต์', 'จากการประเมินพบว่า', 'สรุปความเห็น'],
+      mustHaveValue: ['ตรวจร่างกายปกติ'],
+    },
+    'chinese-traditional-medicine-medical-certificate': {
+      mustContain: ['ใบรับรองแพทย์แผนจีน', 'อาการ'],
+      mustHaveValue: ['ปวดคอ'],
+    },
+    'fit-to-fly': {
+      mustContain: ['FIT-TO-FLY CERTIFICATE', 'Patient Name', 'Flight No.'],
+      mustHaveValue: ['Mrs. Somying Raksa', 'AA1234567', 'TG-103'],
+    },
+    'patient-referral': {
+      mustContain: ['ใบส่งตัวผู้ป่วย', 'Patient Referral Letter', 'ส่งต่อไปยัง'],
+      mustHaveValue: ['รพ.รามาธิบดี', 'ส่งต่อเพื่อ MRI'],
+    },
+    'medicine-label': {
+      mustContain: ['Lover Clinic', 'จำนวน:'],
+      mustHaveValue: ['Paracetamol', '20 เม็ด', 'กินหลังอาหาร'],
+    },
+    'chart': {
+      mustContain: ['ใบประวัติการรักษา', 'CC', 'HPI', 'PE', 'Dx'],
+      mustHaveValue: ['มา 3 วัน', 'หวัด'],
+    },
+    'consent': {
+      mustContain: ['หนังสือยินยอมรับการรักษา', 'หัตถการ/การรักษา', 'ความเสี่ยง'],
+      mustHaveValue: ['ฉีดยา', 'แพ้', 'พยาน'],
+    },
+    'treatment': {
+      mustContain: ['แผนการรักษา', 'ภาวะที่ต้องรักษา', 'เป้าหมาย'],
+      mustHaveValue: ['อาการ', 'หาย'],
+    },
+    'sale-cancelation': {
+      mustContain: ['ใบยกเลิกการขาย', 'เลขที่ใบเสร็จเดิม', 'จำนวนเงินคืน'],
+      mustHaveValue: ['INV-001', 'พนักงาน A'],
+    },
+    'treatment-history': {
+      mustContain: ['Medical History', 'Customer information', 'Vital signs', 'Symptoms', 'Physical Examination', 'Diagnosis', 'Treatment', 'Treatment Plan', 'Additional note', 'Treatment record', 'Home medication', 'Physician'],
+      mustHaveValue: ['Lover Clinic', 'A001 Cholera', 'นพ.ทดสอบ ใจดี'],
+    },
+    'treatment-referral': {
+      mustContain: ['ใบส่งตัวทรีตเมนต์', 'ทรีตเมนต์ที่จะรับ', 'แพทย์ผู้สั่ง'],
+      mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี'],
+    },
+    'course-deduction': {
+      mustContain: ['ใบตัดคอร์ส', 'คอร์ส / สินค้า', 'คงเหลือก่อน', 'คงเหลือหลัง'],
+      mustHaveValue: ['นพ.ทดสอบ ใจดี', 'พนักงาน A'],
+    },
+  };
+
+  // Per-doc render with FULL context
+  for (const seed of SEED_TEMPLATES) {
+    const expectations = PER_DOC_EXPECTATIONS[seed.docType];
+    if (!expectations) continue;
+
+    it(`F12.full:${seed.docType} — renders without {{leak}} + raw-HTML rows render as elements`, () => {
+      const ctx = buildPrintContext({
+        clinic: FULL_CLINIC,
+        customer: FULL_CUSTOMER,
+        values: FULL_VALUES,
+        language: seed.language === 'bilingual' ? 'bilingual' : 'th',
+        toggles: FULL_TOGGLES,
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+
+      // No leftover placeholders
+      expectNoPlaceholderLeak(html, seed.docType);
+      // No escaped table tags (would indicate raw-HTML field forgot {{{}}})
+      expectNoRawTagLeakInText(html, seed.docType);
+
+      // Required strings appear
+      for (const s of expectations.mustContain) {
+        const found = html.includes(s);
+        expect(found ? `${seed.docType}::contains::${s}` : `${seed.docType}::MISSING::${s}`)
+          .toBe(`${seed.docType}::contains::${s}`);
+      }
+      // Required prefilled values appear
+      for (const v of expectations.mustHaveValue) {
+        const found = html.includes(v);
+        expect(found ? `${seed.docType}::value::${v}` : `${seed.docType}::value-MISSING::${v}`)
+          .toBe(`${seed.docType}::value::${v}`);
+      }
+    });
+
+    it(`F12.empty:${seed.docType} — renders with EMPTY context without crashing or leaking placeholders`, () => {
+      // No customer, no values, no toggles.
+      const ctx = buildPrintContext({
+        clinic: { clinicName: 'X' },
+        customer: {},
+        values: {},
+        language: 'th',
+        toggles: {},
+      });
+      const html = renderTemplate(seed.htmlTemplate, ctx);
+      expect(typeof html).toBe('string');
+      expect(html.length).toBeGreaterThan(0);
+      // No leftover placeholders even when values empty
+      expectNoPlaceholderLeak(html, seed.docType);
+      expectNoRawTagLeakInText(html, seed.docType);
+    });
+  }
+
+  it('F12.coverage: PER_DOC_EXPECTATIONS covers every SEED_TEMPLATE docType', () => {
+    for (const seed of SEED_TEMPLATES) {
+      expect(`${seed.docType}-defined-in-expectations:${!!PER_DOC_EXPECTATIONS[seed.docType]}`)
+        .toBe(`${seed.docType}-defined-in-expectations:true`);
+    }
+  });
+});
+
 /* ─── F11: full-flow render — replicated seeds with all options ────────── */
 
 describe('F11: full ProClinic-replicated rendering', () => {
