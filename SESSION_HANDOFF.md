@@ -7,14 +7,14 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-25 (end-of-session — Phase 14.2 ProClinic doc replication, Doc 1/16 done + F12 test bank)
+- **Date last updated**: 2026-04-25 (mid-session — Phase 14.2.D/E ProClinic side-by-side Doc 1-9/16 + theme + F13-F16 banks)
 - **Branch**: `master`
-- **Last commit**: `cb2bdb6 test(phase14.2): F12 per-doc end-to-end test bank for all 16 docTypes + vendor rules`
-- **Test count**: 138 in phase14-flow-simulate (135 pass, **3 F12 fails = next-action**); full suite ~4100+
+- **Last commit**: `aed5f0b feat(phase14.2.E): Docs 3-9/16 ProClinic side-by-side replication`
+- **Test count**: 256 in phase14-flow-simulate (F1-F16 all green); 4254/4254 full suite
 - **Build**: clean
 - **Deploy state**:
-  - **firestore:rules**: v3 deployed (be_document_templates only). v5 schema in code. be_vendors + be_vendor_sales rules added but NOT deployed.
-  - **Vercel prod**: `ec567fd` (Phase 14.1 + V14 fix). **NOT up-to-date** — 5 commits queued waiting deploy auth.
+  - **firestore:rules**: v3 deployed. v9 in code. be_vendors + be_vendor_sales rules added but NOT deployed.
+  - **Vercel prod**: `ec567fd` (Phase 14.1 + V14 fix). **NOT up-to-date** — 7+ commits queued waiting deploy auth (Phase 14.2.D theme + Phase 14.2.E Docs 2-9 replication).
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -32,8 +32,10 @@
 - ✅ **Phase 14.2** (this session, 0398171) — Toggles + bilingual + 13 ProClinic-fidelity rewrites
 - ✅ **Phase 14.2.B** (this session, bcf6e3b) — Per-treatment dual dropdowns ("พิมพ์ใบรับรองแพทย์ ▾" + "พิมพ์การรักษา ▾") + auto cert# generator (runTransaction-safe) + 3 NEW docTypes (treatment-history, treatment-referral, course-deduction) — total 16 docTypes
 - ✅ **Phase 14.2.C** (this session, df556f6) — Doc 1/16 (Medical History) **100% replication** verified end-to-end. Raw-HTML placeholder `{{{key}}}` syntax added (treatment record + home medication tables now render as actual tables, not escaped text). Schema mapping verified via preview_eval on real be_treatments docs.
-- ✅ **F12 test bank** (this session, cb2bdb6) — 32 automated tests (16 docTypes × 2: full + empty context). 29 PASS, 3 FAIL = next-session work.
-- ✅ **Phase 14.3 G6 scaffolding** (this session, bcf6e3b + cb2bdb6) — vendor + vendor-sale validators, CRUD, Tab, firestore.rules. NOT yet wired in nav/dashboard for production use.
+- ✅ **F12 test bank** (cb2bdb6) — 32 automated tests
+- ✅ **Phase 14.3 G6 scaffolding** (bcf6e3b + cb2bdb6) — vendor scaffolding committed, not wired
+- ✅ **Phase 14.2.D Theme + F13/F14/F15/F16 test banks** (5846e05) — black+red theme on all 16 docs + +118 tests for wiring/empty-field/cross-doc/color invariants
+- ✅ **Phase 14.2.E Doc 2-9 ProClinic replication** (b186971 + aed5f0b) — side-by-side Chrome MCP DOM extraction on each ProClinic /admin/* page, full match for medical-cert + driver-license + medical-opinion + PT + thai-traditional + chinese-traditional + fit-to-fly + patient-referral. SCHEMA_VERSION 6→9.
 
 ---
 
@@ -49,32 +51,24 @@ User directive: "ทำแบบนี้ทีละหน้าจนครบ
 5. preview_eval verify in browser
 6. Mark doc done, move to next
 
-### Failing F12 tests right now (caught by automation, fix first)
-
-```
-F12.full:chart    — fix raw-HTML/placeholder issue
-F12.full:consent  — fix raw-HTML/placeholder issue
-F12.full:<one-more> — see test output
-```
-
 ### Doc verification queue
 
-- [x] Doc 1/16 — treatment-history Medical History ✅
-- [ ] Doc 2/16 — medical-certificate (5 โรค)
-- [ ] Doc 3/16 — medical-certificate-for-driver-license
-- [ ] Doc 4/16 — medical-opinion (ลาป่วย)
-- [ ] Doc 5/16 — physical-therapy-certificate
-- [ ] Doc 6/16 — thai-traditional-medicine-cert
-- [ ] Doc 7/16 — chinese-traditional-medicine-cert
-- [ ] Doc 8/16 — fit-to-fly
-- [ ] Doc 9/16 — patient-referral
-- [ ] Doc 10/16 — treatment-referral A5
-- [ ] Doc 11/16 — course-deduction
-- [ ] Doc 12/16 — medicine-label (+ preset list UI)
-- [ ] Doc 13/16 — chart ❌ F12 fails (DEFER if graphical-only)
-- [ ] Doc 14/16 — consent ❌ F12 fails (DEFER if PDF-library-only)
-- [ ] Doc 15/16 — treatment template (DEFER if graphical-only)
-- [ ] Doc 16/16 — sale-cancelation
+- [x] Doc 1/16 — treatment-history Medical History ✅ df556f6
+- [x] Doc 2/16 — medical-certificate (5 โรค) ✅ b186971
+- [x] Doc 3/16 — medical-certificate-for-driver-license ✅ aed5f0b
+- [x] Doc 4/16 — medical-opinion (ลาป่วย) ✅ aed5f0b
+- [x] Doc 5/16 — physical-therapy-certificate ✅ aed5f0b
+- [x] Doc 6/16 — thai-traditional-medicine-cert ✅ aed5f0b
+- [x] Doc 7/16 — chinese-traditional-medicine-cert ✅ aed5f0b
+- [x] Doc 8/16 — fit-to-fly ✅ aed5f0b
+- [x] Doc 9/16 — patient-referral ✅ aed5f0b
+- [ ] Doc 10/16 — treatment-referral A5 (no ProClinic equivalent — our own A5 design)
+- [ ] Doc 11/16 — course-deduction (no ProClinic equivalent — our own design)
+- [ ] Doc 12/16 — medicine-label (no ProClinic equivalent — small label printer 57x32mm, our design)
+- [ ] Doc 13/16 — chart **DEFER Phase 16** (graphical face/body chart drawing tool)
+- [ ] Doc 14/16 — consent (5846e05 — F12 fix landed; ProClinic equivalent is doc-template editor not print preview)
+- [ ] Doc 15/16 — treatment template **DEFER Phase 16** (graphical dental chart tool)
+- [ ] Doc 16/16 — sale-cancelation (5846e05 — F12 fix landed; ProClinic /admin/document/sale-cancelation is editor not template)
 
 After all docs done:
 - Phase 14.3 G6 vendor-sale wire to nav + tests + ship
@@ -85,7 +79,7 @@ After all docs done:
 
 ## Outstanding User Actions (NOT auto-run)
 
-1. **`vercel --prod` deploy of `cb2bdb6`** — current prod stuck on `ec567fd`. Phase 14.2.B/C + Doc 1 fix + F12 not yet live to real users.
+1. **`vercel --prod` deploy of `aed5f0b`** — current prod stuck on `ec567fd`. Pending: Phase 14.2.B/C + Doc 1 fix + F12 + Phase 14.2.D theme + Phase 14.2.E Docs 2-9 ProClinic replication. 7+ commits queued.
 2. **`firebase deploy --only firestore:rules`** with full Probe-Deploy-Probe per Rule B (4 endpoints curl-probe pre + post). Rules added: `be_vendors`, `be_vendor_sales`.
 
 Per V15 combined-deploy rule, these can run together when user says "deploy".

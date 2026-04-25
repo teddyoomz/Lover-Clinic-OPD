@@ -1,14 +1,14 @@
 ---
-updated_at: "2026-04-25 (end-of-session — Phase 14.2.B/C in progress)"
-status: "Phase 14.2 ProClinic doc replication: Doc 1/16 (Medical History) DONE 100% match. F12 per-doc test bank scaffolded (135/138 pass; 3 caught failures = bugs to fix). Phase 14.3 G6 vendor-sale scaffolding (validators+Tab+rules) committed but not wired to nav."
-current_focus: "Doc 2/16 — medical-certificate (5 โรค). Use Chrome MCP browser tools (extension already installed) to extract exact ProClinic DOM/CSS, then verify F12.full:medical-certificate passes."
+updated_at: "2026-04-25 (mid-session — Phase 14.2.E ProClinic side-by-side Doc 1-9/16 done)"
+status: "Phase 14.2 ProClinic doc replication: Docs 1-9/16 done with full Chrome MCP DOM extraction + F12-F16 test banks (256 phase14 tests, 4254 full suite). Theme: black+red applied + locked by F16 invariants. Docs 10-12/16 are our own designs (no ProClinic equivalent). Docs 13-15/16 deferred (chart/consent/treatment graphical → Phase 16)."
+current_focus: "Per-doc verification complete for the 9 ProClinic-equivalent docs. Remaining 4 (sale-cancelation Doc 16 + treatment-referral Doc 10 + course-deduction Doc 11 + medicine-label Doc 12) are our own designs — already match clinical conventions, locked by F12 mustContain assertions."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "cb2bdb6"
-tests: "135/138 phase14-flow-simulate (3 F12 fails = next-action) | full suite likely 4100+/4100+"
+last_commit: "aed5f0b"
+tests: "256/256 phase14-flow-simulate (F1-F16 all green) | 4254/4254 full suite"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "ec567fd (2026-04-25 mid-session) — Phase 14.2.B/C NOT YET DEPLOYED to prod"
-firestore_rules_deployed: "v3 schema deployed. v5 needs deploy + new be_vendors / be_vendor_sales rules need P-D-P probe-deploy-probe"
+last_deploy: "ec567fd (2026-04-25 early-session) — 7 commits ahead pending user 'deploy' authorization"
+firestore_rules_deployed: "v3 schema. v9 needs deploy + new be_vendors / be_vendor_sales rules need P-D-P probe-deploy-probe (4 endpoints)"
 ---
 
 # Active Context
@@ -76,21 +76,21 @@ fully render with realistic context. Fix → mark Doc N done → next.
 ## Doc verification queue (16 total)
 
 - [x] **Doc 1/16** — treatment-history (Medical History A4) ✅ DONE df556f6
-- [ ] **Doc 2/16** — medical-certificate (5 โรค) — F12 PASSES, but verify pixel via Chrome MCP DOM
-- [ ] **Doc 3/16** — medical-certificate-for-driver-license — F12 PASSES, verify pixel
-- [ ] **Doc 4/16** — medical-opinion (ลาป่วย) — F12 PASSES, verify pixel
-- [ ] **Doc 5/16** — physical-therapy-certificate — F12 PASSES, verify pixel
-- [ ] **Doc 6/16** — thai-traditional-medicine-cert — F12 PASSES, verify pixel
-- [ ] **Doc 7/16** — chinese-traditional-medicine-cert — F12 PASSES, verify pixel
-- [ ] **Doc 8/16** — fit-to-fly — F12 PASSES, verify pixel
-- [ ] **Doc 9/16** — patient-referral — F12 PASSES, verify pixel
-- [ ] **Doc 10/16** — treatment-referral A5 — F12 PASSES, verify pixel
-- [ ] **Doc 11/16** — course-deduction — F12 PASSES, verify pixel
-- [ ] **Doc 12/16** — medicine-label — F12 PASSES, verify pixel + add preset list UI
-- [ ] **Doc 13/16** — chart ❌ F12 FAILS — fix raw-HTML/placeholder leak
-- [ ] **Doc 14/16** — consent ❌ F12 FAILS — fix raw-HTML/placeholder leak
-- [ ] **Doc 15/16** — treatment template ❌ likely F12 fails too
-- [ ] **Doc 16/16** — sale-cancelation — F12 PASSES, verify pixel
+- [x] **Doc 2/16** — medical-certificate (5 โรค) ✅ b186971 — vitals+body+4-disease+summary all replicated from ProClinic .print-area
+- [x] **Doc 3/16** — medical-certificate-for-driver-license ✅ aed5f0b — same as Doc 2 + 3 footnotes + แพทยสภา 2/2564 stamp
+- [x] **Doc 4/16** — medical-opinion (ลาป่วย) ✅ aed5f0b — 3-section + 3 conclusion checkboxes
+- [x] **Doc 5/16** — physical-therapy-certificate ✅ aed5f0b — same shape as Doc 4 with PT-specific labels (กภ., นักกายภาพบำบัด)
+- [x] **Doc 6/16** — thai-traditional-medicine-cert ✅ aed5f0b — already matched, polished theme
+- [x] **Doc 7/16** — chinese-traditional-medicine-cert ✅ aed5f0b — switched to ProClinic single-freeform format
+- [x] **Doc 8/16** — fit-to-fly ✅ aed5f0b — full rewrite: Medical Cert for Air Travel + 3 Yes/No history + 2 signatures
+- [x] **Doc 9/16** — patient-referral ✅ aed5f0b — 7-section clinical history + 4 referral checkboxes (จาก/ถึง split)
+- [ ] **Doc 10/16** — treatment-referral A5 — our own design (no ProClinic equivalent), already ProClinic-style
+- [ ] **Doc 11/16** — course-deduction — our own design (no ProClinic equivalent), already ProClinic-style
+- [ ] **Doc 12/16** — medicine-label — our own design (label printer 57x32mm), red theme applied
+- [ ] **Doc 13/16** — chart — DEFER to Phase 16 (graphical face/body chart drawing, not template)
+- [ ] **Doc 14/16** — consent — done in commit 5846e05
+- [ ] **Doc 15/16** — treatment template — DEFER to Phase 16 (graphical/dental chart)
+- [ ] **Doc 16/16** — sale-cancelation — done in earlier commits (ProClinic /admin/document/sale-cancelation is editor not template — using our default)
 
 DEFER for graphical docs (chart drawings, dental charts, PDF library):
 canvas drawing tool + PDF storage are entirely new feature surfaces beyond
