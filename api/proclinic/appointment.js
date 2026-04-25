@@ -4,6 +4,7 @@ import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
+import { debugLog } from '../../src/lib/debugLog.js';
 
 // ─── Action: create ─────────────────────────────────────────────────────────
 
@@ -109,7 +110,7 @@ async function handleCreate(req, res) {
           }
         }
       }
-    } catch { /* best effort */ }
+    } catch (e) { debugLog('proclinic-appointment', 'parse appointment list after redirect to find new id failed', e); }
 
     return res.status(200).json({ success: true, appointmentProClinicId });
   }
@@ -156,7 +157,7 @@ async function handleUpdate(req, res) {
       const events = Array.isArray(apiData) ? apiData : apiData.appointment || Object.values(apiData).filter(v => v && typeof v === 'object' && v.id);
       const match = events.find(ev => String((ev.extendedProps || {}).id || ev.id) === String(appointmentId));
       if (match) existingData = match.extendedProps || {};
-    } catch {}
+    } catch (e) { debugLog('proclinic-appointment', `update: lookup existing data by date ${appointment.appointmentDate} failed`, e); }
   }
   // If not found by new date, try original date from existing data
   if (!existingData.id) {
@@ -176,12 +177,12 @@ async function handleUpdate(req, res) {
             const data = await session.fetchJSON(`${base}/admin/api/appointment?date=${date}`);
             const events = Array.isArray(data) ? data : data.appointment || Object.values(data).filter(v => v && typeof v === 'object' && v.id);
             return events.find(ev => String((ev.extendedProps || {}).id || ev.id) === String(appointmentId));
-          } catch { return null; }
+          } catch (e) { debugLog('proclinic-appointment', `update: scan-batch fetch ${date} failed`, e); return null; }
         }));
         const found = results.find(r => r);
         if (found) { existingData = found.extendedProps || {}; break outer; }
       }
-    } catch {}
+    } catch (e) { debugLog('proclinic-appointment', `update: 365d scan to find original date for appt ${appointmentId} failed`, e); }
   }
 
   // 3. Build form — preserve existing fields, override with changes

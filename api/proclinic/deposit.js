@@ -4,6 +4,7 @@ import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF, extractValidationErrors } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
+import { debugLog } from '../../src/lib/debugLog.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -78,8 +79,8 @@ async function handleOptions(req, res) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
-    }).catch(err => console.warn('[deposit] Firestore options backup failed:', err.message));
-  } catch (_) {}
+    }).catch(e => debugLog('proclinic-deposit', 'pc_deposit_options backup PATCH failed', e));
+  } catch (e) { debugLog('proclinic-deposit', 'pc_deposit_options backup setup failed', e); }
 
   return res.status(200).json({ success: true, options });
 }
@@ -216,7 +217,7 @@ async function handleSubmit(req, res) {
             depositProClinicId = m[1];
           }
         });
-      } catch { /* best effort */ }
+      } catch (e) { debugLog('proclinic-deposit', `submit: parse deposit list to find new id for customer ${proClinicId} failed`, e); }
     }
 
     return res.status(200).json({ success: true, redirectTo: location, depositProClinicId });

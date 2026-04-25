@@ -10,6 +10,7 @@ import {
 } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
+import { debugLog } from '../../src/lib/debugLog.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -46,7 +47,8 @@ async function resolveImageUrls(session, images) {
       const buffer = Buffer.from(await resp.arrayBuffer());
       const ct = resp.headers.get('content-type') || 'image/jpeg';
       return { ...img, dataUrl: `data:${ct};base64,${buffer.toString('base64')}` };
-    } catch {
+    } catch (e) {
+      debugLog('proclinic-treatment', `image inline-fetch failed for ${img?.dataUrl?.slice(0, 80) || 'unknown url'}`, e);
       return img;
     }
   }));
@@ -444,7 +446,7 @@ async function handleGet(req, res) {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
-  }).catch(() => {});
+  }).catch(e => debugLog('proclinic-treatment', `pc_treatments view-time backup PATCH for ${treatmentId} failed`, e));
 
   return res.status(200).json({ success: true, treatment });
 }

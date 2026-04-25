@@ -5,6 +5,7 @@ import { extractCSRF, extractCustomerId, extractHN, extractValidationErrors, ext
 import { buildCreateFormData, buildUpdateFormData, reverseMapPatient } from './_lib/fields.js';
 import { verifyAuth } from './_lib/auth.js';
 import * as cheerio from 'cheerio';
+import { debugLog } from '../../src/lib/debugLog.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -97,7 +98,7 @@ async function handleCreate(req, res) {
   try {
     const editHtml = await session.fetchText(`${base}/admin/customer/${proClinicId}/edit`);
     proClinicHN = extractHN(editHtml);
-  } catch (_) { /* non-fatal */ }
+  } catch (e) { debugLog('proclinic-customer', `extract HN for ${proClinicId} failed`, e); }
 
   // Backup new customer to Firestore for standalone (async)
   try {
@@ -114,8 +115,8 @@ async function handleCreate(req, res) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
-    }).catch(() => {});
-  } catch (_) {}
+    }).catch(e => debugLog('proclinic-customer', `pc_customers create-backup PATCH for ${proClinicId} failed`, e));
+  } catch (e) { debugLog('proclinic-customer', `pc_customers create-backup setup for ${proClinicId} failed`, e); }
 
   return res.status(200).json({ success: true, proClinicId, proClinicHN });
 }
@@ -272,8 +273,8 @@ async function handleFetchPatient(req, res) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
-    }).catch(() => {});
-  } catch (_) {}
+    }).catch(e => debugLog('proclinic-customer', `pc_customers update-backup PATCH for ${proClinicId} failed`, e));
+  } catch (e) { debugLog('proclinic-customer', `pc_customers update-backup setup for ${proClinicId} failed`, e); }
 
   return res.status(200).json({ success: true, patient, proClinicId, proClinicHN });
 }
