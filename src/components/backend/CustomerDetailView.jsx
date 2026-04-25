@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
-  ChevronUp, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
+  ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer
 } from 'lucide-react';
 import {
@@ -88,7 +88,13 @@ function relativeTime(isoStr) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export default function CustomerDetailView({ customer, accentColor, theme, clinicSettings, onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment, onCustomerUpdated, onCreateSale, onOpenFinance }) {
+export default function CustomerDetailView({
+  customer, accentColor, theme, clinicSettings,
+  onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment,
+  onCustomerUpdated, onCreateSale, onOpenFinance,
+  // Phase 14.7.D — placeholder; real handler ships in 14.7.E timeline modal.
+  onShowTimeline,
+}) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -101,6 +107,11 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
   const [customerSales, setCustomerSales] = useState([]);
   const [salesError, setSalesError] = useState('');
   const [expandedTreatment, setExpandedTreatment] = useState(null);
+  // Phase 14.7.D (2026-04-26) — paginate treatment history (5 per page,
+  // ProClinic-style). Single state object so external resetters can wipe
+  // both page + expansion in one setState.
+  const TREATMENT_PAGE_SIZE = 5;
+  const [treatmentPage, setTreatmentPage] = useState(1);
   const [addQtyModal, setAddQtyModal] = useState(null);
   const [addQtyValue, setAddQtyValue] = useState('');
   const [addQtySaving, setAddQtySaving] = useState(false);
@@ -249,6 +260,37 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
     });
     return list;
   }, [customer?.treatmentSummary]);
+
+  // Pagination derivation — slice 5 per page, clamp page if list shrinks.
+  const treatmentTotalPages = Math.max(1, Math.ceil(treatmentSummary.length / TREATMENT_PAGE_SIZE));
+  const paginatedTreatments = useMemo(() => {
+    const start = (treatmentPage - 1) * TREATMENT_PAGE_SIZE;
+    return treatmentSummary.slice(start, start + TREATMENT_PAGE_SIZE);
+  }, [treatmentSummary, treatmentPage]);
+
+  // Compact page-number array. ≤7 pages → show all; otherwise show first /
+  // current ± 1 / last with stable de-duplication and sort. Ellipsis is
+  // computed at render-time by inspecting gaps between adjacent entries.
+  const treatmentPageNumbers = useMemo(() => {
+    if (treatmentTotalPages <= 7) {
+      return Array.from({ length: treatmentTotalPages }, (_, i) => i + 1);
+    }
+    const candidates = [1, treatmentPage - 1, treatmentPage, treatmentPage + 1, treatmentTotalPages]
+      .filter(p => p >= 1 && p <= treatmentTotalPages);
+    return Array.from(new Set(candidates)).sort((a, b) => a - b);
+  }, [treatmentPage, treatmentTotalPages]);
+
+  // Auto-clamp current page if the list shrunk (e.g. delete on page 7 of 7
+  // → no longer 7 pages). Also re-fold any expanded treatment that scrolls
+  // off the current page so users don't see "expanded" UI for an unseen row.
+  useEffect(() => {
+    if (treatmentPage > treatmentTotalPages) setTreatmentPage(1);
+  }, [treatmentPage, treatmentTotalPages]);
+  useEffect(() => {
+    if (expandedTreatment && !paginatedTreatments.some(t => t.id === expandedTreatment)) {
+      setExpandedTreatment(null);
+    }
+  }, [paginatedTreatments, expandedTreatment]);
 
   return (
     <div>
@@ -461,29 +503,49 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
             </div>
           </div>
 
-          {/* Treatment Timeline */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2">
+          {/* Treatment History — Phase 14.7.D (2026-04-26) ProClinic-fidelity:
+              card-per-row with always-visible action chips, 5-per-page
+              pagination, prev/next + page-number nav.
+              Header has 3 CTAs (พิมพ์เอกสาร / + บันทึกการรักษา / ดูไทม์ไลน์);
+              the timeline button is a placeholder until Phase 14.7.E ships. */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden"
+            data-testid="treatment-history-card">
+            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2 flex-wrap">
               <Stethoscope size={16} style={{ color: ac }} />
               <h3 className="text-sm font-bold text-[var(--tx-heading)]">ประวัติการรักษา</h3>
               <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                 style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
-              <button onClick={() => setPrintDocOpen(true)}
-                data-testid="print-document-btn"
-                className="ml-auto text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
-                title="พิมพ์ใบรับรอง / ฉลากยา / เอกสารอื่นๆ">
-                <Printer size={11} /> พิมพ์เอกสาร
-              </button>
-              {onCreateTreatment && (
-                <button onClick={onCreateTreatment}
-                  className="text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                  style={{ color: ac, borderColor: `rgba(${acRgb},0.3)`, backgroundColor: `rgba(${acRgb},0.08)` }}>
-                  <Plus size={11} /> สร้างการรักษา
+              <div className="ml-auto flex items-center gap-1.5">
+                <button onClick={() => setPrintDocOpen(true)}
+                  data-testid="print-document-btn"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                  style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
+                  title="พิมพ์ใบรับรอง / ฉลากยา / เอกสารอื่นๆ">
+                  <Printer size={11} /> พิมพ์เอกสาร
                 </button>
-              )}
+                {onCreateTreatment && (
+                  <button onClick={onCreateTreatment}
+                    data-testid="create-treatment-btn"
+                    className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                    style={{ background: 'linear-gradient(135deg, #56CCF2, #2D9CDB)' }}
+                    title="สร้างใบบันทึกการรักษาใหม่">
+                    <Plus size={11} /> บันทึกการรักษา
+                  </button>
+                )}
+                {/* Phase 14.7.E placeholder — orange matches ProClinic
+                    btn-secondary #FF9F1C (verified via opd.js scan
+                    2026-04-26). Real timeline handler ships in 14.7.E;
+                    button stays disabled until parent passes onShowTimeline. */}
+                <button onClick={() => onShowTimeline?.()} disabled={!onShowTimeline}
+                  data-testid="show-timeline-btn"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, #FF9F1C, #E17B0A)' }}
+                  title={onShowTimeline ? 'ดูไทม์ไลน์รวม' : 'ดูไทม์ไลน์ — เร็วๆ นี้'}>
+                  <Activity size={11} /> ดูไทม์ไลน์
+                </button>
+              </div>
             </div>
 
             {treatmentsError && (
@@ -492,94 +554,159 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
               </div>
             )}
             {treatmentSummary.length === 0 && !treatmentsError ? (
-              <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการรักษา</div>
+              <div className="p-12 text-center" data-testid="treatment-history-empty">
+                <Stethoscope size={32} className="mx-auto mb-3 text-[var(--tx-muted)] opacity-40" />
+                <p className="text-sm font-bold text-[var(--tx-secondary)]">ยังไม่มีประวัติการรักษา</p>
+                <p className="text-xs text-[var(--tx-muted)] mt-1">กดปุ่ม "บันทึกการรักษา" เพื่อสร้างรายการแรก</p>
+              </div>
             ) : (
-              <div className="divide-y divide-[var(--bd)]">
-                {treatmentSummary.map((t, i) => {
-                  const isExpanded = expandedTreatment === t.id;
-                  const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
-                  return (
-                    <div key={t.id || i} className="group">
-                      {/* Summary row */}
-                      <button onClick={() => setExpandedTreatment(isExpanded ? null : t.id)}
-                        className="w-full px-4 py-3 text-left hover:bg-[var(--bg-hover)] transition-colors">
-                        <div className="flex items-start gap-3">
-                          {/* Timeline dot */}
+              <>
+                <div className="divide-y divide-[var(--bd)]" data-testid="treatment-history-list">
+                  {paginatedTreatments.map((t, pageIndex) => {
+                    const globalIndex = (treatmentPage - 1) * TREATMENT_PAGE_SIZE + pageIndex;
+                    const isExpanded = expandedTreatment === t.id;
+                    const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
+                    const isBackendCreated = detail?.createdBy === 'backend' || t.createdBy === 'backend';
+                    const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment);
+                    return (
+                      <div key={t.id || globalIndex}
+                        data-testid={`treatment-row-${t.id}`}
+                        className={`group transition-colors ${isExpanded ? 'bg-[var(--bg-elevated)]/40' : 'hover:bg-[var(--bg-hover)]'}`}>
+                        {/* Header row: marker + summary + always-visible action chips */}
+                        <div className="px-4 py-3 flex items-start gap-3">
                           <div className="mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 border-2"
-                            style={{ borderColor: i === 0 ? ac : 'var(--bd-strong)', backgroundColor: i === 0 ? ac : 'transparent' }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
+                            style={{ borderColor: globalIndex === 0 ? ac : 'var(--bd-strong)', backgroundColor: globalIndex === 0 ? ac : 'transparent' }}
+                            aria-label={globalIndex === 0 ? 'รายการล่าสุด' : undefined} />
+                          <button onClick={() => setExpandedTreatment(isExpanded ? null : t.id)}
+                            className="flex-1 min-w-0 text-left"
+                            data-testid={`treatment-toggle-${t.id}`}
+                            aria-expanded={isExpanded}>
+                            <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-[var(--tx-heading)]">{formatThaiDateFull(t.date) || '-'}</span>
-                              {isExpanded ? <ChevronUp size={14} className="text-[var(--tx-muted)]" /> : <ChevronDown size={14} className="text-[var(--tx-muted)]" />}
+                              {globalIndex === 0 && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>ล่าสุด</span>
+                              )}
+                              <span className="ml-auto text-[var(--tx-muted)] flex-shrink-0">
+                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </span>
                             </div>
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-[var(--tx-muted)]">
                               {t.branch && <span>{t.branch}</span>}
-                              {t.doctor && <span>{t.doctor}</span>}
-                              {t.assistants?.length > 0 && <span>{t.assistants.join(', ')}</span>}
+                              {t.doctor && <span className="font-semibold text-[var(--tx-secondary)]">· {t.doctor}</span>}
+                              {t.assistants?.length > 0 && <span>· {t.assistants.join(', ')}</span>}
                             </div>
-                            {t.cc && <p className="mt-1 text-xs text-[var(--tx-secondary)] truncate">CC: {t.cc}</p>}
-                            {t.dx && <p className="text-xs text-[var(--tx-muted)] truncate">DX: {t.dx}</p>}
-                          </div>
-                        </div>
-                      </button>
+                            {t.cc && <p className="mt-1 text-xs text-[var(--tx-secondary)] truncate"><span className="text-[var(--tx-muted)] font-semibold">CC:</span> {t.cc}</p>}
+                            {t.dx && <p className="text-xs text-[var(--tx-muted)] truncate"><span className="font-semibold">DX:</span> {t.dx}</p>}
+                          </button>
 
-                      {/* Expanded detail */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 pl-10">
-                          {/* Edit/Delete for backend-created treatments only */}
-                          {(detail?.createdBy === 'backend' || t.createdBy === 'backend') && (onEditTreatment || onDeleteTreatment) && (
-                            <div className="flex gap-1.5 mb-2">
+                          {/* Always-visible per-card action chips (backend-created only).
+                              Stop propagation so clicking a chip doesn't toggle the
+                              expansion. Hover-fade on desktop; always-visible on mobile. */}
+                          {showActions && (
+                            <div className="flex flex-shrink-0 gap-1 self-start opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                               {onEditTreatment && (
-                                <button onClick={() => onEditTreatment(t.id)}
-                                  className="text-xs font-bold px-2 py-1 rounded border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all flex items-center gap-1">
-                                  <Edit3 size={10} /> แก้ไข
+                                <button onClick={(e) => { e.stopPropagation(); onEditTreatment(t.id); }}
+                                  data-testid={`treatment-edit-${t.id}`}
+                                  title="แก้ไข"
+                                  aria-label="แก้ไขการรักษา"
+                                  className="p-1.5 rounded border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all">
+                                  <Edit3 size={11} />
                                 </button>
                               )}
                               {onDeleteTreatment && (
-                                <button onClick={() => onDeleteTreatment(t.id)}
-                                  className="text-xs font-bold px-2 py-1 rounded border border-red-700/40 text-red-400 bg-red-900/10 hover:bg-red-900/20 transition-all flex items-center gap-1">
-                                  <Trash2 size={10} /> ลบ
+                                <button onClick={(e) => { e.stopPropagation(); onDeleteTreatment(t.id); }}
+                                  data-testid={`treatment-delete-${t.id}`}
+                                  title="ยกเลิก / ลบ"
+                                  aria-label="ลบการรักษา"
+                                  className="p-1.5 rounded border border-red-700/40 text-red-400 bg-red-900/10 hover:bg-red-900/20 transition-all">
+                                  <Trash2 size={11} />
                                 </button>
                               )}
                             </div>
                           )}
-                          {treatmentsLoading && !detail ? (
-                            <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)] py-2">
-                              <Loader2 size={12} className="animate-spin" /> กำลังโหลด...
-                            </div>
-                          ) : detail?.detail ? (
-                            <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} isDark={isDark} />
-                          ) : (
-                            <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
-                              {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
-                              {t.dx && <DetailField label="วินิจฉัย (DX)" value={t.dx} />}
-                              <p className="text-xs text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
-                            </div>
-                          )}
-                          {/* Phase 14.2.B (2026-04-25) — Per-treatment dual print
-                              dropdowns matching ProClinic: blue "พิมพ์ใบรับรองแพทย์"
-                              (8 medical-cert variants) + green "พิมพ์การรักษา"
-                              (3 treatment-record types). Both open the shared
-                              DocumentPrintModal with docTypeFilter applied +
-                              treatment data pre-filled into the form. */}
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'cert' })}
-                              data-testid={`treatment-print-cert-${t.id}`}
-                              className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-sky-700 hover:bg-sky-600 text-white transition-all">
-                              <Printer size={12} /> พิมพ์ใบรับรองแพทย์ ▾
-                            </button>
-                            <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'record' })}
-                              data-testid={`treatment-print-record-${t.id}`}
-                              className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
-                              <Printer size={12} /> พิมพ์การรักษา ▾
-                            </button>
-                          </div>
                         </div>
-                      )}
+
+                        {/* Expanded detail */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pl-10">
+                            {treatmentsLoading && !detail ? (
+                              <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)] py-2">
+                                <Loader2 size={12} className="animate-spin" /> กำลังโหลด...
+                              </div>
+                            ) : detail?.detail ? (
+                              <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} isDark={isDark} />
+                            ) : (
+                              <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
+                                {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
+                                {t.dx && <DetailField label="วินิจฉัย (DX)" value={t.dx} />}
+                                <p className="text-xs text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
+                              </div>
+                            )}
+                            {/* Per-treatment dual print buttons (Phase 14.2.B) */}
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'cert' })}
+                                data-testid={`treatment-print-cert-${t.id}`}
+                                className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-sky-700 hover:bg-sky-600 text-white transition-all">
+                                <Printer size={12} /> พิมพ์ใบรับรองแพทย์ ▾
+                              </button>
+                              <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'record' })}
+                                data-testid={`treatment-print-record-${t.id}`}
+                                className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
+                                <Printer size={12} /> พิมพ์การรักษา ▾
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination footer — visible only when ≥ 2 pages. */}
+                {treatmentTotalPages > 1 && (
+                  <div className="px-4 py-3 border-t border-[var(--bd)] flex items-center justify-between gap-2 flex-wrap"
+                    data-testid="treatment-history-pagination">
+                    <span className="text-xs text-[var(--tx-muted)]">
+                      แสดง <span className="font-bold text-[var(--tx-secondary)]">{(treatmentPage - 1) * TREATMENT_PAGE_SIZE + 1}–{Math.min(treatmentPage * TREATMENT_PAGE_SIZE, treatmentSummary.length)}</span>
+                      {' '}จาก <span className="font-bold text-[var(--tx-secondary)]">{treatmentSummary.length}</span> รายการ
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setTreatmentPage(p => Math.max(1, p - 1))} disabled={treatmentPage === 1}
+                        data-testid="treatment-page-prev"
+                        title="หน้าก่อนหน้า"
+                        aria-label="หน้าก่อนหน้า"
+                        className="p-1.5 rounded border border-[var(--bd)] text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                        <ChevronLeft size={12} />
+                      </button>
+                      {treatmentPageNumbers.map((p, idx) => {
+                        const prev = treatmentPageNumbers[idx - 1];
+                        const showEllipsis = prev !== undefined && p - prev > 1;
+                        return (
+                          <span key={p} className="flex items-center gap-1">
+                            {showEllipsis && <span className="text-[var(--tx-muted)] text-xs px-1">…</span>}
+                            <button onClick={() => setTreatmentPage(p)}
+                              data-testid={`treatment-page-${p}`}
+                              aria-label={`หน้า ${p}`}
+                              aria-current={p === treatmentPage ? 'page' : undefined}
+                              className={`min-w-[28px] px-2 py-1 rounded text-xs font-bold transition-all ${p === treatmentPage ? 'text-white' : 'text-[var(--tx-muted)] hover:bg-[var(--bg-hover)]'}`}
+                              style={p === treatmentPage ? { backgroundColor: ac } : {}}>
+                              {p}
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button onClick={() => setTreatmentPage(p => Math.min(treatmentTotalPages, p + 1))} disabled={treatmentPage === treatmentTotalPages}
+                        data-testid="treatment-page-next"
+                        title="หน้าถัดไป"
+                        aria-label="หน้าถัดไป"
+                        className="p-1.5 rounded border border-[var(--bd)] text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                        <ChevronRight size={12} />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
