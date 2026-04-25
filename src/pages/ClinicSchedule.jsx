@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db, appId } from '../firebase.js';
+import { db, appId, auth } from '../firebase.js';
 import { CalendarDays, ChevronLeft, ChevronRight, X, Clock, Stethoscope, Phone, MessageCircle, Globe, CheckCircle2, XCircle } from 'lucide-react';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
@@ -71,8 +71,21 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
   // Detect light mode from theme prop
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
+  // 2026-04-25 race fix: track auth-ready state. App.jsx anon-auth gate
+  // keeps users from reaching this component pre-auth, but defense in
+  // depth — if firestore.rules require isSignedIn() and we subscribe
+  // pre-auth, the snapshot returns empty → 'notfound' flashes. Wait for
+  // auth.currentUser before subscribing.
+  const [authReady, setAuthReady] = useState(!!auth.currentUser);
+  useEffect(() => {
+    if (auth.currentUser) { setAuthReady(true); return; }
+    const unsub = auth.onAuthStateChanged((u) => { if (u) setAuthReady(true); });
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
+    if (!authReady) return;
     const unsub = onSnapshot(
       doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token),
       (snap) => {
@@ -88,7 +101,7 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
       () => setStatus('notfound')
     );
     return () => unsub();
-  }, [token]);
+  }, [token, authReady]);
 
   // ── Loading ──
   if (status === 'loading') {

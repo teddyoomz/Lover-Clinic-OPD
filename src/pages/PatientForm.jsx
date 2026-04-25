@@ -29,11 +29,15 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sessionExists, setSessionExists] = useState(true);
+  // 2026-04-25: race-condition fix. sessionExists starts as `null` (loading)
+  // not `true` — only flip to `false` AFTER a server-confirmed snapshot.
+  // Without this, App.jsx's anon-auth race could surface "Invalid Link"
+  // pre-auth even with the App.jsx gate (defense in depth).
+  const [sessionExists, setSessionExists] = useState(null);
   const [isExpired, setIsExpired] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); 
+  const [isEditing, setIsEditing] = useState(false);
   const [sessionType, setSessionType] = useState('intake');
   const [customTemplate, setCustomTemplate] = useState(null);
   const [countryDropdownOpen, setCountryDropdownOpen] = useState(false);
@@ -53,8 +57,16 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
 
   useEffect(() => {
     if (!sessionId) return;
+    // 2026-04-25 race fix: don't subscribe until anon-auth completes.
+    // Even though App.jsx now gates rendering, `user` could still be null
+    // momentarily on edge cases (e.g. cookie cleared mid-session). The
+    // listener uses Firestore rules `isSignedIn()` so a null user → empty
+    // result → false-positive "Invalid Link". Wait for auth.
+    if (!user) return;
     const unsubscribe = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), (snapshot) => {
       if (!snapshot.exists()) { setSessionExists(false); return; }
+      // Set to true on first server-confirmed exists() === true
+      setSessionExists(true);
       const data = snapshot.data();
       const currentFormType = data.formType || 'intake';
       setSessionType(currentFormType);
@@ -389,7 +401,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     </div>
   );
 
-  if (!sessionId || !sessionExists) {
+  // Hard-fail only when sessionId is missing OR snapshot has confirmed the
+  // doc doesn't exist (sessionExists === false). While `sessionExists ===
+  // null` (snapshot not yet fired = still loading), show a spinner — never
+  // flash "Invalid Link". Race-fix 2026-04-25.
+  if (!sessionId || sessionExists === false) {
     return (
       <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
         <LanguageToggle />
@@ -397,6 +413,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         <h2 className="text-xl font-bold mb-3" style={{ color: isDark ? '#ffffff' : '#0f172a' }}>{language === 'en' ? 'Invalid Link' : 'ลิงก์ไม่ถูกต้อง'}</h2>
         <p className="mb-8 text-sm leading-relaxed" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'This QR Code or link is invalid or has been removed.' : 'QR Code หรือลิงก์นี้ไม่ถูกต้อง หรือถูกลบออกจากระบบแล้ว'}</p>
         {isSimulation && <button onClick={onBack} className="font-bold text-sm flex items-center justify-center gap-2 mx-auto transition-colors" style={{ color: isDark ? '#ef4444' : '#ec4899' }}><ArrowLeft size={18} /> {language === 'en' ? 'Return' : 'กลับหน้าหลัก'}</button>}
+      </div>
+    );
+  }
+  if (sessionExists === null) {
+    return (
+      <div className="w-full max-w-xl mx-auto p-6 pt-24 text-center relative" style={{ minHeight: '100vh', background: isDark ? '#050505' : '#fafafa' }}>
+        <div className={`w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4 ${isDark ? 'border-gray-800 border-t-red-400' : 'border-pink-200 border-t-pink-500'}`} />
+        <p className="text-sm font-medium" style={{ color: isDark ? '#9ca3af' : '#64748b' }}>{language === 'en' ? 'Loading…' : 'กำลังโหลด...'}</p>
       </div>
     );
   }

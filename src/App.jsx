@@ -68,11 +68,22 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Public-link routes (?session, ?patient, ?schedule) require Firebase auth
+  // because firestore.rules `opd_sessions / clinic_schedules` check
+  // `isSignedIn()`. Without this, the FIRST render of the public page fires
+  // an onSnapshot listener before signInAnonymously has resolved → the
+  // listener returns empty/no-doc → page briefly flashes "ลิงก์ไม่ถูกต้อง"
+  // → user has to refresh to recover (auth caches on 2nd load). Fix: kick
+  // off anon-auth as soon as a public-link param is detected, and gate the
+  // render below on `user != null`. (Legacy single-bug fix focused only on
+  // sessionFromUrl; expanding to all 3 public-link types — patient + schedule
+  // had the same race per user report 2026-04-25.)
+  const needsPublicAuth = !!(sessionFromUrl || patientFromUrl || scheduleFromUrl);
   useEffect(() => {
-    if (sessionFromUrl && !user && !isInitializing) {
+    if (needsPublicAuth && !user && !isInitializing) {
       signInAnonymously(auth).catch(err => console.error('Anonymous Auth Error:', err));
     }
-  }, [sessionFromUrl, user, isInitializing]);
+  }, [needsPublicAuth, user, isInitializing]);
 
   useEffect(() => {
     const handler = () => setPrintMode(null);
@@ -103,6 +114,15 @@ export default function App() {
 
   if (isInitializing) {
     return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลดระบบ {clinicSettings.clinicName}...</div>;
+  }
+
+  // Wait for anon-auth to complete before rendering ANY public-link page.
+  // Without this gate, the first onSnapshot fires unauthenticated → returns
+  // empty → "Invalid Link" flashes for ~200-500ms before the auth retry
+  // succeeds. (User-reported bug 2026-04-25: "QR ลิ้งใช้ครั้งแรกไม่ได้
+  // ต้อง refresh ถึงจะติด"). Loading screen here = ZERO flash.
+  if (needsPublicAuth && !user) {
+    return <div className="flex items-center justify-center min-h-screen bg-[#050505] font-medium tracking-widest uppercase animate-pulse" style={{color: ac}}>กำลังโหลด...</div>;
   }
 
   if (scheduleFromUrl) {

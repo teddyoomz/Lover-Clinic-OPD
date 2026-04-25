@@ -443,6 +443,13 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
   useEffect(() => {
     if (!token) { setStatus('notfound'); return; }
+    // 2026-04-25 race fix: don't subscribe until clinic settings have at
+    // least loaded once. Without this, a Firestore query can fire before
+    // anon-auth completes (page reaches PatientDashboard before App.jsx's
+    // auth gate has fully resolved on slow networks) → empty snapshot →
+    // status='notfound' flashes briefly. clinicSettingsLoaded is a stable
+    // proxy for "Firebase listeners are now reaching us with auth".
+    if (!clinicSettingsLoaded) return;
     const q = query(
       collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'),
       where('patientLinkToken', '==', token)
@@ -468,7 +475,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
     }, () => setStatus('notfound'));
     return () => unsub();
-  }, [token]);
+  }, [token, clinicSettingsLoaded]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   // ── Controls bar (reused in loading/error/main screens) ───────────────────
