@@ -30,6 +30,7 @@ import StockTab from '../components/backend/StockTab.jsx';
 import PromotionTab from '../components/backend/PromotionTab.jsx';
 import CouponTab from '../components/backend/CouponTab.jsx';
 import VoucherTab from '../components/backend/VoucherTab.jsx';
+import VendorSalesTab from '../components/backend/VendorSalesTab.jsx';
 import ReportsHomeTab from '../components/backend/reports/ReportsHomeTab.jsx';
 import SaleReportTab from '../components/backend/reports/SaleReportTab.jsx';
 import CustomerReportTab from '../components/backend/reports/CustomerReportTab.jsx';
@@ -336,6 +337,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <CouponTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'vouchers' ? (
           <VoucherTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'vendor-sales' ? (
+          <VendorSalesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports' ? (
           <ReportsHomeTab onNavigate={handleNavigate} clinicSettings={clinicSettings} />
         ) : activeTab === 'reports-sale' ? (
