@@ -1385,7 +1385,10 @@ describe('F13: prefill wiring — every field flows from be_treatments/be_custom
       ['treatment',      'ให้ยาแก้ปวดและฉีด Botox 100U'],
       ['treatmentPlan',  'นัดติดตาม 2 สัปดาห์'],
       ['additionalNote', 'แพ้ยาประเภท Sulfa'],
-      ['birthdate',      '1990-05-12'],
+      // Phase 14.6.B — buildPrintContext now auto-formats ISO dates per
+      // language. TH/Bilingual → BE year (1990 + 543 = 2533), EN → CE year.
+      // F13.wire test renders TH, so we expect formatted "12/05/2533".
+      ['birthdate',      '12/05/2533'],
       ['bloodGroup',     'A'],
       ['patientAddress', '67/12 ถ.ทดสอบ'],
       ['emergencyName',  'คุณแม่'],

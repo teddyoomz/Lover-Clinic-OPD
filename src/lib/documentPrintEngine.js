@@ -100,8 +100,23 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
   ctx.today   = (ctx.language === 'en') ? ctx.todayCE : ctx.todayBE;
   ctx.todayISO = today;
 
+  // Phase 14.x — auto-format ISO dates in user-provided values to match
+  // the doc's language. Without this, date fields (restFrom / restTo /
+  // treatmentDate / etc) render as raw "2026-04-25" instead of "25/04/2569"
+  // or "25/04/2026".
+  const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const formattedValues = {};
+  for (const [k, v] of Object.entries(values || {})) {
+    if (isIsoDate(v)) {
+      const [yy, mm, dd] = v.split('-');
+      const yr = ctx.language === 'en' ? yy : (Number(yy) + 543).toString();
+      formattedValues[k] = `${dd}/${mm}/${yr}`;
+    } else {
+      formattedValues[k] = v;
+    }
+  }
   // Merge per-document values last (override defaults if keys collide)
-  return { ...ctx, ...values };
+  return { ...ctx, ...formattedValues };
 }
 
 /**

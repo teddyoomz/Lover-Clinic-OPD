@@ -212,6 +212,59 @@ export default function DocumentPrintModal({
   const effectiveScale = previewScale * zoomMultiplier;
   // Reset zoom when switching templates (different paper size = different fit)
   useEffect(() => { setZoomMultiplier(1); }, [selected?.id]);
+
+  // 2026-04-25 — hand-drag pan on the preview. When user is zoomed past
+  // 100% (zoomMultiplier > 1), the doc overflows the container and they
+  // need to pan to see all corners. Native scrollbars work but a grab
+  // cursor + drag interaction is the world-class UX (matches Adobe Acrobat,
+  // Figma, Google Docs zoom mode).
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, scrollX: 0, scrollY: 0 });
+  const onPanStart = (e) => {
+    if (zoomMultiplier <= 1) return; // no need to pan when fit
+    const el = previewContainerRef.current;
+    if (!el) return;
+    isPanning.current = true;
+    const point = e.touches ? e.touches[0] : e;
+    panStart.current = {
+      x: point.clientX, y: point.clientY,
+      scrollX: el.scrollLeft, scrollY: el.scrollTop,
+    };
+    el.style.cursor = 'grabbing';
+    e.preventDefault();
+  };
+  const onPanMove = (e) => {
+    if (!isPanning.current) return;
+    const el = previewContainerRef.current;
+    if (!el) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dx = point.clientX - panStart.current.x;
+    const dy = point.clientY - panStart.current.y;
+    el.scrollLeft = panStart.current.scrollX - dx;
+    el.scrollTop  = panStart.current.scrollY - dy;
+  };
+  const onPanEnd = () => {
+    if (!isPanning.current) return;
+    isPanning.current = false;
+    const el = previewContainerRef.current;
+    if (el) el.style.cursor = zoomMultiplier > 1 ? 'grab' : 'auto';
+  };
+  // Attach mousemove/mouseup at window level so drag continues even if
+  // cursor leaves the container.
+  useEffect(() => {
+    const handleMove = (e) => onPanMove(e);
+    const handleEnd = () => onPanEnd();
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [zoomMultiplier]);
   useLayoutEffect(() => {
     if (!previewContainerRef.current) return;
     const updateScale = () => {
@@ -491,8 +544,11 @@ export default function DocumentPrintModal({
                 </div>
                 <div
                   ref={previewContainerRef}
-                  className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[70vh] overflow-auto"
+                  className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[80vh] overflow-auto select-none"
                   data-testid="document-print-preview-container"
+                  style={{ cursor: zoomMultiplier > 1 ? 'grab' : 'auto' }}
+                  onMouseDown={onPanStart}
+                  onTouchStart={onPanStart}
                 >
                   {/* Scaled wrapper takes the visible scaled space so the
                       surrounding layout flows correctly. Single scale =
