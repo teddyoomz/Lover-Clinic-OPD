@@ -870,6 +870,14 @@ export default function CustomerDetailView({ customer, accentColor, theme, clini
           rr: v.respiratoryRate || v.rr || '',
           bp,
           spo2: v.oxygenSaturation || v.spo2 || v.oxygenSat || '',
+          // Phase 14.2.E (2026-04-25) — medical-certificate (5 โรค) extras
+          vitalsWeight: v.weight || v.bw || '',
+          vitalsHeight: v.height || v.bh || '',
+          // Body status: default both unchecked; user fills in DocumentPrintModal
+          bodyNormalMark:   '☐',
+          bodyAbnormalMark: '☐',
+          bodyAbnormalDetail: '',
+          otherConditions: '',
           // Clinical fields (treatment-history right panel)
           symptoms: d.symptoms || d.cc || summary?.cc || '',
           physicalExam: d.physicalExam || d.pe || '',

@@ -785,7 +785,17 @@ describe('F12: per-doc end-to-end render — all 16 docTypes', () => {
   // `mustContain` arrays = strings expected in the rendered HTML.
   const PER_DOC_EXPECTATIONS = {
     'medical-certificate': {
-      mustContain: ['ใบรับรองแพทย์', 'ส่วนที่ 1', 'ส่วนที่ 2', 'โรคประจำตัว', 'อุบัติเหตุ', 'ผู้ปกครอง'],
+      // Phase 14.2.E (2026-04-25) — locked to ProClinic /admin/medical-certificate
+      // .print-area extraction. All section headers + 4-disease clause + vitals
+      // labels + summary line must be present.
+      mustContain: [
+        'ใบรับรองแพทย์', 'ส่วนที่ 1', 'ส่วนที่ 2', 'โรคประจำตัว', 'อุบัติเหตุ', 'ผู้ปกครอง',
+        'น้ำหนักตัว', 'ความสูง', 'ความดันโลหิต', 'ชีพจร',
+        'สภาพร่างกายทั่วไปอยู่ในเกณฑ์',
+        'ขอรับรองว่าบุคคลดังกล่าว',
+        'โรคเรื้อนในระยะติดต่อ', 'วัณโรคในระยะอันตราย', 'โรคเท้าช้าง', 'อื่นๆ',
+        'สรุปความเห็นและข้อแนะนำของแพทย์',
+      ],
       mustHaveValue: ['Lover Clinic', 'นพ.ทดสอบ ใจดี', 'A001 Cholera', 'TEST-2026-001'],
     },
     'medical-certificate-for-driver-license': {
@@ -928,8 +938,8 @@ describe('F11: full ProClinic-replicated rendering', () => {
     expect(html).toContain('Lover Clinic');
     expect(html).toContain('11102000999'); // license shown in header
     expect(html).toContain('นพ.A');
-    // Cert# block ALWAYS shown
-    expect(html).toContain('<strong>เลขที่:</strong>');
+    // Cert# block ALWAYS shown — Phase 14.2.D theme adds color:#b71c1c
+    expect(html).toContain('เลขที่:');
     expect(html).toContain('CERT-A1');
     // Patient signature footnote ALWAYS shown (no toggle gate)
     expect(html).toContain('ผู้ปกครอง');
@@ -1114,6 +1124,13 @@ function buildPrefillForTreatment({ customer, treatment, summary, today }) {
     findings: d.physicalExam || d.pe || d.symptoms || d.cc || '',
     drNote: d.treatmentNote || d.note || d.drNote || '',
     treatmentItems: treatmentItemsText,
+    // Phase 14.2.E (2026-04-25) — medical-certificate (5 โรค) extras
+    vitalsWeight: v.weight || v.bw || '',
+    vitalsHeight: v.height || v.bh || '',
+    bodyNormalMark:   '☐',
+    bodyAbnormalMark: '☐',
+    bodyAbnormalDetail: '',
+    otherConditions: '',
   };
 }
 
@@ -1291,9 +1308,14 @@ describe('F13: prefill wiring — every field flows from be_treatments/be_custom
       ['homeMedicationRows',  'Paracetamol'],
     ],
     'medical-certificate': [
-      ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],
-      ['findings',   'BP 120/80, HEENT ปกติ'], // findings = physicalExam fallback
-      ['diagnosis',  'A001 Cholera'],
+      ['doctorName',   'นพ.ทดสอบ ใจดี (X)'],
+      ['findings',     'BP 120/80, HEENT ปกติ'], // findings = physicalExam fallback
+      ['diagnosis',    'A001 Cholera'],
+      // Phase 14.2.E — vitals row + body-status (Doc 2/16 ProClinic match)
+      ['vitalsWeight', '60'],
+      ['vitalsHeight', '165'],
+      ['bp',           '120/80'],
+      ['pr',           '72'],
     ],
     'medical-opinion': [
       ['doctorName', 'นพ.ทดสอบ ใจดี (X)'],

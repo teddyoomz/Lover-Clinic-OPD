@@ -132,7 +132,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -479,13 +479,44 @@ export const SEED_TEMPLATES = Object.freeze([
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;letter-spacing:0.05em;color:#b71c1c">ใบรับรองแพทย์</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
-        <div><strong>วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
       </div>
       ${SECTION_1_PATIENT_DECLARATION_ALWAYS}
       ${SECTION_2_DOCTOR_BLOCK}
+      <!-- Phase 14.2.E (2026-04-25) — ProClinic-replicated vitals + body status + 5-disease (โรคเรื้อน/วัณโรค/เท้าช้าง/อื่นๆ) certification clause + summary. Captured via Chrome MCP from /admin/medical-certificate .print-area. -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin:10px 0">
+        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
+        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
+        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
+        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
+      </div>
+      <div style="margin:10px 0">
+        <span>สภาพร่างกายทั่วไปอยู่ในเกณฑ์</span>
+        {{bodyNormalMark}} ปกติ &nbsp;
+        {{bodyAbnormalMark}} ผิดปกติ ระบุ:
+        <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
+      </div>
+      <div style="margin:14px 0 6px 0;font-weight:600">ขอรับรองว่าบุคคลดังกล่าว ไม่เป็นผู้มีร่างกายทุพพลภาพจนไม่สามารถปฏิบัติหน้าที่ได้ ไม่ปรากฏอาการของโรคจิต หรือจิตฟั่นเฟือน หรือปัญญาอ่อน ไม่ปรากฏอาการของการติดยาเสพติดให้โทษและพิษสุราเรื้อรัง และไม่ปรากฏอาการและอาการแสดงของ:</div>
+      <div style="margin:6px 0 6px 16px">
+        <div style="margin:4px 0">1. โรคเรื้อนในระยะติดต่อ หรือในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
+        <div style="margin:4px 0">2. วัณโรคในระยะอันตราย</div>
+        <div style="margin:4px 0">3. โรคเท้าช้างในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
+        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
+      </div>
+      <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์:</div>
+      <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{recommendation}}</div>
     ` + DOCTOR_SIGNATURE,
-    fields: [...COMMON_CERT_FIELDS, ...COMMON_HISTORY_FIELDS],
+    fields: [...COMMON_CERT_FIELDS, ...COMMON_HISTORY_FIELDS,
+      { key: 'vitalsWeight',       label: 'น้ำหนักตัว (กก.)', type: 'text' },
+      { key: 'vitalsHeight',       label: 'ความสูง (ซม.)', type: 'text' },
+      { key: 'bp',                 label: 'ความดันโลหิต (มม.ปรอท.)', type: 'text' },
+      { key: 'pr',                 label: 'ชีพจร (ครั้ง/นาที)', type: 'text' },
+      { key: 'bodyNormalMark',     label: '☑/☐ ปกติ', type: 'text' },
+      { key: 'bodyAbnormalMark',   label: '☑/☐ ผิดปกติ', type: 'text' },
+      { key: 'bodyAbnormalDetail', label: 'ผิดปกติ ระบุ', type: 'text' },
+      { key: 'otherConditions',    label: 'โรคอื่นๆ (ถ้ามี)', type: 'text' },
+    ],
     toggles: NO_TOGGLES,
   },
   {
