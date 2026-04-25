@@ -110,7 +110,10 @@ export const PAPER_SIZES = Object.freeze(['A4', 'A5', 'label-57x32']);
 
 // 2026-04-25 — added 'checkbox' for ☑/☐ checkbox marks (was being shown as
 // raw text to users, which made the form unusable).
-export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select', 'checkbox']);
+// 2026-04-25 — added 'staff-select' for doctor/staff/assistant dropdowns
+// pulling from be_doctors / be_staff. Use field.source = 'doctors' |
+// 'staff' | 'doctors+staff' to indicate which collection(s) to load.
+export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select', 'checkbox', 'staff-select']);
 
 export const NAME_MAX_LENGTH = 200;
 export const HTML_MAX_LENGTH = 50000; // ~50KB — plenty for any single-page cert
@@ -134,7 +137,7 @@ export const MAX_TOGGLES = 10;
 //   v5 (2026-04-25) — table rows use {{{rawHTML}}} placeholder (3 braces)
 //       so HTML rows aren't escaped. Without this fix, treatment record +
 //       home medication rendered as literal `<tr><td>` text in print.
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FIELD_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -452,7 +455,7 @@ const NO_TOGGLES = Object.freeze([]);
 const COMMON_CERT_FIELDS = [
   { key: 'certNumber',      label: 'เลขที่ใบรับรอง',     type: 'text' },
   { key: 'patientAddress',  label: 'ที่อยู่ผู้ป่วย',      type: 'textarea' },
-  { key: 'doctorName',      label: 'แพทย์ผู้ตรวจ',       type: 'text', required: true },
+  { key: 'doctorName',      label: 'แพทย์ผู้ตรวจ',       type: 'staff-select', source: 'doctors', required: true },
   { key: 'doctorLicenseNo', label: 'เลขใบอนุญาตแพทย์',   type: 'text' },
   { key: 'findings',        label: 'มีรายละเอียดดังนี้',  type: 'textarea', required: true },
   { key: 'diagnosis',       label: 'การวินิจฉัย',         type: 'text', required: true },
@@ -628,12 +631,21 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
       <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
       {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
+      {{#if showPatientSignature}}
+      <div style="margin-top:24px;display:flex;justify-content:flex-start">
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div style="margin-top:2px">( {{customerName}} )</div>
+          <div>วันที่ {{today}}</div>
+        </div>
+      </div>
+      {{/if}}
     ` + DOCTOR_SIGNATURE,
     // medical-opinion uses `opinion` instead of `findings` — drop findings
     // from the cert-fields baseline so the F2 test (required-field-in-HTML)
     // doesn't flag a non-existent placeholder.
     fields: [
-      { key: 'doctorName',      label: 'แพทย์ผู้ตรวจ',       type: 'text', required: true },
+      { key: 'doctorName',      label: 'แพทย์ผู้ตรวจ',       type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาตแพทย์',   type: 'text' },
       { key: 'certNumber',      label: 'เลขที่ใบรับรอง',      type: 'text' },
       { key: 'opinion',         label: 'อาการ',               type: 'textarea', required: true },
@@ -673,6 +685,15 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
       <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
       {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
+      {{#if showPatientSignature}}
+      <div style="margin-top:24px;display:flex;justify-content:flex-start">
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div style="margin-top:2px">( {{customerName}} )</div>
+          <div>วันที่ {{today}}</div>
+        </div>
+      </div>
+      {{/if}}
     ` + `
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
         <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
@@ -682,7 +703,7 @@ export const SEED_TEMPLATES = Object.freeze([
       </div>
     `,
     fields: [
-      { key: 'doctorName',     label: 'นักกายภาพ', type: 'text', required: true },
+      { key: 'doctorName',     label: 'นักกายภาพ', type: 'staff-select', source: 'doctors+staff', required: true },
       { key: 'doctorLicenseNo',label: 'เลขใบอนุญาตประกอบวิชาชีพ', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบรับรอง', type: 'text' },
       { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
@@ -721,6 +742,15 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
       <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์แผนไทยประยุกต์</div>
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{recommendation}}</div>
+      {{#if showPatientSignature}}
+      <div style="margin-top:24px;display:flex;justify-content:flex-start">
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div style="margin-top:2px">( {{customerName}} )</div>
+          <div>วันที่ {{today}}</div>
+        </div>
+      </div>
+      {{/if}}
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
         <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
@@ -729,7 +759,7 @@ export const SEED_TEMPLATES = Object.freeze([
       </div>
     `,
     fields: [
-      { key: 'doctorName',     label: 'แพทย์แผนไทยประยุกต์', type: 'text', required: true },
+      { key: 'doctorName',     label: 'แพทย์แผนไทยประยุกต์', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo',label: 'ใบอนุญาตประกอบวิชาชีพ', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบรับรอง', type: 'text' },
       { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
@@ -762,6 +792,15 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{tcmDiagnosis}}</div>
       {{#lang en}}<div style="margin:4px 0;color:#444;font-size:13px">การรักษา / 治疗 / Treatment:</div>{{/lang}}
       <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
+      {{#if showPatientSignature}}
+      <div style="margin-top:24px;display:flex;justify-content:flex-start">
+        <div>
+          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย{{#lang en}} / Patient{{/lang}}</div>
+          <div style="margin-top:2px">( {{customerName}} )</div>
+          <div>วันที่ {{today}}</div>
+        </div>
+      </div>
+      {{/if}}
     ` + `
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
         <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
@@ -771,7 +810,7 @@ export const SEED_TEMPLATES = Object.freeze([
       </div>
     `,
     fields: [
-      { key: 'doctorName',     label: 'แพทย์จีน', type: 'text', required: true },
+      { key: 'doctorName',     label: 'แพทย์จีน', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo',label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',     label: 'เลขที่ใบรับรอง', type: 'text' },
       { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
@@ -846,7 +885,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'transitCity',        label: 'Transit', type: 'text' },
       { key: 'diagnosis',          label: 'Diagnosis', type: 'textarea' },
       { key: 'treatment',          label: 'Treatment', type: 'textarea' },
-      { key: 'doctorName',         label: 'Doctor', type: 'text', required: true },
+      { key: 'doctorName',         label: 'Doctor', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo',    label: 'License No.', type: 'text' },
       { key: 'certNumber',         label: 'Certificate No.', type: 'text' },
       { key: 'recentInfectionMark',  label: 'Recent infection: Yes', type: 'checkbox' },
@@ -887,7 +926,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'instructions',  label: 'วิธีใช้', type: 'textarea', required: true },
       { key: 'indication',    label: 'ข้อบ่งใช้', type: 'text' },
       { key: 'warning',       label: 'คำเตือน/ข้อควรระวัง', type: 'text' },
-      { key: 'doctorName',    label: 'ผู้จ่ายยา', type: 'text', required: true },
+      { key: 'doctorName',    label: 'ผู้จ่ายยา', type: 'staff-select', source: 'doctors+staff', required: true },
     ],
     toggles: [],
   },
@@ -920,7 +959,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'pe',          label: 'PE',     type: 'textarea' },
       { key: 'dx',          label: 'Diagnosis', type: 'text' },
       { key: 'txPlan',      label: 'Tx Plan', type: 'textarea' },
-      { key: 'doctorName',  label: 'แพทย์', type: 'text', required: true },
+      { key: 'doctorName',  label: 'แพทย์', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',  label: 'เลขที่เอกสาร', type: 'text' },
     ],
@@ -967,7 +1006,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'cost',       label: 'ค่าใช้จ่ายโดยประมาณ (บาท)', type: 'number' },
       { key: 'patientAddress', label: 'ที่อยู่ผู้ป่วย', type: 'textarea' },
       { key: 'witnessName',label: 'ชื่อพยาน', type: 'text' },
-      { key: 'doctorName', label: 'แพทย์ผู้ทำการรักษา', type: 'text', required: true },
+      { key: 'doctorName', label: 'แพทย์ผู้ทำการรักษา', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาตแพทย์', type: 'text' },
       { key: 'certNumber', label: 'เลขที่เอกสาร', type: 'text' },
     ],
@@ -1004,7 +1043,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'estimatedCost', label: 'ค่ารักษา (บาท)', type: 'number' },
       { key: 'sideEffects',   label: 'ผลข้างเคียง', type: 'textarea' },
       { key: 'recommendation',label: 'คำแนะนำ', type: 'textarea' },
-      { key: 'doctorName',    label: 'แพทย์', type: 'text', required: true },
+      { key: 'doctorName',    label: 'แพทย์', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo', label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',    label: 'เลขที่เอกสาร', type: 'text' },
     ],
@@ -1052,7 +1091,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'refundAmount',   label: 'จำนวนเงินคืน (บาท)', type: 'number', required: true },
       { key: 'refundMethod',   label: 'ช่องทางคืนเงิน', type: 'text' },
       { key: 'refundReference',label: 'เลขอ้างอิงการคืนเงิน', type: 'text' },
-      { key: 'staffName',      label: 'พนักงานผู้ทำรายการ', type: 'text', required: true },
+      { key: 'staffName',      label: 'พนักงานผู้ทำรายการ', type: 'staff-select', source: 'staff', required: true },
     ],
     toggles: [],
   },
@@ -1127,7 +1166,7 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'treatmentGiven',   label: '5. การรักษาที่ให้ไว้แล้ว', type: 'textarea' },
       { key: 'referralReason',   label: '6. สาเหตุที่ส่ง', type: 'textarea', required: true },
       { key: 'otherDetail',      label: '7. รายละเอียดอื่นๆ', type: 'textarea' },
-      { key: 'doctorName',       label: 'แพทย์ผู้ส่งต่อ', type: 'text', required: true },
+      { key: 'doctorName',       label: 'แพทย์ผู้ส่งต่อ', type: 'staff-select', source: 'doctors', required: true },
       { key: 'doctorLicenseNo',  label: 'เลขใบอนุญาต', type: 'text' },
       { key: 'certNumber',       label: 'เลขที่ใบส่งตัว', type: 'text' },
       { key: 'checkAdmitMark',        label: 'รับไว้รักษาต่อ', type: 'checkbox' },
@@ -1238,7 +1277,7 @@ export const SEED_TEMPLATES = Object.freeze([
     `,
     fields: [
       { key: 'treatmentDate',     label: 'วันที่รักษา', type: 'date' },
-      { key: 'doctorName',        label: 'แพทย์ผู้รักษา', type: 'text', required: true },
+      { key: 'doctorName',        label: 'แพทย์ผู้รักษา', type: 'staff-select', source: 'doctors', required: true },
       { key: 'birthdate',         label: 'วันเกิด', type: 'text' },
       { key: 'bloodGroup',        label: 'กรุ๊ปเลือด', type: 'text' },
       { key: 'patientAddress',    label: 'ที่อยู่', type: 'textarea' },
@@ -1289,8 +1328,8 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'treatmentDate',  label: 'วันที่รักษา', type: 'date' },
       { key: 'treatmentItems', label: 'ทรีตเมนต์', type: 'textarea' },
       { key: 'drNote',         label: 'หมายเหตุ', type: 'textarea' },
-      { key: 'doctorName',     label: 'แพทย์', type: 'text', required: true },
-      { key: 'assistantName',  label: 'ผู้ช่วย', type: 'text' },
+      { key: 'doctorName',     label: 'แพทย์', type: 'staff-select', source: 'doctors', required: true },
+      { key: 'assistantName',  label: 'ผู้ช่วย', type: 'staff-select', source: 'doctors+staff' },
       { key: 'certNumber',     label: 'เลขที่', type: 'text' },
     ],
     toggles: NO_TOGGLES,
@@ -1338,8 +1377,8 @@ export const SEED_TEMPLATES = Object.freeze([
       { key: 'treatmentDate',  label: 'วันที่ตัด', type: 'date' },
       { key: 'deductionRows',  label: 'รายการที่ตัด', type: 'textarea', hidden: true },
       { key: 'note',           label: 'หมายเหตุ', type: 'textarea' },
-      { key: 'doctorName',     label: 'ผู้ทำหัตถการ', type: 'text', required: true },
-      { key: 'staffName',      label: 'เจ้าหน้าที่', type: 'text', required: true },
+      { key: 'doctorName',     label: 'ผู้ทำหัตถการ', type: 'staff-select', source: 'doctors+staff', required: true },
+      { key: 'staffName',      label: 'เจ้าหน้าที่', type: 'staff-select', source: 'staff', required: true },
       { key: 'certNumber',     label: 'เลขที่', type: 'text' },
     ],
     toggles: NO_TOGGLES,

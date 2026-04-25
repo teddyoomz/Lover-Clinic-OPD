@@ -76,18 +76,29 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
   ctx.customerHN     = customer.proClinicHN || customer.hn || customer.customerHN || '';
   ctx.nationalId     = pd.nationalId || customer.nationalId || '';
   ctx.age            = pd.age || customer.age || '';
-  ctx.gender         = pd.gender || '';
+  // Gender — translated when doc language is English (fit-to-fly etc).
+  // Thai source values: ชาย / หญิง / อื่นๆ → Male / Female / Other.
+  const rawGender = pd.gender || '';
+  if (ctx.language === 'en') {
+    const map = { 'ชาย': 'Male', 'หญิง': 'Female', 'อื่นๆ': 'Other', 'อื่น': 'Other' };
+    ctx.gender = map[rawGender] || rawGender;
+  } else {
+    ctx.gender = rawGender;
+  }
   ctx.phone          = pd.phone || '';
 
-  // Today (Bangkok TZ)
+  // Today (Bangkok TZ). Phase 14.x — language-aware year:
+  //   th       → Buddhist year (พ.ศ.) e.g. 25/04/2569
+  //   en       → CE year e.g. 25/04/2026
+  //   bilingual → Buddhist year (Thai cultural default; EN block can use {{todayCE}})
   const today = thaiTodayISO();
   const [y, m, d] = today.split('-');
-  ctx.today = `${d}/${m}/${y}`; // dd/mm/yyyy CE
-  ctx.todayISO = today;
-
-  // Bilingual convenience: buddhist year
+  const ce = y;
   const be = (Number(y) + 543).toString();
+  ctx.todayCE = `${d}/${m}/${ce}`;
   ctx.todayBE = `${d}/${m}/${be}`;
+  ctx.today   = (ctx.language === 'en') ? ctx.todayCE : ctx.todayBE;
+  ctx.todayISO = today;
 
   // Merge per-document values last (override defaults if keys collide)
   return { ...ctx, ...values };

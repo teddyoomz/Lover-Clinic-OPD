@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates, getNextCertNumber } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
@@ -54,6 +54,11 @@ export default function DocumentPrintModal({
   const [step, setStep] = useState(STEP_PICK);
   const [selected, setSelected] = useState(null);
   const [values, setValues] = useState({});
+  // 2026-04-25 — staff/doctor lists for staff-select fields. Lazy-loaded
+  // ONLY when a template that needs them is picked, then cached for the
+  // session. Empty arrays = not yet loaded.
+  const [doctorList, setDoctorList] = useState(null);
+  const [staffList, setStaffList] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +102,18 @@ export default function DocumentPrintModal({
       // leaving a blank space where the user expects ☐.
       else if (f.type === 'checkbox') initial[f.key] = '☐';
     }
+    // 2026-04-25 — lazy-load doctor/staff lists if any field needs them
+    const fields = t.fields || [];
+    const needsDoctors = fields.some(f => f.type === 'staff-select' && (f.source === 'doctors' || f.source === 'doctors+staff'));
+    const needsStaff   = fields.some(f => f.type === 'staff-select' && (f.source === 'staff'   || f.source === 'doctors+staff'));
+    const promises = [];
+    if (needsDoctors && doctorList === null) {
+      promises.push(listDoctors().then(setDoctorList).catch(() => setDoctorList([])));
+    }
+    if (needsStaff && staffList === null) {
+      promises.push(listStaff().then(setStaffList).catch(() => setStaffList([])));
+    }
+    if (promises.length) Promise.all(promises); // fire-and-forget; UI shows loading inside the dropdown
     // Phase 14.2.B — auto-generate cert# if the template has a `certNumber`
     // field and the user hasn't provided one via prefill. Uses runTransaction
     // for race-safety (matches the invoice-counter pattern). Best-effort:
@@ -334,6 +351,25 @@ export default function DocumentPrintModal({
                     deductionRows). Render checkbox type as a real toggle
                     (was previously rendered as raw text — UX disaster). */}
                 {(selected.fields || []).filter(f => !f.hidden).map((f) => {
+                  // Doctor/staff dropdown: searchable combobox loaded from
+                  // be_doctors / be_staff. The stored value is the display
+                  // name (string), so the template's {{key}} placeholder
+                  // continues to render the same way as a free-text field.
+                  if (f.type === 'staff-select') {
+                    const src = f.source || 'doctors';
+                    const list = src === 'staff' ? staffList
+                               : src === 'doctors+staff' ? [...(doctorList || []), ...(staffList || [])]
+                               : doctorList;
+                    return (
+                      <StaffSelectField
+                        key={f.key}
+                        field={f}
+                        value={values[f.key] || ''}
+                        list={list}
+                        onChange={(v) => setValues(vs => ({ ...vs, [f.key]: v }))}
+                      />
+                    );
+                  }
                   // Checkbox: toggles between '☑' and '' (empty = unchecked).
                   // Template uses {{markKey}} which renders the symbol or
                   // nothing — keeps the rendered HTML semantically correct.
@@ -448,17 +484,20 @@ export default function DocumentPrintModal({
                 </div>
                 <div
                   ref={previewContainerRef}
-                  className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[70vh] overflow-auto flex justify-center"
+                  className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[70vh] overflow-auto"
                   data-testid="document-print-preview-container"
                 >
                   {/* Scaled wrapper takes the visible scaled space so the
                       surrounding layout flows correctly. Single scale =
-                      aspect-ratio-safe (height & width scale together). */}
+                      aspect-ratio-safe (height & width scale together).
+                      Centered via margin:auto when smaller than container,
+                      flush-left when zoomed past it (so scroll reaches
+                      every corner — fix for "ซุมแล้วเลื่อนดูไม่ครบ"). */}
                   <div
                     style={{
                       width:  `${paper.width  * effectiveScale}mm`,
                       height: `${paper.height * effectiveScale}mm`,
-                      flexShrink: 0,
+                      margin: '0 auto',
                     }}
                   >
                     <div
@@ -495,6 +534,99 @@ export default function DocumentPrintModal({
               className="px-3 py-1.5 rounded text-xs font-bold bg-emerald-700 text-white inline-flex items-center gap-1">
               <Printer size={14} /> พิมพ์
             </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Staff-select dropdown — searchable combobox backed by be_doctors /
+ * be_staff. Renders as: text input (current value, shows match count)
+ * + dropdown list of names matching the typed query. Value stored is
+ * the display name (string) so the template renders the same way as
+ * a free-text field. Aligns with user directive 2026-04-25 "ช่องแพทย์
+ * ก็ต้องเป็นแพทย์ของเรา ดึงจากแพทย์เราดิ".
+ */
+function StaffSelectField({ field, value, list, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef(null);
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const loading = list === null;
+  const safe = Array.isArray(list) ? list : [];
+  // Filter by query — match name OR licenseNo
+  const q = query.toLowerCase().trim();
+  const filtered = q
+    ? safe.filter(p => {
+        const n = (p.name || p.fullName || '').toLowerCase();
+        const lic = (p.licenseNo || p.medicalLicenseNo || '').toLowerCase();
+        return n.includes(q) || lic.includes(q);
+      })
+    : safe;
+
+  const showName = (p) => p.name || p.fullName || '(ไม่มีชื่อ)';
+
+  return (
+    <div className="space-y-1" ref={ref}>
+      <label className="block text-xs text-[var(--tx-muted)]">
+        {field.label || field.key}{field.required && <span className="text-red-400"> *</span>}
+        {!loading && safe.length > 0 && (
+          <span className="ml-2 text-[10px] opacity-50">({safe.length} รายการ)</span>
+        )}
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={open ? query : value}
+          placeholder={loading ? 'กำลังโหลด...' : value || 'พิมพ์ค้นหา หรือคลิกเพื่อเลือก'}
+          onFocus={() => { setOpen(true); setQuery(''); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+          data-field={field.key}
+        />
+        {open && !loading && (
+          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg bg-[var(--bg-surface)] border border-[var(--bd)] shadow-xl">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-[var(--tx-muted)]">ไม่พบรายการ</div>
+            ) : (
+              filtered.slice(0, 50).map((p, i) => (
+                <button
+                  key={p.id || i}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)] last:border-b-0"
+                  onClick={() => {
+                    onChange(showName(p));
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                >
+                  <div className="font-bold text-[var(--tx-primary)]">{showName(p)}</div>
+                  {(p.licenseNo || p.medicalLicenseNo || p.role || p.position) && (
+                    <div className="text-[10px] text-[var(--tx-muted)]">
+                      {p.licenseNo || p.medicalLicenseNo || ''}
+                      {(p.licenseNo || p.medicalLicenseNo) && (p.role || p.position) ? ' · ' : ''}
+                      {p.role || p.position || ''}
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
+            {filtered.length > 50 && (
+              <div className="px-3 py-2 text-[10px] text-[var(--tx-muted)] bg-[var(--bg-hover)]">
+                แสดง 50 รายการแรก — พิมพ์ค้นหาเพื่อกรองให้แคบลง
+              </div>
+            )}
           </div>
         )}
       </div>
