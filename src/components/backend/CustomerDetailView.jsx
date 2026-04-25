@@ -9,7 +9,7 @@ import {
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer
 } from 'lucide-react';
 import {
-  getCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
+  getCustomerTreatments, listenToCustomerTreatments, getCustomerSales, addCourseRemainingQty, getCustomer, getAllMasterDataItems,
   getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
   // Phase 14.7 — appointments-on-customer-detail (+ เพิ่มนัดหมาย, ดูทั้งหมด, etc.)
   getCustomerAppointments, createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
@@ -168,19 +168,32 @@ export default function CustomerDetailView({
     return upcoming[0] || null;
   }, [customerAppointments]);
 
-  // Load treatment details from be_treatments
+  // Load treatment details from be_treatments via REAL-TIME listener.
+  // Phase 14.7.G (2026-04-26) — switched from one-shot getCustomerTreatments
+  // to onSnapshot. Bug report: "ปุ่ม ดูไทม์ไลน์ ไม่ real time refresh รูป
+  // ที่เพิ่ง edit … ต้องกด f5 refresh ก่อนถึงแสดงผล". The old fetch had
+  // dep [customer.proClinicId, customer.treatmentCount] — image-only edits
+  // (which don't bump treatmentCount) didn't trigger a refetch, so the
+  // timeline modal showed stale data until full page reload. The listener
+  // also picks up edits from other tabs / other admins for free.
   useEffect(() => {
     if (!customer?.proClinicId) return;
     setTreatmentsLoading(true);
     setTreatmentsError('');
-    getCustomerTreatments(customer.proClinicId)
-      .then(data => setTreatments(data))
-      .catch(err => {
-        console.error('[CustomerDetailView] treatments load failed:', err);
+    const unsubscribe = listenToCustomerTreatments(
+      customer.proClinicId,
+      (data) => {
+        setTreatments(data);
+        setTreatmentsLoading(false);
+      },
+      (err) => {
+        console.error('[CustomerDetailView] treatments listener failed:', err);
         setTreatmentsError('โหลดประวัติการรักษาไม่สำเร็จ');
-      })
-      .finally(() => setTreatmentsLoading(false));
-  }, [customer?.proClinicId, customer?.treatmentCount]);
+        setTreatmentsLoading(false);
+      },
+    );
+    return () => unsubscribe();
+  }, [customer?.proClinicId]);
 
   // Load financial summary (deposit / wallet / points / membership)
   const [finSummary, setFinSummary] = useState(null);

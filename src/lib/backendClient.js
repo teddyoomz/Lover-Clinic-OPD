@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -169,6 +169,37 @@ export async function getCustomerTreatments(customerId) {
     return dB.localeCompare(dA);
   });
   return treatments;
+}
+
+/**
+ * Real-time listener variant of `getCustomerTreatments`. Returns an
+ * unsubscribe function. Fires `onChange(treatments)` immediately with the
+ * current state, then again every time any matching doc is written.
+ *
+ * Phase 14.7.G (2026-04-26) — added after user reported timeline modal
+ * showing stale images: "ปุ่ม ดูไทม์ไลน์ ไม่ real time refresh รูปที่เพิ่ง
+ * edit … ต้องกด f5 refresh ก่อนถึงแสดงผล". The one-shot getCustomer-
+ * Treatments only refetched when `customer.treatmentCount` changed — image-
+ * only edits don't bump the count, so the dep array missed the update.
+ * Switching to onSnapshot makes `treatments[]` live; both the inline card
+ * and the timeline modal see new images within ~1s of save.
+ *
+ * @param {string} customerId
+ * @param {(treatments: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToCustomerTreatments(customerId, onChange, onError) {
+  const q = query(treatmentsCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const treatments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    treatments.sort((a, b) => {
+      const dA = a.detail?.treatmentDate || '';
+      const dB = b.detail?.treatmentDate || '';
+      return dB.localeCompare(dA);
+    });
+    onChange(treatments);
+  }, onError);
 }
 
 /** Get single treatment from be_treatments */
