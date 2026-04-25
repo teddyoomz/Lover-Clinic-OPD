@@ -364,8 +364,8 @@ const HEADER_CLINIC = `
 const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
   <h4 style="margin:14px 0 8px 0;background:#b71c1c;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 1</h4>
   <span style="margin-left:8px">ของผู้ขอรับใบรับรองสุขภาพ</span>
-  <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
-  <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
+  <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
+  <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
   <div style="margin:10px 0 6px 0">ข้าพเจ้าขอรับใบรับรองสุขภาพโดยมีประวัติสุขภาพดังนี้:</div>
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">1. โรคประจำตัว</span><span>{{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} ไม่มี &nbsp; {{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} มี ระบุ: {{chronicDisease}}</span></div>
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">2. อุบัติเหตุและผ่าตัด</span><span>{{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} ไม่มี &nbsp; {{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} มี ระบุ: {{accidentsDetails}}</span></div>
@@ -373,8 +373,8 @@ const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">4. โรคลมชัก<sup>*</sup></span><span>{{#if hasEpilepsy}}☑{{/if}}{{#unless hasEpilepsy}}☐{{/unless}} ไม่มี &nbsp; {{#if hasEpilepsy}}☑{{/if}}{{#unless hasEpilepsy}}☐{{/unless}} มี ระบุ: {{epilepsyDetails}}</span></div>
   <div style="margin:4px 0">5. ประวัติอื่นที่สำคัญ {{otherHistory}}</div>
   <div style="margin-top:14px;display:flex;justify-content:space-around;padding:0 40px">
-    <div>ลงชื่อ: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
-    <div>วัน / เดือน / ปี: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px"></span></div>
+    <div>ลงชื่อ: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px"></span></div>
+    <div>วัน / เดือน / ปี: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px"></span></div>
   </div>
   <div style="font-size:10px;color:#a00;margin-top:6px;text-align:center"><sup>*</sup> ในกรณีที่เด็กไม่สามารถรับรองตนเองได้ ให้ผู้ปกครองลงนามรับรองแทน</div>
 `;
@@ -383,8 +383,8 @@ const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
 // certificates that have it (general / driver-license / fit-to-fly extended).
 const SECTION_1_PATIENT_DECLARATION = `
   <h4 style="margin:14px 0 8px 0;color:#b71c1c;border-bottom:2px solid #b71c1c;padding-bottom:4px">ส่วนที่ 1 ของผู้ขอรับใบรับรองสุขภาพ</h4>
-  <div style="margin-bottom:6px"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
-  <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
+  <div style="margin-bottom:6px"><strong>ข้าพเจ้า:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
+  <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
   <div style="margin:10px 0 6px 0">ข้าพเจ้าขอรับใบรับรองสุขภาพโดยมีประวัติสุขภาพดังนี้:</div>
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">1. โรคประจำตัว</span><span>{{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} ไม่มี &nbsp; {{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} มี ระบุ: {{chronicDisease}}</span></div>
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">2. อุบัติเหตุและผ่าตัด</span><span>{{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} ไม่มี &nbsp; {{#if hasAccidents}}☑{{/if}}{{#unless hasAccidents}}☐{{/unless}} มี ระบุ: {{accidentsDetails}}</span></div>
@@ -393,7 +393,7 @@ const SECTION_1_PATIENT_DECLARATION = `
   <div style="margin:4px 0">5. ประวัติอื่นที่สำคัญ {{otherHistory}}</div>
   {{#if showPatientSignature}}
   <div style="margin-top:14px;display:flex;justify-content:space-between">
-    <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+    <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span></div>
     <div>วัน/เดือน/ปี: {{today}}</div>
   </div>
   <div style="font-size:10px;color:#a00;margin-top:4px">* ในกรณีที่เด็กไม่สามารถรับรองตนเองได้ ให้ผู้ปกครองลงนามรับรองแทน</div>
@@ -415,7 +415,7 @@ const SECTION_2_DOCTOR_BLOCK = `
 
 const DOCTOR_SIGNATURE = `
   <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
-    <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> {{#lang en}}/ Sign{{/lang}}</div>
+    <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span> {{#lang en}}/ Sign{{/lang}}</div>
     <div style="margin-top:2px">( {{doctorName}} )</div>
     <div>{{#lang en}}Date{{/lang}}{{#lang th}}วันที่{{/lang}} {{today}}</div>
   </div>
@@ -429,12 +429,12 @@ const COMMON_TOGGLES = [
 const CERT_NUMBER_LINE = `
   {{#if showCertNumber}}
   <div style="display:flex;justify-content:space-between;margin:10px 0">
-    <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
-    <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+    <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
+    <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
   </div>
   {{/if}}
   {{#unless showCertNumber}}
-  <div style="text-align:right;margin:10px 0"><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+  <div style="text-align:right;margin:10px 0"><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
   {{/unless}}
 `;
 
@@ -491,30 +491,30 @@ export const SEED_TEMPLATES = Object.freeze([
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;letter-spacing:0.05em;color:#b71c1c">ใบรับรองแพทย์</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
-        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
+        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 6px">{{today}}</span></div>
       </div>
       ${SECTION_1_PATIENT_DECLARATION_ALWAYS}
       ${SECTION_2_DOCTOR_BLOCK}
       <!-- Phase 14.2.E (2026-04-25) — ProClinic-replicated vitals + body status + 5-disease (โรคเรื้อน/วัณโรค/เท้าช้าง/อื่นๆ) certification clause + summary. Captured via Chrome MCP from /admin/medical-certificate .print-area. -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin:10px 0">
-        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
-        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
-        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
-        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
+        <div>น้ำหนักตัว <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
+        <div>ความสูง <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
+        <div>ความดันโลหิต <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
+        <div>ชีพจร <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
       </div>
       <div style="margin:10px 0">
         <span>สภาพร่างกายทั่วไปอยู่ในเกณฑ์</span>
         {{bodyNormalMark}} ปกติ &nbsp;
         {{bodyAbnormalMark}} ผิดปกติ ระบุ:
-        <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
+        <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
       </div>
       <div style="margin:14px 0 6px 0;font-weight:600">ขอรับรองว่าบุคคลดังกล่าว ไม่เป็นผู้มีร่างกายทุพพลภาพจนไม่สามารถปฏิบัติหน้าที่ได้ ไม่ปรากฏอาการของโรคจิต หรือจิตฟั่นเฟือน หรือปัญญาอ่อน ไม่ปรากฏอาการของการติดยาเสพติดให้โทษและพิษสุราเรื้อรัง และไม่ปรากฏอาการและอาการแสดงของ:</div>
       <div style="margin:6px 0 6px 16px">
         <div style="margin:4px 0">1. โรคเรื้อนในระยะติดต่อ หรือในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
         <div style="margin:4px 0">2. วัณโรคในระยะอันตราย</div>
         <div style="margin:4px 0">3. โรคเท้าช้างในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
-        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
+        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
       </div>
       <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์:</div>
       <div style="min-height:50px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{recommendation}}</div>
@@ -542,38 +542,38 @@ export const SEED_TEMPLATES = Object.freeze([
     htmlTemplate: HEADER_CLINIC + `
       <h2 style="text-align:center;margin:16px 0;color:#b71c1c;letter-spacing:0.02em">ใบรับรองแพทย์ (สำหรับใบอนุญาตขับรถ)</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong>เล่มที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certBookNumber}}</span></div>
-        <div><strong>เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certNumber}}</span></div>
+        <div><strong>เล่มที่:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certBookNumber}}</span></div>
+        <div><strong>เลขที่:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 6px">{{certNumber}}</span></div>
       </div>
       ${SECTION_1_PATIENT_DECLARATION_ALWAYS}
       <h4 style="margin:18px 0 8px 0;background:#000;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 2</h4>
       <span style="margin-left:8px">ของแพทย์</span>
-      <div style="margin:10px 0"><strong>สถานที่ตรวจ:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{clinicAddress}}</span> <strong>วันที่</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> <strong>เดือน</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> <strong>พ.ศ.</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span></div>
-      <div style="margin:8px 0">(1) ข้าพเจ้า นายแพทย์/แพทย์หญิง: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{doctorName}}</span></div>
-      <div style="margin:6px 0">ใบอนุญาตประกอบวิชาชีพเวชกรรมเลขที่: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 6px">{{doctorLicenseNo}}</span> &nbsp; สถานพยาบาลชื่อ: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{clinicName}}</span></div>
-      <div style="margin:6px 0">ที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{clinicAddress}}</span></div>
-      <div style="margin:8px 0">ได้ตรวจร่างกาย นาย/นาง/นางสาว: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{customerName}}</span></div>
-      <div style="margin:6px 0">แล้วเมื่อวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> เดือน <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px"></span> พ.ศ. <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px"></span> มีรายละเอียดดังนี้</div>
+      <div style="margin:10px 0"><strong>สถานที่ตรวจ:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{clinicAddress}}</span> <strong>วันที่</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px"></span> <strong>เดือน</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px"></span> <strong>พ.ศ.</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px"></span></div>
+      <div style="margin:8px 0">(1) ข้าพเจ้า นายแพทย์/แพทย์หญิง: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{doctorName}}</span></div>
+      <div style="margin:6px 0">ใบอนุญาตประกอบวิชาชีพเวชกรรมเลขที่: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px;padding:0 6px">{{doctorLicenseNo}}</span> &nbsp; สถานพยาบาลชื่อ: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{clinicName}}</span></div>
+      <div style="margin:6px 0">ที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{clinicAddress}}</span></div>
+      <div style="margin:8px 0">ได้ตรวจร่างกาย นาย/นาง/นางสาว: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:340px;padding:0 6px">{{customerName}}</span></div>
+      <div style="margin:6px 0">แล้วเมื่อวันที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px"></span> เดือน <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px"></span> พ.ศ. <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px"></span> มีรายละเอียดดังนี้</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin:10px 0">
-        <div>น้ำหนักตัว <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
-        <div>ความสูง <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
-        <div>ความดันโลหิต <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
-        <div>ชีพจร <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
+        <div>น้ำหนักตัว <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsWeight}}</span> กก.</div>
+        <div>ความสูง <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{vitalsHeight}}</span> ซม.</div>
+        <div>ความดันโลหิต <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{bp}}</span> มม.ปรอท.</div>
+        <div>ชีพจร <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{pr}}</span> ครั้ง/นาที</div>
       </div>
       <div style="margin:10px 0">
         <span>สภาพร่างกายทั่วไปอยู่ในเกณฑ์</span>
         {{bodyNormalMark}} ปกติ &nbsp;
         {{bodyAbnormalMark}} ผิดปกติ ระบุ:
-        <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
+        <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{bodyAbnormalDetail}}</span>
       </div>
-      <div style="margin:8px 0">ผลการตรวจการมองเห็น: ตาขวา <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionRight}}</span> ตาซ้าย <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionLeft}}</span> ตาบอดสี: {{colorBlindMark}}</div>
+      <div style="margin:8px 0">ผลการตรวจการมองเห็น: ตาขวา <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionRight}}</span> ตาซ้าย <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{visionLeft}}</span> ตาบอดสี: {{colorBlindMark}}</div>
       <!-- Phase 14.2.E (2026-04-25) — ProClinic-replicated 4-disease certification clause + summary marker. Captured via Chrome MCP from /admin/medical-certificate-for-driver-license .print-area. -->
       <div style="margin:14px 0 6px 0;font-weight:600">ขอรับรองว่าบุคคลดังกล่าว ไม่เป็นผู้มีร่างกายทุพพลภาพจนไม่สามารถปฏิบัติหน้าที่ได้ ไม่ปรากฏอาการของโรคจิต หรือจิตฟั่นเฟือน หรือปัญญาอ่อน ไม่ปรากฏอาการของการติดยาเสพติดให้โทษ และอาการของโรคพิษสุราเรื้อรัง:</div>
       <div style="margin:6px 0 6px 16px">
         <div style="margin:4px 0">1. โรคเรื้อนในระยะติดต่อ หรือในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
         <div style="margin:4px 0">2. วัณโรคในระยะอันตราย</div>
         <div style="margin:4px 0">3. โรคเท้าช้างในระยะที่ปรากฏอาการเป็นที่รังเกียจแก่สังคม</div>
-        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
+        <div style="margin:4px 0">4. อื่นๆ (ถ้ามี): <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherConditions}}</span></div>
       </div>
       <div style="margin:8px 0"><strong>ผลการตรวจ:</strong> {{findings}}</div>
       <div style="margin:8px 0"><strong>การวินิจฉัย:</strong> {{diagnosis}}</div>
@@ -628,13 +628,13 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
       <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของแพทย์</div>
       <div style="margin:6px 0">{{checkAttendedMark}} ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง</div>
-      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
-      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
+      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
+      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
       {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
       {{#if showPatientSignature}}
       <div style="margin-top:24px;display:flex;justify-content:flex-start">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
@@ -682,13 +682,13 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="min-height:30px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
       <div style="margin:10px 0 6px 0;font-weight:600;color:#b71c1c">สรุปความเห็นและข้อแนะนำของนักกายภาพบำบัด</div>
       <div style="margin:6px 0">{{checkAttendedMark}} ผู้ป่วยได้มารับการตรวจรักษาในวันนี้จริง</div>
-      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
-      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
+      <div style="margin:6px 0">{{checkRestMark}} ให้หยุดพัก ตั้งแต่วันที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restFrom}}</span> ถึงวันที่ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{restTo}}</span> {{#if restDays}}({{restDays}} วัน){{/if}}</div>
+      <div style="margin:6px 0">{{checkOtherMark}} อื่นๆ (ระบุ): <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{otherDetail}}</span></div>
       {{#if recommendation}}<div style="margin:10px 0">{{recommendation}}</div>{{/if}}
       {{#if showPatientSignature}}
       <div style="margin-top:24px;display:flex;justify-content:flex-start">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
@@ -696,7 +696,7 @@ export const SEED_TEMPLATES = Object.freeze([
       {{/if}}
     ` + `
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
-        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
         <div style="font-style:italic;color:#444">นักกายภาพบำบัด</div>
         <div>วันที่ {{today}}</div>
@@ -745,14 +745,14 @@ export const SEED_TEMPLATES = Object.freeze([
       {{#if showPatientSignature}}
       <div style="margin-top:24px;display:flex;justify-content:flex-start">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
       </div>
       {{/if}}
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
-        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
         <div style="font-style:italic;color:#444">แพทย์แผนไทยประยุกต์</div>
         <div>วันที่ {{today}}</div>
@@ -795,7 +795,7 @@ export const SEED_TEMPLATES = Object.freeze([
       {{#if showPatientSignature}}
       <div style="margin-top:24px;display:flex;justify-content:flex-start">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย{{#lang en}} / Patient{{/lang}}</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span> ผู้ป่วย{{#lang en}} / Patient{{/lang}}</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
@@ -803,7 +803,7 @@ export const SEED_TEMPLATES = Object.freeze([
       {{/if}}
     ` + `
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
-        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
         <div style="font-style:italic;color:#444">แพทย์แผนจีน{{#lang en}} / TCM Doctor{{/lang}}</div>
         <div>วันที่ {{today}}</div>
@@ -830,44 +830,44 @@ export const SEED_TEMPLATES = Object.freeze([
       <h2 style="text-align:center;margin:14px 0;color:#b71c1c;letter-spacing:0.02em">Medical Certificate for Air Travel</h2>
       <h3 style="text-align:center;font-weight:normal;font-size:14px;margin:0 0 14px 0;color:#444">FIT-TO-FLY CERTIFICATE / ใบรับรองความพร้อมในการเดินทางทางอากาศ</h3>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong style="color:#b71c1c">No.:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
-        <div><strong style="color:#b71c1c">Date:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
+        <div><strong style="color:#b71c1c">No.:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">Date:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin:8px 0">
-        <div><strong>Name:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{customerNameEn}}</span></div>
-        <div><strong>Gender:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
-        <div><strong>Age:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{age}}</span> year <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{ageMonth}}</span> month</div>
+        <div><strong>Name:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{customerNameEn}}</span></div>
+        <div><strong>Gender:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
+        <div><strong>Age:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{age}}</span> year <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{ageMonth}}</span> month</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
-        <div><strong>Nationality:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{nationality}}</span></div>
-        <div><strong>Passport Number/ID Number:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px;padding:0 4px">{{passport}}</span></div>
+        <div><strong>Nationality:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{nationality}}</span></div>
+        <div><strong>Passport Number/ID Number:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px;padding:0 4px">{{passport}}</span></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin:8px 0">
-        <div><strong>Airline:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{airline}}</span></div>
-        <div><strong>Flight no:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{flightNo}}</span></div>
-        <div><strong>Depart:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{departCity}}</span></div>
-        <div><strong>Arrival:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{arrivalCity}}</span></div>
-        <div><strong>Transit:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{transitCity}}</span></div>
+        <div><strong>Airline:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{airline}}</span></div>
+        <div><strong>Flight no:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{flightNo}}</span></div>
+        <div><strong>Depart:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{departCity}}</span></div>
+        <div><strong>Arrival:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{arrivalCity}}</span></div>
+        <div><strong>Transit:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{transitCity}}</span></div>
       </div>
       <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">Patient's History:</div>
       <div style="margin:6px 0"><strong>Recent infection:</strong> {{recentInfectionMark}} Yes / {{recentInfectionNoMark}} No</div>
       <div style="margin:6px 0"><strong>Recent Fever:</strong> {{recentFeverMark}} Yes / {{recentFeverNoMark}} No</div>
-      <div style="margin:6px 0"><strong>Being treated for any conditions:</strong> {{conditionMark}} Yes / {{conditionNoMark}} No &nbsp; if yes explain: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{conditionDetail}}</span></div>
+      <div style="margin:6px 0"><strong>Being treated for any conditions:</strong> {{conditionMark}} Yes / {{conditionNoMark}} No &nbsp; if yes explain: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{conditionDetail}}</span></div>
       <div style="margin:10px 0 4px 0;font-weight:600">Diagnosis:</div>
       <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{diagnosis}}</div>
       <div style="margin:8px 0 4px 0;font-weight:600">Treatment:</div>
       <div style="min-height:40px;border-bottom:1px dotted #000;margin-bottom:8px;padding:4px">{{treatment}}</div>
       <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">Recommendation for air travel</div>
       <div style="margin:6px 0">{{fitMark}} Fit for air travel &nbsp; {{notFitMark}} Not fit for air travel</div>
-      <div style="margin-top:24px"><strong>Medical License no:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{doctorLicenseNo}}</span></div>
+      <div style="margin-top:24px"><strong>Medical License no:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{doctorLicenseNo}}</span></div>
       <div style="margin-top:32px;display:flex;justify-content:space-between;border-top:1px solid #b71c1c;padding-top:14px">
         <div style="text-align:center">
-          <div>Signature <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
+          <div>Signature <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px"></span></div>
           <div style="margin-top:2px">( {{customerNameEn}} )</div>
           <div style="font-style:italic;color:#444">Passenger</div>
         </div>
         <div style="text-align:center">
-          <div>Signature <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span></div>
+          <div>Signature <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px"></span></div>
           <div style="margin-top:2px">( {{doctorName}} )</div>
           <div style="font-style:italic;color:#444">Attending Physician</div>
         </div>
@@ -989,12 +989,12 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:14px 0">ข้าพเจ้าเข้าใจดีแล้วและยินยอมรับการรักษาด้วยความสมัครใจ ปราศจากการบังคับ</div>
       <div style="margin-top:30px;display:flex;justify-content:space-between">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:180px"></span> ผู้ป่วย/ผู้ยินยอม</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:180px"></span> ผู้ป่วย/ผู้ยินยอม</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:180px"></span> พยาน</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:180px"></span> พยาน</div>
           <div style="margin-top:2px">( {{witnessName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
@@ -1072,12 +1072,12 @@ export const SEED_TEMPLATES = Object.freeze([
       </div>
       <div style="margin-top:30px;display:flex;justify-content:space-between">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:180px"></span> ลูกค้า/ผู้รับเงิน</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:180px"></span> ลูกค้า/ผู้รับเงิน</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:180px"></span> พนักงานผู้ทำรายการ</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:180px"></span> พนักงานผู้ทำรายการ</div>
           <div style="margin-top:2px">( {{staffName}} )</div>
           <div>วันที่ {{today}}</div>
         </div>
@@ -1104,8 +1104,8 @@ export const SEED_TEMPLATES = Object.freeze([
       <!-- Phase 14.2.E (2026-04-25) — ProClinic /admin/patient-referral .print-area replicated. 4 referral checkboxes + 7 numbered clinical history sections. -->
       <h2 style="text-align:center;margin:14px 0;color:#b71c1c;letter-spacing:0.02em">ใบส่งตัวผู้ป่วย{{#lang en}} / Patient Referral Letter{{/lang}}</h2>
       <div style="display:flex;justify-content:space-between;margin:10px 0">
-        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
-        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
+        <div><strong style="color:#b71c1c">เลขที่:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{certNumber}}</span></div>
+        <div><strong style="color:#b71c1c">วันที่รักษา:</strong> <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:140px;padding:0 4px">{{today}}</span></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0">
         <div>
@@ -1115,16 +1115,16 @@ export const SEED_TEMPLATES = Object.freeze([
         </div>
         <div>
           <div style="font-weight:600;color:#b71c1c">ถึง</div>
-          <div><span style="display:inline-block;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{referTo}}</span></div>
+          <div><span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{referTo}}</span></div>
         </div>
       </div>
-      <div style="margin:10px 0">พร้อมหนังสือนี้ ขอส่งผู้ป่วยชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{customerName}}</span></div>
+      <div style="margin:10px 0">พร้อมหนังสือนี้ ขอส่งผู้ป่วยชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:280px;padding:0 4px">{{customerName}}</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin:6px 0">
-        <div>เพศ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
-        <div>อายุ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{age}}</span> ปี</div>
-        <div>HN <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{customerHN}}</span></div>
+        <div>เพศ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
+        <div>อายุ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:60px;padding:0 4px">{{age}}</span> ปี</div>
+        <div>HN <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{customerHN}}</span></div>
       </div>
-      <div style="margin:6px 0">ที่อยู่: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 4px">{{patientAddress}}</span></div>
+      <div style="margin:6px 0">ที่อยู่: <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:540px;padding:0 4px">{{patientAddress}}</span></div>
       <div style="margin:14px 0 6px 0;font-weight:600;color:#b71c1c">มาเพื่อโปรด</div>
       <div style="display:flex;gap:24px;margin:6px 0;flex-wrap:wrap">
         <div>{{checkAdmitMark}} รับไว้รักษาต่อ</div>
@@ -1150,7 +1150,7 @@ export const SEED_TEMPLATES = Object.freeze([
       </div>
     ` + `
       <div style="margin-top:32px;text-align:right;border-top:1px solid #b71c1c;padding-top:14px">
-        <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px"></span></div>
+        <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:200px"></span></div>
         <div style="margin-top:2px">( {{doctorName}} )</div>
         <div style="font-style:italic;color:#444">แพทย์ผู้ตรวจ</div>
         <div>วันที่ {{today}}</div>
@@ -1321,7 +1321,7 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:6px 0"><strong>ผู้ทำหัตถการ:</strong> {{assistantName}}</div>
       <div style="margin:6px 0"><strong>หมายเหตุ:</strong> {{drNote}}</div>
       <div style="margin-top:14px;text-align:right;font-size:11px">
-        ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px"></span> ผู้รับ
+        ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:120px"></span> ผู้รับ
       </div>
     `,
     fields: [
@@ -1364,11 +1364,11 @@ export const SEED_TEMPLATES = Object.freeze([
       <div style="margin:10px 0"><strong>ผู้ทำหัตถการ:</strong> {{doctorName}}</div>
       <div style="margin-top:30px;display:flex;justify-content:space-between">
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span> ลูกค้า</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px"></span> ลูกค้า</div>
           <div style="margin-top:2px">( {{customerName}} )</div>
         </div>
         <div>
-          <div>ลงชื่อ <span style="display:inline-block;border-bottom:1px dotted #000;min-width:160px"></span> เจ้าหน้าที่</div>
+          <div>ลงชื่อ <span style="display:inline-flex;align-items:flex-end;border-bottom:1px dotted #000;min-width:160px"></span> เจ้าหน้าที่</div>
           <div style="margin-top:2px">( {{staffName}} )</div>
         </div>
       </div>

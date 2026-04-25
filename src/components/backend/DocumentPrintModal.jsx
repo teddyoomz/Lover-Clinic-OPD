@@ -265,6 +265,31 @@ export default function DocumentPrintModal({
       window.removeEventListener('touchend', handleEnd);
     };
   }, [zoomMultiplier]);
+
+  // 2026-04-25 — mouse-wheel zoom on preview (Adobe Acrobat / Figma UX).
+  // Wheel up = zoom in, wheel down = zoom out. Hold Ctrl to constrain to
+  // wheel-only (without Ctrl, normal scroll behavior). Smooth 5% per notch
+  // to feel natural.
+  const onWheelZoom = (e) => {
+    // Only intercept when wheel happens INSIDE the preview container.
+    // We use a non-passive listener so we can preventDefault().
+    const delta = e.deltaY;
+    if (delta === 0) return;
+    e.preventDefault();
+    const step = delta > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoomMultiplier(z => {
+      const next = +(z + step).toFixed(2);
+      return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+    });
+  };
+  // Attach wheel listener with { passive: false } so preventDefault works.
+  useEffect(() => {
+    const el = previewContainerRef.current;
+    if (!el) return;
+    const handler = (e) => onWheelZoom(e);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [/* re-attach when ref changes — open toggles ref */ open, step]);
   useLayoutEffect(() => {
     if (!previewContainerRef.current) return;
     const updateScale = () => {
