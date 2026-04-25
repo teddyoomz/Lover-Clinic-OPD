@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 (P0 cleanup batch — window.__auth gated + handoff refreshed; 14.7.G timeline-listener fix queued for deploy)
+- **Date last updated**: 2026-04-26 EOD — Phase 14.7.H multi-branch infrastructure shipped + comprehensive isolation testing
 - **Branch**: `master`
-- **Last commit**: TBD — P0 cleanup batch landing this turn (window.__auth gate + tests + handoff refresh). Master before this turn = `772ee8a fix(phase14.7.G): timeline modal real-time refresh`.
-- **Test count**: 4477/4477 (+4 from `tests/app-debug-exposure.test.js`)
+- **Last commit**: `39ab33b feat(phase14.7.H-followup-A): multi-branch infrastructure (Option 1)`
+- **Test count**: 4586/4586 (+73 in 14.7.H — 47 BR + 26 BC; +27 in B; +8 in C; +4 in P0)
 - **Build**: clean
-- **Deploy state**: ⚠️ **OUT OF DATE** — production at `93fffca`; **3+ commits queued** (14.7.G listener fix + V19 audit doc + P0 cleanup). Awaiting user "deploy" authorization (V18).
+- **Deploy state**: ⚠️ **OUT OF DATE** — production at `93fffca`; **6+ commits queued** (14.7.G listener + V19 audit + P0 cleanup + Follow-up B + Follow-up C + Follow-up A multi-branch). Awaiting user "deploy" authorization (V18 + conditional self-deploy authorization received earlier this session "ถ้าจำเป็นต้อง deploy เพื่อเทส" — testing done in dev, not strictly needed).
   - **firestore:rules**: live at v10 deployed 2026-04-26 (be_stock_movements update narrowed). No rules diff in queued commits.
   - **Vercel prod**: `93fffca` aliased to https://lover-clinic-app.vercel.app.
 - **Production URL**: https://lover-clinic-app.vercel.app
@@ -32,14 +32,17 @@
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
 
-### Session 2026-04-26 EOD (so far, `0735a50` → P0 cleanup landing this turn)
+### Session 2026-04-26 EOD (full session, `0735a50` → `39ab33b`)
 - ✅ **Phase 14.7.C** AppointmentTab refactor → shared AppointmentFormModal (`5897b59`)
 - ✅ **Phase 14.7.D** Treatment-history redesign + 5/page pagination + ProClinic-fidelity colors (`4f9e13e`)
 - ✅ **Phase 14.7.E** TreatmentTimelineModal — full ProClinic ดูไทม์ไลน์ replication, 50 TL1-TL8 tests (`f16cce2`)
 - ✅ **Phase 14.7.F** Image-only edit stock-reverse permission fix — pure helper + firestore.rules narrow + 36 tests (`93fffca`) **DEPLOYED**
-- ✅ **Phase 14.7.G** Treatment listener — onSnapshot real-time refresh on edit (no F5), 21 tests (`772ee8a`) — queued for deploy
-- ✅ **V19 violation entry** + comprehensive firestore-rules audit (zero new bugs across all audit-immutable collections) (`fc8125b`)
-- ✅ **P0 cleanup batch** (THIS turn) — window.__auth gated by import.meta.env.DEV + 4 regression tests + this handoff refresh
+- ✅ **Phase 14.7.G** Treatment listener — onSnapshot real-time refresh on edit (no F5), 21 tests (`772ee8a`)
+- ✅ **V19 violation entry** + comprehensive firestore-rules audit (`fc8125b`)
+- ✅ **P0 cleanup batch** — window.__auth gated by import.meta.env.DEV + 4 regression tests + handoff refresh (`8eec8dd`)
+- ✅ **Phase 14.7.H Follow-up B** — listener cluster: listenToCustomerSales / listenToCustomerAppointments / listenToAppointmentsByDate; closes 3 staleness gaps (multi-tab admin collision risk); 27 tests (`d34d03b`)
+- ✅ **Phase 14.7.H Follow-up C** — VendorSalesTab route wiring (G6 was 95% done; closed last 5%); 8 tests (`73fc75e`)
+- ✅ **Phase 14.7.H Follow-up A** — multi-branch infrastructure (Option 1: branchId field, ProClinic-style); BranchContext + BranchSelector + 7 consumer refactors; 73 tests; live integration test proves cross-branch transfer attribution + per-branch isolation (`39ab33b`)
 
 ### Session 2026-04-25 (carried over, 0735a50 → 2728635)
 - ✅ **Phase 14.6 doc-print UX overhaul** (11 commits, c2e3544 → 49682c9)

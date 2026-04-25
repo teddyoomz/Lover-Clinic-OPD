@@ -251,6 +251,24 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Preview-verified**: Fired 10 rapid visibility-change events + online events in browser, app stayed responsive, no thrashing, no exceptions. Debounce held.
 - **Lesson**: Any production app with Firestore listeners + mobile users MUST have a `visibilitychange` reconnect hook. The Firestore SDK's auto-reconnect is best-effort on mobile and silently fails to refresh listener state in real-world conditions. The fix is a 50-line one-time addition that pays off forever.
 
+### V20 — 2026-04-26 — Multi-branch architecture decision (Option 1) + comprehensive isolation testing
+- **Context**: User asked "การแยกสาขาต้องแยก database กันหมดแบบ completely เลยป่ะ" (does multi-branch require fully-separated databases?) before Phase 15. Three options on the table:
+  - **Option 1**: Single Firestore project + `branchId` field on each branch-scoped doc (ProClinic uses this).
+  - **Option 2**: Separate Firebase projects per branch — physical isolation, federation pain.
+  - **Option 3**: Single project + sub-collection per branch — schema migration required.
+- **Decision rationale (user-facing)**: User clarified "เร็ว = response time". Showed all 3 options have equal per-query latency when `branchId` is indexed. Cross-branch reports favor Option 1 (single query vs federation). Option 1 wins on dev time AND runtime AND error rate. User confirmed Option 1.
+- **Worst part avoided**: Earlier session was about to implement Option 1 unilaterally without clarifying. Auto mode rule 5 ("architecture decisions need user confirmation") triggered the question pause. User's choice would have been the same, but transparency was the right move.
+- **Implementation** (commit `39ab33b`): `src/lib/BranchContext.jsx` (provider + hook), `src/components/backend/BranchSelector.jsx` (auto-hides <2 branches), 7 consumer refactors (SaleTab + 4 stock panels + TreatmentFormPage + AppointmentFormModal). 73 tests in `branch-isolation.test.js` + `branch-collection-coverage.test.js`.
+- **Comprehensive isolation proof** via live preview_eval against real Firestore (user explicitly authorized "Generate อะไรจริงๆขึ้นมาเทสใน backend ได้ไม่จำกัด"):
+  - Created TEST branch → dropdown auto-shows when branches.length ≥ 2
+  - Switched between branches via dropdown → selectedBranchId + localStorage update in sync
+  - Wrote test sales on each branch → query by customerId returns BOTH but each tagged with correct branchId (`{BR-1777095572005-ae97f911: ['TEST-SALE-DEFAULT-...'], TEST-BR-1777123776959: ['TEST-SALE-...']}`)
+  - **Cross-branch stock transfer A→B**: 10 units source → 7 source / 3 dest; EXPORT_TRANSFER (type 8) movement.branchId = source ✓; RECEIVE (type 9) movement.branchId = destination ✓
+  - Cleanup: 2 sales + 1 branch deleted; selector auto-hides again. Stock audit-trail intentionally preserved per Rule D (immutable ledger).
+- **Lesson**: When the user asks an architecture question with multiple valid answers, the right move is to enumerate trade-offs (cost, complexity, latency, error rate) and ASK before committing — even in auto mode. The user's "fast" question revealed the criterion was runtime latency, not dev time. Without clarifying, Option 1 was still right but for different reasons. The decision is now traceable in V20.
+- **Branch-future** collections (be_quotations, be_vendor_sales, be_online_sales, be_sale_insurance_claims, be_expenses, be_staff_schedules) have firestore.rules support but their CRUD UIs don't yet pass branchId. Tracked in `branch-collection-coverage.test.js BC2.future`. Wireup deferred per feature; not blocking single-branch operation.
+- **Audit/skill update**: `branch-collection-coverage.test.js` is itself an audit — every collection in `firestore.rules` MUST be classified in COLLECTION_MATRIX with scope (`branch` / `branch-spread` / `branch-future` / `global`). Forces explicit classification on every new collection going forward (BC1.1 fails if anything's unclassified).
+
 ### V19 — 2026-04-26 — Stock-reverse permission error on image-only edit (rule too tight)
 - User report: "คืนสต็อกการรักษาเดิมไม่สำเร็จ: Missing or insufficient permissions ในหน้าแก้ไขการรักษา … จะคืนเหี้ยไร กุแค่ edit รูป กับ chart ไปเพิ่ม"
 - **Root cause** (two layers): (1) `TreatmentFormPage.handleSubmit` called `reverseStockForTreatment(treatmentId)` on EVERY edit save — including image-only / chart-only / dr-note-only edits where no stock-bearing field changed. Useless work + creates noise. (2) Inside `_reverseOneMovement` (`backendClient.js:3564`), the reversal does `tx.update(movRef, { reversedByMovementId })` to maintain the audit chain — but `firestore.rules` line 245 had `allow update: if false` for `be_stock_movements`. So any edit that DID legitimately change stock items also blew up. Image-only edits hit the same rule because the unconditional reverse fired pointlessly.
