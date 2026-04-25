@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
 // DEBUG: expose auth for console API calls
@@ -89,6 +89,59 @@ export default function App() {
     const handler = () => setPrintMode(null);
     window.addEventListener('afterprint', handler);
     return () => window.removeEventListener('afterprint', handler);
+  }, []);
+
+  // 2026-04-25: Mobile-resume listener-stall fix.
+  // Symptom (user report): "เปิดเข้าไปหน้า frontend ที่ login ค้างไว้ใน mobile
+  // แล้วไม่โหลด Data อะไรเลย ไม่เห็นคิวที่ค้างไว้ ไม่เห็นแชทค้าง — ต้อง
+  // refresh หรือเปิดปิด browser ใหม่ data ถึงจะปรากฎ".
+  //
+  // Root cause: When a tab is backgrounded for ~5min+ (especially iOS Safari
+  // / Android Chrome aggressive tab suspension), the Firestore SDK's
+  // WebSocket connection gets dropped by the OS to save battery. The SDK is
+  // SUPPOSED to auto-reconnect when the tab returns, but in practice on
+  // mobile + slow networks it can keep stale connection state — cached data
+  // continues to show but new server updates don't flow until refresh.
+  //
+  // Fix: on visibility-resume + network-online, force a clean Firestore
+  // reconnect by toggling network (disable → enable). All active onSnapshot
+  // listeners across the app (queue + chat + sessions + everything in
+  // AdminDashboard / PatientDashboard / etc.) re-sync from server in one
+  // coordinated reconnect. Cached data stays visible during the brief
+  // offline window — no UI flash.
+  //
+  // Resource cost: ZERO polling. Only fires on visibility-change + online
+  // events (browser-native, rare). Debounced 1500ms to prevent thrashing
+  // on rapid focus/blur.
+  useEffect(() => {
+    let lastToggleAt = 0;
+    let toggling = false;
+    const TOGGLE_DEBOUNCE_MS = 1500;
+    const reconnect = async () => {
+      if (toggling) return;
+      if (Date.now() - lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
+      toggling = true;
+      lastToggleAt = Date.now();
+      try {
+        await disableNetwork(db);
+        await enableNetwork(db);
+      } catch (err) {
+        // Non-fatal — SDK may still recover via its own retries.
+        console.warn('[FirestoreReconnect] toggle failed:', err?.message || err);
+      } finally {
+        toggling = false;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') reconnect();
+    };
+    const onOnline = () => reconnect();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
+    };
   }, []);
 
   // Auto-reload เมื่อ deploy version ใหม่ (poll ทุก 60 วิ)
