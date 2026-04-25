@@ -4,7 +4,7 @@
 // src/components/backend/nav/navConfig.js; this file doesn't need changes
 // for scale.
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3,
@@ -33,19 +33,24 @@ import PromotionTab from '../components/backend/PromotionTab.jsx';
 import CouponTab from '../components/backend/CouponTab.jsx';
 import VoucherTab from '../components/backend/VoucherTab.jsx';
 import VendorSalesTab from '../components/backend/VendorSalesTab.jsx';
-import ReportsHomeTab from '../components/backend/reports/ReportsHomeTab.jsx';
-import SaleReportTab from '../components/backend/reports/SaleReportTab.jsx';
-import CustomerReportTab from '../components/backend/reports/CustomerReportTab.jsx';
-import AppointmentReportTab from '../components/backend/reports/AppointmentReportTab.jsx';
-import StockReportTab from '../components/backend/reports/StockReportTab.jsx';
-import CRMInsightTab from '../components/backend/reports/CRMInsightTab.jsx';
-import RevenueAnalysisTab from '../components/backend/reports/RevenueAnalysisTab.jsx';
-import AppointmentAnalysisTab from '../components/backend/reports/AppointmentAnalysisTab.jsx';
-import DailyRevenueTab from '../components/backend/reports/DailyRevenueTab.jsx';
-import StaffSalesTab from '../components/backend/reports/StaffSalesTab.jsx';
-import PnLReportTab from '../components/backend/reports/PnLReportTab.jsx';
-import DfPayoutReportTab from '../components/backend/reports/DfPayoutReportTab.jsx';
-import PaymentSummaryTab from '../components/backend/reports/PaymentSummaryTab.jsx';
+// Audit P2 (2026-04-26 P2 — performance code-split): the 13 report tabs
+// are heavy + each is rarely viewed in a single session. lazy() splits
+// each into its own chunk so the initial BackendDashboard payload drops
+// from ~1.2MB to the shell + the active tab. Suspense boundary below
+// catches the in-flight load with a simple spinner.
+const ReportsHomeTab         = lazy(() => import('../components/backend/reports/ReportsHomeTab.jsx'));
+const SaleReportTab          = lazy(() => import('../components/backend/reports/SaleReportTab.jsx'));
+const CustomerReportTab      = lazy(() => import('../components/backend/reports/CustomerReportTab.jsx'));
+const AppointmentReportTab   = lazy(() => import('../components/backend/reports/AppointmentReportTab.jsx'));
+const StockReportTab         = lazy(() => import('../components/backend/reports/StockReportTab.jsx'));
+const CRMInsightTab          = lazy(() => import('../components/backend/reports/CRMInsightTab.jsx'));
+const RevenueAnalysisTab     = lazy(() => import('../components/backend/reports/RevenueAnalysisTab.jsx'));
+const AppointmentAnalysisTab = lazy(() => import('../components/backend/reports/AppointmentAnalysisTab.jsx'));
+const DailyRevenueTab        = lazy(() => import('../components/backend/reports/DailyRevenueTab.jsx'));
+const StaffSalesTab          = lazy(() => import('../components/backend/reports/StaffSalesTab.jsx'));
+const PnLReportTab           = lazy(() => import('../components/backend/reports/PnLReportTab.jsx'));
+const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
+const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
@@ -60,10 +65,13 @@ import CoursesTab from '../components/backend/CoursesTab.jsx';
 import FinanceMasterTab from '../components/backend/FinanceMasterTab.jsx';
 import OnlineSalesTab from '../components/backend/OnlineSalesTab.jsx';
 import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab.jsx';
-import DocumentTemplatesTab from '../components/backend/DocumentTemplatesTab.jsx';
-import QuotationTab from '../components/backend/QuotationTab.jsx';
-import StaffSchedulesTab from '../components/backend/StaffSchedulesTab.jsx';
-import DfGroupsTab from '../components/backend/DfGroupsTab.jsx';
+// 4 more heavy tabs split for the same reason — DocumentTemplatesTab
+// pulls the print engine, QuotationTab + DfGroupsTab + StaffSchedulesTab
+// each pull rich form modals. Same Suspense boundary handles all.
+const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
+const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
+const StaffSchedulesTab    = lazy(() => import('../components/backend/StaffSchedulesTab.jsx'));
+const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
@@ -208,6 +216,17 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       topBarSlot={breadcrumbSlot}
     >
       <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+        {/* Audit P2 (2026-04-26 perf code-split): Suspense boundary catches
+            in-flight tab loads. Eager-imported tabs render immediately;
+            lazy-imported tabs (reports + heavy modals) trigger this fallback
+            for ~50-200ms on first click then cache. Simple spinner — heavy
+            visual treatment defeats the perf goal. */}
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-16 text-[var(--tx-muted)]" data-testid="backend-tab-loading">
+            <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+            <span className="ml-3 text-sm">กำลังโหลด...</span>
+          </div>
+        }>
         {saleMode ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer}
             onCustomerUsed={() => setSaleInitialCustomer(null)}
@@ -409,6 +428,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'document-templates' ? (
           <DocumentTemplatesTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
+        </Suspense>
       </div>
 
       {/* ── Phase 10 placeholder for individual report tabs not yet shipped ── */}
