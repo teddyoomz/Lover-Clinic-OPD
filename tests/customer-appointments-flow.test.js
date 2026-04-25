@@ -265,4 +265,73 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
   it('F5.10: lockedCustomer mode does NOT fetch all customers (memory savings)', () => {
     expect(src).toMatch(/if\s*\(\s*!lockedCustomer\s*\)\s*\{\s*getAllCustomers/);
   });
+
+  it('F5.11: skipStaffScheduleCheck prop gates Phase 13.2.4 schedule check (default true → skip)', () => {
+    // Phase 14.7.C — port AppointmentTab's staff schedule check into the
+    // shared component as an opt-in gate. AppointmentTab passes false to
+    // preserve its pre-refactor behavior; CustomerDetailView keeps default.
+    expect(src).toMatch(/skipStaffScheduleCheck\s*=\s*true/);
+    expect(src).toMatch(/if\s*\(\s*!skipStaffScheduleCheck\s*&&\s*formData\.doctorId\s*\)/);
+    expect(src).toMatch(/listStaffSchedules\(\{\s*staffId:\s*formData\.doctorId/);
+    expect(src).toMatch(/checkAppointmentCollision\(\s*formData\.doctorId/);
+  });
+});
+
+describe('F6: AppointmentTab uses shared AppointmentFormModal (Phase 14.7.C)', () => {
+  const src = READ('src/components/backend/AppointmentTab.jsx');
+
+  it('F6.1: imports the shared AppointmentFormModal', () => {
+    expect(src).toMatch(/import\s+AppointmentFormModal\s+from\s*['"]\.\/AppointmentFormModal\.jsx['"]/);
+  });
+
+  it('F6.2: no inline form imports remain (createBackendAppointment / updateBackendAppointment / getAllCustomers / getAllMasterDataItems / listStaffSchedules / checkAppointmentCollision / DateField)', () => {
+    // These were used only by the inline form. The shared component owns them now.
+    expect(src).not.toMatch(/createBackendAppointment/);
+    expect(src).not.toMatch(/updateBackendAppointment/);
+    expect(src).not.toMatch(/getAllCustomers/);
+    expect(src).not.toMatch(/getAllMasterDataItems/);
+    expect(src).not.toMatch(/listStaffSchedules/);
+    expect(src).not.toMatch(/checkAppointmentCollision/);
+    expect(src).not.toMatch(/from\s*['"][^'"]*DateField/);
+  });
+
+  it('F6.3: no inline form state hooks remain (formData / formSaving / formError / customerSearch / doctors / staff)', () => {
+    expect(src).not.toMatch(/setFormData/);
+    expect(src).not.toMatch(/setFormSaving/);
+    expect(src).not.toMatch(/setFormError/);
+    expect(src).not.toMatch(/setCustomerSearch/);
+    expect(src).not.toMatch(/const\s*\[\s*doctors,\s*setDoctors\s*\]/);
+    expect(src).not.toMatch(/const\s*\[\s*staff,\s*setStaff\s*\]/);
+  });
+
+  it('F6.4: AppointmentFormModal rendered with skipStaffScheduleCheck={false} (preserve Phase 13.2.4 behavior)', () => {
+    expect(src).toMatch(/<AppointmentFormModal[\s\S]+?skipStaffScheduleCheck=\{false\}/);
+  });
+
+  it('F6.5: AppointmentFormModal receives existingAppointments={dayAppts} for collision check', () => {
+    expect(src).toMatch(/<AppointmentFormModal[\s\S]+?existingAppointments=\{dayAppts\}/);
+  });
+
+  it('F6.6: openCreate sets initialDate/initialStartTime/initialRoomName via formMode state', () => {
+    expect(src).toMatch(/setFormMode\(\{\s*mode:\s*['"]create['"]/);
+    expect(src).toMatch(/initialDate/);
+    expect(src).toMatch(/initialStartTime/);
+    expect(src).toMatch(/initialRoomName/);
+  });
+
+  it('F6.7: openEdit passes appt through formMode', () => {
+    expect(src).toMatch(/setFormMode\(\{\s*mode:\s*['"]edit['"]\s*,\s*appt\s*\}\)/);
+  });
+
+  it('F6.8: refreshAfterSave reloads day + month after a save', () => {
+    expect(src).toMatch(/loadDay\(selectedDate\)/);
+    expect(src).toMatch(/getAppointmentsByMonth\(monthStr\)/);
+    expect(src).toMatch(/onSaved=\{refreshAfterSave\}/);
+  });
+
+  it('F6.9: holiday banner + listHolidays still wired (regression — Phase 11.8 W1-W5 pass)', () => {
+    expect(src).toMatch(/data-testid="appt-holiday-banner"/);
+    expect(src).toMatch(/listHolidays\(\)/);
+    expect(src).toMatch(/isDateHoliday\(selectedDate,\s*holidays\)/);
+  });
 });

@@ -1,38 +1,37 @@
 // ─── AppointmentTab — Resource Time Grid (replicate ProClinic layout) ────────
 // 3-panel: Left sidebar (mini calendar + doctor list) | Main (week nav + time grid with room columns)
+//
+// Phase 14.7.C (2026-04-25): inline form replaced with shared
+// `AppointmentFormModal` (extracted in 14.7.B). Calendar grid + holiday
+// banner + week nav stay here; the entire form (validation, holiday confirm,
+// collision check, staff-schedule check, payload write) lives in the shared
+// component. Both writers — AppointmentTab + CustomerDetailView — now flow
+// through one save path.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Calendar, ChevronLeft, ChevronRight, Plus, Edit3, Trash2,
-  Search, Loader2, X, Clock, User, MapPin, Stethoscope,
-  CheckCircle2, AlertCircle, CalendarDays, CalendarX,
+  ChevronLeft, ChevronRight, Plus, Loader2, User,
+  CalendarDays, CalendarX,
 } from 'lucide-react';
 import {
-  createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
-  getAppointmentsByMonth, getAppointmentsByDate, getAllCustomers, getAllMasterDataItems,
-  listHolidays, listStaffSchedules,
+  getAppointmentsByMonth, getAppointmentsByDate, listHolidays,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
-import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
-import DateField from '../DateField.jsx';
+import AppointmentFormModal from './AppointmentFormModal.jsx';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const THAI_DAYS_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 const THAI_DAYS_FULL = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 const CAL_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
-const CHANNELS = ['เคาน์เตอร์','โทรศัพท์','Walk-in','Facebook','Instagram','TikTok','Line','อื่นๆ'];
-const APPT_TYPES = [{ value: 'sales', label: 'ขาย' }, { value: 'followup', label: 'ติดตาม' }];
-const APPT_COLORS = ['ใช้สีเริ่มต้น','เหลืองอ่อน','เขียวอ่อน','ส้มอ่อน','แดงอ่อน','น้ำตาลอ่อน','ชมพูอ่อน','ม่วงอ่อน','น้ำเงินอ่อน'];
 const STATUSES = [
   { value: 'pending', label: 'รอยืนยัน', bg: 'bg-orange-500/20', text: 'text-orange-400', dot: 'bg-orange-400' },
   { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20', text: 'text-sky-400', dot: 'bg-sky-400' },
   { value: 'done', label: 'เสร็จแล้ว', bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
-const FALLBACK_ROOMS = []; // no fallback — show only rooms that have appointments
-const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav
+const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav (read by AppointmentFormModal)
 const SLOT_H = 36; // px per 30-min slot
 
 // Generate time slots 08:30 - 22:30 (30-min)
@@ -77,15 +76,9 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const [dayAppts, setDayAppts] = useState([]); // appointments for selectedDate
   const [dayLoading, setDayLoading] = useState(false);
 
-  // Form
+  // Form modal trigger only — actual form state lives inside AppointmentFormModal.
+  // Shape: null | { mode: 'create' | 'edit', appt?, initialDate?, initialStartTime?, initialEndTime?, initialRoomName? }
   const [formMode, setFormMode] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [formSaving, setFormSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [customers, setCustomers] = useState([]);
-  const [doctors, setDoctors] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [customerSearch, setCustomerSearch] = useState('');
 
   const today = dateStr(new Date());
   const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
@@ -93,6 +86,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   // Phase 11.8 wiring: load holidays once; use pure `isDateHoliday` to decide
   // whether the currently-viewed date falls on a clinic closure. Banner renders
   // above the time grid so admins see it before creating new appointments.
+  // The shared modal also runs `isDateHoliday` on save (skipHolidayCheck=false
+  // default) so the confirm prompt fires there.
   // Silent-fail on load (permission denied or network hiccup) = no banner,
   // existing booking flow untouched.
   const [holidays, setHolidays] = useState([]);
@@ -126,6 +121,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   // 2026-04-20: previously REPLACED rooms on every month change → months
   // with 1 booking showed only 1 room column, blocking new bookings into
   // other rooms. Fix: only ADD, never remove, seeded from prior sessions.
+  // The shared AppointmentFormModal reads this same localStorage key so the
+  // room dropdown there sees every room ever booked.
   const [allKnownRooms, setAllKnownRooms] = useState(() => {
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(ROOMS_CACHE_KEY) : null;
@@ -146,10 +143,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     });
   }, [monthAppts, dayAppts]);
 
-  const rooms = useMemo(() => {
-    if (allKnownRooms.length > 0) return allKnownRooms;
-    return FALLBACK_ROOMS;
-  }, [allKnownRooms]);
+  const rooms = allKnownRooms;
 
   // Pre-compute appointment lookup map for O(1) access in time grid
   const apptMap = useMemo(() => {
@@ -216,184 +210,30 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     setCalMonth({ year: d.getFullYear(), month: d.getMonth() });
   };
 
-  // ── Form handlers ──
-  const loadFormOptions = useCallback(async () => {
-    if (customers.length && doctors.length && staff.length) return;
-    const [c, d, s] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors'), getAllMasterDataItems('staff')]);
-    setCustomers(c);
-    setDoctors(d.filter(x => x.status !== 'พักใช้งาน'));
-    setStaff(s.filter(x => x.status !== 'พักใช้งาน'));
-  }, [customers.length, doctors.length, staff.length]);
-
-  const defaultFormData = (overrides = {}) => ({
-    date: selectedDate, startTime: '10:00', endTime: '10:30',
-    customerId: '', customerName: '', customerHN: '',
-    appointmentType: 'sales', advisorId: '', advisorName: '',
-    doctorId: '', doctorName: '', assistantIds: [], roomName: '',
-    channel: '', appointmentTo: '', location: '',
-    expectedSales: '', preparation: '', customerNote: '', notes: '',
-    appointmentColor: '', lineNotify: false,
-    recurringOption: 'once', recurringInterval: '', recurringUnit: 'วัน', recurringTimes: '',
-    status: 'pending',
-    ...overrides,
-  });
-
+  // ── Modal triggers ──
+  // Holiday confirm runs inside the shared modal on save (skipHolidayCheck
+  // defaults false). The above-grid banner already warns the admin before
+  // they click into a holiday slot, so a pre-open prompt would just nag.
   const openCreate = (date, time, room) => {
-    // Phase 11.8d: holiday-gate. If the target date falls on an active
-    // holiday, require an explicit confirm before proceeding. Non-blocking
-    // override — admin can still book on holidays (emergency / special
-    // hours) but must consciously acknowledge.
-    const target = date || selectedDate;
-    const holiday = isDateHoliday(target, holidays);
-    if (holiday) {
-      const label = holiday.type === 'weekly'
-        ? `ทุกวัน${DAY_OF_WEEK_LABELS[Number(holiday.dayOfWeek) || 0]}`
-        : (holiday.note || `วันหยุดเฉพาะ (${target})`);
-      if (!window.confirm(`วันนี้เป็นวันหยุดคลินิก:\n\n${label}\n\nยืนยันสร้างนัดหมายในวันนี้ ?`)) return;
-    }
-
-    loadFormOptions();
-    setFormData(defaultFormData({
-      date: target,
-      startTime: time || '10:00',
-      endTime: time ? TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time : '10:30',
-      roomName: room || '',
-    }));
-    setFormMode({ mode: 'create' });
-    setFormError('');
+    setFormMode({
+      mode: 'create',
+      initialDate: date || selectedDate,
+      initialStartTime: time || '10:00',
+      initialEndTime: time ? (TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time) : '10:30',
+      initialRoomName: room || '',
+    });
   };
 
   const openEdit = (appt) => {
-    loadFormOptions();
-    setFormData(defaultFormData({
-      date: appt.date, startTime: appt.startTime, endTime: appt.endTime || appt.startTime,
-      customerId: appt.customerId, customerName: appt.customerName, customerHN: appt.customerHN,
-      appointmentType: appt.appointmentType || 'sales',
-      advisorId: appt.advisorId || '', advisorName: appt.advisorName || '',
-      doctorId: appt.doctorId, doctorName: appt.doctorName, assistantIds: appt.assistantIds || [],
-      roomName: appt.roomName, channel: appt.channel, appointmentTo: appt.appointmentTo,
-      location: appt.location || '', expectedSales: appt.expectedSales || '',
-      preparation: appt.preparation || '', customerNote: appt.customerNote || '',
-      notes: appt.notes, appointmentColor: appt.appointmentColor || '',
-      lineNotify: appt.lineNotify || false, status: appt.status || 'pending',
-    }));
     setFormMode({ mode: 'edit', appt });
-    setFormError('');
   };
 
-  const handleDelete = async (appt) => {
-    if (!confirm('ต้องการลบนัดหมายนี้?')) return;
-    await deleteBackendAppointment(appt.appointmentId || appt.id);
-    loadDay(selectedDate);
-    getAppointmentsByMonth(monthStr).then(setMonthAppts);
-  };
-
-  const scrollToFormError = (fieldAttr, msg) => {
-    setFormError(msg);
-    setTimeout(() => {
-      const el = document.querySelector(`[data-field="${fieldAttr}"]`);
-      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
-    }, 50);
-  };
-
-  const handleSave = async () => {
-    if (!formData.customerId) { scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า'); return; }
-    if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
-    if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
-    setFormSaving(true); setFormError('');
-    try {
-      // AP1: overlap detection. A time slot is considered busy if either
-      // the room OR the doctor already has an appointment whose [start,end)
-      // range intersects the new one. Check against appointments for the
-      // EXACT target date (formData.date), not the UI-selected date — user
-      // may pick a different date in the form than what the calendar shows.
-      const editingId = formMode.mode === 'edit' ? (formMode.appt.appointmentId || formMode.appt.id) : null;
-      const newStart = String(formData.startTime);
-      const newEnd = String(formData.endTime || formData.startTime) || newStart;
-      const targetDate = String(formData.date);
-      let sameDay = [];
-      if (targetDate === selectedDate) {
-        sameDay = Array.isArray(dayAppts) ? dayAppts : [];
-      } else {
-        try { sameDay = await getAppointmentsByDate(targetDate); }
-        catch { sameDay = []; }
-      }
-      const overlaps = sameDay.filter(a => {
-        const aid = a.appointmentId || a.id;
-        if (aid && editingId && String(aid) === String(editingId)) return false; // editing self
-        if ((a.status || '') === 'cancelled') return false;
-        const aStart = String(a.startTime || '');
-        const aEnd = String(a.endTime || a.startTime || '');
-        if (!aStart) return false;
-        // half-open interval overlap: aStart < newEnd && aEnd > newStart
-        const startsBeforeNewEnds = aStart < newEnd;
-        const endsAfterNewStarts = (aEnd || aStart) > newStart;
-        if (!(startsBeforeNewEnds && endsAfterNewStarts)) return false;
-        const sameRoom = formData.roomName && a.roomName && a.roomName === formData.roomName;
-        const sameDoctor = formData.doctorId && a.doctorId && String(a.doctorId) === String(formData.doctorId);
-        return !!(sameRoom || sameDoctor);
-      });
-      if (overlaps.length > 0) {
-        const o = overlaps[0];
-        const who = o.roomName === formData.roomName ? `ห้อง "${o.roomName}"` : `หมอ "${o.doctorName || o.doctorId}"`;
-        setFormError(`ช่วงเวลานี้ชน: ${who} มีนัด ${o.startTime}–${o.endTime || o.startTime} (${o.customerName || o.customerHN || 'อีกนัด'}) อยู่แล้ว`);
-        setFormSaving(false);
-        return;
-      }
-
-      // Phase 13.2.4: staff schedule collision (warning, not blocking).
-      // Only runs when a doctor is assigned. Skips if no be_staff_schedules
-      // entry exists for the date (legacy behaviour — assumes available).
-      if (formData.doctorId) {
-        try {
-          const entries = await listStaffSchedules({
-            staffId: formData.doctorId,
-            startDate: targetDate,
-            endDate: targetDate,
-          });
-          const check = checkAppointmentCollision(
-            formData.doctorId, targetDate, newStart, newEnd, entries,
-          );
-          if (!check.available) {
-            const who = formData.doctorName || formData.doctorId;
-            const msg = `แพทย์ "${who}" ${check.reason} ในช่วงเวลาที่เลือก (${newStart}–${newEnd}).\n\nต้องการจองต่อหรือไม่?`;
-            if (!window.confirm(msg)) { setFormSaving(false); return; }
-          }
-        } catch (e) {
-          // Schedule fetch failure is non-fatal — log + continue (legacy path).
-          console.warn('[AppointmentTab] staff schedule check failed:', e);
-        }
-      }
-      const clean = JSON.parse(JSON.stringify({
-        customerId:formData.customerId, customerName:formData.customerName, customerHN:formData.customerHN,
-        date:formData.date, startTime:formData.startTime, endTime:formData.endTime||formData.startTime,
-        appointmentType:formData.appointmentType||'sales',
-        advisorId:formData.advisorId||'', advisorName:formData.advisorName||'',
-        doctorId:formData.doctorId, doctorName:formData.doctorName,
-        assistantIds:formData.assistantIds||[], roomName:formData.roomName,
-        channel:formData.channel, appointmentTo:formData.appointmentTo, location:formData.location||'',
-        expectedSales:formData.expectedSales||'', preparation:formData.preparation||'',
-        customerNote:formData.customerNote||'', notes:formData.notes,
-        appointmentColor:formData.appointmentColor||'', lineNotify:!!formData.lineNotify,
-        status:formData.status||'pending',
-      }));
-      if (formMode.mode === 'edit') await updateBackendAppointment(formMode.appt.appointmentId||formMode.appt.id, clean);
-      else await createBackendAppointment(clean);
-      setFormMode(null);
-      loadDay(selectedDate);
-      getAppointmentsByMonth(monthStr).then(setMonthAppts);
-    } catch (err) { setFormError(err.message); }
-    finally { setFormSaving(false); }
-  };
-
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers.slice(0, 20);
-    const q = customerSearch.toLowerCase();
-    return customers.filter(c => {
-      const name = `${c.patientData?.prefix||''} ${c.patientData?.firstName||''} ${c.patientData?.lastName||''}`.toLowerCase();
-      return name.includes(q) || (c.proClinicHN||'').toLowerCase().includes(q) || (c.patientData?.phone||'').includes(q);
-    }).slice(0, 20);
-  }, [customers, customerSearch]);
+  // Refresh both month dot map + day grid after a save.
+  const refreshAfterSave = useCallback(async () => {
+    setFormMode(null);
+    await loadDay(selectedDate);
+    getAppointmentsByMonth(monthStr).then(setMonthAppts).catch(() => {});
+  }, [loadDay, selectedDate, monthStr]);
 
   // Selected date info
   const selD = parseDate(selectedDate);
@@ -425,7 +265,6 @@ export default function AppointmentTab({ clinicSettings, theme }) {
               const isToday = cell.dateStr === today;
               const isSel = cell.dateStr === selectedDate;
               const hasAppt = (monthAppts[cell.dateStr]||[]).length > 0;
-              const dow = ((i % 7) + 1) % 7; // Mon=1..Sun=0 mapped
               const isWe = (i % 7) >= 5;
               return (
                 <button key={cell.dateStr} onClick={() => { setSelectedDate(cell.dateStr); }}
@@ -562,7 +401,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
 
               {/* Time rows */}
               <div className="relative">
-                {TIME_SLOTS.map((time, ti) => (
+                {TIME_SLOTS.map((time) => (
                   <div key={time} className="flex border-b border-[var(--bd)]/30" style={{ height: SLOT_H }}>
                     <div className="w-[60px] flex-shrink-0 text-xs text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
                     {rooms.map(room => {
@@ -612,240 +451,21 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         )}
       </div>
 
-      {/* ════════════ FORM MODAL ════════════ */}
+      {/* ════════════ FORM MODAL — shared component (Phase 14.7.B) ════════════ */}
       {formMode && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-appointment" onClick={() => setFormMode(null)} onKeyDown={e => { if (e.key === 'Escape') setFormMode(null); }}>
-          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
-              <h3 id="modal-title-appointment" className="text-sm font-bold text-[var(--tx-heading)] uppercase tracking-wider">
-                {formMode.mode === 'edit' ? 'แก้ไขนัดหมาย' : 'สร้างนัดหมาย'}
-              </h3>
-              <button onClick={() => setFormMode(null)} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]" aria-label="ปิด"><X size={18} /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Customer picker */}
-              <div data-field="apptCustomer">
-                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
-                {formData.customerName ? (
-                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
-                    <span className="text-xs text-[var(--tx-heading)] font-bold">{formData.customerName} <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span></span>
-                    <button onClick={() => setFormData(p => ({...p, customerId:'', customerName:'', customerHN:''}))} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ล้าง"><X size={14}/></button>
-                  </div>
-                ) : (
-                  <div>
-                    <input type="text" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="ค้นหาชื่อ / HN / เบอร์..."
-                      className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                    {filteredCustomers.length > 0 && (
-                      <div className="mt-1 max-h-32 overflow-y-auto border border-[var(--bd)] rounded-lg bg-[var(--bg-card)]">
-                        {filteredCustomers.map(c => {
-                          const name = `${c.patientData?.prefix||''} ${c.patientData?.firstName||''} ${c.patientData?.lastName||''}`.trim();
-                          return (
-                            <button key={c.id} onClick={() => { setFormData(p => ({...p, customerId:c.proClinicId||c.id, customerName:name, customerHN:c.proClinicHN||''})); setCustomerSearch(''); }}
-                              className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
-                              <span className="text-[var(--tx-secondary)]">{name}</span>
-                              <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN||''}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              {/* Date + Time */}
-              <div className="grid grid-cols-3 gap-3">
-                <div data-field="apptDate">
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
-                  <DateField value={formData.date} onChange={v => setFormData(p => ({...p, date:v}))}
-                    fieldClassName="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-                <div data-field="apptStartTime">
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
-                  <select value={formData.startTime} onChange={e => setFormData(p => ({...p, startTime:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สิ้นสุด</label>
-                  <select value={formData.endTime} onChange={e => setFormData(p => ({...p, endTime:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              {/* Appointment Type */}
-              <div>
-                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ประเภทนัดหมาย</label>
-                <div className="flex gap-3">
-                  {APPT_TYPES.map(t => (
-                    <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                      <input type="radio" checked={formData.appointmentType === t.value} onChange={() => setFormData(p => ({...p, appointmentType: t.value}))} className="accent-sky-500" />{t.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              {/* Advisor + Doctor + Room */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ที่ปรึกษา</label>
-                  <select value={formData.advisorId} onChange={e => { const s=staff.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,advisorId:e.target.value,advisorName:s?.name||''})); }}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    <option value="">ไม่ระบุ</option>
-                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
-                  <select value={formData.doctorId} onChange={e => { const d=doctors.find(x=>String(x.id)===e.target.value); setFormData(p=>({...p,doctorId:e.target.value,doctorName:d?.name||''})); }}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    <option value="">ไม่ระบุ</option>
-                    {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ห้องตรวจ</label>
-                  <select value={formData.roomName} onChange={e => setFormData(p => ({...p, roomName:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    <option value="">ไม่ระบุ</option>
-                    {[...new Set([...rooms, ...FALLBACK_ROOMS])].map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-              </div>
-              {/* Assistants (multi-select) */}
-              <div>
-                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {doctors.map(d => (
-                    <label key={d.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg cursor-pointer border transition-all ${
-                      formData.assistantIds?.includes(String(d.id))
-                        ? (isDark ? 'bg-sky-900/30 border-sky-700/40 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-700')
-                        : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'
-                    }`}>
-                      <input type="checkbox" checked={formData.assistantIds?.includes(String(d.id)) || false}
-                        onChange={e => {
-                          const id = String(d.id);
-                          setFormData(p => ({...p, assistantIds: e.target.checked
-                            ? [...(p.assistantIds||[]), id].slice(0, 5)
-                            : (p.assistantIds||[]).filter(x => x !== id)
-                          }));
-                        }} className="accent-sky-500 w-3 h-3" />
-                      {d.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              {/* Channel + Purpose + Status + Color */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทางนัดหมาย</label>
-                  <select value={formData.channel} onChange={e => setFormData(p => ({...p, channel:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    <option value="">ไม่ระบุ</option>
-                    {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>
-                  <select value={formData.status} onChange={e => setFormData(p => ({...p, status:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
-                  <textarea value={formData.appointmentTo} onChange={e => setFormData(p => ({...p, appointmentTo:e.target.value}))} rows={2} placeholder="botox, filler..."
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สีนัดหมาย</label>
-                  <select value={formData.appointmentColor} onChange={e => setFormData(p => ({...p, appointmentColor:e.target.value}))}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                    <option value="">ไม่ระบุ</option>
-                    {APPT_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              {/* Extra fields */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานที่นัด</label>
-                  <input type="text" value={formData.location} onChange={e => setFormData(p => ({...p, location:e.target.value}))} placeholder="คลินิก สาขา..."
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ยอดขายที่คาดหวัง</label>
-                  <input type="number" value={formData.expectedSales} onChange={e => setFormData(p => ({...p, expectedSales:e.target.value}))} placeholder="0"
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-              </div>
-              {/* Recurring */}
-              {formMode?.mode === 'create' && (
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ตัวเลือกนัดหมาย</label>
-                  <div className="flex gap-3 mb-2">
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
-                      <input type="radio" checked={formData.recurringOption === 'once'} onChange={() => setFormData(p => ({...p, recurringOption:'once'}))} className="accent-sky-500" />นัดครั้งเดียว
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
-                      <input type="radio" checked={formData.recurringOption === 'multiple'} onChange={() => setFormData(p => ({...p, recurringOption:'multiple'}))} className="accent-sky-500" />นัดหลายครั้ง
-                    </label>
-                  </div>
-                  {formData.recurringOption === 'multiple' && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-[var(--tx-muted)]">ทุก</span>
-                      <input type="number" value={formData.recurringInterval} onChange={e => setFormData(p => ({...p, recurringInterval:e.target.value}))} min="1"
-                        className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" />
-                      <select value={formData.recurringUnit} onChange={e => setFormData(p => ({...p, recurringUnit:e.target.value}))}
-                        className="px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)]">
-                        <option value="วัน">วัน</option><option value="เดือน">เดือน</option>
-                      </select>
-                      <span className="text-[var(--tx-muted)]">จำนวน</span>
-                      <input type="number" value={formData.recurringTimes} onChange={e => setFormData(p => ({...p, recurringTimes:e.target.value}))} min="1"
-                        className="w-16 px-2 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-center text-[var(--tx-primary)]" />
-                      <span className="text-[var(--tx-muted)]">ครั้ง</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {/* Preparation */}
-              <div>
-                <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">การเตรียมตัว</label>
-                <textarea value={formData.preparation} onChange={e => setFormData(p => ({...p, preparation:e.target.value}))} rows={2} placeholder="งดทาครีม, งดกินแอสไพริน..."
-                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
-              </div>
-              {/* Notes (2 types) */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">หมายเหตุ (แจ้งลูกค้า)</label>
-                  <textarea value={formData.customerNote} onChange={e => setFormData(p => ({...p, customerNote:e.target.value}))} rows={2}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">โน้ต (สำหรับคลินิก)</label>
-                  <textarea value={formData.notes} onChange={e => setFormData(p => ({...p, notes:e.target.value}))} rows={2}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
-                </div>
-              </div>
-              {/* LINE notify */}
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={formData.lineNotify || false} onChange={e => setFormData(p => ({...p, lineNotify:e.target.checked}))} className="accent-emerald-500" />
-                แจ้งเตือนนัดหมายทาง LINE
-              </label>
-              {formError && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12}/>{formError}</div>}
-            </div>
-            <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
-              <button onClick={() => setFormMode(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">ยกเลิก</button>
-              <button onClick={handleSave} disabled={formSaving}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
-                {formSaving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
-                {formMode.mode === 'edit' ? 'บันทึก' : 'สร้างนัดหมาย'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AppointmentFormModal
+          mode={formMode.mode}
+          appt={formMode.appt}
+          theme={theme}
+          initialDate={formMode.initialDate}
+          initialStartTime={formMode.initialStartTime}
+          initialEndTime={formMode.initialEndTime}
+          initialRoomName={formMode.initialRoomName}
+          existingAppointments={dayAppts}
+          skipStaffScheduleCheck={false}
+          onClose={() => setFormMode(null)}
+          onSaved={refreshAfterSave}
+        />
       )}
     </div>
   );

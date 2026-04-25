@@ -99,6 +99,7 @@ function defaultFormData(overrides = {}) {
  * @param {string} [props.initialRoomName]
  * @param {boolean} [props.skipHolidayCheck=false]
  * @param {boolean} [props.skipCollisionCheck=false]
+ * @param {boolean} [props.skipStaffScheduleCheck=true] — default ON-skip; AppointmentTab opts in by passing false to preserve Phase 13.2.4 behavior. CustomerDetailView keeps default (skip) because it has no full-day calendar context.
  * @param {Array}  [props.existingAppointments] — for collision check
  * @param {Object} [props.theme]
  * @param {() => void} props.onSaved
@@ -114,6 +115,7 @@ export default function AppointmentFormModal({
   initialRoomName,
   skipHolidayCheck = false,
   skipCollisionCheck = false,
+  skipStaffScheduleCheck = true,
   existingAppointments = [],
   theme,
   onSaved,
@@ -268,6 +270,33 @@ export default function AppointmentFormModal({
             setSaving(false);
             return;
           }
+        }
+      }
+
+      // Phase 13.2.4 staff schedule collision (warning, not blocking). Opt-in
+      // via `skipStaffScheduleCheck=false`. AppointmentTab passes false to
+      // preserve its pre-refactor behavior; CustomerDetailView keeps the
+      // default (skip) because it has no full-calendar context to compare.
+      // Non-fatal on fetch failure — log + continue.
+      if (!skipStaffScheduleCheck && formData.doctorId) {
+        try {
+          const newStart = String(formData.startTime);
+          const newEnd = String(formData.endTime || formData.startTime) || newStart;
+          const entries = await listStaffSchedules({
+            staffId: formData.doctorId,
+            startDate: formData.date,
+            endDate: formData.date,
+          });
+          const check = checkAppointmentCollision(
+            formData.doctorId, formData.date, newStart, newEnd, entries,
+          );
+          if (!check.available) {
+            const who = formData.doctorName || formData.doctorId;
+            const msg = `แพทย์ "${who}" ${check.reason} ในช่วงเวลาที่เลือก (${newStart}–${newEnd}).\n\nต้องการจองต่อหรือไม่?`;
+            if (!window.confirm(msg)) { setSaving(false); return; }
+          }
+        } catch (e) {
+          console.warn('[AppointmentFormModal] staff schedule check failed:', e);
         }
       }
 
