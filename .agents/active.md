@@ -1,125 +1,126 @@
 ---
-updated_at: "2026-04-25 (end-of-session — Rule I + 10 bug fixes + 5 audits + deploy)"
-status: "Rule I iron-clad established. 10 user-reported bugs fixed end-to-end with preview_eval verify. 5 Priority-3 audits run (skip PDPA). 12 commits deployed to prod. 3959/3959 tests."
-current_focus: "Awaiting user UI-verify on prod. No open code work."
+updated_at: "2026-04-25 (end-of-session — Phase 14.2.B/C in progress)"
+status: "Phase 14.2 ProClinic doc replication: Doc 1/16 (Medical History) DONE 100% match. F12 per-doc test bank scaffolded (135/138 pass; 3 caught failures = bugs to fix). Phase 14.3 G6 vendor-sale scaffolding (validators+Tab+rules) committed but not wired to nav."
+current_focus: "Doc 2/16 — medical-certificate (5 โรค). Use Chrome MCP browser tools (extension already installed) to extract exact ProClinic DOM/CSS, then verify F12.full:medical-certificate passes."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "1cb58d5"
-tests: "3959/3959 PASS"
+last_commit: "cb2bdb6"
+tests: "135/138 phase14-flow-simulate (3 F12 fails = next-action) | full suite likely 4100+/4100+"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "1cb58d5 (2026-04-25 end-of-session) — up-to-date with HEAD"
-firestore_rules_deployed: "no change this session"
+last_deploy: "ec567fd (2026-04-25 mid-session) — Phase 14.2.B/C NOT YET DEPLOYED to prod"
+firestore_rules_deployed: "v3 schema deployed. v5 needs deploy + new be_vendors / be_vendor_sales rules need P-D-P probe-deploy-probe"
 ---
 
 # Active Context
 
 ## Objective
 
-User has done "end session". No open code. Next session's first action is
-**user UI-verify** on prod (buffet display + expiry countdown + pick-at-
-treatment same-visit + DF report shows non-zero + blood type dropdown) and
-report back if anything still drifts.
+Replicate ALL 16 ProClinic doc templates (8 medical certs + medicine-label +
+4 system templates + patient-referral + 3 treatment-record types) with
+**100% pixel-close fidelity** per user directive: "ทำ templates เอกสารต่างๆ
+ให้เหมือนกัน proclinic เป๊ะๆเลย ... หน้ากระดาษการพิมพ์ทุกแบบของเราต้องเหมือน
+เค้า 100%". Each doc must auto-fill from real `be_treatments`/`be_customers`
+schema. Cert numbers must auto-increment via runTransaction. Doc dropdowns
+must appear per-treatment-row in CustomerDetailView (mirrors ProClinic).
 
-## Current State
+## Current State (commits this session)
 
-- **master = `1cb58d5`**, prod = `1cb58d5` (up-to-date).
-- 3959/3959 tests PASS, build clean, 15 full-flow simulate files.
-- Rule I (iron-clad) + V13 logged 2026-04-25 after 3-round helper-only
-  test failure pattern — full-flow simulate now mandatory per sub-phase.
-- 10 user-reported bugs fixed in session with preview_eval runtime verify:
-  1. pick-at-treatment nothing shows (commit 85f6c96)
-  2. "คอร์สคงเหลือไม่พอ: LipoS" after pick + use same-visit (116b2a9)
-  3. picked- rowId leak into Phase-1 deduction (d876ffa)
-  4. buffet display "1/1 U" → "บุฟเฟต์" + bloodType dropdown empty (221ab29)
-  5. buffet customer card — hide มูลค่าคงเหลือ, show หมดอายุอีก N วัน (a6a5de1)
-  6. course expiry sync→assign chain preserves daysBeforeExpire (bc17c28)
-  7. openBuyModal whitelist strip + shadow course dedup (28b86a0)
-  8. DF report linkedSaleId back-link via setTreatmentLinkedSaleId (cf0ad55)
-  9. AV2 raw <input type="date"> in FinanceMasterTab + OnlineSalesTab (1cb58d5)
-  10. api/proclinic/explore.js missing @dev-only banner (1cb58d5)
+- `e6ff4e6` — Phase 12.3 Sale Insurance Claim UI + SaleReport wiring
+- `ec567fd` — Phase 14.1 Document Templates System (13 seeds + CRUD + print)
+- `e2528b1` — V14 normalizer fix (undefined → setDoc reject) + V15 combined-deploy rule
+- `0398171` — Phase 14.2 toggles + bilingual + 13 ProClinic-fidelity rewrites
+- `bcf6e3b` — Phase 14.2.B per-treatment dual dropdowns + auto cert# + 3 new docTypes
+- `df556f6` — Phase 14.2.C Medical History 100% replication + raw-HTML `{{{key}}}` placeholder + schema mapping fix
+- `cb2bdb6` — F12 per-doc test bank (32 tests, 3 caught failures)
 
-## Blockers
+## What's working ✅
 
-None.
+- **Doc 1/16 — Medical History (treatment-history A4)**: VERIFIED 100% match
+  via preview_eval. All sections render: clinic letterhead → Date+Physician
+  → Customer info → Emergency contact → Vital signs → Symptoms → Physical
+  Examination → Diagnosis (full ICD codes) → Treatment → Treatment Plan →
+  Additional note → Treatment record TABLE (Allergan 100 U | 100 U | 0 U)
+  → Home medication TABLE (Acetin | 1 amp.) → Physician signature.
+  Doctor name de-duplication regex working. Vitals schema mapped (sys/dia
+  BP, pulseRate, etc.). Raw-HTML rows use `{{{key}}}` placeholder.
+- Auto cert# generator via runTransaction (clinic_settings/cert_counters)
+- Per-treatment dual dropdowns ("พิมพ์ใบรับรองแพทย์ ▾" + "พิมพ์การรักษา ▾")
+- Schema upgrade mechanism (v1→v2→v3→v4→v5) running automatically
+- Chrome MCP browser tools loaded + connected (Browser 1, Windows)
 
-## Next Action (resume session)
+## Failing F12 tests (3) — IMMEDIATE next-action
 
-User has explicitly NOT authorized any deploy / code change this moment.
-First thing next session:
+```
+F12.full:chart    — likely raw-HTML placeholder issue
+F12.full:consent  — likely raw-HTML placeholder issue
+F12.full:<one-more> — see test output
+```
 
-1. User opens prod + UI-verifies the 8 items in SESSION_HANDOFF.md
-   "Outstanding User Actions":
-   - Buy buffet via SaleTab → customer course card shows "บุฟเฟต์" + "หมดอายุอีก N วัน"
-   - Buy pick-at-treatment inside treatment → PickProductsModal → tick → save succeeds
-   - Multi-visit buffet → qty never drops
-   - DF Payout Report shows real ฿ on backend-created sales (was ฿0)
-   - Blood type dropdown renders A/B/AB/O/ไม่ทราบ
-   - Course expiry date visible on customer page
-   - Search courses "บุฟ" shows 4 items (matches ProClinic, not 7 with duplicates)
-   - Treatment edit → reverse+reapply net-zero
+These are EXACTLY the verification mechanism user requested: "เขียนเทสขึ้น
+มาแล้วทดสอบเองเลย กับทุกหน้านะ". Each failure = doc template that doesn't
+fully render with realistic context. Fix → mark Doc N done → next.
 
-2. If any item fails → report bug, continue debug-fix-test-simulate cycle
-   per Rule I.
+## Per-doc verification methodology (per user directive)
 
-3. If all pass → session can continue with the next phase (likely Phase
-   14.x remaining or Phase 15 Central Stock Conditional per
-   `project_execution_order.md`).
+1. Pull ProClinic DOM via Chrome MCP `javascript_tool` on
+   `https://trial.proclinicth.com/admin/<route>` (Browser 1 already
+   connected, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
+2. Compare to our SEED_TEMPLATE
+3. Update template HTML + CustomerDetailView prefill mapping
+4. Bump SCHEMA_VERSION (currently 5, bump to 6 on next batch)
+5. Run `npm test -- --run tests/phase14-documents-flow-simulate.test.js`
+   — F12.full:<docType> + F12.empty:<docType> must pass
+6. preview_eval verify in browser (open template, check all sections)
+7. Mark doc done in active.md, move to next
 
-## Recent Decisions (this session)
+## Doc verification queue (16 total)
 
-1. **Rule I mandatory** — full-flow simulate at every sub-phase end.
-   Helper-only unit tests are NECESSARY BUT NOT SUFFICIENT. 3 rounds of
-   the 2026-04-25 buffet+expiry+shadow bugs all had green unit tests
-   while UI was broken. V13 logged with cross-ref to V11/V12 as a
-   cluster of the same failure mode.
+- [x] **Doc 1/16** — treatment-history (Medical History A4) ✅ DONE df556f6
+- [ ] **Doc 2/16** — medical-certificate (5 โรค) — F12 PASSES, but verify pixel via Chrome MCP DOM
+- [ ] **Doc 3/16** — medical-certificate-for-driver-license — F12 PASSES, verify pixel
+- [ ] **Doc 4/16** — medical-opinion (ลาป่วย) — F12 PASSES, verify pixel
+- [ ] **Doc 5/16** — physical-therapy-certificate — F12 PASSES, verify pixel
+- [ ] **Doc 6/16** — thai-traditional-medicine-cert — F12 PASSES, verify pixel
+- [ ] **Doc 7/16** — chinese-traditional-medicine-cert — F12 PASSES, verify pixel
+- [ ] **Doc 8/16** — fit-to-fly — F12 PASSES, verify pixel
+- [ ] **Doc 9/16** — patient-referral — F12 PASSES, verify pixel
+- [ ] **Doc 10/16** — treatment-referral A5 — F12 PASSES, verify pixel
+- [ ] **Doc 11/16** — course-deduction — F12 PASSES, verify pixel
+- [ ] **Doc 12/16** — medicine-label — F12 PASSES, verify pixel + add preset list UI
+- [ ] **Doc 13/16** — chart ❌ F12 FAILS — fix raw-HTML/placeholder leak
+- [ ] **Doc 14/16** — consent ❌ F12 FAILS — fix raw-HTML/placeholder leak
+- [ ] **Doc 15/16** — treatment template ❌ likely F12 fails too
+- [ ] **Doc 16/16** — sale-cancelation — F12 PASSES, verify pixel
 
-2. **setTreatmentLinkedSaleId writes BOTH shapes** — top-level
-   `linkedSaleId` (where `_clearLinkedTreatmentsHasSale` queries via
-   Firestore `where`) AND `detail.linkedSaleId` (where DF aggregator
-   reads). 3 different code paths used 3 different shapes — aggregator
-   couldn't match treatments to sales → DF report blank. Helper writes
-   both so every reader sees the same thing.
+DEFER for graphical docs (chart drawings, dental charts, PDF library):
+canvas drawing tool + PDF storage are entirely new feature surfaces beyond
+template seeds. Plan as Phase 16 polish.
 
-3. **Shadow-course filter at openBuyModal** — ProClinic sync emits
-   archive/template rows (46% of sync dataset had no courseType + null
-   price). Filter rule: `!!courseType && price > 0`. Mirrors ProClinic
-   behavior. Could be moved upstream to sync-time but keeping at UI
-   layer covers legacy data already in Firestore.
+## Phase 14.3 G6 vendor-sale (separate work-in-progress)
 
-4. **Rule H-bis banner formalized** — dev-only scaffolding files MUST
-   have `@dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)`
-   banner so pre-release audit can pick them up deterministically.
-   explore.js was first caught; template for future dev-only endpoints.
+- ✅ src/lib/vendorValidation.js (committed bcf6e3b)
+- ✅ src/lib/vendorSaleValidation.js (committed bcf6e3b)
+- ✅ src/components/backend/VendorSalesTab.jsx (committed bcf6e3b)
+- ✅ backendClient.js CRUD helpers (committed bcf6e3b)
+- ✅ firestore.rules be_vendors + be_vendor_sales (committed cb2bdb6)
+- ⏳ Nav entry already added but BackendDashboard.jsx may not route yet
+- ⏳ Need preview_eval verification + tests
+- ⏳ Need firestore.rules deploy via Probe-Deploy-Probe
+- ⏳ Awaits Doc 2-16 first
 
-5. **Priority 3 skips PDPA per user directive** — 5 audits run (firestore
-   correctness, backend-firestore-only, anti-vibe-code, react-patterns,
-   ui-cultural-a11y, reports-accuracy). All advisory findings plus 2
-   real AV2 fixes. 18 regression guard tests lock every fix.
+## Phase 14 G5 customer-product-change — NOT STARTED
 
-## Session commit list (12 net, all pushed + deployed)
+Big feature (course exchange + refund). Defer until G6 ships + ProClinic
+docs all green.
 
-- `85f6c96` pick-at-treatment late-visit wiring
-- `116b2a9` alreadyResolved flag prevents placeholder overwrite
-- `d876ffa` picked- rowId classification via isPurchasedSessionRowId
-- `221ab29` buffet display/behavior + bloodType objects + 94 F1-F16 tests
-- `a6a5de1` buffet card countdown + daysUntilExpiry helper (+8 F16 tests)
-- `bc17c28` daysBeforeExpire sync→migrate→store→buy→assign chain (+14 F17 tests)
-- `28b86a0` whitelist preserve + shadow filter (+7 F17.15-21 tests)
-- `8e90f8b` Rule I iron-clad + V13 + Pre-Commit #6 + CLAUDE.md update
-- `ad843c3` Priority 1 batch — 6 files, 117 tests
-- `f9b8f56` Priority 2 batch — 4 files, 92 tests
-- `cf0ad55` DF report linkedSaleId helper + aggregator defensive + 22 tests
-- `1cb58d5` P3 audits + AV2 fixes + H-bis banner + 18 regression guards
+## Outstanding user actions (NOT auto-run)
 
-## V-log status
+1. Deploy `cb2bdb6` to prod via `vercel --prod` (current prod still on
+   `ec567fd` — missing all Phase 14.2.B/C work + Doc 1 fix)
+2. Deploy firestore.rules (be_vendors + be_vendor_sales rules added) via
+   `firebase deploy --only firestore:rules` with full Probe-Deploy-Probe
+   per Rule B iron-clad (4 endpoints curl-probe pre + post)
 
-V13 added 2026-04-25 (§ 2 of `.claude/rules/00-session-start.md`) —
-3-round helper-only test failure pattern. No other V-entries this session.
-
-## Notes
-
-- Production URL verified 200 OK + hasRoot + hasViteBundle via preview_eval.
-- firestore:rules untouched — no Probe-Deploy-Probe needed.
-- Preview dev server still live at localhost:5173 (HMR green all session).
-- Session started at 3306 tests; ended at 3959 (+653 / 4× increase, all
-  pure-helper + full-flow simulate + source-grep regression guards).
+Next session continues with: fix the 3 failing F12 tests + verify each
+remaining doc via Chrome MCP DOM + preview_eval, ONE doc at a time per
+user directive "ทำแบบนี้ทีละหน้าจนครบ".
