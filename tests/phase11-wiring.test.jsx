@@ -25,6 +25,9 @@ vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));
 // Mock backendClient — stub everything AppointmentTab calls. listHolidays is
 // the NEW wire (Phase 11.8); the rest are existing getters returning safe
 // defaults so the tab mounts without exploding.
+// Phase 14.7.H follow-up H (2026-04-26): AppointmentTab migrated from
+// one-shot listHolidays to onSnapshot via listenToHolidays. Mock pipes
+// mockListHolidays() result to onChange to preserve W1-W5 semantics.
 const mockListHolidays = vi.fn();
 vi.mock('../src/lib/backendClient.js', () => ({
   createBackendAppointment: vi.fn(),
@@ -42,6 +45,13 @@ vi.mock('../src/lib/backendClient.js', () => ({
   getAllCustomers: vi.fn(() => Promise.resolve([])),
   getAllMasterDataItems: vi.fn(() => Promise.resolve({})),
   listHolidays: (...a) => mockListHolidays(...a),
+  listenToHolidays: (onChange, onError) => {
+    Promise.resolve(mockListHolidays()).then(
+      (items) => onChange(items || []),
+      (err) => (onError || (() => {}))(err),
+    );
+    return () => {};
+  },
 }));
 
 describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {

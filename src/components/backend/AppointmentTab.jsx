@@ -14,7 +14,7 @@ import {
   CalendarDays, CalendarX,
 } from 'lucide-react';
 import {
-  getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listHolidays,
+  getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listenToHolidays,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
@@ -83,16 +83,20 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const today = dateStr(new Date());
   const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
 
-  // Phase 11.8 wiring: load holidays once; use pure `isDateHoliday` to decide
+  // Phase 11.8 wiring: load holidays; use pure `isDateHoliday` to decide
   // whether the currently-viewed date falls on a clinic closure. Banner renders
   // above the time grid so admins see it before creating new appointments.
   // The shared modal also runs `isDateHoliday` on save (skipHolidayCheck=false
   // default) so the confirm prompt fires there.
-  // Silent-fail on load (permission denied or network hiccup) = no banner,
-  // existing booking flow untouched.
+  // Phase 14.7.H follow-up H (2026-04-26): switched from one-shot `listHolidays`
+  // to onSnapshot via `listenToHolidays`. Closes the staleness gap where an
+  // admin editing a holiday in HolidaysTab from another tab didn't reflect in
+  // this banner without a full nav-and-back. Silent-fail on subscribe error
+  // (permission denied / network hiccup) = empty list, booking flow untouched.
   const [holidays, setHolidays] = useState([]);
   useEffect(() => {
-    listHolidays().then(setHolidays).catch(() => setHolidays([]));
+    const unsub = listenToHolidays(setHolidays, () => setHolidays([]));
+    return unsub;
   }, []);
   const currentHoliday = useMemo(
     () => isDateHoliday(selectedDate, holidays),

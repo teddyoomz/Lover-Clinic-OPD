@@ -29,7 +29,7 @@ import {
 import {
   createBackendAppointment, updateBackendAppointment,
   getAllCustomers, getAllMasterDataItems,
-  listHolidays, listStaffSchedules,
+  listenToHolidays, listStaffSchedules,
 } from '../../lib/backendClient.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
@@ -186,15 +186,13 @@ export default function AppointmentFormModal({
   const [holidays, setHolidays] = useState([]);
 
   useEffect(() => {
-    // Load doctors + staff + holidays on mount.
+    // Load doctors + staff on mount (one-shot — masters change rarely).
     Promise.all([
       getAllMasterDataItems('doctors').catch(() => []),
       getAllMasterDataItems('staff').catch(() => []),
-      listHolidays().catch(() => []),
-    ]).then(([d, s, h]) => {
+    ]).then(([d, s]) => {
       setDoctors((d || []).filter(x => x.status !== 'พักใช้งาน'));
       setStaff((s || []).filter(x => x.status !== 'พักใช้งาน'));
-      setHolidays(h || []);
     });
     // Load customers ONLY if customer is not locked (saves a heavy fetch
     // when CustomerDetailView opens this modal — the customer is already
@@ -203,6 +201,14 @@ export default function AppointmentFormModal({
       getAllCustomers().then(c => setCustomers(c || [])).catch(() => setCustomers([]));
     }
   }, [lockedCustomer]);
+
+  // Phase 14.7.H follow-up H (2026-04-26): listenToHolidays so the modal's
+  // skipHolidayCheck confirm prompt fires against the latest holiday set
+  // even when admin A edits HolidaysTab while admin B is mid-booking.
+  useEffect(() => {
+    const unsub = listenToHolidays(setHolidays, () => setHolidays([]));
+    return unsub;
+  }, []);
 
   // Filtered customer list (only used when not locked)
   const filteredCustomers = useMemo(() => {

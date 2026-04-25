@@ -333,9 +333,12 @@ describe('F6: AppointmentTab uses shared AppointmentFormModal (Phase 14.7.C)', (
     expect(src).toMatch(/onSaved=\{refreshAfterSave\}/);
   });
 
-  it('F6.9: holiday banner + listHolidays still wired (regression — Phase 11.8 W1-W5 pass)', () => {
+  it('F6.9: holiday banner + listenToHolidays still wired (regression — Phase 11.8 W1-W5 pass)', () => {
+    // Phase 14.7.H follow-up H (2026-04-26): migrated from one-shot
+    // listHolidays() to onSnapshot via listenToHolidays(). LC8 covers the
+    // listener contract; this guard locks the AppointmentTab integration.
     expect(src).toMatch(/data-testid="appt-holiday-banner"/);
-    expect(src).toMatch(/listHolidays\(\)/);
+    expect(src).toMatch(/listenToHolidays\(setHolidays/);
     expect(src).toMatch(/isDateHoliday\(selectedDate,\s*holidays\)/);
   });
 });

@@ -242,6 +242,16 @@ const mockSave = vi.fn();
 const mockDelete = vi.fn();
 vi.mock('../src/lib/backendClient.js', () => ({
   listHolidays:  (...a) => mockList(...a),
+  // Phase 14.7.H follow-up H (2026-04-26): HolidaysTab migrated to listener.
+  // Mock invokes mockList for backwards-compat with existing test setups
+  // (mockResolvedValueOnce) and pipes to onChange like onSnapshot would.
+  listenToHolidays: (onChange, onError) => {
+    Promise.resolve(mockList()).then(
+      (items) => onChange(items || []),
+      (err) => (onError || (() => {}))(err),
+    );
+    return () => {};
+  },
   saveHoliday:   (...a) => mockSave(...a),
   deleteHoliday: (...a) => mockDelete(...a),
   getHoliday:    vi.fn(),

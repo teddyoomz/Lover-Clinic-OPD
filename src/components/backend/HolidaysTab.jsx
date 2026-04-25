@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, CalendarX, Loader2, Repeat } from 'lucide-react';
-import { listHolidays, deleteHoliday } from '../../lib/backendClient.js';
+import { listenToHolidays, deleteHoliday } from '../../lib/backendClient.js';
 import HolidayFormModal from './HolidayFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import {
@@ -34,20 +34,26 @@ export default function HolidaysTab({ clinicSettings, theme }) {
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
 
+  // Phase 14.7.H follow-up H (2026-04-26): replaced one-shot listHolidays
+  // with onSnapshot via listenToHolidays. Multi-tab CRUD (admin A creates a
+  // holiday in window 1 while admin B has this tab open in window 2) now
+  // refreshes both lists within ~1s without explicit reload after every
+  // mutation. The legacy `reload` shim is preserved as a no-op so existing
+  // post-mutation callbacks (handleSaved, handleDelete) don't need refactor;
+  // the listener already keeps `items` fresh.
   const reload = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setItems(await listHolidays());
-    } catch (e) {
-      setError(e.message || 'โหลดวันหยุดล้มเหลว');
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
+    return Promise.resolve();
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    const unsub = listenToHolidays(
+      (list) => { setItems(list); setLoading(false); },
+      (e) => { setError(e?.message || 'โหลดวันหยุดล้มเหลว'); setItems([]); setLoading(false); },
+    );
+    return unsub;
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

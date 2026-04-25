@@ -472,3 +472,299 @@ describe('LC7: pure simulate — coalescing + aggregation logic', () => {
     expect(b.lastEmit.membership.cardTypeName).toBe('Gold');
   });
 });
+
+// ─── LC8: listenToHolidays (Phase 14.7.H follow-up H) ─────────────────────
+//
+// Multi-tab admin scenario: admin A edits a holiday in HolidaysTab while
+// admin B is mid-booking in AppointmentTab/AppointmentFormModal. Pre-listener,
+// the holiday banner + skipHolidayCheck confirm prompt stayed stale until full
+// nav-and-back. Now every consumer (3 sites) refreshes within ~1s.
+//
+// LC8 covers:
+//   - backendClient export shape
+//   - listHolidays sort contract preserved (updatedAt desc, createdAt tiebreak)
+//   - Three consumer migrations (AppointmentTab, AppointmentFormModal, HolidaysTab)
+//   - listHolidays no longer imported in any of them (caught V11 pattern)
+//   - useEffect returns the unsub (cleanup on unmount, no leak)
+
+describe('LC8: listenToHolidays — multi-consumer cross-tab refresh', () => {
+  const SRC = READ('src/lib/backendClient.js');
+  const APPT = READ('src/components/backend/AppointmentTab.jsx');
+  const FORM = READ('src/components/backend/AppointmentFormModal.jsx');
+  const HOLI = READ('src/components/backend/HolidaysTab.jsx');
+
+  it('LC8.1: backendClient exports listenToHolidays', () => {
+    expect(SRC).toMatch(/export\s+function\s+listenToHolidays/);
+  });
+
+  it('LC8.2: returns onSnapshot subscription over holidaysCol()', () => {
+    const fn = SRC.match(/export function listenToHolidays[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/return onSnapshot\(holidaysCol\(\),/);
+  });
+
+  it('LC8.3: sort contract preserves listHolidays semantics (updatedAt desc, createdAt tiebreak)', () => {
+    const fn = SRC.match(/export function listenToHolidays[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/items\.sort/);
+    expect(fn).toMatch(/ub\.localeCompare\(ua\)/);
+    expect(fn).toMatch(/\(b\.createdAt\s*\|\|\s*['"]['"]\)\.localeCompare\(a\.createdAt/);
+  });
+
+  it('LC8.4: passes onError through', () => {
+    const fn = SRC.match(/export function listenToHolidays[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/\}\,\s*onError\)/);
+  });
+
+  it('LC8.5: AppointmentTab imports listenToHolidays (not listHolidays)', () => {
+    expect(APPT).toMatch(/listenToHolidays/);
+    // Match active uses only — import token OR call site — not historical
+    // mentions in migration comments.
+    expect(APPT).not.toMatch(/[\{\,]\s*listHolidays\s*[\,\}]|\blistHolidays\(/);
+  });
+
+  it('LC8.6: AppointmentFormModal imports listenToHolidays (not listHolidays)', () => {
+    expect(FORM).toMatch(/listenToHolidays/);
+    expect(FORM).not.toMatch(/[\{\,]\s*listHolidays\s*[\,\}]|\blistHolidays\(/);
+  });
+
+  it('LC8.7: HolidaysTab imports listenToHolidays (not listHolidays)', () => {
+    expect(HOLI).toMatch(/listenToHolidays/);
+    expect(HOLI).not.toMatch(/[\{\,]\s*listHolidays\s*[\,\}]|\blistHolidays\(/);
+  });
+
+  it('LC8.8: AppointmentTab useEffect returns the unsub (cleanup on unmount)', () => {
+    // Pattern: const unsub = listenToHolidays(...); return unsub;
+    expect(APPT).toMatch(/const unsub = listenToHolidays\([\s\S]+?\)\;\s*return unsub;/);
+  });
+
+  it('LC8.9: AppointmentFormModal useEffect returns the unsub', () => {
+    expect(FORM).toMatch(/const unsub = listenToHolidays\([\s\S]+?\)\;\s*return unsub;/);
+  });
+
+  it('LC8.10: HolidaysTab listener subscribes inside useEffect AND clears loading on first emit', () => {
+    // Pattern: setLoading(true); …; const unsub = listenToHolidays((list) => { …; setLoading(false); }, …);
+    const block = HOLI.match(/useEffect\(\(\) => \{\s*setLoading\(true\)[\s\S]+?return unsub;[\s\S]+?\}\, \[\]\)/)?.[0] || '';
+    expect(block).toMatch(/const unsub = listenToHolidays/);
+    expect(block).toMatch(/setLoading\(false\)/);
+  });
+
+  it('LC8.11: HolidaysTab error path also clears loading + sets empty items', () => {
+    const block = HOLI.match(/useEffect\(\(\) => \{\s*setLoading\(true\)[\s\S]+?return unsub;[\s\S]+?\}\, \[\]\)/)?.[0] || '';
+    expect(block).toMatch(/setItems\(\[\]\)/);
+    expect(block).toMatch(/setLoading\(false\)/);
+  });
+
+  it('LC8.12: NO setInterval polling near any holiday consumer', () => {
+    // Listener must obviate polling. Quick grep within a window of each useEffect.
+    const apptRegion = APPT.match(/listenToHolidays[\s\S]{0,400}/)?.[0] || '';
+    const formRegion = FORM.match(/listenToHolidays[\s\S]{0,400}/)?.[0] || '';
+    const holiRegion = HOLI.match(/listenToHolidays[\s\S]{0,400}/)?.[0] || '';
+    expect(apptRegion).not.toMatch(/setInterval/);
+    expect(formRegion).not.toMatch(/setInterval/);
+    expect(holiRegion).not.toMatch(/setInterval/);
+  });
+});
+
+// ─── LC8.sim: pure simulate of listenToHolidays sort contract ─────────────
+
+describe('LC8.sim: pure simulate — holiday sort + tiebreak', () => {
+  function sortHolidays(snapDocs) {
+    const items = snapDocs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => {
+      const ua = a.updatedAt || '';
+      const ub = b.updatedAt || '';
+      if (ua !== ub) return ub.localeCompare(ua);
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    return items;
+  }
+
+  it('LC8.sim.1: latest updatedAt comes first', () => {
+    const docs = [
+      { id: 'H1', data: () => ({ note: 'Old',    updatedAt: '2026-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' }) },
+      { id: 'H2', data: () => ({ note: 'Newest', updatedAt: '2026-04-26T00:00:00Z', createdAt: '2026-04-20T00:00:00Z' }) },
+      { id: 'H3', data: () => ({ note: 'Mid',    updatedAt: '2026-03-01T00:00:00Z', createdAt: '2026-02-15T00:00:00Z' }) },
+    ];
+    const sorted = sortHolidays(docs);
+    expect(sorted.map(s => s.id)).toEqual(['H2', 'H3', 'H1']);
+  });
+
+  it('LC8.sim.2: equal updatedAt → tiebreak on createdAt desc', () => {
+    const docs = [
+      { id: 'H1', data: () => ({ updatedAt: '2026-04-26T00:00:00Z', createdAt: '2026-04-01T00:00:00Z' }) },
+      { id: 'H2', data: () => ({ updatedAt: '2026-04-26T00:00:00Z', createdAt: '2026-04-25T00:00:00Z' }) },
+    ];
+    const sorted = sortHolidays(docs);
+    expect(sorted.map(s => s.id)).toEqual(['H2', 'H1']);
+  });
+
+  it('LC8.sim.3: missing updatedAt sorts last (empty string < ISO timestamp)', () => {
+    const docs = [
+      { id: 'H1', data: () => ({ note: 'Has updatedAt', updatedAt: '2026-04-26T00:00:00Z' }) },
+      { id: 'H2', data: () => ({ note: 'No updatedAt' /* undefined */ }) },
+    ];
+    const sorted = sortHolidays(docs);
+    expect(sorted[0].id).toBe('H1');
+    expect(sorted[1].id).toBe('H2');
+  });
+
+  it('LC8.sim.4: empty input → empty output (no crash)', () => {
+    expect(sortHolidays([])).toEqual([]);
+  });
+
+  it('LC8.sim.5: weekly + specific shapes both pass through cleanly', () => {
+    const docs = [
+      { id: 'W',  data: () => ({ type: 'weekly',   dayOfWeek: 0, updatedAt: '2026-04-25T00:00:00Z' }) },
+      { id: 'S',  data: () => ({ type: 'specific', dates: ['2026-04-26', '2026-04-27'], updatedAt: '2026-04-26T00:00:00Z' }) },
+    ];
+    const sorted = sortHolidays(docs);
+    expect(sorted[0].type).toBe('specific');
+    expect(sorted[0].dates).toHaveLength(2);
+    expect(sorted[1].type).toBe('weekly');
+  });
+});
+
+// ─── LC9: listenToAllSales (Phase 14.7.H follow-up H — bounded) ───────────
+//
+// Bounded by required `since` (default 365d) so the listener never attaches
+// over the entire be_sales collection. SaleTab + SaleInsuranceClaimsTab keep
+// one-shot getAllSales() — listenToAllSales is the canonical pattern for
+// FUTURE real-time dashboards (today's sales widget, live revenue).
+
+describe('LC9: listenToAllSales — bounded real-time variant', () => {
+  const SRC = READ('src/lib/backendClient.js');
+
+  it('LC9.1: backendClient exports listenToAllSales', () => {
+    expect(SRC).toMatch(/export\s+function\s+listenToAllSales/);
+  });
+
+  it('LC9.2: returns onSnapshot over a where("saleDate", ">=", since) query', () => {
+    const fn = SRC.match(/export function listenToAllSales[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/return onSnapshot\(q,/);
+    expect(fn).toMatch(/where\(['"]saleDate['"],\s*['"]>=['"],\s*since\)/);
+  });
+
+  it('LC9.3: defaults since to ~365 days ago (computed at call time)', () => {
+    const fn = SRC.match(/export function listenToAllSales[\s\S]+?^}/m)?.[0] || '';
+    // The default-since IIFE subtracts 365 days
+    expect(fn).toMatch(/setDate\(d\.getDate\(\) - 365\)/);
+    // …and slices to YYYY-MM-DD
+    expect(fn).toMatch(/toISOString\(\)\.slice\(0,\s*10\)/);
+  });
+
+  it('LC9.4: opts.since string overrides default (precedence: explicit > default)', () => {
+    const fn = SRC.match(/export function listenToAllSales[\s\S]+?^}/m)?.[0] || '';
+    // const since = (opts && typeof opts.since === 'string' && opts.since) || defaultSince;
+    expect(fn).toMatch(/typeof opts\.since\s*===\s*['"]string['"]/);
+    expect(fn).toMatch(/\|\|\s*defaultSince/);
+  });
+
+  it('LC9.5: sort contract matches getAllSales (createdAt || saleDate desc)', () => {
+    const fn = SRC.match(/export function listenToAllSales[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/sales\.sort/);
+    expect(fn).toMatch(/\(b\.createdAt\s*\|\|\s*b\.saleDate\s*\|\|\s*['"]['"]\)\.localeCompare\(a\.createdAt\s*\|\|\s*a\.saleDate/);
+  });
+
+  it('LC9.6: passes onError through', () => {
+    const fn = SRC.match(/export function listenToAllSales[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/\}\,\s*onError\)/);
+  });
+
+  it('LC9.7: ANTI-REGRESSION — no unbounded onSnapshot(salesCol()) anywhere in backendClient', () => {
+    // Every onSnapshot over salesCol() MUST be wrapped in a query() with where(...).
+    // Catches a future "convenience" listener that accidentally subscribes to
+    // every sale doc (would be a Firestore-cost regression).
+    const matches = SRC.match(/onSnapshot\(salesCol\(\)\,/g) || [];
+    expect(matches).toHaveLength(0);
+  });
+
+  it('LC9.8: listenToAllSales is NOT consumed by SaleTab or SaleInsuranceClaimsTab in this round', () => {
+    // Deliberate scope decision: those tabs keep one-shot getAllSales for full
+    // history UX. listenToAllSales is exposed for future dashboard widgets.
+    // This test locks the decision so a future contributor doesn't silently
+    // migrate them without thinking about the cost trade-off.
+    const SALE = READ('src/components/backend/SaleTab.jsx');
+    const CLAIMS = READ('src/components/backend/SaleInsuranceClaimsTab.jsx');
+    expect(SALE).not.toMatch(/listenToAllSales/);
+    expect(CLAIMS).not.toMatch(/listenToAllSales/);
+  });
+});
+
+// ─── LC9.sim: pure simulate of listenToAllSales filter + sort ─────────────
+
+describe('LC9.sim: pure simulate — date-floor filter + sort', () => {
+  // Mirror of the listener body's pure pieces (omitting onSnapshot wiring).
+  function defaultSince() {
+    const d = new Date();
+    d.setDate(d.getDate() - 365);
+    return d.toISOString().slice(0, 10);
+  }
+  function resolveSince(opts) {
+    return (opts && typeof opts.since === 'string' && opts.since) || defaultSince();
+  }
+  function sortSales(snapDocs) {
+    const sales = snapDocs.map(d => ({ id: d.id, ...d.data() }));
+    sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
+    return sales;
+  }
+
+  it('LC9.sim.1: defaultSince returns YYYY-MM-DD shape', () => {
+    const since = defaultSince();
+    expect(since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('LC9.sim.2: defaultSince is approximately 365 days ago', () => {
+    const since = defaultSince();
+    const sinceDate = new Date(since + 'T00:00:00Z');
+    const diffDays = Math.round((Date.now() - sinceDate.getTime()) / 86400000);
+    // Allow ±2 day fuzz (TZ rounding)
+    expect(diffDays).toBeGreaterThanOrEqual(364);
+    expect(diffDays).toBeLessThanOrEqual(366);
+  });
+
+  it('LC9.sim.3: opts.since string is accepted verbatim', () => {
+    expect(resolveSince({ since: '2025-01-01' })).toBe('2025-01-01');
+  });
+
+  it('LC9.sim.4: opts.since non-string falls through to default', () => {
+    // Number, null, undefined, object → use default
+    expect(resolveSince({ since: 12345 })).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(resolveSince({ since: null })).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(resolveSince({ since: undefined })).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(resolveSince({ since: { foo: 'bar' } })).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(resolveSince({})).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('LC9.sim.5: empty opts.since string falls through to default', () => {
+    // The `&& opts.since` clause rejects empty strings so they don't pass to where()
+    expect(resolveSince({ since: '' })).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('LC9.sim.6: no opts at all → default since', () => {
+    expect(resolveSince(undefined)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(resolveSince(null)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('LC9.sim.7: sort by createdAt desc with saleDate fallback', () => {
+    const docs = [
+      { id: 'S1', data: () => ({ saleId: 'S1', createdAt: '2026-04-01T10:00:00Z', saleDate: '2026-04-01' }) },
+      { id: 'S2', data: () => ({ saleId: 'S2', createdAt: '2026-04-26T10:00:00Z', saleDate: '2026-04-26' }) },
+      { id: 'S3', data: () => ({ saleId: 'S3', /* no createdAt */ saleDate: '2026-04-15' }) },
+    ];
+    const sorted = sortSales(docs);
+    expect(sorted.map(s => s.saleId)).toEqual(['S2', 'S3', 'S1']);
+  });
+
+  it('LC9.sim.8: empty snapshot → empty array (no crash)', () => {
+    expect(sortSales([])).toEqual([]);
+  });
+
+  it('LC9.sim.9: docs with neither createdAt nor saleDate sort last but do not throw', () => {
+    const docs = [
+      { id: 'S1', data: () => ({ saleId: 'S1', saleDate: '2026-04-26' }) },
+      { id: 'S2', data: () => ({ saleId: 'S2' /* nothing */ }) },
+    ];
+    const sorted = sortSales(docs);
+    expect(sorted[0].saleId).toBe('S1');
+    expect(sorted[1].saleId).toBe('S2');
+  });
+});

@@ -1228,6 +1228,43 @@ export async function getCustomerSales(customerId) {
 }
 
 /**
+ * Real-time listener variant of `getAllSales`, **bounded by date floor** to
+ * keep payload + listener cost reasonable. Returns unsubscribe.
+ * Phase 14.7.H follow-up H (2026-04-26).
+ *
+ * Why bounded: the entire `be_sales` collection grows unboundedly (clinics ship
+ * 1k-10k+ sales/year). An unfiltered onSnapshot would attach a listener over
+ * every doc and re-emit on every write. The `since` filter caps the working
+ * set to a date window the consumer actually renders.
+ *
+ * SaleTab + SaleInsuranceClaimsTab DELIBERATELY keep one-shot `getAllSales()`
+ * for now because their UX shows full history with manual reload. This listener
+ * is the canonical pattern for **future** real-time dashboards (today's sales
+ * widget, live revenue counter, etc.).
+ *
+ * @param {{since?: string}} [opts] — `since`: ISO date string (YYYY-MM-DD).
+ *   Defaults to ~365 days ago in Bangkok TZ. Filters `saleDate >= since`.
+ * @param {(sales: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToAllSales(opts, onChange, onError) {
+  // 365 days ago (Bangkok TZ via thaiTodayISO arithmetic at call time)
+  const defaultSince = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 365);
+    return d.toISOString().slice(0, 10);
+  })();
+  const since = (opts && typeof opts.since === 'string' && opts.since) || defaultSince;
+  const q = query(salesCol(), where('saleDate', '>=', since));
+  return onSnapshot(q, (snap) => {
+    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
+    onChange(sales);
+  }, onError);
+}
+
+/**
  * Real-time listener variant of `getCustomerSales`. Returns unsubscribe.
  * Phase 14.7.H follow-up B (2026-04-26) — closes the staleness gap where
  * a sale created in SaleTab in another tab didn't surface in CustomerDetailView's
@@ -5138,6 +5175,35 @@ export async function listHolidays() {
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
   return items;
+}
+
+/**
+ * Real-time listener variant of `listHolidays`. Returns unsubscribe.
+ * Phase 14.7.H follow-up H (2026-04-26) — extends 14.7.H-B listener cluster
+ * to holidays. Multi-admin scenario: admin A edits a holiday in HolidaysTab
+ * while admin B is mid-booking in AppointmentTab — without a listener, the
+ * banner + skipHolidayCheck prompt in AppointmentFormModal stays stale until
+ * full reload. With listener, every consumer (AppointmentTab banner +
+ * AppointmentFormModal confirm + HolidaysTab CRUD list) refreshes within ~1s.
+ *
+ * Same sort contract as `listHolidays` (updatedAt desc, createdAt desc tiebreak)
+ * so consumers can swap in-place.
+ *
+ * @param {(items: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToHolidays(onChange, onError) {
+  return onSnapshot(holidaysCol(), (snap) => {
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => {
+      const ua = a.updatedAt || '';
+      const ub = b.updatedAt || '';
+      if (ua !== ub) return ub.localeCompare(ua);
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    onChange(items);
+  }, onError);
 }
 
 export async function saveHoliday(holidayId, data) {
