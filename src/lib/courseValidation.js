@@ -51,6 +51,32 @@ function validateNonNeg(val, fieldName, labelThai) {
   return null;
 }
 
+// ─── Phase 14.7.H follow-up E (V12.2b deferred — period enforcement) ─────
+// Day-count fields (period, daysBeforeExpire) must be non-negative INTEGER
+// ≤ 3650 (10 years) when set. Empty/null = "ไม่จำกัด" (unlimited) — valid.
+// Decimals + over-bound + non-numeric all rejected at save-time.
+//
+// Without integer enforcement, users can save period=7.5 → no UI parses
+// that correctly downstream; without max bound, a typo (period=730000)
+// silently locks the buffet for 2000 years.
+function validateDayInteger(val, fieldName, labelThai) {
+  if (val == null || val === '') return null; // empty = unlimited (valid)
+  const n = Number(val);
+  if (!Number.isFinite(n)) {
+    return [fieldName, `${labelThai}ต้องเป็นตัวเลข`];
+  }
+  if (n < 0) {
+    return [fieldName, `${labelThai}ต้องเป็นจำนวนไม่ติดลบ`];
+  }
+  if (!Number.isInteger(n)) {
+    return [fieldName, `${labelThai}ต้องเป็นจำนวนเต็ม (จำนวนวัน)`];
+  }
+  if (n > 3650) {
+    return [fieldName, `${labelThai}ต้องไม่เกิน 3650 วัน (~10 ปี)`];
+  }
+  return null;
+}
+
 export function validateCourse(form) {
   if (!form || typeof form !== 'object' || Array.isArray(form)) {
     return ['form', 'missing form'];
@@ -93,10 +119,26 @@ export function validateCourse(form) {
     || validateNonNeg(form.mainQty, 'mainQty', 'จำนวนสินค้าหลัก')
     || validateNonNeg(form.qtyPerTime, 'qtyPerTime', 'จำนวนที่ใช้ต่อครั้ง')
     || validateNonNeg(form.minQty, 'minQty', 'จำนวนต่ำสุดที่เลือกได้')
-    || validateNonNeg(form.maxQty, 'maxQty', 'จำนวนสูงสุดที่เลือกได้')
-    || validateNonNeg(form.daysBeforeExpire, 'daysBeforeExpire', 'ระยะเวลาใช้งานหลังซื้อ')
-    || validateNonNeg(form.period, 'period', 'ระยะเวลาทำซ้ำ');
+    || validateNonNeg(form.maxQty, 'maxQty', 'จำนวนสูงสุดที่เลือกได้');
   if (numFail) return numFail;
+
+  // Phase 14.7.H follow-up E (V12.2b deferred): day-count fields are
+  // strict-integer + bounded — replaces the loose validateNonNeg checks.
+  const periodFail = validateDayInteger(form.period, 'period', 'ระยะเวลาทำซ้ำ');
+  if (periodFail) return periodFail;
+  const dbeFail = validateDayInteger(form.daysBeforeExpire, 'daysBeforeExpire', 'ระยะเวลาใช้งานหลังซื้อ');
+  if (dbeFail) return dbeFail;
+
+  // Buffet courses MUST have a validity window (daysBeforeExpire > 0).
+  // Without it, the buffet has no expiry → use forever (financially dangerous).
+  // The CourseFormModal already shows "บุฟเฟต์ใช้ได้จนครบกำหนด" hint at line 452;
+  // this validator enforces the implicit business rule.
+  if (isBuffetCourse(form.courseType)) {
+    const dbe = numOrNull(form.daysBeforeExpire);
+    if (dbe == null || dbe <= 0) {
+      return ['daysBeforeExpire', 'บุฟเฟต์ต้องระบุระยะเวลาใช้งานหลังซื้อ (มากกว่า 0 วัน)'];
+    }
+  }
 
   // min_qty ≤ max_qty (when both present)
   const min = numOrNull(form.minQty);

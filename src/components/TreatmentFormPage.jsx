@@ -1694,23 +1694,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     return merged;
   }, [options?.doctors, options?.assistants]);
 
-  // ── Phase 14.4 ask-B (2026-04-24): auto-populate dfEntries[] ──
-  // When the user picks doctor / assistants AND the treatment has any
-  // billable items (purchased-course picks OR direct treatmentItems),
-  // create one dfEntry per person with the resolver's default rows.
-  // No manual "เพิ่มค่ามือ" click required — mirrors the legacy doctorFees
-  // auto-populate, but scoped to the per-course DF model.
-  //
-  // PLACEMENT NOTE (bug fix 2026-04-24): this hook MUST live AFTER the
-  // `treatmentCoursesForDf` + `treatmentPeopleForDf` memo declarations
-  // above. Declaring it earlier triggers a TDZ ReferenceError during
-  // render ("Cannot access '<memo>' before initialization") which
-  // crashed TreatmentFormPage with a blank screen on both create +
-  // edit paths.
-  //
-  // Respects manual dismissal: when the user deletes an auto-created
-  // entry, its doctorId lands in `dfDismissedIds` so picking the same
-  // doctor again won't resurrect the row.
+  /**
+   * !!! HOOK-ORDER INVARIANT — DO NOT MOVE !!!
+   *
+   * This useEffect MUST be declared AFTER both upstream memos:
+   *   - `treatmentCoursesForDf` (useMemo, ~line 1619) — read at line 1716, 1734
+   *   - `treatmentPeopleForDf`  (useMemo, ~line 1683) — read at line 1729
+   *
+   * Moving this hook BEFORE either memo triggers a Temporal Dead Zone
+   * (TDZ) ReferenceError DURING RENDER:
+   *   "Cannot access 'treatmentCoursesForDf' before initialization"
+   * which crashes TreatmentFormPage with a BLANK SCREEN on both create
+   * AND edit paths. There is NO ESLint/TypeScript rule that catches this
+   * — `react-hooks/exhaustive-deps` only checks the dep array shape, not
+   * declaration ordering. The crash only surfaces at render time.
+   *
+   * If you need to add a NEW hook between the memos and this useEffect,
+   * verify both memos are still declared above the new hook + this
+   * useEffect remains the LAST one in the chain that references them.
+   *
+   * @see Phase 14.4 ask-B (2026-04-24) — original bug fix
+   * @see SESSION_HANDOFF.md "Hook-order TDZ in TreatmentFormPage:1694"
+   *
+   * Behavior: when user picks doctor / assistants AND the treatment has
+   * any billable items (purchased-course picks OR direct treatmentItems),
+   * create one dfEntry per person with the resolver's default rows. No
+   * manual "เพิ่มค่ามือ" click required — mirrors the legacy doctorFees
+   * auto-populate, scoped to the per-course DF model. Respects manual
+   * dismissal: when user deletes an auto-created entry, its doctorId
+   * lands in `dfDismissedIds` so picking the same doctor again won't
+   * resurrect the row.
+   */
   useEffect(() => {
     if (!options) return;
     if (treatmentCoursesForDf.length === 0) return;

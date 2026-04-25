@@ -12,7 +12,9 @@ import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
   addCourseRemainingQty, getCustomer, getAllMasterDataItems,
-  getCustomerMembership, getActiveDeposits, getCustomerWallets, getPointBalance,
+  // Phase 14.7.H follow-up F — listenToCustomerFinance bundles 4 listeners
+  // (deposits + wallets + points + memberships); replaces the 4-fn Promise.all.
+  listenToCustomerFinance,
   // Phase 14.7 — appointments-on-customer-detail (+ เพิ่มนัดหมาย, ดูทั้งหมด, etc.)
   getCustomerAppointments, listenToCustomerAppointments,
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
@@ -208,30 +210,36 @@ export default function CustomerDetailView({
     return () => unsubscribe();
   }, [customer?.proClinicId]);
 
-  // Load financial summary (deposit / wallet / points / membership)
+  // Phase 14.7.H follow-up F (2026-04-26) — finance summary now flows via
+  // listenToCustomerFinance (bundles 4 inner listeners: deposits + wallets
+  // + customer.finance.loyaltyPoints + memberships). Edits in any tab to
+  // any of those 4 → card auto-refreshes without F5. Mirrors the
+  // listenToCustomerSales/Appointments/Treatments pattern from 14.7.G/H-B.
+  // The `reloadCustomerFinance` shim is kept so legacy callsites that
+  // explicitly trigger a reload still work — listener already covers
+  // refresh, manual reload is redundant but harmless.
   const [finSummary, setFinSummary] = useState(null);
   const [finLoading, setFinLoading] = useState(false);
+  const reloadCustomerFinance = useMemo(() => {
+    return () => Promise.resolve(finSummary);
+  }, [finSummary]);
   useEffect(() => {
     if (!customer?.proClinicId) return;
     setFinLoading(true);
-    (async () => {
-      try {
-        const cid = customer.proClinicId;
-        const [deposits, wallets, points, membership] = await Promise.all([
-          getActiveDeposits(cid),
-          getCustomerWallets(cid),
-          getPointBalance(cid),
-          getCustomerMembership(cid),
-        ]);
-        const depositBalance = deposits.reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0);
-        const walletBalance = wallets.reduce((s, w) => s + (Number(w.balance) || 0), 0);
-        setFinSummary({ depositBalance, walletBalance, wallets, points, membership });
-      } catch (e) {
-        console.warn('[CustomerDetailView] finSummary load failed:', e);
+    const unsubscribe = listenToCustomerFinance(
+      customer.proClinicId,
+      (summary) => {
+        setFinSummary(summary);
+        setFinLoading(false);
+      },
+      (err) => {
+        console.warn('[CustomerDetailView] finance listener failed:', err);
         setFinSummary(null);
-      } finally { setFinLoading(false); }
-    })();
-  }, [customer?.proClinicId, customer?.treatmentCount]);
+        setFinLoading(false);
+      },
+    );
+    return () => unsubscribe();
+  }, [customer?.proClinicId]);
 
   // Load customer sales for purchase history tab
   useEffect(() => {

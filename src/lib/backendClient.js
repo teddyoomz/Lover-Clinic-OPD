@@ -916,6 +916,116 @@ export function listenToAppointmentsByDate(dateStr, onChange, onError) {
   }, onError);
 }
 
+/**
+ * Real-time listener for customer's finance summary — bundles 4 listeners
+ * into one unsubscribe. Mirrors the {depositBalance, walletBalance, wallets,
+ * points, membership} shape that CustomerDetailView already consumes.
+ *
+ * Phase 14.7.H follow-up F (2026-04-26). Replaces the Promise.all one-shot
+ * load so:
+ *   - depositing/refunding in another tab → balance card updates without F5
+ *   - wallet top-up / spend in TreatmentFormPage → wallet card auto-refreshes
+ *   - earning loyalty points on a sale → points card auto-updates
+ *   - upgrading membership → card swaps live
+ *
+ * Subscribes to:
+ *   - be_deposits where customerId == cid (filtered to active|partial in emit)
+ *   - be_customer_wallets where customerId == cid (sorted by walletTypeName)
+ *   - be_customers/{cid} (single-doc; reads finance.loyaltyPoints)
+ *   - be_memberships where customerId == cid (picks first active+not-expired)
+ *
+ * NOTE: Unlike `getCustomerMembership`, this listener does NOT lazy-write
+ * status='expired' to expired memberships. The UI treats expiry client-side
+ * (filter membership.expiresAt < now). Downstream queries that filter by
+ * status alone may see stale 'active' on expired memberships — they should
+ * also check expiresAt. (Existing one-shot getCustomerMembership preserved
+ * for those callsites.)
+ *
+ * @param {string} customerId
+ * @param {(summary: {depositBalance:number, walletBalance:number, wallets:Array, points:number, membership:object|null}) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe (tears down all 4 inner listeners)
+ */
+export function listenToCustomerFinance(customerId, onChange, onError) {
+  const cid = String(customerId || '');
+  if (!cid) {
+    onChange?.({ depositBalance: 0, walletBalance: 0, wallets: [], points: 0, membership: null });
+    return () => {};
+  }
+
+  let deposits = [];
+  let wallets = [];
+  let points = 0;
+  let membership = null;
+  let depositsReady = false;
+  let walletsReady = false;
+  let pointsReady = false;
+  let membershipReady = false;
+
+  const emit = () => {
+    // Coalesce: only emit once all 4 inner listeners have produced their
+    // first snapshot. Avoids 4 partial-state callbacks during initial mount.
+    if (!depositsReady || !walletsReady || !pointsReady || !membershipReady) return;
+    const depositBalance = deposits
+      .filter(d => d.status === 'active' || d.status === 'partial')
+      .reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0);
+    const walletBalance = wallets.reduce((s, w) => s + (Number(w.balance) || 0), 0);
+    onChange({ depositBalance, walletBalance, wallets, points, membership });
+  };
+
+  const unsubDeposits = onSnapshot(
+    query(depositsCol(), where('customerId', '==', cid)),
+    (snap) => {
+      deposits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      depositsReady = true;
+      emit();
+    },
+    onError,
+  );
+  const unsubWallets = onSnapshot(
+    query(walletsCol(), where('customerId', '==', cid)),
+    (snap) => {
+      wallets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      wallets.sort((a, b) => (a.walletTypeName || '').localeCompare(b.walletTypeName || ''));
+      walletsReady = true;
+      emit();
+    },
+    onError,
+  );
+  const unsubPoints = onSnapshot(
+    customerDoc(cid),
+    (snap) => {
+      points = Number(snap.data()?.finance?.loyaltyPoints) || 0;
+      pointsReady = true;
+      emit();
+    },
+    onError,
+  );
+  const unsubMembership = onSnapshot(
+    query(membershipsCol(), where('customerId', '==', cid)),
+    (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const now = Date.now();
+      // Pick first active + not-expired (matches getCustomerMembership semantics
+      // minus the lazy-write).
+      membership = list.find(m =>
+        m.status === 'active'
+        && (!m.expiresAt || new Date(m.expiresAt).getTime() >= now)
+      ) || null;
+      membershipReady = true;
+      emit();
+    },
+    onError,
+  );
+
+  return () => {
+    unsubDeposits();
+    unsubWallets();
+    unsubPoints();
+    unsubMembership();
+  };
+}
+
 // ─── Sale CRUD ──────────────────────────────────────────────────────────────
 
 const salesCol = () => collection(db, ...basePath(), 'be_sales');

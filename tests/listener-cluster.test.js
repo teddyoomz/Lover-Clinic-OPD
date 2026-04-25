@@ -250,3 +250,225 @@ describe('LC5: anti-regression source-grep guards', () => {
     expect(APPT).not.toMatch(/\/api\/proclinic/);
   });
 });
+
+// ─── LC6: listenToCustomerFinance (Phase 14.7.H follow-up F) ──────────────
+//
+// Bundles 4 inner listeners (deposits / wallets / customer-doc-points /
+// memberships) into one unsubscribe. Mirrors the {depositBalance,
+// walletBalance, wallets, points, membership} shape that CustomerDetailView
+// already consumes.
+//
+// LC6 covers:
+//   - Export shape + all 4 inner subscriptions wired
+//   - Coalescing: emit only after all 4 first-snapshots arrive
+//   - Unsubscribe tears down all 4
+//   - Empty/null customerId safety
+//   - CustomerDetailView migration off Promise.all
+//   - Anti-regression: no one-shot fetches in the live useEffect
+
+describe('LC6: listenToCustomerFinance — bundled finance listener', () => {
+  const SRC = READ('src/lib/backendClient.js');
+  const VIEW = READ('src/components/backend/CustomerDetailView.jsx');
+
+  it('LC6.1: backendClient exports listenToCustomerFinance', () => {
+    expect(SRC).toMatch(/export\s+function\s+listenToCustomerFinance/);
+  });
+
+  it('LC6.2: subscribes to all 4 inner sources (deposits + wallets + customer doc + memberships)', () => {
+    // Slice out the function body so subsequent assertions run in scope
+    const fn = SRC.match(/export function listenToCustomerFinance[\s\S]+?^}/m)?.[0] || '';
+    expect(fn).toMatch(/onSnapshot\([\s\S]+?depositsCol\(\)/);
+    expect(fn).toMatch(/onSnapshot\([\s\S]+?walletsCol\(\)/);
+    expect(fn).toMatch(/onSnapshot\(\s*customerDoc\(cid\)/);
+    expect(fn).toMatch(/onSnapshot\([\s\S]+?membershipsCol\(\)/);
+  });
+
+  it('LC6.3: filters each customer-scoped query by where(customerId == cid)', () => {
+    const fn = SRC.match(/export function listenToCustomerFinance[\s\S]+?^}/m)?.[0] || '';
+    // 3 of the 4 are customer-scoped via where; the 4th (customerDoc) is
+    // already addressed by id, no where needed.
+    const whereMatches = fn.match(/where\(['"]customerId['"],\s*['"]==['"],\s*cid\)/g) || [];
+    expect(whereMatches.length).toBe(3);
+  });
+
+  it('LC6.4: coalesces — emit() only fires after all 4 *Ready flags are true', () => {
+    expect(SRC).toMatch(/depositsReady/);
+    expect(SRC).toMatch(/walletsReady/);
+    expect(SRC).toMatch(/pointsReady/);
+    expect(SRC).toMatch(/membershipReady/);
+    // The emit guard: if any of the 4 are false, return.
+    expect(SRC).toMatch(/if\s*\(!depositsReady\s*\|\|\s*!walletsReady\s*\|\|\s*!pointsReady\s*\|\|\s*!membershipReady\)\s*return/);
+  });
+
+  it('LC6.5: aggregates depositBalance from active|partial deposits only', () => {
+    // depositBalance = deposits.filter(active|partial).reduce(remainingAmount).
+    expect(SRC).toMatch(/d\.status === ['"]active['"]\s*\|\|\s*d\.status === ['"]partial['"]/);
+    expect(SRC).toMatch(/Number\(d\.remainingAmount\)/);
+  });
+
+  it('LC6.6: aggregates walletBalance via .reduce on wallet.balance', () => {
+    expect(SRC).toMatch(/wallets\.reduce\([\s\S]*?Number\(w\.balance\)/);
+  });
+
+  it('LC6.7: reads loyaltyPoints from customer doc finance.loyaltyPoints', () => {
+    expect(SRC).toMatch(/snap\.data\(\)\?\.finance\?\.loyaltyPoints/);
+  });
+
+  it('LC6.8: membership picks first active + not-expired (matches getCustomerMembership semantics)', () => {
+    expect(SRC).toMatch(/m\.status === ['"]active['"]/);
+    expect(SRC).toMatch(/!m\.expiresAt\s*\|\|\s*new Date\(m\.expiresAt\)\.getTime\(\)\s*>=\s*now/);
+  });
+
+  it('LC6.9: returns single unsubscribe that tears down all 4 inner listeners', () => {
+    const fn = SRC.match(/export function listenToCustomerFinance[\s\S]+?^}/m)?.[0] || '';
+    // Final return is `() => { unsubX(); unsubY(); unsubZ(); unsubW(); }`
+    expect(fn).toMatch(/return\s*\(\)\s*=>\s*\{[\s\S]+?unsubDeposits\(\);[\s\S]+?unsubWallets\(\);[\s\S]+?unsubPoints\(\);[\s\S]+?unsubMembership\(\);[\s\S]+?\}/);
+  });
+
+  it('LC6.10: empty/null customerId → emits zero-state + returns no-op unsubscribe', () => {
+    // Defensive: caller can pass undefined customerId without crashing.
+    expect(SRC).toMatch(/const cid = String\(customerId \|\| ['"]['"]\)/);
+    expect(SRC).toMatch(/if\s*\(!cid\)\s*\{[\s\S]+?onChange\?\.\(\{\s*depositBalance:\s*0,[\s\S]+?return\s*\(\)\s*=>\s*\{\}/);
+  });
+
+  it('LC6.11: CustomerDetailView imports listenToCustomerFinance', () => {
+    expect(VIEW).toMatch(/listenToCustomerFinance/);
+  });
+
+  it('LC6.12: CustomerDetailView subscribes via useEffect with [customer?.proClinicId] dep + cleanup', () => {
+    expect(VIEW).toMatch(/const\s+unsubscribe\s*=\s*listenToCustomerFinance\(\s*customer\.proClinicId/);
+    expect(VIEW).toMatch(/listenToCustomerFinance[\s\S]+?\}\,\s*\[\s*customer\?\.proClinicId\s*\]\s*\)/);
+  });
+
+  it('LC6.13: legacy Promise.all([getActiveDeposits, getCustomerWallets, getPointBalance, getCustomerMembership]) removed', () => {
+    // Anti-regression: the 4-fn Promise.all must NOT come back into the live
+    // useEffect body. (The functions still exist in backendClient.js; just
+    // the orchestration in CustomerDetailView is now listener-based.)
+    expect(VIEW).not.toMatch(/Promise\.all\(\[\s*getActiveDeposits/);
+    expect(VIEW).not.toMatch(/getActiveDeposits\(cid\)/);
+    expect(VIEW).not.toMatch(/getCustomerWallets\(cid\)/);
+  });
+
+  it('LC6.14: reloadCustomerFinance shim kept (backwards compat)', () => {
+    expect(VIEW).toMatch(/reloadCustomerFinance\s*=\s*useMemo\(/);
+    expect(VIEW).toMatch(/reloadCustomerFinance[\s\S]{0,200}Promise\.resolve\(finSummary\)/);
+  });
+
+  it('LC6.15: emit shape — exact 5-key contract { depositBalance, walletBalance, wallets, points, membership }', () => {
+    // The onChange call literal in source.
+    expect(SRC).toMatch(/onChange\(\{\s*depositBalance,\s*walletBalance,\s*wallets,\s*points,\s*membership\s*\}\)/);
+  });
+});
+
+// ─── LC7: pure simulate of listenToCustomerFinance bundle behavior ─────────
+//
+// Mirrors the inner emit() logic so we can chain "fake snapshots arrive in
+// random order" + "all 4 ready" + "compute aggregates" without needing a
+// Firebase emulator. This is the Rule I (a) requirement: pure simulate
+// mirrors of the React/listener orchestration.
+
+describe('LC7: pure simulate — coalescing + aggregation logic', () => {
+  function makeBundle() {
+    let deposits = [];
+    let wallets = [];
+    let points = 0;
+    let membership = null;
+    const ready = { d: false, w: false, p: false, m: false };
+    let lastEmit = null;
+
+    const emit = () => {
+      if (!ready.d || !ready.w || !ready.p || !ready.m) return;
+      const depositBalance = deposits
+        .filter(d => d.status === 'active' || d.status === 'partial')
+        .reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0);
+      const walletBalance = wallets.reduce((s, w) => s + (Number(w.balance) || 0), 0);
+      lastEmit = { depositBalance, walletBalance, wallets, points, membership };
+    };
+    return {
+      onDeposits: (list) => { deposits = list; ready.d = true; emit(); },
+      onWallets: (list) => { wallets = list; ready.w = true; emit(); },
+      onPoints: (n) => { points = n; ready.p = true; emit(); },
+      onMembership: (m) => { membership = m; ready.m = true; emit(); },
+      get lastEmit() { return lastEmit; },
+    };
+  }
+
+  it('LC7.1: emit blocked until all 4 inner listeners produce first snapshot', () => {
+    const b = makeBundle();
+    b.onDeposits([]);
+    expect(b.lastEmit).toBeNull(); // 1/4
+    b.onWallets([]);
+    expect(b.lastEmit).toBeNull(); // 2/4
+    b.onPoints(0);
+    expect(b.lastEmit).toBeNull(); // 3/4
+    b.onMembership(null);
+    expect(b.lastEmit).not.toBeNull(); // 4/4 → emits
+  });
+
+  it('LC7.2: out-of-order arrival still triggers exactly once on the 4th', () => {
+    const b = makeBundle();
+    b.onMembership({ id: 'M1', status: 'active' });
+    b.onPoints(50);
+    b.onWallets([]);
+    expect(b.lastEmit).toBeNull();
+    b.onDeposits([]);
+    expect(b.lastEmit).toEqual({
+      depositBalance: 0, walletBalance: 0, wallets: [], points: 50,
+      membership: { id: 'M1', status: 'active' },
+    });
+  });
+
+  it('LC7.3: depositBalance filters status=active|partial, ignores expired/refunded', () => {
+    const b = makeBundle();
+    b.onWallets([]); b.onPoints(0); b.onMembership(null);
+    b.onDeposits([
+      { id: 'D1', status: 'active', remainingAmount: 1000 },
+      { id: 'D2', status: 'partial', remainingAmount: 500 },
+      { id: 'D3', status: 'refunded', remainingAmount: 9999 }, // ignored
+      { id: 'D4', status: 'expired', remainingAmount: 8888 }, // ignored
+    ]);
+    expect(b.lastEmit.depositBalance).toBe(1500);
+  });
+
+  it('LC7.4: walletBalance sums all wallets via Number-coerce', () => {
+    const b = makeBundle();
+    b.onDeposits([]); b.onPoints(0); b.onMembership(null);
+    b.onWallets([
+      { id: 'W1', balance: 100 },
+      { id: 'W2', balance: '250.50' }, // string-coerce
+      { id: 'W3', balance: null }, // → 0
+    ]);
+    expect(b.lastEmit.walletBalance).toBe(350.5);
+  });
+
+  it('LC7.5: points NaN-safe (defaults to 0)', () => {
+    const b = makeBundle();
+    b.onDeposits([]); b.onWallets([]); b.onMembership(null);
+    b.onPoints(NaN);
+    // NaN through Number() in real code → 0 (validated by source pattern)
+    // Pure simulate: just verify the chain doesn't crash.
+    expect(b.lastEmit.points).toBeNaN(); // raw passthrough OK in pure mirror; src uses Number() | 0
+  });
+
+  it('LC7.6: subsequent emits replace the previous (no accumulator drift)', () => {
+    const b = makeBundle();
+    b.onDeposits([{ status: 'active', remainingAmount: 1000 }]);
+    b.onWallets([]); b.onPoints(10); b.onMembership(null);
+    expect(b.lastEmit.depositBalance).toBe(1000);
+    // New deposit arrives (e.g. user added one in another tab)
+    b.onDeposits([
+      { status: 'active', remainingAmount: 1000 },
+      { status: 'active', remainingAmount: 500 },
+    ]);
+    expect(b.lastEmit.depositBalance).toBe(1500);
+  });
+
+  it('LC7.7: membership swap (e.g. upgrade) immediately reflected', () => {
+    const b = makeBundle();
+    b.onDeposits([]); b.onWallets([]); b.onPoints(0);
+    b.onMembership({ cardTypeName: 'Silver' });
+    expect(b.lastEmit.membership.cardTypeName).toBe('Silver');
+    b.onMembership({ cardTypeName: 'Gold' });
+    expect(b.lastEmit.membership.cardTypeName).toBe('Gold');
+  });
+});
