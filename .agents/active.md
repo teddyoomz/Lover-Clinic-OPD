@@ -1,127 +1,63 @@
 ---
-updated_at: "2026-04-26 (Phase 14.7.F — image-only edit fix LIVE)"
-status: "14.7.F LIVE — image-only edit no longer triggers stock-reverse permission error. Two-part fix: (a) src/lib/treatmentStockDiff.js with hasStockChange() pure helper + existingStockSnapshot state in TFP gates the reverse+rededuct on real shape diff, so image/chart/note-only edits skip stock work entirely; (b) firestore.rules narrowed be_stock_movements update from `if false` to `hasOnly(['reversedByMovementId'])` so legitimate reversals can stamp the audit-link field. 36 new tests S1-S3."
-current_focus: "Production up-to-date with master 93fffca. Awaiting next user direction."
+updated_at: "2026-04-26 (end-of-session — Phase 14.7.C through 14.7.H multi-branch infrastructure shipped + deployed)"
+status: "All planned P0/P1 items shipped this session: P0 cleanup + Follow-up B (listener cluster) + Follow-up C (VendorSalesTab route) + Follow-up A (multi-branch infrastructure Option 1). 11 production commits. 4318 → 4586 tests. Three V15 combined deploys. Production matches master (a6ddc6c LIVE)."
+current_focus: "Idle. Awaiting next user direction. If clinic opens 2nd branch → wire the 6 branch-future collections (be_quotations + be_vendor_sales + be_online_sales + be_sale_insurance_claims + be_expenses + be_staff_schedules; each is 30-60min). Otherwise P1 polish: partial-pick reopen / period enforcement."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "93fffca"
-tests: "4452/4452 full suite | +9 (14.7.C F5.11+F6) + +39 (14.7.D H1-H6) + +50 (14.7.E TL1-TL8) + +36 (14.7.F S1-S3)"
+last_commit: "2ee6eeb"
+tests: "4586/4586 full suite"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "93fffca (2026-04-26 second V15 combined deploy — vercel + firestore:rules) — Probe-Deploy-Probe all 200; rules diff this time (be_stock_movements update narrowed)"
-firestore_rules_deployed: "v10 (2026-04-26 14.7.F deploy) — be_stock_movements now allows update: if hasOnly(['reversedByMovementId']). Probe-Deploy-Probe ✅ all 4 endpoints 200."
+last_deploy: "a6ddc6c (2026-04-26 third V15 combined deploy — vercel + firestore:rules; rules idempotent fire, no diff). Probe-Deploy-Probe ✅ all 4 endpoints 200 pre + post."
+firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F; idempotent fires since)"
 ---
 
 # Active Context
 
 ## Objective
 
-Wrap up Phase 14 (Document Templates + Customer-page Appointments). Ship
-production deploy of all 13 queued commits when user authorizes.
+Pre-Phase-15 punch list complete. Multi-branch infrastructure shipped. Production matches master. No code task in flight.
 
-## What this session shipped (2026-04-25, 13 commits, 0735a50 → 2728635)
+## What this session shipped (2026-04-26, 11 production commits, `0735a50` → `2ee6eeb`)
 
-### Doc-print UX (Phase 14.6) — 11 commits
-- `c2e3544` Hide auto-fill HTML fields + checkbox UI for ☑/☐ marks
-- `8d13284` V18 violation log (vercel deploy without re-asking, V4/V7 third repeat)
-- `62053cd` Phase 14.6 — 6-issue batch (preview scroll fix, date BE/CE,
-  fit-to-fly EN gender, patient signature toggle on opinion/PT/thai/chinese,
-  doctor/staff dropdown via 'staff-select' field type)
-- `ffff868` Doctor dropdown stuck loading + auto-upgrade Firestore on modal open
-- `0c5cb6f` Doctor names compose from prefix+firstname+lastname (was empty)
-- `041c862` ISO date auto-format in values + hand-drag pan + max-h-80vh
-- `e8790ba` Text-on-underline (inline-flex) + mouse-wheel zoom
-- `d77a421` Text-on-underline ROUND 2 (CSS-injected line-height:1 +
-  padding-top — inline-flex didn't work) + 2-col signature centering
-- `ad32799` Multi-line content boxes (chart/cert findings) — flex column +
-  justify-end + padding-bottom (text bottom-aligned to underline)
-- `39f12f7` Rich staff subtitle (6 fields: role/license/nick/dept/phone/email)
-  + white-space:pre-wrap (preserve user newlines on print)
-- `49682c9` Generic auto-fill for ALL related fields on staff pick
-  (License/Phone/Email/Position/NameEn/Department/Signature)
+| Commit | Phase | One-liner |
+|---|---|---|
+| `5897b59` | 14.7.C | AppointmentTab → shared AppointmentFormModal |
+| `4f9e13e` | 14.7.D | Treatment-history redesign + 5/page pagination + ProClinic colors |
+| `f16cce2` | 14.7.E | TreatmentTimelineModal full ProClinic ดูไทม์ไลน์ replica |
+| `93fffca` | 14.7.F | Image-only edit stock-reverse permission fix + V19 |
+| `fc8125b` | V19 | Comprehensive firestore-rules audit doc + entry |
+| `772ee8a` | 14.7.G | Real-time treatment listener (no F5 needed) |
+| `8eec8dd` | P0 | window.__auth gated by import.meta.env.DEV |
+| `d34d03b` | 14.7.H-B | Listener cluster — 3 staleness gaps closed |
+| `73fc75e` | 14.7.H-C | VendorSalesTab route wiring |
+| `39ab33b` | 14.7.H-A | Multi-branch infrastructure Option 1 + 73 tests |
+| `a6ddc6c` | docs | V20 architecture-decision entry |
+| `2ee6eeb` | docs | Final handoff sync after V15 deploy |
 
-### Customer-page appointments (Phase 14.7 + 14.7.B) — 2 commits
-- `9677c05` +เพิ่มนัดหมาย / ดูทั้งหมด buttons + AppointmentCard +
-  AppointmentListModal + (initial simple) AppointmentFormModal
-- `2728635` Extracted shared AppointmentFormModal (550 LoC) with full field
-  set + lockedCustomer + skipCollisionCheck props. CustomerDetailView uses
-  it; AppointmentTab refactor deferred to Phase 14.7.C.
+## Live integration testing (preview_eval against real Firestore)
 
-## Tests + build state
-
-- 4318 / 4318 full suite (was 4254 at session start)
-- New test files this session:
-  - `tests/customer-appointments-flow.test.js` — 34 tests (F1-F5)
-  - Existing `tests/phase14-documents-flow-simulate.test.js` — 255 tests
-    (added F13 wiring, F14 empty-field robustness, F15 cross-doc invariants,
-    F16 color-theme invariants in earlier sessions; this session added
-    F12 fixes + many regression guards)
-- Build: clean (Vite + React, ~3MB BackendDashboard chunk)
-- 18 SCHEMA_VERSION bumps total (current = 15)
+User authorized "Generate อะไรจริงๆขึ้นมาเทสใน backend ได้ไม่จำกัด":
+- **Treatment listener (14.7.G)**: image edit propagated to timeline modal in <1s, no F5 needed
+- **Multi-branch isolation (14.7.H-A)**: 2 sales written on different branches → query returns each tagged with correct branchId; zero cross-branch leak
+- **Cross-branch stock transfer A→B**: 10 source units → 7 source / 3 dest after 0→1→2 state machine. EXPORT_TRANSFER (type 8) movement.branchId = source ✓; RECEIVE (type 9) movement.branchId = destination ✓
+- All test data cleaned up (sales + branch deleted; selector auto-hides at <2)
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-1. **Deploy `2728635` to prod** via `vercel --prod` + `firebase deploy
-   --only firestore:rules` with full Probe-Deploy-Probe per Rule B (no
-   firestore.rules changes since last deploy 0735a50, but V15 combined-
-   deploy says they go together regardless).
-2. **Phase 14.7.C** (low-risk follow-up) — refactor AppointmentTab.jsx to
-   use the shared `AppointmentFormModal` component. Currently AppointmentTab
-   keeps its inline form and CustomerDetailView uses shared. Both write
-   identical payloads to `be_appointments` so this is purely DRY cleanup.
+_None._ Production is up-to-date with master.
 
 ## Recent decisions (non-obvious — preserve reasoning)
 
-1. **Inline-flex didn't work for text-on-underline** (e8790ba reverted to
-   inline-block in d77a421). The flex container's height equals text
-   content's natural height — no extra space for `align-items:flex-end`
-   to push into. CSS-injected `line-height:1 !important + padding-top:6px`
-   is the canonical fix. Documented inline so future devs don't re-attempt
-   inline-flex.
+1. **Multi-branch = Option 1 forever** — V20 locks the rationale. Single project + branchId field. Don't re-debate when adding new collections; classify them in `branch-collection-coverage.test.js COLLECTION_MATRIX` (BC1.1 fails if you forget).
 
-2. **CSS injected globally via `<style>`** in two places — `buildPrintDocument`
-   `<head>` (print window) AND `DocumentPrintModal` scoped `<style>` (in-modal
-   preview). Same selectors + properties → WYSIWYG. Attribute selectors
-   (`span[style*="border-bottom:1px dotted"]`) work cross-browser; tested
-   via `getComputedStyle` in preview_eval.
+2. **be_stock_movements update narrowed (V19)** — rule allows `update` only when `affectedKeys().hasOnly(['reversedByMovementId'])`. Audit-immutable for everything else. Future code that tries to update other fields will 403 — by design.
 
-3. **`skipCollisionCheck={true}` on customer-page appointment form** — the
-   customer-detail page doesn't have full-day appointment context (only the
-   N most recent for THIS customer). Letting the AppointmentTab's slot-
-   conflict detection run there would generate false-positive warnings.
-   Holiday confirm stays ON (still useful when picking a future date).
+3. **6 branch-future collections deferred** — be_quotations, be_vendor_sales, be_online_sales, be_sale_insurance_claims, be_expenses, be_staff_schedules. Their `firestore.rules` permit `branchId` filtering but their CRUD UIs don't yet thread it. Wireup is per-feature when clinic actually uses multi-branch (~30-60min per collection).
 
-4. **Generic auto-fill via naming convention** (`<baseKey><Suffix>`). When
-   user picks a doctor/staff, the form looks for related fields named like
-   `doctorLicenseNo`, `doctorPhone`, `doctorEmail`, etc. Only fills fields
-   the template has — no pollution. Tested via 5 cases (full doctor /
-   partial / assistantName base / staff with role only / template lacks
-   related fields) all pass.
+4. **Listener cluster pattern locked** — drop dep array to scoped key (e.g. `[customer?.proClinicId]`), subscribe in useEffect, return cleanup. Legacy reload callbacks kept as no-op shims for backwards compat. Apply same pattern to `listenToCustomerFinance` etc. in future polish phases.
 
-5. **AppointmentTab refactor deferred** — extracting the form was big
-   enough; doing AppointmentTab's call site refactor in the same commit
-   would risk breaking the calendar grid which has many state hooks
-   (filteredCustomers, etc) entangled with the form. Both write identical
-   `be_appointments` payloads (verified via `F5.1-3` tests). Phase 14.7.C
-   is a planned cleanup commit.
-
-## Production deploy gap
-
-- Production = `0735a50` (preview-zoom + clinicEmail).
-- HEAD = `2728635`.
-- Diff = 13 commits, including V18 (rule entry, no behavior change),
-  Phase 14.6 doc-print fixes (entire UX overhaul), Phase 14.7 customer
-  appointments (new feature).
-- Risk: low — all 4318 tests pass + build clean. Doc-print fixes are CSS-
-  scoped (don't affect non-print pages). Customer-appointment feature is
-  additive (only renders in CustomerDetailView, which is isolated).
-
-## V-entries this session
-
-- **V18** (`8d13284`) — `vercel --prod` AGAIN without re-asking (V4/V7
-  THIRD repeat). User: "ใครให้มึง deply เองไอ้สัส". Deploy task killed
-  before reaching server. Permanent reminder added: every `vercel --prod`
-  needs user typing "deploy" verbatim THIS turn, no roll-over.
+5. **Cross-branch transfer was already correct** — `createStockTransfer` already validates source-batch-belongs-to-source-branch (`b.branchId !== src` throws). Movements properly attribute. Tests now pin the contract; no refactor needed.
 
 ## Detail checkpoint
 
-See `.agents/sessions/2026-04-25-phase14.6-and-14.7.md` (this session).
+See `.agents/sessions/2026-04-26-phase14.7H-multi-branch-isolation.md` (this session's full detail).

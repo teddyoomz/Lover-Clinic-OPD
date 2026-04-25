@@ -77,31 +77,34 @@
 
 ## What's Next
 
-### Primary: Production deploy of queued commits (3+)
-Awaiting user "deploy" authorization for V15 combined deploy:
-- `vercel --prod --yes` (frontend bundle)
-- `firebase deploy --only firestore:rules` (no diff this round — idempotent fire per V15)
-- Full Probe-Deploy-Probe (4 endpoints with `/artifacts/loverclinic-opd-4c39b/public/data` prefix)
-- Cleanup probe docs
+### Primary: Idle — production matches master, no code task in flight.
 
-### Phase 15 readiness — Follow-up A (next code task)
-**Branch-selector global wire-up** — user 2026-04-26: "ตอนนี้มี 1 สาขา อยากทำให้รองรับการเปิดสาขาเพิ่มเติมแบบเต็มรูปแบบทีเดียวไปเลย" (currently single-branch; want full multi-branch infra ready). Touch points:
-- `BranchSelectorContext` provider in `BackendDashboard.jsx` (default = first `be_branches` doc with `isDefault=true`)
-- Replace hardcoded `BRANCH_ID` constant in 5 sites: SaleTab.jsx (lines 535, 571), AppointmentTab.jsx, TreatmentFormPage.jsx, StockTab.jsx
-- Add `branchId` filter param to `getAllSales`, `getAppointmentsByDate`, `listStaffSchedules`, etc. so reports can filter by branch
-- ~3-6h. Unblocks Phase 15 Central Stock.
+### When user opens 2nd clinic branch (P1 — branch-future wireups)
+Six collections currently `branch-future` per `tests/branch-collection-coverage.test.js BC2.future` — their `firestore.rules` permit `branchId` filtering but their CRUD UIs don't yet thread it through. When the clinic actually uses multi-branch:
+- `be_quotations` — QuotationsTab form
+- `be_vendor_sales` — VendorSalesTab form
+- `be_online_sales` — OnlineSalesTab form
+- `be_sale_insurance_claims` — InsuranceClaimsTab form
+- `be_expenses` — ExpensesTab form
+- `be_staff_schedules` — StaffScheduleTab form
 
-### Follow-up B — listener cluster (P1 from survey)
-Same fix shape as 14.7.G applied to 3 more sites:
-- `listenToCustomerSales(customerId)` → fix purchase-history staleness in CustomerDetailView
-- `listenToCustomerAppointments(customerId)` → fix nextUpcomingAppt staleness
-- `listenToAppointmentsByDate(dateStr)` → fix multi-admin calendar collision risk in AppointmentTab
-- ~2h.
+Each is ~30-60min: add `useSelectedBranch()` in form modal + thread `branchId` into the `saveX(data)` payload + add a source-grep test (mirror `BC2.spread.be_appointments` pattern).
 
-### Follow-up C — G6 vendor-sale route wiring (P1, 95% done)
-`VendorSalesTab.jsx` exists + `navConfig.js` lists it; just needs `BackendDashboard.jsx` import + render case + 15 tests. ~1-2h.
+### P1 polish queue (deferred to next session)
+- Pick-at-treatment partial-pick reopen (V12.2b note) — M (3-4h)
+- Period enforcement save-time validation (V12.2b note) — S (0.5-1h)
+- Bundle `listenToCustomerFinance` for deposits/wallets/points/membership — M (1h)
+- `listenToHolidays` + `listenToAllSales` — S each
+- TreatmentTimelineModal virtualization (only if 122-row customer reports lag) — M
+- JSDoc guard on TreatmentFormPage:1694 hook-order TDZ — S
+- Debug-level logging for ProClinic API silent-catch sites — M
 
-### Follow-up D — Phase 15 Central Stock (after A + B + C)
+### Phase 15 readiness — UNBLOCKED
+- `be_branches` collection ✓
+- ProductGroups + Units ✓
+- BRANCH_ID hardcode REMOVED (this session) ✓
+- Multi-branch reports filtering ✓ (queries accept branchId filter)
+- **Phase 15 Central Stock can now be planned + started.** Skip if clinic stays single-branch.
 
 ### Phase 14 Doc verification queue (10 done / 6 remaining)
 - [x] Doc 1/16 — treatment-history Medical History ✅
@@ -169,49 +172,43 @@ None code-side. Production deploy gap of 13 commits (Phase 14.6 entire UX overha
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-25 end-of-session.
+Resume LoverClinic OPD — continue from 2026-04-26 end-of-session.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
 2. SESSION_HANDOFF.md (cross-session state of truth — this file)
-3. .agents/active.md (hot state — master=2728635, 4318 tests)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V18)
-5. .agents/sessions/2026-04-25-phase14.6-and-14.7.md (detail checkpoint)
+3. .agents/active.md (hot state — production at a6ddc6c)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V20)
+5. .agents/sessions/2026-04-26-phase14.7H-multi-branch-isolation.md (full session detail)
 
 Status summary:
-- master = 2728635, 4318/4318 tests passing, build clean
-- Production: 0735a50 — 13 commits queued (Phase 14.6 doc-print UX overhaul +
-  V18 violation entry + Phase 14.7 customer-page appointments)
-- SCHEMA_VERSION 15 (auto-upgrades on print-modal open, no rules change)
-- Chrome MCP Browser 1 connected (deviceId 8bdc85cc-b6e5-47d9-b3cd-56957264819d)
-- AppointmentFormModal extracted to shared component, used by CustomerDetailView;
-  AppointmentTab refactor (Phase 14.7.C) deferred — both write identical payloads
-  to be_appointments
+- master = 2ee6eeb, 4586/4586 tests passing, build clean
+- Production: a6ddc6c LIVE — 14.7.C/D/E/F/G + 14.7.H-A/B/C all deployed
+- Multi-branch infrastructure (Option 1) shipped + comprehensive isolation
+  testing proven against real Firestore (cross-branch transfer A→B with
+  movement.branchId attribution correct on each leg)
+- 6 collections classified as `branch-future` per BC2.future — wireup
+  deferred until clinic opens 2nd branch
+- V19 + V20 entries logged
 
-Next action:
-Wait for user to type "deploy". Then run V15 combined deploy:
-1. Pre-probe 4 endpoints with /artifacts/loverclinic-opd-4c39b/public/data
-   path prefix (V1/V9 — root-level path returns 403):
-   - POST chat_conversations?documentId=test-probe-{ts}
-   - PATCH pc_appointments/test-probe-{ts}?updateMask.fieldPaths=probe
-   - PATCH clinic_settings/proclinic_session?updateMask.fieldPaths=probe
-   - PATCH clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe
-2. vercel --prod --yes (run in BACKGROUND, don't wait) +
-   firebase deploy --only firestore:rules (foreground)
-3. Post-probe same 4 endpoints — must all return 200
-4. Cleanup: delete pc_appointments probe doc + strip clinic_settings probe field
+Next action (when user gives go-ahead):
+- If clinic opens 2nd branch: ship branch-future wireups for the 6
+  collections (be_quotations / be_vendor_sales / be_online_sales /
+  be_sale_insurance_claims / be_expenses / be_staff_schedules). Each is
+  30-60min: add useSelectedBranch + thread branchId + source-grep test.
+- Else: tackle P1 polish per .agents/sessions/2026-04-26-*.md "Next todo":
+  partial-pick reopen, period enforcement, finSummary listener, etc.
 
 Outstanding user-triggered actions (NOT auto-run):
-- Deploy 2728635 to prod (V15 combined: vercel + firestore:rules with P-D-P)
-- Phase 14.7.C: refactor AppointmentTab.jsx to use shared AppointmentFormModal
-  (low-risk DRY cleanup; both writers currently produce identical payloads)
+None. Production matches master.
 
 Rules:
-- No deploy unless user explicitly types "deploy" THIS turn (V4/V7/V18)
+- No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
 - V15 combined: "deploy" = vercel + firestore:rules in parallel
-- V1/V9: Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix
-- Schema mapping must be verified via preview_eval — never guess (V13/V14)
-- Every bug → adversarial test + audit invariant (Rule D)
+- Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix (V1/V9)
+- Multi-branch decision is locked at Option 1 (V20) — don't re-debate
+- be_stock_movements update narrowed to reversedByMovementId only (V19)
+- Every bug → test + audit invariant + V-entry (Rule D + Rule I)
 
 Invoke /session-start to boot context.
 ```
