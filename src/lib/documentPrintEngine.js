@@ -212,6 +212,22 @@ export function buildPrintDocument({ template, context, paperSize = 'A4', langua
   hr { border: 0; border-top: 1px solid #000; }
   ul { padding-left: 20px; }
   p { margin: 6px 0; line-height: 1.5; }
+  /* 2026-04-25 — text-on-underline alignment for "fill-in-the-blank" form
+     lines. All inline-block spans with a dotted border-bottom get tight
+     line-height + top padding so the value text sits ON the underline
+     (not floating above it). Catches all 110 underline spans across
+     16 templates without per-span style edits. */
+  span[style*="border-bottom:1px dotted"][style*="display:inline-block"],
+  span[style*="border-bottom: 1px dotted"][style*="display: inline-block"] {
+    line-height: 1 !important;
+    padding-top: 6px !important;
+    padding-bottom: 2px !important;
+    vertical-align: bottom !important;
+  }
+  /* Signature blocks — name + date below the signature line should be
+     centered horizontally under the line, not left-aligned. Apply to
+     every direct child div of a flex signature column. */
+  .sig-col, .signature-col { text-align: center; }
 </style>
 </head>
 <body>

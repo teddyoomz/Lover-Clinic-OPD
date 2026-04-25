@@ -567,6 +567,21 @@ export default function DocumentPrintModal({
                     </button>
                   </div>
                 </div>
+                {/* 2026-04-25 — preview-scoped CSS: text-on-underline alignment +
+                    signature column centering. Mirrors the rules in the print
+                    window's <head> (documentPrintEngine.buildPrintDocument)
+                    so what-you-see-is-what-you-print. */}
+                <style>{`
+                  [data-testid="document-print-preview"] span[style*="border-bottom:1px dotted"][style*="display:inline-block"],
+                  [data-testid="document-print-preview"] span[style*="border-bottom: 1px dotted"][style*="display: inline-block"] {
+                    line-height: 1 !important;
+                    padding-top: 6px !important;
+                    padding-bottom: 2px !important;
+                    vertical-align: bottom !important;
+                  }
+                  [data-testid="document-print-preview"] .sig-col,
+                  [data-testid="document-print-preview"] .signature-col { text-align: center; }
+                `}</style>
                 <div
                   ref={previewContainerRef}
                   className="p-4 rounded-lg bg-neutral-200 dark:bg-neutral-800 max-h-[80vh] overflow-auto select-none"
