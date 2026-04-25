@@ -572,17 +572,36 @@ function StaffSelectField({ field, value, list, onChange }) {
 
   const loading = list === null;
   const safe = Array.isArray(list) ? list : [];
-  // Filter by query — match name OR licenseNo
+  // 2026-04-25 — be_doctors/be_staff raw shape has firstname+lastname, not
+  // 'name' or 'fullName'. Build display name from prefix + first + last (+
+  // nickname fallback).
+  const showName = (p) => {
+    const prefix = (p.prefix || '').trim();
+    const first = (p.firstname || p.firstName || '').trim();
+    const last = (p.lastname || p.lastName || '').trim();
+    const composed = [prefix, first, last].filter(Boolean).join(' ').trim();
+    if (composed) return composed;
+    if (p.name) return p.name;
+    if (p.fullName) return p.fullName;
+    if (p.nickname) return p.nickname;
+    return '(ไม่มีชื่อ)';
+  };
+  const showSubtitle = (p) => {
+    const lic = p.licenseNo || p.medicalLicenseNo || '';
+    const role = p.position || p.role || '';
+    if (lic && role) return `${lic} · ${role}`;
+    return lic || role || '';
+  };
+  // Filter by query — match composed name OR licenseNo
   const q = query.toLowerCase().trim();
   const filtered = q
     ? safe.filter(p => {
-        const n = (p.name || p.fullName || '').toLowerCase();
+        const n = showName(p).toLowerCase();
         const lic = (p.licenseNo || p.medicalLicenseNo || '').toLowerCase();
-        return n.includes(q) || lic.includes(q);
+        const en = `${p.firstnameEn || p.firstNameEn || ''} ${p.lastnameEn || p.lastNameEn || ''}`.toLowerCase().trim();
+        return n.includes(q) || lic.includes(q) || en.includes(q);
       })
     : safe;
-
-  const showName = (p) => p.name || p.fullName || '(ไม่มีชื่อ)';
 
   return (
     <div className="space-y-1" ref={ref}>
@@ -619,12 +638,8 @@ function StaffSelectField({ field, value, list, onChange }) {
                   }}
                 >
                   <div className="font-bold text-[var(--tx-primary)]">{showName(p)}</div>
-                  {(p.licenseNo || p.medicalLicenseNo || p.role || p.position) && (
-                    <div className="text-[10px] text-[var(--tx-muted)]">
-                      {p.licenseNo || p.medicalLicenseNo || ''}
-                      {(p.licenseNo || p.medicalLicenseNo) && (p.role || p.position) ? ' · ' : ''}
-                      {p.role || p.position || ''}
-                    </div>
+                  {showSubtitle(p) && (
+                    <div className="text-[10px] text-[var(--tx-muted)]">{showSubtitle(p)}</div>
                   )}
                 </button>
               ))
