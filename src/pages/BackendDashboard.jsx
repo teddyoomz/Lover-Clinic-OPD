@@ -71,6 +71,7 @@ import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab
 const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
 const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
 const StaffSchedulesTab    = lazy(() => import('../components/backend/StaffSchedulesTab.jsx'));
+const DoctorSchedulesTab   = lazy(() => import('../components/backend/DoctorSchedulesTab.jsx'));
 const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
@@ -446,6 +447,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <QuotationTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'staff-schedules' ? (
           <StaffSchedulesTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'doctor-schedules' ? (
+          <DoctorSchedulesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'df-groups' ? (
           <DfGroupsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'document-templates' ? (

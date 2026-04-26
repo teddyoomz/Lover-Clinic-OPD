@@ -16,7 +16,9 @@ describe('Phase 13.2.5 — staff-schedules nav wiring', () => {
   it('SN3: item metadata well-formed', () => {
     const item = itemById('staff-schedules');
     expect(item).toBeTruthy();
-    expect(item.label).toBe('ตารางงานพนักงาน');
+    // Phase 13.2.7 (2026-04-26): label trimmed from 'ตารางงานพนักงาน' →
+    // 'ตารางพนักงาน' (matches ProClinic /admin/schedule/employee parity).
+    expect(item.label).toBe('ตารางพนักงาน');
     expect(item.color).toBe('amber');
     expect(item.palette).toMatch(/schedule/i);
     expect(item.palette).toMatch(/ตาราง/);
