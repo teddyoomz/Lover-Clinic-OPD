@@ -15,10 +15,12 @@ import {
 } from 'lucide-react';
 import {
   getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listenToHolidays,
+  listenToScheduleByDay, listDoctors,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
+import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -98,6 +100,31 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     const unsub = listenToHolidays(setHolidays, () => setHolidays([]));
     return unsub;
   }, []);
+
+  // Phase 13.2.9 — TodaysDoctorsPanel data: load doctors once + subscribe
+  // to merged schedule entries for the selected date (recurring + override).
+  // Replaces the legacy "doctors who have appointments today" derivation.
+  const [doctors, setDoctors] = useState([]);
+  useEffect(() => {
+    listDoctors().then(setDoctors).catch(() => setDoctors([]));
+  }, []);
+  const [todaysSchedules, setTodaysSchedules] = useState([]);
+  const [todaysSchedulesLoading, setTodaysSchedulesLoading] = useState(false);
+  useEffect(() => {
+    if (!selectedDate) return;
+    setTodaysSchedulesLoading(true);
+    const doctorIds = doctors.map((d) => String(d.doctorId || d.id));
+    const unsub = listenToScheduleByDay(
+      selectedDate,
+      (merged) => {
+        setTodaysSchedules(merged);
+        setTodaysSchedulesLoading(false);
+      },
+      doctorIds.length > 0 ? doctorIds : undefined,
+      () => { setTodaysSchedules([]); setTodaysSchedulesLoading(false); },
+    );
+    return unsub;
+  }, [selectedDate, doctors.length]);
   const currentHoliday = useMemo(
     () => isDateHoliday(selectedDate, holidays),
     [selectedDate, holidays],
@@ -300,28 +327,27 @@ export default function AppointmentTab({ clinicSettings, theme }) {
           </div>
         </div>
 
-        {/* Doctor Schedule for Selected Day */}
-        <div className="bg-[var(--bg-surface)] rounded-xl p-3 shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.15)' }}>
-          <h4 className="text-xs font-black text-[var(--tx-heading)] mb-1 tracking-tight">{selThaiDate}</h4>
-          <p className="text-[11px] text-sky-400 font-bold mb-2">แพทย์เข้าตรวจ {dayDoctors.length} คน</p>
-          {dayDoctors.length === 0 ? (
-            <p className="text-[11px] text-[var(--tx-muted)]">ไม่มีแพทย์เข้าตรวจ</p>
-          ) : (
-            <div className="space-y-1.5">
-              {dayDoctors.map(doc => (
-                <div key={doc.name} className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-sky-900/30' : 'bg-sky-50'}`}>
-                    <User size={11} className={isDark ? 'text-sky-400' : 'text-sky-600'} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-[var(--tx-secondary)] font-medium truncate">{doc.name}</p>
-                    <p className="text-[11px] text-[var(--tx-muted)]">{doc.min} - {doc.max}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Phase 13.2.9 — Today's Doctors Panel (ProClinic /admin/appointment
+            parity). Sources from be_staff_schedules merged via
+            listenToScheduleByDay → recurring shifts + per-date overrides.
+            Shows doctors WORKING today, NOT doctors with bookings today
+            (matches ProClinic SSR Blade output verified in Phase 0). */}
+        <TodaysDoctorsPanel
+          dateISO={selectedDate}
+          doctors={doctors}
+          todaysSchedules={todaysSchedules}
+          loading={todaysSchedulesLoading}
+          isDark={isDark}
+          onDoctorClick={(doctorId) => {
+            // For now, scroll the time grid to the first appointment block
+            // for that doctor (or no-op if none). Future: filter UI.
+            const first = dayAppts.find((a) => String(a.doctorId) === String(doctorId));
+            if (first) {
+              const slotEl = document.querySelector(`[data-time-slot="${first.startTime}"]`);
+              slotEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }}
+        />
       </div>
 
       {/* ════════════ TIME GRID — left on desktop, bottom on mobile ══════════ */}
@@ -357,11 +383,14 @@ export default function AppointmentTab({ clinicSettings, theme }) {
           </div>
         </div>
 
-        {/* Day Header + Add Button */}
+        {/* Day Header + Add Button — แพทย์เข้าตรวจ N คน is derived from
+            schedule (Phase 13.2.9 ProClinic-fidelity), not appointments. */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-bold text-[var(--tx-heading)]">{selThaiDate}</h3>
-            <span className="text-xs font-bold text-sky-400">| แพทย์เข้าตรวจ {dayDoctors.length} คน</span>
+            <span className="text-xs font-bold text-sky-400" data-testid="appt-doctors-count-header">
+              | แพทย์เข้าตรวจ {todaysSchedules.filter(s => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday').length} คน
+            </span>
             {dayLoading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
           </div>
           <button onClick={() => openCreate(selectedDate)}
