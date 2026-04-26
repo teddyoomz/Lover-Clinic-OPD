@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveBranch } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS,
@@ -62,7 +63,7 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="name">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อสาขา (ไทย) <span className="text-red-400">*</span>
+            ชื่อสาขา (ไทย) <RequiredAsterisk />
           </label>
           <input
             type="text"
@@ -88,7 +89,7 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="phone">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            เบอร์ติดต่อ <span className="text-red-400">*</span>
+            เบอร์ติดต่อ <RequiredAsterisk />
           </label>
           <input
             type="tel"

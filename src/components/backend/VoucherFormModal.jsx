@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveVoucher } from '../../lib/backendClient.js';
 import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
@@ -67,7 +68,7 @@ export default function VoucherFormModal({ voucher, onClose, onSaved, clinicSett
 
       <div data-field="voucher_name">
         <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-          ชื่อ Voucher <span className="text-red-500">*</span>
+          ชื่อ Voucher <RequiredAsterisk />
         </label>
         <input type="text" value={form.voucher_name} onChange={(e) => update('voucher_name', e.target.value)}
           placeholder="กรอกชื่อ Voucher"
@@ -77,7 +78,7 @@ export default function VoucherFormModal({ voucher, onClose, onSaved, clinicSett
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div data-field="sale_price">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            ราคาขาย (Inc. VAT) <span className="text-red-500">*</span>
+            ราคาขาย (Inc. VAT) <RequiredAsterisk />
           </label>
           <input type="number" min="0" step="0.01" value={form.sale_price}
             onChange={(e) => update('sale_price', e.target.value)} placeholder="0.00"
@@ -85,7 +86,7 @@ export default function VoucherFormModal({ voucher, onClose, onSaved, clinicSett
         </div>
         <div data-field="commission_percent">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            % ค่าธรรมเนียม <span className="text-red-500">*</span>
+            % ค่าธรรมเนียม <RequiredAsterisk />
           </label>
           <input type="number" min="0" max="100" step="0.01" value={form.commission_percent}
             onChange={(e) => update('commission_percent', e.target.value)} placeholder="0"

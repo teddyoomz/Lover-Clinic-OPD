@@ -8,6 +8,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Search } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import {
   saveQuotation, getAllCustomers, listStaff, getAllMasterDataItems,
 } from '../../lib/backendClient.js';
@@ -234,7 +235,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div data-field="customerId">
             <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-              ลูกค้า <span className="text-red-500">*</span>
+              ลูกค้า <RequiredAsterisk />
             </label>
             <select value={form.customerId}
               onChange={(e) => {
@@ -255,7 +256,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
 
           <div data-field="quotationDate">
             <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-              วันที่เสนอราคา <span className="text-red-500">*</span>
+              วันที่เสนอราคา <RequiredAsterisk />
             </label>
             <DateField value={form.quotationDate}
               onChange={(v) => update('quotationDate', v)}
@@ -440,7 +441,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
                       </div>
                       {item.administrationMethod === 'interval' && (
                         <label className="text-[11px] text-[var(--tx-muted)] block">
-                          ทุกๆ (ชม.) <span className="text-red-500">*</span>
+                          ทุกๆ (ชม.) <RequiredAsterisk />
                           <input type="number" min="1" step="1" value={item.administrationMethodHour || ''}
                             onChange={(e) => updateSubItem(key, idx, { administrationMethodHour: Math.max(0, Number(e.target.value) || 0) })}
                             placeholder="เช่น 6"

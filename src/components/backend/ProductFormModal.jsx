@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveProduct, listProductGroups, listProductUnitGroups } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS,
@@ -74,7 +75,7 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="productType">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ประเภท <span className="text-red-400">*</span>
+            ประเภท <RequiredAsterisk />
           </label>
           <select value={form.productType} onChange={(e) => update({ productType: e.target.value })}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]">
@@ -94,7 +95,7 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="productName">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อสินค้า <span className="text-red-400">*</span>
+            ชื่อสินค้า <RequiredAsterisk />
           </label>
           <input type="text" value={form.productName} onChange={(e) => update({ productName: e.target.value })}
             placeholder="ชื่อสินค้า"

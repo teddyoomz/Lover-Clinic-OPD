@@ -1,10 +1,26 @@
 // ─── FileUploadField — Reusable single-file upload with preview ──────────────
 // Uploads to Firebase Storage on file select. Returns URL for parent form.
 // Supports: image (jpg/png/webp) + PDF. Dark/light theme.
+//
+// 2026-04-26 (Polish): blob URL revocation. Each `URL.createObjectURL(file)`
+// allocates a Blob reference that the browser keeps alive until either the
+// page unloads or `URL.revokeObjectURL(url)` is called. Without revoke,
+// repeated re-uploads accumulate (~50KB-1MB per attempt) → leak. We track
+// the active blob URL via a ref and revoke before each swap, on delete,
+// and on unmount.
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, FileText, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { uploadFile, deleteFile, buildStoragePath } from '../../lib/storageClient.js';
+
+// Revoke ObjectURL only if it's actually a blob: URL. Real http(s) URLs
+// returned from Storage do NOT need revoking and revoking them is a no-op
+// — guarded explicitly so spies in tests can assert call-count cleanly.
+function revokeIfBlob(url) {
+  if (typeof url === 'string' && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
 
 export default function FileUploadField({
   storagePath,        // base path: "uploads/be_sales/INV-001"
@@ -26,6 +42,20 @@ export default function FileUploadField({
   const [isImage, setIsImage] = useState(value ? !value.includes('.pdf') : false);
   const inputRef = useRef(null);
   const uploadIdRef = useRef(0);
+  // Tracks the active blob: URL so we can revoke it before swapping. We
+  // do NOT track non-blob URLs here — only the local-preview blobs. State
+  // (previewUrl) intentionally diverges: it may hold a Storage URL after
+  // upload while this ref is null.
+  const activeBlobRef = useRef(null);
+
+  // Revoke any leftover blob URL when the component unmounts (e.g. user
+  // closes the modal mid-upload). Empty deps array — only fires on unmount.
+  useEffect(() => {
+    return () => {
+      revokeIfBlob(activeBlobRef.current);
+      activeBlobRef.current = null;
+    };
+  }, []);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -34,12 +64,22 @@ export default function FileUploadField({
 
     const thisUpload = ++uploadIdRef.current;
 
+    // Revoke previous blob (if any) BEFORE allocating a new one — picking a
+    // second file before the first upload finishes used to leak the first.
+    revokeIfBlob(activeBlobRef.current);
+    activeBlobRef.current = null;
+
     // Preview
     const fileIsImage = file.type.startsWith('image/');
     setIsImage(fileIsImage);
     setFileName(file.name);
-    if (fileIsImage) setPreviewUrl(URL.createObjectURL(file));
-    else setPreviewUrl(null);
+    if (fileIsImage) {
+      const blobUrl = URL.createObjectURL(file);
+      activeBlobRef.current = blobUrl;
+      setPreviewUrl(blobUrl);
+    } else {
+      setPreviewUrl(null);
+    }
 
     setState('uploading');
     setErrorMsg('');
@@ -58,6 +98,10 @@ export default function FileUploadField({
       if (thisUpload !== uploadIdRef.current) return; // stale
 
       setCurrentPath(result.storagePath);
+      // Upload succeeded — swap from blob: URL to the durable Storage URL
+      // and revoke the blob (no longer needed).
+      revokeIfBlob(activeBlobRef.current);
+      activeBlobRef.current = null;
       if (fileIsImage) setPreviewUrl(result.url);
       else setPreviewUrl(null);
       setState('uploaded');
@@ -73,6 +117,8 @@ export default function FileUploadField({
     if (currentPath) {
       try { await deleteFile(currentPath); } catch {}
     }
+    revokeIfBlob(activeBlobRef.current);
+    activeBlobRef.current = null;
     setState('empty');
     setPreviewUrl(null);
     setFileName('');

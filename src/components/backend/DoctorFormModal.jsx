@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveDoctor, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
 import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
 import {
@@ -100,7 +101,7 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="position">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ตำแหน่ง <span className="text-red-400">*</span>
+            ตำแหน่ง <RequiredAsterisk />
           </label>
           <select value={form.position} onChange={(e) => update({ position: e.target.value })}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]">
@@ -119,7 +120,7 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="firstname">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อ (ไทย) <span className="text-red-400">*</span>
+            ชื่อ (ไทย) <RequiredAsterisk />
           </label>
           <input type="text" value={form.firstname} onChange={(e) => update({ firstname: e.target.value })}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
@@ -207,7 +208,7 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
         <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-2 uppercase tracking-wider">ค่ามือ (DF)</p>
         <div data-field="defaultDfGroupId" className="mb-3">
           <label className="block text-xs text-[var(--tx-muted)] mb-1">
-            กลุ่มค่ามือเริ่มต้น <span className="text-red-400">*</span>
+            กลุ่มค่ามือเริ่มต้น <RequiredAsterisk />
           </label>
           <select value={form.defaultDfGroupId || ''} onChange={(e) => update({ defaultDfGroupId: e.target.value })}
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-[var(--accent)]">

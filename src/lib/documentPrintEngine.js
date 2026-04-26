@@ -31,6 +31,30 @@ export function htmlEscape(v) {
     .replace(/'/g, '&#39;');
 }
 
+// Allowlist for <img src=""> values used in signature injection. Print
+// templates may embed an <img> with a Firebase Storage URL or a base64
+// data-URL — anything else (javascript:, file:, data:text/html, …) is
+// rejected. Returns '' when the URL is unsafe so safeImgTag falls back to
+// "no image" instead of injecting a hostile attribute.
+const SAFE_IMG_URL_RE = /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp);base64,)/i;
+
+/**
+ * Build a sanitized `<img>` tag for direct innerHTML injection. Used by
+ * staff-select signature auto-fill where the template carries `{{{key}}}`
+ * (raw-HTML triple-mustache). All inputs are HTML-escaped; URL is
+ * allow-listed against http(s) + data:image/*. Empty / unsafe URL → ''.
+ *
+ * style is optional inline CSS string (already trusted callsite).
+ */
+export function safeImgTag(url, { alt = '', style = '' } = {}) {
+  if (!url || typeof url !== 'string') return '';
+  if (!SAFE_IMG_URL_RE.test(url.trim())) return '';
+  const safeUrl = htmlEscape(url.trim());
+  const safeAlt = htmlEscape(alt);
+  const safeStyle = htmlEscape(style);
+  return `<img src="${safeUrl}" alt="${safeAlt}"${safeStyle ? ` style="${safeStyle}"` : ''}/>`;
+}
+
 /**
  * Build the union of default context values (customer/clinic/today) + the
  * per-document fill values. Per-document values win on collision.

@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Search } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveDfGroup, getAllMasterDataItems } from '../../lib/backendClient.js';
 import {
   emptyDfGroupForm, generateDfGroupId, validateDfGroupStrict, normalizeDfGroup,
@@ -117,7 +118,7 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
       <section className="space-y-3">
         <div data-field="name">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            ชื่อกลุ่ม <span className="text-red-500">*</span>
+            ชื่อกลุ่ม <RequiredAsterisk />
           </label>
           <input type="text" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}

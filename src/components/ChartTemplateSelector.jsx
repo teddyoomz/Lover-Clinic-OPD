@@ -120,20 +120,23 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
 
   const filtered = category === 'all' ? templates : templates.filter(t => t.category === category);
 
-  const cardCls = `rounded-lg border overflow-hidden transition-all hover:scale-[1.02] ${isDark ? 'border-[#333] bg-[#111] hover:border-teal-500/50' : 'border-gray-200 bg-gray-50 hover:border-teal-400'}`;
+  // 2026-04-26 Polish: replaced 10 `isDark ? <hex> : <gray>` ternaries with
+  // CSS vars so dark/light flip is handled in src/index.css (single source
+  // of truth) instead of per-prop. Teal accent kept as branded constant.
+  const cardCls = 'rounded-lg border overflow-hidden transition-all hover:scale-[1.02] border-[var(--bd-strong)] bg-[var(--bg-card)] hover:border-teal-500/50';
 
   return (
     <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
+      <div className="w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col bg-[var(--bg-elevated)] border border-[var(--bd)]"
         onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className={`flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--bd)]">
           <h3 className="text-sm font-black text-teal-500">เลือก Template</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+          <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]"><X size={18} /></button>
         </div>
 
         {/* Source tabs */}
-        <div className={`flex gap-1 px-4 py-2 border-b ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+        <div className="flex gap-1 px-4 py-2 border-b border-[var(--bd)]">
           {[
             { id: 'local', label: 'ของเรา', icon: FileImage },
             { id: 'proclinic', label: 'ProClinic', icon: Download },
@@ -141,7 +144,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           ].map(tab => (
             <button key={tab.id} onClick={() => { setSource(tab.id); if (tab.id === 'proclinic') loadPcTemplates(); }}
               className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-all ${
-                source === tab.id ? 'bg-teal-500 text-white' : isDark ? 'bg-[#1a1a1a] text-gray-400 hover:bg-[#222]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                source === tab.id ? 'bg-teal-500 text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover2)]'
               }`}>
               <tab.icon size={11} /> {tab.label}
             </button>
@@ -150,11 +153,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
 
         {/* Category filter + add button (local) */}
         {source === 'local' && (
-          <div className={`flex items-center gap-1 px-4 py-2 border-b overflow-x-auto ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+          <div className="flex items-center gap-1 px-4 py-2 border-b overflow-x-auto border-[var(--bd)]">
             {chartCategories.map(cat => (
               <button key={cat.id} onClick={() => setCategory(cat.id)}
                 className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
-                  category === cat.id ? 'bg-gray-600 text-white' : isDark ? 'bg-[#1a1a1a] text-gray-500' : 'bg-gray-50 text-gray-400'
+                  category === cat.id ? 'bg-gray-600 text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)]'
                 }`}>{cat.name}</button>
             ))}
             <button onClick={() => fileRef.current?.click()}
@@ -176,19 +179,19 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
                 return (
                   <div key={tmpl.id + realIdx} className="relative group">
                     <button onClick={() => { if (!isEditing) { onSelect(tmpl); onClose(); } }} className={`w-full ${cardCls}`}>
-                      <div className={`aspect-[3/4] flex items-center justify-center p-2 ${isDark ? 'bg-white/5' : 'bg-white'}`}>
-                        {tmpl.imageUrl ? <img src={tmpl.imageUrl} alt={tmpl.name} className="w-full h-full object-contain opacity-70" /> : <FileImage size={32} className="text-gray-500" />}
+                      <div className="aspect-[3/4] flex items-center justify-center p-2 bg-[var(--bg-input)]">
+                        {tmpl.imageUrl ? <img src={tmpl.imageUrl} alt={tmpl.name} className="w-full h-full object-contain opacity-70" /> : <FileImage size={32} className="text-[var(--tx-muted)]" />}
                       </div>
-                      <div className={`px-2 py-1.5 text-center border-t ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+                      <div className="px-2 py-1.5 text-center border-t border-[var(--bd)]">
                         {isEditing ? (
                           <div className="space-y-1" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
                               <input value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && renameTemplate(realIdx)}
-                                className={`text-xs font-bold bg-transparent border-b outline-none w-full text-center ${isDark ? 'border-teal-500 text-gray-200' : 'border-teal-500'}`} autoFocus />
+                                className="text-xs font-bold bg-transparent border-b outline-none w-full text-center border-teal-500 text-[var(--tx-primary)]" autoFocus />
                               <button onClick={() => renameTemplate(realIdx)} className="text-teal-500 shrink-0"><Check size={12} /></button>
                             </div>
                             <select value={editCategory} onChange={e => { setEditCategory(e.target.value); updateTemplates(templates.map((t, i) => i === realIdx ? { ...t, category: e.target.value } : t)); }}
-                              className={`text-[11px] w-full rounded px-1 py-0.5 ${isDark ? 'bg-[#222] text-gray-300 border-[#333]' : 'bg-gray-100'}`}>
+                              className="text-[11px] w-full rounded px-1 py-0.5 bg-[var(--bg-hover2)] text-[var(--tx-secondary)] border border-[var(--bd-strong)]">
                               {chartCategories.filter(c => c.id !== 'all').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           </div>
@@ -219,17 +222,17 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           {/* ── ProClinic ── */}
           {source === 'proclinic' && (
             pcLoading ? (
-              <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-teal-500 mr-2" /><span className="text-xs text-gray-500">กำลังโหลด...</span></div>
+              <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-teal-500 mr-2" /><span className="text-xs text-[var(--tx-muted)]">กำลังโหลด...</span></div>
             ) : pcTemplates.length === 0 ? (
-              <p className="text-center text-xs text-gray-500 py-12">ไม่พบ template</p>
+              <p className="text-center text-xs text-[var(--tx-muted)] py-12">ไม่พบ template</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {pcTemplates.map(tmpl => (
                   <button key={tmpl.id} onClick={() => { onSelect({ ...tmpl, imageUrl: pcBlobUrls[tmpl.id] || tmpl.imageUrl, isProClinic: true }); onClose(); }} className={cardCls}>
-                    <div className={`aspect-[3/4] flex items-center justify-center p-1 ${isDark ? 'bg-white/5' : 'bg-white'}`}>
-                      {pcBlobUrls[tmpl.id] ? <img src={pcBlobUrls[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-gray-500" />}
+                    <div className="aspect-[3/4] flex items-center justify-center p-1 bg-[var(--bg-input)]">
+                      {pcBlobUrls[tmpl.id] ? <img src={pcBlobUrls[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-[var(--tx-muted)]" />}
                     </div>
-                    <div className={`px-2 py-1.5 text-center border-t ${isDark ? 'border-[#222]' : 'border-gray-100'}`}>
+                    <div className="px-2 py-1.5 text-center border-t border-[var(--bd)]">
                       <span className="text-xs font-bold">{tmpl.name || 'ProClinic'}</span>
                     </div>
                   </button>
@@ -241,11 +244,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           {/* ── อัปโหลด ── */}
           {source === 'upload' && (
             <div>
-              <div className={`rounded-lg border-2 border-dashed py-8 text-center cursor-pointer transition-all ${isDark ? 'border-[#333] hover:border-teal-500/40' : 'border-gray-300 hover:border-teal-400'}`}
+              <div className="rounded-lg border-2 border-dashed py-8 text-center cursor-pointer transition-all border-[var(--bd-strong)] hover:border-teal-500/40"
                 onClick={() => uploadRef.current?.click()}>
-                <Upload size={28} className="mx-auto mb-2 text-gray-500" />
-                <p className="text-xs text-gray-500">อัปโหลดรูปแล้ววาดทันที</p>
-                <p className="text-[11px] text-gray-600 mt-1">JPG, PNG</p>
+                <Upload size={28} className="mx-auto mb-2 text-[var(--tx-muted)]" />
+                <p className="text-xs text-[var(--tx-muted)]">อัปโหลดรูปแล้ววาดทันที</p>
+                <p className="text-[11px] text-[var(--tx-faint)] mt-1">JPG, PNG</p>
               </div>
               <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={e => {
                 if (e.target.files?.[0]) {

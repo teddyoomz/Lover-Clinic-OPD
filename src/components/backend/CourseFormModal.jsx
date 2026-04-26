@@ -15,6 +15,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveCourse, listProducts, listCourses } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS, COURSE_TYPE_OPTIONS, USAGE_TYPE_OPTIONS,
@@ -221,7 +222,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="courseName">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อคอร์ส <span className="text-red-400">*</span>
+            ชื่อคอร์ส <RequiredAsterisk />
           </label>
           <input type="text" value={form.courseName}
             onChange={(e) => update({ courseName: e.target.value })}
@@ -292,7 +293,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div data-field="salePrice">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ราคาขาย <span className="text-red-400">*</span>
+            ราคาขาย <RequiredAsterisk />
           </label>
           <input type="number" step="0.01" min="0" value={form.salePrice ?? ''}
             onChange={(e) => updatePrice(e.target.value, form.isVatIncluded)}
@@ -345,7 +346,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
       {showMainProduct && (
         <div data-field="mainProductId" className="rounded-xl border border-dashed border-[var(--bd)] p-3">
           <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-2 uppercase tracking-wider">
-            สินค้า / บริการหลัก <span className="text-red-400">*</span>
+            สินค้า / บริการหลัก <RequiredAsterisk />
           </p>
           {form.mainProductId ? (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] mb-2">

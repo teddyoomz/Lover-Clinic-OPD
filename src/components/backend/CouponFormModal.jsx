@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveCoupon } from '../../lib/backendClient.js';
 import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../../lib/couponValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
@@ -67,7 +68,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
     >
       <div data-field="coupon_name">
         <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-          ชื่อคูปอง <span className="text-red-500">*</span>
+          ชื่อคูปอง <RequiredAsterisk />
         </label>
         <input type="text" value={form.coupon_name} onChange={(e) => update('coupon_name', e.target.value)}
           placeholder="กรอกชื่อคูปอง"
@@ -76,7 +77,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
 
       <div data-field="coupon_code">
         <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-          โค้ดส่วนลด <span className="text-red-500">*</span>
+          โค้ดส่วนลด <RequiredAsterisk />
         </label>
         <input type="text" value={form.coupon_code}
           onChange={(e) => update('coupon_code', e.target.value.toUpperCase())}
@@ -87,7 +88,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div data-field="discount">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            ส่วนลด <span className="text-red-500">*</span>
+            ส่วนลด <RequiredAsterisk />
           </label>
           <div className="flex items-stretch gap-0">
             <input type="number" min="0.01" step="0.01" value={form.discount}
@@ -102,7 +103,7 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
         </div>
         <div data-field="max_qty">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            จำนวนใช้งานได้ <span className="text-red-500">*</span>
+            จำนวนใช้งานได้ <RequiredAsterisk />
           </label>
           <input type="number" min="0" step="1" value={form.max_qty}
             onChange={(e) => update('max_qty', e.target.value)} placeholder="0"
@@ -119,14 +120,14 @@ export default function CouponFormModal({ coupon, onClose, onSaved, clinicSettin
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div data-field="start_date">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            วันเริ่ม <span className="text-red-500">*</span>
+            วันเริ่ม <RequiredAsterisk />
           </label>
           <DateField value={form.start_date} onChange={(v) => update('start_date', v)}
             locale="ce" placeholder="เลือกวันเริ่ม" size="md" />
         </div>
         <div data-field="end_date">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            วันสิ้นสุด <span className="text-red-500">*</span>
+            วันสิ้นสุด <RequiredAsterisk />
           </label>
           <DateField value={form.end_date} onChange={(v) => update('end_date', v)}
             locale="ce" placeholder="เลือกวันสิ้นสุด" size="md"

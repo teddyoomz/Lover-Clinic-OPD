@@ -20,6 +20,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveProductGroup, listProducts } from '../../lib/backendClient.js';
 import {
   PRODUCT_TYPES,
@@ -182,7 +183,7 @@ export default function ProductGroupFormModal({ productGroup, onClose, onSaved, 
 
           <div data-field="name">
             <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-              ชื่อกลุ่มสินค้า <span className="text-red-400">*</span>
+              ชื่อกลุ่มสินค้า <RequiredAsterisk />
             </label>
             <input
               type="text"

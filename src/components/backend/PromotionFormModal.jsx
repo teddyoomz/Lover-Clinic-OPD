@@ -13,6 +13,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import { savePromotion, getAllMasterDataItems } from '../../lib/backendClient.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
@@ -206,7 +207,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
 
         <div data-field="promotion_name">
           <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-            ชื่อโปรโมชัน <span className="text-red-500">*</span>
+            ชื่อโปรโมชัน <RequiredAsterisk />
           </label>
           <input type="text" value={form.promotion_name}
             onChange={(e) => update('promotion_name', e.target.value)}
@@ -261,7 +262,7 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
           </div>
           <div data-field="sale_price">
             <label className="block text-xs font-semibold text-[var(--tx-muted)] mb-1.5">
-              ราคาขาย (บาท) <span className="text-red-500">*</span>
+              ราคาขาย (บาท) <RequiredAsterisk />
             </label>
             <input type="number" min="0" value={form.sale_price}
               onChange={(e) => update('sale_price', e.target.value)}

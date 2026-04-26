@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveStaff, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
 import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
 import {
@@ -101,7 +102,7 @@ export default function StaffFormModal({ staff, onClose, onSaved, clinicSettings
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="firstname">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อ <span className="text-red-400">*</span>
+            ชื่อ <RequiredAsterisk />
           </label>
           <input type="text" value={form.firstname} onChange={(e) => update({ firstname: e.target.value })}
             placeholder="กรอกชื่อ"

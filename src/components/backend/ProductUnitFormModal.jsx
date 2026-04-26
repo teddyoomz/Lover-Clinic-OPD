@@ -9,6 +9,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, Trash2, Scale } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveProductUnitGroup } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS,
@@ -99,7 +100,7 @@ export default function ProductUnitFormModal({ unitGroup, onClose, onSaved, clin
       {/* groupName */}
       <div data-field="groupName">
         <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-          ชื่อกลุ่มหน่วยสินค้า <span className="text-red-400">*</span>
+          ชื่อกลุ่มหน่วยสินค้า <RequiredAsterisk />
         </label>
         <input
           type="text"
@@ -115,7 +116,7 @@ export default function ProductUnitFormModal({ unitGroup, onClose, onSaved, clin
       <div data-field="units">
         <div className="flex items-center justify-between mb-2">
           <label className="block text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider">
-            หน่วยในกลุ่ม <span className="text-red-400">*</span>
+            หน่วยในกลุ่ม <RequiredAsterisk />
           </label>
           <button
             type="button"

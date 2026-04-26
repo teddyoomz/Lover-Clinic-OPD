@@ -6,6 +6,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { savePermissionGroup } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS,
@@ -121,7 +122,7 @@ export default function PermissionGroupFormModal({ permissionGroup, onClose, onS
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="name">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ชื่อตำแหน่ง / บทบาท <span className="text-red-400">*</span>
+            ชื่อตำแหน่ง / บทบาท <RequiredAsterisk />
           </label>
           <input
             type="text"

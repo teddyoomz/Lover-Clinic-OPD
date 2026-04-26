@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, X, CalendarX } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import DateField from '../DateField.jsx';
 import { saveHoliday } from '../../lib/backendClient.js';
 import {
@@ -89,7 +90,7 @@ export default function HolidayFormModal({ holiday, onClose, onSaved, clinicSett
       {/* type toggle */}
       <div data-field="type">
         <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-          ประเภทวันหยุด <span className="text-red-400">*</span>
+          ประเภทวันหยุด <RequiredAsterisk />
         </label>
         <div className="grid grid-cols-2 gap-2">
           {HOLIDAY_TYPES.map(t => (
@@ -118,7 +119,7 @@ export default function HolidayFormModal({ holiday, onClose, onSaved, clinicSett
       {form.type === 'specific' && (
         <div data-field="dates">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            วันหยุด <span className="text-red-400">*</span>
+            วันหยุด <RequiredAsterisk />
           </label>
           <div className="flex items-end gap-2 mb-2">
             <div className="flex-1">
@@ -160,7 +161,7 @@ export default function HolidayFormModal({ holiday, onClose, onSaved, clinicSett
       {form.type === 'weekly' && (
         <div data-field="dayOfWeek">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            ปิดทุกวัน <span className="text-red-400">*</span>
+            ปิดทุกวัน <RequiredAsterisk />
           </label>
           <div className="grid grid-cols-7 gap-1.5">
             {DAY_OF_WEEK_LABELS.map((label, i) => (

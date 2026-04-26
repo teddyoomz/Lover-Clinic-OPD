@@ -18,6 +18,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Calculator, AlertCircle } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import {
   validateDfEntry, normalizeDfEntry, emptyDfEntry,
   generateDfEntryId, buildDefaultRows, isDoctorAlreadyEntered,
@@ -175,7 +176,7 @@ export default function DfEntryModal({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="doctorId">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            แพทย์ / ผู้ช่วยแพทย์ <span className="text-red-400">*</span>
+            แพทย์ / ผู้ช่วยแพทย์ <RequiredAsterisk />
           </label>
           <select
             value={form.doctorId}
@@ -201,7 +202,7 @@ export default function DfEntryModal({
 
         <div data-field="dfGroupId">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-            กลุ่มค่ามือ <span className="text-red-400">*</span>
+            กลุ่มค่ามือ <RequiredAsterisk />
           </label>
           <select
             value={form.dfGroupId}

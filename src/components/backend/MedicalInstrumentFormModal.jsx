@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, Trash2, Wrench } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import DateField from '../DateField.jsx';
 import { saveMedicalInstrument } from '../../lib/backendClient.js';
 import {
@@ -94,7 +95,7 @@ export default function MedicalInstrumentFormModal({ instrument, onClose, onSave
       {/* name */}
       <div data-field="name">
         <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
-          ชื่อเครื่องหัตถการ <span className="text-red-400">*</span>
+          ชื่อเครื่องหัตถการ <RequiredAsterisk />
         </label>
         <input
           type="text"

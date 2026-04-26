@@ -10,13 +10,28 @@
 // Rule E: Firestore-only — reads be_document_templates, no ProClinic calls.
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
-import { printDocument, buildPrintContext, renderTemplate } from '../../lib/documentPrintEngine.js';
+import { printDocument, buildPrintContext, renderTemplate, safeImgTag } from '../../lib/documentPrintEngine.js';
+import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
+
+// Print templates rely on inline `style="..."` + `class="..."` for layout
+// fidelity (no <style> blocks — print engine adds its own stylesheet via
+// buildPrintDocument). Profile is centralized so xss tests can re-import.
+const SANITIZE_PROFILE = {
+  ADD_ATTR: ['style', 'class'],
+  // Forbid these explicitly — defense-in-depth on top of DOMPurify defaults.
+  // <style> stripped because template body shouldn't carry its own
+  // stylesheet (engine injects one). <script>/iframe/etc. stripped to
+  // close the XSS surface admin-typed templates expose.
+  FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
+  FORBID_ATTR: ['onerror', 'onclick', 'onload', 'onmouseover', 'onfocus', 'onblur', 'onsubmit'],
+};
 
 const STEP_PICK = 'pick';
 const STEP_FILL = 'fill';
@@ -510,10 +525,13 @@ export default function DocumentPrintModal({
                               if (v) next[deptKey] = v;
                             }
                             // Signature image (template can use {{{doctorSignature}}}
-                            // raw-HTML to embed an <img>)
+                            // raw-HTML to embed an <img>). URL is allow-listed
+                            // against http(s) + data:image/* via safeImgTag —
+                            // hostile URLs (javascript:, data:text/html, …)
+                            // are dropped, not injected.
                             const sigKey = `${baseKey}Signature`;
                             if (has(sigKey) && record.signatureUrl) {
-                              next[sigKey] = `<img src="${record.signatureUrl}" alt="signature" style="max-height:60px"/>`;
+                              next[sigKey] = safeImgTag(record.signatureUrl, { alt: 'signature', style: 'max-height:60px' });
                             }
                             return next;
                           });
@@ -536,7 +554,7 @@ export default function DocumentPrintModal({
                           data-field={f.key}
                         />
                         <span className="text-[var(--tx-primary)]">
-                          {f.label || f.key}{f.required && <span className="text-red-400"> *</span>}
+                          {f.label || f.key}{f.required && <RequiredAsterisk className="ml-0.5" />}
                         </span>
                       </label>
                     );
@@ -544,7 +562,7 @@ export default function DocumentPrintModal({
                   return (
                     <div key={f.key} className="space-y-1">
                       <label className="block text-xs text-[var(--tx-muted)]">
-                        {f.label || f.key}{f.required && <span className="text-red-400"> *</span>}
+                        {f.label || f.key}{f.required && <RequiredAsterisk className="ml-0.5" />}
                       </label>
                       {f.type === 'textarea' ? (
                         <textarea
@@ -696,7 +714,7 @@ export default function DocumentPrintModal({
                         transformOrigin: 'top left',
                       }}
                       data-testid="document-print-preview"
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml, SANITIZE_PROFILE) }}
                     />
                   </div>
                 </div>
@@ -792,7 +810,7 @@ function StaffSelectField({ field, value, list, onChange }) {
   return (
     <div className="space-y-1" ref={ref}>
       <label className="block text-xs text-[var(--tx-muted)]">
-        {field.label || field.key}{field.required && <span className="text-red-400"> *</span>}
+        {field.label || field.key}{field.required && <RequiredAsterisk className="ml-0.5" />}
         {!loading && safe.length > 0 && (
           <span className="ml-2 text-[10px] opacity-50">({safe.length} รายการ)</span>
         )}
