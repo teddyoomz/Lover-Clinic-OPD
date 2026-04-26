@@ -1,0 +1,30 @@
+{
+  "selector": ".modal",
+  "tag": "div",
+  "outerHTML": "<div class=\"modal fade\" id=\"editCustomerContactModal\" tabindex=\"-1\" aria-hidden=\"true\">\n\t<div class=\"modal-dialog modal-dialog-centered\">\n\t\t<div class=\"modal-content\">\n\t\t\t<div class=\"modal-body\">\n\t\t\t\t<h4 class=\"text-primary mb-4\">แก้ไขข้อมูลผู้ติดต่อ</h4>\n\t\t\t\t\n\t\t\t\t<form method=\"POST\" name=\"form-unload\" action=\"https://trial.proclinicth.com/admin/customer/13851/contact\" enctype=\"multipart/form-data\" class=\"confirmation\" confirm-message=\"ยืนยันการแก้ไขลูกค้า?\">\n\t                <input type=\"hidden\" name=\"_token\" value=\"9fcKLX3CKGUqsuTJ0yGdmLCiGgcf4AbxoaVDKiJg\" autocomplete=\"off\">\t                <input type=\"hidden\" name=\"_method\" value=\"PUT\">\t\t\t\t\t<h5 class=\"mb-3\">คนที่ 1</h5>\n\t\t\t\t\t<div class=\"row\">\n\t\t\t\t\t\t<div class=\"col-6\">\n\t\t\t\t\t\t\t<div class=\"mb-3\">\n\t\t\t\t\t\t\t\t<label class=\"form-label\">ชื่อ</label>\n\t\t\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_1_firstname\" value=\"\" placeholder=\"ชื่อ\">\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"col-6\">\n\t\t\t\t\t\t\t<div class=\"mb-3\">\n\t\t\t\t\t\t\t\t<label class=\"form-label\">นามสกุล</label>\n\t\t\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_1_lastname\" value=\"\" placeholder=\"นามสกุล\">\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"mb-4\">\n\t\t\t\t\t\t<label class=\"form-label\">เบอร์ติดต่อ</label>\n\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_1_telephone_number\" value=\"\" placeholder=\"เบอร์ติดต่อ\">\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<h5 class=\"mb-3\">คนที่ 2</h5>\n\t\t\t\t\t<div class=\"row\">\n\t\t\t\t\t\t<div class=\"col-6\">\n\t\t\t\t\t\t\t<div class=\"mb-3\">\n\t\t\t\t\t\t\t\t<label class=\"form-label\">ชื่อ</label>\n\t\t\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_2_firstname\" value=\"\" placeholder=\"ชื่อ\">\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<div class=\"col-6\">\n\t\t\t\t\t\t\t<div class=\"mb-3\">\n\t\t\t\t\t\t\t\t<label class=\"form-label\">นามสกุล</label>\n\t\t\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_2_lastname\" value=\"\" placeholder=\"นามสกุล\">\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"mb-4\">\n\t\t\t\t\t\t<label class=\"form-label\">เบอร์ติดต่อ</label>\n\t\t\t\t\t\t<input type=\"text\" class=\"form-control\" name=\"contact_2_telephone_number\" value=\"\" placeholder=\"เบอร์ติดต่อ\">\n\t\t\t\t\t</div>\n\n\t\t\t\t\t<div class=\"modal-action\">\n\t\t\t\t\t\t<button type=\"button\" class=\"btn btn-outline-primary\" data-bs-dismiss=\"modal\">ยกเลิก</button>\n\t\t\t\t\t\t<button type=\"submit\" class=\"btn btn-primary\">ยืนยัน</button>\n\t\t\t\t\t</div>\n\t\t\t\t</form>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n</div>",
+  "classes": "modal fade",
+  "computedStyles": {
+    "display": "none",
+    "position": "fixed",
+    "width": "100%",
+    "height": "100%",
+    "padding": "0px",
+    "margin": "0px",
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(0, 0, 0)",
+    "border": "0px none rgb(0, 0, 0)",
+    "borderRadius": "0px",
+    "font": "IBM",
+    "fontSize": "16px"
+  },
+  "boundingRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  }
+}

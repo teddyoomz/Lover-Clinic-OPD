@@ -113,7 +113,12 @@ export const PAPER_SIZES = Object.freeze(['A4', 'A5', 'label-57x32']);
 // 2026-04-25 — added 'staff-select' for doctor/staff/assistant dropdowns
 // pulling from be_doctors / be_staff. Use field.source = 'doctors' |
 // 'staff' | 'doctors+staff' to indicate which collection(s) to load.
-export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select', 'checkbox', 'staff-select']);
+// 2026-04-26 (Phase 14.8.B) — added 'signature' for hand-drawn signatures
+// captured via signature_pad. Stored in form values as base64 data URL
+// (image/png). Render via <img src="{{{signatureKey}}}"> in htmlTemplate.
+// MAX size enforced at 200 KB to prevent runaway DOM size on print.
+export const FIELD_TYPES = Object.freeze(['text', 'textarea', 'date', 'number', 'select', 'checkbox', 'staff-select', 'signature']);
+export const SIGNATURE_MAX_BYTES = 200 * 1024; // 200 KB cap on data-URL payload
 
 export const NAME_MAX_LENGTH = 200;
 export const HTML_MAX_LENGTH = 50000; // ~50KB — plenty for any single-page cert

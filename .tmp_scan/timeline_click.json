@@ -1,0 +1,9 @@
+{
+  "action": "Clicked \"ดูไทม์ไลน์\"",
+  "navigated": false,
+  "modalOpened": true,
+  "modal": {
+    "title": "Timeline การรักษา",
+    "fields": []
+  }
+}

@@ -1,0 +1,1112 @@
+{
+  "url": "https://trial.proclinicth.com/admin/customer/13813",
+  "title": "HN69000615 จิรัฏฐ์ชัย ใจซื่อกุล | ProClinic",
+  "forms": [
+    {
+      "id": "f0",
+      "fields": 1,
+      "fieldList": [
+        {
+          "name": "q",
+          "type": "text",
+          "label": "ค้นหาลูกค้า",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f1",
+      "fields": 6,
+      "fieldList": [
+        {
+          "name": "contact_1_firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false
+        },
+        {
+          "name": "contact_1_lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false
+        },
+        {
+          "name": "contact_1_telephone_number",
+          "type": "text",
+          "label": "เบอร์ติดต่อ",
+          "required": false
+        },
+        {
+          "name": "contact_2_firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false
+        },
+        {
+          "name": "contact_2_lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false
+        },
+        {
+          "name": "contact_2_telephone_number",
+          "type": "text",
+          "label": "เบอร์ติดต่อ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "fields": 9,
+      "fieldList": [
+        {
+          "name": "customer_doctor_id",
+          "type": "select-one",
+          "label": "แพทย์ประจำตัว",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "แพทย์ประจำตัว",
+          "required": false
+        },
+        {
+          "name": "blood_type",
+          "type": "select-one",
+          "label": "กรุ๊ปเลือด",
+          "required": false
+        },
+        {
+          "name": "pregnanted",
+          "type": "radio",
+          "label": "มี",
+          "required": false
+        },
+        {
+          "name": "pregnanted",
+          "type": "radio",
+          "label": "ไม่มี",
+          "required": false
+        },
+        {
+          "name": "congenital_disease",
+          "type": "textarea",
+          "label": "โรคประจําตัว",
+          "required": false
+        },
+        {
+          "name": "history_of_drug_allergy",
+          "type": "textarea",
+          "label": "ประวัติแพ้ยา",
+          "required": false
+        },
+        {
+          "name": "history_of_food_allergy",
+          "type": "textarea",
+          "label": "ประวัติแพ้อาหาร",
+          "required": false
+        },
+        {
+          "name": "before_treatment",
+          "type": "textarea",
+          "label": "ประวัติการรักษาเดิม",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "fields": 37,
+      "fieldList": [
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ขาย",
+          "required": false
+        },
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ติดตาม",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "text",
+          "label": "วันที่",
+          "required": true
+        },
+        {
+          "name": "appointment_start_time",
+          "type": "select-one",
+          "label": "เวลาเริ่มต้น",
+          "required": true
+        },
+        {
+          "name": "appointment_end_time",
+          "type": "select-one",
+          "label": "เวลาสิ้นสุด",
+          "required": true
+        },
+        {
+          "name": "appointment_option",
+          "type": "radio",
+          "label": "นัดครั้งเดียว",
+          "required": false
+        },
+        {
+          "name": "appointment_option",
+          "type": "radio",
+          "label": "นัดหลายครั้ง",
+          "required": false
+        },
+        {
+          "name": "appointment_every_n_units",
+          "type": "number",
+          "label": "กรอกระยะห่างนัดหมาย",
+          "required": false
+        },
+        {
+          "name": "appointment_unit",
+          "type": "select-one",
+          "label": "",
+          "required": false
+        },
+        {
+          "name": "appointment_times",
+          "type": "number",
+          "label": "กรอกจำนวนนัดหมายเพิ่มเติม",
+          "required": false
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เพิ่มลูกค้าใหม่",
+          "required": false
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เลือกลูกค้าในระบบ",
+          "required": false
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เลือกภายหลัง",
+          "required": false
+        },
+        {
+          "name": "firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false
+        },
+        {
+          "name": "lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "label": "ชื่อเล่น",
+          "required": false
+        },
+        {
+          "name": "telephone_number",
+          "type": "tel",
+          "label": "เบอร์ติดต่อ (ไม่มีขีด เช่น 0912345678)",
+          "required": false
+        },
+        {
+          "name": "customer_source",
+          "type": "select-one",
+          "label": "ที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "source_detail",
+          "type": "text",
+          "label": "รายละเอียดที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "customer_id",
+          "type": "select-one",
+          "label": "ลูกค้า",
+          "required": true
+        },
+        {
+          "name": "advisor_id",
+          "type": "select-one",
+          "label": "ที่ปรึกษา",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ที่ปรึกษา",
+          "required": false
+        },
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false
+        },
+        {
+          "name": "doctor_assistant_id[]",
+          "type": "select-multiple",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false
+        },
+        {
+          "name": "examination_room_id",
+          "type": "select-one",
+          "label": "ห้องตรวจ",
+          "required": false
+        },
+        {
+          "name": "appointment_location",
+          "type": "text",
+          "label": "สถานที่นัด",
+          "required": false
+        },
+        {
+          "name": "source",
+          "type": "select-one",
+          "label": "ช่องทางนัดหมาย",
+          "required": false
+        },
+        {
+          "name": "appointment_to",
+          "type": "textarea",
+          "label": "นัดมาเพื่อ",
+          "required": false
+        },
+        {
+          "name": "expected_sales",
+          "type": "number",
+          "label": "ยอดขายที่คาดหวัง",
+          "required": false
+        },
+        {
+          "name": "preparation",
+          "type": "textarea",
+          "label": "การเตรียมตัว",
+          "required": false
+        },
+        {
+          "name": "customer_note",
+          "type": "textarea",
+          "label": "หมายเหตุ (แจ้งลูกค้า)",
+          "required": false
+        },
+        {
+          "name": "appointment_note",
+          "type": "textarea",
+          "label": "โน้ต (สำหรับคลินิก)",
+          "required": false
+        },
+        {
+          "name": "appointment_color",
+          "type": "select-one",
+          "label": "",
+          "required": false
+        },
+        {
+          "name": "line_notify",
+          "type": "checkbox",
+          "label": "แจ้งเตือนนัดหมายทาง LINE",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "fields": 31,
+      "fieldList": [
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ขาย",
+          "required": false
+        },
+        {
+          "name": "appointment_type",
+          "type": "radio",
+          "label": "ติดตาม",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "text",
+          "label": "วันที่",
+          "required": true
+        },
+        {
+          "name": "appointment_start_time",
+          "type": "select-one",
+          "label": "เวลาเริ่มต้น",
+          "required": true
+        },
+        {
+          "name": "appointment_end_time",
+          "type": "select-one",
+          "label": "เวลาสิ้นสุด",
+          "required": true
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เพิ่มลูกค้าใหม่",
+          "required": false
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เลือกลูกค้าในระบบ",
+          "required": false
+        },
+        {
+          "name": "customer_option",
+          "type": "radio",
+          "label": "เลือกภายหลัง",
+          "required": false
+        },
+        {
+          "name": "firstname",
+          "type": "text",
+          "label": "ชื่อ",
+          "required": false
+        },
+        {
+          "name": "lastname",
+          "type": "text",
+          "label": "นามสกุล",
+          "required": false
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "label": "ชื่อเล่น",
+          "required": false
+        },
+        {
+          "name": "telephone_number",
+          "type": "tel",
+          "label": "เบอร์ติดต่อ (ไม่มีขีด เช่น 0912345678)",
+          "required": false
+        },
+        {
+          "name": "customer_source",
+          "type": "select-one",
+          "label": "ที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "source_detail",
+          "type": "text",
+          "label": "รายละเอียดที่มาของลูกค้า",
+          "required": false
+        },
+        {
+          "name": "customer_id",
+          "type": "select-one",
+          "label": "ลูกค้า",
+          "required": true
+        },
+        {
+          "name": "advisor_id",
+          "type": "select-one",
+          "label": "ที่ปรึกษา",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ที่ปรึกษา",
+          "required": false
+        },
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false
+        },
+        {
+          "name": "doctor_assistant_id[]",
+          "type": "select-multiple",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "ผู้ช่วยแพทย์ (สูงสุด 5 คน)",
+          "required": false
+        },
+        {
+          "name": "examination_room_id",
+          "type": "select-one",
+          "label": "ห้องตรวจ",
+          "required": false
+        },
+        {
+          "name": "appointment_location",
+          "type": "text",
+          "label": "สถานที่นัด",
+          "required": false
+        },
+        {
+          "name": "source",
+          "type": "select-one",
+          "label": "ช่องทางนัดหมาย",
+          "required": false
+        },
+        {
+          "name": "appointment_to",
+          "type": "textarea",
+          "label": "นัดมาเพื่อ",
+          "required": false
+        },
+        {
+          "name": "expected_sales",
+          "type": "number",
+          "label": "ยอดขายที่คาดหวัง",
+          "required": false
+        },
+        {
+          "name": "preparation",
+          "type": "textarea",
+          "label": "การเตรียมตัว",
+          "required": false
+        },
+        {
+          "name": "customer_note",
+          "type": "textarea",
+          "label": "หมายเหตุ (แจ้งลูกค้า)",
+          "required": false
+        },
+        {
+          "name": "appointment_note",
+          "type": "textarea",
+          "label": "โน้ต (สำหรับคลินิก)",
+          "required": false
+        },
+        {
+          "name": "appointment_color",
+          "type": "select-one",
+          "label": "",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "fields": 3,
+      "fieldList": [
+        {
+          "name": "edit-add-before-image",
+          "type": "file",
+          "label": "เพิ่มรูปก่อนรักษา",
+          "required": false
+        },
+        {
+          "name": "edit-add-after-image",
+          "type": "file",
+          "label": "เพิ่มรูปหลังรักษา",
+          "required": false
+        },
+        {
+          "name": "treatment_information",
+          "type": "textarea",
+          "label": "ข้อมูลการรักษา",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "fields": 1,
+      "fieldList": [
+        {
+          "name": "",
+          "type": "text",
+          "label": "กรอกวันที่",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f7",
+      "fields": 1,
+      "fieldList": [
+        {
+          "name": "cancel_detail",
+          "type": "textarea",
+          "label": "",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f8",
+      "fields": 4,
+      "fieldList": [
+        {
+          "name": "receiving_customer_id",
+          "type": "select-one",
+          "label": "ลูกค้าที่รับคอร์ส",
+          "required": true
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "สินค้าในคอร์ส",
+          "required": true
+        },
+        {
+          "name": "qty",
+          "type": "number",
+          "label": "สินค้าในคอร์ส",
+          "required": true
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "หมายเหตุ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f9",
+      "fields": 1,
+      "fieldList": [
+        {
+          "name": "tag_name",
+          "type": "text",
+          "label": "กรอก Customer Tag",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f10",
+      "fields": 5,
+      "fieldList": [
+        {
+          "name": "from_customer_wallet_id",
+          "type": "select-one",
+          "label": "เลือกกระเป๋าเงินที่ต้องการแชร์วงเงิน",
+          "required": false
+        },
+        {
+          "name": "receiving_customer_id",
+          "type": "select-one",
+          "label": "ลูกค้าที่รับเงิน",
+          "required": true
+        },
+        {
+          "name": "to_customer_wallet_id",
+          "type": "select-one",
+          "label": "เลือกกระเป๋าเงินลูกค้าที่ต้องการรับเงิน",
+          "required": false
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "label": "ยอดเงิน",
+          "required": true
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "หมายเหตุ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f12",
+      "fields": 3,
+      "fieldList": [
+        {
+          "name": "",
+          "type": "text",
+          "label": "วันที่รักษา",
+          "required": false
+        },
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "Search",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f13",
+      "fields": 7,
+      "fieldList": [
+        {
+          "name": "customer_wallet_id",
+          "type": "select-one",
+          "label": "เลือกกระเป๋าเงิน",
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "radio",
+          "label": "เพิ่มวงเงิน",
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "radio",
+          "label": "ลดวงเงิน",
+          "required": false
+        },
+        {
+          "name": "credit",
+          "type": "number",
+          "label": "วงเงินที่ปรับ",
+          "required": true
+        },
+        {
+          "name": "credit-change-before",
+          "type": "text",
+          "label": "วงเงินก่อนปรับ",
+          "required": false
+        },
+        {
+          "name": "credit-change-after",
+          "type": "text",
+          "label": "วงเงินก่อนปรับ",
+          "required": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "กรอกหมายเหตุ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f14",
+      "fields": 6,
+      "fieldList": [
+        {
+          "name": "type",
+          "type": "radio",
+          "label": "เพิ่มคะแนน",
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "radio",
+          "label": "ลดคะแนน",
+          "required": false
+        },
+        {
+          "name": "point",
+          "type": "number",
+          "label": "คะแนนที่ปรับ",
+          "required": true
+        },
+        {
+          "name": "",
+          "type": "text",
+          "label": "คะแนนก่อนปรับ",
+          "required": false
+        },
+        {
+          "name": "point-change-after",
+          "type": "text",
+          "label": "คะแนนก่อนปรับ",
+          "required": false
+        },
+        {
+          "name": "note",
+          "type": "textarea",
+          "label": "กรอกหมายเหตุ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f15",
+      "fields": 10,
+      "fieldList": [
+        {
+          "name": "doctor_id",
+          "type": "select-one",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": true
+        },
+        {
+          "name": "",
+          "type": "search",
+          "label": "แพทย์/ผู้ช่วยแพทย์",
+          "required": false
+        },
+        {
+          "name": "symptoms",
+          "type": "textarea",
+          "label": "อาการ",
+          "required": false
+        },
+        {
+          "name": "diagnosis",
+          "type": "textarea",
+          "label": "วินิจฉัย",
+          "required": false
+        },
+        {
+          "name": "physical_therapy",
+          "type": "textarea",
+          "label": "กายภาพบำบัด",
+          "required": false
+        },
+        {
+          "name": "is_actually_come",
+          "type": "checkbox",
+          "label": "ผู้ป่วยได้มารับการตรวจรักษาวันนี้จริง",
+          "required": false
+        },
+        {
+          "name": "rest",
+          "type": "checkbox",
+          "label": "ให้หยุดพัก",
+          "required": false
+        },
+        {
+          "name": "",
+          "type": "text",
+          "label": "เลือกช่วงวันที่หยุดพัก",
+          "required": false
+        },
+        {
+          "name": "other",
+          "type": "checkbox",
+          "label": "อื่นๆ",
+          "required": false
+        },
+        {
+          "name": "other_detail",
+          "type": "textarea",
+          "label": "ระบุข้อมูลอื่นๆ",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "f16",
+      "fields": 1,
+      "fieldList": [
+        {
+          "name": "",
+          "type": "text",
+          "label": "เลือกวันที่รักษา",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "select-consent-template-form",
+      "fields": 2,
+      "fieldList": [
+        {
+          "name": "file-consent",
+          "type": "file",
+          "label": "ถ่ายรูป/อัปโหลด",
+          "required": false
+        },
+        {
+          "name": "select_consent_template",
+          "type": "radio",
+          "label": "",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "id": "t0",
+      "headers": [
+        "สินค้า",
+        "จำนวน"
+      ],
+      "rows": 2
+    },
+    {
+      "id": "t1",
+      "headers": [
+        "วันที่",
+        "ประเภท",
+        "HN",
+        "ลูกค้า",
+        "รายละเอียด",
+        "ผู้ทำรายการ",
+        "หมายเหตุ",
+        "รวม 0 รายการ"
+      ],
+      "rows": 0
+    },
+    {
+      "id": "t2",
+      "headers": [
+        "วันที่",
+        "คอร์ส",
+        "สินค้าที่เปลี่ยน",
+        "สินค้าใหม่",
+        "ชำระเพิ่ม",
+        "ผู้ทำรายการ",
+        "หมายเหตุ",
+        "รวม 0 รายการ"
+      ],
+      "rows": 0
+    },
+    {
+      "id": "t3",
+      "headers": [
+        "วันที่",
+        "กระเป๋าเงิน",
+        "ประเภท",
+        "HN",
+        "ลูกค้า",
+        "ยอดเงิน",
+        "ผู้ทำรายการ",
+        "หมายเหตุ",
+        "รวม 0 รายการ"
+      ],
+      "rows": 0
+    },
+    {
+      "id": "t4",
+      "headers": [
+        "วันที่",
+        "กระเป๋าเงิน",
+        "ประเภท",
+        "วงเงินก่อน",
+        "วงเงินหลัง",
+        "ยอดเงิน",
+        "ผู้ทำรายการ",
+        "หมายเหตุ",
+        "รวม 0 รายการ"
+      ],
+      "rows": 0
+    },
+    {
+      "id": "t5",
+      "headers": [
+        "วันที่",
+        "ประเภท",
+        "คะแนนก่อน",
+        "คะแนนหลัง",
+        "คะแนน",
+        "ผู้ทำรายการ",
+        "หมายเหตุ",
+        "รวม 0 รายการ"
+      ],
+      "rows": 0
+    },
+    {
+      "id": "t6",
+      "headers": [
+        "บริษัทประกัน",
+        "ประเภทสิทธิ์การรักษา",
+        "รายละเอียดสิทธิประกัน",
+        "ยอดเคลม / วัน",
+        "ยอดเคลม / ปี",
+        "จำนวนครั้งที่เคลม / ปี",
+        "ส่วนลดค่ายา",
+        "หมายเหตุ"
+      ],
+      "rows": 1
+    }
+  ],
+  "buttons": [
+    {
+      "text": "เมนูอื่นๆ17",
+      "classes": "nav-link dropdown-toggle"
+    },
+    {
+      "text": "สาขา พระราม9",
+      "classes": "nav-link dropdown-toggle btn btn-outline-secondary ms-xxl-2"
+    },
+    {
+      "text": "Dr.M Clinic \n                           ",
+      "classes": "nav-link dropdown-toggle sp-left"
+    },
+    {
+      "text": "ทำรายการ",
+      "classes": "btn btn-primary w-100 text-nowrap dropdown-toggle"
+    },
+    {
+      "text": "พิมพ์",
+      "classes": "btn btn-info w-100 text-nowrap dropdown-toggle text-white"
+    },
+    {
+      "text": "ประวัติ",
+      "classes": "btn btn-secondary w-100 text-nowrap dropdown-toggle"
+    },
+    {
+      "text": "สิทธิการรักษา",
+      "classes": "btn btn-blue flex-fill text-nowrap text-white"
+    },
+    {
+      "text": "เชื่อมต่อ",
+      "classes": "btn btn-line disable mt-1 user-line-generate"
+    },
+    {
+      "text": "ดูทั้งหมด",
+      "classes": "btn btn-secondary d-flex align-items-center justify-content-"
+    },
+    {
+      "text": "เพิ่มนัดหมาย",
+      "classes": "btn btn-primary d-flex align-items-center justify-content-ce"
+    },
+    {
+      "text": "พิมพ์ใบนัด",
+      "classes": "btn btn-info ms-auto"
+    },
+    {
+      "text": "แก้ไขนัด",
+      "classes": "btn btn-secondary edit-appointment"
+    },
+    {
+      "text": "ยกเลิกนัด",
+      "classes": "btn btn-outline-danger btn-action"
+    },
+    {
+      "text": "บันทึกการรักษา",
+      "classes": "btn btn-info select-draft-treatment d-flex align-items-cente"
+    },
+    {
+      "text": "ดูไทม์ไลน์",
+      "classes": "btn btn-secondary text-nowrap d-flex align-items-center just"
+    },
+    {
+      "text": "พิมพ์ใบรับรองแพทย์",
+      "classes": "btn btn-blue w-100"
+    },
+    {
+      "text": "พิมพ์การรักษา",
+      "classes": "btn btn-primary w-100"
+    },
+    {
+      "text": "ยากลับบ้าน",
+      "classes": "accordion-button bg-gray collapsed"
+    },
+    {
+      "text": "พิมพ์ใบรับรองแพทย์",
+      "classes": "btn btn-blue w-100"
+    },
+    {
+      "text": "พิมพ์การรักษา",
+      "classes": "btn btn-primary w-100"
+    },
+    {
+      "text": "ยากลับบ้าน",
+      "classes": "accordion-button bg-gray collapsed"
+    },
+    {
+      "text": "รายการสินค้าหน้าร้าน",
+      "classes": "accordion-button bg-gray collapsed"
+    },
+    {
+      "text": "พิมพ์ใบรับรองแพทย์",
+      "classes": "btn btn-blue w-100"
+    },
+    {
+      "text": "พิมพ์การรักษา",
+      "classes": "btn btn-primary w-100"
+    },
+    {
+      "text": "คอร์สของฉัน8",
+      "classes": "nav-link active"
+    },
+    {
+      "text": "คอร์สหมดอายุ1",
+      "classes": "nav-link "
+    },
+    {
+      "text": "ประวัติการซื้อ9",
+      "classes": "nav-link "
+    },
+    {
+      "text": "ใบยินยอม",
+      "classes": "nav-link "
+    },
+    {
+      "text": "ยกเลิก",
+      "classes": "btn btn-outline-primary canvas-dismiss"
+    },
+    {
+      "text": "ยืนยัน",
+      "classes": "btn btn-primary"
+    }
+  ],
+  "tabs": [
+    {
+      "text": "คอร์สของฉัน8",
+      "active": true
+    },
+    {
+      "text": "คอร์สหมดอายุ1",
+      "active": false
+    },
+    {
+      "text": "ประวัติการซื้อ9",
+      "active": false
+    },
+    {
+      "text": "ใบยินยอม",
+      "active": false
+    }
+  ]
+}

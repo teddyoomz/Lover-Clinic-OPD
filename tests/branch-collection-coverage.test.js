@@ -74,6 +74,7 @@ const COLLECTION_MATRIX = {
   'be_coupons':            { scope: 'global',  reason: 'Clinic-wide marketing' },
   'be_vouchers':           { scope: 'global',  reason: 'Clinic-wide marketing' },
   'be_document_templates': { scope: 'global',  reason: 'Print templates' },
+  'be_document_prints':    { scope: 'global',  reason: 'Print audit ledger (Phase 14.9 — append-only)' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },

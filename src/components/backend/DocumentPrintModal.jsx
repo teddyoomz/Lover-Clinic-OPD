@@ -11,14 +11,15 @@
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import DOMPurify from 'dompurify';
-import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2, Download } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
-import { printDocument, buildPrintContext, renderTemplate, safeImgTag } from '../../lib/documentPrintEngine.js';
+import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
+import SignatureCanvasField from './SignatureCanvasField.jsx';
 
 // Print templates rely on inline `style="..."` + `class="..."` for layout
 // fidelity (no <style> blocks — print engine adds its own stylesheet via
@@ -133,6 +134,10 @@ export default function DocumentPrintModal({
       // the checkbox. Without this, an empty value renders as nothing,
       // leaving a blank space where the user expects ☐.
       else if (f.type === 'checkbox') initial[f.key] = '☐';
+      // Phase 14.8.B (2026-04-26) — signature defaults to empty string.
+      // The print engine treats falsy values as "no image", which keeps
+      // the signature line clean when the user hasn't signed.
+      else if (f.type === 'signature') initial[f.key] = '';
     }
     // (Doctor/staff lists already loaded by modal-open useEffect — no need
     // to re-fetch here. Cached across template picks within a session.)
@@ -190,8 +195,70 @@ export default function DocumentPrintModal({
         setError('ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาตป๊อปอัพ');
         return;
       }
+      // Phase 14.9 (2026-04-26) — append-only audit log. Non-fatal: print
+      // already succeeded; logging failure is logged but doesn't surface
+      // to the user (avoids confusing them).
+      recordDocumentPrint({
+        templateId: selected.id,
+        templateName: selected.name,
+        docType: selected.docType,
+        customerId: customer?.customerId || customer?.id,
+        customerHN: customer?.proClinicHN || customer?.hn,
+        customerName: customer?.customerName || customer?.name,
+        action: 'print',
+        language: language || selected.language,
+        paperSize: selected.paperSize,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[DocumentPrintModal] audit log write failed (non-fatal):', err?.message || err);
+      });
     } catch (e) {
       setError(e.message || 'พิมพ์ล้มเหลว');
+    }
+  };
+
+  // Phase 14.8.C (2026-04-26) — PDF export. Same required-field gate as
+  // handlePrint. html2pdf.js is dynamically imported inside the engine
+  // so it doesn't bloat the main bundle. UI shows "กำลังสร้าง PDF..."
+  // during the ~1-3s render; download triggers automatically on success.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const handleExportPdf = async () => {
+    if (!selected) return;
+    const missing = (selected.fields || []).filter(f => f.required && !String(values[f.key] || '').trim());
+    if (missing.length > 0) {
+      setError(`กรุณากรอก: ${missing.map(f => f.label || f.key).join(', ')}`);
+      return;
+    }
+    setError('');
+    setPdfBusy(true);
+    try {
+      await exportDocumentToPdf({
+        template: selected,
+        clinic: clinicSettings || {},
+        customer: customer || {},
+        values,
+        language,
+        toggles,
+      });
+      // Phase 14.9 — audit log (non-fatal, fire-and-forget)
+      recordDocumentPrint({
+        templateId: selected.id,
+        templateName: selected.name,
+        docType: selected.docType,
+        customerId: customer?.customerId || customer?.id,
+        customerHN: customer?.proClinicHN || customer?.hn,
+        customerName: customer?.customerName || customer?.name,
+        action: 'pdf',
+        language: language || selected.language,
+        paperSize: selected.paperSize,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[DocumentPrintModal] audit log write failed (non-fatal):', err?.message || err);
+      });
+    } catch (e) {
+      setError(e.message || 'สร้าง PDF ล้มเหลว');
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -539,6 +606,26 @@ export default function DocumentPrintModal({
                       />
                     );
                   }
+                  // Phase 14.8.B (2026-04-26) — signature canvas field.
+                  // Captures hand-drawn signature as base64 PNG data URL.
+                  // Template references via {{{fieldKey}}} (3-brace = raw).
+                  // For print engine compatibility, value is wrapped in
+                  // safeImgTag at render time.
+                  if (f.type === 'signature') {
+                    return (
+                      <div key={f.key} className="space-y-1" data-field={f.key}>
+                        <label className="block text-xs text-[var(--tx-muted)]">
+                          {f.label || f.key}{f.required && <RequiredAsterisk className="ml-0.5" />}
+                        </label>
+                        <SignatureCanvasField
+                          value={values[f.key] || ''}
+                          onChange={(dataUrl) => setValues(v => ({ ...v, [f.key]: dataUrl }))}
+                          width={400}
+                          height={120}
+                        />
+                      </div>
+                    );
+                  }
                   // Checkbox: toggles between '☑' and '' (empty = unchecked).
                   // Template uses {{markKey}} which renders the symbol or
                   // nothing — keeps the rendered HTML semantically correct.
@@ -727,6 +814,12 @@ export default function DocumentPrintModal({
         {step === STEP_FILL && (
           <div className="flex items-center justify-end gap-2 p-3 border-t border-[var(--bd)]">
             <button onClick={onClose} className="px-3 py-1.5 rounded text-xs bg-neutral-700 text-white">ยกเลิก</button>
+            <button onClick={handleExportPdf} disabled={pdfBusy}
+              data-testid="document-export-pdf"
+              className="px-3 py-1.5 rounded text-xs font-bold bg-sky-700 text-white inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed">
+              {pdfBusy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              {pdfBusy ? 'กำลังสร้าง PDF...' : 'PDF'}
+            </button>
             <button onClick={handlePrint}
               data-testid="document-print-submit"
               className="px-3 py-1.5 rounded text-xs font-bold bg-emerald-700 text-white inline-flex items-center gap-1">

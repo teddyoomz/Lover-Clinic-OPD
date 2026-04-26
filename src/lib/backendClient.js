@@ -6756,6 +6756,73 @@ export async function deleteDocumentTemplate(templateId) {
   await deleteDoc(documentTemplateDoc(id));
 }
 
+// ─── Phase 14.9 — Document Print Audit Log (2026-04-26) ─────────────────
+// Append-only ledger of every print + PDF export action. Required for
+// compliance + traceability ("who printed what for whom and when?").
+// Firestore rule: create allowed for clinic staff; update/delete forbidden
+// (matches V19 lesson — append-only contracts must be enforced at the rule
+// layer, not just code).
+//
+// Schema:
+//   {
+//     printId, templateId, templateName, docType, customerId, customerHN,
+//     customerName, action: 'print'|'pdf', language, paperSize,
+//     staffUid, staffEmail, staffName, ts (serverTimestamp)
+//   }
+
+const documentPrintsCol = () => collection(db, ...basePath(), 'be_document_prints');
+const documentPrintDoc = (id) => doc(db, ...basePath(), 'be_document_prints', String(id));
+
+export async function recordDocumentPrint(payload = {}) {
+  // Generate print id with crypto-random suffix (per V31 / Rule C2 — no insecure RNG)
+  const tsCompact = new Date().toISOString().slice(0, 16).replace(/[:T-]/g, '').slice(0, 12);
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  const printId = `PRT-${tsCompact}-${rand}`;
+
+  const u = auth?.currentUser;
+  const safe = (v) => (v == null ? '' : String(v));
+  const nowIso = new Date().toISOString();
+
+  const data = {
+    printId,
+    templateId: safe(payload.templateId),
+    templateName: safe(payload.templateName),
+    docType: safe(payload.docType),
+    customerId: safe(payload.customerId),
+    customerHN: safe(payload.customerHN),
+    customerName: safe(payload.customerName),
+    action: payload.action === 'pdf' ? 'pdf' : 'print',
+    language: safe(payload.language || 'th'),
+    paperSize: safe(payload.paperSize || 'A4'),
+    staffUid: safe(u?.uid),
+    staffEmail: safe(u?.email),
+    staffName: safe(payload.staffName || u?.displayName || u?.email),
+    ts: nowIso,
+    // Phase 14.9 marker — easy to audit-grep "where did print events come from"
+    sourceVersion: 'phase-14.9',
+  };
+
+  await setDoc(documentPrintDoc(printId), data, { merge: false });
+  return { printId };
+}
+
+export async function listDocumentPrints({ limit: maxLimit = 100, customerId, docType } = {}) {
+  // Read-only client-side filter — keeps query rule-safe (no compound
+  // index needed). Caller may want recent N events for a customer or doc.
+  const snap = await getDocs(documentPrintsCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (customerId) items = items.filter(i => i.customerId === customerId);
+  if (docType) items = items.filter(i => i.docType === docType);
+  items.sort((a, b) => {
+    // Newest first — ts is ISO string, sort lexicographically
+    const at = String(a.ts || '');
+    const bt = String(b.ts || '');
+    return bt.localeCompare(at);
+  });
+  return items.slice(0, Math.max(1, maxLimit));
+}
+
 /**
  * Seed the 13 default templates from `SEED_TEMPLATES` on first-load.
  * Idempotent: does nothing if any templates already exist. Safe to call

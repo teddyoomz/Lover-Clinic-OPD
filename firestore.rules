@@ -241,6 +241,17 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 14.9 Document Print Audit Log (append-only) ──
+      // V19/V31 lesson — append-only contracts MUST be enforced at rule
+      // layer, not just code. Update + delete forbidden so a compromised
+      // client can't tamper print history. Read allowed for clinic staff
+      // (admin needs to inspect "who printed what for whom" for compliance).
+      match /be_document_prints/{printId} {
+        allow read:   if isClinicStaff();
+        allow create: if isClinicStaff();
+        allow update, delete: if false;
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

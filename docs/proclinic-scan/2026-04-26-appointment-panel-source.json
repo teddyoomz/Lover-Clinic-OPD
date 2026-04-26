@@ -1,0 +1,133 @@
+{
+  "scan_date": "2026-04-26",
+  "scan_today_dow": "Sunday",
+  "scope": "Verify data source for the 'today's doctors' panel on /admin/appointment",
+  "method": "opd.js network + opd.js api + opd.js look + opd.js peek",
+
+  "summary": {
+    "panel_title": "วันอาทิตย์ที่ 26 เมษายน 2026 | แพทย์เข้าตรวจ 3 คน",
+    "panel_rows_observed": [
+      { "doctor": "กก ก้อง", "range": "09:00 - 19:00", "matches_user_id": 609, "matches_schedule_id": "recurring-609-sunday" },
+      { "doctor": "หมอ น้ำตาล", "range": "10:00 - 14:30", "matches_user_id": 85, "matches_schedule_id": "recurring-85-sunday" },
+      { "doctor": "หมอ ฟ้า", "range": "13:00 - 22:00", "matches_user_id": 96, "matches_schedule_id": "recurring-96-sunday" }
+    ],
+    "definitive_data_source": "Server-side rendered (Blade) inside the page HTML, ultimately backed by /admin/api/schedule/today (or the equivalent PHP query) — NOT /admin/api/appointment.",
+    "evidence_chain": [
+      "panel time-ranges (09:00-19:00 etc.) are SHIFT ranges — they DO NOT come from appointment events whose start/end are 11:00-12:00, 13:00-14:00 etc.",
+      "panel doctor names + ranges match exactly with /admin/api/schedule/today results filtered by today's day-of-week (sunday).",
+      "/admin/api/appointment?date=YYYY-MM-DD returns ONLY {appointment[], day_note} — no doctor list, no ranges. So the panel cannot be derived from the appointment-events API alone.",
+      "the appointment page network capture shows only 4 outgoing calls and /admin/api/schedule/today is NOT among them, so the panel is not lazy-fetched on page load. Most likely it is rendered SSR via a Blade @foreach over a Schedule::today() PHP query (the panel block is beyond opd.js source's 100KB truncation, so we cannot literally see the markup — but the math forces this conclusion)."
+    ]
+  },
+
+  "network_capture_full_url_list": [
+    { "method": "GET", "url": "https://trial.proclinicth.com/admin/appointment", "status": 200 },
+    { "method": "GET", "url": "/admin/api/appointment-month?doctor_id=&current_date=2026-04-26", "status": 200 },
+    { "method": "GET", "url": "/admin/api/appointment-month?doctor_id=&current_date=2026-04-01", "status": 200 },
+    { "method": "GET", "url": "/admin/api/appointment?date=2026-04-26&doctor_id=", "status": 200 },
+    { "method": "GET", "url": "/admin/api/stat", "status": 200 }
+  ],
+
+  "today_appointment_endpoint_shape": {
+    "url": "/admin/api/appointment?date=YYYY-MM-DD&doctor_id=",
+    "top_level_keys": ["appointment", "day_note"],
+    "sample_today_count": 5,
+    "distinct_doctor_ids_in_today_appointments": [609, 96, 85],
+    "note": "All 5 events today touch only 3 distinct doctors. By coincidence on this date, the count of distinct doctors with appointments today (3) HAPPENS to equal the count of doctors actually scheduled today (3). They are NOT derived from the same source though — see independent_check below."
+  },
+
+  "today_schedule_endpoint_shape": {
+    "url": "/admin/api/schedule/today",
+    "data_type": "array",
+    "verified_status": 200,
+    "sample_record": {
+      "id": "recurring-96-sunday",
+      "title": "13:00-22:00 หมอ ฟ้า ",
+      "rrule": { "freq": "weekly", "byweekday": "su", "dtstart": "2025-01-01", "until": "2027-12-31" },
+      "exdate": [],
+      "backgroundColor": "transparent",
+      "extendedProps": { "type": "recurring", "user_id": 96, "eventColor": "#D4932B", "backgroundColor": "transparent", "textColor": "black" }
+    },
+    "behavior": "Returns ALL recurring schedule entries across ALL doctors and ALL days-of-week (462 lines / N records). Date filter (?date=) is ignored. Frontend (or PHP backend) must filter to today's day-of-week itself.",
+    "filter_to_today_pattern": "items.filter(s => s.id.endsWith('-' + dayOfWeekToken)) where dayOfWeekToken in {monday, tuesday, ..., sunday}"
+  },
+
+  "independent_check": {
+    "question": "Does the panel show doctors who are SCHEDULED today but have ZERO appointments today?",
+    "answer": "YES — by definition. The panel is keyed on the schedule, not on appointment events. We could not reproduce a 0-appointments-but-scheduled doctor in the live trial data right now (the 3 panel doctors all happen to also have appointments today), but the data source proves it: /admin/api/schedule/today returns shifts independent of any appointment counts. A doctor with a sunday shift but no booked customers WILL still appear with their full shift range.",
+    "second_question": "Does the panel HIDE doctors who appear in today's appointments but are NOT on the schedule?",
+    "answer_2": "Almost certainly yes (the panel header reads 'แพทย์เข้าตรวจ 3 คน' = 'doctors on duty today: 3', and the displayed range is a SHIFT range like 09:00-19:00 which can ONLY come from the schedule; a non-scheduled doctor would have no shift to display)."
+  },
+
+  "all_panels_and_widgets_on_page": [
+    {
+      "name": "Mini calendar (left rail)",
+      "data_source": "/admin/api/appointment-month?doctor_id=&current_date=YYYY-MM-DD (called twice — once for current week's pivot, once for month start)",
+      "visual_features": "month-grid with green/yellow/red dots indicating availability"
+    },
+    {
+      "name": "Calendar legend (มีจอง / ใกล้เต็ม / คิวแน่น)",
+      "data_source": "static UI"
+    },
+    {
+      "name": "Today doctors panel ('แพทย์เข้าตรวจ N คน')",
+      "data_source": "schedule (recurring shifts), filtered to today's day-of-week + branch — NOT appointment events.",
+      "row_shape": "{ avatar, doctor_name, shift_range_HH:MM_minus_HH:MM }"
+    },
+    {
+      "name": "Day note ('หมายเหตุประจำวัน')",
+      "data_source": "/admin/api/appointment response top-level field 'day_note' (currently '-')",
+      "edit_mechanism": "pencil icon in panel header — separate edit endpoint (not yet captured)"
+    },
+    {
+      "name": "7-day strip (top of main panel)",
+      "data_source": "Aggregated counts per day — sourced via /admin/api/appointment-month (the same calendar data, sliced to a 7-day window). Shows count badge + day label + dd/mm.",
+      "today_marker": "active day shown in solid teal ('อาทิตย์ 26/4' with badge=5)"
+    },
+    {
+      "name": "Resource (room) timeline grid (main right panel)",
+      "data_source": "/admin/api/appointment?date=YYYY-MM-DD&doctor_id= → events fed into FullCalendar resourceTimeGrid view",
+      "rooms_observed": ["นักกายภาพ", "นักกายภาพA x", "ห้อง 3", "ห้อง 4", "ห้องผ่าตัด", "ห้องหัตถการ 1", "ห้องหัตถการ 2", "แพทย์แผนไทย B"]
+    },
+    {
+      "name": "Doctor/assistant filter dropdown ('เลือกแพทย์/ผู้ช่วยแพทย์')",
+      "data_source": "Embedded select2 in page HTML (Blade @foreach over staff list); applies to all calendar API calls via the doctor_id query param",
+      "html_id": "doctor-filter"
+    },
+    {
+      "name": "Top nav stat 'นัดหมายวันนี้ 5'",
+      "data_source": "/admin/api/stat → today_appointment_count=5",
+      "all_stat_fields": ["today_appointment_count", "online_appointment_count", "stock_transfer", "stock_receiving", "central_stock_transfer", "central_stock_withdrawal", "central_stock_receiving"]
+    },
+    {
+      "name": "Top nav stat 'เมนูอื่นๆ 17'",
+      "data_source": "Static count of menu items (not data-driven)"
+    },
+    {
+      "name": "Branch picker ('สาขา พระราม9')",
+      "data_source": "Embedded in page (user-permission-filtered branch list)"
+    },
+    {
+      "name": "Action buttons ('รายการจองนัดออนไลน์', 'เพิ่มนัดหมาย')",
+      "data_source": "Static action triggers"
+    }
+  ],
+
+  "implication_for_replication": {
+    "short_answer": "Our 'today's doctors' panel MUST query be_staff_schedules (or whatever we call our schedule collection) — NOT be_appointments. Otherwise we drop scheduled doctors with zero bookings today and incorrectly omit them from the on-duty list.",
+    "current_LoverClinic_app_status_to_check": "Phase 13 schedule + DF feature is what owns this. Verify that AppointmentTab's 'today's doctors' aggregation reads schedules, not appointments.",
+    "branch_filter": "Our equivalent must filter by branchId per Phase 15 multi-branch rules (V20)."
+  },
+
+  "limitations_and_unknowns": [
+    "opd.js source command truncates HTML at ~100KB; the panel block itself is rendered later in the DOM and was not directly captured. Conclusion is forced by the math (range mismatch between appointment events and panel ranges + match against /admin/api/schedule/today).",
+    "Could not run opd.js intel due to a known bug in form.action handling — using network + api + look + peek covers the gap.",
+    "Did not capture the 'edit day_note' endpoint (out of scope here)."
+  ],
+
+  "raw_evidence_files": {
+    "screenshot_full": "F:\\replicated\\output\\screenshots\\look-admin_appointment-full.png",
+    "html_dump_truncated": "F:\\LoverClinic-app\\.tmp_scan\\appt_source.json",
+    "xray_output": "F:\\LoverClinic-app\\.tmp_scan\\appt_xray.json"
+  }
+}

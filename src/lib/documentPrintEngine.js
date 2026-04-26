@@ -129,12 +129,20 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
   // treatmentDate / etc) render as raw "2026-04-25" instead of "25/04/2569"
   // or "25/04/2026".
   const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  // Phase 14.8.B (2026-04-26) — detect raw signature data URLs and auto-wrap
+  // in <img> tag so templates can use {{{patientSignature}}} (3-brace raw)
+  // and get the rendered image. Already-wrapped values (staff-select sig
+  // pattern) start with `<img` and are left untouched.
+  const isRawSignatureDataUrl = (s) =>
+    typeof s === 'string' && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(s);
   const formattedValues = {};
   for (const [k, v] of Object.entries(values || {})) {
     if (isIsoDate(v)) {
       const [yy, mm, dd] = v.split('-');
       const yr = ctx.language === 'en' ? yy : (Number(yy) + 543).toString();
       formattedValues[k] = `${dd}/${mm}/${yr}`;
+    } else if (isRawSignatureDataUrl(v)) {
+      formattedValues[k] = safeImgTag(v, { alt: 'ลายเซ็น', style: 'max-height:60px;' });
     } else {
       formattedValues[k] = v;
     }
@@ -209,8 +217,16 @@ export function renderTemplate(template, context = {}) {
   return out;
 }
 
-/** Build full HTML document (DOCTYPE + head + body) for print. */
-export function buildPrintDocument({ template, context, paperSize = 'A4', language = 'th', title = 'Document' }) {
+/**
+ * Build full HTML document (DOCTYPE + head + body) for print.
+ *
+ * Phase 14.9 (2026-04-26) — `watermark` optional string. When non-empty,
+ * a diagonal repeating-text watermark overlays every page. Used for "DRAFT"
+ * / "VOID" / "COPY" stamps. Implementation: fixed-position transparent
+ * pseudo-overlay with rotated text. Print color-adjust forces it to render
+ * even with default-print-no-backgrounds settings.
+ */
+export function buildPrintDocument({ template, context, paperSize = 'A4', language = 'th', title = 'Document', watermark = '' }) {
   const bodyHtml = renderTemplate(template, context);
   const sizeMap = {
     'A4':         { w: '210mm', h: '297mm', padding: '18mm' },
@@ -273,9 +289,34 @@ export function buildPrintDocument({ template, context, paperSize = 'A4', langua
      centered horizontally under the line, not left-aligned. Apply to
      every direct child div of a flex signature column. */
   .sig-col, .signature-col { text-align: center; }
+  /* Phase 14.9 - watermark overlay (visible at print + screen).
+     The print-color-adjust:exact rule forces the watermark to render even
+     when the user prints with background graphics OFF - stamps always
+     appear (DRAFT / VOID / COPY). */
+  .doc-watermark {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .doc-watermark > span {
+    transform: rotate(-30deg);
+    font-size: ${paperSize === 'label-57x32' ? '14px' : '120px'};
+    font-weight: 900;
+    color: rgba(220, 38, 38, 0.18);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    user-select: none;
+  }
 </style>
 </head>
 <body>
+${watermark ? `<div class="doc-watermark" aria-hidden="true"><span>${htmlEscape(watermark)}</span></div>` : ''}
 ${bodyHtml}
 <script>
   window.addEventListener('load', function () {
@@ -295,9 +336,9 @@ ${bodyHtml}
  * window auto-closes after `afterprint` fires. This is a side-effectful
  * function — tests exercise buildPrintDocument instead.
  */
-export function openPrintWindow({ template, context, paperSize, language, title }) {
+export function openPrintWindow({ template, context, paperSize, language, title, watermark = '' }) {
   if (typeof window === 'undefined') return null;
-  const doc = buildPrintDocument({ template, context, paperSize, language, title });
+  const doc = buildPrintDocument({ template, context, paperSize, language, title, watermark });
   const win = window.open('', '_blank', 'width=800,height=900,menubar=no,toolbar=no');
   if (!win) return null;
   win.document.open();
@@ -318,7 +359,7 @@ export function openPrintWindow({ template, context, paperSize, language, title 
  *                                   defaults to template.language
  * @param {Record<string, boolean>} [opts.toggles] — show/hide gate values
  */
-export function printDocument({ template, clinic, customer, values, language, toggles } = {}) {
+export function printDocument({ template, clinic, customer, values, language, toggles, watermark } = {}) {
   if (!template || typeof template !== 'object') throw new Error('template required');
   const finalLang = language || template.language || 'th';
   const context = buildPrintContext({ clinic, customer, values, language: finalLang, toggles });
@@ -328,5 +369,108 @@ export function printDocument({ template, clinic, customer, values, language, to
     paperSize: template.paperSize || 'A4',
     language: finalLang,
     title: template.name || 'Document',
+    watermark: watermark || template.watermark || '',
   });
+}
+
+// ─── Phase 14.8.C (2026-04-26) — PDF export via html2pdf.js ──────────────
+// User directive (Tier 3 P1): "T3.c Phase 14.8.C PDF export".
+//
+// html2pdf.js renders an HTML string to a PDF blob via html2canvas + jsPDF.
+// We lazy-import the lib so it isn't in the main bundle (it's ~150 KB).
+// The produced PDF is a faithful render of buildPrintDocument's body —
+// same paper size, same fonts (browser default), same images.
+//
+// Filename convention: <docTypeSlug>_<isoDate>_<HHmm>.pdf in user's locale.
+
+/**
+ * Slugify a Thai document name into a filesystem-safe ASCII suffix.
+ * Falls back to "document" when the name is empty / all non-ASCII.
+ */
+export function pdfFilename({ docType, name, date = new Date() } = {}) {
+  const stamp = date.toISOString().slice(0, 16).replace(/[:T-]/g, '').slice(0, 12);
+  const slug = String(docType || name || 'document')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 40) || 'document';
+  return `${slug}_${stamp}.pdf`;
+}
+
+/**
+ * Build paper-size config for html2pdf jsPDF backend. Maps our
+ * canonical PAPER_SIZES (A4 / A5 / label-57x32) to jsPDF format/units.
+ */
+export function pdfPaperConfig(paperSize = 'A4') {
+  switch (paperSize) {
+    case 'A5':
+      return { unit: 'mm', format: 'a5', orientation: 'portrait' };
+    case 'label-57x32':
+      return { unit: 'mm', format: [57, 32], orientation: 'landscape' };
+    case 'A4':
+    default:
+      return { unit: 'mm', format: 'a4', orientation: 'portrait' };
+  }
+}
+
+/**
+ * Export a document template to PDF + trigger browser download.
+ * Lazy-imports html2pdf.js so the lib stays out of the main bundle.
+ *
+ * @param {Object} opts
+ * @param {Object} opts.template — same shape as printDocument template
+ * @param {Object} opts.clinic
+ * @param {Object} opts.customer
+ * @param {Record<string, any>} opts.values
+ * @param {string} [opts.language]
+ * @param {Record<string, boolean>} [opts.toggles]
+ * @returns {Promise<{ filename: string, blob: Blob }>}
+ */
+export async function exportDocumentToPdf({ template, clinic, customer, values, language, toggles, watermark } = {}) {
+  if (!template || typeof template !== 'object') throw new Error('template required');
+  const finalLang = language || template.language || 'th';
+  const context = buildPrintContext({ clinic, customer, values, language: finalLang, toggles });
+  const html = buildPrintDocument({
+    template: template.htmlTemplate || '',
+    context,
+    paperSize: template.paperSize || 'A4',
+    language: finalLang,
+    title: template.name || 'Document',
+    watermark: watermark || template.watermark || '',
+  });
+
+  // Lazy import — keeps main bundle small (html2pdf.js is ~150 KB).
+  const html2pdfModule = await import('html2pdf.js');
+  const html2pdf = html2pdfModule.default || html2pdfModule;
+
+  const filename = pdfFilename({ docType: template.docType, name: template.name });
+  const paper = pdfPaperConfig(template.paperSize || 'A4');
+
+  // Render to off-DOM container (html2pdf needs an element + size context)
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  // Move only body content (html2pdf accepts a node; keep paper styles)
+  const bodyEl = container.querySelector('body') || container;
+
+  const opt = {
+    margin: 0,
+    filename,
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF: paper,
+  };
+
+  const pdfBlob = await html2pdf().from(bodyEl).set(opt).outputPdf('blob');
+  // Trigger download via object URL — browsers honor `download` attr.
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke after a tick — Chrome aborts the download if revoked too soon.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  return { filename, blob: pdfBlob };
 }

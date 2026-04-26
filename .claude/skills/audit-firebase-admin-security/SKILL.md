@@ -17,7 +17,7 @@ allowed-tools: "Read, Grep, Glob, Bash"
 
 **Credentials**: Admin SDK private key is HIGHLY sensitive. Exfiltration = full Firebase project compromise (create admin users, bypass all rules, read all Firestore, delete everything).
 
-## Invariants (run on any change to api/admin/**)
+## Invariants (run on any change to api/admin/**) — FA1–FA15
 
 ### FA1 — Admin SDK private key NEVER in source
 ```bash
@@ -98,6 +98,47 @@ grep -rnE "getApps\s*\(\s*\)\s*\.length|getApp\s*\(" api/admin/
 ```
 Expected: at least one call site. The singleton pattern prevents `FirebaseAppError: app/duplicate-app` on Vercel warm invocations.
 
+### FA13 — `isClinicStaff()` helper checks custom claims (V26)
+```bash
+grep -nE "isClinicStaff\(\)" firestore.rules
+grep -nE "request\.auth\.token\.email\.matches" firestore.rules
+```
+**Expected**: `isClinicStaff()` checks `request.auth.token.isClinicStaff == true || request.auth.token.admin == true` — NOT email regex. V26 (2026-04-26) closed the gap where ANY @loverclinic.com Firebase Auth user could read/write be_* via SDK. Email is unverified at the rules level. Use custom claims set explicitly via `setCustomUserClaims`.
+
+### FA14 — Soft-gate `isAdmin` derives from group, not email (V28)
+**Why**: V28 — soft-gate had `isAdmin = isAuthorizedAccount && (...)` which required @loverclinic.com email even for staff EXPLICITLY assigned to gp-owner via StaffFormModal. Created chicken-and-egg where gmail staff could never become admin without code change.
+```bash
+grep -rnE "isAuthorizedAccount\s*&&" src/contexts/UserPermissionContext.jsx
+```
+**Expected**: only the bootstrap (`isAuthorizedAccount && !staff`) path uses email; isOwnerGroup + hasMetaPerm paths trust the be_staff doc (firestore.rules already gate be_staff writes via isClinicStaff()). Real authorization gate is firestore.rules — soft gate is UX only.
+
+### FA15 — Credential / claim mutations MUST revoke refresh tokens (V31)
+**Why**: V31 (2026-04-26) — `auth.updateUser({email|password|disabled})` and `auth.setCustomUserClaims(uid, claimsThatRemovePrivilege)` do NOT auto-revoke refresh tokens. Old session ID tokens remain valid for ~1h ID-token TTL. Stolen sessions can outlive credential rotation; old admin claims persist after revocation. Fixed by pairing every mutation with `auth.revokeRefreshTokens(uid)`.
+```bash
+grep -nE "auth\.updateUser\(|auth\.setCustomUserClaims\(|auth\.revokeRefreshTokens\(" api/admin/users.js
+```
+**Pairing rules**:
+- `handleUpdate` — revoke when email/password/disabled changed (computed `credentialsChanged` flag)
+- `handleRevokeAdmin` — ALWAYS revoke (removed privilege)
+- `handleClearPermission` — ALWAYS revoke (removed privilege)
+- `handleSetPermission` — revoke (group changed; old permissionGroupId in token must invalidate)
+- `handleGrantAdmin` — does NOT revoke (granting MORE access; let session keep)
+- `handleDelete` — `deleteUser` already invalidates everything; explicit revoke not needed
+**Expected**: every mutation listed in "ALWAYS revoke" or "revoke when X" pairing has an `auth.revokeRefreshTokens(uid)` AFTER the setCustomUserClaims/updateUser call. `handleGrantAdmin` MUST NOT have one.
+**Anti-regression**: V31 test bank `tests/v31-firebase-auth-orphan-recovery.test.js` V31.I (5 tests) + V31.J (7 tests) lock the call-site shape.
+
+### FA16 — Orphan recovery on email-already-exists (V31)
+**Why**: V31 — Silent-swallow `try/catch console.warn(continuing)` in StaffTab/DoctorsTab handleDelete left orphan Firebase Auth users whenever Firebase Auth deletion failed. Re-creating with same email → auth/email-already-exists → admin blocked.
+```bash
+grep -nE "auth/email-already-exists|decideOrphanRecovery|findStaffOrDoctorByFirebaseUid" api/admin/users.js
+```
+**Expected**: `handleCreate` AND `handleUpdate` (when `update.email !== undefined`) each have try/catch on their `createUser`/`updateUser` call → on `auth/email-already-exists`:
+1. `getUserByEmail(email)` lookup
+2. `findStaffOrDoctorByFirebaseUid(existing.uid)` cross-reference
+3. `decideOrphanRecovery({email, existingUid, crossRef, ownerEmails: OWNER_EMAILS, clinicEmailRegex: LOVERCLINIC_EMAIL_RE})` decision
+4. `'recover'` → `deleteUser(existing.uid)` + retry; otherwise throw with Thai-translated message identifying the block reason
+**Anti-regression**: `tests/v31-firebase-auth-orphan-recovery.test.js` V31.E (12 tests for handleCreate) + V31.H (8 tests for handleUpdate).
+
 ## Severity mapping
 
 - **CRITICAL** (FA1, FA3, FA5, FA9 without token-gate) — private key leak, unauthenticated privileged endpoint, broken admin gate. Block release. Rotate credentials.
@@ -107,7 +148,7 @@ Expected: at least one call site. The singleton pattern prevents `FirebaseAppErr
 
 ## Priority
 
-P0 — any new `api/admin/*` endpoint must pass FA1-FA12 before ship. Privileged endpoints without audit = CRITICAL Vercel-wide security risk (one misauth endpoint = breach the whole Firebase project).
+P0 — any new `api/admin/*` endpoint must pass FA1-FA16 before ship. Privileged endpoints without audit = CRITICAL Vercel-wide security risk (one misauth endpoint = breach the whole Firebase project).
 
 ## Integration
 

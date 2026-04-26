@@ -1,0 +1,1184 @@
+{
+  "url": "/admin/appointment",
+  "framework": {
+    "backend": [
+      "Laravel"
+    ],
+    "frontend": [
+      "jQuery 3.6.0"
+    ],
+    "css": [
+      "Bootstrap 5"
+    ],
+    "libraries": [
+      "Day.js",
+      "SweetAlert",
+      "Chart.js",
+      "Select2",
+      "Flatpickr",
+      "FullCalendar"
+    ],
+    "buildTools": [],
+    "evidence": [
+      "CSRF token pattern matches Laravel"
+    ]
+  },
+  "serverInfo": {
+    "server": "cloudflare",
+    "poweredBy": "PHP/8.4.18",
+    "framework": null,
+    "contentType": "text/html; charset=UTF-8",
+    "setCookie": null,
+    "csp": null,
+    "cors": null,
+    "cacheControl": "private, must-revalidate",
+    "xsrfToken": null,
+    "laravelSession": null
+  },
+  "jsAnalysis": {
+    "ajaxCalls": [],
+    "eventHandlers": [
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      },
+      {
+        "element": "A.dropdown-item",
+        "onclick": "event.stopPropagation()"
+      }
+    ],
+    "formSubmitHandlers": [],
+    "inlineScriptSummary": [],
+    "definedFunctions": []
+  },
+  "sourceMaps": [
+    {
+      "script": "https://trial.proclinicth.com/assets/js/vendor.js?v=1.7.1",
+      "mapUrl": "https://trial.proclinicth.com/assets/js/bootstrap.bundle.min.js.map"
+    }
+  ],
+  "exposedEndpoints": [
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "contentType": "text/plain; charset=UTF-8",
+      "preview": "User-agent: *\nDisallow: /\n"
+    }
+  ],
+  "routeTable": [
+    "/assets/css/style.css?v=1.7.1",
+    "/assets/css/vendor.css?v=1.7.1",
+    "/assets/favicon/2026/apple-touch-icon.png",
+    "/assets/favicon/2026/favicon-16x16.png",
+    "/assets/favicon/2026/favicon-32x32.png",
+    "/assets/favicon/2026/site.webmanifest"
+  ],
+  "globalVariables": {
+    "meta:viewport": "width=device-width, shrink-to-fit=yes",
+    "meta:csrf-token": "vUvGMfhDvRwfwWFP5INGUIYLRkp1aCXxEIcsUGAn"
+  },
+  "hiddenForms": [
+    {
+      "tag": "button",
+      "name": "",
+      "id": "",
+      "value": "",
+      "dataAttributes": {
+        "bsToggle": "dropdown",
+        "id": "doctor-filter"
+      }
+    },
+    {
+      "tag": "input",
+      "name": "_token",
+      "id": "",
+      "value": "vUvGMfhDvRwfwWFP5INGUIYLRkp1aCXxEIcsUGAn",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "type",
+      "id": "",
+      "value": "",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "current_doctor_id",
+      "id": "",
+      "value": "",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "times",
+      "id": "",
+      "value": "08:30,09:00,09:30,10:00,10:30,11:00,11:30,12:00,12:30,13:00,13:30,14:00,14:30,15:00,15:30,16:00,16:3",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "appointment_date",
+      "id": "",
+      "value": "2026-04-26",
+      "dataAttributes": {
+        "input": ""
+      }
+    },
+    {
+      "tag": "button",
+      "name": "",
+      "id": "",
+      "value": "",
+      "dataAttributes": {
+        "url": ""
+      }
+    },
+    {
+      "tag": "input",
+      "name": "_token",
+      "id": "",
+      "value": "vUvGMfhDvRwfwWFP5INGUIYLRkp1aCXxEIcsUGAn",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "_method",
+      "id": "",
+      "value": "PUT",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "appointment_id",
+      "id": "",
+      "value": "",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "action",
+      "id": "",
+      "value": "",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "current_doctor_id",
+      "id": "",
+      "value": "",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "is_basic_flow",
+      "id": "",
+      "value": "true",
+      "dataAttributes": {}
+    },
+    {
+      "tag": "input",
+      "name": "appointment_date",
+      "id": "",
+      "value": "2026-04-26",
+      "dataAttributes": {
+        "input": ""
+      }
+    },
+    {
+      "tag": "button",
+      "name": "",
+      "id": "delete-appointment-one",
+      "value": "",
+      "dataAttributes": {
+        "url": "",
+        "bsDismiss": "modal"
+      }
+    },
+    {
+      "tag": "button",
+      "name": "",
+      "id": "delete-appointment-many",
+      "value": "",
+      "dataAttributes": {
+        "url": "",
+        "bsDismiss": "modal"
+      }
+    },
+    {
+      "tag": "input",
+      "name": "_token",
+      "id": "",
+      "value": "vUvGMfhDvRwfwWFP5INGUIYLRkp1aCXxEIcsUGAn",
+      "dataAttributes": {}
+    }
+  ],
+  "metaData": {},
+  "securityHeaders": {},
+  "errorLeaks": [
+    {
+      "type": "404_response",
+      "status": 404,
+      "body": "<!DOCTYPE html>\n<html lang=\"th\">\n<head>\n\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n    <meta name=\"csrf-token\" content=\"\">\n\n    <title>404 Not Found | ProClinic</title>\n\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/assets/css/bootstrap.min.css\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/assets/css/fontawesome.min.css\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/assets/css/style.css?v=1.7.1\">\n</head>\n<body class=\"bg-gray\">\n\n\t<div class=\"page-error\">\n\t\t<h1>404</h1>\n\t\t<p class=\"mb-4\">ไม่พบหน้าที่คุณค้นหา</p>\n\n\t\t<a href=\"https://trial.proclinicth.com/admin\" class=\"btn btn-primary\" style=\"width: 180px;\"><i class=\"fa-regular fa-arrow-left me-2\"></i>กลับหน้าแรก</a>\n\t</div>\n\n    <!-- Script -->\n    <script type=\"text/javascript\" src=\"/assets/js/bootstrap.bundle.min.js\"></script>\n</body>\n</html>",
+      "headers": {
+        "cache-control": "no-cache, private",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9f22eb46597d7995-BKK",
+        "content-encoding": "br",
+        "content-type": "text/html; charset=UTF-8",
+        "date": "Sun, 26 Apr 2026 04:42:07 GMT",
+        "expires": "-1",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "pragma": "no-cache",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=LM7%2FzqKji0K3jBEZOuR5ySAL3l6rM2QMjSouAck08pylpGmn%2BKnKFRm3kiqnvT%2F2ZdVGFwZXRrg34KnfyknkOx%2B8palIcgXHYGWAXXDwI2EYde2DczUTa0UlnJxC8oU4ssAYad1q9Qg1ScZIpR8OX06KtA%3D%3D\"}]}",
+        "server": "cloudflare",
+        "vary": "Accept-Encoding",
+        "x-powered-by": "PHP/8.4.18"
+      }
+    },
+    {
+      "type": "validation_error_format",
+      "status": 500,
+      "body": "{\n    \"message\": \"Server Error\"\n}"
+    }
+  ],
+  "apiDiscovery": [],
+  "dataModels": {
+    "doctor_id": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "308",
+          "text": "นาสาว An เอ (เอ)"
+        },
+        {
+          "value": "671",
+          "text": "eba"
+        },
+        {
+          "value": "462",
+          "text": "In (in)"
+        },
+        {
+          "value": "511",
+          "text": "namfon nam (fon)"
+        },
+        {
+          "value": "400",
+          "text": "Wee 523"
+        },
+        {
+          "value": "609",
+          "text": "กภ ก้อง"
+        },
+        {
+          "value": "794",
+          "text": "คุณบี"
+        },
+        {
+          "value": "95",
+          "text": "ผู้ช่วย ดรีม"
+        },
+        {
+          "value": "633",
+          "text": "ดรีม ฝันหวาน"
+        },
+        {
+          "value": "85",
+          "text": "หมอ น้ำตาล"
+        },
+        {
+          "value": "632",
+          "text": "นิ ศา (หมอวิว)"
+        },
+        {
+          "value": "617",
+          "text": "นิ่ม เทสเดโม่"
+        },
+        {
+          "value": "97",
+          "text": "ผู้ช่วย ปาล์ม"
+        },
+        {
+          "value": "410",
+          "text": "คุณ พิมพ์"
+        },
+        {
+          "value": "96",
+          "text": "หมอ ฟ้า"
+        },
+        {
+          "value": "646",
+          "text": "นางสาว รัชนี เส็งมา (อ้อม)"
+        },
+        {
+          "value": "465",
+          "text": "สุข ใจ (ชีวา)"
+        },
+        {
+          "value": "619",
+          "text": "หมอนุ่น"
+        },
+        {
+          "value": "309",
+          "text": "นาสาว เอ เอ (เอ)"
+        },
+        {
+          "value": "618",
+          "text": "โค้ชอาร์ท"
+        },
+        {
+          "value": "620",
+          "text": "โค้ชอาร์ท"
+        },
+        {
+          "value": "601",
+          "text": "ใหม่"
+        }
+      ]
+    },
+    "appointment_start_time": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "08:30",
+          "text": "08:30"
+        },
+        {
+          "value": "09:00",
+          "text": "09:00"
+        },
+        {
+          "value": "09:30",
+          "text": "09:30"
+        },
+        {
+          "value": "10:00",
+          "text": "10:00"
+        },
+        {
+          "value": "10:30",
+          "text": "10:30"
+        },
+        {
+          "value": "11:00",
+          "text": "11:00"
+        },
+        {
+          "value": "11:30",
+          "text": "11:30"
+        },
+        {
+          "value": "12:00",
+          "text": "12:00"
+        },
+        {
+          "value": "12:30",
+          "text": "12:30"
+        },
+        {
+          "value": "13:00",
+          "text": "13:00"
+        },
+        {
+          "value": "13:30",
+          "text": "13:30"
+        },
+        {
+          "value": "14:00",
+          "text": "14:00"
+        },
+        {
+          "value": "14:30",
+          "text": "14:30"
+        },
+        {
+          "value": "15:00",
+          "text": "15:00"
+        },
+        {
+          "value": "15:30",
+          "text": "15:30"
+        },
+        {
+          "value": "16:00",
+          "text": "16:00"
+        },
+        {
+          "value": "16:30",
+          "text": "16:30"
+        },
+        {
+          "value": "17:00",
+          "text": "17:00"
+        },
+        {
+          "value": "17:30",
+          "text": "17:30"
+        },
+        {
+          "value": "18:00",
+          "text": "18:00"
+        },
+        {
+          "value": "18:30",
+          "text": "18:30"
+        },
+        {
+          "value": "19:00",
+          "text": "19:00"
+        },
+        {
+          "value": "19:30",
+          "text": "19:30"
+        },
+        {
+          "value": "20:00",
+          "text": "20:00"
+        },
+        {
+          "value": "20:30",
+          "text": "20:30"
+        },
+        {
+          "value": "21:00",
+          "text": "21:00"
+        },
+        {
+          "value": "21:30",
+          "text": "21:30"
+        },
+        {
+          "value": "22:00",
+          "text": "22:00"
+        },
+        {
+          "value": "22:30",
+          "text": "22:30"
+        }
+      ]
+    },
+    "appointment_end_time": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "09:00",
+          "text": "09:00"
+        },
+        {
+          "value": "09:30",
+          "text": "09:30"
+        },
+        {
+          "value": "10:00",
+          "text": "10:00"
+        },
+        {
+          "value": "10:30",
+          "text": "10:30"
+        },
+        {
+          "value": "11:00",
+          "text": "11:00"
+        },
+        {
+          "value": "11:30",
+          "text": "11:30"
+        },
+        {
+          "value": "12:00",
+          "text": "12:00"
+        },
+        {
+          "value": "12:30",
+          "text": "12:30"
+        },
+        {
+          "value": "13:00",
+          "text": "13:00"
+        },
+        {
+          "value": "13:30",
+          "text": "13:30"
+        },
+        {
+          "value": "14:00",
+          "text": "14:00"
+        },
+        {
+          "value": "14:30",
+          "text": "14:30"
+        },
+        {
+          "value": "15:00",
+          "text": "15:00"
+        },
+        {
+          "value": "15:30",
+          "text": "15:30"
+        },
+        {
+          "value": "16:00",
+          "text": "16:00"
+        },
+        {
+          "value": "16:30",
+          "text": "16:30"
+        },
+        {
+          "value": "17:00",
+          "text": "17:00"
+        },
+        {
+          "value": "17:30",
+          "text": "17:30"
+        },
+        {
+          "value": "18:00",
+          "text": "18:00"
+        },
+        {
+          "value": "18:30",
+          "text": "18:30"
+        },
+        {
+          "value": "19:00",
+          "text": "19:00"
+        },
+        {
+          "value": "19:30",
+          "text": "19:30"
+        },
+        {
+          "value": "20:00",
+          "text": "20:00"
+        },
+        {
+          "value": "20:30",
+          "text": "20:30"
+        },
+        {
+          "value": "21:00",
+          "text": "21:00"
+        },
+        {
+          "value": "21:30",
+          "text": "21:30"
+        },
+        {
+          "value": "22:00",
+          "text": "22:00"
+        },
+        {
+          "value": "22:30",
+          "text": "22:30"
+        },
+        {
+          "value": "23:00",
+          "text": "23:00"
+        }
+      ]
+    },
+    "appointment_unit": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "day",
+          "text": "วัน"
+        },
+        {
+          "value": "month",
+          "text": "เดือน"
+        }
+      ]
+    },
+    "customer_source": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "Walk-in",
+          "text": "Walk-in"
+        },
+        {
+          "value": "Drag-in",
+          "text": "Drag-in"
+        },
+        {
+          "value": "เพื่อนแนะนำ",
+          "text": "เพื่อนแนะนำ"
+        },
+        {
+          "value": "BNI",
+          "text": "BNI"
+        },
+        {
+          "value": "ChatGPT",
+          "text": "ChatGPT"
+        },
+        {
+          "value": "Facebook",
+          "text": "Facebook"
+        },
+        {
+          "value": "Gemini",
+          "text": "Gemini"
+        },
+        {
+          "value": "Influencer",
+          "text": "Influencer"
+        },
+        {
+          "value": "Instagram",
+          "text": "Instagram"
+        },
+        {
+          "value": "Line",
+          "text": "Line"
+        },
+        {
+          "value": "Google",
+          "text": "Google"
+        },
+        {
+          "value": "Google Map",
+          "text": "Google Map"
+        },
+        {
+          "value": "GoWabi",
+          "text": "GoWabi"
+        },
+        {
+          "value": "Tiktok",
+          "text": "Tiktok"
+        },
+        {
+          "value": "HDMall",
+          "text": "HDMall"
+        },
+        {
+          "value": "Pantip",
+          "text": "Pantip"
+        },
+        {
+          "value": "SkinX",
+          "text": "SkinX"
+        },
+        {
+          "value": "SHOPEE",
+          "text": "SHOPEE"
+        },
+        {
+          "value": "LAZADA",
+          "text": "LAZADA"
+        },
+        {
+          "value": "Youtube",
+          "text": "Youtube"
+        },
+        {
+          "value": "Twitter (X)",
+          "text": "Twitter (X)"
+        },
+        {
+          "value": "Threads",
+          "text": "Threads"
+        },
+        {
+          "value": "วิทยุ",
+          "text": "วิทยุ"
+        },
+        {
+          "value": "เว็บไซต์",
+          "text": "เว็บไซต์"
+        },
+        {
+          "value": "SMS",
+          "text": "SMS"
+        },
+        {
+          "value": "โบรชัวร์",
+          "text": "โบรชัวร์"
+        },
+        {
+          "value": "อื่นๆ",
+          "text": "อื่นๆ"
+        }
+      ]
+    },
+    "advisor_id": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "637",
+          "text": "audi ddd (audi)"
+        },
+        {
+          "value": "670",
+          "text": "bbek"
+        },
+        {
+          "value": "673",
+          "text": "Game"
+        },
+        {
+          "value": "675",
+          "text": "gu"
+        },
+        {
+          "value": "746",
+          "text": "Mymo Mymo"
+        },
+        {
+          "value": "614",
+          "text": "Test"
+        },
+        {
+          "value": "754",
+          "text": "Test Test (Test)"
+        },
+        {
+          "value": "696",
+          "text": "Test2"
+        },
+        {
+          "value": "647",
+          "text": "tt tt"
+        },
+        {
+          "value": "95",
+          "text": "ผู้ช่วย ดรีม"
+        },
+        {
+          "value": "633",
+          "text": "ดรีม ฝันหวาน"
+        },
+        {
+          "value": "510",
+          "text": "ตอง ตอง (ตอง)"
+        },
+        {
+          "value": "103",
+          "text": "นัท"
+        },
+        {
+          "value": "307",
+          "text": "นาน่า"
+        },
+        {
+          "value": "386",
+          "text": "น้ำ"
+        },
+        {
+          "value": "97",
+          "text": "ผู้ช่วย ปาล์ม"
+        },
+        {
+          "value": "410",
+          "text": "คุณ พิมพ์"
+        },
+        {
+          "value": "102",
+          "text": "ฟิล์ม"
+        },
+        {
+          "value": "747",
+          "text": "ส้ม"
+        },
+        {
+          "value": "466",
+          "text": "หมอ สุขใจ ชีวา (ชีวี)"
+        }
+      ]
+    },
+    "doctor_assistant_id[]": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "308",
+          "text": "นาสาว An เอ (เอ)"
+        },
+        {
+          "value": "671",
+          "text": "eba"
+        },
+        {
+          "value": "462",
+          "text": "In (in)"
+        },
+        {
+          "value": "511",
+          "text": "namfon nam (fon)"
+        },
+        {
+          "value": "400",
+          "text": "Wee 523"
+        },
+        {
+          "value": "609",
+          "text": "กภ ก้อง"
+        },
+        {
+          "value": "794",
+          "text": "คุณบี"
+        },
+        {
+          "value": "95",
+          "text": "ผู้ช่วย ดรีม"
+        },
+        {
+          "value": "633",
+          "text": "ดรีม ฝันหวาน"
+        },
+        {
+          "value": "85",
+          "text": "หมอ น้ำตาล"
+        },
+        {
+          "value": "632",
+          "text": "นิ ศา (หมอวิว)"
+        },
+        {
+          "value": "617",
+          "text": "นิ่ม เทสเดโม่"
+        },
+        {
+          "value": "97",
+          "text": "ผู้ช่วย ปาล์ม"
+        },
+        {
+          "value": "410",
+          "text": "คุณ พิมพ์"
+        },
+        {
+          "value": "96",
+          "text": "หมอ ฟ้า"
+        },
+        {
+          "value": "646",
+          "text": "นางสาว รัชนี เส็งมา (อ้อม)"
+        },
+        {
+          "value": "465",
+          "text": "สุข ใจ (ชีวา)"
+        },
+        {
+          "value": "619",
+          "text": "หมอนุ่น"
+        },
+        {
+          "value": "309",
+          "text": "นาสาว เอ เอ (เอ)"
+        },
+        {
+          "value": "618",
+          "text": "โค้ชอาร์ท"
+        },
+        {
+          "value": "620",
+          "text": "โค้ชอาร์ท"
+        },
+        {
+          "value": "601",
+          "text": "ใหม่"
+        }
+      ]
+    },
+    "examination_room_id": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "245",
+          "text": "นักกายภาพ"
+        },
+        {
+          "value": "198",
+          "text": "นักกายภาพA x"
+        },
+        {
+          "value": "123",
+          "text": "ห้อง 3"
+        },
+        {
+          "value": "124",
+          "text": "ห้อง 4"
+        },
+        {
+          "value": "185",
+          "text": "ห้องผ่าตัด"
+        },
+        {
+          "value": "46",
+          "text": "ห้องหัตถการ 1"
+        },
+        {
+          "value": "47",
+          "text": "ห้องหัตถการ 2"
+        },
+        {
+          "value": "325",
+          "text": "แพทย์แผนไทย B"
+        }
+      ]
+    },
+    "source": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "เคาน์เตอร์",
+          "text": "เคาน์เตอร์"
+        },
+        {
+          "value": "โทรศัพท์",
+          "text": "โทรศัพท์"
+        },
+        {
+          "value": "Walk-in",
+          "text": "Walk-in"
+        },
+        {
+          "value": "Facebook",
+          "text": "Facebook"
+        },
+        {
+          "value": "Instagram",
+          "text": "Instagram"
+        },
+        {
+          "value": "Tiktok",
+          "text": "Tiktok"
+        },
+        {
+          "value": "Line",
+          "text": "Line"
+        },
+        {
+          "value": "อื่นๆ",
+          "text": "อื่นๆ"
+        }
+      ]
+    },
+    "appointment_color": {
+      "type": "enum",
+      "values": [
+        {
+          "value": "#fffef7",
+          "text": "เหลืองอ่อน"
+        },
+        {
+          "value": "#daf4f0",
+          "text": "เขียวอ่อน"
+        },
+        {
+          "value": "#ffecd7",
+          "text": "ส้มอ่อน"
+        },
+        {
+          "value": "#f5d7d9",
+          "text": "แดงอ่อน"
+        },
+        {
+          "value": "#f7ead7",
+          "text": "น้ำตาลอ่อน"
+        },
+        {
+          "value": "#fae7ed",
+          "text": "ชมพูอ่อน"
+        },
+        {
+          "value": "#e2d6f4",
+          "text": "ม่วงอ่อน"
+        },
+        {
+          "value": "#d4e5fe",
+          "text": "น้ำเงินอ่อน"
+        },
+        {
+          "value": "#e0f4fd",
+          "text": "ฟ้าอ่อน"
+        },
+        {
+          "value": "#e4e8f0",
+          "text": "เทาอ่อน"
+        },
+        {
+          "value": "#d4d5d9",
+          "text": "ดำอ่อน"
+        },
+        {
+          "value": "#FFC720",
+          "text": "เหลืองเข้ม"
+        },
+        {
+          "value": "#4FC3F7",
+          "text": "ฟ้าเข้ม"
+        },
+        {
+          "value": "#4F94E6",
+          "text": "น้ำเงินเข้ม"
+        },
+        {
+          "value": "#2EC1B4",
+          "text": "เขียวเข้ม"
+        },
+        {
+          "value": "#FF6A9C",
+          "text": "ชมพูเข้ม"
+        },
+        {
+          "value": "#FF9E1F",
+          "text": "ส้มเข้ม"
+        },
+        {
+          "value": "#EA4747",
+          "text": "แดงเข้ม"
+        },
+        {
+          "value": "#7D58BE",
+          "text": "ม่วงเข้ม"
+        },
+        {
+          "value": "#A56B49",
+          "text": "น้ำตาลเข้ม"
+        },
+        {
+          "value": "#676767",
+          "text": "เทาเข้ม"
+        },
+        {
+          "value": "#252525",
+          "text": "ดำเข้ม"
+        }
+      ]
+    },
+    "data_bsToggle": {
+      "type": "observed",
+      "values": [
+        "dropdown"
+      ]
+    },
+    "data_id": {
+      "type": "observed",
+      "values": [
+        "doctor-filter"
+      ]
+    },
+    "col_จ.อ.พ.พฤ.ศ.ส.อา.": {
+      "type": "string",
+      "sample": "30event31event1event2event3event45event6event7even"
+    },
+    "col_จ.": {
+      "type": "string",
+      "sample": "30event"
+    },
+    "col_อ.": {
+      "type": "string",
+      "sample": "31event"
+    },
+    "col_พ.": {
+      "type": "string",
+      "sample": "1event"
+    },
+    "col_พฤ.": {
+      "type": "string",
+      "sample": "2event"
+    },
+    "col_ศ.": {
+      "type": "string",
+      "sample": "3event"
+    },
+    "col_ส.": {
+      "type": "integer",
+      "sample": "4"
+    },
+    "col_อา.": {
+      "type": "string",
+      "sample": "5event"
+    },
+    "col_นักกายภาพนักกายภาพA xห้อง 3ห้อง 4ห้องผ่าตัดห้องหัตถการ 1ห้องหัตถการ 2แพทย์แผนไทย B": {
+      "type": "string",
+      "sample": "08:3009:0009:3010:0010:3011:0011:3012:0012:3013:00"
+    },
+    "col_นักกายภาพA x": {
+      "type": "string",
+      "sample": "09:00"
+    },
+    "col_ห้อง 4": {
+      "type": "string",
+      "sample": "09:30"
+    },
+    "col_ห้องหัตถการ 1": {
+      "type": "string",
+      "sample": "10:00"
+    },
+    "col_แพทย์แผนไทย B": {
+      "type": "string",
+      "sample": "10:30"
+    }
+  },
+  "businessLogic": [],
+  "tokenAnalysis": {
+    "csrf-token": {
+      "type": "CSRF",
+      "length": 40
+    },
+    "cookies": [
+      "XSRF-TOKEN"
+    ]
+  }
+}
