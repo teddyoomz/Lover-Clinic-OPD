@@ -89,6 +89,12 @@ const FIELD_BOUNDS = {
   contact_2_lastname: 100,
   contact_2_lastname_en: 100,
   contact_2_telephone_number: 30,
+  // V33.7 — LINE OA bot reply language preference. 'th' or 'en' (≤ 2 chars).
+  // Stored when admin manually toggles via LinkLineInstructionsModal /
+  // LinkRequestsTab. When absent, bot derives from customer_type at read
+  // time (foreigner → 'en', else 'th'). See getLanguageForCustomer in
+  // src/lib/lineBotResponder.js.
+  lineLanguage: 10,
 };
 
 const GALLERY_MAX_ITEMS = 20;
@@ -345,6 +351,18 @@ export function normalizeCustomer(form) {
   // Booleans.
   for (const key of ['pregnanted', 'is_image_marketing_allowed']) {
     out[key] = !!out[key];
+  }
+
+  // V33.7 — lineLanguage coerce. Allow 'th' / 'en' only when explicitly set;
+  // any other string value (or empty) → drop the field so bot derives from
+  // customer_type at read time (foreigner → 'en', else 'th').
+  if (out.lineLanguage != null) {
+    const l = String(out.lineLanguage).trim().toLowerCase();
+    if (l === 'th' || l === 'en') {
+      out.lineLanguage = l;
+    } else {
+      delete out.lineLanguage;
+    }
   }
 
   // Gender — normalize uppercase M/F else blank.

@@ -17,10 +17,15 @@ import {
   X, Loader2, AlertCircle, CheckCircle2, Copy, IdCard, MessageSquare,
   Pause, Play, Unlink, Info, Clock,
 } from 'lucide-react';
-import { suspendLineLink, resumeLineLink, unlinkLineAccount } from '../../lib/customerLineLinkClient.js';
+import {
+  suspendLineLink, resumeLineLink, unlinkLineAccount,
+  updateLineLinkLanguage,
+} from '../../lib/customerLineLinkClient.js';
 import {
   getLineLinkState, formatLineLinkStatusBadge, maskLineUserId, LINK_STATES,
 } from '../../lib/customerLineLinkState.js';
+import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
+import LangPillToggle from './LangPillToggle.jsx';
 
 function CopyButton({ value, label = 'คัดลอก', testId }) {
   const [copied, setCopied] = useState(false);
@@ -68,13 +73,38 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
+  // V33.7 — local language state, derived from customer.lineLanguage OR
+  // customer_type:'foreigner' fallback. Toggling fires the backend update;
+  // local state mirrors the new value optimistically.
+  const [language, setLanguage] = useState(() => getLanguageForCustomer(customer));
+  const [langBusy, setLangBusy] = useState(false);
 
   useEffect(() => {
     setError('');
     setSuccess('');
     setBusy(false);
     setConfirmAction(null);
+    setLanguage(getLanguageForCustomer(customer));
   }, [customer?.id]);
+
+  const handleLanguageChange = async (newLang) => {
+    if (newLang === language || langBusy) return;
+    const customerIdForToggle = customer?.id || customer?.customerId || customer?.proClinicId || '';
+    if (!customerIdForToggle) return;
+    setLangBusy(true);
+    setError('');
+    const previous = language;
+    setLanguage(newLang); // optimistic
+    try {
+      await updateLineLinkLanguage(customerIdForToggle, newLang);
+      onActionSuccess?.({ action: 'update-language', customerId: customerIdForToggle, language: newLang });
+    } catch (e) {
+      setLanguage(previous); // rollback
+      setError(e?.message || 'ตั้งค่าภาษาไม่สำเร็จ');
+    } finally {
+      setLangBusy(false);
+    }
+  };
 
   const customerId = customer?.id || customer?.customerId || customer?.proClinicId || '';
   const linkState = getLineLinkState(customer);
@@ -141,16 +171,27 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
     <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto" data-testid="link-line-instructions-modal">
       <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-md my-4 flex flex-col">
         <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)]">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={20} style={{ color: '#06C755' }} />
-            <h3 className="text-lg font-bold text-[var(--tx-heading)]">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare size={20} style={{ color: '#06C755' }} className="flex-shrink-0" />
+            <h3 className="text-lg font-bold text-[var(--tx-heading)] truncate">
               {linkState === LINK_STATES.UNLINKED ? 'วิธีผูก LINE บัญชีลูกค้า' : 'จัดการการผูก LINE'}
             </h3>
           </div>
-          <button onClick={onClose} disabled={busy}
-            className="p-1 rounded hover:bg-[var(--bg-hover)] disabled:opacity-50" aria-label="ปิด">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* V33.7 — language toggle. Customer's bot replies render in this
+                language. Default derived from customer_type ('foreigner' → 'en'). */}
+            <LangPillToggle
+              value={language}
+              onChange={handleLanguageChange}
+              disabled={langBusy || busy}
+              ariaLabel="bot reply language"
+              data-testid="link-line-lang-toggle"
+            />
+            <button onClick={onClose} disabled={busy}
+              className="p-1 rounded hover:bg-[var(--bg-hover)] disabled:opacity-50" aria-label="ปิด">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-3">

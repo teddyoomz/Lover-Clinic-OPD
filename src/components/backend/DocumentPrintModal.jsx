@@ -23,6 +23,7 @@ import { sendDocumentLine } from '../../lib/sendDocumentClient.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
 import StaffSelectField from './StaffSelectField.jsx';
+import LangPillToggle from './LangPillToggle.jsx';
 
 // Print templates rely on inline `style="..."` + `class="..."` for layout
 // fidelity (no <style> blocks — print engine adds its own stylesheet via
@@ -657,18 +658,15 @@ export default function DocumentPrintModal({
                   ))}
                   <div className="ml-auto flex items-center gap-1 text-xs">
                     <span className="text-[var(--tx-muted)]">ภาษา:</span>
-                    {['th', 'en', 'bilingual'].map(lang => (
-                      <button key={lang}
-                        onClick={() => setLanguage(lang)}
-                        data-testid={`document-print-lang-${lang}`}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase transition-colors ${
-                          language === lang
-                            ? 'bg-violet-700 text-white'
-                            : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)]'
-                        }`}>
-                        {lang === 'bilingual' ? 'TH/EN' : lang}
-                      </button>
-                    ))}
+                    {/* V33.7 (Rule C1) — extracted to shared LangPillToggle.
+                        Behavior preserved: violet-700 active, 3 options. */}
+                    <LangPillToggle
+                      value={language}
+                      onChange={(lang) => setLanguage(lang)}
+                      options={['th', 'en', 'bilingual']}
+                      activeClassName="bg-violet-700 text-white border-violet-700"
+                      ariaLabel="document language"
+                    />
                   </div>
                 </div>
                 <div className="text-xs text-[var(--tx-muted)]">

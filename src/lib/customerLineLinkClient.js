@@ -62,3 +62,18 @@ export function unlinkLineAccount(customerId) {
   if (!customerId) throw new Error('customerId required');
   return call({ action: 'unlink', customerId });
 }
+
+/**
+ * V33.7 — Toggle bot reply language for this customer between 'th' and 'en'.
+ * Bot picks up the new value on the customer's NEXT DM (no cache).
+ *
+ * @param {string} customerId
+ * @param {'th'|'en'} language
+ */
+export function updateLineLinkLanguage(customerId, language) {
+  if (!customerId) throw new Error('customerId required');
+  if (language !== 'th' && language !== 'en') {
+    throw new Error('language must be "th" or "en"');
+  }
+  return call({ action: 'update-language', customerId, language });
+}

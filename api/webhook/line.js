@@ -27,6 +27,9 @@ import {
   // V33.5 — Flex message builders for richer course/appointment replies
   buildCoursesFlex,
   buildAppointmentsFlex,
+  // V33.7 — i18n: derive customer's preferred language (lineLanguage field
+  // OR customer_type:'foreigner' fallback → 'en'; else 'th').
+  getLanguageForCustomer,
 } from '../../src/lib/lineBotResponder.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
@@ -416,7 +419,9 @@ async function maybeEmitBotReply(event, config) {
       // Get LINE profile for the snapshot
       const profile = await getLineProfile(userId, config.channelAccessToken);
       await createLinkRequest({ customer, lineUserId: userId, lineProfile: profile, idType, idValue });
-      await replyLineMessage(event.replyToken, formatIdRequestAck(), config.channelAccessToken);
+      // V33.7 — derive customer's preferred language for the ack reply
+      const lang = getLanguageForCustomer(customer);
+      await replyLineMessage(event.replyToken, formatIdRequestAck(lang), config.channelAccessToken);
       return true;
     }
     // No match.
@@ -443,16 +448,19 @@ async function maybeEmitBotReply(event, config) {
     // Fall back to defaults if missing.
     const clinicName = config.clinicName || 'Lover Clinic';
     const accentColor = config.accentColor || '#dc2626';
+    // V33.7 — derive customer's preferred language. Stored `lineLanguage`
+    // wins; otherwise customer_type:'foreigner' → 'en'; else 'th'.
+    const lang = getLanguageForCustomer(customer);
     if (intent.intent === 'courses') {
       // V33.5 — send Flex bubble. altText embedded for graceful fallback on
       // older LINE clients (<8.11) that can't render Flex.
-      const flex = buildCoursesFlex(customer.courses || [], { accentColor, clinicName });
+      const flex = buildCoursesFlex(customer.courses || [], { accentColor, clinicName, language: lang });
       await replyLineMessage(event.replyToken, [flex], config.channelAccessToken);
       return true;
     }
     if (intent.intent === 'appointments') {
       const appts = await findUpcomingAppointmentsForCustomer(customer.id);
-      const flex = buildAppointmentsFlex(appts, { accentColor, clinicName });
+      const flex = buildAppointmentsFlex(appts, { accentColor, clinicName, language: lang });
       await replyLineMessage(event.replyToken, [flex], config.channelAccessToken);
       return true;
     }

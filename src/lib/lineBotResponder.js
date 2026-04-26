@@ -18,57 +18,227 @@
 //   - "นัด" / "appointment" / "วันนัด" → intent: 'appointments'
 //   - default                      → intent: 'help'
 
-const HELP_MESSAGE = [
-  'ส่งข้อความเหล่านี้เพื่อดูข้อมูลของคุณ:',
-  '• "คอร์ส" — ดูคอร์สที่ใช้ได้คงเหลือ',
-  '• "นัด" — ดูรายการนัดหมายล่วงหน้า',
-  '',
-  'หรือพิมพ์คำถามอื่น พนักงานคลินิกจะตอบโดยเร็วที่สุด.',
-].join('\n');
+// ─── V33.7 (2026-04-27) — i18n MESSAGES dictionary ──────────────────────
+// All customer-facing strings are keyed by language. Default = 'th'.
+// Foreign customers (customer_type === 'foreigner') auto-get 'en' unless
+// the admin overrides via lineLanguage field on be_customers.
+//
+// V32-tris-quater (2026-04-26) anti-enumeration kept: ID_REQUEST_RECEIVED
+// is the same-reply-regardless-of-match acknowledgement.
 
-const LINK_SUCCESS_TEMPLATE = (name) => [
-  `🎉 ผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
-  '',
-  'ตอนนี้คุณสามารถ:',
-  '• พิมพ์ "คอร์ส" เพื่อดูคอร์สที่ใช้ได้คงเหลือ',
-  '• พิมพ์ "นัด" เพื่อดูวันนัดหมาย',
-].join('\n');
+const MESSAGES = {
+  th: {
+    HELP: [
+      'ส่งข้อความเหล่านี้เพื่อดูข้อมูลของคุณ:',
+      '• "คอร์ส" — ดูคอร์สที่ใช้ได้คงเหลือ',
+      '• "นัด" — ดูรายการนัดหมายล่วงหน้า',
+      '',
+      'หรือพิมพ์คำถามอื่น พนักงานคลินิกจะตอบโดยเร็วที่สุด.',
+    ].join('\n'),
+    LINK_SUCCESS: (name) => [
+      `🎉 ผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
+      '',
+      'ตอนนี้คุณสามารถ:',
+      '• พิมพ์ "คอร์ส" เพื่อดูคอร์สที่ใช้ได้คงเหลือ',
+      '• พิมพ์ "นัด" เพื่อดูวันนัดหมาย',
+    ].join('\n'),
+    LINK_FAIL_INVALID: 'ไม่พบรหัสผูกบัญชีนี้ในระบบ — โปรดให้คลินิกสร้าง QR ใหม่.',
+    LINK_FAIL_EXPIRED: 'รหัสผูกบัญชีหมดอายุแล้ว — โปรดให้คลินิกสร้าง QR ใหม่.',
+    LINK_FAIL_ALREADY_LINKED: 'บัญชี LINE นี้ผูกกับลูกค้ารายอื่นในระบบอยู่แล้ว.',
+    NOT_LINKED: [
+      'บัญชี LINE นี้ยังไม่ได้ผูกกับลูกค้าในระบบ.',
+      'หากต้องการผูก โปรดส่งเลขบัตรประชาชน (13 หลัก) หรือเลขพาสปอร์ต',
+      'หรือสแกน QR ที่คลินิก.',
+    ].join('\n'),
+    ID_REQUEST_RECEIVED: [
+      '✅ ระบบได้รับคำขอแล้ว',
+      '',
+      'หากเลขที่ระบุตรงกับลูกค้าในระบบ',
+      'เจ้าหน้าที่จะตรวจสอบและยืนยันการผูกบัญชีให้ภายใน 1-24 ชั่วโมง',
+      '',
+      'หากต้องการความช่วยเหลือ โปรดติดต่อคลินิกโดยตรง.',
+    ].join('\n'),
+    ID_REQUEST_RATE_LIMITED: 'คำขอผูกบัญชีในช่วงนี้เกินจำนวนที่กำหนด — โปรดติดต่อคลินิกโดยตรง.',
+    ID_REQUEST_INVALID: [
+      'รูปแบบเลขที่ระบุไม่ถูกต้อง',
+      '',
+      'โปรดส่งข้อความรูปแบบ:',
+      '  ผูก 1234567890123  (เลขบัตรประชาชน 13 หลัก)',
+      '  ผูก AA1234567      (เลขพาสปอร์ต)',
+    ].join('\n'),
+    LINK_REQUEST_APPROVED: (name) => [
+      `🎉 อนุมัติการผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
+      '',
+      'ตอนนี้คุณสามารถ:',
+      '• พิมพ์ "คอร์ส" เพื่อดูคอร์สที่ใช้ได้คงเหลือ',
+      '• พิมพ์ "นัด" เพื่อดูวันนัดหมาย',
+    ].join('\n'),
+    LINK_REQUEST_REJECTED: 'คำขอผูกบัญชีไม่ได้รับการอนุมัติ — โปรดติดต่อคลินิกเพื่อสอบถามรายละเอียด.',
+    // Text reply scaffolding (formatCoursesReply / formatAppointmentsReply)
+    COURSES_NO_DATA: 'ยังไม่มีคอร์สในระบบ',
+    COURSES_NO_ACTIVE: 'ไม่พบคอร์สที่ยังใช้ได้\n(คอร์สทั้งหมดอาจใช้หมดแล้ว / ยกเลิก / คืนเงิน)',
+    COURSES_HEADER: '📋 คอร์สที่ใช้ได้คงเหลือ:',
+    COURSES_FOOTER: (n) => `... และอีก ${n} รายการ — ติดต่อคลินิกเพื่อรายละเอียด`,
+    COURSES_REMAINING_LABEL: 'คงเหลือ',
+    COURSES_EXPIRES_LABEL: 'หมดอายุ',
+    APPT_NO_DATA: 'ไม่พบรายการนัดหมายในระบบ',
+    APPT_NO_UPCOMING: 'ไม่พบรายการนัดหมายล่วงหน้า\n(หากต้องการนัดหมายใหม่ ติดต่อคลินิกได้เลย)',
+    APPT_HEADER: '📅 นัดหมายล่วงหน้า:',
+    APPT_TIME_PREFIX: 'เวลา',
+    APPT_FOOTER: (n) => `... และอีก ${n} รายการ`,
+    // Flex bubble strings
+    FLEX_COURSES_TITLE: '📋 คอร์สคงเหลือ',
+    FLEX_COURSES_COUNT: (n) => `${n} รายการ`,
+    FLEX_COURSES_FOOTER: (n) => `และอีก ${n} รายการ — ติดต่อคลินิกเพื่อรายละเอียด`,
+    FLEX_COURSES_EMPTY_TITLE: 'คอร์สคงเหลือ',
+    FLEX_COURSES_EMPTY_NO_DATA: 'ยังไม่มีคอร์สในระบบ',
+    FLEX_COURSES_EMPTY_NO_ACTIVE: 'ไม่พบคอร์สที่ยังใช้ได้\n(คอร์สทั้งหมดอาจใช้หมดแล้ว / ยกเลิก / คืนเงิน)',
+    FLEX_APPT_TITLE: '📅 นัดหมายล่วงหน้า',
+    FLEX_APPT_COUNT: (n) => `${n} นัด`,
+    FLEX_APPT_FOOTER: (n) => `และอีก ${n} นัด — ติดต่อคลินิกเพื่อรายละเอียด`,
+    FLEX_APPT_EMPTY_TITLE: 'นัดหมายของคุณ',
+    FLEX_APPT_EMPTY_NO_DATA: 'ไม่พบรายการนัดหมายในระบบ',
+    FLEX_APPT_EMPTY_NO_UPCOMING: 'ไม่พบรายการนัดหมายล่วงหน้า\n(หากต้องการนัดหมายใหม่ ติดต่อคลินิกได้เลย)',
+  },
+  en: {
+    HELP: [
+      'Send these messages to view your information:',
+      '• "courses" — view your remaining courses',
+      '• "appointments" — view your upcoming appointments',
+      '',
+      'Or type any other question — clinic staff will reply shortly.',
+    ].join('\n'),
+    LINK_SUCCESS: (name) => [
+      `🎉 LINE account linked successfully${name ? `, ${name}` : ''}`,
+      '',
+      'You can now:',
+      '• Type "courses" to see your remaining courses',
+      '• Type "appointments" to see your upcoming appointments',
+    ].join('\n'),
+    LINK_FAIL_INVALID: 'Linking code not found — please ask the clinic to generate a new QR.',
+    LINK_FAIL_EXPIRED: 'Linking code has expired — please ask the clinic to generate a new QR.',
+    LINK_FAIL_ALREADY_LINKED: 'This LINE account is already linked to another customer.',
+    NOT_LINKED: [
+      'This LINE account is not yet linked to a customer.',
+      'To link, please send your national ID (13 digits) or passport number,',
+      'or scan the QR at the clinic.',
+    ].join('\n'),
+    ID_REQUEST_RECEIVED: [
+      '✅ Request received',
+      '',
+      'If the ID matches a customer in the system,',
+      'staff will verify and confirm the link within 1–24 hours.',
+      '',
+      'For help, please contact the clinic directly.',
+    ].join('\n'),
+    ID_REQUEST_RATE_LIMITED: 'Too many link requests recently — please contact the clinic directly.',
+    ID_REQUEST_INVALID: [
+      'Invalid ID format',
+      '',
+      'Please send a message in this format:',
+      '  link 1234567890123  (national ID, 13 digits)',
+      '  link AA1234567      (passport number)',
+    ].join('\n'),
+    LINK_REQUEST_APPROVED: (name) => [
+      `🎉 LINE account link approved${name ? `, ${name}` : ''}`,
+      '',
+      'You can now:',
+      '• Type "courses" to see your remaining courses',
+      '• Type "appointments" to see your upcoming appointments',
+    ].join('\n'),
+    LINK_REQUEST_REJECTED: 'Link request not approved — please contact the clinic for details.',
+    COURSES_NO_DATA: 'No courses in the system yet',
+    COURSES_NO_ACTIVE: 'No active courses found\n(All courses may be used, cancelled, or refunded)',
+    COURSES_HEADER: '📋 Active Courses:',
+    COURSES_FOOTER: (n) => `... and ${n} more — contact clinic for details`,
+    COURSES_REMAINING_LABEL: 'Remaining',
+    COURSES_EXPIRES_LABEL: 'Expires',
+    APPT_NO_DATA: 'No appointments in the system',
+    APPT_NO_UPCOMING: 'No upcoming appointments found\n(To book a new appointment, contact the clinic)',
+    APPT_HEADER: '📅 Upcoming Appointments:',
+    APPT_TIME_PREFIX: 'at',
+    APPT_FOOTER: (n) => `... and ${n} more`,
+    FLEX_COURSES_TITLE: '📋 Active Courses',
+    FLEX_COURSES_COUNT: (n) => `${n} ${n === 1 ? 'item' : 'items'}`,
+    FLEX_COURSES_FOOTER: (n) => `And ${n} more — contact clinic for details`,
+    FLEX_COURSES_EMPTY_TITLE: 'Your Courses',
+    FLEX_COURSES_EMPTY_NO_DATA: 'No courses in the system yet',
+    FLEX_COURSES_EMPTY_NO_ACTIVE: 'No active courses found\n(All courses may be used, cancelled, or refunded)',
+    FLEX_APPT_TITLE: '📅 Upcoming Appointments',
+    FLEX_APPT_COUNT: (n) => `${n} ${n === 1 ? 'appt' : 'appts'}`,
+    FLEX_APPT_FOOTER: (n) => `And ${n} more — contact clinic for details`,
+    FLEX_APPT_EMPTY_TITLE: 'Your Appointments',
+    FLEX_APPT_EMPTY_NO_DATA: 'No appointments in the system',
+    FLEX_APPT_EMPTY_NO_UPCOMING: 'No upcoming appointments found\n(To book a new appointment, contact the clinic)',
+  },
+};
 
-const LINK_FAIL_INVALID = 'ไม่พบรหัสผูกบัญชีนี้ในระบบ — โปรดให้คลินิกสร้าง QR ใหม่.';
-const LINK_FAIL_EXPIRED = 'รหัสผูกบัญชีหมดอายุแล้ว — โปรดให้คลินิกสร้าง QR ใหม่.';
-const LINK_FAIL_ALREADY_LINKED = 'บัญชี LINE นี้ผูกกับลูกค้ารายอื่นในระบบอยู่แล้ว.';
+/**
+ * V33.7 — Resolve language for a customer doc.
+ * Priority: explicit `lineLanguage` → `customer_type === 'foreigner'` (case-
+ * insensitive) → default 'th'. Null/undefined customer → 'th'.
+ *
+ * @param {object|null} customer
+ * @returns {'th'|'en'}
+ */
+export function getLanguageForCustomer(customer) {
+  const c = customer || {};
+  const explicit = c.lineLanguage;
+  if (explicit === 'th' || explicit === 'en') return explicit;
+  const type = String(c.customer_type || '').trim().toLowerCase();
+  if (type === 'foreigner') return 'en';
+  return 'th';
+}
 
-const NOT_LINKED_MESSAGE = [
-  'บัญชี LINE นี้ยังไม่ได้ผูกกับลูกค้าในระบบ.',
-  'หากต้องการผูก โปรดส่งเลขบัตรประชาชน (13 หลัก) หรือเลขพาสปอร์ต',
-  'หรือสแกน QR ที่คลินิก.',
-].join('\n');
+/**
+ * V33.7 — Defensive language guard. Coerce undefined / unknown / casing
+ * variants to the safe default 'th'. Returns 'en' only on exact match.
+ */
+function normLang(lang) {
+  return lang === 'en' ? 'en' : 'th';
+}
 
-// V32-tris-quater (2026-04-26) — same-reply anti-enumeration. We answer
-// IDENTICALLY whether the ID matches a customer or not, so an attacker
-// who DMs random IDs can't confirm which exist in our DB. Admin sees the
-// real match in the LinkRequestsTab queue and decides to approve/reject.
-const ID_REQUEST_RECEIVED = [
-  '✅ ระบบได้รับคำขอแล้ว',
-  '',
-  'หากเลขที่ระบุตรงกับลูกค้าในระบบ',
-  'เจ้าหน้าที่จะตรวจสอบและยืนยันการผูกบัญชีให้ภายใน 1-24 ชั่วโมง',
-  '',
-  'หากต้องการความช่วยเหลือ โปรดติดต่อคลินิกโดยตรง.',
-].join('\n');
-
-const ID_REQUEST_RATE_LIMITED = 'คำขอผูกบัญชีในช่วงนี้เกินจำนวนที่กำหนด — โปรดติดต่อคลินิกโดยตรง.';
-
-const LINK_REQUEST_APPROVED = (name) => [
-  `🎉 อนุมัติการผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
-  '',
-  'ตอนนี้คุณสามารถ:',
-  '• พิมพ์ "คอร์ส" เพื่อดูคอร์สที่ใช้ได้คงเหลือ',
-  '• พิมพ์ "นัด" เพื่อดูวันนัดหมาย',
-].join('\n');
-
-const LINK_REQUEST_REJECTED =
-  'คำขอผูกบัญชีไม่ได้รับการอนุมัติ — โปรดติดต่อคลินิกเพื่อสอบถามรายละเอียด.';
+/**
+ * V33.7 — Format an ISO date as a long-form, locale-appropriate string:
+ *   Thai (BE):    "อังคาร 28 เมษายน 2569"
+ *   English (CE): "Tuesday 28 April 2026"
+ *
+ * Uses Intl.DateTimeFormat. For Thai, the `th-TH-u-ca-buddhist` locale
+ * produces a verbose form ("วันอังคารที่ 28 เมษายน พ.ศ. 2569") that we
+ * normalize to a clean weekday + day + month + BE-year shape.
+ *
+ * Returns '-' for empty / invalid inputs (mirrors formatThaiDate).
+ *
+ * @param {string} iso
+ * @param {'th'|'en'} [language='th']
+ * @returns {string}
+ */
+export function formatLongDate(iso, language = 'th') {
+  const s = String(iso || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '-';
+  const [y, m, d] = s.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(date.getTime())) return '-';
+  const lang = normLang(language);
+  if (lang === 'en') {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'UTC',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    }).format(date);
+  }
+  // Thai Buddhist calendar — normalize verbose locale output.
+  const raw = new Intl.DateTimeFormat('th-TH-u-ca-buddhist', {
+    timeZone: 'UTC',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(date);
+  return raw
+    .replace(/^วัน/, '')
+    .replace(/ที่\s*/, ' ')
+    .replace(/พ\.ศ\.\s*/, '')
+    .replace(/,/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /**
  * Parse the customer's incoming message and return an intent.
@@ -180,28 +350,36 @@ export function isMeaningfulValue(v) {
   return true;
 }
 
-export function formatCoursesReply(courses) {
+export function formatCoursesReply(courses, language = 'th') {
+  const lang = normLang(language);
+  const M = MESSAGES[lang];
   if (!Array.isArray(courses) || courses.length === 0) {
-    return 'ยังไม่มีคอร์สในระบบ';
+    return M.COURSES_NO_DATA;
   }
   const active = courses.filter((c) => {
     const status = String(c?.status || '').trim();
     return status === 'กำลังใช้งาน' || status === '' || status === 'active';
   });
   if (active.length === 0) {
-    return 'ไม่พบคอร์สที่ยังใช้ได้\n(คอร์สทั้งหมดอาจใช้หมดแล้ว / ยกเลิก / คืนเงิน)';
+    return M.COURSES_NO_ACTIVE;
   }
-  const lines = ['📋 คอร์สที่ใช้ได้คงเหลือ:', ''];
+  const lines = [M.COURSES_HEADER, ''];
   active.slice(0, 20).forEach((c, i) => {
-    const name = c.name || c.product || '(ไม่ระบุ)';
+    const name = c.name || c.product || (lang === 'en' ? '(unspecified)' : '(ไม่ระบุ)');
     const qty = c.qty || c.remaining || '';
     // V33.5 — skip expiry chip when value is an empty placeholder ("-" etc.)
-    const expiry = isMeaningfulValue(c.expiry) ? ` หมดอายุ ${formatThaiDate(c.expiry)}` : '';
+    // V33.7 — also skip when formatThaiDate returns '-' for malformed inputs
+    // ("6/2027", "none", etc.) — fixes the "หมดอายุ -" leak in mobile
+    // screenshot post-V33.6 deploy.
+    const expiryFormatted = formatThaiDate(c.expiry);
+    const expiry = isMeaningfulValue(c.expiry) && isMeaningfulValue(expiryFormatted)
+      ? ` ${M.COURSES_EXPIRES_LABEL} ${expiryFormatted}`
+      : '';
     lines.push(`${i + 1}. ${name}${isMeaningfulValue(qty) ? ` — ${qty}` : ''}${expiry}`);
   });
   if (active.length > 20) {
     lines.push('');
-    lines.push(`... และอีก ${active.length - 20} รายการ — ติดต่อคลินิกเพื่อรายละเอียด`);
+    lines.push(M.COURSES_FOOTER(active.length - 20));
   }
   return lines.join('\n');
 }
@@ -214,9 +392,11 @@ export function formatCoursesReply(courses) {
  * @param {string} [todayISO] — defaults to today
  * @returns {string}
  */
-export function formatAppointmentsReply(appointments, todayISO = '') {
+export function formatAppointmentsReply(appointments, todayISO = '', language = 'th') {
+  const lang = normLang(language);
+  const M = MESSAGES[lang];
   if (!Array.isArray(appointments) || appointments.length === 0) {
-    return 'ไม่พบรายการนัดหมายในระบบ';
+    return M.APPT_NO_DATA;
   }
   const today = todayISO || new Date().toISOString().slice(0, 10);
   const upcoming = appointments
@@ -233,49 +413,48 @@ export function formatAppointmentsReply(appointments, todayISO = '') {
     });
 
   if (upcoming.length === 0) {
-    return 'ไม่พบรายการนัดหมายล่วงหน้า\n(หากต้องการนัดหมายใหม่ ติดต่อคลินิกได้เลย)';
+    return M.APPT_NO_UPCOMING;
   }
-  const lines = ['📅 นัดหมายล่วงหน้า:', ''];
+  const lines = [M.APPT_HEADER, ''];
   upcoming.slice(0, 10).forEach((a, i) => {
     const date = String(a.appointmentDate || a.date || '').slice(0, 10);
-    // V33.5 — show start-end time if both present (HH:MM-HH:MM); else just startTime/time
     const start = a.startTime || a.appointmentTime || a.time || '';
     const end = a.endTime || '';
     const time = start && end ? `${start}-${end}` : start;
-    // V33.5 (directive #2) — include doctor / staff name. doctorName is
-    // denormalized on every be_appointments doc per AppointmentFormModal save.
     const provider = String(a.doctorName || a.staffName || a.advisorName || '').trim();
     const note = a.note || a.title || a.treatment || '';
-    lines.push(`${i + 1}. ${formatThaiDate(date)}${time ? ` เวลา ${time}` : ''}`);
+    // V33.7 — full weekday + month via formatLongDate (locale-aware)
+    lines.push(`${i + 1}. ${formatLongDate(date, lang)}${time ? ` ${M.APPT_TIME_PREFIX} ${time}` : ''}`);
     if (provider) lines.push(`   👨‍⚕️ ${provider}`);
     if (note) lines.push(`   📝 ${note}`);
   });
   if (upcoming.length > 10) {
     lines.push('');
-    lines.push(`... และอีก ${upcoming.length - 10} รายการ`);
+    lines.push(M.APPT_FOOTER(upcoming.length - 10));
   }
   return lines.join('\n');
 }
 
-export function formatHelpReply() {
-  return HELP_MESSAGE;
+export function formatHelpReply(language = 'th') {
+  return MESSAGES[normLang(language)].HELP;
 }
 
-export function formatLinkSuccessReply(customerName = '') {
-  return LINK_SUCCESS_TEMPLATE(String(customerName || '').trim());
+export function formatLinkSuccessReply(customerName = '', language = 'th') {
+  return MESSAGES[normLang(language)].LINK_SUCCESS(String(customerName || '').trim());
 }
 
-export function formatLinkFailureReply(reason) {
+export function formatLinkFailureReply(reason, language = 'th') {
+  const M = MESSAGES[normLang(language)];
   switch (reason) {
-    case 'expired': return LINK_FAIL_EXPIRED;
-    case 'already-linked': return LINK_FAIL_ALREADY_LINKED;
+    case 'expired': return M.LINK_FAIL_EXPIRED;
+    case 'already-linked': return M.LINK_FAIL_ALREADY_LINKED;
     case 'invalid':
-    default: return LINK_FAIL_INVALID;
+    default: return M.LINK_FAIL_INVALID;
   }
 }
 
-export function formatNotLinkedReply() {
-  return NOT_LINKED_MESSAGE;
+export function formatNotLinkedReply(language = 'th') {
+  return MESSAGES[normLang(language)].NOT_LINKED;
 }
 
 /**
@@ -283,8 +462,8 @@ export function formatNotLinkedReply() {
  * Returns the same message whether the ID matched a customer or not,
  * so an attacker DMing random IDs can't confirm which exist in our DB.
  */
-export function formatIdRequestAck() {
-  return ID_REQUEST_RECEIVED;
+export function formatIdRequestAck(language = 'th') {
+  return MESSAGES[normLang(language)].ID_REQUEST_RECEIVED;
 }
 
 /**
@@ -292,38 +471,32 @@ export function formatIdRequestAck() {
  * (default 5 attempts per 24h). Same-message-tone-as-ack so even the
  * rate-limit signal doesn't leak whether IDs are valid.
  */
-export function formatIdRequestRateLimitedReply() {
-  return ID_REQUEST_RATE_LIMITED;
+export function formatIdRequestRateLimitedReply(language = 'th') {
+  return MESSAGES[normLang(language)].ID_REQUEST_RATE_LIMITED;
 }
 
 /**
  * Format hint when customer typed "ผูก" but the ID didn't match the
  * national-id (13 digits) or passport (alphanumeric 6-12) pattern.
  */
-export function formatIdRequestInvalidFormat() {
-  return [
-    'รูปแบบเลขที่ระบุไม่ถูกต้อง',
-    '',
-    'โปรดส่งข้อความรูปแบบ:',
-    '  ผูก 1234567890123  (เลขบัตรประชาชน 13 หลัก)',
-    '  ผูก AA1234567      (เลขพาสปอร์ต)',
-  ].join('\n');
+export function formatIdRequestInvalidFormat(language = 'th') {
+  return MESSAGES[normLang(language)].ID_REQUEST_INVALID;
 }
 
 /**
  * Bot reply pushed to the customer's LINE after admin APPROVES their
  * link request via LinkRequestsTab.
  */
-export function formatLinkRequestApprovedReply(customerName = '') {
-  return LINK_REQUEST_APPROVED(String(customerName || '').trim());
+export function formatLinkRequestApprovedReply(customerName = '', language = 'th') {
+  return MESSAGES[normLang(language)].LINK_REQUEST_APPROVED(String(customerName || '').trim());
 }
 
 /**
  * Bot reply pushed to the customer's LINE after admin REJECTS the
  * link request.
  */
-export function formatLinkRequestRejectedReply() {
-  return LINK_REQUEST_REJECTED;
+export function formatLinkRequestRejectedReply(language = 'th') {
+  return MESSAGES[normLang(language)].LINK_REQUEST_REJECTED;
 }
 
 /**
@@ -405,14 +578,20 @@ function truncateText(text, maxLen) {
  * @param {object} course — single customer.courses[] entry
  * @returns {string}
  */
-export function buildCourseMetaLine(course) {
+export function buildCourseMetaLine(course, language = 'th') {
+  const lang = normLang(language);
+  const M = MESSAGES[lang];
   const c = course || {};
   const qty = isMeaningfulValue(c.qty)
     ? String(c.qty)
     : (isMeaningfulValue(c.remaining) ? String(c.remaining) : '-');
-  let line = `คงเหลือ ${qty}`;
-  if (isMeaningfulValue(c.expiry)) {
-    line += ` · หมดอายุ ${formatThaiDate(c.expiry)}`;
+  let line = `${M.COURSES_REMAINING_LABEL} ${qty}`;
+  // V33.7 — also smart-hide when formatThaiDate('-' / non-ISO) returns '-'.
+  // Fixes the post-V33.6 leak where stored expiry like "6/2027" or "none"
+  // passed isMeaningfulValue(input) but rendered as "หมดอายุ -".
+  const expiryFormatted = formatThaiDate(c.expiry);
+  if (isMeaningfulValue(c.expiry) && isMeaningfulValue(expiryFormatted)) {
+    line += ` · ${M.COURSES_EXPIRES_LABEL} ${expiryFormatted}`;
   }
   return line;
 }
@@ -462,11 +641,13 @@ export function buildCoursesFlex(courses, opts = {}) {
   const accentColor = opts.accentColor || DEFAULT_ACCENT;
   const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
   const maxRows = Number.isFinite(opts.maxRows) ? opts.maxRows : COURSES_FLEX_MAX_ROWS;
+  const lang = normLang(opts.language);
+  const M = MESSAGES[lang];
 
-  const altText = formatCoursesReply(courses);
+  const altText = formatCoursesReply(courses, lang);
 
   if (!Array.isArray(courses) || courses.length === 0) {
-    return buildEmptyStateFlex('คอร์สคงเหลือ', 'ยังไม่มีคอร์สในระบบ', { accentColor, clinicName });
+    return buildEmptyStateFlex(M.FLEX_COURSES_EMPTY_TITLE, M.FLEX_COURSES_EMPTY_NO_DATA, { accentColor, clinicName });
   }
   const active = courses.filter((c) => {
     const status = String(c?.status || '').trim();
@@ -474,8 +655,8 @@ export function buildCoursesFlex(courses, opts = {}) {
   });
   if (active.length === 0) {
     return buildEmptyStateFlex(
-      'คอร์สคงเหลือ',
-      'ไม่พบคอร์สที่ยังใช้ได้\n(คอร์สทั้งหมดอาจใช้หมดแล้ว / ยกเลิก / คืนเงิน)',
+      M.FLEX_COURSES_EMPTY_TITLE,
+      M.FLEX_COURSES_EMPTY_NO_ACTIVE,
       { accentColor, clinicName },
     );
   }
@@ -489,9 +670,11 @@ export function buildCoursesFlex(courses, opts = {}) {
   // mobile data because flex:2 + wrap:false cells couldn't fit "0 / 3
   // ครั้ง" / "เหมาตามจริง". Column-header row dropped because data is
   // now self-labeled inline.
+  // V33.7 — meta line + fallback name translate via language.
+  const fallbackName = lang === 'en' ? '(unspecified)' : '(ไม่ระบุ)';
   const courseRows = visible.map((c, i) => {
-    const name = truncateText(c.name || c.product || '(ไม่ระบุ)', 200);
-    const metaLine = buildCourseMetaLine(c);
+    const name = truncateText(c.name || c.product || fallbackName, 200);
+    const metaLine = buildCourseMetaLine(c, lang);
     return {
       type: 'box', layout: 'vertical', spacing: 'xs',
       paddingTop: i === 0 ? 'none' : 'md',
@@ -510,7 +693,7 @@ export function buildCoursesFlex(courses, opts = {}) {
     bodyContents.push({
       type: 'box', layout: 'vertical', paddingTop: 'md',
       contents: [
-        { type: 'text', text: `และอีก ${remaining} รายการ — ติดต่อคลินิกเพื่อรายละเอียด`, size: 'xs', color: '#888888', align: 'center', wrap: true },
+        { type: 'text', text: M.FLEX_COURSES_FOOTER(remaining), size: 'xs', color: '#888888', align: 'center', wrap: true },
       ],
     });
   }
@@ -529,8 +712,8 @@ export function buildCoursesFlex(courses, opts = {}) {
           {
             type: 'box', layout: 'horizontal', margin: 'xs',
             contents: [
-              { type: 'text', text: '📋 คอร์สคงเหลือ', color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
-              { type: 'text', text: `${active.length} รายการ`, color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
+              { type: 'text', text: M.FLEX_COURSES_TITLE, color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
+              { type: 'text', text: M.FLEX_COURSES_COUNT(active.length), color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
             ],
           },
         ],
@@ -557,11 +740,13 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
   const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
   const maxItems = Number.isFinite(opts.maxItems) ? opts.maxItems : APPOINTMENTS_FLEX_MAX_ITEMS;
   const todayISO = opts.todayISO || new Date().toISOString().slice(0, 10);
+  const lang = normLang(opts.language);
+  const M = MESSAGES[lang];
 
-  const altText = formatAppointmentsReply(appointments, todayISO);
+  const altText = formatAppointmentsReply(appointments, todayISO, lang);
 
   if (!Array.isArray(appointments) || appointments.length === 0) {
-    return buildEmptyStateFlex('นัดหมายของคุณ', 'ไม่พบรายการนัดหมายในระบบ', { accentColor, clinicName });
+    return buildEmptyStateFlex(M.FLEX_APPT_EMPTY_TITLE, M.FLEX_APPT_EMPTY_NO_DATA, { accentColor, clinicName });
   }
   const upcoming = appointments
     .filter((a) => {
@@ -578,8 +763,8 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
 
   if (upcoming.length === 0) {
     return buildEmptyStateFlex(
-      'นัดหมายของคุณ',
-      'ไม่พบรายการนัดหมายล่วงหน้า\n(หากต้องการนัดหมายใหม่ ติดต่อคลินิกได้เลย)',
+      M.FLEX_APPT_EMPTY_TITLE,
+      M.FLEX_APPT_EMPTY_NO_UPCOMING,
       { accentColor, clinicName },
     );
   }
@@ -599,12 +784,14 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
     // them in one horizontal box where time(flex:2, wrap:false) truncated
     // "10:00–10:30" → "10:00–10..." on mobile. Stacked = full string
     // ALWAYS visible regardless of mobile width or font scale.
+    // V33.7 — date now uses formatLongDate (full weekday + month) per
+    // user directive; date string is locale-aware.
     const innerRows = [
       {
         type: 'box', layout: 'horizontal', spacing: 'sm',
         contents: [
           { type: 'text', text: '📅', size: 'sm', flex: 0 },
-          { type: 'text', text: formatThaiDate(date), size: 'sm', weight: 'bold', color: '#222222', flex: 1, wrap: true },
+          { type: 'text', text: formatLongDate(date, lang), size: 'sm', weight: 'bold', color: '#222222', flex: 1, wrap: true },
         ],
       },
     ];
@@ -652,7 +839,7 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
     apptBoxes.push({
       type: 'box', layout: 'vertical', paddingTop: 'md',
       contents: [
-        { type: 'text', text: `และอีก ${remaining} นัด — ติดต่อคลินิกเพื่อรายละเอียด`, size: 'xs', color: '#888888', align: 'center', wrap: true },
+        { type: 'text', text: M.FLEX_APPT_FOOTER(remaining), size: 'xs', color: '#888888', align: 'center', wrap: true },
       ],
     });
   }
@@ -671,8 +858,8 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
           {
             type: 'box', layout: 'horizontal', margin: 'xs',
             contents: [
-              { type: 'text', text: '📅 นัดหมายล่วงหน้า', color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
-              { type: 'text', text: `${upcoming.length} นัด`, color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
+              { type: 'text', text: M.FLEX_APPT_TITLE, color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
+              { type: 'text', text: M.FLEX_APPT_COUNT(upcoming.length), color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
             ],
           },
         ],

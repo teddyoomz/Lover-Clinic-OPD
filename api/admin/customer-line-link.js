@@ -1,4 +1,4 @@
-// ─── /api/admin/customer-line-link — V33.4 (2026-04-27) ──────────
+// ─── /api/admin/customer-line-link — V33.4 + V33.7 (2026-04-27) ──────────
 // Admin actions on a customer's LINE link state machine.
 //
 // Body:
@@ -6,9 +6,11 @@
 //   { action: 'resume',   customerId: '<id>' } — bot resumes replies (lineLinkStatus → 'active')
 //   { action: 'unlink',   customerId: '<id>' } — clear lineUserId entirely (silent — NO LINE push per user choice)
 //   { action: 'list-linked' }                  — list every customer with non-null lineUserId
+//   { action: 'update-language', customerId, language: 'th'|'en' }    — V33.7 i18n toggle
 //
 // Atomic write of {lineLinkStatus, lineLinkStatusChangedAt, lineLinkStatusChangedBy}.
 // On unlink: also clears lineUserId + lineLinkedAt + lineLinkStatus (full clear).
+// On update-language: writes lineLanguage field; bot picks it up on next DM.
 //
 // Security: verifyAdminToken (admin: true claim or bootstrap UID).
 // Rule lockdown: be_customers `read,write: if isClinicStaff()` — but we use
@@ -86,6 +88,23 @@ async function handleUnlink({ db, customerId, callerUid }) {
   return { customerId, action: 'unlink', lineLinkStatus: null };
 }
 
+async function handleUpdateLanguage({ db, customerId, language, callerUid }) {
+  // V33.7 — admin toggles a customer's bot reply language.
+  if (language !== 'th' && language !== 'en') {
+    throw new Error('language ต้องเป็น "th" หรือ "en"');
+  }
+  const cRef = db.doc(`artifacts/${APP_ID}/public/data/be_customers/${customerId}`);
+  const cSnap = await cRef.get();
+  if (!cSnap.exists) throw new Error('ลูกค้าไม่พบในระบบ');
+  const now = new Date().toISOString();
+  await cRef.update({
+    lineLanguage: language,
+    lineLanguageChangedAt: now,
+    lineLanguageChangedBy: callerUid || null,
+  });
+  return { customerId, action: 'update-language', lineLanguage: language };
+}
+
 async function handleListLinked({ db }) {
   // List every customer with a non-null lineUserId — for the "ผูกแล้ว" tab.
   // Firestore can't `where(field, '!=', null)` with sort, so we filter
@@ -108,6 +127,10 @@ async function handleListLinked({ db }) {
         lineLinkedAt: data.lineLinkedAt || null,
         lineLinkStatus: data.lineLinkStatus || 'active',
         lineLinkStatusChangedAt: data.lineLinkStatusChangedAt || null,
+        // V33.7 — surface fields needed by per-row language toggle.
+        // lineLanguage: explicit override; customer_type: auto-default fallback.
+        lineLanguage: data.lineLanguage || null,
+        customer_type: data.customer_type || '',
       };
     })
     .filter(Boolean)
@@ -126,7 +149,7 @@ export default async function handler(req, res) {
   if (!caller) return;
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const { action, customerId } = body;
+  const { action, customerId, language } = body;
   const db = getAdminFirestore();
 
   try {
@@ -147,7 +170,11 @@ export default async function handler(req, res) {
       const result = await handleUnlink({ db, customerId, callerUid: caller.uid });
       return res.status(200).json(result);
     }
-    return res.status(400).json({ error: 'action must be suspend | resume | unlink | list-linked' });
+    if (action === 'update-language') {
+      const result = await handleUpdateLanguage({ db, customerId, language, callerUid: caller.uid });
+      return res.status(200).json(result);
+    }
+    return res.status(400).json({ error: 'action must be suspend | resume | unlink | list-linked | update-language' });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'request failed' });
   }

@@ -192,10 +192,11 @@ describe('L4 formatAppointmentsReply', () => {
       { appointmentDate: '2099-03-01', status: 'no-show' },
       { appointmentDate: '2099-04-01', status: 'pending' },
     ], '2026-04-26');
-    expect(out).toMatch(/01\/04\/2642/);
-    expect(out).not.toMatch(/01\/01/);
-    expect(out).not.toMatch(/01\/02/);
-    expect(out).not.toMatch(/01\/03/);
+    // V33.7 — long date format: "เมษายน 2642" present (the only non-filtered)
+    expect(out).toMatch(/เมษายน 2642/);
+    expect(out).not.toMatch(/มกราคม/);
+    expect(out).not.toMatch(/กุมภาพันธ์/);
+    expect(out).not.toMatch(/มีนาคม/);
   });
   test('L4.4 sorted ascending by date', () => {
     const out = formatAppointmentsReply([
@@ -203,9 +204,10 @@ describe('L4 formatAppointmentsReply', () => {
       { appointmentDate: '2099-06-15' },
       { appointmentDate: '2099-01-20' },
     ], '2026-04-26');
-    const idx1 = out.indexOf('20/01');
-    const idx2 = out.indexOf('15/06');
-    const idx3 = out.indexOf('01/12');
+    // V33.7 — long format: "20 มกราคม" / "15 มิถุนายน" / "1 ธันวาคม"
+    const idx1 = out.indexOf('มกราคม');
+    const idx2 = out.indexOf('มิถุนายน');
+    const idx3 = out.indexOf('ธันวาคม');
     expect(idx1).toBeGreaterThan(0);
     expect(idx1).toBeLessThan(idx2);
     expect(idx2).toBeLessThan(idx3);
@@ -219,7 +221,8 @@ describe('L4 formatAppointmentsReply', () => {
   });
   test('L4.6 alternative date field name "date" works', () => {
     const out = formatAppointmentsReply([{ date: '2099-05-15' }], '2026-04-26');
-    expect(out).toMatch(/15\/05/);
+    // V33.7 — long format renders "15 พฤษภาคม 2642"
+    expect(out).toMatch(/พฤษภาคม 2642/);
   });
 });
 

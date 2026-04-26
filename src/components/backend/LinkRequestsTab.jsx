@@ -20,10 +20,13 @@ import {
   suspendLineLink,
   resumeLineLink,
   unlinkLineAccount,
+  updateLineLinkLanguage,
 } from '../../lib/customerLineLinkClient.js';
 import {
   getLineLinkState, formatLineLinkStatusBadge, maskLineUserId, LINK_STATES,
 } from '../../lib/customerLineLinkState.js';
+import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
+import LangPillToggle from './LangPillToggle.jsx';
 
 const STATUS_TABS = [
   { id: 'pending',  label: 'รอตรวจสอบ', cls: 'bg-amber-700/30 border-amber-700/50 text-amber-200' },
@@ -102,6 +105,27 @@ export default function LinkRequestsTab() {
       await reload();
     } catch (e) {
       setError(e.message || `${labels[action]}ล้มเหลว`);
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  // V33.7 — per-row language toggle. Optimistic local update; rollback on error.
+  // Items[].lineLanguage may be null (not yet set); the toggle reads via
+  // getLanguageForCustomer fallback so customer_type:'foreigner' shows 'EN'.
+  const handleLanguageToggle = async (customerId, newLang) => {
+    setBusyId(customerId);
+    setError('');
+    // Optimistic local mutation so the active pill flips immediately
+    setItems((prev) => prev.map((r) =>
+      r.customerId === customerId ? { ...r, lineLanguage: newLang } : r
+    ));
+    try {
+      await updateLineLinkLanguage(customerId, newLang);
+    } catch (e) {
+      setError(e.message || 'ตั้งค่าภาษาไม่สำเร็จ');
+      // Rollback by reload from server
+      await reload();
     } finally {
       setBusyId('');
     }
@@ -294,7 +318,17 @@ export default function LinkRequestsTab() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* V33.7 — language toggle. Reads lineLanguage if set, else
+                        derives from customer_type ('foreigner' → 'en'). Optimistic
+                        client update; fires updateLineLinkLanguage on click. */}
+                    <LangPillToggle
+                      value={getLanguageForCustomer(row)}
+                      onChange={(newLang) => handleLanguageToggle(row.customerId, newLang)}
+                      disabled={isBusy}
+                      ariaLabel={`bot reply language for ${row.customerName || row.customerId}`}
+                      data-testid={`linked-customer-lang-${row.customerId}`}
+                    />
                     {state === LINK_STATES.ACTIVE ? (
                       <button
                         onClick={() => handleLinkAction(row.customerId, 'suspend')}

@@ -181,7 +181,10 @@ describe('V33.6.C — buildAppointmentsFlex stacked date+time', () => {
     const dateRow = apptBox.contents[0];
     expect(dateRow.layout).toBe('horizontal');
     expect(dateRow.contents[0].text).toBe('📅');
-    expect(dateRow.contents[1].text).toContain('01/01/2642');
+    // V33.7 — date now uses formatLongDate (full weekday + month + BE year)
+    // not the short formatThaiDate '01/01/2642'. Assert long-form contents.
+    expect(dateRow.contents[1].text).toMatch(/2642/);   // BE year preserved
+    expect(dateRow.contents[1].text).toMatch(/มกราคม/); // full Thai month
     expect(dateRow.contents[1].wrap).toBe(true);
   });
   it('C3 — time sub-row: 🕐 emoji + time text (own line, NOT combined with date)', () => {
