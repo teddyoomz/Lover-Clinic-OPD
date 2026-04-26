@@ -239,6 +239,64 @@ describe('PE.E — engine source-grep guards', () => {
     expect(block).toMatch(/a\.click\(\)/);
   });
 
+  // ─── PE.E.padding (Phase 14.10-bis 2026-04-26) — body padding bug fix ───
+  it('E.4a — uses DOMParser (not innerHTML) to keep <body> tag intact', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toContain('DOMParser');
+    expect(block).toMatch(/parseFromString\(html,\s*['"]text\/html['"]\)/);
+  });
+
+  it('E.4b — wrapper has body-equivalent styles INLINED (width / padding / box-sizing)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/width:\s*\$\{sz\.w\}/);
+    expect(block).toMatch(/padding:\s*\$\{sz\.p\}/);
+    expect(block).toContain('box-sizing: border-box');
+  });
+
+  it('E.4c — PDF_WRAPPER_STYLES map covers all 3 paper sizes', () => {
+    expect(engineFile).toMatch(/PDF_WRAPPER_STYLES\s*=\s*\{[\s\S]*?'A4'[\s\S]*?'A5'[\s\S]*?'label-57x32'/);
+    expect(engineFile).toMatch(/'A4':\s*\{\s*w:\s*['"]210mm['"][\s\S]*?p:\s*['"]18mm['"]/);
+    expect(engineFile).toMatch(/'A5':\s*\{\s*w:\s*['"]148mm['"][\s\S]*?p:\s*['"]12mm['"]/);
+    expect(engineFile).toMatch(/'label-57x32':\s*\{\s*w:\s*['"]57mm['"][\s\S]*?p:\s*['"]2mm['"]/);
+  });
+
+  it('E.4d — copies <style> blocks from parsed head to wrapper (so class selectors work)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/parsed\.querySelectorAll\(['"]style['"]\)\.forEach/);
+    expect(block).toMatch(/wrapper\.appendChild\(s\.cloneNode\(true\)\)/);
+  });
+
+  it('E.4e — appends wrapper to document.body so html2canvas can snapshot with styles', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/document\.body\.appendChild\(wrapper\)/);
+  });
+
+  it('E.4f — finally{} cleans up wrapper from document.body (no DOM leak)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/finally\s*\{[\s\S]*?document\.body\.removeChild\(wrapper\)/);
+  });
+
+  it('E.4g — waits for fonts.ready before snapshot (no fallback-font flicker)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/document\.fonts/);
+    expect(block).toMatch(/await document\.fonts\.ready/);
+  });
+
+  it('E.4h — strips <script> nodes from body (the auto-print script must not run twice)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/tagName\s*===\s*['"]SCRIPT['"]/);
+  });
+
+  it('E.4i — wrapper hidden off-screen via position:fixed + left:-99999px', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toContain('position: fixed');
+    expect(block).toContain('left: -99999px');
+  });
+
+  it('E.4j — V31-class regression marker (institutional memory grep)', () => {
+    expect(engineFile).toMatch(/Phase 14\.10-bis/);
+  });
+
   it('E.5 — revokeObjectURL called via setTimeout (Chrome aborts if revoked too soon)', () => {
     const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
     expect(block).toMatch(/setTimeout\s*\([\s\S]*?revokeObjectURL/);

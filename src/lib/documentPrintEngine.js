@@ -443,14 +443,27 @@ export function pdfPaperConfig(paperSize = 'A4') {
  * @param {Record<string, boolean>} [opts.toggles]
  * @returns {Promise<{ filename: string, blob: Blob }>}
  */
+// Phase 14.10-bis (2026-04-26) — paper size CSS map for the PDF render
+// wrapper. MUST stay in sync with PAPER_SIZES in documentTemplateValidation.js
+// + sizeMap inside buildPrintDocument. Used only in exportDocumentToPdf to
+// inline body-equivalent styles on a wrapper div (body { width:..., padding:... }
+// is silently dropped when innerHTML strips the <body> tag — V31-class bug
+// where the source-grep tests passed but the real PDF output was broken).
+const PDF_WRAPPER_STYLES = {
+  'A4':         { w: '210mm', minH: '297mm', p: '18mm' },
+  'A5':         { w: '148mm', minH: '210mm', p: '12mm' },
+  'label-57x32':{ w: '57mm',  minH: '32mm',  p: '2mm' },
+};
+
 export async function exportDocumentToPdf({ template, clinic, customer, values, language, toggles, watermark } = {}) {
   if (!template || typeof template !== 'object') throw new Error('template required');
   const finalLang = language || template.language || 'th';
   const context = buildPrintContext({ clinic, customer, values, language: finalLang, toggles });
+  const paperSize = template.paperSize || 'A4';
   const html = buildPrintDocument({
     template: template.htmlTemplate || '',
     context,
-    paperSize: template.paperSize || 'A4',
+    paperSize,
     language: finalLang,
     title: template.name || 'Document',
     watermark: watermark || template.watermark || '',
@@ -461,23 +474,80 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
   const html2pdf = html2pdfModule.default || html2pdfModule;
 
   const filename = pdfFilename({ docType: template.docType, name: template.name });
-  const paper = pdfPaperConfig(template.paperSize || 'A4');
+  const paper = pdfPaperConfig(paperSize);
 
-  // Render to off-DOM container (html2pdf needs an element + size context)
-  const container = document.createElement('div');
-  container.innerHTML = html;
-  // Move only body content (html2pdf accepts a node; keep paper styles)
-  const bodyEl = container.querySelector('body') || container;
+  // ─── BUG FIX (Phase 14.10-bis 2026-04-26) ────────────────────────
+  // When you set `container.innerHTML = '<!DOCTYPE...><body style="width:210mm;
+  // padding:18mm">...</body>'`, HTML5's "in body" insertion mode STRIPS
+  // the wrapping <body> tag. The body element is gone. The CSS selector
+  // `body { width:210mm; padding:18mm }` then matches NOTHING. Result:
+  // PDF content bleeds to all 4 edges (zero padding).
+  //
+  // Fix: build a wrapper <div> with body-equivalent styles INLINED, copy
+  // the <style> blocks across (so .doc-watermark / .sig-col / etc. selectors
+  // still work), append wrapper to document.body so html2canvas snapshots
+  // it with all CSS applied + fonts loaded, then clean up.
+  const sz = PDF_WRAPPER_STYLES[paperSize] || PDF_WRAPPER_STYLES.A4;
+  const fontFamily = paperSize === 'label-57x32'
+    ? "'Sarabun', 'Noto Sans Thai', sans-serif"
+    : "'Sarabun', 'TH Sarabun New', 'Noto Sans Thai', Tahoma, sans-serif";
 
-  const opt = {
-    margin: 0,
-    filename,
-    image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-    jsPDF: paper,
-  };
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(html, 'text/html');
 
-  const pdfBlob = await html2pdf().from(bodyEl).set(opt).outputPdf('blob');
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('data-pdf-wrapper', 'true');
+  wrapper.style.cssText = [
+    `width: ${sz.w}`,
+    `min-height: ${sz.minH}`,
+    `padding: ${sz.p}`,
+    'box-sizing: border-box',
+    'background: #ffffff',
+    'color: #000000',
+    `font-family: ${fontFamily}`,
+    'font-size: 14px',
+    'margin: 0',
+    'position: fixed',
+    'left: -99999px',
+    'top: 0',
+  ].join('; ');
+
+  // Copy all <style> blocks from the parsed head so class-based selectors
+  // (.doc-watermark, .sig-col, etc.) apply.
+  parsed.querySelectorAll('style').forEach((s) => {
+    wrapper.appendChild(s.cloneNode(true));
+  });
+  // Copy body content. parsed.body always exists with DOMParser('text/html').
+  const parsedBody = parsed.body;
+  if (parsedBody) {
+    Array.from(parsedBody.childNodes).forEach((node) => {
+      // Skip the auto-print <script> — it's only relevant in the print window
+      if (node.nodeType === 1 && node.tagName === 'SCRIPT') return;
+      wrapper.appendChild(node.cloneNode(true));
+    });
+  }
+
+  document.body.appendChild(wrapper);
+  let pdfBlob;
+  try {
+    // Wait one frame so layout + fonts settle before html2canvas snapshot
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    if (document.fonts && typeof document.fonts.ready?.then === 'function') {
+      try { await document.fonts.ready; } catch { /* non-fatal */ }
+    }
+
+    const opt = {
+      margin: 0,
+      filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: paper,
+    };
+    pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob');
+  } finally {
+    if (wrapper.parentNode === document.body) document.body.removeChild(wrapper);
+  }
+
   // Trigger download via object URL — browsers honor `download` attr.
   const url = URL.createObjectURL(pdfBlob);
   const a = document.createElement('a');
