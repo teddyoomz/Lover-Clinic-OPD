@@ -1,15 +1,15 @@
 ---
-updated_at: "2026-04-26 (session 6 — V23 hotfix: anon patient submit on opd_sessions DEPLOYED)"
-status: "Production at 0a0b9f5 LIVE. V23 hotfix DEPLOYED (vercel + firestore:rules). 5-endpoint Probe-Deploy-Probe extended permanently. Anon QR/link patient submit now works (was PERMISSION_DENIED for entire project history since 2026-03-23)."
-current_focus: "Idle. V23 closed end-to-end. Production verified working for anon-auth patient form submit + dashboard course-refresh."
+updated_at: "2026-04-26 (session 7 — Phase 13.5.4 Deploy 1 + V24 schedule sync fix DEPLOYED)"
+status: "Production at 884f6cc LIVE. Phase 13.5.4 Deploy 1 (hard-gate endpoint + auto-sync + migration button) AND V24 schedule sync fix shipped + deployed via combined V15. 5-endpoint Probe-Deploy-Probe 5/5=200 pre+post. AWAITING USER MIGRATION ACTION before Deploy 2."
+current_focus: "User must click 'Sync ทุก staff → Claims' button in PermissionGroupsTab on production to backfill custom claims. Then Deploy 2 (firestore.rules → claim-only check) can ship."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "0a0b9f5"
-tests: "~5239 vitest (5190 + 49 V23 — A1-A5 source-grep + R7 writer-side + V23-lock e2e)"
+last_commit: "884f6cc"
+tests: "~5274 vitest (5239 + 28 Phase 13.5.4 H1-H5 + 7 V24 SC.G new schedule sync)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "0a0b9f5 (2026-04-26 V15 combined deploy V23 hotfix). Pre-probe baseline 200/200/200/200; pre-V23 anon UPDATE 403 (bug confirmed); post-deploy 5 probes 200/200/200/200/200 (V23 LIVE). Production HTTP 200 on backend + 2 public-link routes. Cleanup OK on pc_appointments + proclinic_session* probe fields."
-firestore_rules_deployed: "v11 (V23: opd_sessions update narrowed — isClinicStaff() OR (isSignedIn() AND hasOnly([11-field whitelist])); mirrors V19 pattern)"
-bundle: "BackendDashboard ~925 KB unchanged"
+last_deploy: "884f6cc (2026-04-26 session 7 V15 combined). Pre-probe 5/5=200; post-probe 5/5=200 (V23 anon UPDATE still LIVE); cleanup 4/4=200; production smoke 3/3=200. Vercel: lover-clinic-ejed4oblq aliased; firebase rules: idempotent (rules unchanged in 6799a58 + 884f6cc)."
+firestore_rules_deployed: "v11 (UNCHANGED from V23 — Deploy 2 of 13.5.4 will narrow isClinicStaff() to claim-only AFTER user runs migration button on production)"
+bundle: "BackendDashboard ~928 KB (+3 KB for Phase 13.5.4 button + endpoint wrappers)"
 ---
 
 # Active Context
@@ -141,15 +141,24 @@ catch this regression class automatically (.claude/rules/01-iron-clad.md).
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-None. V23 fix verified working in production. User-side verification:
-1. Open production `?session=<id>` from incognito → fill → submit →
-   should succeed without "เกิดข้อผิดพลาดของระบบ" alert
-2. Open `?patient=<token>` → course refresh succeeds without silent stall
+### Required (blocks Phase 13.5.4 Deploy 2)
+1. **Verify V24 schedule sync fix** — open MasterDataTab in production →
+   click "ดูดตารางหมอ + พนักงาน จาก ProClinic" → expect now to receive
+   BOTH doctor + employee entries (was doctor-only before V24). Then
+   "นำเข้า master_data → be_staff_schedules" → verify
+   EmployeeSchedulesTab calendar shows real data.
+2. **Run migration button** — open PermissionGroupsTab → click "Sync
+   ทุก staff → Claims" (top-right). One-time backfill of all be_staff
+   firebase users with `isClinicStaff: true` + `permissionGroupId`
+   custom claims. Result UI shows synced/skipped/failed counts; when
+   all green you'll see the "พร้อม Deploy 2" hint.
+3. **After migration**: tell me to ship Phase 13.5.4 Deploy 2
+   (firestore.rules → claim-only `isClinicStaff()` check).
 
-Cleanup tip (optional): admin can manually archive the
-`opd_sessions/test-probe-anon-1777184257` and
-`opd_sessions/test-probe-anon-1777184370` docs from the queue if they
-appear as noise. They will not affect any real flow.
+### Optional V23 cleanup (still valid from session 6)
+Admin can manually archive `opd_sessions/test-probe-anon-1777184257`
+and `opd_sessions/test-probe-anon-1777184370` from queue if they show
+as noise. Not blocking.
 
 ## Recent decisions (non-obvious — preserve reasoning)
 

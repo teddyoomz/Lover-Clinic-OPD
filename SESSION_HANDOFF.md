@@ -7,23 +7,23 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 6 — V23 P0 hotfix DEPLOYED (anon patient submit + dashboard course-refresh on opd_sessions)
+- **Date last updated**: 2026-04-26 session 7 — Phase 13.5.4 Deploy 1 + V24 schedule sync fix DEPLOYED via combined V15
 - **Branch**: `master`
-- **Last commit**: `0a0b9f5 fix(v23): allow anon patient submit on opd_sessions firestore rule`
-- **Test count**: ~5239 vitest passing (5190 + 49 V23: 24 A1-A5 firestore-rules-anon-patient-update + 5 R7 writer-side + 2 V23-lock e2e + 18 prior R1-R6/T1-T8)
-- **Build**: clean. BackendDashboard chunk ~925 KB (unchanged)
-- **Deploy state**: ✅ **DEPLOYED** — production at `0a0b9f5` (V15 combined deploy V23 hotfix 2026-04-26)
-  - Vercel: `0a0b9f5` aliased to https://lover-clinic-app.vercel.app (deploy time 31s)
-  - Firestore rules: v11 (V23 narrowing — opd_sessions update gate)
-  - **Pre-probe baseline (4 endpoints)**: 200/200/200/200 ✓ | **V23 pre-probe**: anon UPDATE 403 = bug confirmed live
-  - **Post-deploy probes (5 endpoints)**: 200/200/200/200 + V23 anon CREATE 200 + UPDATE 200 = fix LIVE ✓
+- **Last commit**: `884f6cc fix(v24): ProClinic schedule sync only fetched doctor data — now hits both แพทย์+พนักงาน endpoints`
+- **Test count**: ~5274 vitest passing (5239 + 28 Phase 13.5.4 H1-H5 + 7 V24 SC.G new)
+- **Build**: clean. BackendDashboard chunk ~928 KB (+3 KB Phase 13.5.4)
+- **Deploy state**: ✅ **DEPLOYED** — production at `884f6cc` (V15 combined deploy 2026-04-26 session 7; 2 commits — `6799a58` Phase 13.5.4 Deploy 1 + `884f6cc` V24 sync fix)
+  - Vercel: `lover-clinic-ejed4oblq` aliased to https://lover-clinic-app.vercel.app (deploy time 32s)
+  - Firestore rules: v11 (UNCHANGED — idempotent fire; Deploy 2 of 13.5.4 will narrow isClinicStaff() AFTER user runs migration button)
+  - **Pre-probe (5 endpoints)**: 200/200/200/200/200 ✓ (V23 still LIVE)
+  - **Post-deploy probes (5 endpoints)**: 200/200/200/200/200 ✓
   - **Cleanup**: pc_appointments DELETE x 2 200/200 + proclinic_session* strip 200/200 ✓
   - **Production smoke**: backend / ?session= / ?patient= all HTTP 200 ✓
-- **Rule B probe list extended permanently**: 4 → 5 endpoints (`.claude/rules/01-iron-clad.md`). Future rules deploys catch this regression class automatically.
+- **Rule B probe list permanent**: 5 endpoints (extended in V23). Future rules deploys catch regression class automatically.
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master ahead of origin/master by 1 (push pending in this turn)
+- **Remote sync**: master ahead of origin/master by 3 (`b177541` V23 handoff + `6799a58` Phase 13.5.4 D1 + `884f6cc` V24) — push pending
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
-- **SCHEMA_VERSION**: 15 (auto-upgrades on print-modal open, no manual deploy needed for schema)
+- **SCHEMA_VERSION**: 15 (auto-upgrades on print-modal open)
 
 ---
 
@@ -36,6 +36,50 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 7 (2 commits, `6799a58` + `884f6cc`) — Phase 13.5.4 Deploy 1 + V24 schedule sync fix
+User directives: "ตอนนี้ก่อน phase 15 เหลืออะไรนะ" → "เริ่มทั้งหมดเลย ลำดับความสำคัญก่อนหลังเอา แต่ทำทั้งหมดที่นายแนะนำก่อน 15" → "tab sync proclinic คือ tab ที่ใช้แค่ช่วง develop app ของเรานะ" → "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์ ฝากแก้ตรงนี้ก่อน deploy" → "deploy".
+
+#### Commit `6799a58` — Phase 13.5.4 Deploy 1 (hard-gate MVP foundation)
+2-phase deploy plan: Deploy 1 ships endpoint + auto-sync + migration button (rules unchanged). User runs migration button. Deploy 2 ships rules claim-only check.
+
+Implementation:
+- `api/admin/users.js` — adds `setPermission` + `clearPermission` actions (mirrors grantAdmin/revokeAdmin pattern). serializeUser exposes `isClinicStaff` + `permissionGroupId` from customClaims. Self-protection: clearPermission cannot remove caller's own claim unless bootstrap admin.
+- `src/lib/adminUsersClient.js` — `setUserPermission` + `clearUserPermission` wrappers (named-arg pattern, V11-safe).
+- `src/components/backend/StaffFormModal.jsx` — auto-sync claims after `saveStaff`. Wrapped in try/catch (non-fatal — Firestore save already landed). Skips when no firebaseUid.
+- `src/components/backend/PermissionGroupsTab.jsx` — "Sync ทุก staff → Claims" button (top-right). Loops every be_staff with firebaseUid; per-user error caught; result UI shows synced/skipped/failed + Deploy 2 readiness hint.
+- Tests: `tests/phase13.5.4-hard-gate-claims.test.js` 28/28 in H1-H5.
+
+Per Rule H-bis user reaffirmation 2026-04-26 ("ทุกปุ่มใน tab นั้นจะถูกลบทั้งหมด"): migration button placed in PermissionGroupsTab (production-bound), NOT MasterDataTab (dev-only).
+
+#### Commit `884f6cc` — V24 schedule sync fix
+User report mid-session: "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์ ช่องตารางพนักงานเหมือนไม่มีข้อมูลเลย ฝากแก้ตรงนี้ก่อน deploy".
+
+Root cause: `api/proclinic/master.js handleSyncSchedules` fetched `/admin/api/schedule/today` — comment claimed "covers all staff" but ProClinic actually exposes TWO separate FullCalendar feeds (one per role) with URL-encoded Thai role names:
+- `/admin/api/schedule/แพทย์?start=...&end=...`
+- `/admin/api/schedule/พนักงาน?start=...&end=...`
+
+Verified via `docs/proclinic-scan/detailed-adminscheduleemployee.json` capture.
+
+Fix:
+- New helper `buildScheduleDateRange()` — start/end query window (-180d back, +365d forward, +07:00 TZ).
+- `handleSyncSchedules` rewritten: parallel `Promise.all` fetch of both endpoints with `.catch(()=>null)` per endpoint (one-failure tolerant); throws only when BOTH fail; merges + dedupes by `proClinicId` via Set.
+- Return shape adds `rawDoctor` + `rawEmployee` count fields for diagnostics.
+- Tests: `tests/proclinic-schedule-sync.test.js` SC.E.2 + SC.E.3 updated; NEW SC.G group (7 tests) locks the fix shape.
+- V24 V-entry logged in `.claude/rules/00-session-start.md` with 4 lessons.
+
+#### Combined V15 deploy verification (session 7 EOD)
+- Pre-probe (5 endpoints): 200/200/200/200/200 ✓ (V23 still LIVE)
+- Vercel: deployed in 32s, aliased to lover-clinic-app.vercel.app
+- Firebase rules: idempotent fire (rules unchanged this turn)
+- Post-probe (5): 200/200/200/200/200 ✓ — V24 fix code is now LIVE; V23 anon UPDATE still 200
+- Cleanup: pc_appointments DELETE x 2 + proclinic_session* strip — 4/4 200
+- Production HTTP smoke: backend / ?session= / ?patient= — 3/3 200
+
+#### Outstanding user-triggered actions
+1. **Verify V24 in production**: MasterDataTab → "ดูดตารางหมอ + พนักงาน" → expect to receive BOTH doctor + employee entries → "นำเข้า master_data → be_staff_schedules" → verify EmployeeSchedulesTab calendar populated.
+2. **Run Phase 13.5.4 migration button**: PermissionGroupsTab → "Sync ทุก staff → Claims" (one-time backfill).
+3. **After migration**: tell me to ship Phase 13.5.4 Deploy 2 (firestore.rules → claim-only `isClinicStaff()` check).
 
 ### Session 2026-04-26 session 6 (1 commit, `0a0b9f5`) — V23 P0 HOTFIX: anon QR/link patient submit
 User report (verbatim): "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอดส่งไม่ได้" + "เช็คให้หมดทั้ง frontend แบบ 100% จริงๆ ว่าจะไม่มีบั๊คแบบนี้หรือใกล้เคียงกับแบบนี้อีกแล้ว" + "ทำเสร็จ test แล้ว deploy เลย เพราะใช้จริงอยู่"
