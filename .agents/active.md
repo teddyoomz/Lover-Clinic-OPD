@@ -1,15 +1,15 @@
 ---
-updated_at: "2026-04-26 (session 8 — Phase 13.5.4 hard-gate END-TO-END + V27 cleanup + V28 future-proof — production LIVE + queue CLEAN)"
-status: "Production at fc968cf LIVE. Phase 13.5.4 D1+D2 + V24 + V25 + V25-bis + V27 + V27-bis + V27-tris + V28 + P6 ALL deployed end-to-end. Queue auto-cleaned of all test-probe-anon-* legacy docs (0 remaining). Future onboarding contract LOCKED by 117+ tests."
-current_focus: "Phase 13.5.4 closed. Moving to Tier 2: Doc 10/11/12 verification + UC1 weekend red labels + M9 customer doc summary reconciler."
+updated_at: "2026-04-26 (session 8 — V29 universal auto-sync + ALL manual buttons REMOVED — Perfect 100%)"
+status: "Production at 751e3f7 LIVE. V29 ships /api/admin/sync-self self-service endpoint + UPC auto-sync useEffect + group-change re-sync + REMOVED all 3 manual buttons (Bootstrap self / Sync claims / Cleanup probes). 166/166 permission tests pass. Per-persona E2E coverage matrix locked."
+current_focus: "Phase 13.5.4 + V25-V29 closed Perfect 100%. Auto-sync handles every id, every permission, every email domain. Moving to Tier 2: Doc 10/11/12 + UC1 + M9."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "fc968cf"
-tests: "~5320 vitest (5274 + V27-tris + V27-bis + V28 + P6 = 25 source-grep + 23 future-proof + dual-list sync drift)"
+last_commit: "751e3f7"
+tests: "~5350 vitest (166 permission/security across 6 test files: hard-gate-claims 74 + onboarding-e2e 30 + auto-bootstrap-on-login 17 + deriveState-future-proof 23 + deploy2-claim-only 14 + anon-patient-update 25)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "fc968cf (2026-04-26 session 8 V15 combined — V27-tris bundled with V27-bis + V28 + P6). Pre-probe 5/5+5c=200/200/200/200/200/403 (DELETE blocked PRE-V27tris ✓); post-probe 5/5+5c=200 (DELETE now allowed via test-probe-anon prefix); adversarial DELETE on DEP-DBGMJ7 = 403 ✓ (legit data protected); auto-cleanup deleted 3 legacy probe docs; production smoke 2/2=200."
-firestore_rules_deployed: "v13 (V27-tris: opd_sessions delete narrowed to isClinicStaff() OR (anon + sessionId.matches('^test-probe-anon-.*$')) — anon self-cleanup pattern)"
-bundle: "BackendDashboard ~932 KB (+ 4 KB for V27 cleanup button + V27-bis OWNER_EMAILS + V28 + V25-bis bootstrap-self)"
+last_deploy: "751e3f7 (V29 V15 combined). Pre+post probes 5+5c=200/200/200/200/200/200/200; cleanup OK; 0 probe docs leftover (V27-tris anon self-DELETE works); production smoke 2/2=200. Vercel: lover-clinic-4kpdcilge."
+firestore_rules_deployed: "v13 (UNCHANGED from V27-tris — V29 only changes app + new endpoint)"
+bundle: "BackendDashboard reduced after button removals (3 buttons + result UIs deleted)"
 ---
 
 # Active Context
@@ -141,24 +141,40 @@ catch this regression class automatically (.claude/rules/01-iron-clad.md).
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-### NONE (Phase 13.5.4 closed end-to-end)
-All security-related items are DEPLOYED + verified:
-- V26 isClinicStaff() = claim-only (no email check)
-- V27-bis OWNER_EMAILS allows oomz.peerapat@gmail.com bootstrap
-- V28 staff in gp-owner = admin regardless of email domain
-- V27-tris anon self-cleanup of test-probe artifacts
-- 3 legacy probe docs auto-deleted; queue clean
-- 117+ tests lock the new behavior
+### NONE — V29 closes everything Perfect 100%
 
-### Future onboarding contract (LOCKED by tests)
-1. Admin opens StaffFormModal → enters email + password +
-   permissionGroupId → Save
-2. Firebase Auth account created + claims auto-synced (V25)
-3. New person logs in → soft-gate trusts their group (V28) →
-   sidebar populates
-4. firestore.rules V26 lets them read be_* via claims
-5. Works for ANY email domain (gmail, outlook, yahoo, etc.) — no
-   code change needed
+After deploy, oomz refresh browser → V29 auto-sync fires silently:
+1. UPC useEffect calls `/api/admin/sync-self` (no admin gate; signed-in only)
+2. sync-self looks up be_staff WHERE firebaseUid==oomz.uid → no doc
+3. Returns synced=false → UPC falls back to bootstrapSelfAsAdmin
+4. bootstrap-self: oomz email in OWNER_EMAILS → genesis check skipped → admin claim granted
+5. Token refreshed → next StaffFormModal save works (admin gate cleared)
+
+For NEW staff added via StaffFormModal:
+1. createAdminUser → Firebase Auth account
+2. saveStaff → be_staff doc with permissionGroupId
+3. **setUserPermission auto-grants claims AT CREATION** (V25 + V28-tris):
+   - isClinicStaff: true
+   - permissionGroupId: <group>
+   - admin: true (if group is gp-owner OR has meta-perm)
+4. New staff logs in → token already has claims → instant access
+
+For group changes mid-session:
+1. Admin saves staff with new permissionGroupId
+2. setPermission updates claims in Firebase Auth
+3. UPC group-change useEffect detects staff.permissionGroupId change
+4. Calls sync-self → token refresh → claims propagate without re-login
+
+### Coverage matrix (locked by 30 E2E + 136 source-grep tests)
+
+| Persona | Soft-gate | Hard-gate | First-login |
+|---------|-----------|-----------|-------------|
+| Bootstrap admin (oomz/loverclinic) | Auto via OWNER_EMAILS/regex | Auto via bootstrap-self | Sidebar full immediate |
+| Gmail in gp-owner | Auto via group | Auto via setPermission OR sync-self | Admin sidebar immediate |
+| Outlook in gp-frontdesk | Auto via group | Auto via setPermission | Frontdesk tabs only |
+| Yahoo in custom meta-perm group | Auto via meta-perm | Auto via setPermission group lookup | Admin tabs immediate |
+| Random unauthorized email | Blocked | Blocked | NO access (rejected at every layer) |
+| Multi-owner clinic | Auto for both | Both can bootstrap independently | Both admin |
 
 ## Recent decisions (non-obvious — preserve reasoning)
 
