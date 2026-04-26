@@ -181,13 +181,20 @@ export default function MonthCalendarGrid({
       </div>
 
       {/* Week-header row — Monday-first per ProClinic */}
+      {/* UC1 (V30, 2026-04-26): Thai cultural convention — Sunday in red,
+          Saturday in violet. Mirrors the Thai paper-calendar tradition where
+          Sunday is the holy/rest day shown in red ink. */}
       <div className="grid grid-cols-7 border-b border-[var(--bd)] bg-[var(--bg-hover)]">
         {WEEK_HEADER.map((label, idx) => {
           const jsDow = SLOT_TO_JS_DAY[idx];
-          const isWeekend = jsDow === 0 || jsDow === 6;
+          const headerCls = jsDow === 0
+            ? 'text-rose-400'      // Sunday — Thai red tradition
+            : jsDow === 6
+              ? 'text-violet-400'  // Saturday — Thai violet tradition
+              : 'text-[var(--tx-secondary)]';
           return (
             <div key={label}
-              className={`text-center py-1.5 text-[10px] font-bold uppercase tracking-wider ${isWeekend ? 'text-[var(--tx-muted)]' : 'text-[var(--tx-secondary)]'}`}>
+              className={`text-center py-1.5 text-[10px] font-bold uppercase tracking-wider ${headerCls}`}>
               {label}
             </div>
           );
