@@ -26,7 +26,7 @@ import {
   migrateMasterMedicalInstrumentsToBe, migrateMasterHolidaysToBe,
   migrateMasterBranchesToBe, migrateMasterPermissionGroupsToBe,
   // Phase 12.1: people entities
-  migrateMasterStaffToBe, migrateMasterDoctorsToBe,
+  migrateMasterStaffToBe, migrateMasterDoctorsToBe, migrateMasterStaffSchedulesToBe,
   // Phase 12.2: catalog entities
   migrateMasterProductsToBe, migrateMasterCoursesToBeV2,
   // Phase 14.x: DF groups + per-staff rate overrides (scrape → be_*)
@@ -364,6 +364,9 @@ export default function MasterDataTab({ clinicSettings, theme }) {
     // + permission group wiring happens in OUR CRUD after migrate.
     { key: 'staff',               label: 'พนักงาน → be_staff',                     icon: '👤', fn: migrateMasterStaffToBe },
     { key: 'doctors',             label: 'แพทย์/ผู้ช่วย → be_doctors',              icon: '🩺', fn: migrateMasterDoctorsToBe },
+    // Phase 13.2.14: schedule entries (FK-resolves proClinicStaffId via
+    // be_doctors then be_staff; orphans reported in result.orphans[]).
+    { key: 'staff_schedules',     label: 'ตารางหมอ + พนักงาน → be_staff_schedules', icon: '📆', fn: migrateMasterStaffSchedulesToBe },
     // Phase 12.2 — seed be_products + be_courses. ProClinic IDs preserved so
     // existing sales referencing them stay resolvable.
     { key: 'products',            label: 'สินค้า → be_products',                   icon: '📦', fn: migrateMasterProductsToBe },

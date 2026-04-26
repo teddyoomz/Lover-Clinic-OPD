@@ -7146,6 +7146,136 @@ export async function deleteStaffSchedule(scheduleId) {
   return { success: true };
 }
 
+// ─── Phase 13.2.14 — master_data/staff_schedules → be_staff_schedules migrator ──
+// Custom migrator (NOT runMasterToBeMigration) because schedule entries have
+// a FK to be_doctors OR be_staff via proClinicStaffId. We must classify each
+// item before writing — orphans (proClinicStaffId not in either collection)
+// are reported back to the user so they know to run Doctors/Staff sync first.
+//
+// Idempotent — re-syncing overwrites the same docs (doc id = proClinicId,
+// e.g. "recurring-308-tuesday").
+//
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
+
+/**
+ * Pure: map a master_data/staff_schedules item + a resolved staff record →
+ * be_staff_schedules entry shape.
+ *
+ * @param {object} src - master_data item (output of mapProClinicScheduleEvent)
+ * @param {{id: string, name: string, type: 'doctor'|'employee'}} match
+ * @param {string} now - ISO timestamp
+ */
+export function mapMasterToBeStaffSchedule(src, match, now) {
+  if (!src || !match) return null;
+  const docId = String(src.proClinicId || src.id || '');
+  if (!docId) return null;
+  return {
+    id: docId,
+    scheduleId: docId,
+    staffId: String(match.id),
+    staffName: match.name || '?',
+    type: String(src.type || 'recurring'),
+    dayOfWeek: src.dayOfWeek != null && src.dayOfWeek !== '' ? Number(src.dayOfWeek) : null,
+    date: String(src.date || ''),
+    startTime: String(src.startTime || ''),
+    endTime: String(src.endTime || ''),
+    branchId: String(src.branchId || ''),
+    _source: 'proclinic-sync',
+    _proClinicStaffId: String(src.proClinicStaffId || ''),
+    _proClinicStaffName: String(src.proClinicStaffName || ''),
+    _staffType: match.type,           // 'doctor' | 'employee'
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Migrate master_data/staff_schedules/items/* → be_staff_schedules/*.
+ * FK-resolves proClinicStaffId via be_doctors then be_staff. Orphans
+ * (no match in either) reported in return value, NOT crashed.
+ *
+ * @returns {Promise<{ imported: number, skipped: number, orphans: Array, total: number }>}
+ */
+export async function migrateMasterStaffSchedulesToBe() {
+  const masterSnap = await getDocs(masterDataItemsCol('staff_schedules'));
+  if (masterSnap.empty) return { imported: 0, skipped: 0, orphans: [], total: 0 };
+
+  // Pre-load doctor + staff for FK resolution. Map keyed by both `doctorId`
+  // and the doc id (defensive — the migrator is robust to either shape).
+  const [doctorSnap, staffSnap] = await Promise.all([
+    getDocs(doctorsCol()).catch(() => null),
+    getDocs(staffCol()).catch(() => null),
+  ]);
+
+  const doctorMap = new Map();
+  if (doctorSnap) {
+    for (const d of doctorSnap.docs) {
+      const data = d.data();
+      const idCandidates = new Set([
+        String(d.id || ''),
+        String(data.doctorId || ''),
+      ].filter(Boolean));
+      const fn = (data.firstname || data.firstName || '').trim();
+      const ln = (data.lastname || data.lastName || '').trim();
+      const nick = data.nickname ? ` (${data.nickname})` : '';
+      const name = `${fn} ${ln}`.trim() + nick;
+      const entry = { id: String(d.id || data.doctorId), name: name || data.name || `แพทย์ ${d.id}`, type: 'doctor' };
+      for (const key of idCandidates) doctorMap.set(key, entry);
+    }
+  }
+
+  const staffMap = new Map();
+  if (staffSnap) {
+    for (const s of staffSnap.docs) {
+      const data = s.data();
+      const idCandidates = new Set([
+        String(s.id || ''),
+        String(data.staffId || ''),
+      ].filter(Boolean));
+      const fn = (data.firstname || data.firstName || '').trim();
+      const ln = (data.lastname || data.lastName || '').trim();
+      const nick = data.nickname ? ` (${data.nickname})` : '';
+      const name = `${fn} ${ln}`.trim() + nick;
+      const entry = { id: String(s.id || data.staffId), name: name || data.name || `พนักงาน ${s.id}`, type: 'employee' };
+      for (const key of idCandidates) staffMap.set(key, entry);
+    }
+  }
+
+  const now = new Date().toISOString();
+  let imported = 0;
+  let skipped = 0;
+  const orphans = [];
+
+  for (const d of masterSnap.docs) {
+    const src = { ...d.data(), proClinicId: d.data().proClinicId || d.id };
+    const proStaffId = String(src.proClinicStaffId || '').trim();
+
+    if (!proStaffId) { skipped++; continue; }
+
+    // Try doctor first, fall back to employee. Doctors take precedence
+    // because /admin/api/schedule/today is primarily a doctor schedule
+    // feed (and ambiguity would mis-classify clinic staff with the same id).
+    const match = doctorMap.get(proStaffId) || staffMap.get(proStaffId);
+    if (!match) {
+      orphans.push({
+        proClinicStaffId: proStaffId,
+        proClinicStaffName: String(src.proClinicStaffName || '?'),
+        proClinicId: String(src.proClinicId || d.id),
+        type: src.type,
+      });
+      continue;
+    }
+
+    const payload = mapMasterToBeStaffSchedule(src, match, now);
+    if (!payload) { skipped++; continue; }
+
+    await setDoc(staffScheduleDocRef(payload.id), payload, { merge: false });
+    imported++;
+  }
+
+  return { imported, skipped, orphans, orphanCount: orphans.length, total: masterSnap.size };
+}
+
 /**
  * Phase 13.2.6 — return the EFFECTIVE schedule for a single date, merging
  * per-date overrides over recurring weekly shifts (override wins).
