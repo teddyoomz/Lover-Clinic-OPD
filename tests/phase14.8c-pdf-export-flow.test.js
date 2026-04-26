@@ -218,12 +218,17 @@ describe('PE.E — engine source-grep guards', () => {
     expect(engineFile).toMatch(/export async function exportDocumentToPdf/);
   });
 
-  it('E.2 — exportDocumentToPdf uses lazy import (no top-level html2pdf import)', () => {
-    // Top-level imports section
+  it('E.2 — exportDocumentToPdf uses lazy direct imports of html2canvas + jsPDF (V32 — no html2pdf orchestration)', () => {
+    // Top-level imports section — neither html2canvas, jspdf, nor html2pdf at top
     const importsBlock = engineFile.split(/\n\s*\n/, 1)[0] + engineFile.slice(0, 500);
     expect(importsBlock).not.toMatch(/^import.*html2pdf/m);
-    // Lazy import inside exportDocumentToPdf
-    expect(engineFile).toMatch(/await\s+import\s*\(\s*['"]html2pdf\.js['"]\s*\)/);
+    expect(importsBlock).not.toMatch(/^import\s+.*\s+from\s+['"]html2canvas['"]/m);
+    expect(importsBlock).not.toMatch(/^import\s+.*\s+from\s+['"]jspdf['"]/m);
+    // Lazy direct imports of html2canvas + jspdf
+    expect(engineFile).toMatch(/await\s+(?:Promise\.all\(\s*\[\s*)?import\s*\(\s*['"]html2canvas['"]\s*\)/);
+    expect(engineFile).toMatch(/import\s*\(\s*['"]jspdf['"]\s*\)/);
+    // V32 — must NOT import html2pdf.js anymore
+    expect(engineFile).not.toMatch(/import\s*\(\s*['"]html2pdf\.js['"]\s*\)/);
   });
 
   it('E.3 — exportDocumentToPdf calls buildPrintContext + buildPrintDocument', () => {

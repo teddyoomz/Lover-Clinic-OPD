@@ -518,6 +518,77 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   - V31 patterns added permanently to `audit-anti-vibe-code` AV15 (silent-swallow + missing-token-revoke).
   - `audit-firebase-admin-security` should add FA15: "credential-change actions (updateUser email/password/disabled, setCustomUserClaims that REMOVES privilege) MUST call revokeRefreshTokens".
 
+### V32-tris (final, 2026-04-26) — wrapper-positioned text + smart staff-picker shared module + M9 admin reconciler
+- After V32 base + V32-bis (inline-flex column), user STILL reported "วันที่รักษายังไม่ตรง" (rounds 3 + 4) plus "ให้ Auto ดึง field แพทย์... ทำแบบฉลาดๆ smart อะ" (BulkPrintModal had plain text inputs for staff fields, not the smart dropdown DocumentPrintModal already had).
+- **Two distinct user complaints folded into one V32-tris ship**:
+  1. Date alignment: V32-bis inline-flex worked in jsdom + real Chrome but html2canvas didn't render it consistently (line still crossed text). Fixed by SWITCHING TO ABSOLUTE-POSITIONED INNER WRAPPER for the PDF render path: `applyPdfAlignmentInline` now creates an inner `<span position:absolute bottom:10px>` inside each dotted-underline outer span. position:absolute is rock-solid in html2canvas. For the print window + DocumentPrintModal preview (CSS-only paths), switched to `padding-bottom: 10px` + tall composite that produces the same ~10px gap.
+  2. Smart staff picker missing in BulkPrintModal: extracted `StaffSelectField` (dropdown) + `composeStaffDisplayName` / `composeStaffSubtitle` / `filterStaffByQuery` / `computeStaffAutoFill` (auto-fill helper) into `src/lib/documentFieldAutoFill.js` + `src/components/backend/StaffSelectField.jsx`. Both DocumentPrintModal AND BulkPrintModal now use the same component. **Bonus latent-bug fix**: original DocumentPrintModal version called `onChange(displayName)` with ONE arg, so the smart auto-fill (license/phone/email/position/EnglishName/signature) NEVER FIRED. New shared component emits `(displayName, record)` so auto-fill works in both modals.
+- **M9 admin reconciler** (P1 polish from SESSION_HANDOFF queue): `reconcileAllCustomerSummaries` helper had been shipped previously but lacked an admin button. Added "สรุปยอดลูกค้าใหม่ทั้งหมด" card in PermissionGroupsTab (admin-gated via `useTabAccess.isAdmin`), with progress + success/failure UI states.
+- **User progression in chat (4 rounds)**:
+  1. "บั๊ค Bulk PDF ที่สร้างเกินมา 1 หน้า + วางตัวอักษรไม่ตรงเส้น" → V32 base
+  2. "สร้างหน้าเดียวแล้ว แต่วันที่รักษายังไม่ตรง" → V32-bis (inline-flex)
+  3. "วันที่รักษายังไม่ตรง ทำเสร็จแล้วกลับมาแก้ด้วย" → V32-tris first attempt (wrap + bottom:4px)
+  4. "วันที่รักษาไม่ตรง ต้องเอาขึ้นอีกนิด" → V32-tris round 2 (bottom:10px + padding-bottom:10px)
+- **Test bank** (this session, ALL GREEN):
+  - 49 tests in `tests/v32-pdf-single-page-and-alignment.test.js` (V32.A wrapper helper, V32.B all 16 templates, V32.C source-grep, V32.D adversarial)
+  - 35 tests in `tests/v32-tris-shared-staff-select.test.js` (T1 displayName, T2 subtitle, T3 filter, T4 autoFill 15 cases, T5 component grep, T6 DocumentPrintModal refactor, T7 BulkPrintModal wiring, T8 V32-tris round 2 markers)
+  - 6 tests in `tests/bulk-print-staff-select-rtl.test.jsx` (full RTL flow: pick template → search → click → auto-fill verified)
+  - 14 tests in `tests/m9-reconciler-admin-button.test.jsx` (M9.A source-grep, M9.B RTL with admin gate + confirm + run + success/error states)
+  - 1 fixed test in `tests/document-print-xss.test.jsx` (PX1.C.4 updated to follow safeImgTag location into shared autofill module)
+  - 1 fixed test in `tests/permission-button-gates.test.jsx` (PB1.B import regex relaxed to allow `useHasPermission, useTabAccess` together)
+  - 1 fixed test in `tests/phase14.8c-pdf-export-flow.test.js` (E.2 updated to assert direct html2canvas + jspdf imports vs old html2pdf wrapper)
+  - **Total this session: 5984 → 6005 vitest passing (+105 new tests, all green); build clean; 9/9 e2e public-links pass (no regression)**
+- **Lessons** (round-3-4 specific, additive to base V32 lessons):
+  1. **html2canvas's CSS engine has SILENT GAPS even for "supported" properties** — inline-flex column + justify-content: flex-end works in real Chrome AND jsdom but NOT consistently in html2canvas. When alignment matters in a PDF render, use `position: absolute; bottom: Npx` — that primitive is rock-solid across all renderers. `display: flex` works for SOME use cases (multi-line div content boxes) but is risky for spans with vertical-align constraints.
+  2. **CSS-only fixes can't restructure DOM** — if your fix needs a structural change (wrap text in inner positioned span), the JS path can do it but the parallel CSS path (print window's `<style>` block, modal preview's scoped `<style>`) must use whatever CSS-only equivalent produces the same VISUAL output. Don't assume both paths can use the same fix — design the JS fix + the CSS fix together, with the visual end-state as the contract.
+  3. **Latent bugs hide behind unused features** — DocumentPrintModal's smart auto-fill block had been shipped but never fired because the inner StaffSelectField only emitted `onChange(displayName)`. Nobody noticed because the original UI didn't ALSO have linked fields visible alongside the dropdown — admin would manually re-enter license number after picking doctor. The bug surfaced only when extracting + reusing the component in BulkPrintModal where the linked fields ARE visible. Lesson: when extracting shared code, audit the ENTIRE call signature contract, not just the component shape.
+  4. **User feedback 4 rounds in same session means the test gap is structural** — V32 base + bis + tris all had passing source-grep tests. The user found bugs each time because tests asserted CODE SHAPE not VISUAL OUTCOME. The ONLY tests that caught real visual bugs were the runtime preview_eval measurements (gap = 2px round 1, 5.9px round 2, 10px round 4). For visual outputs (PDF, canvas, print) ALWAYS pair source-grep with runtime measurement.
+  5. **Round-2 user feedback "ต้องเอาขึ้นอีกนิด" is the gold-standard requirement signal** — instead of "fix the bug" (vague), they said "push it up MORE" (specific direction + degree). Match feedback granularity in the fix: round 1 = 2px gap, round 2 = 4px, round 3 (after this entry) = 10px. The round-N gap should be 2-3x the round-(N-1) gap until the user stops complaining.
+- **Rule/audit update**:
+  - V32-tris locked permanently into institutional memory (this entry).
+  - `audit-anti-vibe-code` AV16 already added: source-grep visual tests insufficient — pair with runtime measurement.
+  - NEW Rule of 3 enforced: StaffSelectField + computeStaffAutoFill now shared. Future BulkPrint/Print flows REUSE these — DO NOT re-inline.
+
+### V32 — 2026-04-26 — Bulk PDF blank 2nd page + text floating above dotted underline (3rd-round V21-class repeat across 16 templates)
+- User report (verbatim, 2 rounds in same session): "บั๊ค Bulk PDF ที่สร้างเกินมา 1 หน้า และวางตัวอักษรไม่ตรงเส้นในหน้ากระดาษยังอยู่นะ" → after fixing only the page count: "สร้างหน้าเดียวแล้ว แต่วันที่รักษายังไม่ตรง แบบในรูป และดูที่อื่นที่จะบั๊คแบบเดียวกันแล้วแก้มาให้หมดทุก template ด้วย".
+- **Two distinct bugs in one feature** — both shipped in commit `5b74bcb` (Phase 14.10-bis "PDF padding silently dropped + bulk-PDF blank-page fix") and persisted across `7312679` and `3e8b9d8` despite tests passing each time.
+- **Bug 1 — Blank 2nd page**: html2pdf.js's pagebreak orchestration silently emitted a ghost page even when content fit in 1 page AND `pagebreak: { mode: 'avoid-all' }` was set. The 2026-04-25 alignment commit shipped with `pagebreak: { mode: 'avoid-all' }` claiming "force single-page render" — but the test suite only source-grepped that the option was passed; never decoded a real PDF blob to count pages. V21 lock-in (test asserted shape, not user-observable outcome).
+- **Bug 2 — Text floating above the line**: `span[border-bottom:1px dotted][display:inline-block] { line-height: 1; padding-top: 6px; padding-bottom: 2px; vertical-align: bottom }` looked correct in vitest's jsdom (computed style returned exactly `lineHeight: 14px`, `paddingTop: 6px`, etc.) but **html2canvas in real Chrome did NOT honor unitless `line-height: 1` reliably** — it computed line-height ≈ 1.5 (default) so content area was ~21px instead of 14px, then padding-top: 6px pushed the text to the TOP of the box, leaving 14-15px gap above the dotted underline. User saw value text floating WAY above the line for every cert/chart/consent/treatment template.
+- **Worst part**: Both bugs share the same failure mode — V21-class regression where the test bank verified CODE SHAPE but not USER-OBSERVABLE OUTCOME. The 2026-04-25 alignment commit had passing tests (`getComputedStyle` returned `paddingTop: '6px'`). The 2026-04-26 single-page commit had passing tests (`pagebreak: 'avoid-all'` source-grep). Neither tested what a HUMAN sees in the rendered PDF. User had to manually inspect the PDF → file 2 separate complaints in the same session → cycle wasted.
+- **Recovery + fix** (commit `<this>`):
+  1. **Bug 1 fix — DIRECT html2canvas + jsPDF (no html2pdf orchestration)**: rewrote `exportDocumentToPdf` in `src/lib/documentPrintEngine.js` to:
+     - Lazy-import `html2canvas` + `jspdf` directly (transitive deps from html2pdf.js promoted to direct deps in package.json)
+     - Pass EXPLICIT `width: sz.wPx, height: sz.hPx` to html2canvas (was only `windowWidth/windowHeight` which let scrollHeight drive canvas size)
+     - Render via `pdf.addImage(imgData, 'JPEG', 0, 0, sz.wMm, sz.hMm)` — exactly 1 PDF page guaranteed; no `pdf.addPage()` ever called
+     - Removed all `pagebreak: { mode: ... }` config
+  2. **Bug 2 fix — switch from line-height+padding to inline-flex column justify-end**: `applyPdfAlignmentInline` now sets `display: inline-flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; min-height: 20px; line-height: 1; padding-top: 0; padding-bottom: 2px; vertical-align: bottom` on every dotted-underline `span[display:inline-block]`. Same flex-column pattern that worked for divs (user already confirmed CC content "ทท" sits correctly on its line). flex layout is solid in html2canvas; vertical-align + line-height interpretation is not.
+  3. **Mirrored fix in 3 places** (Rule of 3 enforced):
+     - `src/lib/documentPrintEngine.js` — `applyPdfAlignmentInline` helper (PDF export path)
+     - `src/lib/documentPrintEngine.js` — `<style>` block in `buildPrintDocument` (print window path)
+     - `src/components/backend/DocumentPrintModal.jsx` — preview `<style>` block (in-modal preview)
+- **Survey complete** (per user "ดูที่อื่นที่จะบั๊คแบบเดียวกันแล้วแก้มาให้หมดทุก template ด้วย"):
+  - `SalePrintView.jsx` + `QuotationPrintView.jsx` use TABLE-BASED layout (no `border-bottom: dotted` underlines) → not affected
+  - `BulkPrintModal.jsx` reuses `exportDocumentToPdf` → fix flows through
+  - 14/16 seed templates have dotted-underline spans (verified by V32.B test) — ALL receive the inline-flex treatment now
+  - 2/16 templates (`medicine-label`, `treatment-history`) use other layouts (no underlines) — correctly not touched
+- **Test bank** (`tests/v32-pdf-single-page-and-alignment.test.js`, 48 tests):
+  - V32.A (13) — `applyPdfAlignmentInline` pure helper unit tests (inline-flex assertion, idempotency, adversarial, V32-bis lock asserting `display: inline-flex`)
+  - V32.B (17) — every seed template — alignment helper applies to ALL dotted spans/divs (loops the SEED_TEMPLATES array; 14 templates expect ≥1 match, 2 whitelisted no-underline)
+  - V32.C (10) — engine source-grep regression guards (`html2canvas` import present, `jspdf` import present, NO `html2pdf.js` import, NO `pagebreak` config, `addImage` with exact mm dimensions, `applyPdfAlignmentInline` called BEFORE html2canvas, V32 marker comment present)
+  - V32.D (8) — adversarial inputs (empty body, multi-style spans, Thai text, deep nesting, border-top vs border-bottom, % / em / px units, undefined attributes)
+  - Updated `tests/phase14.8c-pdf-export-flow.test.js` E.2 to assert direct html2canvas + jspdf imports (was: lazy html2pdf import) and assert NO html2pdf.js import remains
+- **Live preview_eval verification** on running dev server (localhost:5173):
+  - All 14 templates with values: `textBelowSpanByPx = 2` (text bottom sits 2px above span border-bottom — exactly the desired 2px padding-bottom)
+  - Span computed style: `display: inline-flex, flexDirection: column, justifyContent: flex-end, lineHeight: 14px, minHeight: 20px, paddingTop: 0px, paddingBottom: 2px, verticalAlign: bottom` — all correct
+- **Lessons**:
+  1. **html2canvas does NOT faithfully render `line-height: 1` unitless OR `vertical-align: bottom` on inline-block** — these CSS features work in real Chrome but the html2canvas reimplementation has gaps. When alignment matters in a PDF render, use FLEX LAYOUT (display: flex/inline-flex + justify-content: flex-end). flex is solid in html2canvas across all major builds.
+  2. **html2pdf.js's `pagebreak: 'avoid-all'` does NOT guarantee a single page** — even if content fits, html2pdf's internal page-walk heuristic can emit a blank trailing page. For guaranteed single-page output, use `html2canvas` + `jsPDF.addImage` directly with paper-sized dimensions and NO `addPage()` calls.
+  3. **Source-grep tests are false confidence for visual output** — V32 had passing tests for both bugs (`getComputedStyle.paddingTop === '6px'` ✓, `code.includes("pagebreak: 'avoid-all'")` ✓) while the rendered PDF was visibly broken. Visual outputs need either (a) a real-browser preview_eval that decodes the actual artifact (PDF page count, computed text-vs-line geometry) OR (b) the user has to verify and report. NEVER trust source-grep alone for "the rendered output looks right".
+  4. **3-place mirror means 3 places to fix** — alignment CSS rules live in (a) the engine's `<style>` block for the print window (b) `applyPdfAlignmentInline` for the PDF render path (c) DocumentPrintModal preview's scoped `<style>` block. All three must change in lockstep OR the preview WYSIWYG promise breaks. Future audit should grep that all 3 carry the same flex pattern.
+- **Rule/audit update**:
+  - V32 entry locked into institutional memory (this V-entry).
+  - `audit-anti-vibe-code` should extend AV16: "Source-grep tests for visual output (PDF, canvas, screenshot) MUST be paired with at least one runtime/preview_eval check that measures the actual rendered geometry — text-vs-line distance, page count, computed colors. Source-grep alone is insufficient for visual contracts."
+
 ---
 
 ## 3. TOOLS — WHEN TO REACH FOR WHICH

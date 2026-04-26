@@ -185,7 +185,13 @@ describe('PX1 — DocumentPrintModal XSS hardening (Polish 2026-04-26)', () => {
     it('PX1.C.4 signature injection uses safeImgTag (not raw template literal)', () => {
       // Anti-regression: V21-style hostile pattern locked out
       expect(modalSource).not.toMatch(/<img\s+src="\$\{record\.signatureUrl\}/);
-      expect(modalSource).toMatch(/safeImgTag\(record\.signatureUrl/);
+      // V32-tris (2026-04-26): the signature-wrap call moved from
+      // DocumentPrintModal into the shared computeStaffAutoFill helper
+      // (src/lib/documentFieldAutoFill.js). Assert it lives there now.
+      const autoFillSource = readFileSync('src/lib/documentFieldAutoFill.js', 'utf8');
+      expect(autoFillSource).toMatch(/safeImgTag\(record\.signatureUrl/);
+      // Also assert the dangerous template literal isn't anywhere in either file
+      expect(autoFillSource).not.toMatch(/<img\s+src="\$\{record\.signatureUrl\}/);
     });
 
     it('PX1.C.5 SANITIZE_PROFILE forbids dangerous tags + handlers', () => {

@@ -21,11 +21,15 @@ import { FileText, Download, ChevronLeft, X, Loader2, Search, AlertCircle, Check
 import {
   listDocumentTemplates,
   recordDocumentPrint,
+  listDoctors,
+  listStaff,
 } from '../../lib/backendClient.js';
 import { exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
+import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
+import StaffSelectField from './StaffSelectField.jsx';
 
 const STEP_PICK = 'pick';
 const STEP_FILL = 'fill';
@@ -42,6 +46,11 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ done: 0, total: 0, currentName: '', failed: [] });
   const [running, setRunning] = useState(false);
+  // V32-tris (2026-04-26) — load doctor + staff lists so staff-select fields
+  // (e.g. แพทย์ in chart template) render as smart dropdown + auto-fill the
+  // license number / phone / email / etc. when picked. null = loading.
+  const [doctorList, setDoctorList] = useState(null);
+  const [staffList, setStaffList] = useState(null);
 
   // Load active templates on mount
   useEffect(() => {
@@ -51,6 +60,18 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
       .then((items) => { if (!cancel) setTemplates(items || []); })
       .catch((e) => { if (!cancel) setError(e.message || 'โหลดเทมเพลตล้มเหลว'); })
       .finally(() => { if (!cancel) setLoading(false); });
+    return () => { cancel = true; };
+  }, []);
+
+  // V32-tris (2026-04-26) — lazy-load doctor + staff lists in parallel.
+  // Per-user directive "ทำแบบฉลาดๆ smart อะ" — bulk modal must surface
+  // the same smart picker as DocumentPrintModal.
+  useEffect(() => {
+    let cancel = false;
+    listDoctors().then((d) => { if (!cancel) setDoctorList(d || []); })
+      .catch((err) => { if (!cancel) { console.warn('[BulkPrintModal] listDoctors:', err?.message || err); setDoctorList([]); } });
+    listStaff().then((s) => { if (!cancel) setStaffList(s || []); })
+      .catch((err) => { if (!cancel) { console.warn('[BulkPrintModal] listStaff:', err?.message || err); setStaffList([]); } });
     return () => { cancel = true; };
   }, []);
 
@@ -223,28 +244,56 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
                 ค่าที่กรอกที่นี่จะถูกใช้กับลูกค้าทั้ง <b>{customers.length}</b> คน. ฟิลด์ส่วนตัว (ชื่อ/HN) จะดึงจากข้อมูลแต่ละคนอัตโนมัติ.
               </div>
               <div className="space-y-2 max-w-md">
-                {(selected.fields || []).filter(f => !f.hidden && f.type !== 'signature').map(f => (
-                  <div key={f.key}>
-                    <label className="block text-xs text-[var(--tx-muted)] mb-1">{f.label || f.key}</label>
-                    {f.type === 'textarea' ? (
-                      <textarea
+                {(selected.fields || []).filter(f => !f.hidden && f.type !== 'signature').map(f => {
+                  // V32-tris (2026-04-26) — staff-select renders as smart
+                  // dropdown loaded from be_doctors / be_staff. Picking a
+                  // person auto-fills license / phone / email / position
+                  // / English name / signature for the SAME shared values
+                  // bundle (applied to every customer in the bulk run).
+                  if (f.type === 'staff-select') {
+                    const src = f.source || 'doctors';
+                    const list = src === 'staff' ? staffList
+                               : src === 'doctors+staff' ? [...(doctorList || []), ...(staffList || [])]
+                               : doctorList;
+                    return (
+                      <StaffSelectField
+                        key={f.key}
+                        field={f}
                         value={values[f.key] || ''}
-                        onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                        rows={2}
-                        className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)]"
-                        data-field={f.key}
+                        list={list}
+                        onChange={(displayName, record) => {
+                          setValues(vs => ({
+                            ...vs,
+                            [f.key]: displayName,
+                            ...computeStaffAutoFill(record, f.key, selected.fields || []),
+                          }));
+                        }}
                       />
-                    ) : (
-                      <input
-                        type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
-                        value={values[f.key] || ''}
-                        onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                        className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)]"
-                        data-field={f.key}
-                      />
-                    )}
-                  </div>
-                ))}
+                    );
+                  }
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-xs text-[var(--tx-muted)] mb-1">{f.label || f.key}</label>
+                      {f.type === 'textarea' ? (
+                        <textarea
+                          value={values[f.key] || ''}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                          rows={2}
+                          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)]"
+                          data-field={f.key}
+                        />
+                      ) : (
+                        <input
+                          type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
+                          value={values[f.key] || ''}
+                          onChange={(e) => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)]"
+                          data-field={f.key}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

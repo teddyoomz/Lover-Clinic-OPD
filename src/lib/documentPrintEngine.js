@@ -285,17 +285,26 @@ export function buildPrintDocument({ template, context, paperSize = 'A4', langua
   hr { border: 0; border-top: 1px solid #000; }
   ul { padding-left: 20px; }
   p { margin: 6px 0; line-height: 1.5; }
-  /* 2026-04-25 — text-on-underline alignment for "fill-in-the-blank" form
-     lines. All inline-block spans with a dotted border-bottom get tight
-     line-height + top padding so the value text sits ON the underline
-     (not floating above it). Catches all 110 underline spans across
-     16 templates without per-span style edits. */
+  /* V32-tris round 2 (2026-04-26) — text-on-underline alignment for
+     "fill-in-the-blank" form lines. Print window uses tall line-height
+     PLUS padding-bottom to push the dotted underline FURTHER below the
+     text. With line-height: 14px (matches font-size) + padding-top: 4px
+     + padding-bottom: 10px + height auto: text sits in upper portion +
+     border-bottom is pushed down ~10px below the digit baseline. User
+     reported "ต้องเอาขึ้นอีกนิด" — 10px is the breathing room that
+     matches ProClinic's reference rendering.
+     The PDF render path uses applyPdfAlignmentInline which wraps text
+     in absolute-positioned inner span (more robust for html2canvas).
+     Both produce the same ~10px visual gap. */
   span[style*="border-bottom:1px dotted"][style*="display:inline-block"],
   span[style*="border-bottom: 1px dotted"][style*="display: inline-block"] {
-    line-height: 1 !important;
-    padding-top: 6px !important;
-    padding-bottom: 2px !important;
+    line-height: 14px !important;
+    height: auto !important;
+    padding-top: 4px !important;
+    padding-bottom: 10px !important;
     vertical-align: bottom !important;
+    white-space: pre-wrap !important;
+    box-sizing: content-box !important;
   }
   /* 2026-04-25 — multi-line content boxes (chart CC/HPI/PMH/PE/Tx Plan,
      plus cert findings/recommendation/treatment fields). These are
@@ -483,10 +492,108 @@ export function pdfPaperConfig(paperSize = 'A4') {
 // is silently dropped when innerHTML strips the <body> tag — V31-class bug
 // where the source-grep tests passed but the real PDF output was broken).
 const PDF_WRAPPER_STYLES = {
-  'A4':         { w: '210mm', minH: '297mm', p: '18mm' },
-  'A5':         { w: '148mm', minH: '210mm', p: '12mm' },
-  'label-57x32':{ w: '57mm',  minH: '32mm',  p: '2mm' },
+  'A4':         { w: '210mm', minH: '297mm', p: '18mm', wPx: 794,  hPx: 1123, wMm: 210, hMm: 297 },
+  'A5':         { w: '148mm', minH: '210mm', p: '12mm', wPx: 559,  hPx: 794,  wMm: 148, hMm: 210 },
+  'label-57x32':{ w: '57mm',  minH: '32mm',  p: '2mm',  wPx: 215,  hPx: 121,  wMm: 57,  hMm: 32  },
 };
+
+// V32-tris (2026-04-26) — apply alignment via WRAPPER STRUCTURE for spans
+// (not just CSS) so it works in html2canvas reliably. CSS-only approaches
+// failed in user testing 2 rounds:
+//   - V32 round 1 (line-height + padding-top): text floated above line in
+//     html2canvas because unitless line-height was computed as default 1.5
+//   - V32 round 2 (inline-flex column justify-end): text-line gap was
+//     correct in jsdom + real Chrome but html2canvas didn't render flex
+//     justify-end consistently, leaving the dotted line passing through
+//     the value text (user screenshot)
+//
+// V32-tris ROBUST FIX: wrap the value text in an ABSOLUTELY-POSITIONED
+// inner span anchored to the BOTTOM of the outer span. position:absolute
+// is rock-solid in html2canvas — works in every renderer + browser combo.
+// Outer span keeps inline-block + position:relative so it's a positioning
+// context. Inner span sits at bottom: Npx (configurable gap above the
+// underline). Empty/structural spans (signature lines etc.) get a height
+// boost so the underline still extends.
+//
+// Divs (multi-line content boxes) keep the flex-column treatment which
+// user confirmed works for those (CC content "ทท" sits correctly on its
+// line in user's screenshot).
+//
+// Applies BOTH explicit `style*=` attribute matches AND COMPUTED-style matches
+// (defensive: catches future templates that use class-based styling).
+export function applyPdfAlignmentInline(rootEl) {
+  if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return 0;
+  let count = 0;
+  // 1) Underline spans — wrap the text node in an absolutely-positioned
+  //    inner span anchored to the bottom. Guarantees text sits 4px above
+  //    the dotted line in EVERY renderer (real Chrome, html2canvas, print).
+  rootEl.querySelectorAll('span').forEach((el) => {
+    const inline = el.getAttribute('style') || '';
+    const isDotted = /border-bottom\s*:\s*\d+px\s+dotted/i.test(inline);
+    const isInlineBlock = /display\s*:\s*inline-block/i.test(inline);
+    if (!isDotted || !isInlineBlock) return;
+
+    // Mark to avoid re-wrapping on idempotent calls
+    if (el.getAttribute('data-pdf-aligned') === '1') {
+      count++;
+      return;
+    }
+    el.setAttribute('data-pdf-aligned', '1');
+
+    // Outer span — keep inline-block, become positioning context
+    el.style.position = 'relative';
+    el.style.display = 'inline-block';
+    el.style.minHeight = '26px';
+    el.style.verticalAlign = 'bottom';
+    el.style.lineHeight = '14px';
+
+    // Capture text content (only if text-only — preserve element children
+    // like <img> in signature spans untouched).
+    const hasOnlyText = el.childNodes.length === 0 || (
+      el.childNodes.length === 1 && el.childNodes[0].nodeType === 3
+    );
+    const text = hasOnlyText ? el.textContent : '';
+
+    if (hasOnlyText && text) {
+      el.textContent = '';
+      const inner = el.ownerDocument.createElement('span');
+      // V32-tris round 2 (2026-04-26) — bottom:10px gives a clear 10px gap
+      // between the digit baseline and the dotted underline. User reported
+      // "ต้องเอาขึ้นอีกนิด" — original 4px was too tight; line appeared to
+      // touch digit descenders. 10px gives clean visual breathing room
+      // matching ProClinic's reference rendering.
+      inner.style.cssText = [
+        'position: absolute',
+        'bottom: 10px',
+        'left: 6px',
+        'right: 6px',
+        'line-height: 14px',
+        'display: block',
+        'text-align: inherit',
+        'white-space: pre-wrap',
+      ].join('; ');
+      inner.textContent = text;
+      el.appendChild(inner);
+    }
+    count++;
+  });
+  // 2) Multi-line content boxes — flex column + justify-end so text grows
+  //    upward from the underline (last line sits just above the line).
+  //    User confirmed this works for divs (CC value "ทท" on line).
+  rootEl.querySelectorAll('div').forEach((el) => {
+    const inline = el.getAttribute('style') || '';
+    const isDotted = /border-bottom\s*:\s*\d+px\s+dotted/i.test(inline);
+    const hasMinHeight = /min-height\s*:/i.test(inline);
+    if (!isDotted || !hasMinHeight) return;
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.justifyContent = 'flex-end';
+    el.style.paddingBottom = '4px';
+    el.style.whiteSpace = 'pre-wrap';
+    count++;
+  });
+  return count;
+}
 
 export async function exportDocumentToPdf({ template, clinic, customer, values, language, toggles, watermark } = {}) {
   if (!template || typeof template !== 'object') throw new Error('template required');
@@ -502,12 +609,23 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
     watermark: watermark || template.watermark || '',
   });
 
-  // Lazy import — keeps main bundle small (html2pdf.js is ~150 KB).
-  const html2pdfModule = await import('html2pdf.js');
-  const html2pdf = html2pdfModule.default || html2pdfModule;
+  // V32 (2026-04-26) — DIRECT html2canvas + jsPDF (NOT html2pdf orchestration).
+  // We previously routed through html2pdf.js, which:
+  //   (a) emitted a blank 2nd page even when content fit in one page (its
+  //       default split heuristic added ghost pages — `pagebreak: avoid-all`
+  //       did NOT prevent this in production), and
+  //   (b) took 2+ minutes to render a single chart template due to its
+  //       worker-pipeline + page-walk overhead.
+  // Direct addImage at fixed paper dimensions guarantees ONE page per call.
+  // Bulk print loops the caller and re-invokes this function per customer.
+  const [html2canvasModule, jspdfModule] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+  const html2canvas = html2canvasModule.default || html2canvasModule;
+  const { jsPDF } = jspdfModule;
 
   const filename = pdfFilename({ docType: template.docType, name: template.name });
-  const paper = pdfPaperConfig(paperSize);
 
   // ─── BUG FIX (Phase 14.10-bis 2026-04-26) ────────────────────────
   // When you set `container.innerHTML = '<!DOCTYPE...><body style="width:210mm;
@@ -550,13 +668,9 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
 
   const wrapper = document.createElement('div');
   wrapper.setAttribute('data-pdf-wrapper', 'true');
-  // Phase 14.10-tris (2026-04-26) — height changed from `min-height: ${sz.minH}`
-  // to `min-height: 0` + explicit `height: ${sz.minH}` because html2pdf was
-  // capturing wrapper at content-natural-height which sometimes exceeded
-  // the minH and forced a 2nd blank page in the PDF. Using fixed height
-  // + overflow:hidden constrains content to exactly 1 page; templates
-  // shorter than 1 page get whitespace fill (correct), templates longer
-  // get cropped (admin sees + can fix template).
+  // V32 (2026-04-26) — fixed height + overflow:hidden constrains content
+  // to exactly 1 page. Templates shorter than 1 page get whitespace fill
+  // (correct), templates longer get cropped (admin sees + can fix template).
   wrapper.style.cssText = [
     `width: ${sz.w}`,
     `height: ${sz.minH}`,
@@ -586,6 +700,11 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
     });
   }
 
+  // V32 (2026-04-26) — apply text-on-underline alignment styles INLINE so
+  // html2canvas can't drop them via cascade quirks. See applyPdfAlignmentInline
+  // for the rule shape + lesson.
+  applyPdfAlignmentInline(wrapper);
+
   offstage.appendChild(wrapper);
   document.body.appendChild(offstage);
   let pdfBlob;
@@ -596,32 +715,38 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
       try { await document.fonts.ready; } catch { /* non-fatal */ }
     }
 
-    const opt = {
-      margin: 0,
-      filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      // Phase 14.10-bis fix — offstage container has 0×0 + overflow:hidden,
-      // BUT html2canvas needs the actual wrapper at proper dims. Pass
-      // explicit width/height so html2canvas captures wrapper correctly
-      // even though its parent clips to 0×0.
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: wrapper.offsetWidth || (paperSize === 'A5' ? 559 : paperSize === 'label-57x32' ? 215 : 794),
-        windowHeight: wrapper.offsetHeight || (paperSize === 'A5' ? 794 : paperSize === 'label-57x32' ? 121 : 1123),
-      },
-      jsPDF: paper,
-      // Phase 14.10-tris (2026-04-26) — force single-page render. Without
-      // this, content overflowing the page split into a 2nd PDF page —
-      // and even content fitting exactly sometimes produced a blank 2nd
-      // page due to html2pdf's default split heuristic (the bug user
-      // reported as "เกินมา 1 หน้าเป็นหน้าเปล่า"). 'avoid-all' keeps
-      // each html2pdf source on a single PDF page; admin sees the cropped
-      // overflow visually and can fix the template.
-      pagebreak: { mode: 'avoid-all' },
-    };
-    pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob');
+    // V32 — html2canvas with EXPLICIT width/height so the canvas matches
+    // the paper EXACTLY. Previously we passed only windowWidth/windowHeight
+    // which controls the virtual viewport but not the canvas crop — and
+    // html2canvas read scrollHeight (full content height) which for some
+    // templates exceeded the wrapper bounds.
+    const canvas = await html2canvas(wrapper, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: sz.wPx,
+      height: sz.hPx,
+      windowWidth: sz.wPx,
+      windowHeight: sz.hPx,
+      logging: false,
+      // Crop x/y to start at wrapper origin (avoid capturing surrounding body)
+      x: 0,
+      y: 0,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    // V32 — direct jsPDF render. addImage with EXACT paper-size dims
+    // produces exactly 1 page. NO html2pdf split heuristic, NO ghost pages.
+    const pdf = new jsPDF({
+      unit: 'mm',
+      format: paperSize === 'label-57x32' ? [sz.wMm, sz.hMm] : (paperSize === 'A5' ? 'a5' : 'a4'),
+      orientation: paperSize === 'label-57x32' ? 'landscape' : 'portrait',
+      compress: true,
+    });
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(imgData, 'JPEG', 0, 0, sz.wMm, sz.hMm, undefined, 'FAST');
+    pdfBlob = pdf.output('blob');
   } finally {
     if (offstage.parentNode === document.body) document.body.removeChild(offstage);
   }

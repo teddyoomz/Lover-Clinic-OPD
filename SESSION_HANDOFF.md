@@ -7,21 +7,32 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 9 EOD — V31 + Phase 14.8/9/10 + master_data → be_* migration (20 files)
+- **Date last updated**: 2026-04-26 session 10 EOD — V32-tris (Bulk PDF alignment + smart staff-picker shared module) + M9 admin reconciler
 - **Branch**: `master`
-- **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers`
-- **Test count**: 5884 vitest passing (~300 new this session — V31 + Phase 14.8-14.10 + PV.F + bulk-print + signature RTL)
-- **Build**: clean. BackendDashboard chunk ~960 KB (+signature_pad eager, +html2pdf.js lazy)
-- **Deploy state**: ⚠️ **5 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
+- **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers` (LOCAL: V32-tris commit pending)
+- **Test count**: 6005 vitest passing (+105 this session — V32 base 49, V32-tris shared 35, BulkPrintModal RTL 6, M9 admin 14, fixes 1+1+1)
+- **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
+- **Deploy state**: ⚠️ **6 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
   - Vercel: `lover-clinic-93z2j8492` aliased to https://lover-clinic-app.vercel.app (40s)
   - Firestore rules: v14 LOCAL (be_document_prints + be_document_drafts), v13 PROD
-  - Pending commits: `2cb2e36 7312679 5b74bcb 3e8b9d8 9a9cde8`
-  - Includes: bulk-print modal + PDF padding fix + sale-receipt + sellerName fix + M9 reconciler + backend 100% be_* migration
+  - Pending commits: `2cb2e36 7312679 5b74bcb 3e8b9d8 9a9cde8` + V32-tris commit
+  - Includes: bulk-print modal + PDF padding fix + sale-receipt + sellerName fix + M9 reconciler + backend 100% be_* migration + V32-tris (PDF alignment + smart staff picker shared)
 - **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅ (8 commits pushed this session)
+- **Remote sync**: master = origin/master ✅ (8 commits pushed prior session; V32-tris pending push)
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
 - **SCHEMA_VERSION**: 15
+
+### Session 2026-04-26 session 10 (V32-tris + M9 reconciler — pending commit)
+4 user-reported issues fixed this session:
+1. **V32 base** — Bulk PDF blank 2nd page + text floating above underline (V21-class regression — round 1+2)
+2. **V32-tris rounds 3+4** — date alignment STILL not right after inline-flex; user "ต้องเอาขึ้นอีกนิด" → switched to position:absolute inner span at bottom:10px + CSS padding-bottom:10px for ~10px clear breathing room
+3. **Smart staff picker missing in BulkPrintModal** — user "ทำแบบฉลาดๆ smart อะ" → extracted `StaffSelectField` + `documentFieldAutoFill.js` shared module; both modals now use them; **bonus fix**: original DocumentPrintModal's auto-fill never fired (onChange called with 1 arg instead of 2)
+4. **M9 admin reconciler button** — P1 polish queue item; admin-gated card in PermissionGroupsTab with progress + success/failure UI
+- New files: `src/lib/documentFieldAutoFill.js`, `src/components/backend/StaffSelectField.jsx`, 4 new test files
+- Modified: documentPrintEngine.js (direct html2canvas+jspdf, applyPdfAlignmentInline wrapper approach), DocumentPrintModal.jsx (uses shared module), BulkPrintModal.jsx (smart picker + auto-fill), PermissionGroupsTab.jsx (M9 card)
+- package.json: html2canvas + jspdf promoted from transitive to direct deps
+- Tests: 5984 → 6005 (+21 new test files / +105 tests, all green); 9/9 e2e public-links pass; build clean
 
 ---
 

@@ -3,11 +3,11 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2 } from 'lucide-react';
-import { listPermissionGroups, deletePermissionGroup } from '../../lib/backendClient.js';
+import { Edit2, Trash2, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { listPermissionGroups, deletePermissionGroup, reconcileAllCustomerSummaries } from '../../lib/backendClient.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
-import { useHasPermission } from '../../hooks/useTabAccess.js';
+import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 import {
   STATUS_OPTIONS,
   ALL_PERMISSION_KEYS,
@@ -37,6 +37,32 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
   // Phase 13.5.3 — gate delete on permission_group_management. Admin
   // bypasses (useHasPermission returns true for admins).
   const canDelete = useHasPermission('permission_group_management');
+  // M9 (2026-04-26) — admin-only reconciler button. Walks every customer +
+  // recomputes the customer-doc summary (totalSpent / lastSaleAt / etc.)
+  // from the ledger collections. Use after a Firestore restore, manual
+  // edits, or whenever the customer-list summary drifts from the actual
+  // sales/treatments/deposits/wallets data.
+  const { isAdmin } = useTabAccess();
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState(null);
+  const [reconcileProgress, setReconcileProgress] = useState({ done: 0, total: 0, name: '' });
+
+  const handleReconcile = useCallback(async () => {
+    if (!window.confirm('สรุปยอดลูกค้าใหม่ทั้งหมด?\n\nเดินทุกลูกค้า → คำนวณยอดซื้อ / วันที่ซื้อล่าสุด / ฯลฯ จาก ledger จริง.\nใช้เวลาตามจำนวนลูกค้า — อาจกินเวลาหลายนาที.')) return;
+    setReconciling(true);
+    setReconcileResult(null);
+    setReconcileProgress({ done: 0, total: 0, name: '' });
+    try {
+      const result = await reconcileAllCustomerSummaries({
+        onProgress: ({ done, total, name }) => setReconcileProgress({ done, total, name }),
+      });
+      setReconcileResult(result);
+    } catch (e) {
+      setReconcileResult({ error: e.message || String(e) });
+    } finally {
+      setReconciling(false);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -99,8 +125,64 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
     </select>
   );
 
+  // M9 (2026-04-26) — admin reconciler card. Rendered OUTSIDE
+  // MarketingTabShell because the shell hides children when there are no
+  // permission groups (filteredCount === 0), but the M9 card is a distinct
+  // admin operation that should always be available to admins regardless
+  // of permission-group state.
+  const m9Card = isAdmin && (
+    <div className="mb-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]" data-testid="m9-reconciler-card">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
+            <RefreshCw size={14} className="text-sky-400" />
+            สรุปยอดลูกค้าใหม่ทั้งหมด (M9 reconciler)
+          </div>
+          <div className="text-xs text-[var(--tx-muted)] mt-0.5">
+            คำนวณยอดซื้อ / วันที่ซื้อล่าสุด / ฯลฯ จาก ledger จริง — ใช้เมื่อข้อมูลรวมหน้า Customer List ไม่ตรงกับยอดจริง
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleReconcile}
+          disabled={reconciling}
+          data-testid="m9-reconcile-btn"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-700 text-white inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {reconciling ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          {reconciling ? `กำลังสรุป... (${reconcileProgress.done}/${reconcileProgress.total})` : 'สรุปยอดใหม่'}
+        </button>
+      </div>
+      {reconciling && reconcileProgress.name && (
+        <div className="mt-2 text-xs text-[var(--tx-muted)] truncate" data-testid="m9-reconcile-progress">
+          กำลังประมวลผล: <b className="text-[var(--tx-heading)]">{reconcileProgress.name}</b>
+        </div>
+      )}
+      {reconcileResult && !reconcileResult.error && (
+        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs flex items-start gap-2" data-testid="m9-reconcile-success">
+          <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <div>เสร็จสิ้น — สรุปสำเร็จ <b>{reconcileResult.succeeded}</b> / {reconcileResult.total} ลูกค้า</div>
+            {reconcileResult.failed.length > 0 && (
+              <div className="mt-1 text-amber-200">
+                ล้มเหลว {reconcileResult.failed.length} ราย — {reconcileResult.failed.slice(0, 3).map(f => f.customerId).join(', ')}{reconcileResult.failed.length > 3 ? '...' : ''}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {reconcileResult && reconcileResult.error && (
+        <div className="mt-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-700/40 text-red-300 text-xs flex items-start gap-2" data-testid="m9-reconcile-error">
+          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+          <div>เกิดข้อผิดพลาด: {reconcileResult.error}</div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
+      {m9Card}
       <MarketingTabShell
         icon={ShieldCheck}
         title="สิทธิ์การใช้งาน"

@@ -67,7 +67,10 @@ describe('PB1 — Phase 13.5.3 inline button gates', () => {
 
       describe(`PB1.B — ${file}`, () => {
         it(`imports useHasPermission`, () => {
-          expect(src).toMatch(/import\s+\{\s*useHasPermission\s*\}\s+from\s+['"]\.\.\/\.\.\/hooks\/useTabAccess\.js['"]/);
+          // M9 (2026-04-26): PermissionGroupsTab now also imports useTabAccess
+          // for the admin-only reconciler card. Loose match: useHasPermission
+          // appears in any { ... } import block from useTabAccess.js.
+          expect(src).toMatch(/import\s+\{[^}]*\buseHasPermission\b[^}]*\}\s+from\s+['"]\.\.\/\.\.\/hooks\/useTabAccess\.js['"]/);
         });
 
         it(`declares canDelete bound to ${key}`, () => {

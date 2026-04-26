@@ -18,8 +18,10 @@ import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
 import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
+import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
+import StaffSelectField from './StaffSelectField.jsx';
 
 // Print templates rely on inline `style="..."` + `class="..."` for layout
 // fidelity (no <style> blocks — print engine adds its own stylesheet via
@@ -641,74 +643,18 @@ export default function DocumentPrintModal({
                         value={values[f.key] || ''}
                         list={list}
                         onChange={(displayName, record) => {
-                          // 2026-04-25 — generic auto-fill. When a doctor/
-                          // staff/assistant is picked, populate ALL related
-                          // fields the template has from the be_doctors /
-                          // be_staff record. Per user directive: "ใช้ความ
-                          // ฉลาดเช็คด้วยว่า มีอะไรดึงมาได้ auto อีกบ้าง".
-                          // Field-key convention: <baseKey><Suffix>
-                          //   doctorName  → doctorLicenseNo, doctorPhone,
-                          //                 doctorEmail, doctorPosition,
-                          //                 doctorNameEn
-                          //   staffName   → staffLicenseNo, staffPhone, ...
-                          //   assistantName → assistant{LicenseNo,Phone,...}
-                          setValues(vs => {
-                            const next = { ...vs, [f.key]: displayName };
-                            if (!record) return next;
-                            const baseKey = f.key.replace(/Name$/, '');
-                            const seedFields = selected.fields || [];
-                            const has = (k) => seedFields.some(sf => sf.key === k);
-                            const firstNonEmpty = (...keys) => {
-                              for (const k of keys) if (record[k]) return record[k];
-                              return '';
-                            };
-                            // License (multiple aliases for be_doctors vs be_staff)
-                            const licKey = `${baseKey}LicenseNo`;
-                            if (has(licKey)) {
-                              const v = firstNonEmpty('licenseNo', 'medicalLicenseNo', 'staffLicenseNo');
-                              if (v) next[licKey] = v;
-                            }
-                            // Phone
-                            const phoneKey = `${baseKey}Phone`;
-                            if (has(phoneKey)) {
-                              const v = firstNonEmpty('phone', 'tel', 'mobile');
-                              if (v) next[phoneKey] = v;
-                            }
-                            // Email
-                            const emailKey = `${baseKey}Email`;
-                            if (has(emailKey)) {
-                              const v = firstNonEmpty('email');
-                              if (v) next[emailKey] = v;
-                            }
-                            // Position / role
-                            const posKey = `${baseKey}Position`;
-                            if (has(posKey)) {
-                              const v = firstNonEmpty('position', 'role');
-                              if (v) next[posKey] = v;
-                            }
-                            // English name (fit-to-fly, bilingual certs)
-                            const enKey = `${baseKey}NameEn`;
-                            if (has(enKey)) {
-                              const en = `${record.firstnameEn || record.firstNameEn || ''} ${record.lastnameEn || record.lastNameEn || ''}`.trim();
-                              if (en) next[enKey] = en;
-                            }
-                            // Department
-                            const deptKey = `${baseKey}Department`;
-                            if (has(deptKey)) {
-                              const v = firstNonEmpty('department', 'section');
-                              if (v) next[deptKey] = v;
-                            }
-                            // Signature image (template can use {{{doctorSignature}}}
-                            // raw-HTML to embed an <img>). URL is allow-listed
-                            // against http(s) + data:image/* via safeImgTag —
-                            // hostile URLs (javascript:, data:text/html, …)
-                            // are dropped, not injected.
-                            const sigKey = `${baseKey}Signature`;
-                            if (has(sigKey) && record.signatureUrl) {
-                              next[sigKey] = safeImgTag(record.signatureUrl, { alt: 'signature', style: 'max-height:60px' });
-                            }
-                            return next;
-                          });
+                          // V32-tris (2026-04-26) — auto-fill via shared helper.
+                          // When a doctor/staff/assistant is picked, populate
+                          // ALL related fields the template has from the
+                          // be_doctors / be_staff record (license / phone /
+                          // email / position / English name / department /
+                          // signature). See documentFieldAutoFill.js for the
+                          // full <baseKey><Suffix> convention.
+                          setValues(vs => ({
+                            ...vs,
+                            [f.key]: displayName,
+                            ...computeStaffAutoFill(record, f.key, selected.fields || []),
+                          }));
                         }}
                       />
                     );
@@ -850,23 +796,28 @@ export default function DocumentPrintModal({
                     window's <head> (documentPrintEngine.buildPrintDocument)
                     so what-you-see-is-what-you-print. */}
                 <style>{`
+                  /* V32-tris round 2 (2026-04-26) — preview MUST mirror
+                     the print + PDF layout. Padding-bottom: 10px pushes
+                     the dotted underline FURTHER below the digit baseline
+                     for clear breathing room. User reported "ต้องเอาขึ้น
+                     อีกนิด" — 10px matches ProClinic's reference. */
                   [data-testid="document-print-preview"] span[style*="border-bottom:1px dotted"][style*="display:inline-block"],
                   [data-testid="document-print-preview"] span[style*="border-bottom: 1px dotted"][style*="display: inline-block"] {
-                    line-height: 1 !important;
-                    padding-top: 6px !important;
-                    padding-bottom: 2px !important;
+                    line-height: 14px !important;
+                    height: auto !important;
+                    padding-top: 4px !important;
+                    padding-bottom: 10px !important;
                     vertical-align: bottom !important;
+                    white-space: pre-wrap !important;
+                    box-sizing: content-box !important;
                   }
                   [data-testid="document-print-preview"] div[style*="border-bottom:1px dotted"][style*="min-height"],
                   [data-testid="document-print-preview"] div[style*="border-bottom: 1px dotted"][style*="min-height"] {
                     display: flex !important;
                     flex-direction: column !important;
                     justify-content: flex-end !important;
-                    padding-bottom: 2px !important;
+                    padding-bottom: 4px !important;
                     white-space: pre-wrap !important;
-                  }
-                  [data-testid="document-print-preview"] span[style*="border-bottom:1px dotted"][style*="display:inline-block"] {
-                    white-space: pre-wrap;
                   }
                   [data-testid="document-print-preview"] .sig-col,
                   [data-testid="document-print-preview"] .signature-col { text-align: center; }
@@ -939,123 +890,7 @@ export default function DocumentPrintModal({
   );
 }
 
-/**
- * Staff-select dropdown — searchable combobox backed by be_doctors /
- * be_staff. Renders as: text input (current value, shows match count)
- * + dropdown list of names matching the typed query. Value stored is
- * the display name (string) so the template renders the same way as
- * a free-text field. Aligns with user directive 2026-04-25 "ช่องแพทย์
- * ก็ต้องเป็นแพทย์ของเรา ดึงจากแพทย์เราดิ".
- */
-function StaffSelectField({ field, value, list, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const ref = useRef(null);
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
-  const loading = list === null;
-  const safe = Array.isArray(list) ? list : [];
-  // 2026-04-25 — be_doctors/be_staff raw shape has firstname+lastname, not
-  // 'name' or 'fullName'. Build display name from prefix + first + last (+
-  // nickname fallback).
-  const showName = (p) => {
-    const prefix = (p.prefix || '').trim();
-    const first = (p.firstname || p.firstName || '').trim();
-    const last = (p.lastname || p.lastName || '').trim();
-    const composed = [prefix, first, last].filter(Boolean).join(' ').trim();
-    if (composed) return composed;
-    if (p.name) return p.name;
-    if (p.fullName) return p.fullName;
-    if (p.nickname) return p.nickname;
-    return '(ไม่มีชื่อ)';
-  };
-  // 2026-04-25 — show ALL useful staff/doctor info as subtitle: position
-  // / license / nickname / email / branch. Helps user pick the right
-  // person when there are 27+ in the list. Each piece separated by " · ".
-  const showSubtitle = (p) => {
-    const parts = [];
-    const role = p.position || p.role || '';
-    const lic = p.licenseNo || p.medicalLicenseNo || p.staffLicenseNo || '';
-    const nick = p.nickname || '';
-    const email = p.email || '';
-    const dept = p.department || p.section || '';
-    const phone = p.phone || p.tel || '';
-    if (role) parts.push(role);
-    if (lic) parts.push(`เลขที่ ${lic}`);
-    if (nick) parts.push(`ชื่อเล่น ${nick}`);
-    if (dept) parts.push(dept);
-    if (phone) parts.push(phone);
-    if (email) parts.push(email);
-    return parts.join(' · ');
-  };
-  // Filter by query — match composed name OR licenseNo
-  const q = query.toLowerCase().trim();
-  const filtered = q
-    ? safe.filter(p => {
-        const n = showName(p).toLowerCase();
-        const lic = (p.licenseNo || p.medicalLicenseNo || '').toLowerCase();
-        const en = `${p.firstnameEn || p.firstNameEn || ''} ${p.lastnameEn || p.lastNameEn || ''}`.toLowerCase().trim();
-        return n.includes(q) || lic.includes(q) || en.includes(q);
-      })
-    : safe;
-
-  return (
-    <div className="space-y-1" ref={ref}>
-      <label className="block text-xs text-[var(--tx-muted)]">
-        {field.label || field.key}{field.required && <RequiredAsterisk className="ml-0.5" />}
-        {!loading && safe.length > 0 && (
-          <span className="ml-2 text-[10px] opacity-50">({safe.length} รายการ)</span>
-        )}
-      </label>
-      <div className="relative">
-        <input
-          type="text"
-          value={open ? query : value}
-          placeholder={loading ? 'กำลังโหลด...' : value || 'พิมพ์ค้นหา หรือคลิกเพื่อเลือก'}
-          onFocus={() => { setOpen(true); setQuery(''); }}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          className="w-full px-2 py-1.5 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-          data-field={field.key}
-        />
-        {open && !loading && (
-          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg bg-[var(--bg-surface)] border border-[var(--bd)] shadow-xl">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-[var(--tx-muted)]">ไม่พบรายการ</div>
-            ) : (
-              filtered.slice(0, 50).map((p, i) => (
-                <button
-                  key={p.id || i}
-                  type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] border-b border-[var(--bd)] last:border-b-0"
-                  onClick={() => {
-                    onChange(showName(p));
-                    setOpen(false);
-                    setQuery('');
-                  }}
-                >
-                  <div className="font-bold text-[var(--tx-primary)]">{showName(p)}</div>
-                  {showSubtitle(p) && (
-                    <div className="text-[10px] text-[var(--tx-muted)]">{showSubtitle(p)}</div>
-                  )}
-                </button>
-              ))
-            )}
-            {filtered.length > 50 && (
-              <div className="px-3 py-2 text-[10px] text-[var(--tx-muted)] bg-[var(--bg-hover)]">
-                แสดง 50 รายการแรก — พิมพ์ค้นหาเพื่อกรองให้แคบลง
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// V32-tris (2026-04-26) — local StaffSelectField removed. Now imported from
+// './StaffSelectField.jsx' so BulkPrintModal + future callers share the
+// SAME smart dropdown + auto-fill logic. Auto-fill helper extracted to
+// '../../lib/documentFieldAutoFill.js'.
