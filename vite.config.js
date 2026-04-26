@@ -72,6 +72,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.js'],
+    // Default include: tests/*.test.* (1 level deep only). Tests in
+    // tests/extended/ are EXCLUDED by default per session-11 EOD-2 user
+    // directive "ลดลงเหลือแต่ที่สำคัญไม่เกิน 1000 test ก่อนในตอนนี้".
+    // Run extended tests via `npm run test:extended` (opt-in, ~5000 tests).
     include: ['tests/*.test.js', 'tests/*.test.jsx'],
     // Firestore-dependent integration tests — they hit live Firestore with
     // no auth context (tests/setup.js has no Firebase signin), so every

@@ -12,11 +12,12 @@
 - **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers` (LOCAL: V32-tris commit pending)
 - **Test count**: 6205 vitest passing (+200 session 11: T3.e 23 LINE-only, T4 39, T5.b 35, T5.a 21, V32-tris-ter LINE flow 82)
 - **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
-- **Deploy state**: ⚠️ **6 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
-  - Vercel: `lover-clinic-93z2j8492` aliased to https://lover-clinic-app.vercel.app (40s)
-  - Firestore rules: v14 LOCAL (be_document_prints + be_document_drafts), v13 PROD
-  - Pending commits: `2cb2e36 7312679 5b74bcb 3e8b9d8 9a9cde8` + V32-tris commit
-  - Includes: bulk-print modal + PDF padding fix + sale-receipt + sellerName fix + M9 reconciler + backend 100% be_* migration + V32-tris (PDF alignment + smart staff picker shared)
+- **Deploy state**: ✅ **PRODUCTION = `68936bb`** (V15 combined deploy session 11 EOD-2 — LINE OA full feature)
+  - Vercel: `lover-clinic-notrzw64k-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (46s)
+  - Firestore rules: v15 LIVE (added be_course_changes + be_customer_link_tokens this turn)
+  - 7-endpoint Probe-Deploy-Probe: pre 6/6 = 200, post 6/6 = 200, negative 2/2 = 403 (be_customer_link_tokens + be_course_changes lockdown verified)
+  - Cleanup: pc_appointments DELETE x 2 + clinic_settings strip x 2 = 4/4 200
+  - Production HTTP smoke: / + ?session= + ?patient= = 3/3 200
 - **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅ (8 commits pushed prior session; V32-tris pending push)

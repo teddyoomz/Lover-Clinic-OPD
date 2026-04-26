@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:extended": "vitest run --include 'tests/extended/*.test.js' --include 'tests/extended/*.test.jsx'",
+    "test:all": "vitest run --include 'tests/*.test.js' --include 'tests/*.test.jsx' --include 'tests/extended/*.test.js' --include 'tests/extended/*.test.jsx'",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "dead-code": "knip"
