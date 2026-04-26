@@ -252,6 +252,15 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Backend: Phase 14.10 Document Print Drafts (resumable form fill) ──
+      // Drafts are mutable — admin can save partial fill, resume later,
+      // or delete when no longer needed. Read+write open to clinic staff.
+      // Caller's staffUid is recorded so admin can scope drafts to "my
+      // drafts" in the future.
+      match /be_document_drafts/{draftId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

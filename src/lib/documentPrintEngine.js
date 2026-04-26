@@ -373,6 +373,23 @@ export function printDocument({ template, clinic, customer, values, language, to
   });
 }
 
+// ─── Phase 14.10 (2026-04-26) — QR code dataURL helper ──────────────────
+// Generates a QR code as base64 PNG data URL. Lazy-imports the `qrcode`
+// lib so it stays out of the main bundle (~30 KB).
+//
+// @param {string} text — payload to encode (URL, ID, etc.)
+// @param {Object} [opts] — { width: 100, margin: 2 }
+// @returns {Promise<string>} data:image/png;base64,...
+export async function generateQrDataUrl(text, { width = 120, margin = 2 } = {}) {
+  if (!text || typeof text !== 'string') return '';
+  const qrcodeModule = await import('qrcode');
+  const QRCode = qrcodeModule.default || qrcodeModule;
+  const url = await QRCode.toDataURL(String(text), { width, margin, errorCorrectionLevel: 'M' });
+  // toDataURL returns 'data:image/png;base64,...' — buildPrintContext will
+  // auto-wrap in safeImgTag for templates using {{{key}}}.
+  return url;
+}
+
 // ─── Phase 14.8.C (2026-04-26) — PDF export via html2pdf.js ──────────────
 // User directive (Tier 3 P1): "T3.c Phase 14.8.C PDF export".
 //

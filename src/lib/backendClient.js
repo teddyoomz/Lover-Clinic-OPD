@@ -6772,6 +6772,8 @@ export async function deleteDocumentTemplate(templateId) {
 
 const documentPrintsCol = () => collection(db, ...basePath(), 'be_document_prints');
 const documentPrintDoc = (id) => doc(db, ...basePath(), 'be_document_prints', String(id));
+const documentDraftsCol = () => collection(db, ...basePath(), 'be_document_drafts');
+const documentDraftDoc = (id) => doc(db, ...basePath(), 'be_document_drafts', String(id));
 
 export async function recordDocumentPrint(payload = {}) {
   // Generate print id with crypto-random suffix (per V31 / Rule C2 — no insecure RNG)
@@ -6805,6 +6807,84 @@ export async function recordDocumentPrint(payload = {}) {
 
   await setDoc(documentPrintDoc(printId), data, { merge: false });
   return { printId };
+}
+
+// ─── Phase 14.10 — Document Print Saved Drafts (2026-04-26) ──────────────
+// Saves an in-progress print form so admin doesn't lose 10-min fill if they
+// navigate away. Drafts are scoped to (templateId + customerId + caller uid)
+// — auto-resume picks up the most recent matching draft on modal open.
+//
+// Schema:
+//   {
+//     draftId: 'DFT-<ts>-<rand>',
+//     templateId, customerId, customerHN, customerName,
+//     values: { ... }, language, toggles,
+//     staffUid, staffEmail,
+//     updatedAt (ISO),
+//   }
+//
+// Lifecycle: writer is upsert (setDoc, merge:true). Drafts auto-purge after
+// 30 days (cron later) — for now manual delete from UI.
+export async function saveDocumentDraft(draftId, payload = {}) {
+  const id = String(draftId || '').trim();
+  if (!id) throw new Error('draftId required');
+  const u = auth?.currentUser;
+  const safe = (v) => (v == null ? '' : String(v));
+  const data = {
+    draftId: id,
+    templateId: safe(payload.templateId),
+    customerId: safe(payload.customerId),
+    customerHN: safe(payload.customerHN),
+    customerName: safe(payload.customerName),
+    values: payload.values && typeof payload.values === 'object' ? payload.values : {},
+    language: safe(payload.language || 'th'),
+    toggles: payload.toggles && typeof payload.toggles === 'object' ? payload.toggles : {},
+    staffUid: safe(u?.uid),
+    staffEmail: safe(u?.email),
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(documentDraftDoc(id), data, { merge: true });
+  return { draftId: id };
+}
+
+export async function getDocumentDraft(draftId) {
+  const id = String(draftId || '').trim();
+  if (!id) return null;
+  const snap = await getDoc(documentDraftDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listDocumentDrafts({ templateId, customerId, staffUid, limit: maxLimit = 25 } = {}) {
+  const snap = await getDocs(documentDraftsCol());
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (templateId) items = items.filter(i => i.templateId === templateId);
+  if (customerId) items = items.filter(i => i.customerId === customerId);
+  if (staffUid) items = items.filter(i => i.staffUid === staffUid);
+  // Newest-first by updatedAt (ISO string sort works)
+  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  return items.slice(0, Math.max(1, maxLimit));
+}
+
+export async function deleteDocumentDraft(draftId) {
+  const id = String(draftId || '').trim();
+  if (!id) throw new Error('draftId required');
+  await deleteDoc(documentDraftDoc(id));
+}
+
+/**
+ * Find the most-recent matching draft for the current caller +
+ * (templateId, customerId) tuple. Useful for auto-resume on modal open.
+ */
+export async function findResumableDraft({ templateId, customerId } = {}) {
+  const u = auth?.currentUser;
+  if (!u || !templateId) return null;
+  const drafts = await listDocumentDrafts({
+    templateId,
+    customerId: customerId || '',
+    staffUid: u.uid,
+    limit: 1,
+  });
+  return drafts[0] || null;
 }
 
 export async function listDocumentPrints({ limit: maxLimit = 100, customerId, docType } = {}) {

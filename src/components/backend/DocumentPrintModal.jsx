@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import DOMPurify from 'dompurify';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2, Download } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint, saveDocumentDraft, findResumableDraft, deleteDocumentDraft } from '../../lib/backendClient.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
@@ -70,6 +70,11 @@ export default function DocumentPrintModal({
   const [step, setStep] = useState(STEP_PICK);
   const [selected, setSelected] = useState(null);
   const [values, setValues] = useState({});
+  // Phase 14.10 (2026-04-26) — saved drafts. draftId tracks the active
+  // draft so subsequent saves overwrite the same doc. resumeBanner shows
+  // when a previous draft is found on template pick (admin can opt-in).
+  const [draftId, setDraftId] = useState('');
+  const [resumeBanner, setResumeBanner] = useState(null); // { draft } or null
   // 2026-04-25 — staff/doctor lists for staff-select fields. Lazy-loaded
   // ONLY when a template that needs them is picked, then cached for the
   // session. Empty arrays = not yet loaded.
@@ -169,7 +174,69 @@ export default function DocumentPrintModal({
     setToggles(initToggles);
     setLanguage(t.language || 'th');
     setStep(STEP_FILL);
+
+    // Phase 14.10 — saved-draft probe. Look up the most recent draft for
+    // this template + customer + caller. If found, surface a banner so
+    // admin can opt in to resume the prior fill session.
+    setResumeBanner(null);
+    setDraftId('');
+    findResumableDraft({
+      templateId: t.id,
+      customerId: customer?.customerId || customer?.id || '',
+    }).then((draft) => {
+      // Don't auto-load; user opts in (avoid surprising overwrite of
+      // a prefill the parent passed in).
+      if (draft && draft.draftId) setResumeBanner({ draft });
+    }).catch(() => {/* non-fatal */});
   };
+
+  const acceptResumeDraft = () => {
+    const draft = resumeBanner?.draft;
+    if (!draft) return;
+    if (draft.values && typeof draft.values === 'object') setValues(draft.values);
+    if (draft.toggles && typeof draft.toggles === 'object') setToggles(draft.toggles);
+    if (draft.language) setLanguage(draft.language);
+    setDraftId(draft.draftId);
+    setResumeBanner(null);
+  };
+
+  const dismissResumeBanner = () => setResumeBanner(null);
+
+  // Phase 14.10 — debounced auto-save. Fires 1.2s after the last `values`
+  // mutation. Skips empty drafts + the initial render. Per-modal lifetime
+  // draftId means subsequent saves overwrite the same doc.
+  const draftIdRef = useRef('');
+  useEffect(() => { draftIdRef.current = draftId; }, [draftId]);
+  useEffect(() => {
+    if (step !== STEP_FILL || !selected) return undefined;
+    const valueCount = Object.values(values || {}).filter(v => v !== '' && v != null).length;
+    if (valueCount === 0) return undefined;
+    const handle = setTimeout(() => {
+      let id = draftIdRef.current;
+      if (!id) {
+        const tsCompact = new Date().toISOString().slice(0, 16).replace(/[:T-]/g, '').slice(0, 12);
+        const rand = Array.from(crypto.getRandomValues(new Uint8Array(3)))
+          .map(b => b.toString(16).padStart(2, '0')).join('');
+        id = `DFT-${tsCompact}-${rand}`;
+        setDraftId(id);
+      }
+      saveDocumentDraft(id, {
+        templateId: selected.id,
+        customerId: customer?.customerId || customer?.id,
+        customerHN: customer?.proClinicHN || customer?.hn,
+        customerName: customer?.customerName || customer?.name,
+        values,
+        language,
+        toggles,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[DocumentPrintModal] draft auto-save failed (non-fatal):', err?.message || err);
+      });
+    }, 1200);
+    return () => clearTimeout(handle);
+    // values is the trigger; selected/customer/language/toggles read inside
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values, selected, language, toggles, step]);
 
   const handleBack = () => { setStep(STEP_PICK); setSelected(null); };
 
@@ -212,6 +279,12 @@ export default function DocumentPrintModal({
         // eslint-disable-next-line no-console
         console.warn('[DocumentPrintModal] audit log write failed (non-fatal):', err?.message || err);
       });
+      // Phase 14.10 — clear the draft after successful print (it served
+      // its purpose). Non-fatal: print already succeeded.
+      if (draftId) {
+        deleteDocumentDraft(draftId).catch(() => {/* non-fatal */});
+        setDraftId('');
+      }
     } catch (e) {
       setError(e.message || 'พิมพ์ล้มเหลว');
     }
@@ -255,6 +328,11 @@ export default function DocumentPrintModal({
         // eslint-disable-next-line no-console
         console.warn('[DocumentPrintModal] audit log write failed (non-fatal):', err?.message || err);
       });
+      // Phase 14.10 — clear the draft after successful PDF export.
+      if (draftId) {
+        deleteDocumentDraft(draftId).catch(() => {/* non-fatal */});
+        setDraftId('');
+      }
     } catch (e) {
       setError(e.message || 'สร้าง PDF ล้มเหลว');
     } finally {
@@ -427,6 +505,35 @@ export default function DocumentPrintModal({
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-900/30 border border-red-700/50 text-red-300 text-xs">
               {error}
+            </div>
+          )}
+          {/* Phase 14.10 — saved-draft resume banner */}
+          {step === STEP_FILL && resumeBanner?.draft && (
+            <div
+              className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/40 text-amber-200 text-xs"
+              data-testid="document-resume-banner"
+            >
+              <span>
+                พบฉบับร่างที่บันทึกไว้ก่อนหน้า ({String(resumeBanner.draft.updatedAt || '').slice(0, 16).replace('T', ' ')}) — ต้องการดึงค่าฟอร์มกลับมาหรือไม่?
+              </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={acceptResumeDraft}
+                  data-testid="document-resume-accept"
+                  className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white text-[11px] font-bold"
+                >
+                  ดึงค่ากลับมา
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissResumeBanner}
+                  data-testid="document-resume-dismiss"
+                  className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white text-[11px]"
+                >
+                  ไม่
+                </button>
+              </div>
             </div>
           )}
 
