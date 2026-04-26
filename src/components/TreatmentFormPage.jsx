@@ -23,6 +23,10 @@ import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // no provider exists. The hook falls back to 'main' when no provider is
 // mounted, preserving legacy behavior.).
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
+// T5.b (2026-04-26) — billing math + BMI + baht formatter extracted to
+// pure helpers. `computeTreatmentBilling` mirrors the previous inline
+// useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
+import { computeTreatmentBilling, computeBmi, formatBaht } from '../lib/treatmentBilling.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 //
@@ -489,58 +493,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   ]);
   const updatePmSeller = (idx, field, val) => setPmSellers(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s));
 
-  // ── BMI auto-calc ──
-  const bmi = useMemo(() => {
-    const w = parseFloat(vitals.weight);
-    const h = parseFloat(vitals.height);
-    if (w > 0 && h > 0) return (w / ((h / 100) ** 2)).toFixed(1);
-    return '';
-  }, [vitals.weight, vitals.height]);
+  // ── BMI auto-calc (T5.b 2026-04-26: extracted to src/lib/treatmentBilling.js) ──
+  const bmi = useMemo(() => computeBmi(vitals.weight, vitals.height), [vitals.weight, vitals.height]);
 
-  // ── Billing calculation ──
-  const formatBaht = (n) => Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const billing = useMemo(() => {
-    const lines = [];
-    purchasedItems.forEach(p => {
-      const net = (parseFloat(p.unitPrice) || 0) * (parseInt(p.qty) || 1);
-      if (net > 0) lines.push({ name: p.name, amount: net, type: 'item' });
-    });
-    medications.filter(m => m.name && parseFloat(m.unitPrice) > 0 && !m.isPremium).forEach(m => {
-      lines.push({ name: m.name, amount: (parseFloat(m.unitPrice) || 0) * (parseInt(m.qty) || 1), type: 'med' });
-    });
-    consumables.filter(c => c.name).forEach(c => {
-      const net = (parseFloat(c.unitPrice) || 0) * (parseInt(c.qty) || 1);
-      if (net > 0) lines.push({ name: c.name, amount: net, type: 'cons' });
-    });
-    const subtotal = lines.reduce((s, l) => s + l.amount, 0);
-    const medSubtotal = lines.filter(l => l.type === 'med').reduce((s, l) => s + l.amount, 0);
-    const medDiscPct = parseFloat(options?.medicineDiscountPercent) || 0;
-    const medDisc = parseFloat(medDiscountOverride) || (medSubtotal * medDiscPct / 100);
-    const afterMedDisc = Math.max(0, subtotal - medDisc);
-    const billDiscAmt = billDiscountType === 'percent'
-      ? afterMedDisc * (parseFloat(billDiscount) || 0) / 100
-      : parseFloat(billDiscount) || 0;
-    const afterDiscount = Math.max(0, afterMedDisc - billDiscAmt);
-    const insDed = isInsuranceClaimed ? (parseFloat(insuranceClaimAmount) || 0) : 0;
-    // Membership discount (backend mode only)
-    const memPct = isBackend ? (Number(backendActiveMembership?.discountPercent) || 0) : 0;
-    const afterIns = Math.max(0, afterDiscount - insDed);
-    const membershipDisc = afterIns * memPct / 100;
-    const afterMembership = Math.max(0, afterIns - membershipDisc);
-    const backendDepDed = isBackend
-      ? selectedDeposits.reduce((s, d) => s + (Number(d.amount) || 0), 0)
-      : 0;
-    const legacyDepDed = useDeposit ? (parseFloat(depositAmount) || 0) : 0;
-    const depDed = isBackend ? backendDepDed : legacyDepDed;
-    const afterDepDed = isBackend ? Math.max(0, afterMembership - depDed) : Math.max(0, afterDiscount - insDed - depDed);
-    const backendWalDed = isBackend ? Math.min(Number(selectedWallet?.amount) || 0, afterDepDed) : 0;
-    const legacyWalDed = useWallet ? (parseFloat(walletAmount) || 0) : 0;
-    const walDed = isBackend ? backendWalDed : legacyWalDed;
-    const netTotal = isBackend
-      ? Math.max(0, afterDepDed - walDed)
-      : Math.max(0, afterDiscount - insDed - depDed - walDed);
-    return { lines, subtotal, medSubtotal, medDiscPct, medDisc, billDiscAmt, afterDiscount, insDed, membershipDisc, memPct, afterMembership, depDed, walDed, netTotal };
-  }, [purchasedItems, medications, consumables, medDiscountOverride, billDiscount, billDiscountType,
+  // ── Billing calculation (T5.b 2026-04-26: extracted to computeTreatmentBilling helper) ──
+  const billing = useMemo(() => computeTreatmentBilling({
+    purchasedItems, medications, consumables,
+    medDiscountOverride, billDiscount, billDiscountType,
+    isInsuranceClaimed, insuranceClaimAmount,
+    isBackend, selectedDeposits, selectedWallet, backendActiveMembership, options,
+    useDeposit, depositAmount, useWallet, walletAmount,
+  }), [purchasedItems, medications, consumables, medDiscountOverride, billDiscount, billDiscountType,
       isInsuranceClaimed, insuranceClaimAmount, useDeposit, depositAmount, useWallet, walletAmount,
       isBackend, selectedDeposits, selectedWallet, backendActiveMembership, options]);
 

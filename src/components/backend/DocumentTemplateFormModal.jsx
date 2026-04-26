@@ -7,8 +7,9 @@
 // docType dropdown is locked (avoid re-typing a medical-certificate as
 // a consent by accident and breaking seeds).
 
-import { useState, useMemo, useCallback } from 'react';
-import { Plus, X, AlertCircle } from 'lucide-react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
+import { Plus, X, AlertCircle, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import { saveDocumentTemplate } from '../../lib/backendClient.js';
 import {
@@ -22,6 +23,10 @@ import {
   generateDocumentTemplateId,
   extractTemplatePlaceholders,
 } from '../../lib/documentTemplateValidation.js';
+// T5.a (2026-04-26) — visual designer MVP: render-as-you-type preview
+// using the production print engine so admin sees exactly what will be
+// printed without leaving the modal.
+import { buildPrintContext, renderTemplate } from '../../lib/documentPrintEngine.js';
 
 const LANG_LABEL = { th: 'ไทย', en: 'English', bilingual: 'สองภาษา' };
 const PAPER_LABEL = { A4: 'A4 (210×297mm)', A5: 'A5 (148×210mm)', 'label-57x32': 'ฉลากยา (57×32mm)' };
@@ -40,6 +45,10 @@ export default function DocumentTemplateFormModal({
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // T5.a (2026-04-26) — visual designer state: preview toggle + cursor
+  // position for "insert placeholder at cursor" helper.
+  const [previewOpen, setPreviewOpen] = useState(true);
+  const htmlTextareaRef = useRef(null);
 
   const update = useCallback((patch) => setForm(prev => ({ ...prev, ...patch })), []);
 
@@ -77,6 +86,70 @@ export default function DocumentTemplateFormModal({
       fields: prev.fields.map((f, i) => i === idx ? { ...f, ...patch } : f),
     }));
   };
+
+  // T5.a (2026-04-26) — reorder fields. Used by ArrowUp/ArrowDown buttons
+  // on each row. Out-of-bounds moves are no-ops.
+  const moveField = (idx, delta) => {
+    setForm(prev => {
+      const fields = [...(prev.fields || [])];
+      const target = idx + delta;
+      if (target < 0 || target >= fields.length) return prev;
+      [fields[idx], fields[target]] = [fields[target], fields[idx]];
+      return { ...prev, fields };
+    });
+  };
+
+  // T5.a (2026-04-26) — insert {{placeholder}} at the textarea cursor.
+  // Smart-pick keeps the cursor in the right place AFTER the inserted token
+  // so admin can keep typing context around it.
+  const insertPlaceholder = useCallback((key) => {
+    const ta = htmlTextareaRef.current;
+    if (!ta) {
+      // Fallback: append to end
+      update({ htmlTemplate: (form.htmlTemplate || '') + `{{${key}}}` });
+      return;
+    }
+    const start = ta.selectionStart || 0;
+    const end = ta.selectionEnd || 0;
+    const before = (form.htmlTemplate || '').slice(0, start);
+    const after = (form.htmlTemplate || '').slice(end);
+    const insert = `{{${key}}}`;
+    const next = before + insert + after;
+    update({ htmlTemplate: next });
+    // Restore cursor AFTER the inserted token on next paint
+    requestAnimationFrame(() => {
+      const cursor = start + insert.length;
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    });
+  }, [form.htmlTemplate, update]);
+
+  // T5.a (2026-04-26) — live preview HTML. Mirrors documentPrintEngine
+  // render path. Sample data ensures placeholders show non-empty values
+  // so admin can verify alignment / wrapping / styling.
+  const previewHtml = useMemo(() => {
+    const sampleValues = {};
+    (form.fields || []).forEach((f) => {
+      if (!f?.key) return;
+      if (f.type === 'date') sampleValues[f.key] = '2026-04-26';
+      else if (f.type === 'number') sampleValues[f.key] = '123';
+      else if (f.type === 'staff-select') sampleValues[f.key] = 'นพ. ตัวอย่าง';
+      else if (f.type === 'checkbox') sampleValues[f.key] = '☑';
+      else sampleValues[f.key] = `[${f.label || f.key}]`;
+    });
+    const ctx = buildPrintContext({
+      clinic: clinicSettings || {},
+      customer: {
+        customerName: 'นางสาว ตัวอย่าง',
+        proClinicHN: '000000',
+        patientData: { gender: 'หญิง', age: '30', phone: '080-000-0000' },
+      },
+      values: sampleValues,
+      language: form.language || 'th',
+      toggles: {},
+    });
+    return renderTemplate(form.htmlTemplate || '', ctx);
+  }, [form.htmlTemplate, form.fields, form.language, clinicSettings]);
 
   const handleSave = async () => {
     setError('');
@@ -164,20 +237,56 @@ export default function DocumentTemplateFormModal({
       </div>
 
       <div className="space-y-2">
-        <label className="block text-xs text-[var(--tx-muted)]">
-          HTML เทมเพลต * &nbsp;
-          <span className="text-[10px] text-[var(--tx-muted)]">
-            ใช้ <code>{'{{placeholder}}'}</code> สำหรับค่าที่จะเติมตอนพิมพ์
-          </span>
-        </label>
-        <textarea
-          value={form.htmlTemplate || ''}
-          onChange={(e) => update({ htmlTemplate: e.target.value })}
-          rows={12}
-          className="w-full px-2 py-1.5 rounded text-xs font-mono bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
-          data-field="htmlTemplate"
-          spellCheck={false}
-        />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <label className="block text-xs text-[var(--tx-muted)]">
+            HTML เทมเพลต * &nbsp;
+            <span className="text-[10px] text-[var(--tx-muted)]">
+              ใช้ <code>{'{{placeholder}}'}</code> สำหรับค่าที่จะเติมตอนพิมพ์
+            </span>
+          </label>
+          {/* T5.a — toggle live preview pane */}
+          <button type="button"
+            onClick={() => setPreviewOpen(o => !o)}
+            data-testid="template-preview-toggle"
+            className="text-[11px] flex items-center gap-1 px-2 py-1 rounded bg-[var(--bg-hover)] hover:bg-[var(--bg-card)]">
+            {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
+            {previewOpen ? 'ซ่อน Preview' : 'แสดง Preview'}
+          </button>
+        </div>
+        {/* T5.a — quick-insert placeholder bar (clicks insert {{key}} at
+            textarea cursor). Combines field keys + common context keys. */}
+        <div className="flex items-center gap-1 flex-wrap" data-testid="template-quick-insert">
+          <span className="text-[10px] text-[var(--tx-muted)]">เพิ่ม placeholder:</span>
+          {[...new Set([
+            ...((form.fields || []).map(f => f.key).filter(Boolean)),
+            'customerName', 'customerHN', 'today', 'clinicName',
+          ])].slice(0, 12).map(key => (
+            <button key={key} type="button"
+              onClick={() => insertPlaceholder(key)}
+              data-testid={`template-insert-${key}`}
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--bd)]">
+              {`{{${key}}}`}
+            </button>
+          ))}
+        </div>
+        <div className={previewOpen ? 'grid grid-cols-1 lg:grid-cols-2 gap-3' : ''}>
+          <textarea
+            ref={htmlTextareaRef}
+            value={form.htmlTemplate || ''}
+            onChange={(e) => update({ htmlTemplate: e.target.value })}
+            rows={12}
+            className="w-full px-2 py-1.5 rounded text-xs font-mono bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]"
+            data-field="htmlTemplate"
+            spellCheck={false}
+          />
+          {previewOpen && (
+            <div className="rounded border border-[var(--bd)] bg-white text-black p-3 overflow-auto"
+              style={{ maxHeight: '320px', fontSize: '11px', minHeight: '180px' }}
+              data-testid="template-live-preview"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml || '<em style="color:#999">— ว่าง —</em>') }}
+            />
+          )}
+        </div>
         {placeholders.length > 0 && (
           <div className="text-[11px] text-[var(--tx-muted)]">
             Placeholder ในเทมเพลต: {placeholders.map(p => (
@@ -203,30 +312,55 @@ export default function DocumentTemplateFormModal({
             <Plus size={12} /> เพิ่มฟิลด์
           </button>
         </div>
-        {(form.fields || []).map((f, i) => (
-          <div key={i} className="grid grid-cols-12 gap-2 items-center">
-            <input type="text" placeholder="key (a-z_)" value={f.key || ''}
-              onChange={(e) => updateField(i, { key: e.target.value })}
-              className="col-span-3 px-2 py-1 rounded text-xs font-mono bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-            <input type="text" placeholder="label" value={f.label || ''}
-              onChange={(e) => updateField(i, { label: e.target.value })}
-              className="col-span-4 px-2 py-1 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
-            <select value={f.type || 'text'}
-              onChange={(e) => updateField(i, { type: e.target.value })}
-              className="col-span-2 px-2 py-1 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-              {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <label className="col-span-2 text-xs flex items-center gap-1">
-              <input type="checkbox" checked={!!f.required}
-                onChange={(e) => updateField(i, { required: e.target.checked })} />
-              required
-            </label>
-            <button type="button" onClick={() => removeField(i)}
-              className="col-span-1 text-red-400 hover:bg-red-900/20 rounded p-1">
-              <X size={12} />
-            </button>
-          </div>
-        ))}
+        {(form.fields || []).map((f, i) => {
+          const total = (form.fields || []).length;
+          return (
+            <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`template-field-row-${i}`}>
+              <input type="text" placeholder="key (a-z_)" value={f.key || ''}
+                onChange={(e) => updateField(i, { key: e.target.value })}
+                className="col-span-3 px-2 py-1 rounded text-xs font-mono bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+              <input type="text" placeholder="label" value={f.label || ''}
+                onChange={(e) => updateField(i, { label: e.target.value })}
+                className="col-span-3 px-2 py-1 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+              <select value={f.type || 'text'}
+                onChange={(e) => updateField(i, { type: e.target.value })}
+                className="col-span-2 px-2 py-1 rounded text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+                {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <label className="col-span-2 text-xs flex items-center gap-1">
+                <input type="checkbox" checked={!!f.required}
+                  onChange={(e) => updateField(i, { required: e.target.checked })} />
+                required
+              </label>
+              {/* T5.a — reorder buttons (move up / down). Disabled at the
+                  edges so admin doesn't hammer no-op clicks. */}
+              <div className="col-span-1 flex items-center gap-0.5">
+                <button type="button"
+                  onClick={() => moveField(i, -1)}
+                  disabled={i === 0}
+                  data-testid={`template-field-up-${i}`}
+                  title="ย้ายขึ้น"
+                  className="text-[var(--tx-muted)] hover:bg-[var(--bg-hover)] rounded p-0.5 disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ArrowUp size={12} />
+                </button>
+                <button type="button"
+                  onClick={() => moveField(i, 1)}
+                  disabled={i === total - 1}
+                  data-testid={`template-field-down-${i}`}
+                  title="ย้ายลง"
+                  className="text-[var(--tx-muted)] hover:bg-[var(--bg-hover)] rounded p-0.5 disabled:opacity-30 disabled:cursor-not-allowed">
+                  <ArrowDown size={12} />
+                </button>
+              </div>
+              <button type="button" onClick={() => removeField(i)}
+                data-testid={`template-field-remove-${i}`}
+                title="ลบฟิลด์"
+                className="col-span-1 text-red-400 hover:bg-red-900/20 rounded p-1">
+                <X size={12} />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-4">

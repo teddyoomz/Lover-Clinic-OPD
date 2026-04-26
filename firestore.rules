@@ -261,6 +261,17 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: T4 / Phase 14.4 G5 Course Exchange + Refund Audit Log ──
+      // V32-tris-bis (2026-04-26) — course exchanges + refunds are written
+      // here as immutable audit entries via runTransaction. Same append-
+      // only contract as be_document_prints / be_stock_movements so a
+      // compromised client can't tamper exchange history.
+      match /be_course_changes/{changeId} {
+        allow read:   if isClinicStaff();
+        allow create: if isClinicStaff();
+        allow update, delete: if false;
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

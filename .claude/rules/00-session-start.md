@@ -518,6 +518,13 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   - V31 patterns added permanently to `audit-anti-vibe-code` AV15 (silent-swallow + missing-token-revoke).
   - `audit-firebase-admin-security` should add FA15: "credential-change actions (updateUser email/password/disabled, setCustomUserClaims that REMOVES privilege) MUST call revokeRefreshTokens".
 
+### V32-tris-bis (session 11 follow-on, 2026-04-26) — P1-P3 batch shipment (T3.e + T4 + T5.b + T5.a)
+- After V32-tris ship in session 10, user instructed "ทำทั้งหมด" (do all P1-P3 from queue). Shipped 4 deferred Tier 3 features in one session — T3.e email/LINE delivery (was BLOCKED on user config), T4 G5 customer-product-change, T5.b TFP refactor, T5.a visual designer MVP.
+- **No regressions, no V-class bugs found** — V32-tris methodology held. Pure helpers + source-grep + RTL coverage = +121 tests (5984 → 6126), build clean, e2e public-links 9/9.
+- **Pattern reinforced**: when user says "ทำทั้งหมด" on a queue with mixed scope (S/M/L/XL), prioritize unblocking + valuable+small first (T3.e config-missing scaffolding works without admin running prompts; T4 audit log; T5.b extract-helper; T5.a feature-on-existing-modal). Defer mega XL scopes to follow-on (drag-drop designer would have eaten the whole session).
+- **Single test fix needed**: `branch-collection-coverage.test.js BC1.1` — added new collection (be_course_changes) to COLLECTION_MATRIX. Pattern: every new `be_*` collection MUST be classified in this matrix or CI fails. Cheap, prevents drift.
+- **Lesson**: T3.e's "config-missing 503 with friendly error" pattern is the right way to ship a feature that depends on user-side config. Don't block the feature; ship the UI + endpoint + test path; surface a clear "config not set up — go here to fix" error. Admin can configure later without redeploy. Mirror for any future feature that depends on admin-only setup (SMS gateway, signed-URL bucket, OAuth provider).
+
 ### V32-tris (final, 2026-04-26) — wrapper-positioned text + smart staff-picker shared module + M9 admin reconciler
 - After V32 base + V32-bis (inline-flex column), user STILL reported "วันที่รักษายังไม่ตรง" (rounds 3 + 4) plus "ให้ Auto ดึง field แพทย์... ทำแบบฉลาดๆ smart อะ" (BulkPrintModal had plain text inputs for staff fields, not the smart dropdown DocumentPrintModal already had).
 - **Two distinct user complaints folded into one V32-tris ship**:

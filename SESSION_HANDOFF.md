@@ -7,10 +7,10 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 10 EOD — V32-tris (Bulk PDF alignment + smart staff-picker shared module) + M9 admin reconciler
+- **Date last updated**: 2026-04-26 session 11 EOD — P1-P3 ALL: T3.e + T4 + T5.b + T5.a + V32-tris + M9 reconciler
 - **Branch**: `master`
 - **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers` (LOCAL: V32-tris commit pending)
-- **Test count**: 6005 vitest passing (+105 this session — V32 base 49, V32-tris shared 35, BulkPrintModal RTL 6, M9 admin 14, fixes 1+1+1)
+- **Test count**: 6126 vitest passing (+121 session 11 P1-P3 — T3.e 26, T4 39, T5.b 35, T5.a 21)
 - **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
 - **Deploy state**: ⚠️ **6 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
   - Vercel: `lover-clinic-93z2j8492` aliased to https://lover-clinic-app.vercel.app (40s)
@@ -22,6 +22,40 @@
 - **Remote sync**: master = origin/master ✅ (8 commits pushed prior session; V32-tris pending push)
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
 - **SCHEMA_VERSION**: 15
+
+### Session 2026-04-26 session 11 (P1-P3 ALL: T3.e + T4 + T5.b + T5.a — pending commit)
+User: "ทำทั้งหมด" (do all P1-P3 from session 10's queue). Shipped 4 deferred Tier 3 features in one session:
+
+**T3.e — Email + LINE document delivery** (was BLOCKED on user config in session 9):
+- New `api/admin/send-document.js` (admin-gated POST). Body `{type:'email'|'line', recipient, pdfBase64, ...}`.
+  - Email path: nodemailer SMTP — config from `clinic_settings/email_config` (host/user/pass/from)
+  - LINE path: reuses existing `chat_config.line.channelAccessToken` from webhook/send.js
+  - 503 + `code:'CONFIG_MISSING'` when admin hasn't configured yet (UI surfaces friendly Thai error)
+  - 10 MB PDF cap; nodemailer dynamically imported (Vercel function size)
+- New `src/lib/sendDocumentClient.js` (Firebase ID-token auth wrapper + blob→base64 helper).
+- DocumentPrintModal: 2 new buttons "ส่ง Email" + "แจ้ง LINE" with progress + success/error banner. PDF render is intercepted (suppress download click) so the same engine path can both download AND email.
+- Tests: 26 in `tests/t3e-send-document.test.js` (helper unit + modal source-grep + server source-grep guards).
+
+**T4 — Course exchange + refund** (Phase 14.4 G5):
+- New `src/lib/courseExchange.js` — pure helpers: `findCourseIndex`, `applyCourseExchange`, `applyCourseRefund`, `buildChangeAuditEntry`.
+- New `backendClient.exchangeCustomerCourse(...)` + `refundCustomerCourse(...)` — atomic via runTransaction; both write `be_course_changes` audit entry inside the same tx so the customer.courses[] mutation + audit log can never diverge.
+- New `backendClient.listCourseChanges(customerId)` — for showing exchange/refund history per customer.
+- New `firestore.rules` block for `be_course_changes` (append-only — read+create OK for clinic staff, update+delete forbidden — mirrors be_document_prints / be_stock_movements).
+- Tests: 39 in `tests/t4-course-exchange-refund.test.js` (T4.A-F: helpers, exchange, refund, audit, backendClient wiring, firestore rule shape).
+
+**T5.b — TreatmentFormPage refactor** (4676 LOC tech debt):
+- Extracted billing math + BMI + baht formatter into `src/lib/treatmentBilling.js` — `computeTreatmentBilling()`, `computeBmi()`, `formatBaht()`. Pure functions, easy to unit-test without mounting the 119-useState component.
+- TFP `useMemo(() => billing-calc...)` block went from 40+ LOC inline to a 1-call delegation.
+- Tests: 35 in `tests/t5b-treatment-billing.test.js` covering subtotal/medSubtotal/medDisc/billDisc/insurance/membership/deposit/wallet/clamp branches in BOTH backend mode + legacy mode + adversarial inputs.
+
+**T5.a — Visual template designer MVP** (mega XL drag-drop deferred to follow-up):
+- DocumentTemplateFormModal gained: live preview pane (sample-data render via DOMPurify-sanitized), quick-insert placeholder bar (clicks insert at textarea cursor with cursor restore), reorder up/down buttons per field row (disabled at edges).
+- Tests: 21 in `tests/t5a-template-designer-mvp.test.jsx` (source-grep + RTL: insert at cursor, toggle preview, reorder, edge cases).
+
+**Test fix this session**:
+- `tests/branch-collection-coverage.test.js` BC1.1 — added `be_course_changes` to COLLECTION_MATRIX (scope: 'global'); without this the new collection would fail the matrix-spans-rules invariant.
+
+**Production deploy**: 7 commits unpushed-to-prod (b2784cf is prod). Awaiting "deploy".
 
 ### Session 2026-04-26 session 10 (V32-tris + M9 reconciler — pending commit)
 4 user-reported issues fixed this session:

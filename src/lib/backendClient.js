@@ -2134,6 +2134,115 @@ export async function reconcileAllCustomerSummaries({ onProgress } = {}) {
   return { total, succeeded, failed };
 }
 
+// ─── Course Exchange + Refund (T4 / Phase 14.4 G5, 2026-04-26) ─────────────
+// Atomic helpers that swap or refund a customer's course AND write the
+// be_course_changes audit log entry in the same Firestore transaction.
+// Pure shape transformations live in src/lib/courseExchange.js — these
+// functions wire those into Firestore + audit log.
+
+const courseChangesCol = () => collection(db, ...basePath(), 'be_course_changes');
+const courseChangeDoc = (id) => doc(db, ...basePath(), 'be_course_changes', String(id));
+
+/**
+ * Execute a course exchange atomically.
+ *
+ *   1. Read customer doc inside transaction
+ *   2. Compute next courses[] via applyCourseExchange
+ *   3. Write next courses[] back
+ *   4. Append be_course_changes audit entry
+ *
+ * @param {string} customerId
+ * @param {string} fromCourseId - existing course in customer.courses[]
+ * @param {object} newMasterCourse - master course shape from be_courses
+ * @param {object} opts - { reason: string, actor: string }
+ * @returns {Promise<{ changeId, fromCourse, newCourse }>}
+ */
+export async function exchangeCustomerCourse(customerId, fromCourseId, newMasterCourse, opts = {}) {
+  const { applyCourseExchange, buildChangeAuditEntry } = await import('./courseExchange.js');
+
+  return runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    if (!cSnap.exists()) throw new Error('Customer not found');
+    const customer = { id: cSnap.id, ...cSnap.data() };
+
+    const { nextCourses, fromCourse, newCourse } = applyCourseExchange(
+      customer, fromCourseId, newMasterCourse,
+    );
+
+    tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });
+
+    const audit = buildChangeAuditEntry({
+      customerId,
+      kind: 'exchange',
+      fromCourse,
+      toCourse: newCourse,
+      reason: opts.reason || '',
+      actor: opts.actor || '',
+    });
+    tx.set(courseChangeDoc(audit.changeId), audit);
+
+    return { changeId: audit.changeId, fromCourse, newCourse };
+  });
+}
+
+/**
+ * Refund a customer's course atomically.
+ *
+ *   1. Read customer doc
+ *   2. Mark course as refunded (status: 'คืนเงิน', refundedAt, refundAmount)
+ *   3. Write next courses[] back
+ *   4. Append be_course_changes audit entry
+ *
+ * Does NOT auto-deduct customer.totalSpent — caller decides whether the
+ * refund affects lifetime spend (refunds for canceled-but-not-used courses
+ * may not reduce totalSpent depending on accounting policy).
+ *
+ * @param {string} customerId
+ * @param {string} courseId
+ * @param {number} refundAmount - non-negative
+ * @param {object} opts - { reason: string, actor: string }
+ * @returns {Promise<{ changeId, fromCourse, refundAmount }>}
+ */
+export async function refundCustomerCourse(customerId, courseId, refundAmount, opts = {}) {
+  const { applyCourseRefund, buildChangeAuditEntry } = await import('./courseExchange.js');
+
+  return runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    if (!cSnap.exists()) throw new Error('Customer not found');
+    const customer = { id: cSnap.id, ...cSnap.data() };
+
+    const { nextCourses, fromCourse, refundAmount: refundedAmount } = applyCourseRefund(
+      customer, courseId, refundAmount, { reason: opts.reason || '' },
+    );
+
+    tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });
+
+    const audit = buildChangeAuditEntry({
+      customerId,
+      kind: 'refund',
+      fromCourse,
+      toCourse: null,
+      refundAmount: refundedAmount,
+      reason: opts.reason || '',
+      actor: opts.actor || '',
+    });
+    tx.set(courseChangeDoc(audit.changeId), audit);
+
+    return { changeId: audit.changeId, fromCourse, refundAmount: refundedAmount };
+  });
+}
+
+/** List be_course_changes audit entries for a customer (most recent first). */
+export async function listCourseChanges(customerId) {
+  const q = query(courseChangesCol(), where('customerId', '==', String(customerId)));
+  const snap = await getDocs(q);
+  const entries = snap.docs.map(d => d.data());
+  entries.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return entries;
+}
+
 /**
  * Create a new deposit. Sets remainingAmount = amount, usedAmount = 0, status = 'active'.
  * Returns { depositId, success }.
