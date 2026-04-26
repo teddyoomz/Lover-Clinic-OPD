@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -5512,9 +5512,20 @@ export async function deletePermissionGroup(permissionGroupId) {
 
 /**
  * Phase 13.5.1 — chained listener for the current user's permission state.
- * Subscribes to be_staff/{uid} and (when staff.permissionGroupId is set)
- * be_permission_groups/{groupId}. Fires `onChange({ staff, group })` on any
- * mutation to either doc.
+ * V30 (2026-04-26) FIX: queries `be_staff WHERE firebaseUid == uid` instead
+ * of `be_staff/{uid}` direct doc lookup. The doc ID is `staffId` (e.g.
+ * `STF-XXX`), NOT the Firebase Auth uid — only `firebaseUid` field links
+ * the doc to the auth account. Without this fix, every newly-created
+ * staff with separate staffId vs firebaseUid was invisible to the soft-
+ * gate listener → empty sidebar even after V29 sync-self set their claims.
+ * (User report verbatim: "สิทธิ์เจ้าของกิจการที่เพิ่งสร้างใหม่ ก็ไม่เห็น
+ * tab ใน backend อยู่ดี".)
+ *
+ * Subscribes to:
+ *   - be_staff WHERE firebaseUid == uid LIMIT 1 (the staff doc for this user)
+ *   - be_permission_groups/{groupId} (chained when staff.permissionGroupId resolves)
+ *
+ * Fires `onChange({ staff, group })` on any mutation to either result.
  *
  * Pattern follows Phase 14.7.H listener-cluster: 200ms debounce coalesces
  * rapid changes to avoid React re-render storms.
@@ -5561,10 +5572,19 @@ export function listenToUserPermissions(uid, onChange, onError) {
     );
   };
 
+  // V30 FIX: query by firebaseUid field, NOT by doc ID. be_staff doc IDs
+  // are staffId (STF-XXX), Firebase Auth uid is in the `firebaseUid` field.
+  const staffQuery = query(
+    staffCol(),
+    where('firebaseUid', '==', uid),
+    limit(1),
+  );
+
   const staffUnsub = onSnapshot(
-    staffDoc(uid),
-    (snap) => {
-      lastStaff = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    staffQuery,
+    (querySnap) => {
+      const docSnap = querySnap.docs[0] || null;
+      lastStaff = docSnap ? { id: docSnap.id, ...docSnap.data() } : null;
       const newGroupId = lastStaff?.permissionGroupId || null;
       if (newGroupId !== currentGroupId) {
         currentGroupId = newGroupId;

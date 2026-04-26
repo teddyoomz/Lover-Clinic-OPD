@@ -251,21 +251,27 @@ describe('PT1 — Phase 13.5.1 permission system wiring', () => {
       expect(backendSource).toMatch(/export\s+function\s+listenToUserPermissions\s*\(\s*uid/);
     });
 
-    it('PT1.E.6 listenToUserPermissions chains staff → group with cleanup', () => {
-      // Find function start; take next ~3000 chars (function body is dense).
+    it('PT1.E.6 (V30 FIX) listenToUserPermissions chains staff (by firebaseUid query) → group with cleanup', () => {
+      // V30 (2026-04-26) — flipped from "uses staffDoc(uid)" anti-regression
+      // (which LOCKED IN the bug — be_staff doc IDs are staffId not auth.uid).
+      // The fix queries `where('firebaseUid', '==', uid)` instead.
       const startIdx = backendSource.indexOf('export function listenToUserPermissions');
       expect(startIdx).toBeGreaterThan(0);
       const fn = backendSource.slice(startIdx, startIdx + 3500);
-      // Two onSnapshot calls — staff + group
+      // Two onSnapshot calls — staff query + group doc
       const snapshots = (fn.match(/onSnapshot\(/g) || []).length;
       expect(snapshots).toBeGreaterThanOrEqual(2);
       // Returns unsub function
       expect(fn).toMatch(/return\s+\(\)\s*=>/);
       // Debounce per listener-cluster pattern
       expect(fn).toMatch(/setTimeout|debounceTimer/);
-      // References both staff doc and group doc
-      expect(fn).toMatch(/staffDoc\(uid\)/);
+      // V30: query by firebaseUid field, NOT by uid as doc ID
+      expect(fn).toMatch(/where\(['"]firebaseUid['"]\s*,\s*['"]==['"]\s*,\s*uid\)/);
+      expect(fn).toMatch(/limit\(1\)/);
       expect(fn).toMatch(/permissionGroupDoc/);
+      // Anti-regression: must NOT use staffDoc(uid) inside an onSnapshot
+      // (the broken pattern that V30 fixed)
+      expect(fn).not.toMatch(/onSnapshot\(\s*staffDoc\(uid\)/);
     });
   });
 });
