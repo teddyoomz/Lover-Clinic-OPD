@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-27 (s14 — V33.6 Flex no-truncation DEPLOYED)"
-status: "Production = 380f05d LIVE. V33.6 fixes mobile LINE-OA Flex truncation: courses now stacked-vertical card per row (name top, 'คงเหลือ X · หมดอายุ Y' meta below); appt date+time split to two stacked sub-rows; doctor name #222 dark (Rule 04 spirit). Eliminates truncation as a bug class — no flex math, no wrap:false on data."
-current_focus: "Idle. V33.6 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Awaiting user mobile QA on LINE OA."
+updated_at: "2026-04-27 (s15 — V33.7 i18n + full-date + admin lang toggle DEPLOYED)"
+status: "Production = 2ff8803 LIVE. V33.7 ships TH/EN i18n (foreign customers auto-EN via customer_type), full-weekday-month date format (อังคาร 28 เมษายน 2569 / Tuesday 28 April 2026), admin language toggle in LinkLineInstructionsModal + LinkRequestsTab 'ผูกแล้ว' rows + DocumentPrintModal refactor. Plus หมดอายุ smart-hide leak fix (V33.6 follow-up)."
+current_focus: "Idle. V33.7 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Awaiting user mobile QA + foreign-customer admin-toggle test."
 branch: "master"
-last_commit: "380f05d"
-tests: 1439
+last_commit: "2ff8803"
+tests: 1530
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "380f05d"
+production_commit: "2ff8803"
 firestore_rules_version: 17
 storage_rules_version: 2
 ---
@@ -19,19 +19,28 @@ storage_rules_version: 2
 - V33.4 + V33.5 V15 combined deploy verified: pre 6/6 + 3/3 negative + post 6/6 + 3/3 negative + cleanup 4/4 + smoke 3/3 (incl. /?customer=LC-26000001 → 200).
 - Working tree clean. Build clean.
 
-## What this session shipped (s14)
-1 commit (`380f05d`). Detail follows; full V-entry in
-`.claude/rules/v-log-archive.md` (V33.6).
+## What this session shipped (s15)
+1 commit (`2ff8803`). Detail follows.
 
-- **V33.6** (`380f05d`) — Mobile LINE-OA Flex truncation fix.
-  - Bug: V33.5 horizontal flex:5/2/2 + wrap:false truncated mobile.
-    "0 / 3 a..." (vs "0 / 3 ครั้ง"), "เหมาตา..." (vs "เหมาตามจริง"),
-    "10:00–10..." (vs "10:00–10:30"), provider in red.
-  - Fix: vertical-stacked rows + buildCourseMetaLine helper +
-    appt date/time split + provider color #222.
-  - Tests: +54 (V33.6.A-G). Total 1385 → 1439.
+- **V33.7** (`2ff8803`) — TH/EN i18n + full-date + admin language toggle.
+  - 3 user directives: full weekday/month date, auto-EN for foreign
+    customers, manual TH/EN toggle in 2 UI surfaces.
+  - 1 V33.6 follow-up: หมดอายุ - smart-hide leak (formatThaiDate '-'
+    output also filtered now).
+  - Architecture: MESSAGES = { th, en } dict in lineBotResponder.js
+    + getLanguageForCustomer (lineLanguage > customer_type > 'th') +
+    formatLongDate (Intl.DateTimeFormat + Buddhist calendar normalized).
+  - Rule C1 extract: NEW LangPillToggle.jsx (3rd consumer triggers extract;
+    DocumentPrintModal refactored to use shared component).
+  - Backend: api/admin/customer-line-link.js + 'update-language' action;
+    api/webhook/line.js threads lang from customer; customerValidation.js
+    + lineLanguage FIELD_BOUNDS + normalizer coerce.
+  - Tests: +91 (V33.7.A-J + LP1-LP6). Total 1439 → 1530.
   - V15 combined deploy: vercel + firestore:rules; pre+post probe
     6/6 + 3/3 GREEN; HTTP smoke 3/3 = 200.
+
+## What s14 shipped (prior session)
+1 commit (`380f05d`). V33.6 mobile Flex no-truncation.
 
 ## What s13 shipped (prior session)
 8 commits (`1f0faff` → `ea8a09c`). Full detail in
@@ -52,9 +61,9 @@ storage_rules_version: 2
 
 ## Next action
 None pending. If user wants to continue:
-- **NEW**: live mobile QA — DM "คอร์ส" / "นัด" to LINE OA; verify stacked layout renders fully (no `…` truncation) on smartphone
+- **NEW (V33.7)**: live mobile QA — Thai customer DM "คอร์ส" / "นัด" → confirm full-weekday date; admin toggle a foreign customer to EN → that customer DMs → confirm English replies
 - **P1 polish**: TEST-/E2E- prefix enforcement on test fixtures (per V33.2 directive); receipt-info edit UI on existing customers
-- **P1 cleanup (24h grace)**: V33.5+ remove orphan QR-token plumbing — api/admin/customer-link.js + customerLinkClient.js + generateLinkToken/consumeLinkToken in webhook + `be_customer_link_tokens` collection
+- **P1 cleanup (24h grace eligible)**: V33.5+ remove orphan QR-token plumbing — api/admin/customer-link.js + customerLinkClient.js + generateLinkToken/consumeLinkToken in webhook + `be_customer_link_tokens` collection
 - **P2 XL**: TFP 3200 LOC refactor; T5.a full drag-drop designer
 
 ## Outstanding user-triggered actions (NOT auto-run)

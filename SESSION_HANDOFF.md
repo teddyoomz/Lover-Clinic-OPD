@@ -7,13 +7,13 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 14 — V33.6 mobile Flex no-truncation DEPLOYED
+- **Date last updated**: 2026-04-27 session 15 — V33.7 i18n + full-date + admin lang toggle DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `380f05d feat(line-oa): V33.6 — Flex bubble vertical-stacked rows (mobile no-truncation)`
-- **Test count**: **1439** focused (+54 since s13: V33.6.A-G full-flow simulate)
-- **Build**: clean. BackendDashboard chunk 994.86 KB (≈ unchanged)
-- **Deploy state**: ✅ **PRODUCTION = `380f05d`** (V15 combined deploy session 14 — V33.6 LIVE)
-  - Vercel: `lover-clinic-ekusiibat-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (53s)
+- **Last commit**: `2ff8803 feat(line-oa): V33.7 — TH/EN i18n + full-date format + admin language toggle`
+- **Test count**: **1530** focused (+91 since s14: V33.7.A-J + LP1-LP6)
+- **Build**: clean. BackendDashboard chunk 995.30 KB (≈ unchanged)
+- **Deploy state**: ✅ **PRODUCTION = `2ff8803`** (V15 combined deploy session 15 — V33.7 LIVE)
+  - Vercel: `lover-clinic-1g876hou3-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (56s)
   - Firestore rules: v17 LIVE (rules unchanged — already-up-to-date re-deploy per V1/V9 anti-drift)
   - Storage rules: V26 claim-based (unchanged)
   - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, smoke 3/3 = 200 (root + /?customer=LC-26000001 + /?backend=1)
@@ -21,6 +21,65 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
+
+### Session 2026-04-27 session 15 (1 commit, `2ff8803`) — V33.7 TH/EN i18n + full-date + admin language toggle
+
+User shipped 3 directives in one go (post-V33.6 mobile success):
+1. **Date format**: appointment bubble + replies use full weekday +
+   full month name. TH `อังคาร 28 เมษายน 2569` / EN `Tuesday 28 April 2026`.
+2. **Auto-language**: foreign customers (`customer_type === 'foreigner'`)
+   auto-receive EN bot replies. Default 'th'. Stored `lineLanguage` field
+   wins over auto-derive.
+3. **Admin toggle**: TH/EN segmented pill in 2 surfaces:
+   - LinkLineInstructionsModal (CustomerDetailView "ผูก LINE")
+   - LinkRequestsTab "ผูกแล้ว" sub-tab — per-row inline
+
+Plus V33.6 follow-up: "หมดอายุ -" leak fix (formatThaiDate output now
+also filtered via isMeaningfulValue, so non-ISO inputs like "6/2027"
+no longer render dangling suffix).
+
+**Architecture**:
+- Single `MESSAGES = { th: {...}, en: {...} }` dict in lineBotResponder.js
+- `getLanguageForCustomer(c)` priority: `lineLanguage` > `customer_type='foreigner'` > 'th'
+- `formatLongDate(iso, lang)` via `Intl.DateTimeFormat` + Buddhist calendar;
+  Thai output normalized (strip "วัน" prefix + "พ.ศ." suffix)
+- 13 reply functions + 3 Flex builders all accept language param (default 'th')
+- Webhook threads `lang` from customer doc; pre-link paths default 'th'
+
+**Rule C1 extract**: NEW `LangPillToggle.jsx` reusable segmented pill.
+3rd consumer (LinkLineInstructionsModal + LinkRequestsTab + DocumentPrintModal)
+triggered the extract; old inline pattern in DocumentPrintModal refactored.
+
+**Tests**: +91 new
+- `tests/v33-7-line-bot-i18n.test.js` (76): A getLanguageForCustomer +
+  B formatLongDate + C reply funcs + D Flex i18n + E หมดอายุ smart-hide +
+  F webhook threading + G customer-line-link action + H client helper +
+  I customerValidation + J UI source-grep
+- `tests/v33-7-lang-pill-toggle.test.jsx` (21): LP1 render + LP2 active +
+  LP3 onChange + LP4 disabled + LP5 adversarial + LP6 labelFn
+- Updated v33-6 C2 + v32-tris-ter L4.3/L4.4/L4.6 (long-form date assertions)
+
+**Files**:
+- src/lib/lineBotResponder.js — MESSAGES + helpers + 13 reply + 3 Flex refactor
+- src/lib/customerValidation.js — FIELD_BOUNDS lineLanguage + normalize coerce
+- src/lib/customerLineLinkClient.js — updateLineLinkLanguage helper
+- api/admin/customer-line-link.js — 'update-language' action + list-linked exposes lineLanguage
+- api/webhook/line.js — getLanguageForCustomer + lang threading on 3 sites
+- src/components/backend/LangPillToggle.jsx — NEW shared pill
+- src/components/backend/LinkLineInstructionsModal.jsx — toggle at top
+- src/components/backend/LinkRequestsTab.jsx — per-row toggle in "ผูกแล้ว"
+- src/components/backend/DocumentPrintModal.jsx — refactor to shared toggle
+
+**Verification**:
+- npm test --run: 1439 → 1530, all green
+- npm run build: clean, BD 995.30 KB (≈ unchanged)
+- Pre+Post probes 6/6 + 3/3 GREEN
+- Production HTTP smoke 3/3 = 200
+
+**1 commit**:
+```
+2ff8803 feat(line-oa): V33.7 — TH/EN i18n + full-date format + admin language toggle
+```
 
 ### Session 2026-04-27 session 14 (1 commit, `380f05d`) — V33.6 mobile Flex no-truncation
 
@@ -329,19 +388,22 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s14.
+Resume LoverClinic — continue from 2026-04-27 s15.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=380f05d, prod=380f05d)
-3. .agents/active.md (1439 focused tests pass)
+2. SESSION_HANDOFF.md (master=2ff8803, prod=2ff8803)
+3. .agents/active.md (1530 focused tests pass)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
 5. .agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md
 
-Status: master=380f05d, 1439/1439 tests pass, prod=380f05d LIVE (V33.6)
+Status: master=2ff8803, 1530/1530 tests pass, prod=2ff8803 LIVE (V33.7)
 Next: idle — awaiting user direction
 Outstanding (user-triggered):
-  - Live mobile QA: DM "คอร์ส" / "นัด" / bare-13-digit to LINE OA — verify stacked Flex layout renders fully (no `…` truncation) on smartphone
+  - V33.7 mobile QA: Thai customer DM "คอร์ส" / "นัด" → confirm full
+    weekday + month date ("อังคาร 28 เมษายน 2569"). Admin toggle a foreign
+    customer to EN via LinkLineInstructionsModal or LinkRequestsTab "ผูกแล้ว"
+    row → that customer DMs → confirm English replies + "Tuesday 28 April 2026"
   - Admin test suspend/resume/unlink in "ผูกแล้ว" tab (carry-over)
   - V33.5+ cleanup: remove orphan QR-token plumbing (24h grace period — eligible from 2026-04-28)
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (6+3 endpoints — path is `artifacts/loverclinic-opd-4c39b/public/data/...`)
