@@ -199,6 +199,51 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
       expect(fnBlock[0]).toMatch(/window\.confirm/);
     });
+
+    // ─── V25 (2026-04-26) — Admin self-bootstrap (lockout-prevention) ──
+    // Discovered when user ran migration: 20 staff / 0 synced / 20 skipped
+    // (none had firebaseUid). The CURRENT logged-in admin would have NO
+    // claim either → Deploy 2 (claim-only rule) = lockout. Fix: button
+    // ALSO syncs auth.currentUser.uid as gp-owner if not in be_staff.
+    it('H4.10: imports auth from firebase.js (for current-user lookup)', () => {
+      expect(PG_TAB).toMatch(/import\s*\{[^}]*\bauth\b/);
+      expect(PG_TAB).toMatch(/from\s+['"]\.\.\/\.\.\/firebase\.js['"]/);
+    });
+
+    it('H4.11: admin self-bootstrap reads auth.currentUser.uid', () => {
+      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
+      expect(fnBlock[0]).toMatch(/auth\?\.currentUser\?\.uid/);
+    });
+
+    it('H4.12: admin self-bootstrap only fires when uid NOT in be_staff (foundInBeStaff guard)', () => {
+      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
+      expect(fnBlock[0]).toMatch(/foundInBeStaff/);
+      expect(fnBlock[0]).toMatch(/if\s*\(\s*!foundInBeStaff\s*\)/);
+    });
+
+    it('H4.13: admin self-bootstrap calls setUserPermission with gp-owner default', () => {
+      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
+      // The bootstrap call must use gp-owner (admin assumption)
+      expect(fnBlock[0]).toMatch(/setUserPermission\(\s*\{\s*uid:\s*myUid,\s*permissionGroupId:\s*['"]gp-owner['"]/);
+    });
+
+    it('H4.14: result tracks adminBootstrap field for UI surfacing', () => {
+      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
+      expect(fnBlock[0]).toMatch(/adminBootstrap:/);
+      // UI block surfaces it to the admin
+      expect(PG_TAB).toMatch(/migrateResult\.adminBootstrap/);
+      expect(PG_TAB).toMatch(/Admin\s+self-bootstrap/);
+    });
+
+    it('H4.15: bootstrap error caught — counts as failed but does NOT abort the loop', () => {
+      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
+      // The bootstrap try/catch must increment result.failed and push an
+      // error (with admin marker) — and the FOR loop below must still run
+      const bootstrapBlock = fnBlock[0].match(/if\s*\(\s*!foundInBeStaff\s*\)\s*\{[\s\S]*?\}\s*\}/);
+      expect(bootstrapBlock).toBeTruthy();
+      expect(bootstrapBlock[0]).toMatch(/try\s*\{[\s\S]*?setUserPermission[\s\S]*?\}\s*catch/);
+      expect(bootstrapBlock[0]).toMatch(/admin self-bootstrap/);
+    });
   });
 
   describe('H5: Phase 13.5.4 staging — Deploy 1 vs Deploy 2 separation', () => {

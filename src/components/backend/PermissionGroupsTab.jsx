@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound } from 'lucide-react';
 import { listPermissionGroups, deletePermissionGroup, listStaff } from '../../lib/backendClient.js';
 import { setUserPermission } from '../../lib/adminUsersClient.js';
+import { auth } from '../../firebase.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -98,16 +99,45 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
       'Sync ทุก staff → Firebase custom claims?\n\n' +
       'ขั้นตอน Deploy 1 ของ Phase 13.5.4 hard-gate.\n' +
       'จะ loop be_staff ทั้งหมด + setCustomUserClaims ตาม permissionGroupId\n' +
-      'ของแต่ละคน. Idempotent — รันซ้ำได้ปลอดภัย.'
+      'ของแต่ละคน. + Auto-bootstrap ตัวคุณเอง (admin login) ด้วย gp-owner\n' +
+      'ถ้ายังไม่มี be_staff record. Idempotent — รันซ้ำได้ปลอดภัย.'
     )) return;
 
     setMigrating(true);
     setMigrateResult(null);
     setError('');
-    const result = { total: 0, synced: 0, skipped: 0, failed: 0, errors: [] };
+    const result = { total: 0, synced: 0, skipped: 0, failed: 0, errors: [], adminBootstrap: null };
     try {
       const allStaff = await listStaff();
       result.total = allStaff.length;
+
+      // ─── ADMIN BOOTSTRAP (V25 — 2026-04-26) ───────────────────────────
+      // Sync the CURRENT logged-in user's claims FIRST. If their auth.uid
+      // is in any be_staff doc, the loop below handles them. If NOT
+      // (bootstrap admin with no be_staff record), self-sync as gp-owner
+      // here so they don't lock themselves out after Deploy 2.
+      // Lockout would happen if Deploy 2 ships claim-only rules and
+      // current admin has no isClinicStaff claim. This guard prevents it.
+      const myUid = auth?.currentUser?.uid || '';
+      const myEmail = auth?.currentUser?.email || '';
+      let foundInBeStaff = false;
+      if (myUid) {
+        for (const s of allStaff) {
+          if ((s.firebaseUid || '') === myUid) { foundInBeStaff = true; break; }
+        }
+        if (!foundInBeStaff) {
+          // Self-sync as gp-owner (bootstrap admin assumption — they can
+          // re-assign themselves to a different group later via PermissionGroupsTab)
+          try {
+            await setUserPermission({ uid: myUid, permissionGroupId: 'gp-owner' });
+            result.synced += 1;
+            result.adminBootstrap = { uid: myUid, email: myEmail, group: 'gp-owner' };
+          } catch (err) {
+            result.failed += 1;
+            result.errors.push(`(admin self-bootstrap ${myEmail || myUid}): ${err?.message || 'unknown'}`);
+          }
+        }
+      }
 
       for (const s of allStaff) {
         const uid = s.firebaseUid || '';
@@ -240,6 +270,11 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
             ข้าม (ไม่มี firebaseUid) <span className="text-neutral-400 font-bold">{migrateResult.skipped}</span> /
             ล้มเหลว <span className="text-red-400 font-bold">{migrateResult.failed}</span>
           </div>
+          {migrateResult.adminBootstrap && (
+            <div className="mt-2 text-[11px] text-amber-300">
+              ⚙ Admin self-bootstrap: <span className="font-mono">{migrateResult.adminBootstrap.email || migrateResult.adminBootstrap.uid}</span> → gp-owner (Phase 13.5.4 lockout-prevention)
+            </div>
+          )}
           {migrateResult.errors.length > 0 && (
             <ul className="mt-2 text-[11px] text-red-400 list-disc list-inside max-h-32 overflow-y-auto">
               {migrateResult.errors.map((e, i) => <li key={i}>{e}</li>)}
