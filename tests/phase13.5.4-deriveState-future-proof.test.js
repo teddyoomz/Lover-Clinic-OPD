@@ -266,6 +266,57 @@ describe('V28 — deriveState future-proof: any future user must "just work"', (
     });
   });
 
+  describe('P6: OWNER_EMAILS dual-list sync (drift catcher)', () => {
+    // src/lib/ownerEmails.js (frontend) and api/admin/bootstrap-self.js
+    // (Vercel serverless) BOTH carry an OWNER_EMAILS hardcoded list.
+    // They MUST stay in sync. If admin adds an owner email to one but
+    // forgets the other, the user gets a confusing partial-grant
+    // (frontend lets them in, backend bootstrap-self rejects them — or
+    // vice versa).
+    //
+    // This test parses both lists and asserts they match. If you see
+    // this test fail, update BOTH files OR migrate to env-var-driven
+    // config (Phase 13.5.6 follow-up).
+    it('P6.1: OWNER_EMAILS in src/lib/ownerEmails.js matches api/admin/bootstrap-self.js', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const ROOT = path.resolve(__dirname, '..');
+
+      const srcContent = fs.readFileSync(path.join(ROOT, 'src/lib/ownerEmails.js'), 'utf8');
+      const apiContent = fs.readFileSync(path.join(ROOT, 'api/admin/bootstrap-self.js'), 'utf8');
+
+      // Extract OWNER_EMAILS array from each (multi-line, single-quoted strings)
+      const extractEmails = (content) => {
+        const m = content.match(/OWNER_EMAILS\s*=\s*\[([\s\S]*?)\]/);
+        if (!m) return null;
+        const items = [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((g) => g[1].toLowerCase());
+        return items.sort();
+      };
+
+      const srcList = extractEmails(srcContent);
+      const apiList = extractEmails(apiContent);
+
+      expect(srcList, 'OWNER_EMAILS not found in src/lib/ownerEmails.js').toBeTruthy();
+      expect(apiList, 'OWNER_EMAILS not found in api/admin/bootstrap-self.js').toBeTruthy();
+      expect(srcList).toEqual(apiList);
+    });
+
+    it('P6.2: both files have a sync-maintenance reminder comment', () => {
+      // Make it discoverable for future maintainers
+      const fs = require('fs');
+      const path = require('path');
+      const ROOT = path.resolve(__dirname, '..');
+      const srcContent = fs.readFileSync(path.join(ROOT, 'src/lib/ownerEmails.js'), 'utf8');
+      const apiContent = fs.readFileSync(path.join(ROOT, 'api/admin/bootstrap-self.js'), 'utf8');
+      // Each file mentions the other in its sync comment
+      expect(srcContent).toMatch(/api\/admin\/bootstrap-self\.js/);
+      expect(apiContent).toMatch(/src\/lib\/ownerEmails\.js/);
+      // Each file has the audit grep command for verification
+      expect(srcContent).toMatch(/grep[\s\S]{0,80}OWNER_EMAILS/);
+      expect(apiContent).toMatch(/grep[\s\S]{0,80}OWNER_EMAILS/);
+    });
+  });
+
   describe('P5: groupName surfacing for UI badge', () => {
     it('P5.1: bootstrap admin → "เจ้าของกิจการ (bootstrap)"', () => {
       const s = __deriveStateForTest(
