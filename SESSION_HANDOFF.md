@@ -7,18 +7,19 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 8 EOD — Phase 13.5.4 + V23-V30 + UC1 + Tier 2 closed end-to-end
+- **Date last updated**: 2026-04-26 session 9 EOD — V31 + Phase 14.8/9/10 + master_data → be_* migration (20 files)
 - **Branch**: `master`
-- **Last commit**: `6480083 docs(handoff): V30 LIVE + Tier 2 closed + Tier 3 status`
-- **Test count**: ~5400 vitest passing (175+ permission/security/E2E across 8 test files)
-- **Build**: clean. BackendDashboard chunk ~925 KB
-- **Deploy state**: ✅ **DEPLOYED** — production at `5b3a89b` (V30 V15 combined deploy session 8 EOD)
-  - Vercel: `lover-clinic-jbx0eyf11` aliased to https://lover-clinic-app.vercel.app (27s)
-  - Firestore rules: v13 (V27-tris narrow on opd_sessions delete)
-  - Pre+post probes 7/7 = 200; cleanup OK; production smoke 2/2 = 200
+- **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers`
+- **Test count**: 5884 vitest passing (~300 new this session — V31 + Phase 14.8-14.10 + PV.F + bulk-print + signature RTL)
+- **Build**: clean. BackendDashboard chunk ~960 KB (+signature_pad eager, +html2pdf.js lazy)
+- **Deploy state**: ⚠️ **5 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
+  - Vercel: `lover-clinic-93z2j8492` aliased to https://lover-clinic-app.vercel.app (40s)
+  - Firestore rules: v14 LOCAL (be_document_prints + be_document_drafts), v13 PROD
+  - Pending commits: `2cb2e36 7312679 5b74bcb 3e8b9d8 9a9cde8`
+  - Includes: bulk-print modal + PDF padding fix + sale-receipt + sellerName fix + M9 reconciler + backend 100% be_* migration
 - **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅ (handoff commit pending in this turn)
+- **Remote sync**: master = origin/master ✅ (8 commits pushed this session)
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
 - **SCHEMA_VERSION**: 15
 
@@ -33,6 +34,49 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 9 EOD (8 commits, `06d98bd` → `9a9cde8`) — V31 + Phase 14.8/9/10 + master_data → be_* migration
+
+V31 hotfix follow-ups (Firebase Auth orphan recovery + credential-change
+revoke + self-delete protection) plus Phase 14.8 signature canvas +
+Phase 14.8.C PDF export + Phase 14.9 audit log + watermark + receipt
+status/customer/seller fixes + Phase 14.10 saved drafts + QR + bulk
+print + critical late-session move: backend 100% migration off
+`master_data` mirror to canonical `be_*` collections (20 files migrated).
+
+10 user-reported bugs all fixed:
+1. mymild.tn@gmail.com Firebase Auth orphan (V31 hotfix, deployed)
+2. PDF padding lost (innerHTML strips body — V31-class CSS scope bug)
+3. Bulk PDF blank (off-screen positioning misses html2canvas)
+4. Bulk PDF extra blank page (default split heuristic)
+5. Templates not pulling HN + address + emergency
+6. Receipt status display inverted (recompute vs payment.status)
+7. Receipt signature dates blank
+8. Receipt sellerName empty (wrong key — `name` not `sellerName`)
+9. Sale modal seller as numeric "614"
+10. ALL backend tabs reading master_data (user demanded zero mirror)
+
+Commits:
+```
+06d98bd fix(v31): orphan Firebase Auth recovery + credential-change revoke + self-delete protection
+62251d3 feat(phase14.8-14.9): signature canvas + PDF export + audit log + watermark
+b2784cf feat(phase14.10): saved drafts + QR helper + firestore rule for be_document_drafts
+2cb2e36 feat(phase14.10-bulk): BulkPrintModal + CustomerListTab multi-select bulk print
+7312679 fix(phase14.10-bis): PDF padding silently dropped (V31-class regression)
+5b74bcb fix(phase14.10-bis): SaleTab Gen-receipt + bulk-PDF blank-page fix
+3e8b9d8 fix(phase14.10-tris): receipt + bulk-PDF + seller-name + reconciler bundle
+9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers
+```
+
+Detail: see `.agents/sessions/2026-04-26-session9-V31-phase14.8-10-master-data-migration.md`
+
+V31 deployed via combined V15 (vercel `lover-clinic-1nkbxq9eg`).
+T3.f saved drafts ALSO deployed via combined V15 (vercel
+`lover-clinic-93z2j8492`). 5 commits since then are unpushed-to-prod.
+
+Anti-regression invariant added: `PV.F.11` directory-walk test fails CI
+on any future re-introduction of `getAllMasterDataItems('staff'|'doctors')`
+in `src/components/backend/**` (excludes sanctioned MasterDataTab).
 
 ### Session 2026-04-26 session 8 EOD (27 commits, `0a0b9f5` → `6480083`) — Phase 13.5.4 hard-gate END-TO-END (V23-V30) + UC1 + Tier 2
 
@@ -360,44 +404,47 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-26 session 8 EOD.
+Resume LoverClinic OPD — continue from 2026-04-26 session 9 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — master = 6480083, prod = 5b3a89b)
-3. .agents/active.md (hot state — Phase 13.5.4 + V25-V30 + UC1 + Tier 2 closed end-to-end)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V30)
-5. .agents/sessions/2026-04-26-session8-phase13.5.4-end-to-end-V23-V30.md (this session detail — 27 commits)
+2. SESSION_HANDOFF.md (cross-session state of truth — master = 9a9cde8, prod = b2784cf)
+3. .agents/active.md (hot state — 5884 tests, backend 100% be_*)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V31)
+5. .agents/sessions/2026-04-26-session9-V31-phase14.8-10-master-data-migration.md (this session detail — 8 commits, ~300 new tests)
 
 Status summary:
-- master = 6480083, ~5400 vitest passing
-- Production at 5b3a89b LIVE (V30 deployed via V15 combined). Vercel: lover-clinic-jbx0eyf11
-- This session shipped 27 commits + 14 V-entries (V23 → V30) closing chicken-and-egg admin loop end-to-end
-- Auto-sync universal: every id, every email, every permission group works automatically
-- 175+ permission/security/E2E tests + adversarial coverage
-- All 3 manual admin buttons removed per user directive
-- Tier 2 closed: Doc 10/11/12 covered by F12; UC1 weekend colors shipped; M9 deferred
+- master = 9a9cde8, 5884 vitest passing, build clean
+- Production = b2784cf at vercel lover-clinic-93z2j8492 (T3.f deploy)
+- 5 commits UNPUSHED-TO-PROD: 2cb2e36, 7312679, 5b74bcb, 3e8b9d8, 9a9cde8
+  Includes: bulk print + PDF padding fix + sale receipt + sellerName fix +
+  M9 reconciler + backend 100% be_* migration (20 files)
+- Firestore rules also pending: be_document_prints (append-only) +
+  be_document_drafts in 9a9cde8 (prod still v13)
+
+This session shipped 8 commits + V31 hotfix follow-ups + Phase 14.8/9/10
+batch + 10 user-reported bugs fixed + master_data → be_* migration with
+PV.F.11 directory-walk anti-regression invariant.
 
 Next action (when user gives go-ahead):
-- Tier 3 XL features remaining (each needs focused 3-4h session):
-  * T3.b Phase 14.8.B signature canvas (react-signature-canvas + new field type)
-  * T3.c Phase 14.8.C PDF export (html2pdf.js)
-  * T3.d/e Phase 14.9 audit log + watermark + email/LINE delivery
-  * T3.f Phase 14.10 bulk print + QR + saved drafts
-  * T4 Phase 14.4 G5 customer-product-change (course exchange + refund)
-  * T5 Phase 14.11 visual designer + TFP 3200 LOC refactor
+- Likely "deploy" → run V15 combined (vercel + firestore:rules with full
+  7-endpoint Probe-Deploy-Probe per Rule B). 5 commits will go live.
+- OR continue with deferred Tier 3:
+  * T3.e email/LINE delivery (needs SMTP + LINE channel config from user)
+  * T4 G5 customer-product-change (XL course exchange + refund)
+  * T5.a visual template designer (mega XL ~2000 LOC)
+  * T5.b TFP 3200 LOC refactor (XL tech debt)
 
 Outstanding user-triggered actions (NOT auto-run):
-- None code-side. Production verified working end-to-end.
+- "deploy" command needed for production push. Per V4/V7/V18 — no auto-deploy.
 
 Rules:
 - No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
 - V15 combined: "deploy" = vercel + firestore:rules in parallel
-- Rule B Probe-Deploy-Probe with 5 endpoints + V23 anon-CREATE/UPDATE + V27-tris anon-DELETE = 7 endpoints
-- V27 lesson: probe artifacts must use isArchived=true CREATE pattern (not 'pending')
-- V28 lesson: soft-gate isAdmin trusts group, not email (drop isAuthorizedAccount prefix)
-- V29 lesson: no manual buttons; auto-sync via UPC useEffect + sync-self endpoint
-- V30 lesson: be_staff doc IDs = staffId; query by firebaseUid FIELD not uid as doc ID
+- Rule B Probe-Deploy-Probe = 7 endpoints (5 baseline + V23 anon-CREATE/UPDATE + V27-tris anon-DELETE)
+- V31 lesson: silent-swallow `try/catch console.warn(continuing)` is anti-V21 — replace with error classification
+- New invariant PV.F.11: zero getAllMasterDataItems('staff'|'doctors') in backend (except MasterDataTab) — directory-walk test guards
+- Rule H: backend 100% be_* canonical, NO master_data reads outside MasterDataTab
 - Every bug → test + audit invariant + V-entry (Rule D + Rule I)
 
 Invoke /session-start to boot context.

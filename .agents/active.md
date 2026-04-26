@@ -1,248 +1,139 @@
 ---
-updated_at: "2026-04-26 (session 8 EOD — V25-V30 + UC1 + Tier 2 closed; Phase 14.8.A pre-flight already in place)"
-status: "Production at 5b3a89b LIVE. V30 listenToUserPermissions firebaseUid query fix DEPLOYED. Phase 13.5.4 + V25-V30 + UC1 weekend colors + Doc 10/11/12 verify ALL CLOSED. 175+ permission/security/calendar tests pass. Auto-sync universal — Perfect 100% across all id/permission types."
-current_focus: "Tier 2 closed (Doc 10/11/12 covered by F12 tests + UC1 shipped + M9 deferred). Tier 3 Phase 14.8.A pre-flight already implemented. Remaining: T3.b signature canvas + T3.c PDF export + T3.d/e Phase 14.9 + T3.f Phase 14.10 + T4 G5 + T5 visual designer + TFP refactor — all XL features needing focused sessions."
+updated_at: "2026-04-26 (session 9 EOD — V31 + Phase 14.8-14.10 + master_data → be_* migration)"
+status: "master = 9a9cde8 (5884 tests pass, build clean). Production = b2784cf at lover-clinic-93z2j8492 (T3.f saved drafts deploy). 5 commits unpushed-to-prod awaiting user 'deploy' command."
+current_focus: "Big bug-fix + feature shipment session: V31 (Firebase Auth orphan recovery), Phase 14.8.B/C signature+PDF, Phase 14.9 audit log + watermark, Phase 14.10 saved drafts + QR + bulk print, plus 6 user-reported bugs all fixed. Final big move: backend 100% be_* (zero master_data mirror reads outside MasterDataTab) + listAllSellers helper resolving legacy ProClinic numeric ids → human names."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "5b3a89b"
-tests: "~5400 vitest"
+last_commit: "9a9cde8"
+tests: 5884
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "5b3a89b (V30 V15 combined). Pre-probe 7/7=200; post-probe 7/7=200; cleanup OK; production smoke 2/2=200. Vercel: lover-clinic-jbx0eyf11."
-firestore_rules_deployed: "v13 (UNCHANGED from V27-tris)"
-bundle: "BackendDashboard ~925 KB"
+last_deploy: "b2784cf via V15 combined (vercel lover-clinic-93z2j8492 + firestore.rules with be_document_prints + be_document_drafts). Pre+post 7/7=200; negative 2/2=403 (rules correctly reject anon to new collections); production smoke 3/3=200; cleanup 4/4=200."
+firestore_rules_deployed: "v14 (added be_document_prints + be_document_drafts in 9a9cde8 — NOT YET DEPLOYED to prod)"
+bundle: "BackendDashboard ~960 KB (added html2pdf.js lazy + signature_pad eager)"
 ---
 
 # Active Context
 
 ## Objective
 
-Resume from session 5 EOD. User authorized P0 hotfix (V23):
-- "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอดส่งไม่ได้"
-- "เช็คให้หมดทั้ง frontend แบบ 100% จริงๆ ว่าจะไม่มีบั๊คแบบนี้หรือใกล้เคียงกับแบบนี้อีกแล้ว"
-- "ทำเสร็จ test แล้ว deploy เลย เพราะใช้จริงอยู่"
+Resume from session 8 EOD (master = `f5c91dc`). User authorized "ทำจนจบแบบ
+auto mode" + Tier 2/3 features + bug fixes as they came in. Major shipment
+this session covering V31 hotfix follow-ups, Phase 14.8-14.10 feature
+batch, and the master_data → be_* migration the user demanded after
+seeing seller names render as numeric IDs.
 
-V23 SHIPPED + DEPLOYED end-to-end this session.
+## What this session shipped (8 commits, all pushed to master)
 
-## V23 fix summary (commit 0a0b9f5)
+```
+06d98bd fix(v31): orphan Firebase Auth recovery + credential-change revoke + self-delete protection
+62251d3 feat(phase14.8-14.9): signature canvas + PDF export + audit log + watermark
+b2784cf feat(phase14.10): saved drafts + QR helper + firestore rule for be_document_drafts
+2cb2e36 feat(phase14.10-bulk): BulkPrintModal + CustomerListTab multi-select bulk print
+7312679 fix(phase14.10-bis): PDF padding silently dropped (V31-class regression)
+5b74bcb fix(phase14.10-bis): SaleTab Gen-receipt + bulk-PDF blank-page fix
+3e8b9d8 fix(phase14.10-tris): receipt + bulk-PDF + seller-name + reconciler bundle
+9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers
+```
 
-Root cause (live since 2026-03-23 initial commit `554506b` — entire project
-history): firestore.rules opd_sessions had `allow update: if isClinicStaff()`.
-Patients reach the form via signInAnonymously (App.jsx:89) — anon users
-have no @loverclinic.com email → isClinicStaff() = false → PERMISSION_DENIED
-→ "เกิดข้อผิดพลาดของระบบ" alert.
+## Current state vs production
 
-Comprehensive 100%-frontend sweep finding: EXACTLY 3 anon-reachable
-Firestore writes, all opd_sessions:
-- src/pages/PatientForm.jsx:372 (visible alert — bug visible)
-- src/pages/PatientDashboard.jsx:403 (silent fail — fire-and-forget)
-- src/pages/PatientDashboard.jsx:410 (silent fail — console.warn caught)
-Adjacent surfaces (Storage, Cloud Functions, /api/*) verified safe.
+- master = `9a9cde8` (5884/5884 tests, clean build)
+- Production = `b2784cf` (deployed via `lover-clinic-93z2j8492`)
+- **5 commits unpushed-to-prod**: 2cb2e36, 7312679, 5b74bcb, 3e8b9d8, 9a9cde8
+  Includes: bulk-print UI, PDF padding fix, sellerName fix, M9 reconciler,
+  100% backend be_* migration. **Awaiting user "deploy" command.**
 
-Fix: opd_sessions update narrowed to `isClinicStaff() OR (isSignedIn() AND
-affectedKeys().hasOnly([11-field whitelist]))`. Mirrors V19 hasOnly pattern.
+## Bugs fixed this session (user-reported, all verified live)
 
-Tests added (V21-paired):
-- NEW tests/firestore-rules-anon-patient-update.test.js (24 tests A1-A5)
-- EXTEND tests/public-link-auth-race.test.js R7 (5 tests writer-side)
-- EXTEND tests/e2e/public-links-no-auth.spec.js V23-lock (2 tests runtime)
-49 tests total — all pass.
+1. **V31** — Firebase Auth orphan on staff delete (login still worked) +
+   credential-change without token revoke + self-delete possible →
+   3-layer fix + 111 V31 tests
+2. **PDF padding lost** — body tag stripped by innerHTML → DOMParser +
+   inline body styles + offstage container
+3. **Bulk PDF blank** — html2canvas can't snapshot off-screen elements →
+   offstage container at viewport origin + windowWidth/Height opts
+4. **Bulk PDF extra blank page** — content overflow → height fixed +
+   pagebreak avoid-all
+5. **Templates missing HN/address** — buildPrintContext didn't expose
+   patientAddress/birthdate/bloodGroup/emergency/passport/visitCount/
+   nationality → all added; SECTION_1_PATIENT_DECLARATION_ALWAYS now
+   includes HN; thai-traditional + fit-to-fly templates show HN+address
+6. **Receipt status inverted** — was recomputed from totalPaidAmount vs
+   netTotal → resolveSaleStatusLabel reads sale.payment.status
+7. **Receipt customer/seller signature dates blank** → pre-fill from
+   record createdAt/saleDate
+8. **Receipt sellerName blank** — read wrong key (`sellerName` not
+   `name`) → fallback chain firstSeller.name → sellerName → lookup → id
+9. **Sale modal seller as numeric "614"** — sellers state sourced from
+   master_data (stale ProClinic mirror with empty name) → switched
+   to listAllSellers (be_staff + be_doctors); verified live: 614→Test
+10. **20 backend tabs were reading master_data** — user demanded zero
+    mirror reads → migrated all to be_* canonical helpers (listAllSellers,
+    listProducts, listCourses, listPromotions, listMembershipTypes,
+    listWalletTypes); PV.F.11 directory-walk invariant test guards future
+    regressions
 
-Rule B probe-list extended permanently 4 → 5 endpoints. Future rules deploys
-catch this regression class automatically (.claude/rules/01-iron-clad.md).
+## Outstanding user-triggered actions
 
-## Live verification this session
+### Pending production deploy
+5 commits at master are NOT live in production:
+- 2cb2e36 BulkPrintModal + select-mode in CustomerListTab
+- 7312679 PDF padding fix
+- 5b74bcb Sale Print receipt button + bulk PDF blank fix
+- 3e8b9d8 receipt status + signature data + sellerName + M9
+- 9a9cde8 backend 100% be_* migration
 
-### Pre-deploy probes (TS=1777184152 + 1777184257)
-- Probes 1-4 (chat_conversations / pc_appointments / proclinic_session*):
-  ALL 200 baseline ✓
-- V23 anon UPDATE: 403 PERMISSION_DENIED — **bug confirmed live**
+When user says "deploy" → run V15 combined (vercel + firebase rules with
+full 7-endpoint Probe-Deploy-Probe per Rule B). Firestore rules deploy
+needs to ship be_document_prints + be_document_drafts new rules from
+b2784cf → 9a9cde8.
 
-### V15 combined deploy (parallel)
-- vercel --prod: deployed in 31s, aliased to lover-clinic-app.vercel.app
-- firebase deploy --only firestore:rules: rules compiled + released
-- Both exit code 0
+### Tier 3 deferred (each = 3-6h focused session)
+- T3.e Phase 14.9 email/LINE delivery — needs SMTP + LINE channel config
+- T4 Phase 14.4 G5 customer-product-change (course exchange + refund) — XL
+- T5.a Phase 14.11 visual template designer — mega XL (~2000 LOC)
+- T5.b TFP 3200 LOC refactor — XL technical debt
 
-### Post-deploy probes (TS=1777184370)
-- Probes 1-4: ALL 200 ✓ (no regression)
-- V23 anon CREATE: 200 ✓ (preserved)
-- V23 anon UPDATE: 200 ✓ (**fix LIVE**)
+### P3 deferred
+- PDPA suite (consent / audit log / data export / erasure) — substantial
+- M9 reconciler — HELPER SHIPPED (recomputeCustomerSummary +
+  reconcileAllCustomerSummaries) but NO admin button in UI yet
 
-### Cleanup
-- DELETE pc_appointments test-probe x 2: 200/200 ✓
-- PATCH proclinic_session* strip probe field: 200/200 ✓
-- chat_conversations + opd_sessions test-probe-anon docs: blocked by rules
-  (require staff for delete) — left as identifiable noise; admin can clean
-  manually if desired
+## Decisions (non-obvious)
 
-### Production HTTP smoke
-- /admin (backend): 200 ✓
-- /?session=DEP-DBGMJ7: 200 ✓
-- /?patient=dkeq1b2hx7bk5138pe80: 200 ✓
+1. **PDF wrapper offstage strategy** — 0×0 fixed container at viewport
+   origin (not negative left coordinates) so html2canvas snapshots
+   correctly. Negative-left positioning was producing blank PDFs in bulk
+   mode. (commit 5b74bcb)
+2. **Single-page enforcement via pagebreak.mode='avoid-all' + height
+   fixed** — html2pdf default split heuristic was producing blank 2nd
+   pages even when content fit. Better to crop visible overflow than
+   silently emit a blank page. (commit 5b74bcb)
+3. **listAllSellers emits row per id alias** — not just the canonical
+   staffId/doctorId but also legacy proClinicId numbers. Lets old sales
+   saved with "614" still resolve to "Test" without database migration.
+   (commit 9a9cde8)
+4. **PV.F.11 directory-walk invariant test** — directory-recursive scan
+   of src/components/backend that fails CI if anyone re-introduces
+   getAllMasterDataItems('staff'|'doctors'). Permanent regression guard
+   for the user's "ไม่ต้องการ mirror from master_data อีกสักที่" directive.
+5. **MasterDataTab + brokerClient still allowed** — dev-only sync seed
+   per Rule H-bis. Not part of production. PV.F.11 explicitly excludes it.
 
-## What this session shipped (11 commits, all DEPLOYED)
+## Key tests added this session (~300 new tests)
 
-### ProClinic schedule replication chain
-- **Phase A** `3bf9f31` — schema: 'recurring' type + dayOfWeek field +
-  mergeSchedulesForDate + getActiveSchedulesForDate +
-  listenToScheduleByDay + checkAppointmentCollision rewire (44 SR)
-- **Phase B** `7ff124d` — DoctorSchedulesTab calendar view +
-  scheduling/MonthCalendarGrid + ScheduleSidebarPanel +
-  ScheduleEntryFormModal (29 DST)
-- **Phase C** `5b2d4cb` — EmployeeSchedulesTab calendar view (replaces
-  list-view StaffSchedulesTab); reuses scheduling/* (25 EST)
-- **Phase D** `b2e31bc` — TodaysDoctorsPanel schedule-derived (NOT
-  appointment-derived) (21 TDP)
-- **Phase E** `e192b0c` — AppointmentFormModal collision honors
-  recurring shifts (drops broken date filter) (15 AFC)
-- **Phase B-bis HOTFIX** `e574897` — V22: calendar shows ALL staff
-  stacked (was filtered to selected); chip text "HH:MM-HH:MM <name>"
-  with V21-anti name-as-text guard; per-staff color hash (20 MS)
-- **Phase I** `326ef6c` — ProClinic sync: api/proclinic/master action=
-  syncSchedules + brokerClient.syncSchedules + MasterDataTab "ตารางหมอ +
-  พนักงาน" sync button (27 SC)
-- **Phase J** `a7bf674` — migrateMasterStaffSchedulesToBe FK-resolves
-  + orphan reporting + MasterDataTab MIGRATE_TARGETS entry (23 MM)
-- **Phase K** `14f4feb` — synced-data wiring E2E: 30 SD pure
-  pipeline-simulator tests + LIVE preview_eval verifying all 5
-  consumer paths read synced data correctly
-- **Phase F** `0c4a90d` — legacy StaffSchedulesTab.jsx + 105 list-view
-  RTL tests deleted; 4 references updated
-- **Phase H/handoff** `9169363` — V22 logged + handoff refresh
-
-## Live verification done this session
-
-### Pure-logic tests (Vitest)
-- 234 schedule-domain new tests across SR/DST/EST/MS/TDP/AFC/SC/MM/SD
-- All 4 pre-existing schedule test files updated for new schema
-- 350-test sweep (all schedule + nav + perm + collision tests) passed
-
-### Live preview_eval against real Firestore
-- B-bis HOTFIX: wrote 3 recurring Sunday shifts for 3 distinct doctorIds
-  → calendar cell rendered 3 chips with text names ("นาสาว An เอ" /
-  "Wee 523" / etc.); cleanup OK
-- Phase D: wrote 1 recurring shift → TodaysDoctorsPanel updated to
-  "แพทย์เข้าตรวจ 1 คน" within 1.5s; deleted → reverted to 0
-- Phase K: full pipeline simulator + 5/5 consumer paths verified on
-  REAL Firestore (Tue recurring / Wed leave-override-wins / collision
-  Tue OK / collision Wed blocked-ลา / Sun panel name-resolution)
-
-### V15 combined deploy (this session, EOD)
-- **Pre-probe**: chat_conversations 200 + pc_appointments 200 +
-  proclinic_session 200 + proclinic_session_trial 200 ✓
-- **vercel --prod --yes**: deployed in 34s, aliased to
-  lover-clinic-app.vercel.app
-- **firebase deploy --only firestore:rules**: idempotent fire ("latest
-  version already up to date, skipping upload")
-- **Post-probe**: 200/200/200/200 ✓
-- **Cleanup**: 4 probe artifacts removed (pc_appointments DELETE +
-  proclinic_session*.probe field strip)
-- **Production HTTP smoke**: backend / public-session / public-patient
-  all HTTP 200 ✓
-
-## Outstanding user-triggered actions (NOT auto-run)
-
-### NONE — Phase 13.5.4 + V25-V30 closes everything Perfect 100%
-
-V30 fix isolated: only `listenToUserPermissions` had the uid-as-doc-ID
-bug. All other lookups (sync-self, doctor lookups, etc.) verified
-correct via comprehensive audit grep.
-
-### Tier 2 status
-- T2.a Doc 10 treatment-referral A5 — covered by F12 tests (255 pass)
-- T2.b Doc 11 course-deduction — covered by F12 tests
-- T2.c Doc 12 medicine-label 57x32mm — covered by F12 tests
-- T2.d UC1 weekend red labels — SHIPPED (Sun rose + Sat violet)
-- T2.e M9 customer doc summary reconciler — DEFERRED (substantial
-  cron-style feature; tx-log already mitigates drift; nightly
-  reconciler is high-effort + low-impact for current state)
-
-### Tier 3+ status (Phase 14.8/9/10 + Phase 14.4 G5 + Tier 5)
-- T3.a Phase 14.8.A pre-flight required-field validation — ALREADY
-  IMPLEMENTED (DocumentPrintModal.jsx:173-176 — `missing` filter +
-  Thai error message). Done.
-- T3.b Phase 14.8.B signature canvas — NOT STARTED (XL: install
-  react-signature-canvas, new field type, UI integration, template
-  substitution, tests)
-- T3.c Phase 14.8.C PDF export — NOT STARTED (XL: html2pdf.js
-  integration, button, tests)
-- T3.d Phase 14.9 audit log + watermark — NOT STARTED (XL)
-- T3.e Phase 14.9 email/LINE delivery — NOT STARTED (XL)
-- T3.f Phase 14.10 bulk print + QR + saved drafts — NOT STARTED (XL)
-- T4 Phase 14.4 G5 customer-product-change — NOT STARTED (XL business
-  logic — course exchange + refund)
-- T5.a Phase 14.11 visual template designer — NOT STARTED (mega XL)
-- T5.b TFP 3200 LOC refactor — NOT STARTED (XL technical debt)
-
-After deploy, oomz refresh browser → V29 auto-sync fires silently:
-1. UPC useEffect calls `/api/admin/sync-self` (no admin gate; signed-in only)
-2. sync-self looks up be_staff WHERE firebaseUid==oomz.uid → no doc
-3. Returns synced=false → UPC falls back to bootstrapSelfAsAdmin
-4. bootstrap-self: oomz email in OWNER_EMAILS → genesis check skipped → admin claim granted
-5. Token refreshed → next StaffFormModal save works (admin gate cleared)
-
-For NEW staff added via StaffFormModal:
-1. createAdminUser → Firebase Auth account
-2. saveStaff → be_staff doc with permissionGroupId
-3. **setUserPermission auto-grants claims AT CREATION** (V25 + V28-tris):
-   - isClinicStaff: true
-   - permissionGroupId: <group>
-   - admin: true (if group is gp-owner OR has meta-perm)
-4. New staff logs in → token already has claims → instant access
-
-For group changes mid-session:
-1. Admin saves staff with new permissionGroupId
-2. setPermission updates claims in Firebase Auth
-3. UPC group-change useEffect detects staff.permissionGroupId change
-4. Calls sync-self → token refresh → claims propagate without re-login
-
-### Coverage matrix (locked by 30 E2E + 136 source-grep tests)
-
-| Persona | Soft-gate | Hard-gate | First-login |
-|---------|-----------|-----------|-------------|
-| Bootstrap admin (oomz/loverclinic) | Auto via OWNER_EMAILS/regex | Auto via bootstrap-self | Sidebar full immediate |
-| Gmail in gp-owner | Auto via group | Auto via setPermission OR sync-self | Admin sidebar immediate |
-| Outlook in gp-frontdesk | Auto via group | Auto via setPermission | Frontdesk tabs only |
-| Yahoo in custom meta-perm group | Auto via meta-perm | Auto via setPermission group lookup | Admin tabs immediate |
-| Random unauthorized email | Blocked | Blocked | NO access (rejected at every layer) |
-| Multi-owner clinic | Auto for both | Both can bootstrap independently | Both admin |
-
-## Recent decisions (non-obvious — preserve reasoning)
-
-1. **V22 multi-staff calendar correction** — user manually flagged
-   that ProClinic shows ALL staff stacked per calendar cell, not
-   filtered to selected. Triangle screenshots Phase 0 had it correct
-   but I misinterpreted ("ตารางแพทย์" tab + sidebar selector → I
-   inferred per-selected filter). The right-rail sidebar IS per-staff;
-   the calendar grid is everyone. Hot-fix in `e574897` adds explicit
-   multi-staff render tests + per-staff color hash + V21-anti
-   name-as-text guard.
-
-2. **Chip label format = "HH:MM-HH:MM <name>"** — ProClinic's title
-   field is structured exactly this way. Initial chip showed only
-   "HH:MM-HH:MM" — pixel-different from reference. Fix matches title
-   format verbatim; resolveStaffName fallback chain prevents numeric
-   user_id from ever leaking as visible text.
-
-3. **Multi-source migrator with orphan reporting** (Phase J) — schedule
-   entries reference user_ids from BOTH be_doctors AND be_staff. The
-   migrator pre-loads both maps, tries doctor first (precedence —
-   schedule API is primarily doctor-feed), then employee. Orphans
-   (no match in either) reported instead of crashed; user runs
-   Doctors/Staff sync first then re-imports.
-
-4. **Calendar shows everyone, sidebar filters to one** — this is the
-   correct architectural split. Calendar provides clinic-wide visual
-   context; sidebar provides per-staff CRUD scope. Both Doctor and
-   Employee tabs share scheduling/* components (Rule of 3 prep —
-   2 consumers now, 3rd reuse trigger if Holiday calendar tab added).
-
-5. **Sync chain dev-only** — api/proclinic/* + brokerClient + Master
-   sync UI all marked @dev-only per Rule H-bis; production deploy
-   strips them. Production user-flow: Doctors/Staff manually CRUD'd
-   in our backend, schedule sync only used during initial seeding.
+- `tests/v31-firebase-auth-orphan-recovery.test.js` — 111 tests (V31.A-N)
+- `tests/phase14.8b-signature-canvas-flow.test.js` — 52 tests (SC.A-H)
+- `tests/signature-canvas-field-rtl.test.jsx` — 13 tests (RTL mount)
+- `tests/phase14.8c-pdf-export-flow.test.js` — 50 tests (PE.A-F + padding fix)
+- `tests/phase14.9-audit-log-watermark.test.js` — 41 tests (AL.A-G)
+- `tests/phase14.10-saved-drafts-qr.test.js` — 76 tests (SD.A-H)
+- `tests/bulk-print-modal-flow.test.js` — 34 tests (BP.A-F)
+- `tests/saletab-print-receipt.test.js` — 15 tests (SP.A-D)
+- `tests/sale-quotation-print-view-fixes.test.js` — 50 tests (PV.A-F + 11)
+- 5 mock-update patches (dfGroups / phase10-* / phase11-wiring /
+  phase9-promotion / quotationUi)
 
 ## Detail checkpoint
 
-Each phase well-described in commit messages. No standalone
-.agents/sessions/ checkpoint needed for this session — the 11 commits
-self-document.
+`.agents/sessions/2026-04-26-session9-V31-phase14.8-10-master-data-migration.md`
