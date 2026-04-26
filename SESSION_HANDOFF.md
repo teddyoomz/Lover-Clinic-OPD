@@ -7,19 +7,15 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 3 EOD — full audit-all sweep + 2 fix passes + design audit + UI click-test + E2E spec authoring + V15 combined deploy
+- **Date last updated**: 2026-04-26 session 4 — P1 polish batch + Phase 13.5 permission system (4 commits)
 - **Branch**: `master`
-- **Last commit**: `093d4d9 test(e2e): full backend coverage — 68 tests across 4 specs (40 + 28 all passing)`
-- **Test count**: 4893/4893 vitest + 68/68 E2E (smoke 40 + marketing 3 + reports 13 + master-data 12) = **4961 total tests passing**
-- **Build**: clean. **BackendDashboard chunk: 1216 KB → 899 KB (-26% / -317 KB; gzip 224 → 162 KB / -28%)** after code-split
-- **UI click-test**: 41/41 backend tabs verified loading via preview_eval AND via Playwright E2E. 0 console errors during sidebar walkthrough.
-- **Design audit**: 5 parallel agents reviewed 95 backend component files. Top issue (145-site `:focus-visible` gap) shipped via single CSS rule.
-- **Deploy state**: ✅ **DEPLOYED** — production now at `093d4d9` (V15 combined deploy 2026-04-26 EOD; pre-probe + post-probe both 200/200/200/200; firestore.rules idempotent fire — no diff)
+- **Last commit**: `242107a phase(13.5.3): inline button gates on 9 critical destructive actions`
+- **Test count**: 5061 vitest + 75 E2E (no E2E delta this session) = **5136 total tests passing** (+100 from session 3 EOD: 72 polish + 29 PT1 + 23 PS1 + 44 PB1 — minus 68 dedup overlap)
+- **Build**: clean. **BackendDashboard chunk: 920 KB → 924 KB (+4 KB / +0.5%)** after permission system + dompurify (negligible bundle impact)
+- **Deploy state**: ⚠️ **4 commits ahead of prod** — production still at `093d4d9` (last V15 combined deploy 2026-04-26 EOD); pending "deploy" command for current 4 commits per V18 lesson
   - Vercel: `093d4d9` aliased to https://lover-clinic-app.vercel.app
-  - Firestore rules: v10 (unchanged, re-deployed as no-op)
-  - **firestore:rules**: NOT changed this session — no probe-deploy-probe needed
-  - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app
-  - **Pending deploy**: 5 commits — user must say "deploy" THIS turn per V18 (V15 combined would ship all 5)
+  - Firestore rules: v10 (UNCHANGED this session — no rules deploy needed unless user wants Phase 13.5.4 hard-gate later)
+  - **Pending deploy**: 4 commits (`02ee2ef → 242107a`) — user must say "deploy" THIS turn per V18
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -36,6 +32,14 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 4 (4 commits, `02ee2ef` → `242107a`) — Polish batch + Phase 13.5 permission system
+- ✅ **P1 Polish batch** (`02ee2ef`) — DocumentPrintModal DOMPurify XSS + safeImgTag URL allowlist (27 PX1 tests) + FileUploadField URL.revokeObjectURL leak fix (15 FU1 tests) + RequiredAsterisk amber-500 component migrating 39 inline asterisks across 17 backend modals (14 RA1 tests) + ChartTemplateSelector 19 hardcoded colors → CSS vars (16 CT1 tests). 72 new tests; +21 KB BackendDashboard from dompurify. **NOT YET DEPLOYED.**
+- ✅ **Phase 13.5.1 — useTabAccess wired** (`79feb5f`) — replaced stub with real Firebase-backed permission state via new UserPermissionContext (provider + hook + chained listenToUserPermissions debounce 200ms in backendClient.js) + 5-group seedDefaultPermissionGroups (gp-owner / gp-manager / gp-frontdesk / gp-nurse / gp-doctor) + isAdmin via 3 OR-joined paths (bootstrap @loverclinic.com + no staff doc / OWNER GROUP / META PERM permission_group_management) all gated by clinic-email match. 29 PT1 tests. **NOT YET DEPLOYED.**
+- ✅ **Phase 13.5.2 — sidebar/palette/deep-link filter** (`1c83dc8`) — BackendSidebar + BackendCmdPalette filter PINNED + sections via canAccess (empty sections collapsed); BackendDashboard redirect useEffect bounces inaccessible deep-links to firstAllowedTab; handleNavigate canAccess defense-in-depth gate. tabPermissions map gained insurance-claims / vendor-sales / document-templates entries (closed default-allow gap). 23 PS1 tests. **NOT YET DEPLOYED.**
+- ✅ **Phase 13.5.3 — inline button gates on 9 destructive actions** (`242107a`) — useHasPermission(key) hook + canDelete/canRefund gates on PermissionGroupsTab / StaffTab / DoctorsTab / BranchesTab / HolidaysTab / CouponTab / PromotionTab / VoucherTab / DepositPanel-refund. Each button: disabled={busy || !canDelete} + Thai tooltip. useUserPermission default-fallback flipped to admin-bypass (preserves backward compat with Phase 13.5.0 stub for standalone RTL tests; production always wraps via App.jsx). 44 PB1 tests. **NOT YET DEPLOYED.**
+
+Phase 13.5.4 (server-side Firebase custom claims + firestore.rules hard-gate) DEFERRED — soft gate ships now, hard gate needs Rule B turn.
 
 ### Session 2026-04-26 session 3 (5 commits, `7a9c62d` → `b870b40`) — 24h pre-launch pass
 - ✅ **Phase 14.7.H Follow-up H** — listener cluster: `listenToHolidays` + bounded `listenToAllSales(opts.since)`; 3 holiday consumer migrations; LC8/LC9 (29 tests) (`b1032bf`) **NOT YET DEPLOYED**
@@ -168,10 +172,16 @@ If user wants to extend: see P1/P2 polish below.
 
 ## Outstanding User Actions (NOT auto-run)
 
-None code-side. Production at `093d4d9` LIVE + verified (vercel + firestore
-rules deployed; pre+post-probe 200/200/200/200; production HTTP probe
-returned 200 on all 3 public-link types). master 1 commit ahead is just a
-test spec.
+- **Deploy 4 commits** (`02ee2ef → 242107a`): polish batch + Phase 13.5
+  permission system. User must say "deploy" THIS turn per V18 lesson.
+  V15 combined deploy = vercel + firestore:rules in parallel; rules
+  unchanged this session so probe-deploy-probe is idempotent fire (still
+  required by Rule B).
+- **Permission group customization**: 5 default groups seeded
+  (gp-owner / gp-manager / gp-frontdesk / gp-nurse / gp-doctor) with
+  hand-tuned permissions. User can edit via PermissionGroupsTab once
+  any be_permission_groups doc exists. Initial seed runs on first tab
+  open if collection is empty.
 
 ---
 
@@ -213,44 +223,46 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 3.
+Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 4.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — master = 2001aa6, prod = 093d4d9)
-3. .agents/active.md (hot state — production LIVE, master 1 commit ahead with E2E spec only)
+2. SESSION_HANDOFF.md (cross-session state of truth — master = 242107a, prod = 093d4d9)
+3. .agents/active.md (hot state — 4 commits ahead of prod, all soft-gate permission system + polish)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V21)
-5. .agents/sessions/2026-04-26-session3-audit-deploy-e2e.md (this session detail — 12 commits)
 
 Status summary:
-- master = 2001aa6, 4961 vitest + 75 E2E = 5036 tests passing, build clean
-- Production: 093d4d9 LIVE — V15 combined deploy 2026-04-26 EOD (vercel + firestore:rules; pre+post probes 200/200/200/200)
-- master 1 commit ahead with V16 anti-regression public-link spec only (no production code change)
-- BackendDashboard bundle: 1216 KB → 899 KB (-26%) after code-split
-- All V12.2b deferred items closed; ProClinic API silent-catch logging closed
-- Phase 15 (Central Stock Conditional) fully UNBLOCKED — skip if single-branch
+- master = 242107a, 5061 vitest passing, build clean (BackendDashboard 924 KB)
+- Production: 093d4d9 (last V15 deploy 2026-04-26 EOD) — 4 commits behind
+- 4 new commits this session: polish batch + Phase 13.5.1/.2/.3 permission system
+- Phase 13.5.4 (firestore.rules hard-gate) DEFERRED to a later session
+
+What this session shipped (commits in order):
+- 02ee2ef polish: DOMPurify XSS + URL revoke + amber asterisk + ChartTemplateSelector CSS vars (72 tests)
+- 79feb5f Phase 13.5.1 wire useTabAccess + UserPermissionContext + 5-group seed (29 tests)
+- 1c83dc8 Phase 13.5.2 sidebar/palette/deep-link filter (23 tests)
+- 242107a Phase 13.5.3 inline button gates on 9 destructive actions (44 tests)
 
 Next action (when user gives go-ahead):
-- If user wants more polish: ChartTemplateSelector hardcoded colors / DocumentPrintModal DOMPurify (XSS) / FileUploadField URL.createObjectURL revoke (leak) / required-field amber asterisk (Thai cultural)
-- If user wants Phase 15: Central Stock Conditional planning
-- If user wants permission system: Phase 13.5 deferred — gate hasPermission() at every tab; needs user input on permission group definitions
-- If user wants TFP refactor: 3200 LOC monolith → 7-8 sub-components (XL effort, high leverage)
+- If user wants deploy: combined vercel + firestore:rules (V15). Rules unchanged, idempotent fire. Probe-Deploy-Probe still required (Rule B). 4 commits ship.
+- If user wants Phase 13.5.4 hard-gate: server-side Firebase custom claims via /api/admin/setUserPermission + firestore.rules narrowing. Needs Rule B turn for rules deploy.
+- If user wants more button gates: extend Phase 13.5.3 to SaleTab cancel/refund + TreatmentFormPage delete + CustomerListTab delete (the deeper flows we deferred). Current pattern: useHasPermission(key) + disabled={busy || !canX} + Thai tooltip.
+- If user wants Phase 15: Central Stock Conditional planning. Single-branch clinics can skip.
+- If user wants TFP refactor: 3200 LOC monolith → 7-8 sub-components (XL effort).
 
 Outstanding user-triggered actions (NOT auto-run):
-- None code-side. master 1 commit ahead is just a test spec.
+- DEPLOY 4 commits (02ee2ef → 242107a) — user types "deploy"
+- Permission group customization via PermissionGroupsTab (post-deploy, after seed runs)
 
 Rules:
-- No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
+- No deploy unless user says "deploy" THIS turn (V4/V7/V18)
 - V15 combined: "deploy" = vercel + firestore:rules in parallel
 - Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix (V1/V9/V19)
-- Multi-branch decision is locked at Option 1 (V20) — don't re-debate
-- be_stock_movements update narrowed to reversedByMovementId only (V19)
-- V21 lesson: source-grep tests can encode broken behavior — pair with
-  runtime outcome assertions (preview_eval or RTL)
+- Permission soft-gate: useTabAccess.canAccess (sidebar) + useHasPermission (button)
+- useUserPermission outside-provider fallback returns admin-true (test compat)
+- Multi-branch decision Option 1 locked (V20)
+- V21 lesson: source-grep tests can encode broken behavior — pair with runtime
 - Every bug → test + audit invariant + V-entry (Rule D + Rule I)
-- E2E sidebar nav: use clickLeafTab + expandAllNavSections from helpers.js
-  (filters via `nav button:not([aria-expanded])` to disambiguate
-  section header from leaf when names share, e.g. "การเงิน")
 
 Invoke /session-start to boot context.
 ```

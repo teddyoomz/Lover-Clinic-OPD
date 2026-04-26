@@ -1,96 +1,140 @@
 ---
-updated_at: "2026-04-26 (session 3 EOD — audit + design + e2e + deploy COMPLETE)"
-status: "Production at 093d4d9 LIVE. V15 combined deploy of 11 commits done; pre+post-probe 200/200/200/200. master 1 commit ahead with E2E spec only (no production code). Tests: 4961 vitest + 75 E2E = 5036 total. Bundle -26% via code-split."
-current_focus: "Idle. Pre-launch audit pass + design pass + E2E backend coverage + V16 public-link lock all shipped + deployed. Production verified working for both authed admins (full E2E) and non-logged-in customers (public-link spec)."
+updated_at: "2026-04-26 (session 4 — polish batch + Phase 13.5 permission system)"
+status: "master 4 commits ahead of prod. 4 commits this session: P1 polish (XSS/leak/amber/CSS-vars) + Phase 13.5.1 useTabAccess wired + Phase 13.5.2 sidebar filter + Phase 13.5.3 button gates. Tests: 5061 vitest + 75 E2E = 5136 total. Build clean."
+current_focus: "Idle. Awaiting user 'deploy' command to push 4 commits (02ee2ef → 242107a) to production. Rules unchanged so probe-deploy-probe is idempotent."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "2001aa6"
-tests: "4961 vitest + 75 E2E = 5036 total"
+last_commit: "242107a"
+tests: "5061 vitest + 75 E2E = 5136 total"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "093d4d9 (2026-04-26 EOD V15 combined deploy — 11 commits including audit fixes + IIFE refactor + code-split + design-CSS + E2E suite). Pre+post probes 200/200/200/200."
-firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F per V19; UNCHANGED this session — re-deploy was idempotent fire)"
-bundle: "BackendDashboard: 1216 KB → 899 KB (-26%, gzip 224 → 162 KB / -28%) via React.lazy on 17 of 44 tabs"
+last_deploy: "093d4d9 (2026-04-26 EOD V15 combined deploy session 3). Production NOT updated this session."
+firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F per V19; UNCHANGED this session)"
+bundle: "BackendDashboard: 920 KB → 924 KB (+0.5%) after permission system + dompurify"
 ---
 
 # Active Context
 
 ## Objective
 
-24h pre-launch session. User authorized "use everything" — audit-all sweep
-+ design pass + UI click-test + E2E coverage + deploy. All shipped.
+Resume from session 3 EOD. User selected P1 polish batch + permission
+system as next focus. All shipped + tested + pushed; awaiting deploy.
 
-## What this session shipped (12 commits — 4 themes)
+## What this session shipped (4 commits)
 
-### Theme 1: Audit-all sweep + remediation (commits b1032bf → b870b40)
-- 22 audit skills / 237 invariants via 6 parallel agents → docs/audit-2026-04-26-sweep.md
-- **TZ1 P0**: SalePaymentModal paidAt + StockReportTab + medicalInstrumentValidation → thaiTodayISO
-- **AP1 P1**: server-side appointment collision check (read-then-write, ~50ms race window) + AP1_COLLISION error code + Thai message
-- **RP5 P1**: 6 TFP + 3 ChartTemplateSelector silent catches → debugLog
-- **AV3 P2**: txId / ptxId crypto.getRandomValues hardening (audit-chain integrity)
-- **C3 P2**: deleteBackendTreatment design-intent regression test (false-positive lock)
-- **listenToHolidays + listenToAllSales**: extends listener cluster pattern
-- **Pick-at-treatment reopen-add**: last V12.2b deferred item closed
-- **debugLog helper**: structured logger for ProClinic API silent-catch sites
+### Commit 1 — `02ee2ef` polish batch
+- DOMPurify XSS hardening on DocumentPrintModal (`dangerouslySetInnerHTML`
+  wrapped in DOMPurify.sanitize with FORBID list; `safeImgTag` URL allowlist
+  for signature injection — http(s) + data:image/* only)
+- FileUploadField blob URL leak fix (revokeIfBlob helper + activeBlobRef +
+  unmount cleanup useEffect; revokes on swap, post-upload, delete, unmount)
+- Shared `RequiredAsterisk` component (text-amber-500 + aria-hidden) replacing
+  39 inline `<span className="text-red-{400|500}">*</span>` across 17 backend
+  modals
+- ChartTemplateSelector 19 hardcoded hex/gray colors → CSS vars (var(--bg-*)
+  / var(--bd) / var(--tx-*)); teal accent kept as brand
+- 72 new tests across 4 files
 
-### Theme 2: Bonus polish (5b790e4 → 4d4529b)
-- IIFE JSX refactor (TFP:3287 + 4589 → component-scope useMemo)
-- BackendDashboard code-split via React.lazy + Suspense (17 tabs lazy)
-- Bundle: 1216 KB → 899 KB (-26%, gzip -28%)
+### Commit 2 — `79feb5f` Phase 13.5.1 wired
+- New `src/contexts/UserPermissionContext.jsx` — provider + useUserPermission
+  hook + deriveState (pure, exported for test). isAdmin via 3 OR-joined paths
+  (bootstrap @loverclinic.com / OWNER GROUP gp-owner / META PERM
+  permission_group_management) all gated by clinic-email match
+- New `src/lib/seedDefaultPermissionGroups.js` — 5 starter groups
+  (gp-owner all 131 keys / gp-manager 128 / gp-frontdesk 17 /
+  gp-nurse 12 / gp-doctor 12). Idempotent seed — noop if any group exists
+- `src/lib/backendClient.js` — listenToUserPermissions(uid, onChange, onError)
+  chained listener: be_staff/{uid} → be_permission_groups/{groupId}; 200ms
+  debounce per Phase 14.7.H listener-cluster pattern
+- `src/hooks/useTabAccess.js` — replaced TODO stub with useUserPermission()
+  read forwarding to canAccessTab/filterAllowedTabs/firstAllowedTab helpers
+- `src/App.jsx` — UserPermissionProvider mounted above BackendDashboard route
+- 29 PT1 tests covering deriveState 3-path admin logic + seed shape +
+  idempotent seed + source-grep regression guards
 
-### Theme 3: Design audit + a11y fix (24b82ac)
-- 5 parallel design-audit agents reviewed all 95 backend component files
-- Top P0: 145-site `:focus-visible` gap → single CSS rule covers all
-- docs/audit-2026-04-26-design-pass.md catalogued P1/P2/P3 for next session
+### Commit 3 — `1c83dc8` Phase 13.5.2 sidebar/palette/deep-link filter
+- BackendSidebar + BackendCmdPalette read useTabAccess; filter PINNED + sections
+  via canAccess; empty sections collapse out (no header for zero-allowed groups)
+- BackendDashboard redirect useEffect: when (hydrated && permsLoaded && !canAccess)
+  → setActiveTab(firstAllowedTab(['appointments','customers','reports','sales']))
+- handleNavigate canAccess defense-in-depth gate
+- tabPermissions.js TAB_PERMISSION_MAP gained 3 missing entries that were
+  default-allow: insurance-claims (sale_management|sale_view) + vendor-sales
+  (vendor_sale_management) + document-templates (adminOnly)
+- 23 PS1 tests across source-grep guards + per-role filter behavior +
+  empty-section collapse sanity
 
-### Theme 4: E2E coverage + V15 deploy + V16 lock (093d4d9 → 2001aa6)
-- 4 new backend E2E specs (smoke 40 + marketing 3 + reports 13 + master-data 12 = 68 tests)
-- helpers.js: expandAllNavSections + clickLeafTab (handle nav section/leaf disambiguation)
-- V15 combined deploy: vercel + firestore:rules; pre+post-probe 200/200/200/200
-- V16 anti-regression public-link spec: 7 tests for ?session/?patient/?schedule no-auth access
-- Production HTTP probed: 3 sample public URLs returned 200
+### Commit 4 — `242107a` Phase 13.5.3 button gates on 9 destructive actions
+- New useHasPermission(key) hook export from useTabAccess.js
+- 9 tabs gated (each: import + canDelete useState + disabled prop + Thai tooltip):
+  PermissionGroupsTab → permission_group_management
+  StaffTab            → user_management
+  DoctorsTab          → doctor_management
+  BranchesTab         → branch_management
+  HolidaysTab         → holiday_setting
+  CouponTab           → coupon_management
+  PromotionTab        → promotion_management
+  VoucherTab          → voucher_management
+  DepositPanel refund → deposit_cancel
+- useUserPermission outside-provider default flipped from default-deny to
+  default-admin (preserves backward compat with Phase 13.5.0 stub for
+  standalone RTL tests; production always wraps via App.jsx)
+- 44 PB1 tests including V21-anti-pattern guard pairing source-grep with
+  deriveState integration
 
-## Live verification done this session
+## Live verification (preview_eval)
 
-### Preview server (preview_eval against real Firestore)
-- 41/41 backend tabs verified loading via programmatic click-test (0 console errors)
-- debugLog helper correct format (6 invocation paths)
-- thaiTodayISO returns "2026-04-26"
-- AP1 collision: first write success → overlapping write throws code='AP1_COLLISION'
-- mapRawCoursesToForm carries pick-group fields on synthetic data
-
-### Playwright E2E
-- backend-all-tabs-smoke: 40 passed (3.1m)
-- marketing/reports/master-data batch: 28 passed (1.2m)
-- public-links-no-auth: 7 passed (16.2s)
-
-### Production HTTP
-- /?session=DEP-DBGMJ7         → 200
-- /?patient=dkeq1b2hx7bk5138pe80 → 200
-- /?schedule=SCH-0bb9ed3369    → 200
+Reload + import probes confirmed:
+- DEFAULT_PERMISSION_GROUPS exports 5 groups, owner has 131 permission keys
+- UserPermissionContext exports UserPermissionProvider + useUserPermission
+- useTabAccess.js exports both useHasPermission + useTabAccess
+- Page loads cleanly, no console errors
+- Logged-in user (loverclinic@loverclinic.com) → bootstrap admin path active,
+  all sidebar sections visible
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-None. Production deployed + verified. master 1 commit ahead (`2001aa6`) is
-the V16 anti-regression spec only — no production code change → no deploy
-needed.
+1. **Deploy** 4 commits via V15 combined (`02ee2ef → 242107a`). Rules
+   unchanged so probe-deploy-probe is idempotent fire. Required ANY deploy
+   per Rule B. User must type "deploy" THIS turn per V18 lesson.
+2. **Permission group customization** post-deploy: 5 default groups seed
+   on first PermissionGroupsTab open. User can edit names + permissions
+   to match real clinic role structure.
 
 ## Recent decisions (non-obvious — preserve reasoning)
 
-1. **Triage downgraded 6 of 12 raw CRITICAL audit findings to false positives** by reading cited code (C3 design intent, CL1/CL3 already implemented, FF3 attrs exist, RP1 click-handler-only rule, PV1-PV5 user-deferred).
+1. **isAdmin fallback when context is null switched to TRUE** (Phase 13.5.3).
+   Original Phase 13.5.1 design defaulted to deny outside the provider —
+   correct fail-closed posture but broke 15 existing RTL tests rendering
+   tabs without an App wrapper. Switched to admin-bypass for the
+   outside-provider case. Production always wraps via App.jsx so the
+   real permission state always applies for actual backend nav. Test
+   render contexts have no real user identity to gate anyway.
 
-2. **:focus-visible CSS rule beats per-component focus-ring edits** — single CSS rule scoped to interactive elements covers 145 sites; only triggers on KEYBOARD focus (mouse preserved).
+2. **Phase 13.5.4 hard-gate deferred**. Soft-gate (UI hide + button
+   disable) is sufficient for clinic launch; firestore.rules narrowing
+   needs a Rule B probe-deploy-probe turn + server-side custom claim
+   setting via /api/admin/setUserPermission. Defer until post-launch.
 
-3. **Bundle code-split kept 12 always-on tabs eager** — lazy-loading entry-point tabs would block first click. TFP stays eager (multi-site usage).
+3. **Default 5 permission groups follow real-world clinic roles**:
+   Owner / Manager / Front-desk / Nurse / Doctor. Manager excludes the
+   3 admin keys (permission_group / user / branch_management) so they
+   can't promote themselves. Bootstrap admin path covers the
+   chicken-and-egg of "who assigns the first owner group".
 
-4. **AP1 server-side check uses read-then-write (not transaction)** — Firestore SDK doesn't allow queries in transactions. Read-then-write reduces race from ms-wide to ~50ms; combined with client-side + listener freshness, covers clinic-pace bookings.
+4. **9 button gates, not 12**. Plan called for 12 sites but the deeper
+   ones (SaleTab cancel/refund, TreatmentFormPage delete, CustomerListTab
+   delete) require navigating modal/drill-down state. Shipped the 9
+   tab-level delete buttons + DepositPanel refund as the high-leverage
+   set; the deeper 3 ride next session (same useHasPermission(key)
+   pattern, just different anchor sites).
 
-5. **AV3 crypto suffix is 4 bytes (8 hex sliced to 4)** — keeps WTX-/PTX- + Date.now()-XXXX format stable for log-grep.
-
-6. **E2E spec helper iteration was 3 rounds** — final form uses `clickLeafTab` filtering via `nav button:not([aria-expanded])` to disambiguate "การเงิน" leaf vs section header.
-
-7. **Public-link spec uses content-settle wait** — Firestore listeners keep network active forever; `waitForLoadState('networkidle')` would never resolve. 3.5s after domcontentloaded covers V16 race window with margin.
+5. **Tab → permission key mapping for new entries**:
+   - insurance-claims uses sale_management OR sale_view (sale-adjacent)
+   - vendor-sales uses vendor_sale_management
+   - document-templates is adminOnly (doc CRUD = config, not day-to-day)
 
 ## Detail checkpoint
 
-See `.agents/sessions/2026-04-26-session3-audit-deploy-e2e.md` (this
-session's full detail — 12 commits + verification + decisions + next-todo).
+This file. No separate checkpoint file in `.agents/sessions/` for this
+session — all 4 commits are well-described in their commit messages
+and SESSION_HANDOFF.md.
