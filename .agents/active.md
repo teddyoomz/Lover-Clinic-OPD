@@ -1,98 +1,96 @@
 ---
-updated_at: "2026-04-26 (session 3 — 24h pre-launch audit + remediation + perf code-split + design audit + UI click-test + E2E spec authoring)"
-status: "All scope shipped: 22 audits + 5-agent design audit + 41/41 backend UI click-test verified live + 4 new E2E spec files (~69 tests). 145-site `:focus-visible` a11y gap closed via single CSS rule. 11 commits ahead of prod."
-current_focus: "Idle. All in-scope audit work shipped + verified live. Next decision: deploy 8-commit batch OR start a deeper item (TFP refactor, permission system) that needs explicit user input before commit."
+updated_at: "2026-04-26 (session 3 EOD — audit + design + e2e + deploy COMPLETE)"
+status: "Production at 093d4d9 LIVE. V15 combined deploy of 11 commits done; pre+post-probe 200/200/200/200. master 1 commit ahead with E2E spec only (no production code). Tests: 4961 vitest + 75 E2E = 5036 total. Bundle -26% via code-split."
+current_focus: "Idle. Pre-launch audit pass + design pass + E2E backend coverage + V16 public-link lock all shipped + deployed. Production verified working for both authed admins (full E2E) and non-logged-in customers (public-link spec)."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "4d4529b"
-tests: "4893/4893 full suite (+214 across this 24h pass)"
+last_commit: "2001aa6"
+tests: "4961 vitest + 75 E2E = 5036 total"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "791b2de (2026-04-26 V15 combined deploy — V21 fix + 14.7.H-D wireup). 8 commits 7a9c62d → 4d4529b pushed but NOT deployed."
-firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F per V19; UNCHANGED this session — re-deploy will be no-diff fire)"
-bundle: "BackendDashboard: 1216 KB → 899 KB (-26%, gzip 224 → 162 KB / -28%) after lazy-loading 17 of 44 tabs"
+last_deploy: "093d4d9 (2026-04-26 EOD V15 combined deploy — 11 commits including audit fixes + IIFE refactor + code-split + design-CSS + E2E suite). Pre+post probes 200/200/200/200."
+firestore_rules_deployed: "v10 (be_stock_movements update narrowed in 14.7.F per V19; UNCHANGED this session — re-deploy was idempotent fire)"
+bundle: "BackendDashboard: 1216 KB → 899 KB (-26%, gzip 224 → 162 KB / -28%) via React.lazy on 17 of 44 tabs"
 ---
 
 # Active Context
 
 ## Objective
 
-Pre-launch audit-all sweep + triage + remediation. User authorised a 24h
-"use everything" pass to find + fix real bugs before production traffic.
+24h pre-launch session. User authorized "use everything" — audit-all sweep
++ design pass + UI click-test + E2E coverage + deploy. All shipped.
 
-## What this session shipped (2026-04-26 session 3, 5 commits, `7a9c62d` → `b870b40`)
+## What this session shipped (12 commits — 4 themes)
 
-| Commit | Phase | One-liner |
-|---|---|---|
-| `7a9c62d` | 14.7.H-EFG | (carried from session 2 — period + finance listener + TDZ guard) |
-| `b1032bf` | 14.7.H-H | listener cluster: listenToHolidays + bounded listenToAllSales(opts.since); 3 holiday consumer migrations; 29 LC8/LC9 tests |
-| `55b5919` | 14.7.H-I | pick-at-treatment reopen-add (last V12.2b deferred); addPicksToResolvedGroup + _pickGroupOptions snapshot + reopen UI; 46 F18 tests |
-| `65ba420` | 14.7.H-J | debugLog helper + 9 silent-catch wirings in api/proclinic/{customer,appointment,treatment,deposit}.js; 35 DL1-DL3 tests |
-| `b870b40` | audit-2026-04-26 | TZ1 P0 + AP1 P1 + RP5 P1 + AV3 P2 + C3 design lock; 54 tests across 2 files |
+### Theme 1: Audit-all sweep + remediation (commits b1032bf → b870b40)
+- 22 audit skills / 237 invariants via 6 parallel agents → docs/audit-2026-04-26-sweep.md
+- **TZ1 P0**: SalePaymentModal paidAt + StockReportTab + medicalInstrumentValidation → thaiTodayISO
+- **AP1 P1**: server-side appointment collision check (read-then-write, ~50ms race window) + AP1_COLLISION error code + Thai message
+- **RP5 P1**: 6 TFP + 3 ChartTemplateSelector silent catches → debugLog
+- **AV3 P2**: txId / ptxId crypto.getRandomValues hardening (audit-chain integrity)
+- **C3 P2**: deleteBackendTreatment design-intent regression test (false-positive lock)
+- **listenToHolidays + listenToAllSales**: extends listener cluster pattern
+- **Pick-at-treatment reopen-add**: last V12.2b deferred item closed
+- **debugLog helper**: structured logger for ProClinic API silent-catch sites
 
-## Audit findings + verification (full report: `docs/audit-2026-04-26-sweep.md`)
+### Theme 2: Bonus polish (5b790e4 → 4d4529b)
+- IIFE JSX refactor (TFP:3287 + 4589 → component-scope useMemo)
+- BackendDashboard code-split via React.lazy + Suspense (17 tabs lazy)
+- Bundle: 1216 KB → 899 KB (-26%, gzip -28%)
 
-**Method**: 22 audit skills / 237 invariants run via 6 parallel domain-grouped Explore agents. Raw counts: 12 CRITICAL + 9 HIGH. After verification (read cited code, reproduce assertion, check false positives):
+### Theme 3: Design audit + a11y fix (24b82ac)
+- 5 parallel design-audit agents reviewed all 95 backend component files
+- Top P0: 145-site `:focus-visible` gap → single CSS rule covers all
+- docs/audit-2026-04-26-design-pass.md catalogued P1/P2/P3 for next session
 
-**P0 — fixed**:
-- **TZ1** SalePaymentModal:24 paidAt UTC slice → drifted to YESTERDAY 00:00-07:00 Bangkok. Fix: thaiTodayISO(). Same pattern fixed in StockReportTab CSV filename + medicalInstrumentValidation default-today.
+### Theme 4: E2E coverage + V15 deploy + V16 lock (093d4d9 → 2001aa6)
+- 4 new backend E2E specs (smoke 40 + marketing 3 + reports 13 + master-data 12 = 68 tests)
+- helpers.js: expandAllNavSections + clickLeafTab (handle nav section/leaf disambiguation)
+- V15 combined deploy: vercel + firestore:rules; pre+post-probe 200/200/200/200
+- V16 anti-regression public-link spec: 7 tests for ?session/?patient/?schedule no-auth access
+- Production HTTP probed: 3 sample public URLs returned 200
 
-**P1 — fixed**:
-- **AP1** createBackendAppointment had no server-side collision check → race double-booking. Fix: read existing appointments by date + filter doctorId + check time overlap before write; throw with code='AP1_COLLISION' + collision payload. Combined with client-side check + 1s listener freshness covers realistic clinic-pace gap. Race window down to ~50ms.
-- **RP5** silent catches in TFP outer modal-load functions (6) + ChartTemplateSelector (3) → migrated to debugLog with category prefixes (`tfp-medmodal-load`, `chart-template-pc`, etc).
+## Live verification done this session
 
-**P2 — fixed**:
-- **AV3** txId / ptxId Math.random suffix → crypto.getRandomValues with Math.random fallback. Audit-chain integrity hardened.
-- **C3** deleteBackendTreatment design-intent regression test added (the audit's CRITICAL was a false positive — the comment block at lines 270-281 explicitly documents stock NOT reversed because items WERE used; user must cancel the linked SALE).
+### Preview server (preview_eval against real Firestore)
+- 41/41 backend tabs verified loading via programmatic click-test (0 console errors)
+- debugLog helper correct format (6 invocation paths)
+- thaiTodayISO returns "2026-04-26"
+- AP1 collision: first write success → overlapping write throws code='AP1_COLLISION'
+- mapRawCoursesToForm carries pick-group fields on synthetic data
 
-**False positives ruled out by verification** (no code changes):
-- **C3** stock orphan — design intent (locked with regression test)
-- **CL1** clone dedup gap — already implemented at cloneOrchestrator.js:91-116 (HN + phone + national-ID via findCustomersByField)
-- **CL3** silent partial-failure — handled with per-appointment errors[] + console.error aggregate count
-- **FF3** scrollToError gap — data-field="sellers" (line 4511) + data-field="paymentChannels" (line 4478) BOTH exist
-- **RP1/AV1** IIFE JSX — CLAUDE.md Bug #5 was about CLICK HANDLERS specifically; render-time IIFEs at TFP:3286 + 4580 work today (4848 tests + clean build)
-- **PV1-PV5** PDPA — explicitly deferred per user directive
+### Playwright E2E
+- backend-all-tabs-smoke: 40 passed (3.1m)
+- marketing/reports/master-data batch: 28 passed (1.2m)
+- public-links-no-auth: 7 passed (16.2s)
 
-## Live verification done this session (preview_eval against real Firestore)
-
-User authorisations from earlier sessions still in force ("Generate อะไรจริงๆขึ้นมาเทสใน backend ได้ไม่จำกัด").
-
-### Test 1 — listener cluster H (b1032bf)
-- listenToHolidays: 1 emit, payload=[] (no holidays in test data) ✓
-- listenToAllSales (default 365d since): 50 sales returned, sample shape correct ✓
-- listenToAllSales(since='2024-01-01'): 50 returned, override accepted ✓
-
-### Test 2 — pick-at-treatment reopen-add (55b5919)
-- 425 customers scanned (no existing pick-at-treatment data — feature flows forward only) ✓
-- mapRawCoursesToForm carries _pickedFromCourseId + _pickGroupOptions on synthetic input ✓
-- addPicksToResolvedGroup throws cleanly on bogus group id ✓
-
-### Test 3 — debugLog helper (65ba420)
-- 6 invocation paths produce expected formats ✓
-- Long-string detail truncated to 200 chars ✓
-- console.warn (not .error) ✓
-
-### Test 4 — audit batch fixes (b870b40)
-- thaiTodayISO returns "2026-04-26" (YYYY-MM-DD shape) ✓
-- daysUntilMaintenance fallback agrees with explicit-arg call ✓
-- AP1: first write success → overlapping write throws code='AP1_COLLISION' → edge-touch write success ✓
-- 2 test appointments cleaned up ✓
+### Production HTTP
+- /?session=DEP-DBGMJ7         → 200
+- /?patient=dkeq1b2hx7bk5138pe80 → 200
+- /?schedule=SCH-0bb9ed3369    → 200
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-- **`vercel --prod` for 5 commits `7a9c62d` → `b870b40`** — V15 combined deploy (vercel + firestore:rules) in parallel. firestore:rules unchanged this round → no-diff probe fire expected. Per V18, user must say "deploy" THIS turn.
+None. Production deployed + verified. master 1 commit ahead (`2001aa6`) is
+the V16 anti-regression spec only — no production code change → no deploy
+needed.
 
 ## Recent decisions (non-obvious — preserve reasoning)
 
-1. **Triage downgrades** — 6 of the 12 raw CRITICAL findings were verified false positives. Reading the cited code (especially comment blocks like `deleteBackendTreatment` lines 270-281 + cloneOrchestrator dedup at 91-116) revealed the audit invariants were either outdated or didn't account for explicit design intent. Lock these decisions with regression tests so they don't get "re-fixed" by future contributors.
+1. **Triage downgraded 6 of 12 raw CRITICAL audit findings to false positives** by reading cited code (C3 design intent, CL1/CL3 already implemented, FF3 attrs exist, RP1 click-handler-only rule, PV1-PV5 user-deferred).
 
-2. **AP1 server-side check uses read-then-write (not transaction)** — Firestore SDK doesn't support queries inside runTransaction. True atomicity would require a slot-claim doc architecture. Read-then-write reduces race window from ms-wide to ~50ms — combined with client-side check + 1s listener freshness, covers realistic clinic-pace booking. Slot-claim architecture deferred.
+2. **:focus-visible CSS rule beats per-component focus-ring edits** — single CSS rule scoped to interactive elements covers 145 sites; only triggers on KEYBOARD focus (mouse preserved).
 
-3. **AV3 crypto suffix is 4 bytes (8 hex chars sliced to 4)** — keeps existing WTX-/PTX- + Date.now()-XXXX format stable for log-grep + downstream parsers. Math.random fallback preserved for legacy node test environments.
+3. **Bundle code-split kept 12 always-on tabs eager** — lazy-loading entry-point tabs would block first click. TFP stays eager (multi-site usage).
 
-4. **Silent-catch migration scope** — picked TFP + ChartTemplateSelector outer catches (highest-traffic user-facing surfaces). brokerClient.js sites 54/233/245/253 deferred — they're internal broker bookkeeping, lower diagnostic value.
+4. **AP1 server-side check uses read-then-write (not transaction)** — Firestore SDK doesn't allow queries in transactions. Read-then-write reduces race from ms-wide to ~50ms; combined with client-side + listener freshness, covers clinic-pace bookings.
 
-5. **IIFE JSX not refactored** — CLAUDE.md Bug #5 was about CLICK HANDLER IIFEs blocking events, not all render-time IIFEs. The TFP:3286 grand-total computation + TFP:4580 modal mount both work today (4848 tests + clean build). Refactor when convenient (extract to useMemo / sub-component) but not blocking.
+5. **AV3 crypto suffix is 4 bytes (8 hex sliced to 4)** — keeps WTX-/PTX- + Date.now()-XXXX format stable for log-grep.
+
+6. **E2E spec helper iteration was 3 rounds** — final form uses `clickLeafTab` filtering via `nav button:not([aria-expanded])` to disambiguate "การเงิน" leaf vs section header.
+
+7. **Public-link spec uses content-settle wait** — Firestore listeners keep network active forever; `waitForLoadState('networkidle')` would never resolve. 3.5s after domcontentloaded covers V16 race window with margin.
 
 ## Detail checkpoint
 
-See `docs/audit-2026-04-26-sweep.md` (full audit findings + triage matrix).
+See `.agents/sessions/2026-04-26-session3-audit-deploy-e2e.md` (this
+session's full detail — 12 commits + verification + decisions + next-todo).

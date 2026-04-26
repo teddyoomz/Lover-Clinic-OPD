@@ -98,13 +98,12 @@
 
 ## What's Next
 
-### Primary: P0 user-gated deploy — 5 commits ready to ship (`7a9c62d` → `b870b40`)
-Production at `791b2de`. Master 5 commits ahead. User says "deploy" → V15 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe). Note: firestore:rules is unchanged this round so probe will be a no-diff fire. Bundle includes:
-1. `7a9c62d` EFG quick wins (period + finance listener + TDZ guard)
-2. `b1032bf` listener cluster H (listenToHolidays + bounded listenToAllSales)
-3. `55b5919` pick-at-treatment reopen-add (last V12.2b deferred item)
-4. `65ba420` debugLog helper + 9 silent-catch wirings
-5. `b870b40` audit-2026-04-26 batch (TZ1 P0 + AP1 P1 + RP5 P1 + AV3 P2 + C3 design lock)
+### Primary: ALL DEPLOYED — production at `093d4d9` ✅
+V15 combined deploy completed 2026-04-26 EOD. 11 commits shipped (`7a9c62d`
+→ `093d4d9`). Pre+post probes 200/200/200/200. master 1 commit ahead with
+V16 anti-regression public-link spec only — no production code change.
+
+If user wants to extend: see P1/P2 polish below.
 
 ### P1 polish queue — drained this session
 - ✅ Pick-at-treatment partial-pick reopen — DONE (`55b5919`)
@@ -169,13 +168,16 @@ Production at `791b2de`. Master 5 commits ahead. User says "deploy" → V15 comb
 
 ## Outstanding User Actions (NOT auto-run)
 
-- **`vercel --prod` for 8 commits `7a9c62d` → `4d4529b`** — EFG quick wins + listener cluster H + pick-reopen + debugLog + audit-2026-04-26 batch + IIFE refactor + code-split (+ 1 docs commit) all committed + pushed but NOT yet deployed. User must say "deploy" THIS turn. Per V18 — no roll-over. V15 combined: "deploy" = vercel + firestore:rules in parallel with Probe-Deploy-Probe (rules unchanged → no-diff fire expected).
+None code-side. Production at `093d4d9` LIVE + verified (vercel + firestore
+rules deployed; pre+post-probe 200/200/200/200; production HTTP probe
+returned 200 on all 3 public-link types). master 1 commit ahead is just a
+test spec.
 
 ---
 
 ## Blockers
 
-None code-side. Production deploy gap of 1 commit (EFG quick wins) — invisible to live users until next deploy.
+None. Production at `093d4d9` LIVE + verified.
 
 ---
 
@@ -183,18 +185,26 @@ None code-side. Production deploy gap of 1 commit (EFG quick wins) — invisible
 
 - **Doc 13/15 deferred to Phase 16** — chart (canvas drawing) / treatment-template (dental chart) are graphical surfaces beyond seed templates.
 - **Phase 14.4 G5 customer-product-change NOT STARTED** — bigger feature (course exchange + refund). XL effort.
-- **Pick-at-treatment partial-pick reopen** (V12.2b note) — user picks subset, can't reopen to add more. M effort, defer to polish. **Last remaining V12.2b deferred item.**
+- ~~Pick-at-treatment partial-pick reopen~~ — ✅ **DONE** in `55b5919` (Phase 14.7.H-I) — last V12.2b deferred item closed.
 - ~~Period enforcement (V12.2b)~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-E).
-- ~~Hook-order TDZ JSDoc guard on TreatmentFormPage:1694~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-G).
-- ~~Bundle `listenToCustomerFinance`~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-F).
+- ~~Hook-order TDZ JSDoc guard~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-G).
+- ~~Bundle listenToCustomerFinance~~ — ✅ **DONE** in `7a9c62d` (Phase 14.7.H-F).
+- ~~ProClinic API silent-catch logging~~ — ✅ **DONE** in `65ba420` (Phase 14.7.H-J) — debugLog helper + 9 highest-value sites wired; remaining brokerClient catches verified false-positive (sessionStorage best-effort).
 - **Phase 14.8/9/10/11 print-form roadmap** — pre-flight + signature canvas + PDF export + audit log + watermark + email/LINE delivery + bulk print + QR embed + visual designer. Tracked in `~/.claude/projects/F--LoverClinic-app/memory/project_print_form_world_class_roadmap.md`. XL each, defer.
-- **ProClinic API silent-catch logging** — 35+ intentional `/* best effort */` blocks; debug observability gap. M to add structured logger.
+- **DocumentPrintModal `dangerouslySetInnerHTML`** — XSS risk if admin types hostile template HTML. Need DOMPurify. Audit P1.
+- **FileUploadField URL.createObjectURL** — never revoked → memory leak on repeated uploads. Audit P1.
 
 ---
 
 ## Violations This Session
 
-- **V21** (`791b2de`, 2026-04-26) — Two latent UI bugs in shipped TreatmentTimelineModal: image click blocked by Chrome `<a href="data:">` policy + edit button hidden behind modal stacking (z-100 covers TFP z-80). Source-grep tests TL2.6/TL5.1 had **encoded broken behavior** in their assertions. **Lesson**: any new click handler test must pair shape grep with runtime outcome assertion (preview_eval or RTL). 15 TL9 tests + V-entry locked.
+None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
+- **V13** helper-tests-not-enough → applied via Rule I full-flow simulate
+- **V14** undefined-reject → no Firestore writes added
+- **V18** deploy-without-asking-third-repeat → user said "deploy" verbatim before V15 combined deploy
+- **V19** rule-vs-callers → no firestore.rules changes this session
+- **V20** multi-branch decision (Option 1) → no re-debate; honored
+- **V21** source-grep-locks-broken-behavior → AB6 IIFE refactor tests pair shape grep with runtime outcome via preview_eval
 
 ---
 
@@ -203,32 +213,31 @@ None code-side. Production deploy gap of 1 commit (EFG quick wins) — invisible
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 2.
+Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 3.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — master = 7a9c62d)
-3. .agents/active.md (hot state — production at 791b2de, master 1 ahead)
+2. SESSION_HANDOFF.md (cross-session state of truth — master = 2001aa6, prod = 093d4d9)
+3. .agents/active.md (hot state — production LIVE, master 1 commit ahead with E2E spec only)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V21)
-5. .agents/sessions/2026-04-26-pre-phase15-quickwins.md (this session detail)
+5. .agents/sessions/2026-04-26-session3-audit-deploy-e2e.md (this session detail — 12 commits)
 
 Status summary:
-- master = 7a9c62d, 4679/4679 tests passing, build clean
-- Production: 791b2de LIVE — V21 fix + 14.7.H-D wireup deployed
-- master 1 commit ahead with EFG quick wins (period enforcement +
-  listenToCustomerFinance + TFP hook-order JSDoc guard) NOT YET DEPLOYED
-- V21 entry logged
-- Phase 15 (Central Stock Conditional) is now technically UNBLOCKED
+- master = 2001aa6, 4961 vitest + 75 E2E = 5036 tests passing, build clean
+- Production: 093d4d9 LIVE — V15 combined deploy 2026-04-26 EOD (vercel + firestore:rules; pre+post probes 200/200/200/200)
+- master 1 commit ahead with V16 anti-regression public-link spec only (no production code change)
+- BackendDashboard bundle: 1216 KB → 899 KB (-26%) after code-split
+- All V12.2b deferred items closed; ProClinic API silent-catch logging closed
+- Phase 15 (Central Stock Conditional) fully UNBLOCKED — skip if single-branch
 
 Next action (when user gives go-ahead):
-- If user wants EFG live: V15 combined deploy of 7a9c62d (vercel +
-  firestore:rules with full Probe-Deploy-Probe per Rule B)
-- If user wants more polish before Phase 15: pick-at-treatment
-  partial-pick reopen (last V12.2b deferred, M ~3-4h)
-- If user wants to start Phase 15: Central Stock Conditional planning
+- If user wants more polish: ChartTemplateSelector hardcoded colors / DocumentPrintModal DOMPurify (XSS) / FileUploadField URL.createObjectURL revoke (leak) / required-field amber asterisk (Thai cultural)
+- If user wants Phase 15: Central Stock Conditional planning
+- If user wants permission system: Phase 13.5 deferred — gate hasPermission() at every tab; needs user input on permission group definitions
+- If user wants TFP refactor: 3200 LOC monolith → 7-8 sub-components (XL effort, high leverage)
 
 Outstanding user-triggered actions (NOT auto-run):
-- vercel --prod for 7a9c62d (EFG quick wins)
+- None code-side. master 1 commit ahead is just a test spec.
 
 Rules:
 - No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
@@ -239,6 +248,9 @@ Rules:
 - V21 lesson: source-grep tests can encode broken behavior — pair with
   runtime outcome assertions (preview_eval or RTL)
 - Every bug → test + audit invariant + V-entry (Rule D + Rule I)
+- E2E sidebar nav: use clickLeafTab + expandAllNavSections from helpers.js
+  (filters via `nav button:not([aria-expanded])` to disambiguate
+  section header from leaf when names share, e.g. "การเงิน")
 
 Invoke /session-start to boot context.
 ```
