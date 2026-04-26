@@ -393,6 +393,31 @@ function truncateText(text, maxLen) {
 }
 
 /**
+ * V33.6 — Build the inline meta line shown beneath each course name in
+ * the Flex bubble. Replaces the V33.5 horizontal 3-column table whose
+ * narrow `flex: 2` / `wrap: false` cells truncated mobile data ("0 / 3
+ * a..." instead of "0 / 3 ครั้ง", "เหมาตา..." instead of "เหมาตามจริง").
+ *
+ * Always renders "คงเหลือ X" — falls back through qty → remaining → '-'.
+ * Conditionally appends " · หมดอายุ Y" iff `isMeaningfulValue(c.expiry)`
+ * (smart-display preserved from V33.5 directive).
+ *
+ * @param {object} course — single customer.courses[] entry
+ * @returns {string}
+ */
+export function buildCourseMetaLine(course) {
+  const c = course || {};
+  const qty = isMeaningfulValue(c.qty)
+    ? String(c.qty)
+    : (isMeaningfulValue(c.remaining) ? String(c.remaining) : '-');
+  let line = `คงเหลือ ${qty}`;
+  if (isMeaningfulValue(c.expiry)) {
+    line += ` · หมดอายุ ${formatThaiDate(c.expiry)}`;
+  }
+  return line;
+}
+
+/**
  * Build a single Flex bubble for the empty / no-data case.
  * Used by both courses + appointments when their respective lists are empty.
  */
@@ -458,36 +483,29 @@ export function buildCoursesFlex(courses, opts = {}) {
   const visible = active.slice(0, maxRows);
   const remaining = active.length - visible.length;
 
-  // Header row of the table
-  const headerRow = {
-    type: 'box', layout: 'horizontal', spacing: 'sm', paddingBottom: 'sm',
-    contents: [
-      { type: 'text', text: 'คอร์ส', size: 'xs', color: '#888888', weight: 'bold', flex: 5, wrap: false },
-      { type: 'text', text: 'คงเหลือ', size: 'xs', color: '#888888', weight: 'bold', flex: 2, align: 'end', wrap: false },
-      { type: 'text', text: 'หมดอายุ', size: 'xs', color: '#888888', weight: 'bold', flex: 2, align: 'end', wrap: false },
-    ],
-  };
-
-  // Data rows
+  // V33.6 — Vertical-stacked data rows. Each course = name (full width
+  // bold) + meta line ("คงเหลือ X · หมดอายุ Y", inline gray). Eliminates
+  // truncation as a bug class — V33.5 horizontal 3-column table truncated
+  // mobile data because flex:2 + wrap:false cells couldn't fit "0 / 3
+  // ครั้ง" / "เหมาตามจริง". Column-header row dropped because data is
+  // now self-labeled inline.
   const courseRows = visible.map((c, i) => {
-    const name = truncateText(c.name || c.product || '(ไม่ระบุ)', 50);
-    const qty = isMeaningfulValue(c.qty)
-      ? String(c.qty)
-      : (isMeaningfulValue(c.remaining) ? String(c.remaining) : '-');
-    const expiryDisplay = isMeaningfulValue(c.expiry) ? formatThaiDate(c.expiry) : '';
+    const name = truncateText(c.name || c.product || '(ไม่ระบุ)', 200);
+    const metaLine = buildCourseMetaLine(c);
     return {
-      type: 'box', layout: 'horizontal', spacing: 'sm', paddingTop: 'sm', paddingBottom: 'sm',
+      type: 'box', layout: 'vertical', spacing: 'xs',
+      paddingTop: i === 0 ? 'none' : 'md',
+      paddingBottom: 'md',
       borderColor: '#EEEEEE',
       borderWidth: i === 0 ? 'none' : '1px',
       contents: [
-        { type: 'text', text: name, size: 'sm', color: '#333333', flex: 5, wrap: true },
-        { type: 'text', text: qty, size: 'sm', color: '#222222', flex: 2, align: 'end', weight: 'bold' },
-        { type: 'text', text: expiryDisplay || '—', size: 'xs', color: expiryDisplay ? '#555555' : '#CCCCCC', flex: 2, align: 'end' },
+        { type: 'text', text: name, size: 'sm', color: '#222222', weight: 'bold', wrap: true },
+        { type: 'text', text: metaLine, size: 'xs', color: '#666666', wrap: true, margin: 'xs' },
       ],
     };
   });
 
-  const bodyContents = [headerRow, ...courseRows];
+  const bodyContents = [...courseRows];
   if (remaining > 0) {
     bodyContents.push({
       type: 'box', layout: 'vertical', paddingTop: 'md',
@@ -577,26 +595,37 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
     const provider = String(a.doctorName || a.staffName || a.advisorName || '').trim();
     const note = String(a.note || a.title || a.treatment || '').trim();
 
+    // V33.6 — Date + time as TWO separate stacked sub-rows. V33.5 had
+    // them in one horizontal box where time(flex:2, wrap:false) truncated
+    // "10:00–10:30" → "10:00–10..." on mobile. Stacked = full string
+    // ALWAYS visible regardless of mobile width or font scale.
     const innerRows = [
-      // Date + time row
       {
         type: 'box', layout: 'horizontal', spacing: 'sm',
         contents: [
           { type: 'text', text: '📅', size: 'sm', flex: 0 },
-          { type: 'text', text: formatThaiDate(date), size: 'sm', weight: 'bold', color: '#222222', flex: 4, wrap: false },
-          ...(time ? [
-            { type: 'text', text: '🕐', size: 'sm', flex: 0 },
-            { type: 'text', text: time, size: 'sm', color: '#444444', flex: 2, align: 'end', wrap: false },
-          ] : []),
+          { type: 'text', text: formatThaiDate(date), size: 'sm', weight: 'bold', color: '#222222', flex: 1, wrap: true },
         ],
       },
     ];
+    if (time) {
+      innerRows.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'xs',
+        contents: [
+          { type: 'text', text: '🕐', size: 'sm', flex: 0 },
+          { type: 'text', text: time, size: 'sm', color: '#444444', flex: 1, wrap: true },
+        ],
+      });
+    }
     if (isMeaningfulValue(provider)) {
       innerRows.push({
         type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'xs',
         contents: [
           { type: 'text', text: '👨‍⚕️', size: 'sm', flex: 0 },
-          { type: 'text', text: truncateText(provider, 60), size: 'sm', color: accentColor, flex: 1, wrap: true },
+          // V33.6 — provider color #222 not accentColor. Rule 04 (Thai
+          // culture): red on names of people = death omen. Red preserved
+          // on header band only — accent on STRUCTURE, not on names.
+          { type: 'text', text: truncateText(provider, 100), size: 'sm', color: '#222222', flex: 1, wrap: true },
         ],
       });
     }

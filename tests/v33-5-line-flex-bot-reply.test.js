@@ -102,8 +102,9 @@ describe('V33.5.C — buildCoursesFlex bubble shape', () => {
     const courses = Array.from({ length: 30 }, (_, i) => ({ name: `C${i}`, status: 'กำลังใช้งาน' }));
     const flex = buildCoursesFlex(courses);
     const bodyContents = flex.contents.body.contents;
-    // Header row + 25 course rows + footer
-    expect(bodyContents.length).toBe(27);
+    // V33.6 — column-header row dropped (data is self-labeled inline).
+    // 25 course rows + footer = 26.
+    expect(bodyContents.length).toBe(26);
     const footer = bodyContents[bodyContents.length - 1];
     const footerText = footer.contents[0].text;
     expect(footerText).toMatch(/และอีก 5 รายการ/);
@@ -114,28 +115,30 @@ describe('V33.5.C — buildCoursesFlex bubble shape', () => {
   });
 });
 
-// ─── V33.5 directive: smart-display (no empty placeholders for expiry) ──
-describe('V33.5.D — courses smart-hide empty expiry/qty (V33.5 user directive)', () => {
-  it('D1 — course without expiry shows "—" placeholder NOT "หมดอายุ -"', () => {
+// ─── V33.5 + V33.6 directive: smart-display (no empty placeholders for expiry) ──
+describe('V33.5.D — courses smart-hide empty expiry/qty (V33.6 stacked layout)', () => {
+  it('D1 — course without expiry: meta line OMITS "หมดอายุ" (smart-hide)', () => {
+    // V33.6 — vertical stack. body.contents[0] = first course row;
+    // course row contents = [nameText, metaText]. No expiry cell exists.
     const flex = buildCoursesFlex([{ name: 'A', status: 'กำลังใช้งาน', qty: '5/10' }]);
-    const rows = flex.contents.body.contents;
-    const courseRow = rows[1]; // row[0] is header, row[1] is first course
-    const expiryCell = courseRow.contents[2];
-    expect(expiryCell.text).toBe('—');
-    // The dashes-as-placeholder color is dimmed
-    expect(expiryCell.color).toBe('#CCCCCC');
+    const courseRow = flex.contents.body.contents[0];
+    expect(courseRow.layout).toBe('vertical');
+    const metaText = courseRow.contents[1];
+    expect(metaText.text).toBe('คงเหลือ 5/10');
+    expect(metaText.text).not.toMatch(/หมดอายุ/);
   });
-  it('D2 — course WITH valid expiry shows the formatted Thai BE date', () => {
-    const flex = buildCoursesFlex([{ name: 'A', status: 'กำลังใช้งาน', expiry: '2026-12-31' }]);
-    const courseRow = flex.contents.body.contents[1];
-    const expiryCell = courseRow.contents[2];
-    expect(expiryCell.text).toBe('31/12/2569');
-    expect(expiryCell.color).toBe('#555555');
+  it('D2 — course WITH valid expiry: meta line includes Thai BE date', () => {
+    const flex = buildCoursesFlex([{ name: 'A', status: 'กำลังใช้งาน', qty: '5/10', expiry: '2026-12-31' }]);
+    const courseRow = flex.contents.body.contents[0];
+    const metaText = courseRow.contents[1];
+    expect(metaText.text).toBe('คงเหลือ 5/10 · หมดอายุ 31/12/2569');
   });
-  it('D3 — expiry === "-" treated as missing (not rendered as "หมดอายุ -")', () => {
-    const flex = buildCoursesFlex([{ name: 'A', status: 'กำลังใช้งาน', expiry: '-' }]);
-    const courseRow = flex.contents.body.contents[1];
-    expect(courseRow.contents[2].text).toBe('—');
+  it('D3 — expiry === "-" treated as missing (no "หมดอายุ" suffix)', () => {
+    const flex = buildCoursesFlex([{ name: 'A', status: 'กำลังใช้งาน', qty: '3', expiry: '-' }]);
+    const courseRow = flex.contents.body.contents[0];
+    const metaText = courseRow.contents[1];
+    expect(metaText.text).not.toMatch(/หมดอายุ/);
+    expect(metaText.text).toBe('คงเหลือ 3');
   });
   it('D4 — text formatter (altText) ALSO hides empty expiry now', () => {
     const text = formatCoursesReply([
@@ -191,8 +194,9 @@ describe('V33.5.E — buildAppointmentsFlex bubble shape', () => {
       { appointmentDate: FUTURE, startTime: '10:00', note: 'follow-up' },
     ]);
     const apptBox = flex.contents.body.contents[0];
-    // Should have date row + note row only (no provider row)
-    expect(apptBox.contents.length).toBe(2);
+    // V33.6 stacked: date row + time row + note row (NO provider row).
+    // V33.5 had date+time combined → length was 2; V33.6 splits → length 3.
+    expect(apptBox.contents.length).toBe(3);
     const allTexts = JSON.stringify(apptBox);
     expect(allTexts).not.toContain('👨‍⚕️');
   });
