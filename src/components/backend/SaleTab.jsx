@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShoppingCart, Plus, Edit3, Trash2, Search, Loader2, X, Eye,
   ChevronDown, CheckCircle2, AlertCircle, DollarSign, CreditCard,
-  Users as UsersIcon, Package, Pill, ArrowLeft
+  Users as UsersIcon, Package, Pill, ArrowLeft, Printer
 } from 'lucide-react';
 import {
   createBackendSale, updateBackendSale, deleteBackendSale,
@@ -33,6 +33,11 @@ import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
 import DateField from '../DateField.jsx';
+// Phase 14.10-bis (2026-04-26) — SalePrintView wired into SaleTab so
+// every row can generate the same A4 receipt that QuotationTab already
+// shows for converted sales. User directive: "ทุกรายการ ต้อง Gen ใบเสร็จ
+// ได้ แบบเดียวกันกับ tab=quotations".
+import SalePrintView from './SalePrintView.jsx';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'].map(n => ({ id: n, name: n }));
 const PAYMENT_STATUSES = [
@@ -77,6 +82,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
   // ── Detail / Cancel / Payment modals ──
   const [viewingSale, setViewingSale] = useState(null);
+  const [printingSale, setPrintingSale] = useState(null); // Phase 14.10-bis (2026-04-26) — receipt-print modal
   const [cancelModal, setCancelModal] = useState(null); // { sale }
   const [cancelReason, setCancelReason] = useState('');
   const [cancelRefundMethod, setCancelRefundMethod] = useState('เงินสด');
@@ -850,6 +856,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                             also trigger the row-click detail modal. */}
                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                           <button onClick={() => setViewingSale(sale)} className="p-2.5 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
+                          {/* Phase 14.10-bis (2026-04-26) — Print receipt button.
+                              Renders SalePrintView modal — same A4 receipt as
+                              QuotationTab uses for converted sales. Available
+                              for every row regardless of payment status. */}
+                          <button onClick={() => setPrintingSale(sale)}
+                            className="p-2.5 rounded hover:bg-emerald-900/20 text-emerald-400"
+                            title="พิมพ์ใบเสร็จ"
+                            aria-label="พิมพ์ใบเสร็จ"
+                            data-testid={`saletab-print-${sale.saleId || sale.id}`}>
+                            <Printer size={13} />
+                          </button>
                           <button onClick={() => openEdit(sale)} className="p-2.5 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           {(sale.payment?.status === 'unpaid' || sale.payment?.status === 'split') && (
                             <button onClick={() => { setPayModal(sale); setPayMethod(''); setPayAmount(''); setPayDate(thaiTodayISO()); setPayRefNo(''); }}
@@ -868,6 +885,18 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             </table>
           </div>
         </div>
+      )}
+
+      {/* Phase 14.10-bis (2026-04-26) — Sale receipt print modal.
+          Same A4 SalePrintView as QuotationTab uses. Available for every
+          sale row regardless of status, per user directive: "ทุกรายการ
+          ต้อง Gen ใบเสร็จได้ แบบเดียวกันกับ tab=quotations". */}
+      {printingSale && (
+        <SalePrintView
+          sale={printingSale}
+          clinicSettings={clinicSettings}
+          onClose={() => setPrintingSale(null)}
+        />
       )}
 
       {/* ═══ DETAIL VIEW MODAL ═══ */}

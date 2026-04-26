@@ -266,14 +266,29 @@ describe('PE.E — engine source-grep guards', () => {
     expect(block).toMatch(/wrapper\.appendChild\(s\.cloneNode\(true\)\)/);
   });
 
-  it('E.4e — appends wrapper to document.body so html2canvas can snapshot with styles', () => {
+  it('E.4e — appends offstage container to document.body (wrapper inside it for html2canvas)', () => {
     const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
-    expect(block).toMatch(/document\.body\.appendChild\(wrapper\)/);
+    expect(block).toMatch(/document\.body\.appendChild\(offstage\)/);
+    expect(block).toMatch(/offstage\.appendChild\(wrapper\)/);
   });
 
-  it('E.4f — finally{} cleans up wrapper from document.body (no DOM leak)', () => {
+  it('E.4f — finally{} cleans up offstage from document.body (no DOM leak)', () => {
     const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
-    expect(block).toMatch(/finally\s*\{[\s\S]*?document\.body\.removeChild\(wrapper\)/);
+    expect(block).toMatch(/finally\s*\{[\s\S]*?document\.body\.removeChild\(offstage\)/);
+  });
+
+  it('E.4f-bis — offstage uses overflow:hidden + 0×0 so wrapper is in-viewport for html2canvas but invisible to user', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'width:\s*0'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'height:\s*0'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'overflow:\s*hidden'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'opacity:\s*0'/);
+  });
+
+  it('E.4f-tris — html2canvas opts pass explicit windowWidth/Height (per-paper-size)', () => {
+    const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
+    expect(block).toContain('windowWidth');
+    expect(block).toContain('windowHeight');
   });
 
   it('E.4g — waits for fonts.ready before snapshot (no fallback-font flicker)', () => {
@@ -287,10 +302,12 @@ describe('PE.E — engine source-grep guards', () => {
     expect(block).toMatch(/tagName\s*===\s*['"]SCRIPT['"]/);
   });
 
-  it('E.4i — wrapper hidden off-screen via position:fixed + left:-99999px', () => {
+  it('E.4i — wrapper at position:relative inside offstage container (in-viewport for html2canvas)', () => {
     const block = engineFile.match(/export async function exportDocumentToPdf[\s\S]*?^\}/m)?.[0] || '';
-    expect(block).toContain('position: fixed');
-    expect(block).toContain('left: -99999px');
+    expect(block).toMatch(/wrapper\.style\.cssText[\s\S]*?'position:\s*relative'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'position:\s*fixed'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'top:\s*0'/);
+    expect(block).toMatch(/offstage\.style\.cssText[\s\S]*?'left:\s*0'/);
   });
 
   it('E.4j — V31-class regression marker (institutional memory grep)', () => {

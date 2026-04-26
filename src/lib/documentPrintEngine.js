@@ -495,6 +495,26 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
   const parser = new DOMParser();
   const parsed = parser.parseFromString(html, 'text/html');
 
+  // Hide-but-render strategy. Off-screen `position:fixed; left:-99999px`
+  // produced BLANK PDFs in bulk-print mode (html2canvas snapshot failed
+  // silently for elements outside the viewport in certain Chrome builds).
+  // Use a visible-position wrapper inside a fixed-zero-size offstage
+  // container so the wrapper IS in viewport coords (html2canvas happy)
+  // but the user sees nothing (overflow hidden on the offstage parent).
+  const offstage = document.createElement('div');
+  offstage.setAttribute('data-pdf-offstage', 'true');
+  offstage.style.cssText = [
+    'position: fixed',
+    'top: 0',
+    'left: 0',
+    'width: 0',
+    'height: 0',
+    'overflow: hidden',
+    'pointer-events: none',
+    'opacity: 0',
+    'z-index: -9999',
+  ].join('; ');
+
   const wrapper = document.createElement('div');
   wrapper.setAttribute('data-pdf-wrapper', 'true');
   wrapper.style.cssText = [
@@ -507,9 +527,7 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
     `font-family: ${fontFamily}`,
     'font-size: 14px',
     'margin: 0',
-    'position: fixed',
-    'left: -99999px',
-    'top: 0',
+    'position: relative',
   ].join('; ');
 
   // Copy all <style> blocks from the parsed head so class-based selectors
@@ -527,7 +545,8 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
     });
   }
 
-  document.body.appendChild(wrapper);
+  offstage.appendChild(wrapper);
+  document.body.appendChild(offstage);
   let pdfBlob;
   try {
     // Wait one frame so layout + fonts settle before html2canvas snapshot
@@ -540,12 +559,22 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
       margin: 0,
       filename,
       image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      // Phase 14.10-bis fix — offstage container has 0×0 + overflow:hidden,
+      // BUT html2canvas needs the actual wrapper at proper dims. Pass
+      // explicit width/height so html2canvas captures wrapper correctly
+      // even though its parent clips to 0×0.
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: wrapper.offsetWidth || (paperSize === 'A5' ? 559 : paperSize === 'label-57x32' ? 215 : 794),
+        windowHeight: wrapper.offsetHeight || (paperSize === 'A5' ? 794 : paperSize === 'label-57x32' ? 121 : 1123),
+      },
       jsPDF: paper,
     };
     pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob');
   } finally {
-    if (wrapper.parentNode === document.body) document.body.removeChild(wrapper);
+    if (offstage.parentNode === document.body) document.body.removeChild(offstage);
   }
 
   // Trigger download via object URL — browsers honor `download` attr.
