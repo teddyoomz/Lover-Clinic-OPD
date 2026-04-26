@@ -7,18 +7,21 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 5 EOD — Phase 13.2.6-13.2.16 ProClinic schedule replication SHIPPED + V15 combined deploy COMPLETE
+- **Date last updated**: 2026-04-26 session 6 — V23 P0 hotfix DEPLOYED (anon patient submit + dashboard course-refresh on opd_sessions)
 - **Branch**: `master`
-- **Last commit**: `9169363 docs(handoff): session 5 EOD — Phase 13.2.6-13.2.16 ProClinic schedule replication COMPLETE + V22 logged`
-- **Test count**: ~5190 vitest passing (+ 234 schedule-domain tests across SR/DST/EST/MS/TDP/AFC/SC/MM/SD; -105 deleted list-view UI tests; net +129)
-- **Build**: clean. BackendDashboard chunk ~925 KB
-- **Deploy state**: ✅ **DEPLOYED** — production now at `9169363` (V15 combined deploy 2026-04-26 EOD session 5; pre+post probes 200/200/200/200; production HTTP 200 on backend + 2 public-link routes)
-  - Vercel: `9169363` aliased to https://lover-clinic-app.vercel.app (deploy time 34s)
-  - Firestore rules: v10 (idempotent fire — "latest version already up to date, skipping upload")
-  - **Pre-probe**: 4/4 200 ✓ | **Post-probe**: 4/4 200 ✓ | **Cleanup**: 4/4 200 ✓
-  - **Production smoke**: backend / public-session / public-patient all HTTP 200 ✓
+- **Last commit**: `0a0b9f5 fix(v23): allow anon patient submit on opd_sessions firestore rule`
+- **Test count**: ~5239 vitest passing (5190 + 49 V23: 24 A1-A5 firestore-rules-anon-patient-update + 5 R7 writer-side + 2 V23-lock e2e + 18 prior R1-R6/T1-T8)
+- **Build**: clean. BackendDashboard chunk ~925 KB (unchanged)
+- **Deploy state**: ✅ **DEPLOYED** — production at `0a0b9f5` (V15 combined deploy V23 hotfix 2026-04-26)
+  - Vercel: `0a0b9f5` aliased to https://lover-clinic-app.vercel.app (deploy time 31s)
+  - Firestore rules: v11 (V23 narrowing — opd_sessions update gate)
+  - **Pre-probe baseline (4 endpoints)**: 200/200/200/200 ✓ | **V23 pre-probe**: anon UPDATE 403 = bug confirmed live
+  - **Post-deploy probes (5 endpoints)**: 200/200/200/200 + V23 anon CREATE 200 + UPDATE 200 = fix LIVE ✓
+  - **Cleanup**: pc_appointments DELETE x 2 200/200 + proclinic_session* strip 200/200 ✓
+  - **Production smoke**: backend / ?session= / ?patient= all HTTP 200 ✓
+- **Rule B probe list extended permanently**: 4 → 5 endpoints (`.claude/rules/01-iron-clad.md`). Future rules deploys catch this regression class automatically.
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅
+- **Remote sync**: master ahead of origin/master by 1 (push pending in this turn)
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
 - **SCHEMA_VERSION**: 15 (auto-upgrades on print-modal open, no manual deploy needed for schema)
 
@@ -33,6 +36,40 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 6 (1 commit, `0a0b9f5`) — V23 P0 HOTFIX: anon QR/link patient submit
+User report (verbatim): "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอดส่งไม่ได้" + "เช็คให้หมดทั้ง frontend แบบ 100% จริงๆ ว่าจะไม่มีบั๊คแบบนี้หรือใกล้เคียงกับแบบนี้อีกแล้ว" + "ทำเสร็จ test แล้ว deploy เลย เพราะใช้จริงอยู่"
+
+Root cause: firestore.rules opd_sessions had `allow update: if isClinicStaff()` since INITIAL commit (`554506b`, 2026-03-23) — **live for entire project history**. Anon patients (signInAnonymously) hit PERMISSION_DENIED. V16 fix (2026-04-25) only made the page LOAD without flashing — never tested SUBMIT path.
+
+100% frontend sweep (per user "เช็คให้หมดทั้ง"): EXACTLY 3 anon-reachable Firestore writes, all opd_sessions:
+- `src/pages/PatientForm.jsx:372` (visible alert)
+- `src/pages/PatientDashboard.jsx:403` (silent fail .catch)
+- `src/pages/PatientDashboard.jsx:410` (silent fail console.warn)
+Adjacent surfaces (Storage, Cloud Functions, /api/*) verified safe.
+
+Fix (single rule narrow + V21-paired test bank):
+- ✅ **firestore.rules** opd_sessions update narrowed to `isClinicStaff() OR (isSignedIn() AND affectedKeys().hasOnly([11-field whitelist]))`. Mirrors V19 pattern.
+- ✅ **`.claude/rules/01-iron-clad.md` Rule B** extended 4 → 5 probe endpoints permanently (NEW: anon-auth opd_sessions PATCH). Future deploys catch this regression class automatically.
+- ✅ **NEW** `tests/firestore-rules-anon-patient-update.test.js` — 24 tests in A1-A5 groups (rule shape, writer↔rule contract, Rule B documented, 8 staff-only-field bypass guards, V-entry+handoff updated)
+- ✅ **EXTEND** `tests/public-link-auth-race.test.js` R7 group — 5 writer-side regression tests
+- ✅ **EXTEND** `tests/e2e/public-links-no-auth.spec.js` V23-lock — 2 runtime no-PERMISSION_DENIED tests for ?session= and ?patient=
+- ✅ **V23 entry** added to `.claude/rules/00-session-start.md` § 2
+
+Live verification (this session):
+- Pre-deploy probes 1-4: 200/200/200/200 baseline ✓
+- Pre-deploy V23 probe: anon CREATE 200 + UPDATE 403 = bug confirmed LIVE
+- V15 combined deploy: vercel + firebase rules in parallel, both exit 0
+- Post-deploy probes 1-4: 200/200/200/200 (no regression) ✓
+- Post-deploy V23 probe: anon CREATE 200 + UPDATE 200 = **fix LIVE** ✓
+- Cleanup: pc_appointments DELETE x 2 + proclinic_session* probe-field strip — all 200
+- Production HTTP smoke: backend / ?session= / ?patient= all 200 ✓
+
+Key lessons logged in V23 entry:
+1. Probe list must cover EVERY auth state that writes (unauth REST, anon-auth client, etc.)
+2. Render tests aren't write tests — V16 lock missed SUBMIT path
+3. Source-grep tests can lock in working OR broken behavior — pair with runtime
+4. Long-lived bugs are the most dangerous — they pass every audit because they were never tested
 
 ### Session 2026-04-26 session 5 (10 commits, `3bf9f31` → `0c4a90d`) — Phase 13.2.6-13.2.16 ProClinic schedule replication
 User directive: "ทำให้ระบบนี้ให้เหมือน proclinic เป๊ะๆ ไม่ต้องคิดเอง...ทั้งหน้า /admin/schedule/doctor และ /admin/schedule/employee แบบ 100% และ wiring ไปในส่วนที่จำเป็นเช่นส่วนการนัดหมาย ส่วนที่แจ้งว่าวันนี้หมอเข้ากี่คนห้องไหนบ้าง"
@@ -250,45 +287,45 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-26 end-of-session 4.
+Resume LoverClinic OPD — continue from 2026-04-26 session 6 (V23 hotfix DEPLOYED).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — master = 242107a, prod = 093d4d9)
-3. .agents/active.md (hot state — 4 commits ahead of prod, all soft-gate permission system + polish)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V21)
+2. SESSION_HANDOFF.md (master = 0a0b9f5, prod = 0a0b9f5 LIVE)
+3. .agents/active.md (hot state — V23 fix DEPLOYED + verified end-to-end)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V23)
 
 Status summary:
-- master = 242107a, 5061 vitest passing, build clean (BackendDashboard 924 KB)
-- Production: 093d4d9 (last V15 deploy 2026-04-26 EOD) — 4 commits behind
-- 4 new commits this session: polish batch + Phase 13.5.1/.2/.3 permission system
-- Phase 13.5.4 (firestore.rules hard-gate) DEFERRED to a later session
+- master = 0a0b9f5, ~5239 vitest passing (49 new V23 tests)
+- Production at 0a0b9f5 LIVE — V23 P0 hotfix deployed via V15 combined (vercel + firestore:rules)
+- Pre-deploy V23 probe confirmed bug live (anon UPDATE 403); post-deploy 5 probes all 200
+- Production HTTP 200 on backend + ?session= + ?patient=
+- Rule B probe-list extended permanently 4 → 5 endpoints
 
-What this session shipped (commits in order):
-- 02ee2ef polish: DOMPurify XSS + URL revoke + amber asterisk + ChartTemplateSelector CSS vars (72 tests)
-- 79feb5f Phase 13.5.1 wire useTabAccess + UserPermissionContext + 5-group seed (29 tests)
-- 1c83dc8 Phase 13.5.2 sidebar/palette/deep-link filter (23 tests)
-- 242107a Phase 13.5.3 inline button gates on 9 destructive actions (44 tests)
+V23 fix shape (summarised — full V-entry in 00-session-start.md):
+- firestore.rules opd_sessions update narrowed to `isClinicStaff() OR (isSignedIn() AND hasOnly([11-field whitelist]))`
+- Whitelist: status, patientData, submittedAt, updatedAt, isUnread, lastCoursesAutoFetch, coursesRefreshRequest, brokerStatus, brokerError, brokerJob, latestCourses
+- Anon attacker who guesses sessionId can only modify those 11 fields (V19 hasOnly pattern)
+- Test bank: NEW firestore-rules-anon-patient-update.test.js (24) + EXTEND public-link-auth-race R7 (5) + EXTEND e2e V23-lock (2)
 
-Next action (when user gives go-ahead):
-- If user wants deploy: combined vercel + firestore:rules (V15). Rules unchanged, idempotent fire. Probe-Deploy-Probe still required (Rule B). 4 commits ship.
-- If user wants Phase 13.5.4 hard-gate: server-side Firebase custom claims via /api/admin/setUserPermission + firestore.rules narrowing. Needs Rule B turn for rules deploy.
-- If user wants more button gates: extend Phase 13.5.3 to SaleTab cancel/refund + TreatmentFormPage delete + CustomerListTab delete (the deeper flows we deferred). Current pattern: useHasPermission(key) + disabled={busy || !canX} + Thai tooltip.
-- If user wants Phase 15: Central Stock Conditional planning. Single-branch clinics can skip.
-- If user wants TFP refactor: 3200 LOC monolith → 7-8 sub-components (XL effort).
+Next action (when user gives direction):
+- If user verifies in production: open `?session=<id>` from incognito → fill → submit → success expected (was "เกิดข้อผิดพลาดของระบบ" pre-V23)
+- If user wants Phase 13.5.4 hard-gate: server-side Firebase custom claims + firestore.rules narrowing
+- If user wants Phase 15 Central Stock: skip if single-branch
+- If user wants TFP refactor: 3200 LOC → 7-8 sub-components (XL effort)
+- If user wants permission group customization: edit via PermissionGroupsTab + assign via StaffFormModal
 
-Outstanding user-triggered actions (NOT auto-run):
-- DEPLOY 4 commits (02ee2ef → 242107a) — user types "deploy"
-- Permission group customization via PermissionGroupsTab (post-deploy, after seed runs)
+Outstanding user actions (NOT auto-run):
+- (Optional) Admin can manually archive `opd_sessions/test-probe-anon-1777184257` and `opd_sessions/test-probe-anon-1777184370` from queue if they show as noise. They don't affect any real flow.
 
 Rules:
 - No deploy unless user says "deploy" THIS turn (V4/V7/V18)
 - V15 combined: "deploy" = vercel + firestore:rules in parallel
-- Probe-Deploy-Probe with /artifacts/{appId}/public/data prefix (V1/V9/V19)
-- Permission soft-gate: useTabAccess.canAccess (sidebar) + useHasPermission (button)
-- useUserPermission outside-provider fallback returns admin-true (test compat)
-- Multi-branch decision Option 1 locked (V20)
+- Rule B Probe-Deploy-Probe — NOW 5 ENDPOINTS (V23 added anon-auth opd_sessions PATCH permanently)
+- V20 multi-branch Option 1 locked
 - V21 lesson: source-grep tests can encode broken behavior — pair with runtime
+- V22 lesson: multi-instance render must have multi-instance test fixtures
+- V23 lesson: probe list must cover every auth state that writes (anon-auth ≠ unauth-REST)
 - Every bug → test + audit invariant + V-entry (Rule D + Rule I)
 
 Invoke /session-start to boot context.
