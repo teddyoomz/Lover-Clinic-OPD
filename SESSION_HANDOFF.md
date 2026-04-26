@@ -7,22 +7,23 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 12 — V32-tris-ter-fix (CORS proxy + admin SDK) + V32-tris-quater (ID-link request flow) DEPLOYED
+- **Date last updated**: 2026-04-27 session 13 — V33 + V33.2 Customer Create page DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `0c0ae28 docs(agents): end-of-session 2026-04-27 session 12` (will become latest after this compression commit)
-- **Test count**: 1096 focused / ~6300 with extended (session 12 added: V32-tris-ter-fix 36 + V32-tris-quater 71 = 107 new; user OK'd >1000 from now on)
-- **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
-- **Deploy state**: ✅ **PRODUCTION = `cb387c3`** (V15 combined deploy session 12 — V32-tris-quater LIVE)
-  - Vercel: `lover-clinic-ow7hhv2lk-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (55s)
-  - Firestore rules: v16 LIVE (added be_link_requests + be_link_attempts to lockdown collection set)
-  - Probe-Deploy-Probe: pre 6/6 = 200, post 6/6 = 200, negative 4/4 = 403 (be_customer_link_tokens + be_course_changes + be_link_requests + be_link_attempts all locked down)
-  - Cleanup: pc_appointments DELETE x 2 + clinic_settings strip x 2 = 4/4 200
-  - Production HTTP smoke: / + ?session= + ?patient= = 3/3 200
-  - Earlier this session: V32-tris-ter-fix shipped at `203581f` (CORS proxy for LINE test + webhook admin SDK)
-- **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
+- **Last commit**: `b4326c3 feat(customer): V33.2 — modal→full-page + DateField + simplified blood types + receipt wiring + cleanup helper`
+- **Test count**: **1279** focused (+183 since s12: V33 159 + V33.2 24)
+- **Build**: clean. BackendDashboard chunk ~991 KB
+- **Deploy state**: ✅ **PRODUCTION = `b4326c3`** (V15 combined deploy session 13 — V33 + V33.2 LIVE)
+  - Vercel: `lover-clinic-621zzs42r-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (52s)
+  - Firestore rules: **v17 LIVE** (added be_customer_counter)
+  - Storage rules: **migrated to V26 isClinicStaff() claim-based** (V33.2 catch-up — was still using email regex since project init)
+  - Probe-Deploy-Probe: pre 5/5 + 2 negative = GREEN, post 5/5 + 2 negative + storage S1 = GREEN
+  - Cleanup: pc_appointments DELETE x 2 + clinic_settings strip x 2 = 4/4 = 200
+  - Production HTTP smoke: / + ?session= + ?patient= = 3/3 = 200
+  - **53 test customers cleaned** via deleteCustomerDocOnly helper (425 → 372; 0 remaining matching criteria)
+- **Rule B probe list now**: 7 endpoints + 3 negative (be_customer_counter + be_customers + storage be_customers path)
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅ (everything pushed)
-- **SCHEMA_VERSION**: 15
+- **Remote sync**: master = origin/master ✅ (everything pushed; deploy verified)
+- **SCHEMA_VERSION**: 16
 
 ### Session 2026-04-27 session 12 EOD (4 commits, `203581f` → `66ab18b`) — V32-tris-ter-fix + V32-tris-quater LINE OA completion
 User chain across the session: production-test bug reports → CORS-proxy fix
