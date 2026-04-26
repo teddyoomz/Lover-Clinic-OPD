@@ -207,6 +207,7 @@ describe('section integrity', () => {
       'df-groups',
       'document-templates',
       'line-settings',
+      'link-requests',
     ]);
   });
 

@@ -21,6 +21,9 @@ import {
   formatLinkSuccessReply,
   formatLinkFailureReply,
   formatNotLinkedReply,
+  formatIdRequestAck,
+  formatIdRequestRateLimitedReply,
+  formatIdRequestInvalidFormat,
 } from '../../src/lib/lineBotResponder.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
@@ -199,6 +202,102 @@ async function consumeLinkToken(token, lineUserId) {
   return { ok: true, customerId, customerName };
 }
 
+// V32-tris-quater (2026-04-26) — id-link-request flow. Customer DMs
+// "ผูก 1234567890123" (or passport) → bot looks up customer by ID via
+// admin SDK → if found, creates pending be_link_requests entry for
+// admin to approve/reject. Same-reply anti-enumeration: bot replies
+// IDENTICALLY whether the ID matched or not, so attacker DMing random
+// IDs can't confirm which exist in our DB.
+//
+// Rate limit: 5 requests per lineUserId per 24h to prevent enumeration
+// + brute force on IDs. Tracked in be_link_attempts/{lineUserId}.
+
+const RATE_LIMIT_MAX = 5;       // requests per window
+const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
+
+async function checkRateLimit(lineUserId) {
+  const db = getAdminFirestore();
+  const ref = db.doc(`artifacts/${APP_ID}/public/data/be_link_attempts/${lineUserId}`);
+  const snap = await ref.get();
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  let attempts = [];
+  if (snap.exists) {
+    const data = snap.data() || {};
+    attempts = (Array.isArray(data.timestamps) ? data.timestamps : [])
+      .filter(t => Number(t) > cutoff);
+  }
+  if (attempts.length >= RATE_LIMIT_MAX) {
+    return { allowed: false, count: attempts.length };
+  }
+  attempts.push(now);
+  await ref.set({ timestamps: attempts, lastAttemptAt: new Date(now).toISOString() }, { merge: true });
+  return { allowed: true, count: attempts.length };
+}
+
+async function findCustomerByNationalId(idValue) {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection(`artifacts/${APP_ID}/public/data/be_customers`)
+    .where('patientData.nationalId', '==', idValue)
+    .limit(1)
+    .get()
+    .catch(() => null);
+  if (!snap || snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...(d.data() || {}) };
+}
+
+async function findCustomerByPassport(idValue) {
+  const db = getAdminFirestore();
+  // Try uppercased + as-is
+  for (const v of [idValue, idValue.toUpperCase(), idValue.toLowerCase()]) {
+    const snap = await db
+      .collection(`artifacts/${APP_ID}/public/data/be_customers`)
+      .where('patientData.passport', '==', v)
+      .limit(1)
+      .get()
+      .catch(() => null);
+    if (snap && !snap.empty) {
+      const d = snap.docs[0];
+      return { id: d.id, ...(d.data() || {}) };
+    }
+  }
+  return null;
+}
+
+// Create a pending link-request entry. Returns true if created, false on
+// failure. Always returns regardless of match — the bot replies the same
+// ack message either way (anti-enumeration).
+async function createLinkRequest({ customer, lineUserId, lineProfile, idType, idValue }) {
+  if (!customer) return false;
+  try {
+    const db = getAdminFirestore();
+    const requestId = `lr-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const last4 = String(idValue || '').slice(-4);
+    await db.doc(`artifacts/${APP_ID}/public/data/be_link_requests/${requestId}`).set({
+      requestId,
+      customerId: String(customer.id || customer.customerId || ''),
+      customerName: String(customer.customerName || customer.name || ''),
+      customerHN: String(customer.proClinicHN || customer.hn || ''),
+      lineUserId,
+      lineDisplayName: String(lineProfile?.displayName || ''),
+      linePictureUrl: String(lineProfile?.pictureUrl || ''),
+      idType,
+      idValueLast4: last4,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      resolvedAt: null,
+      resolvedBy: null,
+      resolveAction: null,
+    });
+    return true;
+  } catch (e) {
+    console.warn('[line-webhook] createLinkRequest failed:', e?.message || e);
+    return false;
+  }
+}
+
 async function findCustomerByLineUserId(lineUserId) {
   if (!lineUserId) return null;
   try {
@@ -249,6 +348,39 @@ async function maybeEmitBotReply(event, config) {
       ? formatLinkSuccessReply(result.customerName || '')
       : formatLinkFailureReply(result.reason);
     await replyLineMessage(event.replyToken, replyText, config.channelAccessToken);
+    return true;
+  }
+
+  // V32-tris-quater (2026-04-26) — id-link-request: customer DM'd
+  // "ผูก <ID>". Format-invalid → reply with format hint.
+  // Format-valid → check rate limit + look up customer + create
+  // pending request. Same-reply anti-enumeration regardless of match.
+  if (intent.intent === 'id-link-request') {
+    if (intent.payload?.idType === 'invalid') {
+      await replyLineMessage(event.replyToken, formatIdRequestInvalidFormat(), config.channelAccessToken);
+      return true;
+    }
+    const rate = await checkRateLimit(userId).catch(() => ({ allowed: true }));
+    if (!rate.allowed) {
+      await replyLineMessage(event.replyToken, formatIdRequestRateLimitedReply(), config.channelAccessToken);
+      return true;
+    }
+    // Look up customer by national-id or passport (admin SDK bypasses rules)
+    const idType = intent.payload?.idType;
+    const idValue = intent.payload?.idValue;
+    let customer = null;
+    if (idType === 'national-id') {
+      customer = await findCustomerByNationalId(idValue);
+    } else if (idType === 'passport') {
+      customer = await findCustomerByPassport(idValue);
+    }
+    if (customer) {
+      // Get LINE profile for the snapshot
+      const profile = await getLineProfile(userId, config.channelAccessToken);
+      await createLinkRequest({ customer, lineUserId: userId, lineProfile: profile, idType, idValue });
+    }
+    // Reply IDENTICALLY whether match or no-match (anti-enumeration)
+    await replyLineMessage(event.replyToken, formatIdRequestAck(), config.channelAccessToken);
     return true;
   }
 

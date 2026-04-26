@@ -282,6 +282,23 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // ── Backend: V32-tris-quater (2026-04-26) LINE Link Requests Queue ──
+      // Customer DM'd "ผูก <ID>" → webhook validated ID via admin SDK +
+      // created pending request here. Admin reviews + approves/rejects via
+      // /api/admin/link-requests (firebase-admin SDK). Client SDK reads
+      // blocked — request docs include lineDisplayName/picture which is
+      // PII. LinkRequestsTab fetches via the admin endpoint.
+      match /be_link_requests/{requestId} {
+        allow read, write: if false;
+      }
+
+      // ── Backend: V32-tris-quater (2026-04-26) Rate-limit attempts ──
+      // Tracks lineUserId → [timestamps[]] for the 5-per-24h cap on
+      // id-link-request submissions. Admin SDK only.
+      match /be_link_attempts/{lineUserId} {
+        allow read, write: if false;
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

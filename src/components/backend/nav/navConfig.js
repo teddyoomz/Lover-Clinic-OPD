@@ -152,6 +152,7 @@ export const NAV_SECTIONS = [
       { id: 'df-groups',            label: 'กลุ่ม DF (ค่ามือ)',     icon: Percent,       color: 'amber', palette: 'df doctor fee group rate commission ค่ามือ กลุ่ม อัตรา เปอร์เซ็นต์' },
       { id: 'document-templates',   label: 'เทมเพลตเอกสาร',        icon: FileTextIcon,  color: 'amber', palette: 'document template certificate medical fit-to-fly medicine label consent referral เทมเพลต เอกสาร ใบรับรอง ฉลากยา ส่งตัว' },
       { id: 'line-settings',        label: 'ตั้งค่า LINE OA',       icon: MessageCircle, color: 'emerald', palette: 'line official account messaging chat bot qr link channel webhook ลายน์ ออฟฟิเชียล แชท บอท ผูก qr' },
+      { id: 'link-requests',        label: 'คำขอผูก LINE',          icon: MessageCircle, color: 'emerald', palette: 'line link request approve reject pending bot id national passport ลายน์ คำขอ ผูก อนุมัติ รอ ตรวจสอบ' },
     ],
   },
 ];

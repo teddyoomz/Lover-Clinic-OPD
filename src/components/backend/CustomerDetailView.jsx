@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard
 } from 'lucide-react';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
@@ -24,6 +24,7 @@ import {
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineQrModal from './LinkLineQrModal.jsx';
+import EditCustomerIdsModal from './EditCustomerIdsModal.jsx';
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
@@ -134,6 +135,9 @@ export default function CustomerDetailView({
   // Phase 14.5 — print document modal
   const [printDocOpen, setPrintDocOpen] = useState(false);
   const [lineQrOpen, setLineQrOpen] = useState(false);
+  // V32-tris-quater (2026-04-26) — focused nationalId/passport edit modal.
+  // Customer linking via "ผูก <ID>" needs these on be_customers.
+  const [editIdsOpen, setEditIdsOpen] = useState(false);
   // Phase 14.2.B (2026-04-25) — per-treatment-row print modal:
   //   { treatmentId, type: 'cert' | 'record' }
   // 'cert' filters to TREATMENT_CERT_DOC_TYPES (8 medical-cert variants).
@@ -565,6 +569,16 @@ export default function CustomerDetailView({
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
               <div className="ml-auto flex items-center gap-1.5">
+                {/* V32-tris-quater (2026-04-26) — edit nationalId / passport
+                    so the customer can use "ผูก <ID>" via LINE OA chat to
+                    request a link (Option 2: admin-mediated approval). */}
+                <button onClick={() => setEditIdsOpen(true)}
+                  data-testid="edit-customer-ids-btn"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                  style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
+                  title="แก้ไข / เพิ่ม เลขบัตรประชาชน + พาสปอร์ต">
+                  <IdCard size={11} /> เลขบัตร
+                </button>
                 {/* V32-tris-ter (2026-04-26) — LINE link QR. Mints a one-time
                     token + shows QR for customer to scan. After scan + send,
                     /api/webhook/line writes lineUserId onto this customer record. */}
@@ -1026,6 +1040,21 @@ export default function CustomerDetailView({
         <LinkLineQrModal
           customer={customer}
           onClose={() => setLineQrOpen(false)}
+        />
+      )}
+      {/* V32-tris-quater (2026-04-26) — Edit nationalId / passport */}
+      {editIdsOpen && (
+        <EditCustomerIdsModal
+          customer={customer}
+          onClose={() => setEditIdsOpen(false)}
+          onSaved={(updated) => {
+            // Optimistic local update so the next "ผูก LINE" attempt uses
+            // the fresh ID values without a full reload. Parent page
+            // listener will eventually overwrite with the canonical doc.
+            if (customer && updated) {
+              customer.patientData = { ...(customer.patientData || {}), ...updated };
+            }
+          }}
         />
       )}
       {/* Phase 14.2.C (2026-04-25) — per-treatment-row print modals.

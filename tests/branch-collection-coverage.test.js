@@ -78,6 +78,8 @@ const COLLECTION_MATRIX = {
   'be_document_drafts':    { scope: 'global',  reason: 'Print form drafts (Phase 14.10 — caller-scoped via staffUid)' },
   'be_course_changes':     { scope: 'global',  reason: 'Course exchange + refund audit ledger (T4 / Phase 14.4 G5 — append-only, customer-scoped via field)' },
   'be_customer_link_tokens': { scope: 'global', reason: 'LINE customer-link one-time tokens (V32-tris-ter — admin-mint via firebase-admin SDK; webhook consumes via REST; client SDK blocked)' },
+  'be_link_requests':      { scope: 'global', reason: 'LINE link-request approval queue (V32-tris-quater — admin-mediated; client SDK blocked)' },
+  'be_link_attempts':      { scope: 'global', reason: 'LINE link-request rate-limit tracker (V32-tris-quater — 5/24h cap; client SDK blocked)' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },
