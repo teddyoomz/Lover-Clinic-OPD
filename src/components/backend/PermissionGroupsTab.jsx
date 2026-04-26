@@ -3,8 +3,9 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2 } from 'lucide-react';
-import { listPermissionGroups, deletePermissionGroup } from '../../lib/backendClient.js';
+import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound } from 'lucide-react';
+import { listPermissionGroups, deletePermissionGroup, listStaff } from '../../lib/backendClient.js';
+import { setUserPermission } from '../../lib/adminUsersClient.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -80,12 +81,72 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
 
   const handleSaved = async () => { setFormOpen(false); setEditing(null); await reload(); };
 
+  // ─── Phase 13.5.4 — Hard-Gate Migration Button ───────────────────────────
+  // Loops every be_staff doc, calls /api/admin/users setPermission for each
+  // user with a firebaseUid, sets isClinicStaff + permissionGroupId custom
+  // claims. One-time backfill before Deploy 2 of Phase 13.5.4 (claim-only
+  // firestore.rules check).
+  //
+  // Idempotent: re-running just re-asserts the same claims.
+  // Skipped: be_staff entries with no firebaseUid (Firestore-only records).
+  // Self-protection: setPermission endpoint blocks "clear own claim" — but
+  // SET is fine for everyone including the caller.
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState(null);
+  const handleMigrateAllToClaims = async () => {
+    if (!window.confirm(
+      'Sync ทุก staff → Firebase custom claims?\n\n' +
+      'ขั้นตอน Deploy 1 ของ Phase 13.5.4 hard-gate.\n' +
+      'จะ loop be_staff ทั้งหมด + setCustomUserClaims ตาม permissionGroupId\n' +
+      'ของแต่ละคน. Idempotent — รันซ้ำได้ปลอดภัย.'
+    )) return;
+
+    setMigrating(true);
+    setMigrateResult(null);
+    setError('');
+    const result = { total: 0, synced: 0, skipped: 0, failed: 0, errors: [] };
+    try {
+      const allStaff = await listStaff();
+      result.total = allStaff.length;
+
+      for (const s of allStaff) {
+        const uid = s.firebaseUid || '';
+        if (!uid) { result.skipped += 1; continue; }
+        const groupId = s.permissionGroupId || '';
+        try {
+          await setUserPermission({ uid, permissionGroupId: groupId });
+          result.synced += 1;
+        } catch (err) {
+          result.failed += 1;
+          result.errors.push(`${s.firstname || s.id || uid}: ${err?.message || 'unknown'}`);
+        }
+      }
+      setMigrateResult(result);
+    } catch (e) {
+      setError(`Migration error: ${e?.message || 'unknown'}`);
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   const extraFilters = (
-    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-      className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-      <option value="">สถานะทั้งหมด</option>
-      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-    </select>
+    <div className="flex items-center gap-2">
+      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+        className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+        <option value="">สถานะทั้งหมด</option>
+        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <button
+        type="button"
+        data-testid="permission-claims-migrate-button"
+        onClick={handleMigrateAllToClaims}
+        disabled={migrating || !canDelete}
+        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'Sync ทุก staff → custom claims (Phase 13.5.4)'}
+        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-amber-700/40 hover:text-amber-300 transition-all disabled:opacity-50">
+        {migrating ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+        Sync ทุก staff → Claims
+      </button>
+    </div>
   );
 
   return (
@@ -168,6 +229,29 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
           })}
         </div>
       </MarketingTabShell>
+
+      {migrateResult && (
+        <div data-testid="permission-claims-migrate-result"
+          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
+          <div className="font-bold text-[var(--tx-heading)] mb-1">ผลการ Sync Custom Claims</div>
+          <div className="text-[var(--tx-muted)]">
+            ทั้งหมด <span className="text-[var(--tx-primary)] font-bold">{migrateResult.total}</span> /
+            สำเร็จ <span className="text-emerald-400 font-bold">{migrateResult.synced}</span> /
+            ข้าม (ไม่มี firebaseUid) <span className="text-neutral-400 font-bold">{migrateResult.skipped}</span> /
+            ล้มเหลว <span className="text-red-400 font-bold">{migrateResult.failed}</span>
+          </div>
+          {migrateResult.errors.length > 0 && (
+            <ul className="mt-2 text-[11px] text-red-400 list-disc list-inside max-h-32 overflow-y-auto">
+              {migrateResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          )}
+          {migrateResult.failed === 0 && migrateResult.synced > 0 && (
+            <div className="mt-2 text-[11px] text-emerald-400">
+              ✓ พร้อม Deploy 2 — รัน firestore.rules deploy เพื่อเปลี่ยนเป็น claim-only check
+            </div>
+          )}
+        </div>
+      )}
 
       {formOpen && (
         <PermissionGroupFormModal

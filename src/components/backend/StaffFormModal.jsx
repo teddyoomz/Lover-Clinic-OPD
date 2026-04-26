@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveStaff, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
-import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
+import { createAdminUser, updateAdminUser, setUserPermission } from '../../lib/adminUsersClient.js';
 import {
   STATUS_OPTIONS, POSITION_OPTIONS,
   validateStaff, emptyStaffForm, generateStaffId,
@@ -77,6 +77,19 @@ export default function StaffFormModal({ staff, onClose, onSaved, clinicSettings
       }
 
       await saveStaff(id, { ...form, firebaseUid, createdAt: staff?.createdAt });
+
+      // Phase 13.5.4 — auto-sync custom claims for hard-gate (MVP).
+      // Non-fatal: Firestore save already succeeded. If claim sync fails
+      // (network blip, endpoint down), user can re-run "Sync ทุก staff"
+      // in PermissionGroupsTab to backfill. Token refresh on next sign-in.
+      if (firebaseUid) {
+        try {
+          await setUserPermission({ uid: firebaseUid, permissionGroupId: form.permissionGroupId || '' });
+        } catch (claimErr) {
+          console.warn('[StaffFormModal] permission claim sync failed:', claimErr?.message || claimErr);
+        }
+      }
+
       await onSaved?.();
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');

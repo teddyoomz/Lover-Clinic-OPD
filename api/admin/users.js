@@ -34,6 +34,9 @@ function serializeUser(userRecord) {
     disabled: !!userRecord.disabled,
     emailVerified: !!userRecord.emailVerified,
     isAdmin: userRecord.customClaims?.admin === true,
+    // Phase 13.5.4 — hard-gate custom claims surfaced for client visibility
+    isClinicStaff: userRecord.customClaims?.isClinicStaff === true,
+    permissionGroupId: userRecord.customClaims?.permissionGroupId || '',
     createdAt: userRecord.metadata?.creationTime || '',
     lastSignInAt: userRecord.metadata?.lastSignInTime || '',
   };
@@ -132,6 +135,53 @@ async function handleRevokeAdmin(auth, params, caller) {
   return serializeUser(await auth.getUser(uid));
 }
 
+// ─── Phase 13.5.4 — Hard-Gate Custom Claims (MVP) ──────────────────────────
+// Set isClinicStaff + permissionGroupId on a Firebase user via setCustomUserClaims.
+// Called by StaffFormModal auto-sync on staff save, and by the migration
+// button in PermissionGroupsTab to backfill all existing be_staff users.
+//
+// Rule: claims must be set BEFORE deploying the strict claim-only rules
+// change (Phase 13.5.4 Deploy 2). Otherwise existing logged-in users lose
+// access. Migration flow:
+//   Deploy 1: ship endpoint + auto-sync + migration button (rules unchanged)
+//   User: log in to backend → click "Sync ทุก staff" in PermissionGroupsTab
+//   Deploy 2: rules-only deploy with claim-only isClinicStaff() check
+async function handleSetPermission(auth, params) {
+  const uid = String(params.uid || '').trim();
+  if (!uid) throw new Error('uid required');
+  // permissionGroupId can be empty (unassigned) — claim still gets isClinicStaff=true
+  const permissionGroupId = params.permissionGroupId
+    ? String(params.permissionGroupId).trim()
+    : '';
+
+  const existing = await auth.getUser(uid);
+  const claims = {
+    ...(existing.customClaims || {}),
+    isClinicStaff: true,
+    permissionGroupId,
+  };
+  await auth.setCustomUserClaims(uid, claims);
+  return serializeUser(await auth.getUser(uid));
+}
+
+async function handleClearPermission(auth, params, caller) {
+  const uid = String(params.uid || '').trim();
+  if (!uid) throw new Error('uid required');
+
+  // Self-protection: caller cannot clear own claim unless they're a bootstrap
+  // admin (env-granted) — otherwise they'd lock themselves out of the backend.
+  if (uid === caller.uid && !isBootstrapAdmin(caller.uid)) {
+    throw new Error('cannot clear own permission claim (use bootstrap UID env to recover)');
+  }
+
+  const existing = await auth.getUser(uid);
+  const claims = { ...(existing.customClaims || {}) };
+  delete claims.isClinicStaff;
+  delete claims.permissionGroupId;
+  await auth.setCustomUserClaims(uid, claims);
+  return serializeUser(await auth.getUser(uid));
+}
+
 const ACTIONS = {
   list: (auth, p) => handleList(auth, p),
   get: (auth, p) => handleGet(auth, p),
@@ -140,6 +190,9 @@ const ACTIONS = {
   delete: (auth, p, caller) => handleDelete(auth, p, caller),
   grantAdmin: (auth, p) => handleGrantAdmin(auth, p),
   revokeAdmin: (auth, p, caller) => handleRevokeAdmin(auth, p, caller),
+  // Phase 13.5.4
+  setPermission: (auth, p) => handleSetPermission(auth, p),
+  clearPermission: (auth, p, caller) => handleClearPermission(auth, p, caller),
 };
 
 export default async function handler(req, res) {

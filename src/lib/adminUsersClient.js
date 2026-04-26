@@ -67,3 +67,15 @@ export function grantAdmin(uid) {
 export function revokeAdmin(uid) {
   return callAdminUsers('revokeAdmin', { uid });
 }
+
+// ─── Phase 13.5.4 — Hard-Gate Custom Claims (MVP) ──────────────────────────
+// Set / clear isClinicStaff + permissionGroupId on the user's Firebase Auth
+// custom claims. Called by StaffFormModal on save (auto-sync) and by the
+// migration button in PermissionGroupsTab (backfill existing be_staff users).
+export function setUserPermission({ uid, permissionGroupId } = {}) {
+  return callAdminUsers('setPermission', { uid, permissionGroupId });
+}
+
+export function clearUserPermission(uid) {
+  return callAdminUsers('clearPermission', { uid });
+}
