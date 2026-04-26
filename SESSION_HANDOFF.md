@@ -7,13 +7,13 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 13 — V33.3 Edit Customer page + profile card surgery DEPLOYED
+- **Date last updated**: 2026-04-27 session 13 EOD2 — V33.4 + V33.5 LINE-OA redesign DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `2cc67ef feat(customer): V33.3 — Edit Customer page + profile card surgery`
-- **Test count**: **1302** focused (+206 since s12: V33 159 + V33.2 24 + V33.3 23)
-- **Build**: clean. BackendDashboard chunk ~987 KB
-- **Deploy state**: ✅ **PRODUCTION = `2cc67ef`** (V15 combined deploy session 13 final — V33.3 LIVE)
-  - Vercel: `lover-clinic-ncn9butvf-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (55s)
+- **Last commit**: `231b2f5 feat(line-oa): V33.5 — Flex Message bot replies + doctor in appointments + smart-display`
+- **Test count**: **1385** focused (+289 since s12 baseline 1096: V33 159 + V33.2 24 + V33.3 23 + V33.4 42 + V33.5 41)
+- **Build**: clean. BackendDashboard chunk ~995 KB
+- **Deploy state**: ✅ **PRODUCTION = `231b2f5`** (V15 combined deploy session 13 EOD2 — V33.4 + V33.5 LIVE)
+  - Vercel: `lover-clinic-6mt57qih5-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (56s)
   - Firestore rules: v17 LIVE (unchanged since V33 — re-deployed for Console-drift safety per V1/V9)
   - Storage rules: V26 claim-based (unchanged — re-deployed)
   - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, cleanup 4/4 = 200, smoke 3/3 = 200 (incl. /?customer=LC-26000001 = 200)
