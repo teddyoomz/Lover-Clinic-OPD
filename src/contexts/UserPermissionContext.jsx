@@ -37,10 +37,18 @@ function deriveState(user, staff, group) {
   const groupId = staff?.permissionGroupId || null;
   const permissions = (group && typeof group.permissions === 'object') ? group.permissions : {};
 
+  // V28 (2026-04-26) — bootstrap path is the ONLY one that requires
+  // isAuthorizedAccount (clinic email OR owner email + no staff doc).
+  // Staff explicitly added by an admin to gp-owner group OR with the
+  // permission_group_management meta-perm are admin REGARDLESS of email
+  // domain. Previously the isAuthorizedAccount prefix incorrectly blocked
+  // legit Gmail-using staff that admin had explicitly granted owner
+  // access. Per user directive: "ถ้ามีการเพิ่มสิทธิ์ เพิ่มพนักงาน เพิ่ม
+  // เมลที่เป็น admin หรือ user ในอนาคต จะต้องใช้ได้เลย ไม่เป็นแบบนี้อีก".
   const bootstrap = isAuthorizedAccount && !staff;
-  const isOwner = groupId === 'gp-owner';
+  const isOwnerGroup = groupId === 'gp-owner';
   const hasMetaPerm = permissions.permission_group_management === true;
-  const isAdmin = isAuthorizedAccount && (bootstrap || isOwner || hasMetaPerm);
+  const isAdmin = bootstrap || isOwnerGroup || hasMetaPerm;
 
   return {
     user: user || null,

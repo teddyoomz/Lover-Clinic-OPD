@@ -326,6 +326,37 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   3. **Chip label format is part of the fidelity contract**. Don't ship `HH:MM-HH:MM` when the source shows `HH:MM-HH:MM <name>` — the missing name field is technically working code but pixel-different from the reference.
 - **Rule/audit update**: triangle-inspect skill should add "multi-entity-per-cell" check on calendar/grid replications (count comparison: ProClinic-cell-entries vs ours-cell-entries on the same date). The MS test bank in `tests/schedule-calendar-multi-staff.test.jsx` is the canonical pattern for future grid replications.
 
+### V28 — 2026-04-26 — Soft-gate isAdmin incorrectly required @loverclinic.com email even for staff explicitly assigned to gp-owner group
+- User report (verbatim): "เข้าเมล oomz.peerapat@gmail.com มาด้วยสิทธิ์เจ้าของกิจการ แต่เข้า backend มาแล้ว ไม่เห้นเหี้ยไรเลย" + follow-up directive: "ทำให้ถ้ามีการเพิ่มสิทธิ์ เพิ่มพนักงาน เพิ่มเมลที่เป็น admin หรือ user ในอนาคต จะต้องใช้ได้เลย ไม่เป็นแบบนี้อีก เทสให้แน่ใจ".
+- **Symptom 1 (caught immediately)**: oomz.peerapat@gmail.com (clinic owner using Google Sign-In) logged into backend → empty sidebar (only search bar + collapse arrow). All tabs filtered out because soft-gate `isAdmin` required `@loverclinic.com` email. → fixed in V27-bis with OWNER_EMAILS allowlist.
+- **Symptom 2 (deeper, latent)**: Even for staff that admin EXPLICITLY adds to `gp-owner` group via StaffFormModal (e.g. jane.smith@gmail.com with permissionGroupId='gp-owner'), the OLD soft-gate `isAuthorizedAccount && (...)` prefix blocked them from being admin. Their group permissions still partially worked via `hasPermission(key) → permissions[key]` but the admin-bypass branch was nuked. This was security-theater (frontend-only gate; hard-gate via firestore.rules already requires claims) AND user-hostile (admin can't grant gmail staff full access).
+- **Worst part**: The OLD `tests/use-tab-access-wired.test.jsx` PT1.A.4 EXPLICITLY ASSERTED this broken behavior: "NON-CLINIC EMAIL: never admin even with owner group assigned". This test was lock-in for security-theater that prevented the legitimate use case. V21 lesson all over again — source-grep tests can encode broken behavior. Test had to flip.
+- **Root cause**: `isAdmin = isAuthorizedAccount && (bootstrap || isOwnerGroup || hasMetaPerm)`. The `isAuthorizedAccount &&` prefix makes email a HARD prereq for admin status. This conflated TWO distinct concepts: (a) bootstrap-by-email (for setup-time when no staff exists), (b) staff-in-admin-group (for ongoing operations). The first NEEDS email check (no staff doc to verify against). The second IS the staff doc — group assignment is authoritative.
+- **Fix** (commit pending V28):
+  ```js
+  // OLD (security-theater):
+  const isAdmin = isAuthorizedAccount && (bootstrap || isOwnerGroup || hasMetaPerm);
+  // NEW (V28):
+  const bootstrap = isAuthorizedAccount && !staff;
+  const isAdmin = bootstrap || isOwnerGroup || hasMetaPerm;
+  ```
+  - bootstrap path STILL requires authorized email (set-up time has no staff doc to verify)
+  - isOwnerGroup path: trust the be_staff doc (firestore.rules require isClinicStaff() to write be_staff, so attacker can't insert)
+  - hasMetaPerm path: same — trust the be_staff doc
+- **Test bank** `tests/phase13.5.4-deriveState-future-proof.test.js` — 21 tests across 5 personas:
+  - P1 (4): bootstrap admin paths — @loverclinic, OWNER_EMAILS gmail, random gmail (blocked), anon
+  - P2 (5): staff added by admin — gmail in gp-owner (FIX), outlook in gp-frontdesk, yahoo with meta-perm, gmail nurse (limited), loverclinic in gp-frontdesk (NOT admin — group authoritative)
+  - P3 (5): edge cases — unassigned, deleted group, loading state, logged out, empty perms in gp-owner
+  - P4 (4): adversarial — spoofed email + fake be_staff (security boundary documented; real gate is firestore.rules), phone-only auth in gp-owner, falsy permissions, prototype pollution attempt
+  - P5 (3): groupName UI badge surfacing
+  - PLUS: PT1.A.4 in use-tab-access-wired.test.jsx FLIPPED from "never admin" to "IS admin (group authoritative)" — locks the V28 fix shape.
+- **Lessons**:
+  1. **Frontend security is a UX gate, not a real gate.** Firestore rules are the real gate. Adding email checks on top of group-based permissions creates security-theater that breaks legit use cases.
+  2. **"Adding new staff/admin must just work" is a design property, not a feature.** If onboarding a new admin requires touching code (OWNER_EMAILS hardcoded list) or env vars or hidden bootstrap endpoints, the design has failed. The CORRECT path: admin uses StaffFormModal → enters email/password/group → save → new person logs in → access works. V28 makes this true for non-loverclinic emails (V25 already handled the claim-sync side).
+  3. **Test assertions can lock in WRONG behavior.** PT1.A.4 was a test that explicitly verified a security-theater behavior that broke onboarding. Anti-regression tests must assert WANTED behavior — flip them when the wanted behavior changes.
+  4. **Adversarial tests should document the security boundary, not just the happy path.** P4.1 explicitly says "this would render as admin IF the be_staff doc existed; the doc CAN'T exist for an attacker because firestore.rules V26 blocks them". This makes the trust assumption explicit.
+- **Rule/audit update**: extend `/audit-firebase-admin-security` FA14: "soft-gate isAdmin must trust group-based permissions for users with be_staff docs; email checks are valid ONLY for the bootstrap (no-staff) path".
+
 ### V27 — 2026-04-26 — Probe-Deploy-Probe pattern polluted production patient queue (~10 docs across 5 deploys)
 - User report (verbatim): "มึงมาเทสสร้างเหี้ยไรหน้านี้แล้วทำไมไม่ลบ ากปรกเกะกะ เลอะเทะ" — pointing at a screenshot of the production queue showing multiple `test-probe-anon-1777187xxx` entries with "ไม่ระบุชื่อ" name + INTAKE tag + กำลังรอ status.
 - **Root cause**: Rule B Probe-Deploy-Probe protocol introduced a 5th probe in V23 (anon CREATE+UPDATE on opd_sessions). The CREATE step used `{ status: 'pending' }` payload — the SAME shape as a real patient kiosk session. AdminDashboard queue filters in/out based on status/isArchived; status='pending' = visible. Cleanup step DELETE returned 403 because rules block anon delete (`allow delete: if isClinicStaff()`). Result: every deploy left 2 visible queue entries.

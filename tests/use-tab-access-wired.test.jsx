@@ -42,11 +42,20 @@ describe('PT1 — Phase 13.5.1 permission system wiring', () => {
       expect(s.isAdmin).toBe(true);
     });
 
-    it('PT1.A.4 NON-CLINIC EMAIL: never admin even with owner group assigned', () => {
+    it('PT1.A.4 V28 FIX: NON-CLINIC EMAIL with explicitly-assigned owner group → IS admin (group is authoritative)', () => {
+      // V28 (2026-04-26) — flipped from the original Phase 13.5.1 contract.
+      // Per user directive: "ถ้ามีการเพิ่มสิทธิ์ เพิ่มพนักงาน เพิ่มเมล
+      // ที่เป็น admin หรือ user ในอนาคต จะต้องใช้ได้เลย".
+      // The frontend trusts a be_staff doc with permissionGroupId='gp-owner'
+      // because writing be_staff requires isClinicStaff() claim (firestore
+      // rules V26). An "attacker" CAN'T insert this doc.
+      // The OLD security-theater behavior (block non-loverclinic emails
+      // from admin even when admin explicitly assigned them owner group)
+      // broke the legit case of multi-owner clinics + Google Sign-In owners.
       const staff = { id: 'u1', permissionGroupId: 'gp-owner' };
       const group = { id: 'gp-owner', permissions: { permission_group_management: true } };
-      const s = deriveState({ uid: 'u1', email: 'attacker@gmail.com' }, staff, group);
-      expect(s.isAdmin).toBe(false);
+      const s = deriveState({ uid: 'u1', email: 'jane.legit-staff@gmail.com' }, staff, group);
+      expect(s.isAdmin).toBe(true);
     });
 
     it('PT1.A.5 NON-OWNER staff w/o meta-perm + non-empty staff → not admin', () => {
