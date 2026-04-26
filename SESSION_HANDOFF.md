@@ -7,15 +7,16 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 5 — Phase 13.2.6-13.2.16 ProClinic schedule replication (10 commits)
+- **Date last updated**: 2026-04-26 session 5 EOD — Phase 13.2.6-13.2.16 ProClinic schedule replication SHIPPED + V15 combined deploy COMPLETE
 - **Branch**: `master`
-- **Last commit**: `0c4a90d phase(13.2.16): legacy StaffSchedulesTab cleanup — list-view deleted`
+- **Last commit**: `9169363 docs(handoff): session 5 EOD — Phase 13.2.6-13.2.16 ProClinic schedule replication COMPLETE + V22 logged`
 - **Test count**: ~5190 vitest passing (+ 234 schedule-domain tests across SR/DST/EST/MS/TDP/AFC/SC/MM/SD; -105 deleted list-view UI tests; net +129)
 - **Build**: clean. BackendDashboard chunk ~925 KB
-- **Deploy state**: ⚠️ **14 commits ahead of prod** — production still at `093d4d9` (last V15 deploy EOD session 3); pending "deploy" command per V18 lesson
-  - Vercel: `093d4d9` aliased to https://lover-clinic-app.vercel.app
-  - Firestore rules: v10 (UNCHANGED — no rules deploy needed)
-  - **Pending deploy**: 14 commits (session 4: `02ee2ef → 242107a` — 5 commits + session 5: `3bf9f31 → 0c4a90d` — 10 commits + 1 docs)
+- **Deploy state**: ✅ **DEPLOYED** — production now at `9169363` (V15 combined deploy 2026-04-26 EOD session 5; pre+post probes 200/200/200/200; production HTTP 200 on backend + 2 public-link routes)
+  - Vercel: `9169363` aliased to https://lover-clinic-app.vercel.app (deploy time 34s)
+  - Firestore rules: v10 (idempotent fire — "latest version already up to date, skipping upload")
+  - **Pre-probe**: 4/4 200 ✓ | **Post-probe**: 4/4 200 ✓ | **Cleanup**: 4/4 200 ✓
+  - **Production smoke**: backend / public-session / public-patient all HTTP 200 ✓
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -195,16 +196,19 @@ If user wants to extend: see P1/P2 polish below.
 
 ## Outstanding User Actions (NOT auto-run)
 
-- **Deploy 4 commits** (`02ee2ef → 242107a`): polish batch + Phase 13.5
-  permission system. User must say "deploy" THIS turn per V18 lesson.
-  V15 combined deploy = vercel + firestore:rules in parallel; rules
-  unchanged this session so probe-deploy-probe is idempotent fire (still
-  required by Rule B).
+None code-side. Production at `9169363` LIVE + verified (vercel +
+firestore rules deployed; pre+post-probe 200/200/200/200; production
+HTTP 200 on all 3 routes).
+
+Optional follow-ups (not blockers):
 - **Permission group customization**: 5 default groups seeded
-  (gp-owner / gp-manager / gp-frontdesk / gp-nurse / gp-doctor) with
-  hand-tuned permissions. User can edit via PermissionGroupsTab once
-  any be_permission_groups doc exists. Initial seed runs on first tab
-  open if collection is empty.
+  (gp-owner / gp-manager / gp-frontdesk / gp-nurse / gp-doctor). User
+  can edit via PermissionGroupsTab; assignments via StaffFormModal.
+- **ProClinic schedule sync**: now LIVE in production. User can click
+  MasterDataTab → "ดูดตารางหมอ + พนักงาน จาก ProClinic" → "นำเข้า
+  master_data → be_staff_schedules" to populate real schedule data.
+  Today's-Doctors panel + DoctorSchedulesTab calendar will reflect
+  immediately via the live listener.
 
 ---
 
