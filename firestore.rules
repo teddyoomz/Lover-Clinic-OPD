@@ -77,6 +77,14 @@ service cloud.firestore {
       // Anon attacker who guesses a sessionId can only modify those 11
       // fields — cannot flip isArchived, sessionName, formType,
       // customTemplate, createdAt, brokerProClinicId, patientLinkToken.
+      //
+      // V27-tris (2026-04-26) — allow anon DELETE only on doc IDs that
+      // start with `test-probe-anon-` (Rule B probe artifacts).
+      // Without this, every deploy left visible queue clutter that only
+      // staff (with claims) could remove. Self-cleanup pattern keeps
+      // production queue tidy automatically. Real session IDs are
+      // DEP-XXXXXX / QR-XXXXXX / IMP-XXXXXX — never start with
+      // `test-probe-anon-`, so legit data is unreachable by this branch.
       match /opd_sessions/{sessionId} {
         allow read: if isSignedIn();
         allow create: if true;  // Patients (anon) can create new sessions
@@ -85,7 +93,8 @@ service cloud.firestore {
             .hasOnly(['status', 'patientData', 'submittedAt', 'updatedAt', 'isUnread',
                      'lastCoursesAutoFetch', 'coursesRefreshRequest',
                      'brokerStatus', 'brokerError', 'brokerJob', 'latestCourses']));
-        allow delete: if isClinicStaff();
+        allow delete: if isClinicStaff() ||
+          (isSignedIn() && sessionId.matches('^test-probe-anon-.*$'));
       }
 
       // ── Backend: Customers (cloned from ProClinic) ──

@@ -61,9 +61,25 @@ describe('V23 — opd_sessions anon-patient-update rule (source-grep)', () => {
       expect(block[0]).toMatch(/allow\s+create:\s*if\s+true/);
     });
 
-    it('A1.3: allow delete: if isClinicStaff() preserved (only staff can delete)', () => {
+    it('A1.3: allow delete: if isClinicStaff() preserved + V27-tris anon test-probe self-cleanup', () => {
       const block = RULES.match(/match\s+\/opd_sessions\/\{sessionId\}\s*\{[\s\S]*?\n\s+\}/);
+      // Staff path preserved
       expect(block[0]).toMatch(/allow\s+delete:\s*if\s+isClinicStaff\(\)/);
+      // V27-tris: anon can self-delete docs whose ID starts with test-probe-anon-
+      expect(block[0]).toMatch(/sessionId\.matches\(['"]\^test-probe-anon-/);
+      expect(block[0]).toMatch(/isSignedIn\(\)\s*&&\s*sessionId\.matches/);
+    });
+
+    it('A1.3-bis: V27-tris anon-delete is restricted to test-probe-anon prefix (cannot delete real session IDs)', () => {
+      // Real session ID prefixes: DEP-, QR-, IMP- — they MUST NOT match
+      // the anon-delete branch. The regex `^test-probe-anon-.*$` must
+      // not be relaxed to something like `^.*-anon-` etc.
+      const block = RULES.match(/match\s+\/opd_sessions\/\{sessionId\}\s*\{[\s\S]*?\n\s+\}/);
+      // The regex MUST start with `^test-probe-anon-` (not just contain it)
+      expect(block[0]).toMatch(/sessionId\.matches\(['"]\^test-probe-anon-/);
+      // Must NOT have an over-permissive variant
+      expect(block[0]).not.toMatch(/sessionId\.matches\(['"]\.\*['"]/);
+      expect(block[0]).not.toMatch(/sessionId\.matches\(['"]\^DEP-/);
     });
 
     it('A1.4: update rule has staff path (isClinicStaff)', () => {
