@@ -341,6 +341,20 @@ export function syncStaff() {
   return apiFetch('master', { action: 'syncStaff' });
 }
 
+/**
+ * Phase 13.2.13 — Sync schedule entries (recurring weekly + per-date) from
+ * ProClinic /admin/api/schedule/today (FullCalendar feed). Returns
+ * normalized items keyed by proClinicId. Covers BOTH doctors + employees
+ * in one call (the migrator classifies via be_doctors/be_staff lookup).
+ *
+ * Returns: { success, data: { items[], count, dropped, raw } }
+ *
+ * @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
+ */
+export function syncSchedules() {
+  return apiFetch('master', { action: 'syncSchedules' });
+}
+
 /** Sync courses (คอร์ส) from ProClinic → { success, items[], count, totalPages } */
 export function syncCourses() {
   return apiFetch('master', { action: 'syncCourses' });

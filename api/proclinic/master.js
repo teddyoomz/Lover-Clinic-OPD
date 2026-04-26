@@ -659,6 +659,116 @@ async function handleSyncBranches(req, res) {
   });
 }
 
+// ─── Phase 13.2.13 — Schedule sync (recurring weekly shifts + per-date overrides) ──
+// Source: GET /admin/api/schedule/today (FullCalendar feed). Returns array
+// of entries with rrule (recurring) — pattern: id="recurring-{userId}-{day}",
+// title="HH:MM-HH:MM <name>", extendedProps.user_id + type + colors.
+//
+// We normalize each entry into our master_data shape:
+//   { proClinicStaffId, proClinicStaffName, dayOfWeek, type, startTime,
+//     endTime, date?, branchId?, syncedAt }
+//
+// staffType (doctor vs employee) is NOT determined here — the migrator
+// (Phase J) cross-references be_doctors / be_staff to classify.
+//
+// @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
+
+const PROCLINIC_DAY_MAP = { mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6, su: 0 };
+
+// Parse "HH:MM-HH:MM <name>" → { startTime, endTime, name }
+// ProClinic title format from FullCalendar feed.
+function parseScheduleTitle(title) {
+  if (typeof title !== 'string') return { startTime: '', endTime: '', name: '' };
+  const m = title.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\s+(.+)$/);
+  if (!m) return { startTime: '', endTime: '', name: title.trim() };
+  const [, s, e, n] = m;
+  return {
+    startTime: s.padStart(5, '0'),
+    endTime: e.padStart(5, '0'),
+    name: n.trim(),
+  };
+}
+
+// Pure: normalize ProClinic FullCalendar event → master_data item shape.
+// Returns null if entry is malformed (missing user_id / unmappable day).
+export function mapProClinicScheduleEvent(event) {
+  if (!event || typeof event !== 'object') return null;
+  const ext = event.extendedProps || {};
+  const userId = ext.user_id != null ? String(ext.user_id) : '';
+  if (!userId) return null;
+
+  const { startTime, endTime, name } = parseScheduleTitle(event.title || '');
+  const type = ext.type || 'recurring';
+
+  // Recurring entries derive dayOfWeek from rrule.byweekday
+  let dayOfWeek = null;
+  let date = null;
+  if (type === 'recurring') {
+    const dayCode = String(event.rrule?.byweekday || '').toLowerCase();
+    if (!(dayCode in PROCLINIC_DAY_MAP)) return null; // bad rrule
+    dayOfWeek = PROCLINIC_DAY_MAP[dayCode];
+  } else {
+    // Per-date override — ProClinic emits start: "YYYY-MM-DD"
+    date = String(event.start || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  }
+
+  return {
+    proClinicId: String(event.id || ''),
+    proClinicStaffId: userId,
+    proClinicStaffName: name,
+    type,
+    dayOfWeek,
+    date,
+    startTime,
+    endTime,
+    backgroundColor: event.backgroundColor || '',
+    textColor: ext.textColor || '',
+    branchId: '',
+  };
+}
+
+async function handleSyncSchedules(req, res) {
+  const session = await getSession(req.body);
+  const base = session.origin;
+
+  // Fetch the FullCalendar feed — single endpoint covers ALL staff
+  // (doctors + employees) recurring shifts + per-date overrides + leave.
+  const data = await withRetry(
+    () => session.fetchJSON(`${base}/admin/api/schedule/today`, FETCH_OPTS),
+    RETRY_OPTS,
+  );
+
+  if (!Array.isArray(data)) {
+    throw new Error('expected array from /admin/api/schedule/today');
+  }
+
+  // Normalize + drop malformed entries. Each normalized item exposes `id`
+  // = proClinicId so runMasterDataSync uses it as the Firestore doc key
+  // (idempotent re-sync overwrites the same doc).
+  const items = [];
+  let dropped = 0;
+  for (const event of data) {
+    const norm = mapProClinicScheduleEvent(event);
+    if (norm) {
+      items.push({ id: norm.proClinicId, ...norm });
+    } else {
+      dropped++;
+    }
+  }
+
+  // Match the shape runMasterDataSync expects: top-level items + count.
+  return res.status(200).json({
+    success: true,
+    type: 'staff_schedules',
+    count: items.length,
+    totalPages: 1,
+    dropped,
+    raw: data.length,
+    items,
+  });
+}
+
 async function handleSyncDfStaffRates(req, res) {
   // Phase 14.x: sync per-staff DF rate overrides from ProClinic. Two
   // URLs cover the two sub-pages:
@@ -873,6 +983,9 @@ export default async function handler(req, res) {
       case 'syncDfStaffRates':        return await handleSyncDfStaffRates(req, res);
       // Phase 14.x: medicine label presets (/admin/medicine-label).
       case 'syncMedicineLabels':      return await handleSyncMedicineLabels(req, res);
+      // Phase 13.2.13 (2026-04-26): recurring weekly + per-date schedule
+      // entries from /admin/api/schedule/today (FullCalendar feed).
+      case 'syncSchedules':           return await handleSyncSchedules(req, res);
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }

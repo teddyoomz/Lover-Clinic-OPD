@@ -45,6 +45,8 @@ import {
   syncHolidays, syncBranches, syncPermissionGroups,
   // Phase 14.x: DF groups + per-staff rate overrides + medicine labels
   syncDfGroups, syncDfStaffRates, syncMedicineLabels,
+  // Phase 13.2.13 (2026-04-26): schedule entries (recurring weekly + per-date)
+  syncSchedules,
 } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
 
@@ -77,6 +79,9 @@ const SYNC_TYPES = [
   { key: 'df_groups',            label: 'กลุ่มค่ามือ (DF)',   fn: syncDfGroups,            icon: '💰', color: 'amber' },
   { key: 'df_staff_rates',       label: 'ค่ามือต่อแพทย์/ผู้ช่วย', fn: syncDfStaffRates,       icon: '🩻', color: 'amber' },
   { key: 'medicine_labels',      label: 'Preset ฉลากยา',        fn: syncMedicineLabels,      icon: '🏷️', color: 'rose' },
+  // Phase 13.2.13: schedule entries (covers BOTH doctors + employees in
+  // one ProClinic feed; migrator classifies via be_doctors/be_staff lookup)
+  { key: 'staff_schedules',      label: 'ตารางหมอ + พนักงาน',     fn: syncSchedules,           icon: '📆', color: 'sky' },
 ];
 
 const SYNC_COLOR_MAP_DARK = {
