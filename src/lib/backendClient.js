@@ -79,6 +79,271 @@ export async function updateCustomer(proClinicId, fields) {
   await updateDoc(customerDoc(proClinicId), fields);
 }
 
+// ─── V33-customer-create — patientData camelCase mapper ─────────────────────
+//
+// Why: emptyCustomerForm() uses LOWERCASE ProClinic-shape keys (firstname,
+// lastname, telephone_number, sub_district, postal_code, citizen_id) but
+// downstream readers (CustomerListTab, CustomerCard, AppointmentFormModal,
+// SaleTab, TreatmentTimelineModal, EditCustomerIdsModal, etc.) all read
+// CAMELCASE keys from patientData (firstName, lastName, phone, subDistrict,
+// postalCode, nationalId).
+//
+// The cloneOrchestrator path goes through `reverseMapPatient` (api/proclinic
+// /_lib/fields.js) which transforms ProClinic raw → camelCase. Manually-
+// created customers must produce the SAME shape so they're indistinguishable
+// from cloned ones to every reader. This mapper mirrors the field-name
+// translation reverseMapPatient does.
+//
+// Stored shape: { ...flatLowercase, patientData: {camelCaseNested} } —
+// readers access patientData; legacy code that scans root flat fields still
+// works.
+function buildPatientDataFromForm(form) {
+  if (!form || typeof form !== 'object') return {};
+  const pd = {};
+
+  // Direct same-name passthrough
+  if (form.prefix) pd.prefix = form.prefix;
+  if (form.gender) pd.gender = form.gender;
+  if (form.address) pd.address = form.address;
+  if (form.province) pd.province = form.province;
+  if (form.district) pd.district = form.district;
+  if (form.email) pd.email = form.email;
+
+  // Renamed (lowercase → camelCase)
+  if (form.firstname) pd.firstName = form.firstname;
+  if (form.lastname) pd.lastName = form.lastname;
+  if (form.telephone_number) pd.phone = form.telephone_number;
+  if (form.sub_district) pd.subDistrict = form.sub_district;
+  if (form.postal_code) pd.postalCode = form.postal_code;
+
+  // Identity — readers use nationalId/passport (V32-tris-quater contract)
+  if (form.citizen_id) pd.nationalId = form.citizen_id;
+  if (form.passport_id) pd.passport = form.passport_id;
+  if (form.country) pd.nationalityCountry = form.country;
+
+  // Demographics — birthdate stored as both ISO + dobYear/Month/Day for legacy readers
+  if (form.birthdate) {
+    pd.birthdate = form.birthdate;
+    const parts = String(form.birthdate).split('-');
+    if (parts.length === 3) {
+      const yr = parseInt(parts[0], 10);
+      const mo = parseInt(parts[1], 10);
+      const dy = parseInt(parts[2], 10);
+      if (!Number.isNaN(yr) && !Number.isNaN(mo) && !Number.isNaN(dy)) {
+        pd.dobYear = String(yr + 543);   // CE → BE for legacy frontend
+        pd.dobMonth = String(mo);
+        pd.dobDay = String(dy);
+        const today = new Date();
+        let age = today.getFullYear() - yr;
+        if (today.getMonth() + 1 < mo || (today.getMonth() + 1 === mo && today.getDate() < dy)) age--;
+        pd.age = String(age);
+      }
+    }
+  }
+  if (form.blood_type) pd.bloodType = form.blood_type;
+  if (form.height != null && form.height !== '') pd.height = form.height;
+  if (form.weight != null && form.weight !== '') pd.weight = form.weight;
+  if (form.nickname) pd.nickname = form.nickname;
+  if (form.occupation) pd.occupation = form.occupation;
+  if (form.income != null && form.income !== '') pd.income = form.income;
+
+  // Customer-type radios
+  if (form.customer_type) pd.customerType = form.customer_type;
+  if (form.customer_type_2) pd.customerType2 = form.customer_type_2;
+
+  // Social
+  if (form.line_id) pd.lineId = form.line_id;
+  if (form.facebook_link) pd.facebookLink = form.facebook_link;
+
+  // Source / referral
+  if (form.source) pd.source = form.source;
+  if (form.source_detail) pd.sourceDetail = form.source_detail;
+  if (form.ad_description) pd.adDescription = form.ad_description;
+
+  // Preferences
+  if (form.like_note) pd.likeNote = form.like_note;
+  if (form.dislike_note) pd.dislikeNote = form.dislike_note;
+  if (form.note) pd.note = form.note;
+  if (form.doctor_id) pd.doctorId = form.doctor_id;
+
+  // Health
+  if (form.symptoms) pd.symptoms = form.symptoms;
+  if (form.before_treatment) pd.beforeTreatment = form.before_treatment;
+  if (form.congenital_disease) pd.congenitalDisease = form.congenital_disease;
+  if (form.history_of_drug_allergy) pd.drugAllergy = form.history_of_drug_allergy;
+  if (form.history_of_food_allergy) pd.foodAllergy = form.history_of_food_allergy;
+  if (typeof form.pregnanted === 'boolean') pd.pregnanted = form.pregnanted;
+
+  // Emergency contacts (camelCase aliases)
+  if (form.contact_1_firstname) pd.emergencyName = form.contact_1_firstname + (form.contact_1_lastname ? ` ${form.contact_1_lastname}` : '');
+  if (form.contact_1_telephone_number) pd.emergencyPhone = form.contact_1_telephone_number;
+  if (form.contact_2_firstname) pd.emergencyName2 = form.contact_2_firstname + (form.contact_2_lastname ? ` ${form.contact_2_lastname}` : '');
+  if (form.contact_2_telephone_number) pd.emergencyPhone2 = form.contact_2_telephone_number;
+
+  // Receipt
+  if (form.receipt_type) pd.receiptType = form.receipt_type;
+
+  // Profile + gallery URLs (after upload)
+  if (form.profile_image) pd.profileImage = form.profile_image;
+  if (Array.isArray(form.gallery_upload) && form.gallery_upload.length > 0) {
+    pd.gallery = form.gallery_upload;
+  }
+
+  return pd;
+}
+
+export { buildPatientDataFromForm };
+
+// ─── V33-customer-create — HN counter + addCustomer orchestrator ─────────────
+//
+// Why a counter (Option B in plan):
+// - ProClinic-cloned customers reuse ProClinic's HN as doc-id (numeric string).
+// - Manually-created customers need their OWN HN namespace that can never
+//   collide with cloned ones. Format `LC-YY{0000NNN}` (e.g. LC-26000001):
+//   the `LC-` prefix guarantees no namespace overlap with numeric ProClinic
+//   ids. Year-prefixed sequence lets us reset internal seq each year if
+//   needed without changing format.
+// - Counter doc at `be_customer_counter/counter` (parallel to be_sales_counter).
+// - Atomic via runTransaction: 50 concurrent calls → 50 unique sequences.
+
+const customerCounterDoc = () => doc(db, ...basePath(), 'be_customer_counter', 'counter');
+
+/** Generate next customer HN: `LC-YY{0000NNN}` (atomic counter, year-prefixed). */
+export async function generateCustomerHN() {
+  const yearStr = String(new Date().getFullYear() % 100).padStart(2, '0');
+  const seq = await runTransaction(db, async (tx) => {
+    const ref = customerCounterDoc();
+    const snap = await tx.get(ref);
+    let nextSeq = 1;
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.year === yearStr) nextSeq = (data.seq || 0) + 1;
+    }
+    tx.set(ref, { year: yearStr, seq: nextSeq, updatedAt: new Date().toISOString() });
+    return nextSeq;
+  });
+  return `LC-${yearStr}${String(seq).padStart(6, '0')}`;
+}
+
+/**
+ * V33-customer-create — manually create a new customer doc.
+ *
+ * Orchestration:
+ *   1. validateCustomer (strict allows missing hn_no — counter fills it)
+ *   2. normalizeCustomer (coerce types, migrate consent.imageMarketing)
+ *   3. generateCustomerHN — atomic counter
+ *   4. (optional) upload profile_image + gallery_upload via storageClient
+ *   5. setDoc to `be_customers/{LC-YY#######}` with merge:false (NEW doc)
+ *   6. return { id, hn }
+ *
+ * `branchId` defaults to caller-provided value (BranchContext) or null.
+ * `createdBy` is the firebaseUid of the logged-in admin (for audit).
+ * `files = { profile?: File, gallery?: File[] }` — uploaded BEFORE setDoc so
+ * URLs land in the same write. If upload fails, throws and no doc is written.
+ */
+export async function addCustomer(form, opts = {}) {
+  const { branchId = null, createdBy = null, files = null, strict = true } = opts;
+  const safe = form && typeof form === 'object' ? { ...form } : {};
+
+  // Steps 1+2 — normalize FIRST (coerce types e.g. gender 'm'→'M', upper
+  // passport, etc.) so validation sees the canonical shape. Mirrors the
+  // saveCustomer pattern (lines 66-68): normalize → strict validate.
+  const { normalizeCustomer, validateCustomer } = await import('./customerValidation.js');
+
+  // Strip any caller-provided hn_no (counter is authoritative on create).
+  delete safe.hn_no;
+
+  const preNormalized = normalizeCustomer(safe);
+
+  if (strict) {
+    // Pre-counter validation: only firstname is truly required from the user.
+    const firstname = typeof preNormalized.firstname === 'string' ? preNormalized.firstname.trim() : '';
+    if (!firstname) {
+      const err = new Error('กรุณากรอกชื่อ');
+      err.field = 'firstname';
+      throw err;
+    }
+  }
+
+  // Soft-validate the normalized shape (bounds + regexes + enum) to catch
+  // malformed input. We inject a placeholder hn_no so the bounds check on
+  // hn_no doesn't fire (counter fills it later).
+  const softFail = validateCustomer({ ...preNormalized, hn_no: 'placeholder' });
+  if (softFail) {
+    const [field, msg] = softFail;
+    const err = new Error(msg);
+    err.field = field;
+    throw err;
+  }
+
+  // Step 3 — HN counter (atomic).
+  const hn = await generateCustomerHN();
+  const customerId = hn;  // doc-id == HN (LC-prefixed; collision-free with ProClinic numeric ids)
+
+  // Step 4 — uploads (if any). Done BEFORE the Firestore write so a partial
+  // failure doesn't leave a doc with broken image refs.
+  let profileUrl = safe.profile_image || '';
+  let galleryUrls = Array.isArray(safe.gallery_upload) ? [...safe.gallery_upload] : [];
+
+  if (files && (files.profile || (Array.isArray(files.gallery) && files.gallery.length > 0))) {
+    const { uploadFile, buildStoragePath } = await import('./storageClient.js');
+
+    if (files.profile) {
+      const path = buildStoragePath('be_customers', customerId, 'profile', files.profile.name);
+      const { url } = await uploadFile(files.profile, path, { maxSizeMB: 1 });
+      profileUrl = url;
+    }
+
+    if (Array.isArray(files.gallery) && files.gallery.length > 0) {
+      const uploadedUrls = await Promise.all(
+        files.gallery.map(async (file) => {
+          const uniqueId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          const path = buildStoragePath('be_customers', customerId, `gallery_${uniqueId}`, file.name);
+          const { url } = await uploadFile(file, path, { maxSizeMB: 5 });
+          return url;
+        }),
+      );
+      galleryUrls = [...galleryUrls, ...uploadedUrls];
+    }
+  }
+
+  // Step 5 — assemble + write. Re-normalize after merging upload URLs so
+  // the gallery_upload dedupe runs on the final concatenated array.
+  const nowIso = new Date().toISOString();
+  const finalForm = normalizeCustomer({
+    ...preNormalized,
+    hn_no: hn,
+    profile_image: profileUrl,
+    gallery_upload: galleryUrls,
+    created_year: new Date().getFullYear(),
+  });
+
+  const docPayload = {
+    ...finalForm,
+    // V33-customer-create — patientData mirror in camelCase for downstream
+    // readers (CustomerListTab, AppointmentFormModal, SaleTab, etc.).
+    // Mirrors the cloneOrchestrator output shape produced by reverseMapPatient.
+    patientData: buildPatientDataFromForm(finalForm),
+    proClinicId: null,
+    proClinicHN: null,
+    branchId: branchId || null,
+    createdAt: nowIso,
+    createdBy: createdBy || null,
+    lastUpdatedAt: nowIso,
+    clonedAt: nowIso,        // sort key compat with CustomerListTab (sorts by clonedAt desc)
+    isManualEntry: true,     // distinguish from ProClinic-cloned customers
+    courses: [],
+    appointments: [],
+    treatmentSummary: [],
+    treatmentCount: 0,
+  };
+
+  await setDoc(customerDoc(customerId), docPayload, { merge: false });
+  return { id: customerId, hn };
+}
+
 /**
  * CL1: find customers whose doc has `field == value`, optionally excluding
  * a specific proClinicId (used by cloneOrchestrator to detect duplicate HN

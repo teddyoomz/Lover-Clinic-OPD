@@ -2,21 +2,45 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // V33-customer-create (2026-04-27) — V26 catch-up: migrated from email
+    // regex (`request.auth.token.email.matches('.*@loverclinic[.]com$')`)
+    // to claim-based gating, mirroring firestore.rules `isClinicStaff()`.
+    // This closes the same security-theater gap V26 closed in firestore.rules:
+    // any Firebase user with @loverclinic.com email could write here even
+    // without staff-grant claims. Now requires `isClinicStaff:true` OR
+    // `admin:true` custom claim set via /api/admin/users.
+    function isClinicStaff() {
+      return request.auth != null && (
+        request.auth.token.isClinicStaff == true ||
+        request.auth.token.admin == true
+      );
+    }
+
     // Default deny all
     match /{allPaths=**} {
       allow read, write: if false;
     }
 
-    // Uploads — clinic staff only
-    match /uploads/{collection}/{docId}/{fileName} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-                    && request.auth.token.email.matches('.*@loverclinic[.]com$')
+    // V33-customer-create — explicit be_customers path (profile + gallery uploads).
+    // Stricter MIME gating: image/* OR pdf only; max 10MB.
+    match /uploads/be_customers/{customerId}/{file=**} {
+      allow read: if isClinicStaff();
+      allow create: if isClinicStaff()
                     && request.resource.size < 10 * 1024 * 1024
                     && (request.resource.contentType.matches('image/.*')
                         || request.resource.contentType == 'application/pdf');
-      allow delete: if request.auth != null
-                    && request.auth.token.email.matches('.*@loverclinic[.]com$');
+      allow delete: if isClinicStaff();
+    }
+
+    // Generic uploads — clinic staff only (other be_* collections like
+    // be_treatments, be_documents, etc. land here). Same MIME + size gate.
+    match /uploads/{collection}/{docId}/{fileName} {
+      allow read: if isClinicStaff();
+      allow create: if isClinicStaff()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*')
+                        || request.resource.contentType == 'application/pdf');
+      allow delete: if isClinicStaff();
     }
   }
 }

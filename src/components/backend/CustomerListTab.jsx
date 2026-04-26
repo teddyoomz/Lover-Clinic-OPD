@@ -3,16 +3,19 @@
 // Client-side search filtering by name, HN, phone.
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square } from 'lucide-react';
+import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
 import { getAllCustomers } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';
 import BulkPrintModal from './BulkPrintModal.jsx';
+import CustomerFormModal from './CustomerFormModal.jsx';
 
 export default function CustomerListTab({ clinicSettings, theme, onViewCustomer }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme !== 'light';
+  const canCreate = useHasPermission('customer_management');
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +26,8 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  // V33-customer-create — add-customer modal
+  const [addOpen, setAddOpen] = useState(false);
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -106,6 +111,17 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
           >
             <FileText size={15} /> {selectMode ? 'ยกเลิก' : 'พิมพ์ Bulk'}
           </button>
+          {/* V33-customer-create — manual add customer */}
+          {canCreate && (
+            <button
+              onClick={() => setAddOpen(true)}
+              disabled={loading}
+              data-testid="add-customer-button"
+              className="px-5 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-900/30"
+            >
+              <UserPlus size={15} /> เพิ่มลูกค้า
+            </button>
+          )}
         </div>
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
@@ -262,6 +278,16 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
           onClose={() => { setBulkOpen(false); exitSelectMode(); }}
         />
       )}
+
+      {/* V33-customer-create — Add customer modal */}
+      <CustomerFormModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSaved={(result) => {
+          // Refresh list so the new customer appears at the top.
+          setRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }

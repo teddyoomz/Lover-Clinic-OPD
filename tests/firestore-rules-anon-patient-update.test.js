@@ -30,6 +30,12 @@ const PATIENT_FORM = READ('src/pages/PatientForm.jsx');
 const PATIENT_DASHBOARD = READ('src/pages/PatientDashboard.jsx');
 const RULE_01 = READ('.claude/rules/01-iron-clad.md');
 const RULE_00 = READ('.claude/rules/00-session-start.md');
+// V-entries V1-V31 were moved to v-log-archive.md by commit a8a41ef
+// (docs(compress): cut session-load tokens 56k → 24k). The compressed
+// 00-session-start.md keeps a one-liner summary table; full V23 detail
+// lives in the archive. Tests source-grepping V23 detail must read both.
+const V_LOG_ARCHIVE = READ('.claude/rules/v-log-archive.md');
+const RULE_00_AND_ARCHIVE = `${RULE_00}\n\n${V_LOG_ARCHIVE}`;
 const HANDOFF = READ('SESSION_HANDOFF.md');
 
 // The 11 fields anon clients legitimately write. Keep this list in lockstep
@@ -227,30 +233,30 @@ describe('V23 — opd_sessions anon-patient-update rule (source-grep)', () => {
     // single regex with lookahead — the multiline `$` lookahead in earlier
     // iterations stopped at the first end-of-line.
     function getV23Section() {
-      const startMatch = RULE_00.match(/^### V23 —/m);
+      // V23 detail moved to v-log-archive.md (commit a8a41ef compress).
+      const startMatch = RULE_00_AND_ARCHIVE.match(/^### V23 —/m);
       if (!startMatch) return null;
       const start = startMatch.index;
-      // End at the next V-entry header OR the next `\n---\n` separator
-      const tail = RULE_00.slice(start + 10);
+      const tail = RULE_00_AND_ARCHIVE.slice(start + 10);
       const nextHeaderRel = tail.search(/\n### V\d/);
       const nextSepRel = tail.search(/\n---\n/);
       const candidates = [nextHeaderRel, nextSepRel].filter((i) => i >= 0);
       const endRel = candidates.length ? Math.min(...candidates) : tail.length;
-      return RULE_00.slice(start, start + 10 + endRel);
+      return RULE_00_AND_ARCHIVE.slice(start, start + 10 + endRel);
     }
 
-    it('A5.1: 00-session-start.md contains V23 entry with the user verbatim quote', () => {
-      expect(RULE_00).toMatch(/^### V23 —/m);
-      expect(RULE_00).toMatch(/ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้ง/);
+    it('A5.1: V23 entry exists in rules+archive with the user verbatim quote', () => {
+      expect(RULE_00_AND_ARCHIVE).toMatch(/^### V23 —/m);
+      expect(RULE_00_AND_ARCHIVE).toMatch(/ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้ง/);
     });
 
-    it('A5.2: 00-session-start.md V23 entry references the 11-field whitelist', () => {
+    it('A5.2: V23 entry references the 11-field whitelist', () => {
       const section = getV23Section();
       expect(section, 'V23 section not extractable').toBeTruthy();
       expect(section).toMatch(/11[\s\S]{0,30}field/i);
     });
 
-    it('A5.3: 00-session-start.md V23 lists 3 anon-reachable Firestore write sites', () => {
+    it('A5.3: V23 lists 3 anon-reachable Firestore write sites', () => {
       const section = getV23Section();
       expect(section).toMatch(/PatientForm\.jsx:372/);
       expect(section).toMatch(/PatientDashboard\.jsx:403/);

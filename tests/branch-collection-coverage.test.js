@@ -90,6 +90,7 @@ const COLLECTION_MATRIX = {
   'be_medicine_labels':    { scope: 'global',  reason: 'Label presets' },
   'be_central_stock_warehouses': { scope: 'global', reason: 'Central warehouse master (Phase 15)' },
   'be_sales_counter':      { scope: 'global',  reason: 'Atomic sale-id sequencer (singleton doc)' },
+  'be_customer_counter':   { scope: 'global',  reason: 'V33-customer-create — atomic HN sequencer for manually-created customers (singleton doc)' },
 
   // ─── Parent-scoped (inherit branch via foreign key) ──
   'be_customer_wallets':   { scope: 'global',  reason: 'Customer-owned; tx record inherits sale.branchId' },

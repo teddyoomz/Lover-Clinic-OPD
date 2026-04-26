@@ -97,8 +97,12 @@ service cloud.firestore {
           (isSignedIn() && sessionId.matches('^test-probe-anon-.*$'));
       }
 
-      // ── Backend: Customers (cloned from ProClinic) ──
+      // ── Backend: Customers (cloned from ProClinic OR manually created via CustomerFormModal) ──
       match /be_customers/{customerId} {
+        allow read, write: if isClinicStaff();
+      }
+      // V33-customer-create — HN counter (atomic via runTransaction).
+      match /be_customer_counter/{docId} {
         allow read, write: if isClinicStaff();
       }
 

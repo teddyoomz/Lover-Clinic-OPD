@@ -12,17 +12,24 @@
 
 export const GENDER_OPTIONS = Object.freeze(['M', 'F', '']);  // '' = unspecified
 export const RECEIPT_TYPE_OPTIONS = Object.freeze(['personal', 'company', '']);
-export const CONSENT_KEYS = Object.freeze(['marketing', 'healthData']);
+// V33-customer-create (2026-04-27): added imageMarketing to consent ladder
+// (Rule of 3 — same shape as marketing + healthData; replaces flat
+// is_image_marketing_allowed field which is kept as deprecated mirror).
+export const CONSENT_KEYS = Object.freeze(['marketing', 'healthData', 'imageMarketing']);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THAI_PHONE_RE = /^[+\-\s\d]{8,20}$/;         // permissive — international OK
 const THAI_CITIZEN_RE = /^\d{13}$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HTTPS_URL_RE = /^https?:\/\//i;
+const FACEBOOK_LINK_RE = /^(https?:)?\/\/(www\.)?(facebook|fb)\.(com|me)\//i;
+const LINE_ID_RE = /^[\w._-]{2,100}$/;
 
 const FIELD_BOUNDS = {
   hn_no: 30,
   old_hn_id: 30,
   prefix: 40,
+  prefix_en: 40,
   firstname: 100,
   lastname: 100,
   firstname_en: 100,
@@ -64,7 +71,28 @@ const FIELD_BOUNDS = {
   company_receipt_address: 500,
   company_receipt_phonenumber: 30,
   company_receipt_tax_id: 30,
+  // V33-customer-create — bounds for fields used by ProClinic create form
+  customer_type: 50,
+  customer_type_2: 50,
+  blood_type: 10,
+  passport_id: 30,
+  profile_image: 500,
+  card_photo: 500,
+  doctor_id: 50,
+  contact_1_firstname: 100,
+  contact_1_firstname_en: 100,
+  contact_1_lastname: 100,
+  contact_1_lastname_en: 100,
+  contact_1_telephone_number: 30,
+  contact_2_firstname: 100,
+  contact_2_firstname_en: 100,
+  contact_2_lastname: 100,
+  contact_2_lastname_en: 100,
+  contact_2_telephone_number: 30,
 };
+
+const GALLERY_MAX_ITEMS = 20;
+const GALLERY_URL_MAX_LEN = 500;
 
 export function validateCustomer(form, opts = {}) {
   const strict = !!opts.strict;
@@ -155,6 +183,51 @@ export function validateCustomer(form, opts = {}) {
     return ['is_image_marketing_allowed', 'is_image_marketing_allowed ต้องเป็น boolean'];
   }
 
+  // V33-customer-create — facebook_link must look like a Facebook URL when present.
+  if (form.facebook_link) {
+    const fb = String(form.facebook_link).trim();
+    if (fb && !FACEBOOK_LINK_RE.test(fb)) {
+      return ['facebook_link', 'รูปแบบลิงก์ Facebook ไม่ถูกต้อง'];
+    }
+  }
+
+  // V33-customer-create — line_id must be a plain identifier (not a URL).
+  if (form.line_id) {
+    const ln = String(form.line_id).trim();
+    if (ln && !LINE_ID_RE.test(ln)) {
+      return ['line_id', 'LINE ID ต้องเป็นตัวอักษร/ตัวเลข/. _ - 2-100 ตัว'];
+    }
+  }
+
+  // V33-customer-create — created_year integer 1900-2100 if present.
+  if (form.created_year != null && form.created_year !== '') {
+    const yr = Number(form.created_year);
+    if (!Number.isInteger(yr) || yr < 1900 || yr > 2100) {
+      return ['created_year', 'created_year ต้องเป็นปี ค.ศ. 1900-2100'];
+    }
+  }
+
+  // V33-customer-create — gallery_upload array, ≤20 items, each https URL ≤500 chars.
+  if (form.gallery_upload != null) {
+    if (!Array.isArray(form.gallery_upload)) {
+      return ['gallery_upload', 'gallery_upload ต้องเป็น array'];
+    }
+    if (form.gallery_upload.length > GALLERY_MAX_ITEMS) {
+      return ['gallery_upload', `gallery_upload เกิน ${GALLERY_MAX_ITEMS} รายการ`];
+    }
+    for (const url of form.gallery_upload) {
+      if (typeof url !== 'string') {
+        return ['gallery_upload', 'gallery_upload แต่ละรายการต้องเป็น string'];
+      }
+      if (url.length > GALLERY_URL_MAX_LEN) {
+        return ['gallery_upload', `gallery_upload URL เกิน ${GALLERY_URL_MAX_LEN} ตัวอักษร`];
+      }
+      if (url && !HTTPS_URL_RE.test(url)) {
+        return ['gallery_upload', 'gallery_upload URL ต้องขึ้นต้น http:// หรือ https://'];
+      }
+    }
+  }
+
   // Consent block — values must be boolean.
   if (form.consent) {
     if (typeof form.consent !== 'object' || Array.isArray(form.consent)) {
@@ -243,7 +316,10 @@ export function emptyCustomerForm() {
     contact_2_lastname: '',
     contact_2_lastname_en: '',
     contact_2_telephone_number: '',
-    consent: { marketing: false, healthData: false },
+    // V33-customer-create — multi-image gallery + HN year tag + consent.imageMarketing
+    gallery_upload: [],
+    created_year: null,
+    consent: { marketing: false, healthData: false, imageMarketing: false },
   };
 }
 
@@ -284,12 +360,51 @@ export function normalizeCustomer(form) {
     out.citizen_id = out.citizen_id.replace(/[-\s]/g, '').trim();
   }
 
-  // Consent — always emit both keys so downstream callers can rely on shape.
+  // V33-customer-create — passport upper-cased + trimmed.
+  if (typeof out.passport_id === 'string') {
+    out.passport_id = out.passport_id.trim().toUpperCase();
+  }
+
+  // V33-customer-create — created_year coerce to int or null.
+  if (out.created_year === '' || out.created_year == null) {
+    out.created_year = null;
+  } else {
+    const yr = Number(out.created_year);
+    out.created_year = Number.isInteger(yr) ? yr : null;
+  }
+
+  // V33-customer-create — gallery_upload normalize: array of trimmed unique non-empty strings, max 20.
+  if (Array.isArray(out.gallery_upload)) {
+    const seen = new Set();
+    const cleaned = [];
+    for (const u of out.gallery_upload) {
+      const s = typeof u === 'string' ? u.trim() : '';
+      if (s && !seen.has(s)) {
+        seen.add(s);
+        cleaned.push(s);
+      }
+    }
+    out.gallery_upload = cleaned.slice(0, 20);
+  } else {
+    out.gallery_upload = [];
+  }
+
+  // V33-customer-create — migrate flat is_image_marketing_allowed → consent.imageMarketing.
+  // Keep flat field as deprecated mirror for one release; readers should switch to consent.imageMarketing.
   const c = out.consent && typeof out.consent === 'object' && !Array.isArray(out.consent) ? out.consent : {};
+  const imageMarketingFromConsent = c.imageMarketing != null ? !!c.imageMarketing : null;
+  const imageMarketingFromFlat = !!out.is_image_marketing_allowed;
+  // Prefer consent.imageMarketing when explicitly set; else fall back to flat field.
+  const finalImageMarketing = imageMarketingFromConsent !== null
+    ? imageMarketingFromConsent
+    : imageMarketingFromFlat;
   out.consent = {
     marketing: !!c.marketing,
     healthData: !!c.healthData,
+    imageMarketing: finalImageMarketing,
   };
+  // Mirror back to flat field for backward compat.
+  out.is_image_marketing_allowed = finalImageMarketing;
 
   return out;
 }
