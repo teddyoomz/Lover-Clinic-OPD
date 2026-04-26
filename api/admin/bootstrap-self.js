@@ -27,6 +27,20 @@ import { getAdminAuth, verifyAdminToken } from './_lib/adminAuth.js';
 
 const LOVERCLINIC_EMAIL_RE = /@loverclinic\.com$/i;
 
+// ─── V27-bis (2026-04-26) — OWNER_EMAILS allowlist ──────────────────────
+// MUST stay in sync with src/lib/ownerEmails.js. Pre-approved owner
+// accounts can bootstrap admin even WITHOUT @loverclinic.com email and
+// SKIP the genesis "no other admin exists" check (multi-owner clinics).
+// Audit grep: `grep -n "OWNER_EMAILS" src/lib/ownerEmails.js api/admin/bootstrap-self.js`
+const OWNER_EMAILS = [
+  'oomz.peerapat@gmail.com',
+];
+
+function isOwnerEmail(email) {
+  if (!email) return false;
+  return OWNER_EMAILS.includes(String(email).toLowerCase());
+}
+
 function bad(res, status, error, extra = {}) {
   res.status(status).json({ success: false, error, ...extra });
   return null;
@@ -76,9 +90,12 @@ export default async function handler(req, res) {
   const callerUid = decoded.uid;
   const callerEmail = decoded.email || '';
 
-  // Gate 1: caller email must match clinic domain
-  if (!LOVERCLINIC_EMAIL_RE.test(callerEmail)) {
-    return bad(res, 403, 'Forbidden: caller email must match @loverclinic.com');
+  // Gate 1: caller email must be authorized — either @loverclinic.com OR
+  // in the OWNER_EMAILS allowlist (V27-bis: multi-owner clinics)
+  const isOwner = isOwnerEmail(callerEmail);
+  const isClinicEmail = LOVERCLINIC_EMAIL_RE.test(callerEmail);
+  if (!isOwner && !isClinicEmail) {
+    return bad(res, 403, 'Forbidden: caller email not in @loverclinic.com or OWNER_EMAILS allowlist');
   }
 
   // Gate 2: caller must NOT already be admin via env (use grantAdmin instead)
@@ -99,20 +116,27 @@ export default async function handler(req, res) {
         alreadyAdmin: true,
         uid: callerUid,
         email: callerEmail,
+        isOwner,
       },
     });
   }
 
-  // Gate 3: GENESIS CHECK — no other user may have admin:true
-  const auth = getAdminAuth();
-  const existingAdmin = await findExistingAdmin(auth, callerUid);
-  if (existingAdmin) {
-    return bad(res, 409, 'Conflict: another admin already exists. Ask them to grant you admin via PermissionGroupsTab.', {
-      existingAdmin: { uid: existingAdmin.uid, email: existingAdmin.email },
-    });
+  // Gate 3: GENESIS CHECK — but SKIP for OWNER_EMAILS (pre-approved
+  // multi-owner accounts). Non-owner clinic emails still subject to
+  // the "one bootstrap per project" rule — they must be granted by
+  // an existing admin via /api/admin/users grantAdmin.
+  if (!isOwner) {
+    const auth = getAdminAuth();
+    const existingAdmin = await findExistingAdmin(auth, callerUid);
+    if (existingAdmin) {
+      return bad(res, 409, 'Conflict: another admin already exists. Ask them to grant you admin via PermissionGroupsTab.', {
+        existingAdmin: { uid: existingAdmin.uid, email: existingAdmin.email },
+      });
+    }
   }
 
-  // All gates passed → grant genesis admin
+  // All gates passed → grant admin (genesis OR owner-bootstrap)
+  const auth = getAdminAuth();
   const existing = await auth.getUser(callerUid);
   const claims = {
     ...(existing.customClaims || {}),
@@ -122,7 +146,7 @@ export default async function handler(req, res) {
   await auth.setCustomUserClaims(callerUid, claims);
 
   // eslint-disable-next-line no-console
-  console.log(`[bootstrap-self] genesis admin granted: uid=${callerUid} email=${callerEmail}`);
+  console.log(`[bootstrap-self] admin granted: uid=${callerUid} email=${callerEmail} owner=${isOwner}`);
 
   return res.status(200).json({
     success: true,
@@ -131,6 +155,7 @@ export default async function handler(req, res) {
       alreadyAdmin: false,
       uid: callerUid,
       email: callerEmail,
+      isOwner,
       reminder: 'Refresh ID token client-side via auth.currentUser.getIdToken(true) for the new claim to take effect.',
     },
   });

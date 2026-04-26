@@ -20,6 +20,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { listenToUserPermissions } from '../lib/backendClient.js';
+import { isOwnerEmail } from '../lib/ownerEmails.js';
 
 const UserPermissionContext = createContext(null);
 
@@ -28,13 +29,18 @@ const LOVERCLINIC_EMAIL_RE = /@loverclinic\.com$/i;
 function deriveState(user, staff, group) {
   const email = user?.email || '';
   const isClinicEmail = LOVERCLINIC_EMAIL_RE.test(email);
+  // V27-bis: pre-approved owner emails (e.g. Google Sign-In with personal
+  // email) bypass the @loverclinic.com regex requirement. See
+  // src/lib/ownerEmails.js for the canonical list.
+  const isOwnerAccount = isOwnerEmail(email);
+  const isAuthorizedAccount = isClinicEmail || isOwnerAccount;
   const groupId = staff?.permissionGroupId || null;
   const permissions = (group && typeof group.permissions === 'object') ? group.permissions : {};
 
-  const bootstrap = isClinicEmail && !staff;
+  const bootstrap = isAuthorizedAccount && !staff;
   const isOwner = groupId === 'gp-owner';
   const hasMetaPerm = permissions.permission_group_management === true;
-  const isAdmin = isClinicEmail && (bootstrap || isOwner || hasMetaPerm);
+  const isAdmin = isAuthorizedAccount && (bootstrap || isOwner || hasMetaPerm);
 
   return {
     user: user || null,
@@ -44,6 +50,7 @@ function deriveState(user, staff, group) {
     isAdmin,
     groupName: group?.name || (bootstrap ? 'เจ้าของกิจการ (bootstrap)' : ''),
     bootstrap,
+    isOwnerAccount,  // exposed for UI badges / future use
     hasPermission: (key) => isAdmin || permissions[key] === true,
   };
 }

@@ -270,10 +270,14 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       expect(BOOTSTRAP_API).not.toMatch(/verifyAdminToken\s*\(/);
     });
 
-    it('H6.3: caller email must match @loverclinic.com', () => {
+    it('H6.3: caller email must match @loverclinic.com OR be in OWNER_EMAILS (V27-bis)', () => {
       expect(BOOTSTRAP_API).toMatch(/LOVERCLINIC_EMAIL_RE/);
       expect(BOOTSTRAP_API).toMatch(/@loverclinic\\\./);
-      expect(BOOTSTRAP_API).toMatch(/Forbidden:\s*caller\s+email\s+must\s+match/);
+      // V27-bis: extended check — OWNER_EMAILS allowlist
+      expect(BOOTSTRAP_API).toMatch(/OWNER_EMAILS/);
+      expect(BOOTSTRAP_API).toMatch(/isOwnerEmail/);
+      // Updated forbidden message — mentions both paths
+      expect(BOOTSTRAP_API).toMatch(/Forbidden:[\s\S]{0,80}OWNER_EMAILS|Forbidden:[\s\S]{0,80}allowlist/);
     });
 
     it('H6.4: genesis check — refuses if any other admin exists (409 Conflict)', () => {
@@ -304,9 +308,20 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       expect(BOOTSTRAP_API).toMatch(/\.\.\.\(existing\.customClaims\s*\|\|\s*\{\}\)/);
     });
 
-    it('H6.8: logs the genesis grant for audit trail', () => {
+    it('H6.8: logs the admin grant for audit trail (V27-bis: now covers genesis OR owner-bootstrap)', () => {
       expect(BOOTSTRAP_API).toMatch(/console\.log\([^)]*bootstrap-self/);
-      expect(BOOTSTRAP_API).toMatch(/genesis\s+admin\s+granted/);
+      // After V27-bis the log says "admin granted" (covers BOTH genesis
+      // first-admin path AND owner-bootstrap path — flag is in `owner=`
+      // suffix instead)
+      expect(BOOTSTRAP_API).toMatch(/admin\s+granted/);
+    });
+
+    it('H6.10: V27-bis — owner-email skips genesis check (multi-owner clinics)', () => {
+      const fnBlock = BOOTSTRAP_API.match(/Gate 3:[\s\S]*?\}\s*\}/);
+      expect(fnBlock, 'Gate 3 block not found').toBeTruthy();
+      // The genesis check must be conditional on !isOwner
+      expect(fnBlock[0]).toMatch(/if\s*\(\s*!isOwner\s*\)/);
+      expect(fnBlock[0]).toMatch(/findExistingAdmin/);
     });
 
     it('H6.9: pagination cap on findExistingAdmin (DoS protection)', () => {
@@ -367,18 +382,26 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
     });
   });
 
-  describe('H5: Phase 13.5.4 staging — Deploy 1 vs Deploy 2 separation', () => {
-    it('H5.1: firestore.rules unchanged in this commit (Deploy 1 ships rules-unchanged)', () => {
-      // After Deploy 1 + user runs migration button + verification,
-      // a follow-up commit changes the isClinicStaff() helper to claim-only.
-      // This test asserts that's still pending (not done in this commit).
+  describe('H5: Phase 13.5.4 staging — Deploy 2 LIVE (V26 + V27-bis)', () => {
+    it('H5.1: firestore.rules POST-Deploy-2 — isClinicStaff() is now claim-only', () => {
+      // After Deploy 2 (V26) shipped, the helper checks custom claims
+      // instead of email. This test was originally an anti-regression for
+      // Deploy 1 ("rules unchanged"); after V26 deploy completed it
+      // flipped to lock the new shape. See V26 entry in
+      // .claude/rules/00-session-start.md for the migration journey.
       const RULES = READ('firestore.rules');
-      // Current isClinicStaff() check is still email-based
-      expect(RULES).toMatch(/function\s+isClinicStaff\(\)\s*\{[\s\S]*?@loverclinic\[\.\]com/);
-      // Should NOT yet check the custom claim — that's Deploy 2 surface
-      // (this assertion FAILS once Deploy 2 lands; that's intentional —
-      // remove this guard then.)
-      expect(RULES).not.toMatch(/request\.auth\.token\.isClinicStaff\s*===\s*true/);
+      // Helper now checks isClinicStaff custom claim
+      expect(RULES).toMatch(/request\.auth\.token\.isClinicStaff\s*==\s*true/);
+      // AND checks admin claim (defense-in-depth)
+      expect(RULES).toMatch(/request\.auth\.token\.admin\s*==\s*true/);
+      // Email regex check REMOVED from helper body (still in comments
+      // for institutional memory — strip comments before checking)
+      const fn = RULES.match(/function\s+isClinicStaff[\s\S]*?\n\s+\}/);
+      const noCommentBody = fn[0]
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//'))
+        .join('\n');
+      expect(noCommentBody).not.toMatch(/\.matches\(['"`]\.\*@loverclinic/);
     });
 
     it('H5.2: dev-only Sync ProClinic infra unaffected (per Rule H-bis + user 2026-04-26)', () => {
