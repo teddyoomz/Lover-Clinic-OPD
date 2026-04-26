@@ -287,21 +287,28 @@ export default function AppointmentFormModal({
       // preserve its pre-refactor behavior; CustomerDetailView keeps the
       // default (skip) because it has no full-calendar context to compare.
       // Non-fatal on fetch failure — log + continue.
+      //
+      // Phase 13.2.10 (2026-04-26): query ALL doctor schedules (no date
+      // filter) so checkAppointmentCollision → mergeSchedulesForDate can
+      // see RECURRING entries (which have dayOfWeek, no date). Previous
+      // {startDate, endDate} filter excluded recurring entries entirely
+      // → silent "no entry → assume available" for every doctor.
       if (!skipStaffScheduleCheck && formData.doctorId) {
         try {
           const newStart = String(formData.startTime);
           const newEnd = String(formData.endTime || formData.startTime) || newStart;
+          // Pull ALL entries for this doctor (recurring + per-date) — no
+          // date filter so recurring entries reach the merge helper.
           const entries = await listStaffSchedules({
             staffId: formData.doctorId,
-            startDate: formData.date,
-            endDate: formData.date,
           });
           const check = checkAppointmentCollision(
             formData.doctorId, formData.date, newStart, newEnd, entries,
           );
           if (!check.available) {
             const who = formData.doctorName || formData.doctorId;
-            const msg = `แพทย์ "${who}" ${check.reason} ในช่วงเวลาที่เลือก (${newStart}–${newEnd}).\n\nต้องการจองต่อหรือไม่?`;
+            const sourceTag = check.source === 'recurring' ? '(งานประจำ)' : check.source === 'override' ? '(งานรายวัน)' : '';
+            const msg = `แพทย์ "${who}" ${check.reason} ${sourceTag} ในช่วงเวลาที่เลือก (${newStart}–${newEnd}).\n\nต้องการจองต่อหรือไม่?`;
             if (!window.confirm(msg)) { setSaving(false); return; }
           }
         } catch (e) {
