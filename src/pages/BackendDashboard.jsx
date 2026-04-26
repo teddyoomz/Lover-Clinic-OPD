@@ -70,7 +70,10 @@ import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab
 // each pull rich form modals. Same Suspense boundary handles all.
 const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
 const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
-const StaffSchedulesTab    = lazy(() => import('../components/backend/StaffSchedulesTab.jsx'));
+// Phase 13.2.8 (2026-04-26) — list-view StaffSchedulesTab replaced by
+// calendar-view EmployeeSchedulesTab (ProClinic-fidelity). Old file
+// remains importable until Phase F deletes it.
+const EmployeeSchedulesTab = lazy(() => import('../components/backend/EmployeeSchedulesTab.jsx'));
 const DoctorSchedulesTab   = lazy(() => import('../components/backend/DoctorSchedulesTab.jsx'));
 const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
@@ -446,7 +449,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'quotations' ? (
           <QuotationTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'staff-schedules' ? (
-          <StaffSchedulesTab clinicSettings={clinicSettings} theme={theme} />
+          <EmployeeSchedulesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'doctor-schedules' ? (
           <DoctorSchedulesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'df-groups' ? (
