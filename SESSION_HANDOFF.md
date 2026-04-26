@@ -7,17 +7,18 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 11 EOD-2 — P1-P3 + V32-tris-ter (LINE OA Q&A bot + QR linking + LineSettingsTab) + email stripped
+- **Date last updated**: 2026-04-27 session 12 — V32-tris-ter-fix (CORS proxy + admin SDK) + V32-tris-quater (ID-link request flow) DEPLOYED
 - **Branch**: `master`
 - **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers` (LOCAL: V32-tris commit pending)
-- **Test count**: 6205 vitest passing (+200 session 11: T3.e 23 LINE-only, T4 39, T5.b 35, T5.a 21, V32-tris-ter LINE flow 82)
+- **Test count**: 1096 focused / ~6300 with extended (session 12 added: V32-tris-ter-fix 36 + V32-tris-quater 71 = 107 new; user OK'd >1000 from now on)
 - **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
-- **Deploy state**: ✅ **PRODUCTION = `68936bb`** (V15 combined deploy session 11 EOD-2 — LINE OA full feature)
-  - Vercel: `lover-clinic-notrzw64k-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (46s)
-  - Firestore rules: v15 LIVE (added be_course_changes + be_customer_link_tokens this turn)
-  - 7-endpoint Probe-Deploy-Probe: pre 6/6 = 200, post 6/6 = 200, negative 2/2 = 403 (be_customer_link_tokens + be_course_changes lockdown verified)
+- **Deploy state**: ✅ **PRODUCTION = `cb387c3`** (V15 combined deploy session 12 — V32-tris-quater LIVE)
+  - Vercel: `lover-clinic-ow7hhv2lk-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (55s)
+  - Firestore rules: v16 LIVE (added be_link_requests + be_link_attempts to lockdown collection set)
+  - Probe-Deploy-Probe: pre 6/6 = 200, post 6/6 = 200, negative 4/4 = 403 (be_customer_link_tokens + be_course_changes + be_link_requests + be_link_attempts all locked down)
   - Cleanup: pc_appointments DELETE x 2 + clinic_settings strip x 2 = 4/4 200
   - Production HTTP smoke: / + ?session= + ?patient= = 3/3 200
+  - Earlier this session: V32-tris-ter-fix shipped at `203581f` (CORS proxy for LINE test + webhook admin SDK)
 - **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅ (8 commits pushed prior session; V32-tris pending push)
