@@ -7,23 +7,20 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 7 — Phase 13.5.4 Deploy 1 + V24 schedule sync fix DEPLOYED via combined V15
+- **Date last updated**: 2026-04-26 session 8 EOD — Phase 13.5.4 + V23-V30 + UC1 + Tier 2 closed end-to-end
 - **Branch**: `master`
-- **Last commit**: `884f6cc fix(v24): ProClinic schedule sync only fetched doctor data — now hits both แพทย์+พนักงาน endpoints`
-- **Test count**: ~5274 vitest passing (5239 + 28 Phase 13.5.4 H1-H5 + 7 V24 SC.G new)
-- **Build**: clean. BackendDashboard chunk ~928 KB (+3 KB Phase 13.5.4)
-- **Deploy state**: ✅ **DEPLOYED** — production at `884f6cc` (V15 combined deploy 2026-04-26 session 7; 2 commits — `6799a58` Phase 13.5.4 Deploy 1 + `884f6cc` V24 sync fix)
-  - Vercel: `lover-clinic-ejed4oblq` aliased to https://lover-clinic-app.vercel.app (deploy time 32s)
-  - Firestore rules: v11 (UNCHANGED — idempotent fire; Deploy 2 of 13.5.4 will narrow isClinicStaff() AFTER user runs migration button)
-  - **Pre-probe (5 endpoints)**: 200/200/200/200/200 ✓ (V23 still LIVE)
-  - **Post-deploy probes (5 endpoints)**: 200/200/200/200/200 ✓
-  - **Cleanup**: pc_appointments DELETE x 2 200/200 + proclinic_session* strip 200/200 ✓
-  - **Production smoke**: backend / ?session= / ?patient= all HTTP 200 ✓
-- **Rule B probe list permanent**: 5 endpoints (extended in V23). Future rules deploys catch regression class automatically.
+- **Last commit**: `6480083 docs(handoff): V30 LIVE + Tier 2 closed + Tier 3 status`
+- **Test count**: ~5400 vitest passing (175+ permission/security/E2E across 8 test files)
+- **Build**: clean. BackendDashboard chunk ~925 KB
+- **Deploy state**: ✅ **DEPLOYED** — production at `5b3a89b` (V30 V15 combined deploy session 8 EOD)
+  - Vercel: `lover-clinic-jbx0eyf11` aliased to https://lover-clinic-app.vercel.app (27s)
+  - Firestore rules: v13 (V27-tris narrow on opd_sessions delete)
+  - Pre+post probes 7/7 = 200; cleanup OK; production smoke 2/2 = 200
+- **Rule B probe list permanent**: 7 endpoints (5 baseline + V23 anon-update CREATE + V27-tris anon-DELETE)
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master ahead of origin/master by 3 (`b177541` V23 handoff + `6799a58` Phase 13.5.4 D1 + `884f6cc` V24) — push pending
+- **Remote sync**: master = origin/master ✅ (handoff commit pending in this turn)
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
-- **SCHEMA_VERSION**: 15 (auto-upgrades on print-modal open)
+- **SCHEMA_VERSION**: 15
 
 ---
 
@@ -36,6 +33,38 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 8 EOD (27 commits, `0a0b9f5` → `6480083`) — Phase 13.5.4 hard-gate END-TO-END (V23-V30) + UC1 + Tier 2
+
+The biggest single session in project history. Started with patient form
+submit broken (V23). Shipped 27 commits closing the chicken-and-egg admin
+loop end-to-end + adding comprehensive auto-sync + removing all manual
+buttons + Thai cultural calendar polish.
+
+V-entries shipped: V23, V24, V25, V25-bis, V26, V27, V27-bis, V27-tris,
+V28, V28-bis, V28-tris, V29, V30 (13 V-entries) + UC1.
+
+System is now Perfect 100% auto:
+- Owner email login (loverclinic OR OWNER_EMAILS) → auto-bootstrap admin
+  claim → sidebar populates → can call /api/admin
+- Staff added via StaffFormModal → claims set at creation via setPermission
+  (auto-grants admin if gp-owner OR meta-perm group)
+- Group change mid-session → UPC re-sync useEffect updates claims without
+  re-login
+- Manual buttons (Bootstrap self / Sync claims / Cleanup probes) ALL
+  REMOVED per user directive — auto-sync handles everything
+- listenToUserPermissions queries by firebaseUid field (V30) so newly-
+  created staff are visible to soft-gate immediately
+
+Detail: see `.agents/sessions/2026-04-26-session8-phase13.5.4-end-to-end-V23-V30.md`
+
+Tier 2 status: Doc 10/11/12 covered by F12 tests; UC1 shipped (Sun rose +
+Sat violet weekend colors per Thai paper-calendar tradition); M9 reconciler
+deferred (substantial cron feature, low impact for current state).
+
+Tier 3 status: Phase 14.8.A pre-flight ALREADY IMPLEMENTED in
+DocumentPrintModal:173-176. Remaining T3.b-f + T4 + T5 = XL features each,
+need focused sessions.
 
 ### Session 2026-04-26 session 7 (2 commits, `6799a58` + `884f6cc`) — Phase 13.5.4 Deploy 1 + V24 schedule sync fix
 User directives: "ตอนนี้ก่อน phase 15 เหลืออะไรนะ" → "เริ่มทั้งหมดเลย ลำดับความสำคัญก่อนหลังเอา แต่ทำทั้งหมดที่นายแนะนำก่อน 15" → "tab sync proclinic คือ tab ที่ใช้แค่ช่วง develop app ของเรานะ" → "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์ ฝากแก้ตรงนี้ก่อน deploy" → "deploy".
@@ -329,6 +358,54 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 ## Resume Prompt
 
 Paste this into the next Claude session (or invoke `/session-start`):
+
+```
+Resume LoverClinic OPD — continue from 2026-04-26 session 8 EOD.
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md (stack + env + rule index)
+2. SESSION_HANDOFF.md (cross-session state of truth — master = 6480083, prod = 5b3a89b)
+3. .agents/active.md (hot state — Phase 13.5.4 + V25-V30 + UC1 + Tier 2 closed end-to-end)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V30)
+5. .agents/sessions/2026-04-26-session8-phase13.5.4-end-to-end-V23-V30.md (this session detail — 27 commits)
+
+Status summary:
+- master = 6480083, ~5400 vitest passing
+- Production at 5b3a89b LIVE (V30 deployed via V15 combined). Vercel: lover-clinic-jbx0eyf11
+- This session shipped 27 commits + 14 V-entries (V23 → V30) closing chicken-and-egg admin loop end-to-end
+- Auto-sync universal: every id, every email, every permission group works automatically
+- 175+ permission/security/E2E tests + adversarial coverage
+- All 3 manual admin buttons removed per user directive
+- Tier 2 closed: Doc 10/11/12 covered by F12; UC1 weekend colors shipped; M9 deferred
+
+Next action (when user gives go-ahead):
+- Tier 3 XL features remaining (each needs focused 3-4h session):
+  * T3.b Phase 14.8.B signature canvas (react-signature-canvas + new field type)
+  * T3.c Phase 14.8.C PDF export (html2pdf.js)
+  * T3.d/e Phase 14.9 audit log + watermark + email/LINE delivery
+  * T3.f Phase 14.10 bulk print + QR + saved drafts
+  * T4 Phase 14.4 G5 customer-product-change (course exchange + refund)
+  * T5 Phase 14.11 visual designer + TFP 3200 LOC refactor
+
+Outstanding user-triggered actions (NOT auto-run):
+- None code-side. Production verified working end-to-end.
+
+Rules:
+- No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
+- V15 combined: "deploy" = vercel + firestore:rules in parallel
+- Rule B Probe-Deploy-Probe with 5 endpoints + V23 anon-CREATE/UPDATE + V27-tris anon-DELETE = 7 endpoints
+- V27 lesson: probe artifacts must use isArchived=true CREATE pattern (not 'pending')
+- V28 lesson: soft-gate isAdmin trusts group, not email (drop isAuthorizedAccount prefix)
+- V29 lesson: no manual buttons; auto-sync via UPC useEffect + sync-self endpoint
+- V30 lesson: be_staff doc IDs = staffId; query by firebaseUid FIELD not uid as doc ID
+- Every bug → test + audit invariant + V-entry (Rule D + Rule I)
+
+Invoke /session-start to boot context.
+```
+
+---
+
+## Archived Resume Prompt (session 7 — superseded)
 
 ```
 Resume LoverClinic OPD — continue from 2026-04-26 session 6 (V23 hotfix DEPLOYED).
