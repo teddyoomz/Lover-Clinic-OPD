@@ -29,7 +29,7 @@ import {
   GENDER_OPTIONS,
   RECEIPT_TYPE_OPTIONS,
 } from '../../lib/customerValidation.js';
-import { addCustomer } from '../../lib/backendClient.js';
+import { addCustomer, buildFormFromCustomer, updateCustomerFromForm } from '../../lib/backendClient.js';
 import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
 import DateField from '../DateField.jsx';
 import ThaiAddressSelect from './customer-form/ThaiAddressSelect.jsx';
@@ -73,8 +73,15 @@ export default function CustomerCreatePage({
   onCancel,
   branchId = null,
   createdBy = null,
+  // V33.3 — dual-mode: 'create' (default, addCustomer + counter) or 'edit'
+  // (updateCustomerFromForm + preserve hn_no). When mode='edit', pass
+  // `initialCustomer` (the customer doc) to prefill the form.
+  mode = 'create',
+  initialCustomer = null,
 }) {
-  const [form, setForm] = useState(() => emptyCustomerForm());
+  const isEdit = mode === 'edit' && initialCustomer;
+  const customerIdForEdit = isEdit ? (initialCustomer.id || initialCustomer.proClinicId || initialCustomer.customerId) : null;
+  const [form, setForm] = useState(() => isEdit ? (buildFormFromCustomer(initialCustomer) || emptyCustomerForm()) : emptyCustomerForm());
   const [profileFile, setProfileFile] = useState(null);
   const [profilePreview, setProfilePreview] = useState('');
   const [galleryFiles, setGalleryFiles] = useState([]);   // File[]
@@ -86,16 +93,17 @@ export default function CustomerCreatePage({
   const galleryInputRef = useRef(null);
 
   // Reset state on mount (page is unmounted/remounted by BackendDashboard
-  // takeover when creatingCustomer toggles, so this fires per session).
+  // takeover when creatingCustomer / editingCustomer toggles).
   useEffect(() => {
-    setForm(emptyCustomerForm());
+    setForm(isEdit ? (buildFormFromCustomer(initialCustomer) || emptyCustomerForm()) : emptyCustomerForm());
     setProfileFile(null);
-    setProfilePreview('');
+    setProfilePreview(isEdit && initialCustomer?.patientData?.profileImage ? initialCustomer.patientData.profileImage : '');
     setGalleryFiles([]);
     setGalleryPreviews([]);
     setSaving(false);
     setError('');
     setSuccess('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Cleanup blob URLs on unmount or when previews change.
@@ -194,18 +202,25 @@ export default function CustomerCreatePage({
     setSuccess('');
     setSaving(true);
     try {
-      const result = await addCustomer(form, {
-        branchId,
-        createdBy,
-        files: {
-          profile: profileFile,
-          gallery: galleryFiles,
-        },
-      });
-      setSuccess(`บันทึกเรียบร้อย — HN: ${result.hn}`);
+      let result;
+      if (isEdit) {
+        result = await updateCustomerFromForm(customerIdForEdit, form, {
+          branchId,
+          updatedBy: createdBy,
+          files: { profile: profileFile, gallery: galleryFiles },
+        });
+        setSuccess(`บันทึกการแก้ไขเรียบร้อย — HN: ${form.hn_no || customerIdForEdit}`);
+      } else {
+        result = await addCustomer(form, {
+          branchId,
+          createdBy,
+          files: { profile: profileFile, gallery: galleryFiles },
+        });
+        setSuccess(`บันทึกเรียบร้อย — HN: ${result.hn}`);
+      }
       onSaved?.(result);
       // Brief delay so user sees the success message before BackendDashboard
-      // tears down the page (sets creatingCustomer=false).
+      // tears down the page (creatingCustomer / editingCustomer = false).
       setTimeout(() => { onCancel?.(); }, 800);
     } catch (err) {
       const field = err.field || 'firstname';
@@ -233,7 +248,9 @@ export default function CustomerCreatePage({
           </button>
           <div className="flex items-center gap-2">
             <UserPlus size={22} className="text-emerald-400" />
-            <h2 className="text-xl font-black text-[var(--tx-heading)]">เพิ่มลูกค้าใหม่</h2>
+            <h2 className="text-xl font-black text-[var(--tx-heading)]">
+              {isEdit ? `แก้ไขข้อมูลลูกค้า ${form.hn_no || ''}` : 'เพิ่มลูกค้าใหม่'}
+            </h2>
           </div>
         </div>
         <button
@@ -333,10 +350,16 @@ export default function CustomerCreatePage({
                 <input type="text" value={form.old_hn_id || ''} onChange={(e) => setField('old_hn_id', e.target.value)} maxLength={30} data-field="old_hn_id" data-testid="customer-form-old-hn" className={inputCls()} />
               </div>
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">หมายเหตุ HN ใหม่</label>
-                <div className="px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs">
-                  ระบบจะสร้าง HN อัตโนมัติเมื่อบันทึก (รูปแบบ LC-YY######)
-                </div>
+                <label className="block text-xs text-[var(--tx-muted)] mb-1">{isEdit ? 'รหัสลูกค้า (HN)' : 'หมายเหตุ HN ใหม่'}</label>
+                {isEdit ? (
+                  <div className="px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-sm font-mono">
+                    {form.hn_no || customerIdForEdit || '—'}
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs">
+                    ระบบจะสร้าง HN อัตโนมัติเมื่อบันทึก (รูปแบบ LC-YY######)
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -732,7 +755,7 @@ export default function CustomerCreatePage({
               className="px-5 py-2 rounded-lg text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {saving ? 'กำลังบันทึก...' : 'บันทึกลูกค้าใหม่'}
+              {saving ? 'กำลังบันทึก...' : (isEdit ? 'บันทึกการแก้ไข' : 'บันทึกลูกค้าใหม่')}
             </button>
           </div>
         </form>

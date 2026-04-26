@@ -413,21 +413,33 @@ describe('Q8 nav + dashboard + tabPermissions', () => {
   });
 });
 
-// ─── Q9 — CustomerDetailView edit-customer-ids button + modal wiring ────
-describe('Q9 CustomerDetailView wiring', () => {
-  test('Q9.1 imports EditCustomerIdsModal', () => {
-    expect(CDV_SRC).toMatch(/import EditCustomerIdsModal/);
+// ─── Q9 — CustomerDetailView wiring (V33.3 superseded V32-tris-quater) ────
+// V33.3 (2026-04-27): EditCustomerIdsModal REMOVED in favor of full-page Edit
+// Customer takeover (CustomerCreatePage mode='edit' via BackendDashboard).
+// The focused เลขบัตร button is gone; admin clicks "แก้ไข" in the profile
+// card → BackendDashboard.editingCustomer → CustomerCreatePage prefills the
+// form. Q10 group below still validates the EditCustomerIdsModal *file*
+// since it stays on disk for backward compat (just unmounted).
+describe('Q9 CustomerDetailView wiring (V33.3 — page replaces modal)', () => {
+  test('Q9.1 EditCustomerIdsModal NO LONGER imported (V33.3 removed)', () => {
+    expect(CDV_SRC).not.toMatch(/import EditCustomerIdsModal/);
+    expect(CDV_SRC).not.toMatch(/<EditCustomerIdsModal/);
   });
-  test('Q9.2 has editIdsOpen state + setEditIdsOpen', () => {
-    expect(CDV_SRC).toMatch(/editIdsOpen/);
-    expect(CDV_SRC).toMatch(/setEditIdsOpen/);
+  test('Q9.2 editIdsOpen state REMOVED (V33.3)', () => {
+    expect(CDV_SRC).not.toMatch(/setEditIdsOpen/);
+    expect(CDV_SRC).not.toMatch(/data-testid=["']edit-customer-ids-btn["']/);
   });
-  test('Q9.3 button has data-testid + opens modal', () => {
-    expect(CDV_SRC).toMatch(/data-testid=["']edit-customer-ids-btn["']/);
-    expect(CDV_SRC).toMatch(/setEditIdsOpen\(true\)/);
+  test('Q9.3 NEW Edit button delegates to onEditCustomer prop (full-page takeover)', () => {
+    expect(CDV_SRC).toMatch(/data-testid=["']edit-customer-btn["']/);
+    expect(CDV_SRC).toMatch(/onClick=\{onEditCustomer\}/);
+    expect(CDV_SRC).toMatch(/onEditCustomer/);
   });
-  test('Q9.4 modal renders only when open', () => {
-    expect(CDV_SRC).toMatch(/\{editIdsOpen\s*&&\s*\(\s*<EditCustomerIdsModal/);
+  test('Q9.4 BackendDashboard wires editingCustomer takeover to CustomerCreatePage mode=edit', async () => {
+    const fs = await import('node:fs/promises');
+    const dashSrc = await fs.readFile('src/pages/BackendDashboard.jsx', 'utf-8');
+    expect(dashSrc).toMatch(/editingCustomer \?/);
+    expect(dashSrc).toMatch(/<CustomerCreatePage[\s\S]*?mode="edit"/);
+    expect(dashSrc).toMatch(/onEditCustomer=\{\(\) => setEditingCustomer/);
   });
 });
 

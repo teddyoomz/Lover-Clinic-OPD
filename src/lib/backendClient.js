@@ -211,6 +211,205 @@ function buildPatientDataFromForm(form) {
 
 export { buildPatientDataFromForm };
 
+// V33.3 (2026-04-27) — REVERSE mapper: customer doc → form (lowercase ProClinic
+// shape). Used by CustomerEditPage to prefill the form from an existing
+// customer doc. Reads BOTH root flat fields (post-V33 docs) AND
+// patientData camelCase (cloned customers via reverseMapPatient).
+//
+// Critical: this MUST mirror buildPatientDataFromForm's mapping in reverse,
+// so a save → load → save round-trip preserves all fields.
+function buildFormFromCustomer(customer) {
+  if (!customer || typeof customer !== 'object') return null;
+  const pd = customer.patientData && typeof customer.patientData === 'object' ? customer.patientData : {};
+
+  const pick = (rootKey, pdKey) => {
+    const r = customer[rootKey];
+    const p = pdKey ? pd[pdKey] : null;
+    if (r != null && r !== '') return r;
+    if (p != null && p !== '') return p;
+    return '';
+  };
+
+  // Birthdate: prefer root ISO; fall back to patientData.birthdate; fall back to
+  // dobYear/Month/Day → reconstruct ISO (handles legacy cloned shape).
+  let birthdate = pick('birthdate', 'birthdate');
+  if (!birthdate && pd.dobYear) {
+    const yrBE = parseInt(pd.dobYear, 10);
+    const mo = parseInt(pd.dobMonth || '1', 10);
+    const dy = parseInt(pd.dobDay || '1', 10);
+    if (!Number.isNaN(yrBE) && !Number.isNaN(mo) && !Number.isNaN(dy)) {
+      // Heuristic: years > 2400 are BE (พ.ศ.); convert to CE.
+      const yrCE = yrBE > 2400 ? yrBE - 543 : yrBE;
+      birthdate = `${String(yrCE).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(dy).padStart(2, '0')}`;
+    }
+  }
+
+  return {
+    hn_no: customer.hn_no || customer.proClinicHN || '',
+    old_hn_id: pick('old_hn_id'),
+    prefix: pick('prefix', 'prefix'),
+    prefix_en: pick('prefix_en'),
+    firstname: pick('firstname', 'firstName'),
+    lastname: pick('lastname', 'lastName'),
+    firstname_en: pick('firstname_en'),
+    lastname_en: pick('lastname_en'),
+    nickname: pick('nickname', 'nickname'),
+    gender: pick('gender', 'gender'),
+    birthdate,
+    blood_type: pick('blood_type', 'bloodType'),
+    height: pick('height', 'height'),
+    weight: pick('weight', 'weight'),
+    citizen_id: pick('citizen_id', 'nationalId'),
+    passport_id: pick('passport_id', 'passport'),
+    country: pick('country', 'nationalityCountry'),
+    pregnanted: typeof customer.pregnanted === 'boolean'
+      ? customer.pregnanted
+      : (typeof pd.pregnanted === 'boolean' ? pd.pregnanted : false),
+    customer_type: pick('customer_type', 'customerType'),
+    customer_type_2: pick('customer_type_2', 'customerType2'),
+    telephone_number: pick('telephone_number', 'phone'),
+    email: pick('email', 'email'),
+    line_id: pick('line_id', 'lineId'),
+    facebook_link: pick('facebook_link', 'facebookLink'),
+    address: pick('address', 'address'),
+    full_address_en: pick('full_address_en'),
+    postal_code: pick('postal_code', 'postalCode'),
+    district: pick('district', 'district'),
+    sub_district: pick('sub_district', 'subDistrict'),
+    province: pick('province', 'province'),
+    occupation: pick('occupation', 'occupation'),
+    income: pick('income', 'income'),
+    source: pick('source', 'source'),
+    source_detail: pick('source_detail', 'sourceDetail'),
+    ad_description: pick('ad_description', 'adDescription'),
+    is_image_marketing_allowed: !!customer.is_image_marketing_allowed,
+    profile_image: pick('profile_image', 'profileImage'),
+    card_photo: pick('card_photo'),
+    doctor_id: pick('doctor_id', 'doctorId'),
+    symptoms: pick('symptoms', 'symptoms'),
+    symptoms_en: pick('symptoms_en'),
+    before_treatment: pick('before_treatment', 'beforeTreatment'),
+    before_treatment_en: pick('before_treatment_en'),
+    congenital_disease: pick('congenital_disease', 'congenitalDisease'),
+    congenital_disease_en: pick('congenital_disease_en'),
+    history_of_drug_allergy: pick('history_of_drug_allergy', 'drugAllergy'),
+    history_of_drug_allergy_en: pick('history_of_drug_allergy_en'),
+    history_of_food_allergy: pick('history_of_food_allergy', 'foodAllergy'),
+    history_of_food_allergy_en: pick('history_of_food_allergy_en'),
+    note: pick('note', 'note'),
+    like_note: pick('like_note', 'likeNote'),
+    dislike_note: pick('dislike_note', 'dislikeNote'),
+    receipt_type: pick('receipt_type', 'receiptType'),
+    personal_receipt_name: pick('personal_receipt_name'),
+    personal_receipt_address: pick('personal_receipt_address'),
+    personal_receipt_phonenumber: pick('personal_receipt_phonenumber'),
+    personal_receipt_tax_id: pick('personal_receipt_tax_id'),
+    company_receipt_name: pick('company_receipt_name'),
+    company_receipt_address: pick('company_receipt_address'),
+    company_receipt_phonenumber: pick('company_receipt_phonenumber'),
+    company_receipt_tax_id: pick('company_receipt_tax_id'),
+    contact_1_firstname: pick('contact_1_firstname'),
+    contact_1_firstname_en: pick('contact_1_firstname_en'),
+    contact_1_lastname: pick('contact_1_lastname'),
+    contact_1_lastname_en: pick('contact_1_lastname_en'),
+    contact_1_telephone_number: pick('contact_1_telephone_number'),
+    contact_2_firstname: pick('contact_2_firstname'),
+    contact_2_firstname_en: pick('contact_2_firstname_en'),
+    contact_2_lastname: pick('contact_2_lastname'),
+    contact_2_lastname_en: pick('contact_2_lastname_en'),
+    contact_2_telephone_number: pick('contact_2_telephone_number'),
+    gallery_upload: Array.isArray(customer.gallery_upload)
+      ? customer.gallery_upload
+      : (Array.isArray(pd.gallery) ? pd.gallery : []),
+    created_year: customer.created_year ?? null,
+    consent: {
+      marketing: !!(customer.consent?.marketing),
+      healthData: !!(customer.consent?.healthData),
+      imageMarketing: !!(customer.consent?.imageMarketing ?? customer.is_image_marketing_allowed),
+    },
+  };
+}
+
+export { buildFormFromCustomer };
+
+// V33.3 — Update existing customer doc from form. Mirrors addCustomer flow
+// but with no HN counter (preserves existing) + uses existing customerId.
+// Re-uploads files only if NEW File objects passed; existing URLs preserved.
+export async function updateCustomerFromForm(customerId, form, opts = {}) {
+  if (!customerId) throw new Error('customerId required');
+  const { branchId, updatedBy = null, files = null } = opts;
+  const safe = form && typeof form === 'object' ? { ...form } : {};
+
+  const { normalizeCustomer, validateCustomer } = await import('./customerValidation.js');
+
+  const preNormalized = normalizeCustomer(safe);
+
+  // Strict-validate: firstname required + bounds + regexes.
+  const firstname = typeof preNormalized.firstname === 'string' ? preNormalized.firstname.trim() : '';
+  if (!firstname) {
+    const err = new Error('กรุณากรอกชื่อ');
+    err.field = 'firstname';
+    throw err;
+  }
+  // Inject the existing hn_no for the bounds check (since edit preserves it).
+  const softFail = validateCustomer({ ...preNormalized, hn_no: preNormalized.hn_no || customerId });
+  if (softFail) {
+    const [field, msg] = softFail;
+    const err = new Error(msg);
+    err.field = field;
+    throw err;
+  }
+
+  // Upload new files; preserve URLs already in form.profile_image / gallery_upload.
+  let profileUrl = preNormalized.profile_image || '';
+  let galleryUrls = Array.isArray(preNormalized.gallery_upload) ? [...preNormalized.gallery_upload] : [];
+
+  if (files && (files.profile || (Array.isArray(files.gallery) && files.gallery.length > 0))) {
+    const { uploadFile, buildStoragePath } = await import('./storageClient.js');
+
+    if (files.profile) {
+      const path = buildStoragePath('be_customers', customerId, 'profile', files.profile.name);
+      const { url } = await uploadFile(files.profile, path, { maxSizeMB: 1 });
+      profileUrl = url;
+    }
+
+    if (Array.isArray(files.gallery) && files.gallery.length > 0) {
+      const uploadedUrls = await Promise.all(
+        files.gallery.map(async (file) => {
+          const uniqueId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          const path = buildStoragePath('be_customers', customerId, `gallery_${uniqueId}`, file.name);
+          const { url } = await uploadFile(file, path, { maxSizeMB: 5 });
+          return url;
+        }),
+      );
+      galleryUrls = [...galleryUrls, ...uploadedUrls];
+    }
+  }
+
+  const finalForm = normalizeCustomer({
+    ...preNormalized,
+    profile_image: profileUrl,
+    gallery_upload: galleryUrls,
+  });
+
+  // Compute updates — flat root fields + dotted-path patientData merge.
+  // We use updateDoc with the FULL re-merged doc to preserve consent + branchId
+  // + nested object structure that downstream readers depend on.
+  const patch = {
+    ...finalForm,
+    // Re-build patientData (camelCase mirror) since the form may have changed.
+    patientData: buildPatientDataFromForm(finalForm),
+    lastUpdatedAt: new Date().toISOString(),
+    lastUpdatedBy: updatedBy || null,
+  };
+  if (branchId) patch.branchId = branchId;
+
+  await updateDoc(customerDoc(customerId), patch);
+  return { id: customerId };
+}
+
 // ─── V33-customer-create — HN counter + addCustomer orchestrator ─────────────
 //
 // Why a counter (Option B in plan):

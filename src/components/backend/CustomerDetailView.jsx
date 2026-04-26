@@ -24,7 +24,7 @@ import {
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineQrModal from './LinkLineQrModal.jsx';
-import EditCustomerIdsModal from './EditCustomerIdsModal.jsx';
+// V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
@@ -103,6 +103,7 @@ export default function CustomerDetailView({
   customer, accentColor, theme, clinicSettings,
   onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment,
   onCustomerUpdated, onCreateSale, onOpenFinance,
+  onEditCustomer,    // V33.3 — open the full Edit Customer page (BackendDashboard takeover)
 }) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
@@ -137,7 +138,7 @@ export default function CustomerDetailView({
   const [lineQrOpen, setLineQrOpen] = useState(false);
   // V32-tris-quater (2026-04-26) — focused nationalId/passport edit modal.
   // Customer linking via "ผูก <ID>" needs these on be_customers.
-  const [editIdsOpen, setEditIdsOpen] = useState(false);
+  // V33.3 — editIdsOpen removed (full-page edit takes over instead)
   // Phase 14.2.B (2026-04-25) — per-treatment-row print modal:
   //   { treatmentId, type: 'cert' | 'record' }
   // 'cert' filters to TREATMENT_CERT_DOC_TYPES (8 medical-cert variants).
@@ -383,12 +384,38 @@ export default function CustomerDetailView({
                   <span className="text-[var(--tx-muted)]">| {relativeTime(customer.lastSyncedAt)}</span>
                 </div>
               )}
+
+              {/* V33.3 — Action buttons row (Edit + LINE) integrated into profile header */}
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {onEditCustomer && (
+                  <button onClick={onEditCustomer}
+                    data-testid="edit-customer-btn"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
+                    style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
+                    title="แก้ไขข้อมูลลูกค้าทั้งหมด">
+                    <Edit3 size={11} /> แก้ไข
+                  </button>
+                )}
+                <button onClick={() => setLineQrOpen(true)}
+                  data-testid="link-line-btn"
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
+                  style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
+                  title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
+                  <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
+                </button>
+              </div>
             </div>
 
             {/* Personal Info Table */}
             <div className="p-4 space-y-0">
-              <InfoRow label="สัญชาติ" value={pd.nationality || '-'} />
-              <InfoRow label="เลขบัตรปชช." value={pd.idCard || '-'} />
+              {/* V33.3 — read both legacy (nationality/idCard) + canonical
+                  (nationalityCountry/nationalId) shapes for cloned + manually-created
+                  customer compatibility. */}
+              <InfoRow label="สัญชาติ" value={pd.nationalityCountry || pd.nationality || (customer?.country || '-')} />
+              <InfoRow label="เลขบัตรปชช." value={pd.nationalId || pd.idCard || (customer?.citizen_id || '-')} icon={<IdCard size={11} />} />
+              {(pd.passport || customer?.passport_id) && (
+                <InfoRow label="พาสปอร์ต" value={pd.passport || customer?.passport_id} icon={<IdCard size={11} />} />
+              )}
               <InfoRow label="เพศ" value={pd.gender || '-'} />
               <InfoRow label="วันเกิด" value={formatDob(pd)} />
               <InfoRow label="เบอร์โทร" value={pd.phone || '-'} icon={<Phone size={11} />} />
@@ -569,26 +596,9 @@ export default function CustomerDetailView({
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
               <div className="ml-auto flex items-center gap-1.5">
-                {/* V32-tris-quater (2026-04-26) — edit nationalId / passport
-                    so the customer can use "ผูก <ID>" via LINE OA chat to
-                    request a link (Option 2: admin-mediated approval). */}
-                <button onClick={() => setEditIdsOpen(true)}
-                  data-testid="edit-customer-ids-btn"
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                  style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
-                  title="แก้ไข / เพิ่ม เลขบัตรประชาชน + พาสปอร์ต">
-                  <IdCard size={11} /> เลขบัตร
-                </button>
-                {/* V32-tris-ter (2026-04-26) — LINE link QR. Mints a one-time
-                    token + shows QR for customer to scan. After scan + send,
-                    /api/webhook/line writes lineUserId onto this customer record. */}
-                <button onClick={() => setLineQrOpen(true)}
-                  data-testid="link-line-btn"
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                  style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
-                  title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
-                  <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
-                </button>
+                {/* V33.3 (2026-04-27) — "เลขบัตร" + "ผูก LINE" buttons MOVED
+                    into profile card (left column). Edit ALL customer data
+                    (incl. nationalId/passport) via the new full-page edit. */}
                 <button onClick={() => setPrintDocOpen(true)}
                   data-testid="print-document-btn"
                   className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
@@ -1042,21 +1052,9 @@ export default function CustomerDetailView({
           onClose={() => setLineQrOpen(false)}
         />
       )}
-      {/* V32-tris-quater (2026-04-26) — Edit nationalId / passport */}
-      {editIdsOpen && (
-        <EditCustomerIdsModal
-          customer={customer}
-          onClose={() => setEditIdsOpen(false)}
-          onSaved={(updated) => {
-            // Optimistic local update so the next "ผูก LINE" attempt uses
-            // the fresh ID values without a full reload. Parent page
-            // listener will eventually overwrite with the canonical doc.
-            if (customer && updated) {
-              customer.patientData = { ...(customer.patientData || {}), ...updated };
-            }
-          }}
-        />
-      )}
+      {/* V33.3 (2026-04-27) — EditCustomerIdsModal REMOVED in favor of full-page
+          Edit Customer (CustomerCreatePage mode='edit' via BackendDashboard
+          takeover). The focused nationalId/passport edit lives there now. */}
       {/* Phase 14.2.C (2026-04-25) — per-treatment-row print modals.
           Prefill maps every ProClinic Medical History field from the actual
           be_treatments / be_customers schema (verified via preview_eval):

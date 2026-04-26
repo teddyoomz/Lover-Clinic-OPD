@@ -92,6 +92,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [activeTab, setActiveTab] = useState('clone');
   const [viewingCustomer, setViewingCustomer] = useState(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);   // V33.2 — full-page Add Customer takeover
+  const [editingCustomer, setEditingCustomer] = useState(null);      // V33.3 — full-page Edit Customer takeover (the customer doc to edit)
   const [customerListRefresh, setCustomerListRefresh] = useState(0); // bump after Save so list reloads on return
   const [treatmentFormMode, setTreatmentFormMode] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -281,6 +282,21 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               onCustomerUsed={() => setFinanceInitialCustomer(null)}
             />
           </div>
+        ) : editingCustomer ? (
+          /* V33.3 — full-page Edit Customer takeover (from CustomerDetailView "แก้ไข" button) */
+          <CustomerCreatePage
+            mode="edit"
+            initialCustomer={editingCustomer}
+            onSaved={async () => {
+              // Refresh the customer doc so CustomerDetailView shows fresh data on return
+              try {
+                const fresh = await getCustomer(editingCustomer.id || editingCustomer.proClinicId);
+                if (fresh) setViewingCustomer(fresh);
+              } catch {}
+              setCustomerListRefresh((n) => n + 1);
+            }}
+            onCancel={() => setEditingCustomer(null)}
+          />
         ) : viewingCustomer ? (
           <CustomerDetailView
             customer={viewingCustomer}
@@ -288,6 +304,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             theme={theme}
             clinicSettings={clinicSettings}
             onBack={() => setViewingCustomer(null)}
+            onEditCustomer={() => setEditingCustomer(viewingCustomer)}
             onCreateTreatment={() => setTreatmentFormMode({
               mode: 'create',
               customerId: viewingCustomer.proClinicId,
