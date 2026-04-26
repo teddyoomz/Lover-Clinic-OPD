@@ -3,10 +3,11 @@
 // Client-side search filtering by name, HN, phone.
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle } from 'lucide-react';
+import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square } from 'lucide-react';
 import { getAllCustomers } from '../../lib/backendClient.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';
+import BulkPrintModal from './BulkPrintModal.jsx';
 
 export default function CustomerListTab({ clinicSettings, theme, onViewCustomer }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
@@ -18,6 +19,24 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
   const [filterQuery, setFilterQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState(null);
+  // Phase 14.10 (2026-04-26) — bulk-print multi-select mode + selected ids
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const exitSelectMode = () => { setSelectMode(false); clearSelection(); };
+  const selectedCustomers = useMemo(
+    () => customers.filter(c => selectedIds.has(c.id)),
+    [customers, selectedIds],
+  );
 
   // Fetch all cloned customers
   useEffect(() => {
@@ -77,6 +96,15 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
             style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.6))`, boxShadow: `0 4px 20px rgba(${acRgb},0.25)` }}
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> รีเฟรช
+          </button>
+          {/* Phase 14.10 — bulk-print toggle + action bar */}
+          <button
+            onClick={() => { setSelectMode(s => !s); if (selectMode) clearSelection(); }}
+            disabled={loading || customers.length === 0}
+            data-testid="bulk-print-toggle"
+            className={`px-4 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-40 flex items-center gap-2 uppercase tracking-wider ${selectMode ? 'bg-violet-700 text-white' : 'bg-[var(--bg-input)] text-[var(--tx-primary)] border border-[var(--bd)] hover:border-violet-500/50'}`}
+          >
+            <FileText size={15} /> {selectMode ? 'ยกเลิก' : 'พิมพ์ Bulk'}
           </button>
         </div>
         <div className="mt-3 flex items-center justify-between">
@@ -152,18 +180,87 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
 
       {/* ── Customer Grid ── */}
       {!loading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {filtered.map(customer => (
-            <CustomerCard
-              key={customer.id}
-              customer={customer}
-              accentColor={ac}
-              theme={theme}
-              mode="cloned"
-              onView={onViewCustomer}
-            />
-          ))}
-        </div>
+        <>
+          {selectMode && (
+            <div
+              className="sticky top-0 z-10 -mx-1 px-3 py-2 rounded-lg bg-violet-900/30 border border-violet-700/50 text-xs text-violet-100 flex items-center gap-2 backdrop-blur"
+              data-testid="bulk-print-action-bar"
+            >
+              <span className="font-bold">เลือก {selectedIds.size} รายการ</span>
+              <span className="opacity-70">— กดที่ลูกค้าเพื่อเลือก</span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIds(new Set(filtered.map(c => c.id)));
+                  }}
+                  data-testid="bulk-print-select-all"
+                  className="px-2 py-1 rounded bg-violet-800 hover:bg-violet-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                >
+                  <CheckSquare size={11} /> เลือกทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={selectedIds.size === 0}
+                  className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white text-[11px] disabled:opacity-50"
+                >
+                  ล้าง
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkOpen(true)}
+                  disabled={selectedIds.size === 0}
+                  data-testid="bulk-print-launch"
+                  className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold inline-flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download size={11} /> สร้าง PDF
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {filtered.map(customer => {
+              const selected = selectedIds.has(customer.id);
+              return (
+                <div
+                  key={customer.id}
+                  className={selectMode ? 'relative cursor-pointer' : 'relative'}
+                  onClick={selectMode ? () => toggleSelect(customer.id) : undefined}
+                  data-testid={selectMode ? `bulk-print-row-${customer.id}` : undefined}
+                  data-selected={selectMode && selected ? 'true' : undefined}
+                >
+                  {selectMode && (
+                    <div className="absolute top-2 left-2 z-10 pointer-events-none" aria-hidden="true">
+                      {selected
+                        ? <CheckSquare size={20} className="text-emerald-400 drop-shadow" />
+                        : <Square size={20} className="text-[var(--tx-muted)] drop-shadow" />
+                      }
+                    </div>
+                  )}
+                  <div className={selectMode ? (selected ? 'ring-2 ring-emerald-500/70 rounded-2xl' : 'opacity-80') : ''}>
+                    <CustomerCard
+                      customer={customer}
+                      accentColor={ac}
+                      theme={theme}
+                      mode="cloned"
+                      onView={selectMode ? null : onViewCustomer}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Phase 14.10 — Bulk print modal */}
+      {bulkOpen && (
+        <BulkPrintModal
+          customers={selectedCustomers}
+          clinicSettings={clinicSettings}
+          onClose={() => { setBulkOpen(false); exitSelectMode(); }}
+        />
       )}
     </div>
   );
