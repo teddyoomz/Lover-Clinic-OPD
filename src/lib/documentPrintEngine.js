@@ -97,9 +97,18 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
   ctx.customerName   = customer.customerName || customer.name
     || `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim()
     || '';
+  // Phase 14.10-tris (2026-04-26) — also expose customerNameEn for English
+  // / bilingual certificates (fit-to-fly, etc.).
+  ctx.customerNameEn = customer.customerNameEn
+    || `${pd.firstNameEn || ''} ${pd.lastNameEn || ''}`.trim()
+    || '';
   ctx.customerHN     = customer.proClinicHN || customer.hn || customer.customerHN || '';
+  // Aliases — some templates use these alternate names
+  ctx.hn             = ctx.customerHN;
+  ctx.HN             = ctx.customerHN;
   ctx.nationalId     = pd.nationalId || customer.nationalId || '';
   ctx.age            = pd.age || customer.age || '';
+  ctx.ageMonth       = pd.ageMonth || customer.ageMonth || '';
   // Gender — translated when doc language is English (fit-to-fly etc).
   // Thai source values: ชาย / หญิง / อื่นๆ → Male / Female / Other.
   const rawGender = pd.gender || '';
@@ -110,6 +119,24 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
     ctx.gender = rawGender;
   }
   ctx.phone          = pd.phone || '';
+  // Phase 14.10-tris (2026-04-26) — extended customer fields. User reported
+  // "บาง template ไม่ดึง HN และกรอก text ไม่ตรงช่อง Form" — templates use
+  // `{{patientAddress}}`, `{{birthdate}}`, `{{bloodGroup}}`,
+  // `{{emergencyName}}`, `{{emergencyPhone}}` but buildPrintContext didn't
+  // populate them. Result: every consent / patient-referral / fit-to-fly
+  // doc rendered with blank ที่อยู่ + เบอร์ติดต่อฉุกเฉิน fields.
+  // Fix: pull from be_customers.patientData.* with fallbacks for legacy
+  // shapes (some have address as a string, some as a structured object).
+  ctx.patientAddress = pd.address
+    || (pd.addressFull ? pd.addressFull : '')
+    || customer.address
+    || '';
+  ctx.birthdate      = pd.birthdate || pd.dateOfBirth || customer.birthdate || '';
+  ctx.bloodGroup     = pd.bloodGroup || pd.bloodType || customer.bloodGroup || '';
+  ctx.emergencyName  = pd.emergencyName || pd.emergencyContact?.name || customer.emergencyName || '';
+  ctx.emergencyPhone = pd.emergencyPhone || pd.emergencyContact?.phone || customer.emergencyPhone || '';
+  ctx.passport       = pd.passport || pd.passportNo || customer.passport || '';
+  ctx.visitCount     = customer.stats?.visitCount || customer.visitCount || '';
 
   // Today (Bangkok TZ). Phase 14.x — language-aware year:
   //   th       → Buddhist year (พ.ศ.) e.g. 25/04/2569
@@ -517,9 +544,16 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
 
   const wrapper = document.createElement('div');
   wrapper.setAttribute('data-pdf-wrapper', 'true');
+  // Phase 14.10-tris (2026-04-26) — height changed from `min-height: ${sz.minH}`
+  // to `min-height: 0` + explicit `height: ${sz.minH}` because html2pdf was
+  // capturing wrapper at content-natural-height which sometimes exceeded
+  // the minH and forced a 2nd blank page in the PDF. Using fixed height
+  // + overflow:hidden constrains content to exactly 1 page; templates
+  // shorter than 1 page get whitespace fill (correct), templates longer
+  // get cropped (admin sees + can fix template).
   wrapper.style.cssText = [
     `width: ${sz.w}`,
-    `min-height: ${sz.minH}`,
+    `height: ${sz.minH}`,
     `padding: ${sz.p}`,
     'box-sizing: border-box',
     'background: #ffffff',
@@ -528,6 +562,7 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
     'font-size: 14px',
     'margin: 0',
     'position: relative',
+    'overflow: hidden',
   ].join('; ');
 
   // Copy all <style> blocks from the parsed head so class-based selectors
@@ -571,6 +606,14 @@ export async function exportDocumentToPdf({ template, clinic, customer, values, 
         windowHeight: wrapper.offsetHeight || (paperSize === 'A5' ? 794 : paperSize === 'label-57x32' ? 121 : 1123),
       },
       jsPDF: paper,
+      // Phase 14.10-tris (2026-04-26) — force single-page render. Without
+      // this, content overflowing the page split into a 2nd PDF page —
+      // and even content fitting exactly sometimes produced a blank 2nd
+      // page due to html2pdf's default split heuristic (the bug user
+      // reported as "เกินมา 1 หน้าเป็นหน้าเปล่า"). 'avoid-all' keeps
+      // each html2pdf source on a single PDF page; admin sees the cropped
+      // overflow visually and can fix the template.
+      pagebreak: { mode: 'avoid-all' },
     };
     pdfBlob = await html2pdf().from(wrapper).set(opt).outputPdf('blob');
   } finally {

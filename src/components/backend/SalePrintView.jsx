@@ -21,13 +21,32 @@ function fmtMoney(n) {
   return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Phase 14.10-bis (2026-04-26) — STATUS map matches SaleTab PAYMENT_STATUSES
+// + sale.status='cancelled' override. User reported "ชำระแล้วและไม่ชำระแล้ว
+// ขึ้นผิด" — the previous SalePrintView recomputed status from totalPaidAmount
+// vs netTotal, which diverged from the stored payment.status field. Source
+// of truth = sale.payment.status (set by SaleTab's payment workflow).
 const PAYMENT_STATUS_LABEL = {
-  active: 'ใช้งาน',
-  draft: 'ร่าง',
-  paid: 'ชำระแล้ว',
-  unpaid: 'ยังไม่ชำระ',
+  paid:      'ชำระแล้ว',
+  split:     'แบ่งชำระ',
+  unpaid:    'ค้างชำระ',
+  deferred:  'ชำระภายหลัง',
+  draft:     'แบบร่าง',
   cancelled: 'ยกเลิก',
 };
+function resolveSaleStatusLabel(sale) {
+  if (!sale) return '—';
+  // sale.status='cancelled' is the canonical cancelled flag (overrides payment.status)
+  if (sale.status === 'cancelled') return PAYMENT_STATUS_LABEL.cancelled;
+  const ps = sale.payment?.status;
+  if (ps && PAYMENT_STATUS_LABEL[ps]) return PAYMENT_STATUS_LABEL[ps];
+  // Legacy fallback: derive from paid-amount math
+  const paidAmount = Number(sale.totalPaidAmount) || 0;
+  const netTotal = Number(sale.billing?.netTotal ?? sale.netTotal) || 0;
+  if (paidAmount >= netTotal - 0.01 && netTotal > 0) return PAYMENT_STATUS_LABEL.paid;
+  if (paidAmount > 0) return PAYMENT_STATUS_LABEL.split;
+  return PAYMENT_STATUS_LABEL.unpaid;
+}
 
 function computeLineTotal(item) {
   // Grouped items (SaleTab) use `unitPrice`; legacy flat items use `price`.
@@ -39,7 +58,7 @@ function computeLineTotal(item) {
   return Math.max(0, gross - disc);
 }
 
-export default function SalePrintView({ sale, clinicSettings, onClose }) {
+export default function SalePrintView({ sale, clinicSettings, onClose, sellersLookup = [] }) {
   const s = sale || {};
   const clinic = clinicSettings || {};
   const accent = clinic.accentColor || '#dc2626';
@@ -117,10 +136,33 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
 
   const saleNumber = s.saleId || s.id || '—';
   const paidAmount = Number(s.totalPaidAmount) || 0;
-  const statusLabel = s.status === 'cancelled' ? 'ยกเลิก'
-    : paidAmount >= netTotal - 0.01 ? 'ชำระแล้ว'
-    : paidAmount > 0 ? `ชำระบางส่วน ${fmtMoney(paidAmount)}`
-    : 'ยังไม่ชำระ';
+  // Phase 14.10-bis (2026-04-26) — derive from sale.payment.status (source of
+  // truth set by SaleTab). Previous version recomputed and showed inverted
+  // labels when totalPaidAmount diverged from payment.status.
+  const statusLabel = resolveSaleStatusLabel(s);
+  // Date stamp at signature lines — falls back through created → saleDate → today
+  const signatureDateIso = s.createdAt
+    ? String(s.createdAt).slice(0, 10)
+    : (s.saleDate || new Date().toISOString().slice(0, 10));
+  const signatureDateBE = formatDateThaiBE(signatureDateIso);
+  // Customer + seller display: pull from the record (single source of truth).
+  // Phase 14.10-tris (2026-04-26) — sellers were saved with `{ id, name, percent, total }`
+  // shape (SaleTab.jsx line 498), but earlier SalePrintView read `sellerName`
+  // (wrong key — never existed). User reported "ผู้ออกใบขายไม่ดึง" with
+  // empty parens. Fix: read `name` (canonical) with fallback chain.
+  const customerDisplay = s.customerName || (s.customerHN ? `HN ${s.customerHN}` : '');
+  const firstSeller = (s.sellers || [])[0] || {};
+  // Resolve name via lookup when saved record only has id (legacy data)
+  const lookupName = firstSeller.id && Array.isArray(sellersLookup)
+    ? sellersLookup.find((opt) => String(opt.id) === String(firstSeller.id))?.name
+    : '';
+  const sellerDisplay = firstSeller.name
+    || firstSeller.sellerName
+    || lookupName
+    || firstSeller.id
+    || s.createdByName
+    || s.createdBy
+    || '';
 
   // Render via React Portal into document.body so print CSS can hide #root
   // cleanly (see QuotationPrintView for the same pattern).
@@ -302,22 +344,28 @@ export default function SalePrintView({ sale, clinicSettings, onClose }) {
           </div>
         )}
 
-        {/* Signatures */}
+        {/* Signatures
+            Phase 14.10-bis (2026-04-26) — customer name + seller name pulled
+            from the record's saved values (s.customerName + s.sellers[0]).
+            Bottom date pre-fills with the record's createdAt → saleDate
+            (was blank "..................") per user directive. */}
         <div className="grid grid-cols-2 gap-12 mt-auto pt-8 text-[11px]">
           <div className="text-center">
             <div className="border-t border-neutral-400 pt-2">
               <div className="font-semibold">ลูกค้า</div>
-              <div className="text-neutral-500 mt-0.5">( ............................................ )</div>
-              <div className="text-[10px] text-neutral-500 mt-3">วันที่ ..................</div>
+              <div className="text-neutral-700 mt-0.5">
+                ( {customerDisplay || '............................................'} )
+              </div>
+              <div className="text-[10px] text-neutral-600 mt-3">วันที่ {signatureDateBE}</div>
             </div>
           </div>
           <div className="text-center">
             <div className="border-t border-neutral-400 pt-2">
               <div className="font-semibold">ผู้ออกใบขาย</div>
-              <div className="text-neutral-500 mt-0.5">
-                ( {(s.sellers || [])[0]?.sellerName || '............................................'} )
+              <div className="text-neutral-700 mt-0.5">
+                ( {sellerDisplay || '............................................'} )
               </div>
-              <div className="text-[10px] text-neutral-500 mt-3">วันที่ ..................</div>
+              <div className="text-[10px] text-neutral-600 mt-3">วันที่ {signatureDateBE}</div>
             </div>
           </div>
         </div>

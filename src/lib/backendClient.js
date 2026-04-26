@@ -1979,6 +1979,161 @@ export async function recalcCustomerDepositBalance(customerId) {
   return total;
 }
 
+// ─── Phase M9 (2026-04-26) — Customer Summary Reconciler ────────────────
+// User directive (P3): "M9 customer doc summary drift — mitigated by tx-log;
+// nightly reconciler implicit". This is the explicit reconciler.
+//
+// Recomputes denormalized summary fields on each customer doc from source
+// ledgers (be_sales, be_treatments, be_deposits, be_customer_wallets).
+// Fields recomputed:
+//   - finance.depositBalance      — sum(active + partial deposits remainingAmount)
+//   - finance.walletBalance       — sum(active wallets remainingAmount)
+//   - stats.totalSpent            — sum(non-cancelled sales billing.netTotal)
+//   - stats.lifetimeSales         — sum(non-cancelled sales billing.netTotal — same as totalSpent;
+//                                       kept as separate field for backwards compat)
+//   - stats.visitCount            — count(non-cancelled treatments)
+//   - stats.lastVisitAt           — max(treatment.treatmentDate)
+//   - stats.lastSaleAt            — max(sale.saleDate)
+//   - stats.totalSales            — count(non-cancelled sales)
+//   - stats.totalTreatments       — count(non-cancelled treatments)
+//
+// Pure, no side effects beyond the customer doc write. Safe to call any
+// time. Idempotent (running twice produces the same result).
+
+/**
+ * Recompute all denormalized customer-summary fields from source ledgers.
+ * Returns the computed summary object — caller can verify before writing
+ * (pass `{ dryRun: true }` to skip the doc write).
+ */
+export async function recomputeCustomerSummary(customerId, opts = {}) {
+  const cid = String(customerId || '').trim();
+  if (!cid) throw new Error('customerId required');
+  const dryRun = !!opts.dryRun;
+
+  // Pull source ledgers in parallel (each is one query)
+  const [salesSnap, treatmentsSnap, depositsSnap, walletsSnap] = await Promise.all([
+    getDocs(query(salesCol(), where('customerId', '==', cid))),
+    getDocs(query(treatmentsCol(), where('customerId', '==', cid))),
+    getDocs(query(depositsCol(), where('customerId', '==', cid))),
+    getDocs(query(walletsCol(), where('customerId', '==', cid))),
+  ]);
+
+  // Sales aggregates (skip cancelled per spec)
+  let totalSpent = 0;
+  let totalSales = 0;
+  let lastSaleAt = '';
+  salesSnap.docs.forEach((d) => {
+    const s = d.data();
+    if (s.status === 'cancelled') return;
+    totalSales += 1;
+    totalSpent += Number(s.billing?.netTotal) || 0;
+    const dt = String(s.saleDate || '');
+    if (dt > lastSaleAt) lastSaleAt = dt;
+  });
+
+  // Treatments aggregates (skip cancelled)
+  let visitCount = 0;
+  let totalTreatments = 0;
+  let lastVisitAt = '';
+  treatmentsSnap.docs.forEach((d) => {
+    const t = d.data();
+    if (t.status === 'cancelled') return;
+    visitCount += 1;
+    totalTreatments += 1;
+    const dt = String(t.treatmentDate || '');
+    if (dt > lastVisitAt) lastVisitAt = dt;
+  });
+
+  // Deposit balance (active + partial only)
+  let depositBalance = 0;
+  depositsSnap.docs.forEach((d) => {
+    const x = d.data();
+    if (x.status === 'active' || x.status === 'partial') {
+      depositBalance += Number(x.remainingAmount) || 0;
+    }
+  });
+
+  // Wallet balance (active only)
+  let walletBalance = 0;
+  walletsSnap.docs.forEach((d) => {
+    const w = d.data();
+    if (w.status === 'active') {
+      walletBalance += Number(w.remainingAmount) || 0;
+    }
+  });
+
+  const summary = {
+    finance: {
+      depositBalance,
+      walletBalance,
+    },
+    stats: {
+      totalSpent,
+      lifetimeSales: totalSpent,
+      totalSales,
+      lastSaleAt,
+      visitCount,
+      totalTreatments,
+      lastVisitAt,
+    },
+    reconciledAt: new Date().toISOString(),
+  };
+
+  if (!dryRun) {
+    try {
+      await updateDoc(customerDoc(cid), {
+        'finance.depositBalance': summary.finance.depositBalance,
+        'finance.walletBalance':  summary.finance.walletBalance,
+        'stats.totalSpent':       summary.stats.totalSpent,
+        'stats.lifetimeSales':    summary.stats.lifetimeSales,
+        'stats.totalSales':       summary.stats.totalSales,
+        'stats.lastSaleAt':       summary.stats.lastSaleAt,
+        'stats.visitCount':       summary.stats.visitCount,
+        'stats.totalTreatments':  summary.stats.totalTreatments,
+        'stats.lastVisitAt':      summary.stats.lastVisitAt,
+        'reconciledAt':           summary.reconciledAt,
+      });
+    } catch (err) {
+      // Customer doc may not exist (test fixture, deleted, etc.) — surface
+      // to caller for visibility but don't crash batch operations.
+      throw new Error(`reconcile failed for ${cid}: ${err.message || err}`);
+    }
+  }
+
+  return { customerId: cid, summary };
+}
+
+/**
+ * Batch-reconcile every active customer. Yields progress via callback.
+ * Returns { total, succeeded, failed: [{customerId, message}] }.
+ *
+ * Use case: nightly cron OR admin "recompute all summaries" button after
+ * a bulk-import, manual Firestore edit, or schema migration where summary
+ * drift is suspected.
+ */
+export async function reconcileAllCustomerSummaries({ onProgress } = {}) {
+  const customers = await getAllCustomers();
+  const total = customers.length;
+  let succeeded = 0;
+  const failed = [];
+  for (let i = 0; i < customers.length; i += 1) {
+    const c = customers[i];
+    const cid = c.customerId || c.id;
+    if (!cid) continue;
+    try {
+      await recomputeCustomerSummary(cid);
+      succeeded += 1;
+    } catch (err) {
+      failed.push({ customerId: cid, message: err.message || String(err) });
+    }
+    if (typeof onProgress === 'function') {
+      try { onProgress({ done: i + 1, total, customerId: cid, name: c.customerName || '' }); }
+      catch { /* non-fatal */ }
+    }
+  }
+  return { total, succeeded, failed };
+}
+
 /**
  * Create a new deposit. Sets remainingAmount = amount, usedAmount = 0, status = 'active'.
  * Returns { depositId, success }.

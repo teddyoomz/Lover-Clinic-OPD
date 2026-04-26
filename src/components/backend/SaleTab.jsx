@@ -895,6 +895,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         <SalePrintView
           sale={printingSale}
           clinicSettings={clinicSettings}
+          sellersLookup={sellers}
           onClose={() => setPrintingSale(null)}
         />
       )}
@@ -958,11 +959,25 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 ))}
                 {viewingSale.payment?.refNo && <p className="text-[var(--tx-muted)] mt-1">Ref: {viewingSale.payment.refNo}</p>}
               </div>
-              {/* Sellers */}
+              {/* Sellers
+                  Phase 14.10-tris (2026-04-26) — fallback lookup against
+                  loaded `sellers` state when saved record's `s.name` is
+                  empty (legacy data where dropdown didn't capture name).
+                  User reported numeric "614" showing instead of staff name. */}
               {viewingSale.sellers?.length > 0 && (
                 <div>
                   <h4 className={labelCls}>พนักงานขาย</h4>
-                  {viewingSale.sellers.map((s,i) => <div key={i} className="flex justify-between py-0.5"><span>{s.name||s.id}</span><span>{s.percent}%</span></div>)}
+                  {viewingSale.sellers.map((s, i) => {
+                    const resolvedName = s.name
+                      || sellers.find(opt => String(opt.id) === String(s.id))?.name
+                      || s.id;
+                    return (
+                      <div key={i} className="flex justify-between py-0.5">
+                        <span>{resolvedName}</span>
+                        <span>{s.percent}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {/* Cancelled info */}

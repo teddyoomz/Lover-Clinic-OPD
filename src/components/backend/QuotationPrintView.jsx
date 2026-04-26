@@ -58,6 +58,16 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
   }, [q.courses, q.products, q.promotions, q.takeawayMeds]);
 
   const subtotal = rows.reduce((sum, r) => sum + computeLineTotal(r), 0);
+
+  // Phase 14.10-bis (2026-04-26) — bottom signature date pulls from record's
+  // creation date (was blank "..................") + customer/seller names
+  // pre-fill from saved record values per user directive.
+  const sigDateIso = q.createdAt
+    ? String(q.createdAt).slice(0, 10)
+    : (q.quotationDate || q.date || new Date().toISOString().slice(0, 10));
+  const signatureDateBE = formatDateThaiBE(sigDateIso);
+  const customerDisplay = q.customerName || (q.customerHN ? `HN ${q.customerHN}` : '');
+  const sellerDisplay = q.sellerName || q.createdByName || q.createdBy || '';
   const headerDiscount = Number(q.discount) || 0;
   const discountAmount = q.discountType === 'percent'
     ? subtotal * (headerDiscount / 100)
@@ -263,22 +273,26 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
           </ol>
         </div>
 
-        {/* Signatures */}
+        {/* Signatures
+            Phase 14.10-bis (2026-04-26) — pre-fill customer/seller name +
+            record creation date from the saved values. */}
         <div className="grid grid-cols-2 gap-12 mt-auto pt-8 text-[11px]">
           <div className="text-center">
             <div className="border-t border-neutral-400 pt-2">
               <div className="font-semibold">ลูกค้า</div>
-              <div className="text-neutral-500 mt-0.5">( ............................................ )</div>
-              <div className="text-[10px] text-neutral-500 mt-3">วันที่ ..................</div>
+              <div className="text-neutral-700 mt-0.5">
+                ( {customerDisplay || '............................................'} )
+              </div>
+              <div className="text-[10px] text-neutral-600 mt-3">วันที่ {signatureDateBE}</div>
             </div>
           </div>
           <div className="text-center">
             <div className="border-t border-neutral-400 pt-2">
               <div className="font-semibold">ผู้เสนอราคา</div>
-              <div className="text-neutral-500 mt-0.5">
-                ( {q.sellerName || '............................................'} )
+              <div className="text-neutral-700 mt-0.5">
+                ( {sellerDisplay || '............................................'} )
               </div>
-              <div className="text-[10px] text-neutral-500 mt-3">วันที่ ..................</div>
+              <div className="text-[10px] text-neutral-600 mt-3">วันที่ {signatureDateBE}</div>
             </div>
           </div>
         </div>

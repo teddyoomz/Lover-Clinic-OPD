@@ -183,8 +183,9 @@ describe('QuotationPrintView', () => {
 
   it('QP2: date rendered in Thai พ.ศ.', () => {
     render(<QuotationPrintView quotation={makeQuotation()} clinicSettings={{}} onClose={() => {}} />);
-    // 2026 CE → 2569 BE
-    expect(screen.getByText(/2569/)).toBeInTheDocument();
+    // 2026 CE → 2569 BE. Phase 14.10-bis: signature lines also pre-fill
+    // the date so /2569/ now appears 3 times (header + 2 signatures).
+    expect(screen.getAllByText(/2569/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('QP3: discount row shown when header discount > 0', () => {
