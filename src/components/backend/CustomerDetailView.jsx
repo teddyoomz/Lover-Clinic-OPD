@@ -23,7 +23,7 @@ import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
-import LinkLineQrModal from './LinkLineQrModal.jsx';
+import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
@@ -410,8 +410,17 @@ export default function CustomerDetailView({
             <div className="p-4 space-y-0">
               {/* V33.3 — read both legacy (nationality/idCard) + canonical
                   (nationalityCountry/nationalId) shapes for cloned + manually-created
-                  customer compatibility. */}
-              <InfoRow label="สัญชาติ" value={pd.nationalityCountry || pd.nationality || (customer?.country || '-')} />
+                  customer compatibility.
+                  V33.4 (D1) — Thai customers don't store country anywhere (the
+                  country dropdown only appears for foreigners), so derive
+                  "ไทย" from customer_type when no explicit country exists.
+                  Mirror of PrintTemplates.jsx pattern. */}
+              <InfoRow label="สัญชาติ" value={
+                pd.nationalityCountry
+                || pd.nationality
+                || customer?.country
+                || ((customer?.customer_type === 'thai' || pd.customerType === 'thai') ? 'ไทย' : '-')
+              } />
               <InfoRow label="เลขบัตรปชช." value={pd.nationalId || pd.idCard || (customer?.citizen_id || '-')} icon={<IdCard size={11} />} />
               {(pd.passport || customer?.passport_id) && (
                 <InfoRow label="พาสปอร์ต" value={pd.passport || customer?.passport_id} icon={<IdCard size={11} />} />
@@ -1045,11 +1054,18 @@ export default function CustomerDetailView({
         clinicSettings={clinicSettings || { accentColor: ac }}
         customer={customer}
       />
-      {/* V32-tris-ter (2026-04-26) — LINE link QR modal */}
+      {/* V33.4 (2026-04-27) — LINE link Instructions modal (replaces QR modal).
+          Two render states: not-linked (instructions + ID copy) / linked
+          (suspend / resume / unlink actions). onActionSuccess refreshes
+          the customer doc so the page reflects the new lineLinkStatus. */}
       {lineQrOpen && (
-        <LinkLineQrModal
+        <LinkLineInstructionsModal
           customer={customer}
           onClose={() => setLineQrOpen(false)}
+          onActionSuccess={() => {
+            // Refresh by triggering parent reload (caller passes onCustomerUpdated)
+            onCustomerUpdated?.();
+          }}
         />
       )}
       {/* V33.3 (2026-04-27) — EditCustomerIdsModal REMOVED in favor of full-page

@@ -79,10 +79,25 @@ const LINK_REQUEST_REJECTED =
  * Bot creates a pending request → admin verifies + approves manually.
  *
  * @param {string} text — raw message body
- * @returns {{ intent: 'link'|'id-link-request'|'courses'|'appointments'|'help',
+ * @returns {{ intent: 'link'|'id-link-request'|'courses'|'appointments'|'help'|'unknown',
  *             payload?: { token?: string, idType?: 'national-id'|'passport',
- *                         idValue?: string } }}
+ *                         idValue?: string, wasBarePrefix?: boolean } }}
  */
+// V33.4 (D9) — EXACT-match standalone keyword whitelists. Substring match
+// caused false triggers ("อยากดูคอร์ส" → bot replied with course list).
+// Customer's message must EQUAL one of these (after trim + lowercase).
+export const COURSES_TRIGGERS = Object.freeze([
+  'คอร์ส', 'คอร์สเหลือ', 'คอร์สที่เหลือ', 'คอร์สคงเหลือ',
+  'course', 'courses', 'เหลือ', 'remaining',
+]);
+export const APPOINTMENTS_TRIGGERS = Object.freeze([
+  'นัด', 'นัดหมาย', 'วันนัด', 'นัดของฉัน', 'นัดของผม', 'นัดของหนู',
+  'appointment', 'appointments', 'appt', 'appts',
+]);
+export const HELP_TRIGGERS = Object.freeze([
+  'help', 'menu', 'เมนู', 'ช่วยเหลือ', 'วิธีใช้', '?', '??',
+]);
+
 export function interpretCustomerMessage(text) {
   const raw = String(text || '').trim();
   if (!raw) return { intent: 'help' };
@@ -90,45 +105,59 @@ export function interpretCustomerMessage(text) {
   // LINK-<token> — case-insensitive prefix match. Token is base32-ish
   // (alphanumeric, 8-32 chars). Tolerant of trailing whitespace + wrapping
   // quotes / brackets / Thai punctuation around the token.
+  // V33.5 cleanup target — token-based linking deprecated by V33.4 directive
+  // #2; webhook still consumes legacy tokens during grace period.
   const linkMatch = raw.match(/LINK-([A-Za-z0-9_-]{6,64})/i);
   if (linkMatch) {
     return { intent: 'link', payload: { token: linkMatch[1] } };
   }
 
-  // National ID / passport link request. Customer MUST prefix with
-  // "ผูก" / "ผูกบัญชี" / "link" — anti-false-positive guard so bot
-  // doesn't treat a random 13-digit number (phone, HN, etc.) as a link
-  // request. User directive 2026-04-26: "ให้พิมพ์ ผูก [เลขบัตร]".
+  // National ID / passport link request — TWO accepted formats:
   //
-  // Pattern matches: "ผูก 1234567890123" / "ผูกบัญชี AA1234567" /
-  //                  "link 1234567890123" with flexible spacing.
-  // We strip separators inside the ID so customers can paste
-  // "1-2345-67890-12-3" copied from their ID card.
+  // (a) Legacy "ผูก <id>" prefix (V32-tris-quater):
+  //     "ผูก 1234567890123" / "ผูกบัญชี AA1234567" / "link 1234567890123"
+  //     wasBarePrefix=false → on no-match, bot replies with format hint
+  //     and admin queue gets an "invalid" entry (pre-existing behaviour).
+  //
+  // (b) BARE id (V33.4 directive #3):
+  //     Just "1234567890123" or just "AA1234567" as a single message
+  //     bubble — no other text. Customer convenience: no need to remember
+  //     the "ผูก" keyword.
+  //     wasBarePrefix=true → on no-match, webhook DROPS to Q&A help
+  //     instead of creating an invalid admin queue entry. Per user choice
+  //     ("Ignore เงียบ"); minor info leak accepted vs. less queue spam.
+
   const idPrefixMatch = raw.match(/^\s*(?:ผูก(?:บัญชี)?|link)\s+(.+)$/i);
   if (idPrefixMatch) {
     const candidate = idPrefixMatch[1].replace(/[\s\-.()]/g, '');
-    // Thai national ID — exactly 13 digits.
     if (/^\d{13}$/.test(candidate)) {
-      return { intent: 'id-link-request', payload: { idType: 'national-id', idValue: candidate } };
+      return { intent: 'id-link-request', payload: { idType: 'national-id', idValue: candidate, wasBarePrefix: false } };
     }
-    // Passport — alphanumeric 6-12 chars, must have at least 1 letter.
     if (/^[A-Za-z][A-Za-z0-9]{5,11}$/.test(candidate) && /\d/.test(candidate)) {
-      return { intent: 'id-link-request', payload: { idType: 'passport', idValue: candidate.toUpperCase() } };
+      return { intent: 'id-link-request', payload: { idType: 'passport', idValue: candidate.toUpperCase(), wasBarePrefix: false } };
     }
-    // Customer typed "ผูก ..." but the ID didn't match — still route
-    // to id-link-request so the bot can reply with format hint instead
-    // of falling through to the generic help message.
-    return { intent: 'id-link-request', payload: { idType: 'invalid', idValue: '' } };
+    return { intent: 'id-link-request', payload: { idType: 'invalid', idValue: '', wasBarePrefix: false } };
   }
 
-  const lower = raw.toLowerCase();
-  if (/(คอร์ส|courses?|เหลือ|remaining)/i.test(lower)) {
-    return { intent: 'courses' };
+  // V33.4 directive #3 — BARE id detection. The whole message body
+  // (after trim) must be JUST a 13-digit number OR JUST a passport
+  // pattern. Anything mixed (text + 13-digits) does NOT trigger.
+  if (/^\d{13}$/.test(raw)) {
+    return { intent: 'id-link-request', payload: { idType: 'national-id', idValue: raw, wasBarePrefix: true } };
   }
-  if (/(นัด|appointment|appt|วันนัด)/i.test(lower)) {
-    return { intent: 'appointments' };
+  if (/^[A-Za-z][A-Za-z0-9]{5,11}$/.test(raw) && /\d/.test(raw)) {
+    return { intent: 'id-link-request', payload: { idType: 'passport', idValue: raw.toUpperCase(), wasBarePrefix: true } };
   }
-  return { intent: 'help' };
+
+  // V33.4 (D9) — EXACT-match keyword whitelist. The message body (trimmed
+  // + lowercased) must EQUAL one of the trigger phrases. Substring match
+  // caused false triggers like "อยากดูคอร์สหน่อย" → bot replied; that's
+  // gone now. Anything not matching falls to 'unknown' (no bot reply).
+  const norm = raw.toLowerCase();
+  if (COURSES_TRIGGERS.includes(norm)) return { intent: 'courses' };
+  if (APPOINTMENTS_TRIGGERS.includes(norm)) return { intent: 'appointments' };
+  if (HELP_TRIGGERS.includes(norm)) return { intent: 'help' };
+  return { intent: 'unknown' };
 }
 
 /**

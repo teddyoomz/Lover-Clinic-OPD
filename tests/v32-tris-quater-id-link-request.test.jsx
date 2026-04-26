@@ -72,8 +72,12 @@ describe('Q1 ผูก <ID> intent detection', () => {
     expect(interpretCustomerMessage('ผูก ABCDEF').payload.idType).toBe('invalid');
     expect(interpretCustomerMessage('ผูก 123456').payload.idType).toBe('invalid');
   });
-  test('Q1.7 BARE 13-digit number (no prefix) does NOT trigger id-link-request (anti-false-positive)', () => {
-    expect(interpretCustomerMessage('1234567890123').intent).toBe('help');
+  test('Q1.7 BARE 13-digit DOES trigger id-link-request (V33.4 D3 — overrides Q9-tris-quater anti-false-positive design)', () => {
+    const r = interpretCustomerMessage('1234567890123');
+    expect(r.intent).toBe('id-link-request');
+    expect(r.payload.wasBarePrefix).toBe(true);
+    // V33.4 user accepted the false-positive trade-off; webhook DROPS to
+    // Q&A help on no-match (silent), so admin queue spam is bounded.
   });
   test('Q1.8 invalid format after prefix → idType="invalid" (route to format hint)', () => {
     const r = interpretCustomerMessage('ผูก 123');
@@ -84,10 +88,11 @@ describe('Q1 ผูก <ID> intent detection', () => {
   test('Q1.9 "LINK-<token>" (existing QR flow) takes priority over id-link-request', () => {
     expect(interpretCustomerMessage('LINK-ABCDEF12345').intent).toBe('link');
   });
-  test('Q1.10 "ผูก" alone (no ID) → invalid format (still id-link-request intent)', () => {
+  test('Q1.10 "ผูก" alone (no ID) → unknown (V33.4 D9 — was "help" pre-V33.4)', () => {
     const r = interpretCustomerMessage('ผูก');
-    // No space-separated suffix, just word — falls through to keyword test
-    expect(r.intent).toBe('help');
+    // No space-separated suffix; "ผูก" is not in HELP_TRIGGERS exact-match
+    // whitelist either. V33.4 returns 'unknown' for unrecognized text.
+    expect(r.intent).toBe('unknown');
   });
   test('Q1.11 14-digit number rejected (only 13 digits valid)', () => {
     expect(interpretCustomerMessage('ผูก 12345678901234').payload.idType).toBe('invalid');

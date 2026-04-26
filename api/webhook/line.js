@@ -309,7 +309,12 @@ async function findCustomerByLineUserId(lineUserId) {
       .get();
     if (snap.empty) return null;
     const d = snap.docs[0];
-    return { id: d.id, ...(d.data() || {}) };
+    const data = d.data() || {};
+    // V33.4 (D4) — suspended links are invisible to the bot. Chat message
+    // still gets stored upstream (per V32-tris-ter ordering); we just skip
+    // the bot reply by returning null here.
+    if (data.lineLinkStatus === 'suspended') return null;
+    return { id: d.id, ...data };
   } catch {
     return null;
   }
@@ -352,11 +357,22 @@ async function maybeEmitBotReply(event, config) {
   }
 
   // V32-tris-quater (2026-04-26) — id-link-request: customer DM'd
-  // "ผูก <ID>". Format-invalid → reply with format hint.
+  // "ผูก <ID>" (legacy) OR a bare 13-digit/passport (V33.4 D3).
+  // Format-invalid → reply with format hint (only legacy "ผูก" path).
   // Format-valid → check rate limit + look up customer + create
-  // pending request. Same-reply anti-enumeration regardless of match.
+  // pending request when match.
+  //
+  // V33.4 (D3) divergence on no-match:
+  //   - wasBarePrefix=false (legacy "ผูก" path): same-reply anti-enumeration ack
+  //     regardless of match (preserves V32-tris-quater contract).
+  //   - wasBarePrefix=true (bare-ID path): on no-match, DROP silently into
+  //     Q&A help fallback. No admin queue entry, no rate-limit consumption.
+  //     Per user choice: "Ignore เงียบ" — accepts minor info leak in
+  //     exchange for less queue spam from misdialed numbers.
   if (intent.intent === 'id-link-request') {
+    const wasBarePrefix = !!intent.payload?.wasBarePrefix;
     if (intent.payload?.idType === 'invalid') {
+      // 'invalid' only emitted from the legacy "ผูก" path → keep replying.
       await replyLineMessage(event.replyToken, formatIdRequestInvalidFormat(), config.channelAccessToken);
       return true;
     }
@@ -378,10 +394,21 @@ async function maybeEmitBotReply(event, config) {
       // Get LINE profile for the snapshot
       const profile = await getLineProfile(userId, config.channelAccessToken);
       await createLinkRequest({ customer, lineUserId: userId, lineProfile: profile, idType, idValue });
+      await replyLineMessage(event.replyToken, formatIdRequestAck(), config.channelAccessToken);
+      return true;
     }
-    // Reply IDENTICALLY whether match or no-match (anti-enumeration)
-    await replyLineMessage(event.replyToken, formatIdRequestAck(), config.channelAccessToken);
-    return true;
+    // No match.
+    if (wasBarePrefix) {
+      // V33.4 (D3) — silent drop. Customer DM'd a bare number that didn't
+      // match any patient ID; treat as random message → no reply, no queue
+      // entry. Falls THROUGH to the help-fallback below (which itself only
+      // emits a reply when intent === 'help').
+      // Intentionally NOT returning here; the function continues.
+    } else {
+      // Legacy "ผูก" path: keep V32-tris-quater anti-enumeration contract.
+      await replyLineMessage(event.replyToken, formatIdRequestAck(), config.channelAccessToken);
+      return true;
+    }
   }
 
   if (intent.intent === 'courses' || intent.intent === 'appointments') {
@@ -403,9 +430,15 @@ async function maybeEmitBotReply(event, config) {
     }
   }
 
-  // help fallback — don't spam (only emit help when message was non-empty
-  // AND wasn't recognized at all). This keeps random "ครับ" / emojis from
-  // triggering an auto-reply.
+  // V33.4 (D9) — 'unknown' intent: chat message stored upstream but no bot
+  // reply. This is the new default for any message that doesn't EXACTLY
+  // match a trigger phrase — replaces the old substring-match auto-reply.
+  if (intent.intent === 'unknown') {
+    return false;
+  }
+
+  // help fallback — only emit help when explicitly requested via a
+  // HELP_TRIGGERS phrase. Random "ครับ" / emojis no longer trigger help.
   if (intent.intent === 'help' && text.trim().length >= 2) {
     await replyLineMessage(event.replyToken, formatHelpReply(), config.channelAccessToken);
     return true;

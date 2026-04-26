@@ -300,8 +300,14 @@ describe('V33.LL — source-grep regression guards (V33.3 wiring)', () => {
   it('LL6 — Profile card reads BOTH legacy + canonical shapes for nationalId/nationality', async () => {
     const fs = await import('node:fs/promises');
     const src = await fs.readFile('src/components/backend/CustomerDetailView.jsx', 'utf-8');
-    // The InfoRow values must check pd.nationalId OR pd.idCard for compat
-    expect(src).toMatch(/pd\.nationalId \|\| pd\.idCard/);
-    expect(src).toMatch(/pd\.nationalityCountry \|\| pd\.nationality/);
+    // V33.4 multi-line InfoRow value expression — collapse whitespace before
+    // matching so newlines + indentation don't break the regex.
+    const collapsed = src.replace(/\s+/g, ' ');
+    // nationalId InfoRow includes both canonical (pd.nationalId) + legacy (pd.idCard)
+    expect(collapsed).toMatch(/pd\.nationalId \|\| pd\.idCard/);
+    // สัญชาติ InfoRow includes both canonical (pd.nationalityCountry) + legacy (pd.nationality)
+    expect(collapsed).toMatch(/pd\.nationalityCountry \|\| pd\.nationality/);
+    // V33.4 (D1) — derives 'ไทย' from customer_type='thai' fallback
+    expect(collapsed).toMatch(/customer_type === 'thai'/);
   });
 });

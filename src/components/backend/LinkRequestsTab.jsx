@@ -9,17 +9,28 @@
 // the matched customer here and decides.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { CheckCircle2, XCircle, Loader2, RefreshCw, MessageCircle, IdCard, Clock, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, RefreshCw, MessageCircle, IdCard, Clock, AlertCircle, Pause, Play, Unlink, Link2 } from 'lucide-react';
 import {
   listLinkRequests,
   approveLinkRequest,
   rejectLinkRequest,
 } from '../../lib/linkRequestsClient.js';
+import {
+  listLinkedCustomers,
+  suspendLineLink,
+  resumeLineLink,
+  unlinkLineAccount,
+} from '../../lib/customerLineLinkClient.js';
+import {
+  getLineLinkState, formatLineLinkStatusBadge, maskLineUserId, LINK_STATES,
+} from '../../lib/customerLineLinkState.js';
 
 const STATUS_TABS = [
   { id: 'pending',  label: 'รอตรวจสอบ', cls: 'bg-amber-700/30 border-amber-700/50 text-amber-200' },
   { id: 'approved', label: 'อนุมัติแล้ว', cls: 'bg-emerald-700/30 border-emerald-700/50 text-emerald-200' },
   { id: 'rejected', label: 'ไม่อนุมัติ', cls: 'bg-red-700/30 border-red-700/50 text-red-200' },
+  // V33.4 (D2 + directive #4) — fourth tab: every customer with non-null lineUserId.
+  { id: 'linked',   label: 'ผูกแล้ว',    cls: 'bg-[#06C755]/30 border-[#06C755]/50 text-emerald-200' },
 ];
 
 export default function LinkRequestsTab() {
@@ -33,10 +44,14 @@ export default function LinkRequestsTab() {
     setLoading(true);
     setError('');
     try {
-      const result = await listLinkRequests({ status: filter });
+      // V33.4 — 'linked' tab uses different endpoint (list-linked customers,
+      // not be_link_requests). Other tabs unchanged.
+      const result = filter === 'linked'
+        ? await listLinkedCustomers()
+        : await listLinkRequests({ status: filter });
       setItems(Array.isArray(result?.items) ? result.items : []);
     } catch (e) {
-      setError(e.message || 'โหลดรายการคำขอล้มเหลว');
+      setError(e.message || 'โหลดรายการล้มเหลว');
       setItems([]);
     } finally {
       setLoading(false);
@@ -74,13 +89,34 @@ export default function LinkRequestsTab() {
     }
   };
 
+  // V33.4 — linked-tab row actions
+  const handleLinkAction = async (customerId, action) => {
+    const labels = { suspend: 'ปิดชั่วคราว', resume: 'เปิดใหม่', unlink: 'ยกเลิกการผูก' };
+    if (!window.confirm(`ยืนยัน${labels[action] || action}?`)) return;
+    setBusyId(customerId);
+    setError('');
+    try {
+      if (action === 'suspend') await suspendLineLink(customerId);
+      else if (action === 'resume') await resumeLineLink(customerId);
+      else if (action === 'unlink') await unlinkLineAccount(customerId);
+      await reload();
+    } catch (e) {
+      setError(e.message || `${labels[action]}ล้มเหลว`);
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const counts = useMemo(() => {
-    const c = { pending: 0, approved: 0, rejected: 0 };
-    items.forEach(i => {
-      if (c[i.status] !== undefined) c[i.status]++;
-    });
+    const c = { pending: 0, approved: 0, rejected: 0, linked: 0 };
+    if (filter === 'linked') {
+      // V33.4 — when on 'ผูกแล้ว' tab, items are customer rows (not requests)
+      c.linked = items.length;
+    } else {
+      items.forEach(i => { if (c[i.status] !== undefined) c[i.status]++; });
+    }
     return c;
-  }, [items]);
+  }, [items, filter]);
 
   return (
     <div className="space-y-4 max-w-4xl" data-testid="link-requests-tab">
@@ -137,7 +173,7 @@ export default function LinkRequestsTab() {
         </div>
       )}
 
-      {items.length > 0 && (
+      {items.length > 0 && filter !== 'linked' && (
         <div className="space-y-2" data-testid="link-requests-list">
           {items.map(req => {
             const isBusy = busyId === req.requestId;
@@ -209,8 +245,101 @@ export default function LinkRequestsTab() {
         </div>
       )}
 
+      {/* V33.4 — 'ผูกแล้ว' tab — list every customer with non-null lineUserId. */}
+      {items.length > 0 && filter === 'linked' && (
+        <div className="space-y-2" data-testid="linked-customers-list">
+          {items.map(row => {
+            const state = getLineLinkState(row);
+            const badge = formatLineLinkStatusBadge(state);
+            const isBusy = busyId === row.customerId;
+            return (
+              <div
+                key={row.customerId}
+                data-testid={`linked-customer-${row.customerId}`}
+                className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)]"
+              >
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="font-bold text-[var(--tx-heading)]">
+                        {row.customerName || '(ไม่มีชื่อ)'}
+                      </div>
+                      {row.customerHN && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--tx-muted)]">
+                          HN {row.customerHN}
+                        </span>
+                      )}
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 border"
+                        style={{ backgroundColor: badge.bgColor, color: badge.color, borderColor: `${badge.color}40` }}
+                        data-testid={`linked-customer-${row.customerId}-status`}
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: badge.color }} />
+                        {badge.label}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-[var(--tx-muted)] flex items-center gap-3 flex-wrap">
+                      <span className="flex items-center gap-1 font-mono">
+                        <Link2 size={11} />
+                        {maskLineUserId(row.lineUserId)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={11} />
+                        ผูก {row.lineLinkedAt ? new Date(row.lineLinkedAt).toLocaleString('th-TH') : '-'}
+                      </span>
+                      {row.lineLinkStatusChangedAt && (
+                        <span className="flex items-center gap-1">
+                          <Clock size={11} /> เปลี่ยน {new Date(row.lineLinkStatusChangedAt).toLocaleString('th-TH')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {state === LINK_STATES.ACTIVE ? (
+                      <button
+                        onClick={() => handleLinkAction(row.customerId, 'suspend')}
+                        disabled={isBusy}
+                        data-testid={`linked-customer-suspend-${row.customerId}`}
+                        className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
+                        style={{ color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}
+                      >
+                        {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Pause size={12} />}
+                        ปิดชั่วคราว
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleLinkAction(row.customerId, 'resume')}
+                        disabled={isBusy}
+                        data-testid={`linked-customer-resume-${row.customerId}`}
+                        className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
+                        style={{ color: '#06C755', backgroundColor: 'rgba(6,199,85,0.15)', border: '1px solid rgba(6,199,85,0.3)' }}
+                      >
+                        {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                        เปิดใหม่
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleLinkAction(row.customerId, 'unlink')}
+                      disabled={isBusy}
+                      data-testid={`linked-customer-unlink-${row.customerId}`}
+                      className="text-xs flex items-center gap-1 px-3 py-1.5 rounded font-bold disabled:opacity-50"
+                      style={{ color: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}
+                    >
+                      {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="text-[10px] text-[var(--tx-muted)] mt-4">
-        คำขอทั้งหมด: รอตรวจ {counts.pending} · อนุมัติ {counts.approved} · ปฏิเสธ {counts.rejected}
+        {filter === 'linked'
+          ? `ลูกค้าที่ผูกแล้ว: ${counts.linked} ราย`
+          : `คำขอทั้งหมด: รอตรวจ ${counts.pending} · อนุมัติ ${counts.approved} · ปฏิเสธ ${counts.rejected}`}
       </div>
     </div>
   );

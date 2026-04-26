@@ -30,7 +30,10 @@ const RESPONDER_SRC = readFileSync('src/lib/lineBotResponder.js', 'utf8');
 const ADMIN_LINK_SRC = readFileSync('api/admin/customer-link.js', 'utf8');
 const WEBHOOK_SRC = readFileSync('api/webhook/line.js', 'utf8');
 const SETTINGS_SRC = readFileSync('src/components/backend/LineSettingsTab.jsx', 'utf8');
-const QR_MODAL_SRC = readFileSync('src/components/backend/LinkLineQrModal.jsx', 'utf8');
+// V33.4 (2026-04-27) — LinkLineQrModal.jsx renamed to LinkLineInstructionsModal.jsx.
+// QR generation removed; modal now shows instructions + ID + copy buttons (unlinked
+// state) or status + suspend/unlink actions (linked state).
+const QR_MODAL_SRC = readFileSync('src/components/backend/LinkLineInstructionsModal.jsx', 'utf8');
 const RULES_SRC = readFileSync('firestore.rules', 'utf8');
 const NAV_SRC = readFileSync('src/components/backend/nav/navConfig.js', 'utf8');
 const DASH_SRC = readFileSync('src/pages/BackendDashboard.jsx', 'utf8');
@@ -57,41 +60,56 @@ describe('L1 interpretCustomerMessage — intent routing', () => {
     expect(r.intent).toBe('link');
     expect(r.payload.token).toBe('ABC123XYZ7');
   });
-  test('L1.5 LINK with too-short token does NOT match (anti false-positive)', () => {
-    expect(interpretCustomerMessage('LINK-ABC').intent).toBe('help');
-    expect(interpretCustomerMessage('LINK-12345').intent).toBe('help');
+  // V33.4 (2026-04-27, D9) — bot now returns 'unknown' for unrecognized messages
+  // (was 'help'). 'help' is reserved for explicit HELP_TRIGGERS phrases.
+  test('L1.5 LINK with too-short token does NOT match → unknown (V33.4)', () => {
+    expect(interpretCustomerMessage('LINK-ABC').intent).toBe('unknown');
+    expect(interpretCustomerMessage('LINK-12345').intent).toBe('unknown');
   });
-  test('L1.6 LINK with invalid characters does NOT match', () => {
-    expect(interpretCustomerMessage('LINK-!@#$%^&*()').intent).toBe('help');
-    // Spaces in token = stops at first space
-    const r = interpretCustomerMessage('LINK-ABC 123XYZ7');
-    expect(r.intent).toBe('help');
+  test('L1.6 LINK with invalid characters does NOT match → unknown (V33.4)', () => {
+    expect(interpretCustomerMessage('LINK-!@#$%^&*()').intent).toBe('unknown');
+    // Spaces in token = stops at first space → fragment fails token match
+    expect(interpretCustomerMessage('LINK-ABC 123XYZ7').intent).toBe('unknown');
   });
-  test('L1.7 Thai keyword "คอร์ส" → courses', () => {
+  test('L1.7 EXACT-match "คอร์ส" → courses (V33.4 D9 — substring no longer triggers)', () => {
     expect(interpretCustomerMessage('คอร์ส').intent).toBe('courses');
-    expect(interpretCustomerMessage('ขอดูคอร์สหน่อย').intent).toBe('courses');
+    // Substring no longer counts (V33.4 D9 fix)
+    expect(interpretCustomerMessage('ขอดูคอร์สหน่อย').intent).toBe('unknown');
   });
-  test('L1.8 English keyword variations → courses', () => {
-    expect(interpretCustomerMessage('courses please').intent).toBe('courses');
-    expect(interpretCustomerMessage('how many course').intent).toBe('courses');
-    expect(interpretCustomerMessage('course remaining').intent).toBe('courses');
+  test('L1.8 EXACT English course phrases → courses (V33.4 D9)', () => {
+    expect(interpretCustomerMessage('course').intent).toBe('courses');
+    expect(interpretCustomerMessage('courses').intent).toBe('courses');
     expect(interpretCustomerMessage('REMAINING').intent).toBe('courses');
+    // Substring like "courses please" / "how many course" no longer matches
+    expect(interpretCustomerMessage('courses please').intent).toBe('unknown');
+    expect(interpretCustomerMessage('how many course').intent).toBe('unknown');
   });
-  test('L1.9 Thai/English appointment keywords → appointments', () => {
+  test('L1.9 EXACT appointment keywords → appointments (V33.4 D9)', () => {
     expect(interpretCustomerMessage('นัด').intent).toBe('appointments');
-    expect(interpretCustomerMessage('วันนัดหมาย').intent).toBe('appointments');
+    expect(interpretCustomerMessage('นัดหมาย').intent).toBe('appointments');
     expect(interpretCustomerMessage('appointment').intent).toBe('appointments');
-    expect(interpretCustomerMessage('appt time?').intent).toBe('appointments');
+    // "appt time?" is substring; no longer matches
+    expect(interpretCustomerMessage('appt time?').intent).toBe('unknown');
   });
-  test('L1.10 random message → help', () => {
-    expect(interpretCustomerMessage('สวัสดีครับ').intent).toBe('help');
-    expect(interpretCustomerMessage('hello').intent).toBe('help');
+  test('L1.10 unrecognized free-text → unknown (V33.4 — was help)', () => {
+    expect(interpretCustomerMessage('สวัสดีครับ').intent).toBe('unknown');
+    expect(interpretCustomerMessage('hello').intent).toBe('unknown');
   });
   test('L1.11 LINK takes priority over keyword in same message', () => {
     expect(interpretCustomerMessage('LINK-ABC123XYZ7 คอร์ส').intent).toBe('link');
   });
-  test('L1.12 emoji-only / sticker text returns help', () => {
-    expect(interpretCustomerMessage('🙂').intent).toBe('help');
+  test('L1.12 emoji-only / sticker text → unknown (V33.4 — was help)', () => {
+    expect(interpretCustomerMessage('🙂').intent).toBe('unknown');
+  });
+  test('L1.13 explicit HELP_TRIGGERS keyword → help (V33.4)', () => {
+    expect(interpretCustomerMessage('help').intent).toBe('help');
+    expect(interpretCustomerMessage('เมนู').intent).toBe('help');
+    expect(interpretCustomerMessage('ช่วยเหลือ').intent).toBe('help');
+  });
+  test('L1.14 BARE 13-digit triggers id-link-request (V33.4 D3)', () => {
+    const r = interpretCustomerMessage('1234567890123');
+    expect(r.intent).toBe('id-link-request');
+    expect(r.payload.wasBarePrefix).toBe(true);
   });
 });
 
@@ -426,23 +444,33 @@ describe('L9 LineSettingsTab', () => {
 });
 
 // ─── L10 — LinkLineQrModal UI source-grep ────────────────────────────────
-describe('L10 LinkLineQrModal', () => {
-  test('L10.1 imports createCustomerLinkToken + generateQrDataUrl', () => {
-    expect(QR_MODAL_SRC).toMatch(/createCustomerLinkToken/);
-    expect(QR_MODAL_SRC).toMatch(/generateQrDataUrl/);
+// V33.4 (2026-04-27) — LinkLineQrModal renamed to LinkLineInstructionsModal.
+// QR generation gone; modal now shows: instructions + nationalId/passport
+// with Copy buttons (unlinked state) OR status badge + suspend/unlink
+// actions (linked state).
+describe('L10 LinkLineInstructionsModal (V33.4 — replaces LinkLineQrModal)', () => {
+  test('L10.1 imports state-machine helpers + customer-line-link client', () => {
+    expect(QR_MODAL_SRC).toMatch(/customerLineLinkState/);
+    expect(QR_MODAL_SRC).toMatch(/customerLineLinkClient/);
+    expect(QR_MODAL_SRC).toMatch(/getLineLinkState/);
+    // QR plumbing GONE
+    expect(QR_MODAL_SRC).not.toMatch(/createCustomerLinkToken/);
+    expect(QR_MODAL_SRC).not.toMatch(/generateQrDataUrl/);
   });
-  test('L10.2 root testid + image testid + copy button + regen button + error', () => {
-    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-qr-modal["']/);
-    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-qr-image["']/);
-    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-qr-copy["']/);
-    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-qr-regen["']/);
-    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-qr-error["']/);
+  test('L10.2 NEW root testid + copy buttons + suspend/unlink actions', () => {
+    expect(QR_MODAL_SRC).toMatch(/data-testid=["']link-line-instructions-modal["']/);
+    // CopyButton receives testId via prop, then renders data-testid={testId}
+    expect(QR_MODAL_SRC).toMatch(/testId=["']copy-national-id-btn["']/);
+    expect(QR_MODAL_SRC).toMatch(/data-testid=["']suspend-line-btn["']/);
+    expect(QR_MODAL_SRC).toMatch(/data-testid=["']unlink-line-btn["']/);
   });
-  test('L10.3 cancelRef pattern protects against unmounted setState', () => {
-    expect(QR_MODAL_SRC).toMatch(/cancelRef\.current/);
+  test('L10.3 confirm dialog appears for suspend/unlink before action runs', () => {
+    expect(QR_MODAL_SRC).toMatch(/data-testid=["']line-link-confirm-dialog["']/);
   });
-  test('L10.4 default TTL passed = 1440 minutes (24h)', () => {
-    expect(QR_MODAL_SRC).toMatch(/ttlMinutes:\s*1440/);
+  test('L10.4 instructions text references "ข้อความเดี่ยว" (V33.4 D3 — no "ผูก" prefix)', () => {
+    expect(QR_MODAL_SRC).toMatch(/ข้อความเดี่ยว/);
+    // Instructions explicitly say "ไม่ต้องมีคำว่า ผูก" (V33.4 directive #3)
+    expect(QR_MODAL_SRC).toMatch(/ไม่ต้องมีคำว่า/);
   });
 });
 
@@ -473,12 +501,14 @@ describe('L12 nav + dashboard wiring', () => {
 });
 
 // ─── L13 — CustomerDetailView "ผูก LINE" button wiring ──────────────────
-describe('L13 CustomerDetailView line-link button', () => {
+// V33.4 (2026-04-27) — modal renamed to LinkLineInstructionsModal.
+describe('L13 CustomerDetailView line-link button (V33.4)', () => {
   const CDV = readFileSync('src/components/backend/CustomerDetailView.jsx', 'utf8');
-  test('L13.1 imports LinkLineQrModal', () => {
-    expect(CDV).toMatch(/import LinkLineQrModal/);
+  test('L13.1 imports LinkLineInstructionsModal (NOT old LinkLineQrModal)', () => {
+    expect(CDV).toMatch(/import LinkLineInstructionsModal/);
+    expect(CDV).not.toMatch(/import LinkLineQrModal/);
   });
-  test('L13.2 has lineQrOpen state', () => {
+  test('L13.2 has lineQrOpen state (kept name for stability)', () => {
     expect(CDV).toMatch(/lineQrOpen/);
     expect(CDV).toMatch(/setLineQrOpen/);
   });
@@ -489,7 +519,9 @@ describe('L13 CustomerDetailView line-link button', () => {
   test('L13.4 button label changes when already linked (lineUserId set)', () => {
     expect(CDV).toMatch(/customer\?\.lineUserId\s*\?\s*['"]LINE\s*✓['"]/);
   });
-  test('L13.5 modal renders only when open', () => {
-    expect(CDV).toMatch(/\{lineQrOpen\s*&&\s*\(\s*<LinkLineQrModal/);
+  test('L13.5 modal renders only when open + uses NEW component name', () => {
+    expect(CDV).toMatch(/\{lineQrOpen\s*&&\s*\(\s*<LinkLineInstructionsModal/);
+    // No remaining mount of the old name
+    expect(CDV).not.toMatch(/<LinkLineQrModal/);
   });
 });
