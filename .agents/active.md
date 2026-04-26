@@ -1,139 +1,178 @@
 ---
-updated_at: "2026-04-26 (session 9 EOD — V31 + Phase 14.8-14.10 + master_data → be_* migration)"
-status: "master = 9a9cde8 (5884 tests pass, build clean). Production = b2784cf at lover-clinic-93z2j8492 (T3.f saved drafts deploy). 5 commits unpushed-to-prod awaiting user 'deploy' command."
-current_focus: "Big bug-fix + feature shipment session: V31 (Firebase Auth orphan recovery), Phase 14.8.B/C signature+PDF, Phase 14.9 audit log + watermark, Phase 14.10 saved drafts + QR + bulk print, plus 6 user-reported bugs all fixed. Final big move: backend 100% be_* (zero master_data mirror reads outside MasterDataTab) + listAllSellers helper resolving legacy ProClinic numeric ids → human names."
+updated_at: "2026-04-27 (session 12 EOD — V32-tris-ter-fix + V32-tris-quater LINE OA full feature DEPLOYED)"
+status: "master = 66ab18b. Production = cb387c3 LIVE at lover-clinic-app.vercel.app (rules v16). LINE OA flow end-to-end working: customer DM 'ผูก <ID>' → admin queue → approve → bot reply. 1096 focused tests + ~5200 extended."
+current_focus: "LINE OA full feature complete. Customer + admin flows live. No outstanding bugs reported. Ready for user QA / next feature."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "9a9cde8"
-tests: 5884
+last_commit: "66ab18b"
+tests: 1096
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "b2784cf via V15 combined (vercel lover-clinic-93z2j8492 + firestore.rules with be_document_prints + be_document_drafts). Pre+post 7/7=200; negative 2/2=403 (rules correctly reject anon to new collections); production smoke 3/3=200; cleanup 4/4=200."
-firestore_rules_deployed: "v14 (added be_document_prints + be_document_drafts in 9a9cde8 — NOT YET DEPLOYED to prod)"
-bundle: "BackendDashboard ~960 KB (added html2pdf.js lazy + signature_pad eager)"
+production_commit: "cb387c3"
+firestore_rules_version: 16
+last_deploy: "cb387c3 via V15 combined (vercel lover-clinic-ow7hhv2lk + firestore rules v16). Pre 6/6=200, Post 6/6=200, Negative 4/4=403 (be_customer_link_tokens + be_course_changes + be_link_requests + be_link_attempts all locked down). Cleanup 4/4=200, smoke 3/3=200."
+bundle: "BackendDashboard ~963 KB (LinkRequestsTab + LineSettingsTab + LinkLineQrModal lazy-loaded)"
 ---
 
 # Active Context
 
 ## Objective
 
-Resume from session 8 EOD (master = `f5c91dc`). User authorized "ทำจนจบแบบ
-auto mode" + Tier 2/3 features + bug fixes as they came in. Major shipment
-this session covering V31 hotfix follow-ups, Phase 14.8-14.10 feature
-batch, and the master_data → be_* migration the user demanded after
-seeing seller names render as numeric IDs.
+Session 12 closed the LINE OA flow end-to-end. Started with V32-tris-ter
+shipped from session 11 EOD-2 + 2 production bugs the user found in
+real testing. Ended with full Option-2 admin-mediated approval flow +
+production verified.
 
-## What this session shipped (8 commits, all pushed to master)
+## What this session shipped (4 commits, all deployed)
 
 ```
-06d98bd fix(v31): orphan Firebase Auth recovery + credential-change revoke + self-delete protection
-62251d3 feat(phase14.8-14.9): signature canvas + PDF export + audit log + watermark
-b2784cf feat(phase14.10): saved drafts + QR helper + firestore rule for be_document_drafts
-2cb2e36 feat(phase14.10-bulk): BulkPrintModal + CustomerListTab multi-select bulk print
-7312679 fix(phase14.10-bis): PDF padding silently dropped (V31-class regression)
-5b74bcb fix(phase14.10-bis): SaleTab Gen-receipt + bulk-PDF blank-page fix
-3e8b9d8 fix(phase14.10-tris): receipt + bulk-PDF + seller-name + reconciler bundle
-9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers
+203581f fix(line-oa): V32-tris-ter-fix — CORS proxy + webhook admin SDK
+cb387c3 feat(line-oa): V32-tris-quater — admin-mediated ID link request
+66ab18b docs(handoff): V32-tris-quater deployed (cb387c3 LIVE; rules v16)
 ```
+
+(Earlier: `b61c298 chore(tests): reduce default suite 6205 → 989` was
+session 11; carried through.)
+
+## Bugs fixed (live production)
+
+1. **"ทดสอบการเชื่อมต่อ" Failed to fetch** — browser CORS block on
+   api.line.me. Fixed via new `api/admin/line-test.js` proxy + Firebase
+   ID-token wrapper. (commit 203581f)
+2. **LINK token always rejected** — webhook used unauth REST against
+   `be_customer_link_tokens: read,write: if false`. Fixed by switching
+   webhook to firebase-admin SDK for ALL be_* paths
+   (consumeLinkToken + findCustomerByLineUserId +
+   findUpcomingAppointmentsForCustomer). (commit 203581f)
+
+## Features added
+
+### V32-tris-ter-fix (203581f)
+- NEW `api/admin/line-test.js` — admin-gated proxy for LINE bot/info
+- NEW `src/lib/lineTestClient.js` — Firebase ID-token wrapper
+- `api/webhook/line.js` — switched be_* ops to firebase-admin SDK
+- `LineSettingsTab.jsx` — calls backend proxy
+- 36 adversarial tests + 4 legacy fixes
+
+### V32-tris-quater (cb387c3) — FULL feature
+- NEW `src/lib/lineBotResponder.js` (extended) — `id-link-request`
+  intent: "ผูก 1234567890123" (Thai ID) or "ผูก AA1234567" (passport)
+- NEW `api/webhook/line.js` (extended) — id-link-request handler:
+  rate-limit (5/24h via be_link_attempts) + admin SDK customer lookup
+  by patientData.nationalId / patientData.passport + same-reply
+  anti-enumeration + createLinkRequest entry
+- NEW `api/admin/link-requests.js` — list / approve / reject with
+  batch atomic write + LINE Push notifications
+- NEW `src/lib/linkRequestsClient.js` — Firebase ID-token wrapper
+- NEW `src/components/backend/LinkRequestsTab.jsx` — admin queue UI
+  with filter tabs (pending/approved/rejected) + approve/reject buttons
+- NEW `src/components/backend/EditCustomerIdsModal.jsx` — focused
+  nationalId + passport editor with strict validation; Firestore
+  dotted-path update preserves siblings
+- NEW `firestore.rules` blocks — `be_link_requests` +
+  `be_link_attempts` both `read,write: if false` (admin SDK only)
+- NAV: link-requests tab in master section (now 18 items)
+- 71 adversarial tests + 3 cascade fixes (nav count, COLLECTION_MATRIX)
 
 ## Current state vs production
 
-- master = `9a9cde8` (5884/5884 tests, clean build)
-- Production = `b2784cf` (deployed via `lover-clinic-93z2j8492`)
-- **5 commits unpushed-to-prod**: 2cb2e36, 7312679, 5b74bcb, 3e8b9d8, 9a9cde8
-  Includes: bulk-print UI, PDF padding fix, sellerName fix, M9 reconciler,
-  100% backend be_* migration. **Awaiting user "deploy" command.**
-
-## Bugs fixed this session (user-reported, all verified live)
-
-1. **V31** — Firebase Auth orphan on staff delete (login still worked) +
-   credential-change without token revoke + self-delete possible →
-   3-layer fix + 111 V31 tests
-2. **PDF padding lost** — body tag stripped by innerHTML → DOMParser +
-   inline body styles + offstage container
-3. **Bulk PDF blank** — html2canvas can't snapshot off-screen elements →
-   offstage container at viewport origin + windowWidth/Height opts
-4. **Bulk PDF extra blank page** — content overflow → height fixed +
-   pagebreak avoid-all
-5. **Templates missing HN/address** — buildPrintContext didn't expose
-   patientAddress/birthdate/bloodGroup/emergency/passport/visitCount/
-   nationality → all added; SECTION_1_PATIENT_DECLARATION_ALWAYS now
-   includes HN; thai-traditional + fit-to-fly templates show HN+address
-6. **Receipt status inverted** — was recomputed from totalPaidAmount vs
-   netTotal → resolveSaleStatusLabel reads sale.payment.status
-7. **Receipt customer/seller signature dates blank** → pre-fill from
-   record createdAt/saleDate
-8. **Receipt sellerName blank** — read wrong key (`sellerName` not
-   `name`) → fallback chain firstSeller.name → sellerName → lookup → id
-9. **Sale modal seller as numeric "614"** — sellers state sourced from
-   master_data (stale ProClinic mirror with empty name) → switched
-   to listAllSellers (be_staff + be_doctors); verified live: 614→Test
-10. **20 backend tabs were reading master_data** — user demanded zero
-    mirror reads → migrated all to be_* canonical helpers (listAllSellers,
-    listProducts, listCourses, listPromotions, listMembershipTypes,
-    listWalletTypes); PV.F.11 directory-walk invariant test guards future
-    regressions
+- master = `66ab18b` (handoff doc commit, no code change)
+- Production = `cb387c3` (V32-tris-quater code shipped + LIVE)
+- All session-12 commits deployed. No pending push.
+- Firestore rules v16 LIVE.
 
 ## Outstanding user-triggered actions
 
-### Pending production deploy
-5 commits at master are NOT live in production:
-- 2cb2e36 BulkPrintModal + select-mode in CustomerListTab
-- 7312679 PDF padding fix
-- 5b74bcb Sale Print receipt button + bulk PDF blank fix
-- 3e8b9d8 receipt status + signature data + sellerName + M9
-- 9a9cde8 backend 100% be_* migration
+None code-side — all this session's work is deployed + verified.
 
-When user says "deploy" → run V15 combined (vercel + firebase rules with
-full 7-endpoint Probe-Deploy-Probe per Rule B). Firestore rules deploy
-needs to ship be_document_prints + be_document_drafts new rules from
-b2784cf → 9a9cde8.
+**Optional admin setup** (not blockers):
+1. **LINE Settings tab** → Admin needs to fill `Channel Secret` +
+   `Channel Access Token` + `Bot Basic ID` from LINE Developers Console
+2. **Webhook URL** → Admin needs to paste
+   `https://lover-clinic-app.vercel.app/api/webhook/line` into LINE
+   Developers Console → Channel → Messaging API → Webhook URL
+3. **Customer ID backfill** → Admins use new "เลขบัตร" button on
+   each customer to set nationalId/passport (some customers cloned
+   from ProClinic may have empty IDs)
 
-### Tier 3 deferred (each = 3-6h focused session)
-- T3.e Phase 14.9 email/LINE delivery — needs SMTP + LINE channel config
-- T4 Phase 14.4 G5 customer-product-change (course exchange + refund) — XL
-- T5.a Phase 14.11 visual template designer — mega XL (~2000 LOC)
-- T5.b TFP 3200 LOC refactor — XL technical debt
+## Decisions (non-obvious — preserve reasoning)
 
-### P3 deferred
-- PDPA suite (consent / audit log / data export / erasure) — substantial
-- M9 reconciler — HELPER SHIPPED (recomputeCustomerSummary +
-  reconcileAllCustomerSummaries) but NO admin button in UI yet
+### D1 — Webhook + admin SDK hybrid (not pure REST)
+Rules `be_*: if isClinicStaff()` block webhook unauth REST. Switching
+to firebase-admin SDK bypasses rules — exactly what server-side
+privileged code is supposed to do. Defense-in-depth: rules stay
+`if false` for client SDK; only the webhook+admin endpoints can read
+the locked collections via admin SDK.
 
-## Decisions (non-obvious)
+### D2 — Same-reply anti-enumeration on id-link-request
+`formatIdRequestAck` returns identical text whether customer matches
+or not. Without this, attacker DMs random IDs to the OA + observes
+which get a "match" reply → builds a customer-DB enumeration. The
+admin sees the real match in LinkRequestsTab + decides to approve.
 
-1. **PDF wrapper offstage strategy** — 0×0 fixed container at viewport
-   origin (not negative left coordinates) so html2canvas snapshots
-   correctly. Negative-left positioning was producing blank PDFs in bulk
-   mode. (commit 5b74bcb)
-2. **Single-page enforcement via pagebreak.mode='avoid-all' + height
-   fixed** — html2pdf default split heuristic was producing blank 2nd
-   pages even when content fit. Better to crop visible overflow than
-   silently emit a blank page. (commit 5b74bcb)
-3. **listAllSellers emits row per id alias** — not just the canonical
-   staffId/doctorId but also legacy proClinicId numbers. Lets old sales
-   saved with "614" still resolve to "Test" without database migration.
-   (commit 9a9cde8)
-4. **PV.F.11 directory-walk invariant test** — directory-recursive scan
-   of src/components/backend that fails CI if anyone re-introduces
-   getAllMasterDataItems('staff'|'doctors'). Permanent regression guard
-   for the user's "ไม่ต้องการ mirror from master_data อีกสักที่" directive.
-5. **MasterDataTab + brokerClient still allowed** — dev-only sync seed
-   per Rule H-bis. Not part of production. PV.F.11 explicitly excludes it.
+### D3 — Rate limit 5/24h via be_link_attempts collection
+Per-lineUserId enforcement (not per-IP). LINE userIds are stable
+identifiers we control; IP would require X-Forwarded-For trust which
+LINE doesn't reliably provide.
 
-## Key tests added this session (~300 new tests)
+### D4 — "ผูก" prefix REQUIRED (not bare 13-digit detection)
+User directive: "ให้พิมพ์ ผูก [เลขบัตร]". Plain 13-digit could be a
+phone number, HN, treatment code, etc. Requiring "ผูก" prefix prevents
+false-positive bot triggers + makes intent explicit.
 
-- `tests/v31-firebase-auth-orphan-recovery.test.js` — 111 tests (V31.A-N)
-- `tests/phase14.8b-signature-canvas-flow.test.js` — 52 tests (SC.A-H)
-- `tests/signature-canvas-field-rtl.test.jsx` — 13 tests (RTL mount)
-- `tests/phase14.8c-pdf-export-flow.test.js` — 50 tests (PE.A-F + padding fix)
-- `tests/phase14.9-audit-log-watermark.test.js` — 41 tests (AL.A-G)
-- `tests/phase14.10-saved-drafts-qr.test.js` — 76 tests (SD.A-H)
-- `tests/bulk-print-modal-flow.test.js` — 34 tests (BP.A-F)
-- `tests/saletab-print-receipt.test.js` — 15 tests (SP.A-D)
-- `tests/sale-quotation-print-view-fixes.test.js` — 50 tests (PV.A-F + 11)
-- 5 mock-update patches (dfGroups / phase10-* / phase11-wiring /
-  phase9-promotion / quotationUi)
+### D5 — Last-4 of ID stored only (privacy)
+`be_link_requests.idValueLast4` keeps audit info without storing the
+full ID anywhere. Full ID is only in customer.patientData.nationalId
+which is rule-protected.
+
+### D6 — EditCustomerIdsModal uses Firestore dotted-path
+`updateCustomer(id, { 'patientData.nationalId': X, 'patientData.passport': Y })`
+preserves all OTHER patientData fields (firstname, lastname, phone, etc.).
+Using `{ patientData: {nationalId, passport} }` would WIPE everything else.
+
+### D7 — Approval is BATCH atomic (customer + request together)
+`db.batch().update(cRef, ...).update(reqRef, ...).commit()` so customer
+.lineUserId + request.status='approved' can never diverge — if either
+fails, both roll back. Same pattern as runTransaction without the
+read-then-write requirement.
+
+### D8 — Test reduction reversible (move to tests/extended/, not delete)
+Session 11 user directive cut 6205 → 989 tests but the moved files
+stay in git for `npm run test:extended` (opt-in pre-release suite).
+Session 12 added 36+71+3 = 110 new tests bringing focused to 1096.
+User confirmed >1000 OK from now on.
+
+## Key tests added this session (107 new)
+
+- `tests/v32-tris-ter-line-bot-fix.test.js` — 36 (CORS proxy + admin SDK)
+- `tests/v32-tris-quater-id-link-request.test.jsx` — 71 (Q1-Q10 covering
+  intent + reply formatters + webhook handler + admin endpoint +
+  EditCustomerIdsModal RTL flow + LinkRequestsTab + nav + lockdown)
+
+## Next todo (when user resumes)
+
+### P0 — User decision
+None. Production is stable + LIVE. Wait for user QA feedback or new feature ask.
+
+### P1 — Polish queue (if continuing LINE work)
+- (a) Detection warning in LinkLineQrModal when Bot Basic ID empty
+  ("QR จะเป็น text แทน auto-link")
+- (b) Help text in LineSettingsTab for Bot Basic ID (where to find in
+  LINE Developers Console)
+- (c) Welcome message customization → already in LineSettingsTab as
+  `welcomeMessage` field but not used by webhook yet (LINK approval
+  uses formatLinkRequestApprovedReply hard-coded; admin override hook
+  point exists but not wired)
+
+### P2 — Tier 3 deferred (each 3-6h focused)
+- T5.a Phase 14.11 visual template designer FULL drag-drop (current
+  MVP has live preview + reorder; full drag-drop is mega XL)
+- TFP refactor — split 3200 LOC TreatmentFormPage into 7-8 sub-
+  components (T5.b billing extracted; rest pending)
+
+### P3 — Out of scope (user-deferred)
+- PDPA suite (PV1-PV5)
+- Phase 15 Central Stock (multi-branch only)
 
 ## Detail checkpoint
 
-`.agents/sessions/2026-04-26-session9-V31-phase14.8-10-master-data-migration.md`
+`.agents/sessions/2026-04-27-session12-line-oa-completion.md`
