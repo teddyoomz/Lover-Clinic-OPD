@@ -35,7 +35,10 @@ describe('AC1: BackendDashboard code-split', () => {
     'PaymentSummaryTab',
     'DocumentTemplatesTab',
     'QuotationTab',
-    'StaffSchedulesTab',
+    // Phase 13.2.8 (2026-04-26): replaced StaffSchedulesTab with calendar-view
+    // EmployeeSchedulesTab; Phase 13.2.7 added DoctorSchedulesTab.
+    'EmployeeSchedulesTab',
+    'DoctorSchedulesTab',
     'DfGroupsTab',
   ];
 

@@ -92,7 +92,7 @@ const COLLECTION_MATRIX = {
   'be_deposits':           { scope: 'global',  reason: 'Customer-owned; deposit records branchId of capture, sale uses it' },
   'be_memberships':        { scope: 'global',  reason: 'Customer membership state' },
   'be_expenses':           { scope: 'branch-spread', source: 'FinanceMasterTab ExpensesSection; saveExpense spreads — wired Phase 14.7.H-D' },
-  'be_staff_schedules':    { scope: 'branch-spread', source: 'StaffSchedulesTab; saveStaffSchedule spreads — wired Phase 14.7.H-D' },
+  'be_staff_schedules':    { scope: 'branch-spread', source: 'DoctorSchedulesTab + EmployeeSchedulesTab; saveStaffSchedule spreads — wired Phase 14.7.H-D, refactored Phase 13.2.7-13.2.8' },
 };
 
 // ─── Scope coverage tests ─────────────────────────────────────────────────
@@ -201,9 +201,14 @@ describe('BC2: branch-scoped collections — branchId presence per scope class',
     expect(src).toMatch(/branchId:\s*selectedBranchId/);
   });
 
-  it('BC2.spread.be_staff_schedules: StaffSchedulesTab payload includes branchId', () => {
-    const src = READ('src/components/backend/StaffSchedulesTab.jsx');
-    expect(src).toMatch(/branchId:\s*selectedBranchId/);
+  it('BC2.spread.be_staff_schedules: Doctor + Employee SchedulesTab payloads include branchId', () => {
+    // Phase 13.2.7-13.2.8 (2026-04-26): list-view StaffSchedulesTab replaced
+    // by calendar-view DoctorSchedulesTab + EmployeeSchedulesTab. Both share
+    // ScheduleEntryFormModal which spreads branchId.
+    const docSrc = READ('src/components/backend/DoctorSchedulesTab.jsx');
+    const empSrc = READ('src/components/backend/EmployeeSchedulesTab.jsx');
+    expect(docSrc).toMatch(/branchId=\{selectedBranchId\}/);
+    expect(empSrc).toMatch(/branchId=\{selectedBranchId\}/);
   });
 
   // BRANCH-FUTURE: collection has rule support but UI form not yet wired.

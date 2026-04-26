@@ -65,9 +65,10 @@ import CoursesTab from '../components/backend/CoursesTab.jsx';
 import FinanceMasterTab from '../components/backend/FinanceMasterTab.jsx';
 import OnlineSalesTab from '../components/backend/OnlineSalesTab.jsx';
 import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab.jsx';
-// 4 more heavy tabs split for the same reason — DocumentTemplatesTab
-// pulls the print engine, QuotationTab + DfGroupsTab + StaffSchedulesTab
-// each pull rich form modals. Same Suspense boundary handles all.
+// 5 more heavy tabs split for the same reason — DocumentTemplatesTab
+// pulls the print engine, QuotationTab + DfGroupsTab + DoctorSchedulesTab +
+// EmployeeSchedulesTab each pull rich form modals + scheduling components.
+// Same Suspense boundary handles all.
 const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
 const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
 // Phase 13.2.8 (2026-04-26) — list-view StaffSchedulesTab replaced by
