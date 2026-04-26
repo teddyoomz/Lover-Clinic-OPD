@@ -36,7 +36,7 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   const [doctors, setDoctors] = useState([]);
   const [doctorsLoading, setDoctorsLoading] = useState(false);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
-  const [schedules, setSchedules] = useState([]);
+  const [schedules, setSchedules] = useState([]); // ALL doctor schedules (calendar)
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -70,22 +70,38 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
 
   useEffect(() => { loadDoctors(); }, []);
 
-  // Load schedules for selected doctor
+  // Phase 13.2.7-bis (2026-04-26 user correction):
+  // ProClinic /admin/schedule/doctor calendar shows ALL doctors at once
+  // (multi-staff per cell, color-coded). Sidebar selection only filters
+  // the right-rail "งานประจำสัปดาห์/รายวัน/วันลา" sections.
+  // Therefore: load ALL schedules + filter to staffIds∈be_doctors.
   const loadSchedules = useCallback(async () => {
-    if (!selectedDoctorId) { setSchedules([]); return; }
+    if (doctors.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
     try {
-      const list = await listStaffSchedules({ staffId: selectedDoctorId });
-      setSchedules(list);
+      const all = await listStaffSchedules();
+      const doctorIdSet = new Set(doctors.map((d) => String(d.doctorId || d.id)));
+      const filtered = all.filter((e) => doctorIdSet.has(String(e.staffId)));
+      setSchedules(filtered);
     } catch (e) {
       setError(e?.message || 'โหลดตารางล้มเหลว');
       setSchedules([]);
     } finally {
       setScheduleLoading(false);
     }
-  }, [selectedDoctorId]);
+  }, [doctors]);
 
   useEffect(() => { loadSchedules(); }, [loadSchedules]);
+
+  // staffMap for calendar chip labels (V21-anti: never show numeric user_id).
+  const staffMap = useMemo(() => {
+    const m = new Map();
+    for (const d of doctors) {
+      const id = String(d.doctorId || d.id);
+      m.set(id, { name: doctorDisplayName(d) });
+    }
+    return m;
+  }, [doctors]);
 
   // Pick selected doctor object for the sidebar
   const selectedDoctor = useMemo(() => {
@@ -100,10 +116,13 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
     };
   }, [doctors, selectedDoctorId]);
 
-  // Split schedules into 3 sections
+  // Sidebar sections show ONLY the selected doctor's entries — calendar
+  // shows everyone, sidebar focuses on one (matches ProClinic).
   const { recurringEntries, overrideEntries, leaveEntries } = useMemo(() => {
     const rec = [], ovr = [], lea = [];
+    if (!selectedDoctorId) return { recurringEntries: [], overrideEntries: [], leaveEntries: [] };
     for (const e of schedules) {
+      if (String(e.staffId) !== String(selectedDoctorId)) continue;
       if (e.type === 'recurring') rec.push(e);
       else if (e.type === 'leave' || e.type === 'sick') lea.push(e);
       else ovr.push(e);
@@ -112,7 +131,7 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
     ovr.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     lea.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     return { recurringEntries: rec, overrideEntries: ovr, leaveEntries: lea };
-  }, [schedules]);
+  }, [schedules, selectedDoctorId]);
 
   // Modal handlers
   const openAdd = (kind) => setModal({ kind, entry: null });
@@ -200,6 +219,8 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
               year={calYear}
               monthIdx={calMonth}
               schedules={schedules}
+              selectedStaffId={selectedDoctorId}
+              staffMap={staffMap}
               onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); }}
             />
           )}

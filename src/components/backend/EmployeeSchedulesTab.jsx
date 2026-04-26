@@ -37,7 +37,7 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
   const [staff, setStaff] = useState([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [schedules, setSchedules] = useState([]);
+  const [schedules, setSchedules] = useState([]); // ALL employee schedules
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -66,21 +66,35 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
 
   useEffect(() => { loadStaff(); }, []);
 
+  // Phase 13.2.8-bis (2026-04-26 user correction): calendar shows ALL
+  // staff at once. Sidebar selection filters only the right-rail sections.
   const loadSchedules = useCallback(async () => {
-    if (!selectedStaffId) { setSchedules([]); return; }
+    if (staff.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
     try {
-      const list = await listStaffSchedules({ staffId: selectedStaffId });
-      setSchedules(list);
+      const all = await listStaffSchedules();
+      const staffIdSet = new Set(staff.map((s) => String(s.staffId || s.id)));
+      const filtered = all.filter((e) => staffIdSet.has(String(e.staffId)));
+      setSchedules(filtered);
     } catch (e) {
       setError(e?.message || 'โหลดตารางล้มเหลว');
       setSchedules([]);
     } finally {
       setScheduleLoading(false);
     }
-  }, [selectedStaffId]);
+  }, [staff]);
 
   useEffect(() => { loadSchedules(); }, [loadSchedules]);
+
+  // V21-anti: never show numeric user_id; resolve to display name.
+  const staffMap = useMemo(() => {
+    const m = new Map();
+    for (const s of staff) {
+      const id = String(s.staffId || s.id);
+      m.set(id, { name: staffDisplayName(s) });
+    }
+    return m;
+  }, [staff]);
 
   const selectedStaff = useMemo(() => {
     if (!selectedStaffId) return null;
@@ -94,9 +108,12 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     };
   }, [staff, selectedStaffId]);
 
+  // Sidebar entries — ONLY the selected staff's records.
   const { recurringEntries, overrideEntries, leaveEntries } = useMemo(() => {
     const rec = [], ovr = [], lea = [];
+    if (!selectedStaffId) return { recurringEntries: [], overrideEntries: [], leaveEntries: [] };
     for (const e of schedules) {
+      if (String(e.staffId) !== String(selectedStaffId)) continue;
       if (e.type === 'recurring') rec.push(e);
       else if (e.type === 'leave' || e.type === 'sick') lea.push(e);
       else ovr.push(e);
@@ -105,7 +122,7 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     ovr.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     lea.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     return { recurringEntries: rec, overrideEntries: ovr, leaveEntries: lea };
-  }, [schedules]);
+  }, [schedules, selectedStaffId]);
 
   const openAdd = (kind) => setModal({ kind, entry: null });
   const openEdit = (entry) => {
@@ -188,6 +205,8 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
               year={calYear}
               monthIdx={calMonth}
               schedules={schedules}
+              selectedStaffId={selectedStaffId}
+              staffMap={staffMap}
               onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m); }}
             />
           )}
