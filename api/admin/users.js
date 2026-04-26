@@ -16,9 +16,22 @@
 // pattern so frontend wiring stays consistent.
 
 import { getAdminAuth, verifyAdminToken, isBootstrapAdmin } from './_lib/adminAuth.js';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD = 6;
+const APP_ID = 'loverclinic-opd-4c39b';
+
+// V28-tris (2026-04-26) — Firestore Admin SDK accessor for group lookup
+// in setPermission. Reuses the firebase-admin app initialized by adminAuth.js.
+let cachedFirestore = null;
+function getAdminFirestore() {
+  if (cachedFirestore) return cachedFirestore;
+  // Trigger app init if not already (getAdminAuth handles app initialization)
+  getAdminAuth();
+  cachedFirestore = getFirestore();
+  return cachedFirestore;
+}
 
 function bad(res, status, error) {
   res.status(status).json({ success: false, error });
@@ -160,6 +173,50 @@ async function handleSetPermission(auth, params) {
     isClinicStaff: true,
     permissionGroupId,
   };
+
+  // ─── V28-tris (2026-04-26) — Auto-grant admin claim ──────────────────────
+  // User directive: "ป้องกันอย่าให้เป็นอีกไม่ว่ากับ id ไหน mail ไหน".
+  // Without this, admin adds staff to gp-owner group → soft-gate (V28)
+  // says they're admin → they see admin sidebar → but hard-gate
+  // (verifyAdminToken) rejects them → "Forbidden: admin privilege required"
+  // chicken-and-egg loops back. V28-tris closes the loop by setting
+  // admin:true claim AT THE TIME of group assignment.
+  //
+  // Triggers admin:true if EITHER:
+  //   1. permissionGroupId === 'gp-owner' (canonical owner group)
+  //   2. The group has permissions.permission_group_management === true
+  //      (custom admin group with meta-perm — covers user-defined admin
+  //      groups not named gp-owner)
+  //
+  // We do NOT auto-revoke admin if group changes to non-admin — that's
+  // a separate explicit operation (revokeAdmin) to prevent accidental
+  // lockout when admin temporarily downgrades themselves for testing.
+  let grantAdminAuto = false;
+  if (permissionGroupId === 'gp-owner') {
+    grantAdminAuto = true;
+  } else if (permissionGroupId) {
+    // Group lookup via Firestore Admin SDK to check meta-perm
+    try {
+      const db = getAdminFirestore();
+      const groupRef = db
+        .collection('artifacts').doc(APP_ID)
+        .collection('public').doc('data')
+        .collection('be_permission_groups').doc(permissionGroupId);
+      const groupDoc = await groupRef.get();
+      if (groupDoc.exists && groupDoc.data()?.permissions?.permission_group_management === true) {
+        grantAdminAuto = true;
+      }
+    } catch (err) {
+      // Non-fatal — claim sync still proceeds without admin grant
+      // eslint-disable-next-line no-console
+      console.warn(`[setPermission] group lookup failed for ${permissionGroupId}: ${err?.message || err}`);
+    }
+  }
+
+  if (grantAdminAuto) {
+    claims.admin = true;
+  }
+
   await auth.setCustomUserClaims(uid, claims);
   return serializeUser(await auth.getUser(uid));
 }

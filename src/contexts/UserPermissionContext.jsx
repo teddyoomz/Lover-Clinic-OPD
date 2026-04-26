@@ -18,9 +18,10 @@
 // Firestore rules' isClinicStaff() guard so we don't claim admin for users
 // the rules would reject anyway.
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { listenToUserPermissions } from '../lib/backendClient.js';
 import { isOwnerEmail } from '../lib/ownerEmails.js';
+import { bootstrapSelfAsAdmin } from '../lib/adminUsersClient.js';
 
 const UserPermissionContext = createContext(null);
 
@@ -83,6 +84,53 @@ export function UserPermissionProvider({ user, children }) {
     });
     return () => unsub();
   }, [user?.uid]);
+
+  // ─── V28-bis (2026-04-26) — Auto-bootstrap admin claim on owner login ──
+  // After V27-bis added OWNER_EMAILS allowlist (gmail owners pass soft-gate),
+  // a SECOND chicken-and-egg surfaced: gmail owner could see the backend
+  // sidebar (soft-gate ✓) but couldn't call /api/admin/users (hard-gate
+  // requires admin: true claim). They had to manually click "Bootstrap
+  // ตัวเองเป็น admin" button before any admin action would work.
+  //
+  // V28-bis: when an authorized user (loverclinic email OR OWNER_EMAILS)
+  // logs in WITHOUT admin claim, silently auto-call bootstrap-self +
+  // force token refresh. Idempotent — alreadyAdmin returns 200 fast.
+  //
+  // Per-session ref guard prevents re-calling on every render. Reset on
+  // user change (logout/login).
+  const bootstrapAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (!user?.uid) {
+      bootstrapAttemptedRef.current = false;
+      return;
+    }
+    if (bootstrapAttemptedRef.current) return;
+    bootstrapAttemptedRef.current = true;
+
+    (async () => {
+      try {
+        const tokenResult = await user.getIdTokenResult();
+        // Already admin → skip (avoid unnecessary network call)
+        if (tokenResult?.claims?.admin === true) return;
+
+        // Auto-bootstrap only for authorized accounts (loverclinic OR owner)
+        const email = (user.email || '').toLowerCase();
+        const isAuthorized = LOVERCLINIC_EMAIL_RE.test(email) || isOwnerEmail(email);
+        if (!isAuthorized) return;
+
+        // Silently call bootstrap-self. 409 (genesis exists + non-owner)
+        // expected for normal staff — caught + logged.
+        await bootstrapSelfAsAdmin();
+        // Force ID token refresh to pick up new admin claim
+        await user.getIdToken(true);
+      } catch (err) {
+        // Non-fatal — manual "Bootstrap ตัวเองเป็น admin" button still
+        // available in PermissionGroupsTab as fallback.
+        // eslint-disable-next-line no-console
+        console.warn('[auto-bootstrap] skip:', err?.message || err);
+      }
+    })();
+  }, [user?.uid, user?.email]);
 
   const state = useMemo(() => ({
     ...deriveState(user, staff, group),

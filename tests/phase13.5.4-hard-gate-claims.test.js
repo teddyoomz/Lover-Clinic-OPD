@@ -53,6 +53,44 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       expect(USERS_API).toMatch(/clearPermission:\s*\(\s*auth\s*,\s*p\s*,\s*caller\s*\)\s*=>\s*handleClearPermission/);
     });
 
+    it('H1.5-V28tris: setPermission auto-grants admin if permissionGroupId===gp-owner', () => {
+      // V28-tris (2026-04-26): User directive "ป้องกันอย่าให้เป็นอีกไม่ว่า
+      // กับ id ไหน mail ไหน". setPermission must close the chicken-and-egg
+      // loop by granting admin claim when assigning to gp-owner group.
+      const block = USERS_API.match(/async\s+function\s+handleSetPermission[\s\S]*?\n\}/);
+      expect(block).toBeTruthy();
+      expect(block[0]).toMatch(/permissionGroupId\s*===\s*['"]gp-owner['"]/);
+      expect(block[0]).toMatch(/grantAdminAuto\s*=\s*true/);
+      expect(block[0]).toMatch(/claims\.admin\s*=\s*true/);
+    });
+
+    it('H1.5-V28tris-bis: setPermission also auto-grants admin if group has permission_group_management meta-perm', () => {
+      // For custom admin groups not named gp-owner. Lookup via Firestore
+      // Admin SDK + check group.permissions.permission_group_management.
+      const block = USERS_API.match(/async\s+function\s+handleSetPermission[\s\S]*?\n\}/);
+      expect(block[0]).toMatch(/getAdminFirestore/);
+      expect(block[0]).toMatch(/be_permission_groups/);
+      expect(block[0]).toMatch(/permission_group_management\s*===\s*true/);
+    });
+
+    it('H1.5-V28tris-resilience: group lookup failure is non-fatal (claim sync continues)', () => {
+      const block = USERS_API.match(/async\s+function\s+handleSetPermission[\s\S]*?\n\}/);
+      // Try/catch around the group lookup — if Firestore unavailable, set
+      // permission still proceeds (just without admin auto-grant)
+      expect(block[0]).toMatch(/try\s*\{[\s\S]*?groupRef[\s\S]*?\}\s*catch/);
+      expect(block[0]).toMatch(/console\.warn[^)]*setPermission/);
+    });
+
+    it('H1.5-V28tris-no-revoke: does NOT auto-revoke admin if group changes to non-admin', () => {
+      // V28-tris explicit lesson: don't auto-revoke. Admin demotion is a
+      // separate explicit operation (revokeAdmin) to prevent accidental
+      // lockout. Look for the comment that explains this:
+      const block = USERS_API.match(/async\s+function\s+handleSetPermission[\s\S]*?\n\}/);
+      expect(block[0]).toMatch(/NOT auto-revoke/);
+      // The fn must NOT have `delete claims.admin` anywhere
+      expect(block[0]).not.toMatch(/delete\s+claims\.admin/);
+    });
+
     it('H1.5: setPermission does NOT drop existing claims (spread + override)', () => {
       // The implementation must preserve `admin: true` if the user already had
       // it, while adding/updating isClinicStaff + permissionGroupId.
