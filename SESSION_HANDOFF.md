@@ -7,14 +7,16 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 3 — full audit-all sweep + 2 fix passes + design audit + UI click-test + E2E spec authoring
+- **Date last updated**: 2026-04-26 session 3 EOD — full audit-all sweep + 2 fix passes + design audit + UI click-test + E2E spec authoring + V15 combined deploy
 - **Branch**: `master`
-- **Last commit**: `24b82ac a11y(audit-design): :focus-visible global rule restores keyboard focus across all backend inputs`
-- **Test count**: 4893/4893 vitest + new E2E specs (`backend-all-tabs-smoke` 41 tests + `marketing-tabs-actions` 3 + `reports-tabs-render` 13 + `master-data-actions` 12 = 69 new E2E tests)
+- **Last commit**: `093d4d9 test(e2e): full backend coverage — 68 tests across 4 specs (40 + 28 all passing)`
+- **Test count**: 4893/4893 vitest + 68/68 E2E (smoke 40 + marketing 3 + reports 13 + master-data 12) = **4961 total tests passing**
 - **Build**: clean. **BackendDashboard chunk: 1216 KB → 899 KB (-26% / -317 KB; gzip 224 → 162 KB / -28%)** after code-split
-- **UI click-test**: 41/41 backend tabs verified loading via preview_eval. 0 console errors during sidebar walkthrough.
+- **UI click-test**: 41/41 backend tabs verified loading via preview_eval AND via Playwright E2E. 0 console errors during sidebar walkthrough.
 - **Design audit**: 5 parallel agents reviewed 95 backend component files. Top issue (145-site `:focus-visible` gap) shipped via single CSS rule.
-- **Deploy state**: ⚠️ **10 commits ahead of prod** — production at `791b2de`
+- **Deploy state**: ✅ **DEPLOYED** — production now at `093d4d9` (V15 combined deploy 2026-04-26 EOD; pre-probe + post-probe both 200/200/200/200; firestore.rules idempotent fire — no diff)
+  - Vercel: `093d4d9` aliased to https://lover-clinic-app.vercel.app
+  - Firestore rules: v10 (unchanged, re-deployed as no-op)
   - **firestore:rules**: NOT changed this session — no probe-deploy-probe needed
   - **Vercel prod**: `791b2de` aliased to https://lover-clinic-app.vercel.app
   - **Pending deploy**: 5 commits — user must say "deploy" THIS turn per V18 (V15 combined would ship all 5)
