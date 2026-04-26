@@ -1,15 +1,15 @@
 ---
-updated_at: "2026-04-26 (session 7 — Phase 13.5.4 Deploy 1 + V24 schedule sync fix DEPLOYED)"
-status: "Production at 884f6cc LIVE. Phase 13.5.4 Deploy 1 (hard-gate endpoint + auto-sync + migration button) AND V24 schedule sync fix shipped + deployed via combined V15. 5-endpoint Probe-Deploy-Probe 5/5=200 pre+post. AWAITING USER MIGRATION ACTION before Deploy 2."
-current_focus: "User must click 'Sync ทุก staff → Claims' button in PermissionGroupsTab on production to backfill custom claims. Then Deploy 2 (firestore.rules → claim-only check) can ship."
+updated_at: "2026-04-26 (session 8 — Phase 13.5.4 hard-gate END-TO-END + V27 cleanup + V28 future-proof — production LIVE + queue CLEAN)"
+status: "Production at fc968cf LIVE. Phase 13.5.4 D1+D2 + V24 + V25 + V25-bis + V27 + V27-bis + V27-tris + V28 + P6 ALL deployed end-to-end. Queue auto-cleaned of all test-probe-anon-* legacy docs (0 remaining). Future onboarding contract LOCKED by 117+ tests."
+current_focus: "Phase 13.5.4 closed. Moving to Tier 2: Doc 10/11/12 verification + UC1 weekend red labels + M9 customer doc summary reconciler."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "884f6cc"
-tests: "~5274 vitest (5239 + 28 Phase 13.5.4 H1-H5 + 7 V24 SC.G new schedule sync)"
+last_commit: "fc968cf"
+tests: "~5320 vitest (5274 + V27-tris + V27-bis + V28 + P6 = 25 source-grep + 23 future-proof + dual-list sync drift)"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "884f6cc (2026-04-26 session 7 V15 combined). Pre-probe 5/5=200; post-probe 5/5=200 (V23 anon UPDATE still LIVE); cleanup 4/4=200; production smoke 3/3=200. Vercel: lover-clinic-ejed4oblq aliased; firebase rules: idempotent (rules unchanged in 6799a58 + 884f6cc)."
-firestore_rules_deployed: "v11 (UNCHANGED from V23 — Deploy 2 of 13.5.4 will narrow isClinicStaff() to claim-only AFTER user runs migration button on production)"
-bundle: "BackendDashboard ~928 KB (+3 KB for Phase 13.5.4 button + endpoint wrappers)"
+last_deploy: "fc968cf (2026-04-26 session 8 V15 combined — V27-tris bundled with V27-bis + V28 + P6). Pre-probe 5/5+5c=200/200/200/200/200/403 (DELETE blocked PRE-V27tris ✓); post-probe 5/5+5c=200 (DELETE now allowed via test-probe-anon prefix); adversarial DELETE on DEP-DBGMJ7 = 403 ✓ (legit data protected); auto-cleanup deleted 3 legacy probe docs; production smoke 2/2=200."
+firestore_rules_deployed: "v13 (V27-tris: opd_sessions delete narrowed to isClinicStaff() OR (anon + sessionId.matches('^test-probe-anon-.*$')) — anon self-cleanup pattern)"
+bundle: "BackendDashboard ~932 KB (+ 4 KB for V27 cleanup button + V27-bis OWNER_EMAILS + V28 + V25-bis bootstrap-self)"
 ---
 
 # Active Context
@@ -141,24 +141,24 @@ catch this regression class automatically (.claude/rules/01-iron-clad.md).
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-### Required (blocks Phase 13.5.4 Deploy 2)
-1. **Verify V24 schedule sync fix** — open MasterDataTab in production →
-   click "ดูดตารางหมอ + พนักงาน จาก ProClinic" → expect now to receive
-   BOTH doctor + employee entries (was doctor-only before V24). Then
-   "นำเข้า master_data → be_staff_schedules" → verify
-   EmployeeSchedulesTab calendar shows real data.
-2. **Run migration button** — open PermissionGroupsTab → click "Sync
-   ทุก staff → Claims" (top-right). One-time backfill of all be_staff
-   firebase users with `isClinicStaff: true` + `permissionGroupId`
-   custom claims. Result UI shows synced/skipped/failed counts; when
-   all green you'll see the "พร้อม Deploy 2" hint.
-3. **After migration**: tell me to ship Phase 13.5.4 Deploy 2
-   (firestore.rules → claim-only `isClinicStaff()` check).
+### NONE (Phase 13.5.4 closed end-to-end)
+All security-related items are DEPLOYED + verified:
+- V26 isClinicStaff() = claim-only (no email check)
+- V27-bis OWNER_EMAILS allows oomz.peerapat@gmail.com bootstrap
+- V28 staff in gp-owner = admin regardless of email domain
+- V27-tris anon self-cleanup of test-probe artifacts
+- 3 legacy probe docs auto-deleted; queue clean
+- 117+ tests lock the new behavior
 
-### Optional V23 cleanup (still valid from session 6)
-Admin can manually archive `opd_sessions/test-probe-anon-1777184257`
-and `opd_sessions/test-probe-anon-1777184370` from queue if they show
-as noise. Not blocking.
+### Future onboarding contract (LOCKED by tests)
+1. Admin opens StaffFormModal → enters email + password +
+   permissionGroupId → Save
+2. Firebase Auth account created + claims auto-synced (V25)
+3. New person logs in → soft-gate trusts their group (V28) →
+   sidebar populates
+4. firestore.rules V26 lets them read be_* via claims
+5. Works for ANY email domain (gmail, outlook, yahoo, etc.) — no
+   code change needed
 
 ## Recent decisions (non-obvious — preserve reasoning)
 
