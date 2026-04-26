@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Search } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveDfGroup, getAllMasterDataItems } from '../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — be_courses canonical (was master_data mirror)
+import { saveDfGroup, listCourses } from '../../lib/backendClient.js';
 import {
   emptyDfGroupForm, generateDfGroupId, validateDfGroupStrict, normalizeDfGroup,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,
@@ -22,7 +23,7 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
 
   useEffect(() => {
     let cancelled = false;
-    getAllMasterDataItems('courses').catch(() => [])
+    listCourses().catch(() => [])
       .then((c) => { if (!cancelled) setCourses(c || []); });
     return () => { cancelled = true; };
   }, []);

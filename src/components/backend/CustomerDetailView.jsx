@@ -11,7 +11,10 @@ import {
 import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
-  addCourseRemainingQty, getCustomer, getAllMasterDataItems,
+  addCourseRemainingQty, getCustomer,
+  // Phase 14.10-tris (2026-04-26) — be_* canonical for staff/products
+  // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
+  listAllSellers, listProducts,
   // Phase 14.7.H follow-up F — listenToCustomerFinance bundles 4 listeners
   // (deposits + wallets + points + memberships); replaces the 4-fn Promise.all.
   listenToCustomerFinance,
@@ -1212,7 +1215,8 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAllMasterDataItems('staff').then(s => { setStaff(s); setLoading(false); }).catch(() => setLoading(false));
+    // Phase 14.10-tris — listAllSellers (be_staff + be_doctors canonical)
+    listAllSellers().then(s => { setStaff(s); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const selectedStaff = staff.find(s => String(s.id) === staffId);
@@ -1289,7 +1293,8 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
   const currentParsed = parseQtyString(course.qty);
 
   useEffect(() => {
-    Promise.all([getAllMasterDataItems('products'), getAllMasterDataItems('staff')])
+    // Phase 14.10-tris — be_products + listAllSellers
+    Promise.all([listProducts(), listAllSellers()])
       .then(([p, s]) => { setProducts(p); setStaff(s); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
@@ -1444,7 +1449,8 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
   useEffect(() => {
     Promise.all([
       import('../../lib/backendClient.js').then(m => m.getAllCustomers()),
-      getAllMasterDataItems('staff'),
+      // Phase 14.10-tris — listAllSellers (be_*)
+      listAllSellers(),
     ]).then(([c, s]) => { setCustomers(c.filter(c => c.proClinicId !== fromCustomerId)); setStaff(s); setLoading(false); }).catch(() => setLoading(false));
   }, [fromCustomerId]);
 

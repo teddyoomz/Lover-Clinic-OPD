@@ -6209,6 +6209,56 @@ export async function listDoctors() {
   return items;
 }
 
+// ─── Phase 14.10-tris (2026-04-26) — unified seller loader ──────────────
+// User directive: "ทั้ง backend ใช้ database ตัวเองทั้งหมด ไม่ต้องการ
+// mirror from master_data อีกสักที่เลย". Centralized helper that every
+// backend tab can call to get a flat `[{ id, name }]` list of sellable
+// staff (be_staff + be_doctors). Each entry expands its primary id
+// (staffId/doctorId) AND any legacy proClinicId so OLD sales saved with
+// numeric ProClinic ids still resolve to the human-readable name.
+//
+// Use this INSTEAD of `getAllMasterDataItems('staff')` /
+// `getAllMasterDataItems('doctors')` in any backend UI that needs to
+// display sellable staff.
+export async function listAllSellers() {
+  const [staffList, doctorList] = await Promise.all([listStaff(), listDoctors()]);
+  const buildName = (x) => {
+    const parts = [x.firstname || x.firstName || '', x.lastname || x.lastName || ''].filter(Boolean);
+    const composed = parts.join(' ').trim();
+    return composed || x.nickname || x.name || x.fullName || '';
+  };
+  const expand = (x) => {
+    const out = [];
+    const name = buildName(x);
+    if (!name) return out;
+    const ids = new Set([x.id, x.staffId, x.doctorId, x.proClinicId]
+      .filter((v) => v != null && String(v).trim() !== ''));
+    for (const id of ids) out.push({ id: String(id), name });
+    return out;
+  };
+  const merged = [...staffList.flatMap(expand), ...doctorList.flatMap(expand)];
+  // Dedupe by id — later entries (doctors) override earlier (staff) for same id
+  const byId = new Map();
+  merged.forEach((opt) => { byId.set(opt.id, opt); });
+  return Array.from(byId.values());
+}
+
+// Phase 14.10-tris — be_membership_types listing (was master_data/membership_types)
+export async function listMembershipTypes() {
+  const snap = await getDocs(membershipTypesCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return items;
+}
+
+// Phase 14.10-tris — be_wallet_types listing (was master_data/wallet_types)
+export async function listWalletTypes() {
+  const snap = await getDocs(walletTypesCol());
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return items;
+}
+
 export async function saveDoctor(doctorId, data) {
   const id = String(doctorId || '');
   if (!id) throw new Error('doctorId required');

@@ -10,7 +10,9 @@ import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import {
-  saveQuotation, getAllCustomers, listStaff, getAllMasterDataItems,
+  saveQuotation, getAllCustomers, listStaff,
+  // Phase 14.10-tris (2026-04-26) — be_courses/products/promotions canonical
+  listCourses, listProducts, listPromotions,
 } from '../../lib/backendClient.js';
 import {
   validateQuotationStrict, normalizeQuotation, emptyQuotationForm,
@@ -63,9 +65,9 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
     Promise.all([
       getAllCustomers().catch(() => []),
       listStaff().catch(() => []),
-      getAllMasterDataItems('courses').catch(() => []),
-      getAllMasterDataItems('products').catch(() => []),
-      getAllMasterDataItems('promotions').catch(() => []),
+      listCourses().catch(() => []),
+      listProducts().catch(() => []),
+      listPromotions().catch(() => []),
     ])
       .then(([cs, st, mc, mp, mpr]) => {
         if (cancelled) return;

@@ -194,3 +194,96 @@ describe('PV.E — seller name fallback chain (SaleTab + SalePrintView)', () => 
     expect(sellerDisplayBlock).toMatch(/=\s*firstSeller\.name/);
   });
 });
+
+// ─── PV.F — listAllSellers (be_staff + be_doctors) source (V31-class fix) ──
+// User reported persistent "614" display because SaleTab loaded sellers
+// from getAllMasterDataItems('staff') (stale ProClinic mirror with empty
+// `name`). Fix: unified listAllSellers helper in backendClient that loads
+// be_staff + be_doctors and emits a flat [{id, name}] list with all id
+// aliases (staffId, doctorId, proClinicId) so legacy numeric ids resolve.
+describe('PV.F — sellers source switched to listAllSellers (be_*)', () => {
+  const saleTabFile = readFileSync(join(ROOT, 'src/components/backend/SaleTab.jsx'), 'utf8');
+  const quotationTabFile = readFileSync(join(ROOT, 'src/components/backend/QuotationTab.jsx'), 'utf8');
+  const backendFile = readFileSync(join(ROOT, 'src/lib/backendClient.js'), 'utf8');
+
+  it('F.1 — backendClient exports listAllSellers helper', () => {
+    expect(backendFile).toMatch(/export async function listAllSellers/);
+  });
+
+  it('F.2 — listAllSellers calls listStaff + listDoctors internally (Promise.all)', () => {
+    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    expect(block).toMatch(/Promise\.all\(\[listStaff\(\),\s*listDoctors\(\)\]\)/);
+  });
+
+  it('F.3 — listAllSellers buildName composes firstname+lastname with nickname fallback', () => {
+    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    expect(block).toContain('firstname');
+    expect(block).toContain('lastname');
+    expect(block).toContain('nickname');
+  });
+
+  it('F.4 — expand emits row per id (id, staffId, doctorId, proClinicId) so legacy numeric ids resolve', () => {
+    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    expect(block).toContain('staffId');
+    expect(block).toContain('doctorId');
+    expect(block).toContain('proClinicId');
+  });
+
+  it('F.5 — dedupe via Map by id (later doctors override earlier staff for same id)', () => {
+    const block = backendFile.match(/export async function listAllSellers[\s\S]*?\n\}/)?.[0] || '';
+    expect(block).toMatch(/new Map\(\)/);
+    expect(block).toMatch(/byId\.set\(opt\.id,\s*opt\)/);
+  });
+
+  it('F.6 — SaleTab imports listAllSellers from backendClient', () => {
+    expect(saleTabFile).toMatch(/listAllSellers[\s\S]*?from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  });
+
+  it('F.7 — SaleTab loadOptions calls listAllSellers (NOT inline listStaff/listDoctors anymore)', () => {
+    const block = saleTabFile.match(/const loadOptions\s*=[\s\S]*?\}, \[customers\.length, sellers\.length\]\);/)?.[0] || '';
+    expect(block).toContain('listAllSellers()');
+    // Old master_data calls removed
+    expect(block).not.toMatch(/getAllMasterDataItems\(['"]staff['"]/);
+    expect(block).not.toMatch(/getAllMasterDataItems\(['"]doctors['"]/);
+  });
+
+  it('F.8 — QuotationTab also uses listAllSellers for sellersLookup', () => {
+    expect(quotationTabFile).toMatch(/listAllSellers/);
+    expect(quotationTabFile).toContain('sellersLookup');
+  });
+
+  it('F.9 — QuotationTab passes sellersLookup to SalePrintView', () => {
+    expect(quotationTabFile).toMatch(/<SalePrintView[\s\S]*?sellersLookup=\{sellersLookup\}/);
+  });
+
+  it('F.10 — Phase 14.10-tris marker (institutional memory)', () => {
+    expect(saleTabFile).toMatch(/Phase 14\.10-tris/);
+    expect(quotationTabFile).toMatch(/Phase 14\.10-tris/);
+    expect(backendFile).toMatch(/Phase 14\.10-tris/);
+  });
+
+  it('F.11 — anti-regression: zero getAllMasterDataItems(staff/doctors) anywhere in src/components/backend', () => {
+    // This is a directory-scan test — invariant must hold across every backend tab
+    // (per user directive "ไม่ต้องการ mirror from master_data อีกสักที่เลย").
+    // Scan all .jsx in backend dir except MasterDataTab (sanctioned exception).
+    const fs = require('fs');
+    const path = require('path');
+    function* walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory()) yield* walk(p);
+        else if (entry.isFile() && /\.(jsx?|tsx?)$/.test(entry.name)) yield p;
+      }
+    }
+    const backendDir = path.join(ROOT, 'src/components/backend');
+    const violations = [];
+    for (const file of walk(backendDir)) {
+      if (file.includes('MasterDataTab')) continue;
+      const src = fs.readFileSync(file, 'utf8');
+      // Match getAllMasterDataItems('staff') or getAllMasterDataItems('doctors')
+      const matches = src.match(/getAllMasterDataItems\(['"](staff|doctors)['"]/g);
+      if (matches) violations.push({ file: file.replace(ROOT, ''), matches });
+    }
+    expect(violations).toEqual([]);
+  });
+});

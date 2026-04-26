@@ -21,7 +21,8 @@ import {
   buildRevenueColumns,
 } from '../../../lib/revenueAnalysisAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
-import { getAllMasterDataItems } from '../../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — be_courses canonical
+import { listCourses } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -56,7 +57,7 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
     setLoading(true); setError('');
     Promise.all([
       loadSalesByDateRange({ from, to }),
-      getAllMasterDataItems('courses'),
+      listCourses(),
     ])
       .then(([s, c]) => { if (!abort) { setSales(s); setCourses(c); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })

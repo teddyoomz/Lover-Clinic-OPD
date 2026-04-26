@@ -28,8 +28,11 @@ import {
 } from 'lucide-react';
 import {
   createBackendAppointment, updateBackendAppointment,
-  getAllCustomers, getAllMasterDataItems,
+  getAllCustomers,
   listenToHolidays, listStaffSchedules,
+  // Phase 14.10-tris (2026-04-26) — load doctors + staff from be_* canonical
+  // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
+  listDoctors, listStaff,
 } from '../../lib/backendClient.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
@@ -187,9 +190,10 @@ export default function AppointmentFormModal({
 
   useEffect(() => {
     // Load doctors + staff on mount (one-shot — masters change rarely).
+    // Phase 14.10-tris — switched from master_data to be_* canonical.
     Promise.all([
-      getAllMasterDataItems('doctors').catch(() => []),
-      getAllMasterDataItems('staff').catch(() => []),
+      listDoctors().catch(() => []),
+      listStaff().catch(() => []),
     ]).then(([d, s]) => {
       setDoctors((d || []).filter(x => x.status !== 'พักใช้งาน'));
       setStaff((s || []).filter(x => x.status !== 'พักใช้งาน'));

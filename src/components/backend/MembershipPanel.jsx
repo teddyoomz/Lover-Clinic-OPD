@@ -9,8 +9,10 @@ import {
   CheckCircle2, AlertCircle, Ban, RotateCcw, Crown, Trash2,
 } from 'lucide-react';
 import {
-  getAllCustomers, getAllMasterDataItems,
+  getAllCustomers,
   createMembership, cancelMembership, renewMembership, getAllMemberships, deleteMembership,
+  // Phase 14.10-tris (2026-04-26) — be_* canonical (was master_data mirror)
+  listMembershipTypes, listAllSellers,
 } from '../../lib/backendClient.js';
 import { fmtMoney, calcMembershipExpiry, isMembershipExpired } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
@@ -89,7 +91,7 @@ export default function MembershipPanel({ theme, initialCustomer, onCustomerUsed
   const [sellOpen, setSellOpen] = useState(false);
 
   const loadCardTypes = useCallback(async () => {
-    try { setCardTypes(await getAllMasterDataItems('membership_types')); }
+    try { setCardTypes(await listMembershipTypes()); }
     catch { setCardTypes([]); }
   }, []);
   const loadMemberships = useCallback(async () => {
@@ -385,15 +387,8 @@ function SellMembershipForm({ initialCustomer, customers, cardTypes, isDark, inp
   useEffect(() => {
     (async () => {
       try {
-        const [s, d] = await Promise.all([
-          getAllMasterDataItems('staff'),
-          getAllMasterDataItems('doctors'),
-        ]);
-        const merged = [
-          ...s.map(x => ({ id: x.id, name: x.name, position: x.position })),
-          ...d.map(x => ({ id: x.id, name: x.name, position: x.position || 'แพทย์' })),
-        ];
-        setSellerList(merged);
+        // Phase 14.10-tris — listAllSellers (be_staff + be_doctors canonical)
+        setSellerList(await listAllSellers());
       } catch { setSellerList([]); }
     })();
   }, []);

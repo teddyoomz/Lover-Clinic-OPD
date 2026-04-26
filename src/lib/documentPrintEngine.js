@@ -137,6 +137,12 @@ export function buildPrintContext({ clinic = {}, customer = {}, values = {}, lan
   ctx.emergencyPhone = pd.emergencyPhone || pd.emergencyContact?.phone || customer.emergencyPhone || '';
   ctx.passport       = pd.passport || pd.passportNo || customer.passport || '';
   ctx.visitCount     = customer.stats?.visitCount || customer.visitCount || '';
+  // Phase 14.10-tris (2026-04-26) — fit-to-fly cert uses {{nationality}}.
+  // Default to 'Thai' for Thai-shaped national IDs (13-digit pattern) when
+  // explicit nationality not stored. Fallback chain otherwise.
+  const explicitNat = pd.nationality || customer.nationality || '';
+  ctx.nationality = explicitNat
+    || (/^\d{13}$/.test(String(ctx.nationalId || '').replace(/\D/g, '')) ? 'Thai' : '');
 
   // Today (Bangkok TZ). Phase 14.x — language-aware year:
   //   th       → Buddhist year (พ.ศ.) e.g. 25/04/2569

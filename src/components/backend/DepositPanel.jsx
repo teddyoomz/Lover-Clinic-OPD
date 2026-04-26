@@ -9,7 +9,9 @@ import {
 } from 'lucide-react';
 import {
   createDeposit, updateDeposit, cancelDeposit, refundDeposit, deleteDeposit,
-  getAllDeposits, getDeposit, getAllCustomers, getAllMasterDataItems,
+  getAllDeposits, getDeposit, getAllCustomers,
+  // Phase 14.10-tris (2026-04-26) — be_* canonical, no master_data mirror
+  listStaff, listDoctors,
 } from '../../lib/backendClient.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
@@ -157,12 +159,17 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     try {
       const [c, s, d] = await Promise.all([
         getAllCustomers(),
-        getAllMasterDataItems('staff'),
-        getAllMasterDataItems('doctors'),
+        listStaff(),
+        listDoctors(),
       ]);
       setCustomers(c);
-      setStaff(s.map(x => ({ id: x.id, name: x.name, position: x.position })));
-      setDoctors(d.map(x => ({ id: x.id, name: x.name, position: x.position })));
+      // Phase 14.10-tris — be_staff/be_doctors shape: firstname+lastname (no flat .name)
+      const buildName = (x) => {
+        const parts = [x.firstname || x.firstName || '', x.lastname || x.lastName || ''].filter(Boolean);
+        return parts.join(' ').trim() || x.nickname || x.name || x.fullName || '';
+      };
+      setStaff(s.map(x => ({ id: x.staffId || x.id, name: buildName(x), position: x.position })));
+      setDoctors(d.map(x => ({ id: x.doctorId || x.id, name: buildName(x), position: x.position })));
       setOptionsLoaded(true);
     } catch (e) { console.warn('[DepositPanel] load options failed:', e); }
   }, [optionsLoaded]);

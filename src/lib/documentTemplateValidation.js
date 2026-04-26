@@ -369,7 +369,7 @@ const HEADER_CLINIC = `
 const SECTION_1_PATIENT_DECLARATION_ALWAYS = `
   <h4 style="margin:14px 0 8px 0;background:#b71c1c;color:#fff;display:inline-block;padding:4px 12px;border-radius:4px">ส่วนที่ 1</h4>
   <span style="margin-left:8px">ของผู้ขอรับใบรับรองสุขภาพ</span>
-  <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
+  <div style="margin:10px 0 6px 0"><strong>ข้าพเจ้า:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:240px;padding:0 6px">{{customerName}}</span> &nbsp; <strong>HN:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:100px;padding:0 6px">{{customerHN}}</span> &nbsp; <strong>หมายเลขบัตรประชาชน:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:170px;padding:0 6px">{{nationalId}}</span></div>
   <div style="margin-bottom:6px"><strong>ที่อยู่ (ที่ติดต่อได้):</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:540px;padding:0 6px">{{patientAddress}}</span></div>
   <div style="margin:10px 0 6px 0">ข้าพเจ้าขอรับใบรับรองสุขภาพโดยมีประวัติสุขภาพดังนี้:</div>
   <div style="margin:4px 0;display:flex"><span style="min-width:240px">1. โรคประจำตัว</span><span>{{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} ไม่มี &nbsp; {{#if hasChronicDisease}}☑{{/if}}{{#unless hasChronicDisease}}☐{{/unless}} มี ระบุ: {{chronicDisease}}</span></div>
@@ -735,7 +735,7 @@ export const SEED_TEMPLATES = Object.freeze([
       ${CERT_NUMBER_LINE}
       <div style="margin:8px 0"><strong>ข้าพเจ้า แพทย์แผนไทยประยุกต์:</strong> {{doctorName}}</div>
       <div style="margin:6px 0"><strong>ใบอนุญาตประกอบวิชาชีพแพทย์แผนไทยประยุกต์ :</strong> {{doctorLicenseNo}}</div>
-      <div style="margin:6px 0"><strong>ได้ทำการตรวจประเมินทางการแพทย์แผนไทยประยุกต์ นาย/นาง/นางสาว:</strong> {{customerName}}</div>
+      <div style="margin:6px 0"><strong>ได้ทำการตรวจประเมินทางการแพทย์แผนไทยประยุกต์ นาย/นาง/นางสาว:</strong> {{customerName}} &nbsp; <strong>HN:</strong> {{customerHN}}</div>
       <div style="margin:6px 0"><strong>สถานที่อยู่ (ที่ติดต่อได้):</strong> {{patientAddress}}</div>
       <div style="margin:6px 0"><strong>หมายเลขบัตรประจำตัวประชาชน:</strong> {{nationalId}}</div>
       <div style="margin:6px 0"><strong>แล้วเมื่อวันที่:</strong> {{today}}</div>
@@ -842,6 +842,10 @@ export const SEED_TEMPLATES = Object.freeze([
         <div><strong>Name:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:200px;padding:0 4px">{{customerNameEn}}</span></div>
         <div><strong>Gender:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:80px;padding:0 4px">{{gender}}</span></div>
         <div><strong>Age:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{age}}</span> year <span style="display:inline-block;border-bottom:1px dotted #000;min-width:40px;padding:0 4px">{{ageMonth}}</span> month</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
+        <div><strong>HN:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{customerHN}}</span></div>
+        <div><strong>Address:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:300px;padding:0 4px">{{patientAddress}}</span></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
         <div><strong>Nationality:</strong> <span style="display:inline-block;border-bottom:1px dotted #000;min-width:120px;padding:0 4px">{{nationality}}</span></div>

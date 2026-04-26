@@ -7,6 +7,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, FileText, Printer, Loader2, ArrowRightCircle, Receipt, CheckCircle2 } from 'lucide-react';
 import {
   listQuotations, deleteQuotation, convertQuotationToSale, getBackendSale,
+  // Phase 14.10-tris (2026-04-26) — listAllSellers is the unified helper
+  // backed by be_staff + be_doctors so SalePrintView can resolve legacy
+  // seller ids (e.g. ProClinic numeric "614") → names.
+  listAllSellers,
 } from '../../lib/backendClient.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
@@ -45,6 +49,15 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [printing, setPrinting] = useState(null);
   const [printingSale, setPrintingSale] = useState(null);
+  // Phase 14.10-tris (2026-04-26) — sellers list for receipt id→name resolution
+  const [sellersLookup, setSellersLookup] = useState([]);
+  useEffect(() => {
+    let cancel = false;
+    listAllSellers()
+      .then((list) => { if (!cancel) setSellersLookup(list); })
+      .catch(() => {/* non-fatal */});
+    return () => { cancel = true; };
+  }, []);
   const [loadingSale, setLoadingSale] = useState(null);
   const [paymentFor, setPaymentFor] = useState(null); // loaded sale doc
   const [loadingPay, setLoadingPay] = useState(null);
@@ -284,6 +297,7 @@ export default function QuotationTab({ clinicSettings, theme }) {
         <SalePrintView
           sale={printingSale}
           clinicSettings={clinicSettings}
+          sellersLookup={sellersLookup}
           onClose={() => setPrintingSale(null)}
         />
       )}

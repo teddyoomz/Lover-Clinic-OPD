@@ -16,7 +16,8 @@ import DateField from '../DateField.jsx';
 import {
   listVendors, saveVendor, deleteVendor,
   listVendorSales, saveVendorSale, deleteVendorSale, transitionVendorSale,
-  getAllMasterDataItems,
+  // Phase 14.10-tris (2026-04-26) — be_products canonical
+  listProducts,
 } from '../../lib/backendClient.js';
 import {
   emptyVendorForm, generateVendorId, validateVendor,
@@ -58,7 +59,7 @@ export default function VendorSalesTab({ clinicSettings }) {
       const [vs, ss, ps] = await Promise.all([
         listVendors(),
         listVendorSales(),
-        getAllMasterDataItems('products').catch(() => []),
+        listProducts().catch(() => []),
       ]);
       setVendors(vs);
       setSales(ss);

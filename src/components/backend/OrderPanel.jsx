@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import {
   listStockOrders, createStockOrder, cancelStockOrder,
-  getAllMasterDataItems,
+  // Phase 14.10-tris (2026-04-26) — be_products canonical
+  listProducts,
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
@@ -61,7 +62,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const loadProducts = useCallback(async () => {
     setProductsLoading(true);
     try {
-      const data = await getAllMasterDataItems('products');
+      const data = await listProducts();
       setProducts(Array.isArray(data) ? data : []);
     } catch (e) { console.error('[OrderPanel] products load failed:', e); setProducts([]); }
     finally { setProductsLoading(false); }

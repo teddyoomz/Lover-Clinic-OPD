@@ -43,6 +43,16 @@ vi.mock('../src/lib/reportsLoaders.js', () => ({
 
 vi.mock('../src/lib/backendClient.js', () => ({
   getAllMasterDataItems: vi.fn(async () => FIX_STAFF),
+  // Phase 14.10-tris — be_* read helpers replaced legacy getAllMasterDataItems.
+  // Stub all new entry points so any consumer that swapped over still mounts.
+  listAllSellers: () => Promise.resolve([]),
+  listProducts: () => Promise.resolve([]),
+  listCourses: () => Promise.resolve([]),
+  listPromotions: () => Promise.resolve([]),
+  listStaff: () => Promise.resolve([]),
+  listDoctors: () => Promise.resolve([]),
+  listMembershipTypes: () => Promise.resolve([]),
+  listWalletTypes: () => Promise.resolve([]),
 }));
 
 vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app' }));

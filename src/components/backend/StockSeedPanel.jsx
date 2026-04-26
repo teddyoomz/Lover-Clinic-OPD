@@ -12,7 +12,8 @@ import {
   CheckSquare, Square,
 } from 'lucide-react';
 import {
-  getAllMasterDataItems, listStockBatches, createStockOrder,
+  // Phase 14.10-tris (2026-04-26) — be_products canonical
+  listProducts, listStockBatches, createStockOrder,
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
@@ -50,7 +51,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
     setLoading(true);
     try {
       const [prods, batches] = await Promise.all([
-        getAllMasterDataItems('products'),
+        listProducts(),
         listStockBatches({ branchId: BRANCH_ID, status: 'active' }),
       ]);
       const map = new Map();

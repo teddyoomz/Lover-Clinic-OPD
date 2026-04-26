@@ -5,7 +5,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
-import { listStockMovements, getAllMasterDataItems } from '../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — be_products canonical (was master_data mirror)
+import { listStockMovements, listProducts } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
@@ -75,7 +76,7 @@ export default function MovementLogPanel({ clinicSettings, theme }) {
   // Load products for filter dropdown
   useEffect(() => {
     (async () => {
-      try { setProducts(await getAllMasterDataItems('products') || []); }
+      try { setProducts(await listProducts() || []); }
       catch { setProducts([]); }
     })();
   }, []);

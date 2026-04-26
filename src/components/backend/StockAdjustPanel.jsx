@@ -9,8 +9,10 @@ import {
   SlidersHorizontal, ArrowLeft, Search,
 } from 'lucide-react';
 import {
-  listStockBatches, createStockAdjustment, getAllMasterDataItems,
+  listStockBatches, createStockAdjustment,
   listStockMovements, getStockBatch,
+  // Phase 14.10-tris (2026-04-26) — be_products canonical
+  listProducts,
 } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import {
@@ -59,7 +61,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   const openCreate = async (prefill = null) => {
     setProductsLoading(true);
     try {
-      const data = await getAllMasterDataItems('products');
+      const data = await listProducts();
       setProducts(Array.isArray(data) ? data : []);
     } catch { setProducts([]); }
     finally { setProductsLoading(false); }

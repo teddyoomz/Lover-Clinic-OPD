@@ -22,7 +22,8 @@ import {
   loadAppointmentsByDateRange,
   loadAllCustomersForReport,
 } from '../../../lib/reportsLoaders.js';
-import { getAllMasterDataItems } from '../../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — listAllSellers (be_*) replaces master_data
+import { listAllSellers } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
 
@@ -99,7 +100,7 @@ export default function AppointmentReportTab({ clinicSettings, theme }) {
     Promise.all([
       loadAppointmentsByDateRange({ from, to }),
       loadAllCustomersForReport(),
-      getAllMasterDataItems('staff'),
+      listAllSellers(),
     ])
       .then(([appts, cs, st]) => {
         if (abort) return;

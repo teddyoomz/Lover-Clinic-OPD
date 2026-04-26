@@ -17,6 +17,17 @@ vi.mock('../src/lib/backendClient.js', () => ({
   savePromotion: vi.fn(async () => {}),
   deletePromotion: vi.fn(async () => {}),
   getAllMasterDataItems: vi.fn(async () => []),
+  // Phase 14.10-tris — be_* read helpers replaced legacy getAllMasterDataItems
+  // for some consumers. Stub all new entry points so any consumer that swapped
+  // over still mounts. listCourses + listProducts default to [] which already
+  // matches the C15 "ยังไม่มีคอร์สใน master_data" placeholder assertion.
+  listAllSellers: () => Promise.resolve([]),
+  listProducts: () => Promise.resolve([]),
+  listCourses: () => Promise.resolve([]),
+  listStaff: () => Promise.resolve([]),
+  listDoctors: () => Promise.resolve([]),
+  listMembershipTypes: () => Promise.resolve([]),
+  listWalletTypes: () => Promise.resolve([]),
 }));
 
 vi.mock('../src/lib/storageClient.js', () => ({

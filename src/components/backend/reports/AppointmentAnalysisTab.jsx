@@ -19,7 +19,8 @@ import {
   loadAppointmentsByDateRange,
   loadSalesByDateRange,
 } from '../../../lib/reportsLoaders.js';
-import { getAllMasterDataItems } from '../../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — listAllSellers (be_*) replaces master_data
+import { listAllSellers } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
@@ -85,7 +86,7 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
     Promise.all([
       loadAppointmentsByDateRange({ from, to }),
       loadSalesByDateRange({ from, to }),
-      getAllMasterDataItems('staff').catch(() => []),
+      listAllSellers().catch(() => []),
     ])
       .then(([a, s, st]) => {
         if (abort) return;

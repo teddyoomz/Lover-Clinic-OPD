@@ -15,7 +15,8 @@ import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { savePromotion, getAllMasterDataItems } from '../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — be_courses + be_products canonical
+import { savePromotion, listCourses, listProducts } from '../../lib/backendClient.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
 
@@ -58,8 +59,8 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     let cancelled = false;
     setMasterLoading(true);
     Promise.all([
-      getAllMasterDataItems('courses').catch(() => []),
-      getAllMasterDataItems('products').catch(() => []),
+      listCourses().catch(() => []),
+      listProducts().catch(() => []),
     ])
       .then(([c, p]) => { if (!cancelled) { setMasterCourses(c || []); setMasterProducts(p || []); } })
       .finally(() => { if (!cancelled) setMasterLoading(false); });

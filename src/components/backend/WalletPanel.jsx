@@ -8,9 +8,11 @@ import {
   ArrowDownCircle, AlertCircle, CheckCircle2, RefreshCw,
 } from 'lucide-react';
 import {
-  getAllCustomers, getAllMasterDataItems,
+  getAllCustomers,
   getCustomerWallets, topUpWallet, adjustWallet, getWalletTransactions,
   ensureCustomerWallet,
+  // Phase 14.10-tris (2026-04-26) — be_wallet_types canonical
+  listWalletTypes,
 } from '../../lib/backendClient.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import DateField from '../DateField.jsx';
@@ -56,7 +58,7 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
     try { setCustomers(await getAllCustomers()); } catch { setCustomers([]); }
   }, []);
   const loadWalletTypes = useCallback(async () => {
-    try { setWalletTypes((await getAllMasterDataItems('wallet_types')).filter(w => w.status !== 'พักใช้งาน')); }
+    try { setWalletTypes((await listWalletTypes()).filter(w => w.status !== 'พักใช้งาน')); }
     catch { setWalletTypes([]); }
   }, []);
 

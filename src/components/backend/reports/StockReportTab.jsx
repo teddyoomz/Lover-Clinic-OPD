@@ -18,7 +18,8 @@ import {
   buildStockReportColumns,
 } from '../../../lib/stockReportAggregator.js';
 import { loadAllStockBatchesForReport } from '../../../lib/reportsLoaders.js';
-import { getAllMasterDataItems } from '../../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — be_products canonical
+import { listProducts } from '../../../lib/backendClient.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -74,7 +75,7 @@ export default function StockReportTab({ clinicSettings, theme }) {
     setLoading(true); setError('');
     Promise.all([
       loadAllStockBatchesForReport(),
-      getAllMasterDataItems('products'),
+      listProducts(),
     ])
       .then(([bs, ps]) => {
         if (abort) return;

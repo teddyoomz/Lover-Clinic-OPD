@@ -60,6 +60,16 @@ vi.mock('../src/lib/backendClient.js', () => ({
     return () => {};
   },
   listDoctors: vi.fn(() => Promise.resolve([])),
+  // Phase 14.10-tris — be_* read helpers replaced legacy getAllMasterDataItems
+  // for several consumers. Stub all new entry points so any consumer that
+  // swapped over still mounts even though the W tests don't exercise them.
+  listAllSellers: () => Promise.resolve([]),
+  listProducts: () => Promise.resolve([]),
+  listCourses: () => Promise.resolve([]),
+  listPromotions: () => Promise.resolve([]),
+  listStaff: () => Promise.resolve([]),
+  listMembershipTypes: () => Promise.resolve([]),
+  listWalletTypes: () => Promise.resolve([]),
 }));
 
 describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {

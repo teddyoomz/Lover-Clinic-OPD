@@ -9,12 +9,21 @@ import {
 } from 'lucide-react';
 import {
   createBackendSale, updateBackendSale, deleteBackendSale,
-  getAllSales, getAllCustomers, getAllMasterDataItems,
+  getAllSales, getAllCustomers,
   cancelBackendSale, updateSalePayment, assignCourseToCustomer,
   applyDepositToSale, reverseDepositUsage,
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
   analyzeSaleCancel, removeLinkedSaleCourses,
   deductStockForSale, reverseStockForSale, analyzeStockImpact,
+  // Phase 14.10-tris (2026-04-26) — be_products + be_courses canonical
+  // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
+  listProducts, listCourses,
+  // Phase 14.10-tris (2026-04-26) — listAllSellers is the unified helper
+  // backed by be_staff + be_doctors (canonical OUR data). Master_data is
+  // dev-only seed per Rule H-bis; the real CRUD writes to be_*. User
+  // reported numeric "614" showing because master_data entry for that
+  // staff had empty `name`, while be_staff has proper firstname/lastname.
+  listAllSellers,
 } from '../../lib/backendClient.js';
 import { flattenPromotionsForStockDeduction } from '../../lib/treatmentBuyHelpers.js';
 import {
@@ -277,11 +286,20 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   }, [sales, filterQuery, filterStatus]);
 
   // ── Load form options ──
+  // Phase 14.10-tris (2026-04-26) — sellers loaded from be_staff +
+  // be_doctors via unified listAllSellers helper (Rule of 3: same logic
+  // shared with QuotationTab + every other backend tab).
+  // Med products: still loaded from master_data here pending be_products
+  // migration of the medication-flag (isTakeaway/isMedication discriminator).
   const loadOptions = useCallback(async () => {
     if (customers.length && sellers.length) return;
-    const [c, d, s, p] = await Promise.all([getAllCustomers(), getAllMasterDataItems('doctors'), getAllMasterDataItems('staff'), getAllMasterDataItems('products')]);
+    const [c, sellerList, p] = await Promise.all([
+      getAllCustomers(),
+      listAllSellers(),
+      listProducts(),
+    ]);
     setCustomers(c);
-    setSellers([...s.map(x => ({ id: x.id, name: x.name })), ...d.map(x => ({ id: x.id, name: x.name }))]);
+    setSellers(sellerList);
     setMedProducts(p.map(x => ({ id: x.id, name: x.name, price: x.price, unit: x.unit, category: x.category, type: x.type })));
   }, [customers.length, sellers.length]);
 
@@ -315,11 +333,11 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             products: p.products || [],
           }));
       } else if (type === 'product') {
-        const all = await getAllMasterDataItems('products');
+        const all = await listProducts();
         items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, itemType: 'product' }));
       } else {
         // 'course'
-        const all = await getAllMasterDataItems('courses');
+        const all = await listCourses();
         // Phase 12.2b follow-up (2026-04-25): preserve courseType +
         // daysBeforeExpire + period + unit so the full buy chain carries
         // the validity window through to assignCourseToCustomer. Prior

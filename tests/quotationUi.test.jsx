@@ -31,6 +31,17 @@ vi.mock('../src/lib/backendClient.js', () => ({
   saveQuotation: (...a) => mockSaveQuotation(...a),
   getAllCustomers: (...a) => mockGetAllCustomers(...a),
   listStaff: (...a) => mockGetAllStaff(...a),
+  // Phase 14.10-tris (2026-04-26) — backend tabs migrated to be_* helpers.
+  // Mocks default to empty arrays so the receipt/print views can mount
+  // without crashing. Tests that need specific staff/courses/products
+  // can override these mocks per-test.
+  listDoctors: (...a) => Promise.resolve([]),
+  listAllSellers: (...a) => Promise.resolve([]),
+  listCourses: (...a) => mockGetAllMasterDataItems('courses', ...a),
+  listProducts: (...a) => mockGetAllMasterDataItems('products', ...a),
+  listPromotions: (...a) => Promise.resolve([]),
+  convertQuotationToSale: (...a) => Promise.resolve({}),
+  getBackendSale: (...a) => Promise.resolve(null),
   getAllMasterDataItems: (...a) => mockGetAllMasterDataItems(...a),
 }));
 

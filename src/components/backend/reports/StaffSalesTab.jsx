@@ -15,7 +15,8 @@ import {
   buildDoctorColumns,
 } from '../../../lib/staffSalesAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
-import { getAllMasterDataItems } from '../../../lib/backendClient.js';
+// Phase 14.10-tris (2026-04-26) — listStaff + listDoctors (be_*) canonical
+import { listStaff, listDoctors } from '../../../lib/backendClient.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -38,8 +39,8 @@ export default function StaffSalesTab({ clinicSettings, theme }) {
     setLoading(true); setError('');
     Promise.all([
       loadSalesByDateRange({ from, to }),
-      getAllMasterDataItems('staff').catch(() => []),
-      getAllMasterDataItems('doctors').catch(() => []),
+      listStaff().catch(() => []),
+      listDoctors().catch(() => []),
     ])
       .then(([s, st, dc]) => {
         if (abort) return;

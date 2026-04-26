@@ -24,6 +24,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listDfGroups: (...a) => mockListDfGroups(...a),
   deleteDfGroup: (...a) => mockDeleteDfGroup(...a),
   saveDfGroup: (...a) => mockSaveDfGroup(...a),
+  // Phase 14.10-tris (2026-04-26) — be_* canonical (DfGroupFormModal switched
+  // to listCourses; existing tests passed via getAllMasterDataItems mock)
+  listCourses: (...a) => mockGetAllMasterDataItems('courses', ...a),
   getAllMasterDataItems: (...a) => mockGetAllMasterDataItems(...a),
 }));
 
