@@ -326,6 +326,37 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   3. **Chip label format is part of the fidelity contract**. Don't ship `HH:MM-HH:MM` when the source shows `HH:MM-HH:MM <name>` — the missing name field is technically working code but pixel-different from the reference.
 - **Rule/audit update**: triangle-inspect skill should add "multi-entity-per-cell" check on calendar/grid replications (count comparison: ProClinic-cell-entries vs ours-cell-entries on the same date). The MS test bank in `tests/schedule-calendar-multi-staff.test.jsx` is the canonical pattern for future grid replications.
 
+### V26 — 2026-04-26 — Phase 13.5.4 Deploy 2: closing the @loverclinic-email security gap (rule narrowed from email to claim)
+- **Goal**: close the security gap where ANY Firebase user with @loverclinic.com email could read/write all be_* collections via Firestore SDK directly (browser console, custom code), bypassing the Phase 13.5.1-3 soft-gate (which only hides UI). Email is unverified at the rules level — the regex check accepts any decoded.email matching the pattern.
+- **Why this took 2 deploys + a bootstrap endpoint to ship safely**:
+  - Deploy 1 (`6799a58`, V25): app + endpoint + auto-sync + migration button. Rules unchanged. Established the claim infrastructure.
+  - Mid-flight V25 fix: migration button auto-bootstraps current admin user (`gp-owner`) so they don't lock themselves out.
+  - V25-bis (`f135a7a`): genesis admin bootstrap endpoint (`/api/admin/bootstrap-self`). Discovered the chicken-and-egg — admin had neither `admin:true` claim nor `FIREBASE_ADMIN_BOOTSTRAP_UIDS` env entry, so EVERY /api/admin/* call returned 403. Genesis bootstrap with strict guards (caller email = @loverclinic AND no other admin exists) breaks the loop.
+  - User ran bootstrap → got admin claim → ran migration → got synced=1 (their own user) + skipped=20 (be_staff with no firebaseUid).
+  - Deploy 2 (THIS V26): rules narrowed to claim-only check. Email regex DROPPED.
+- **Fix**: `firestore.rules` `isClinicStaff()` helper changed from
+  ```
+  return isSignedIn() && request.auth.token.email.matches('.*@loverclinic[.]com$');
+  ```
+  to
+  ```
+  return isSignedIn() && (
+    request.auth.token.isClinicStaff == true ||
+    request.auth.token.admin == true
+  );
+  ```
+  Either claim suffices: `admin:true` (bootstrap/grantAdmin path) OR `isClinicStaff:true` (per-staff via setPermission). Defense-in-depth.
+- **Worst part / open risk**: any phantom Firebase Auth user with @loverclinic.com email (created outside our backend flow, e.g. by Firebase Console manual add) will LOSE access after Deploy 2 because they have no custom claims. We accept this — the whole point is to close that exact gap. If the admin needs to grant access to a new user post-Deploy-2, they create them via StaffFormModal (auto-syncs claim) OR call /api/admin/users grantAdmin/setPermission. There is NO email-based fallback after this commit.
+- **Live verification (post-Deploy-2)**:
+  - The 5-endpoint Rule B probe should still pass — none of the probe endpoints depend on isClinicStaff() returning true for an unauthed/anon caller. opd_sessions anon UPDATE still passes via the V23 whitelist path (isSignedIn + hasOnly).
+  - Negative-path probe (NEW): an anon-auth user (or a Firebase user with @loverclinic.com email but NO claims) attempting to READ be_customers should now return 403. This is the gap closure validated.
+- **Lessons**:
+  1. **Email-as-auth is unverified at the rules level** — `request.auth.token.email` is whatever Firebase says. If you want hard-gating, use custom claims that you (the admin) explicitly set.
+  2. **Claim-based gating requires bootstrap planning** — at MINIMUM the first admin needs a way to acquire the claim. Without that bootstrap path (env var OR genesis endpoint), you ship a lockout.
+  3. **Two-deploy migrations are the safest pattern** for changes that depend on claims being set: Deploy 1 ships the claim-setting infrastructure + lets the user backfill, Deploy 2 enforces. NEVER do both in one deploy.
+  4. **Rule B probe list works for positive cases** — but doesn't catch negative-path regressions (e.g. claim-only didn't lock out the legit admin). Add negative probes for future security tightening.
+- **Rule/audit update**: `/audit-firebase-admin-security` should add an FA13 invariant: "firestore.rules `isClinicStaff()` helper must check custom claims, NOT just email". `/audit-anti-vibe-code` AV13 already covered "long-lived auth-write-blocked silent failures" — extend to "auth-by-email is not authentication".
+
 ### V24 — 2026-04-26 — ProClinic schedule sync only fetched doctor data (employee schedule empty since shipping)
 - User report (verbatim): "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์ ช่องตารางพนักงานเหมือนไม่มีข้อมูลเลย ฝากแก้ตรงนี้ก่อน deploy".
 - **Symptom**: After Phase 13.2.13/13.2.14 shipped (2026-04-26 session 5), admin clicks MasterDataTab "ดูดตารางหมอ + พนักงาน" → master_data populated → migrate to be_staff_schedules → DoctorSchedulesTab calendar shows real data. **EmployeeSchedulesTab calendar empty**. Migrator orphan reports (if any) might explain partial gaps but not 100% empty employee data.

@@ -8,8 +8,20 @@ service cloud.firestore {
     }
 
     function isClinicStaff() {
-      // Must be authenticated with email ending in @loverclinic.com
-      return isSignedIn() && request.auth.token.email.matches('.*@loverclinic[.]com$');
+      // Phase 13.5.4 Deploy 2 (V26, 2026-04-26) — narrowed from email-only
+      // check to Firebase Auth custom claims. Closes security gap where any
+      // user with @loverclinic.com email could read/write be_* via SDK.
+      // Prerequisites (all done in Deploy 1):
+      //   - /api/admin/users setPermission action sets isClinicStaff:true
+      //   - StaffFormModal auto-syncs claims after staff save
+      //   - PermissionGroupsTab "Sync ทุก staff → Claims" button backfills
+      //   - /api/admin/bootstrap-self grants genesis admin (admin + isClinicStaff)
+      // Either claim suffices: `admin:true` (bootstrap/grantAdmin path) OR
+      // `isClinicStaff:true` (per-staff via setPermission). Defense-in-depth.
+      return isSignedIn() && (
+        request.auth.token.isClinicStaff == true ||
+        request.auth.token.admin == true
+      );
     }
 
     // ── Default deny all ──
