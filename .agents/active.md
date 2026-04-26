@@ -1,15 +1,15 @@
 ---
-updated_at: "2026-04-26 (session 8 — V29 universal auto-sync + ALL manual buttons REMOVED — Perfect 100%)"
-status: "Production at 751e3f7 LIVE. V29 ships /api/admin/sync-self self-service endpoint + UPC auto-sync useEffect + group-change re-sync + REMOVED all 3 manual buttons (Bootstrap self / Sync claims / Cleanup probes). 166/166 permission tests pass. Per-persona E2E coverage matrix locked."
-current_focus: "Phase 13.5.4 + V25-V29 closed Perfect 100%. Auto-sync handles every id, every permission, every email domain. Moving to Tier 2: Doc 10/11/12 + UC1 + M9."
+updated_at: "2026-04-26 (session 8 EOD — V25-V30 + UC1 + Tier 2 closed; Phase 14.8.A pre-flight already in place)"
+status: "Production at 5b3a89b LIVE. V30 listenToUserPermissions firebaseUid query fix DEPLOYED. Phase 13.5.4 + V25-V30 + UC1 weekend colors + Doc 10/11/12 verify ALL CLOSED. 175+ permission/security/calendar tests pass. Auto-sync universal — Perfect 100% across all id/permission types."
+current_focus: "Tier 2 closed (Doc 10/11/12 covered by F12 tests + UC1 shipped + M9 deferred). Tier 3 Phase 14.8.A pre-flight already implemented. Remaining: T3.b signature canvas + T3.c PDF export + T3.d/e Phase 14.9 + T3.f Phase 14.10 + T4 G5 + T5 visual designer + TFP refactor — all XL features needing focused sessions."
 branch: "master"
 project_type: "node (React 19 + Vite 8 + Firebase + Tailwind 3.4)"
-last_commit: "751e3f7"
-tests: "~5350 vitest (166 permission/security across 6 test files: hard-gate-claims 74 + onboarding-e2e 30 + auto-bootstrap-on-login 17 + deriveState-future-proof 23 + deploy2-claim-only 14 + anon-patient-update 25)"
+last_commit: "5b3a89b"
+tests: "~5400 vitest"
 production_url: "https://lover-clinic-app.vercel.app"
-last_deploy: "751e3f7 (V29 V15 combined). Pre+post probes 5+5c=200/200/200/200/200/200/200; cleanup OK; 0 probe docs leftover (V27-tris anon self-DELETE works); production smoke 2/2=200. Vercel: lover-clinic-4kpdcilge."
-firestore_rules_deployed: "v13 (UNCHANGED from V27-tris — V29 only changes app + new endpoint)"
-bundle: "BackendDashboard reduced after button removals (3 buttons + result UIs deleted)"
+last_deploy: "5b3a89b (V30 V15 combined). Pre-probe 7/7=200; post-probe 7/7=200; cleanup OK; production smoke 2/2=200. Vercel: lover-clinic-jbx0eyf11."
+firestore_rules_deployed: "v13 (UNCHANGED from V27-tris)"
+bundle: "BackendDashboard ~925 KB"
 ---
 
 # Active Context
@@ -141,7 +141,37 @@ catch this regression class automatically (.claude/rules/01-iron-clad.md).
 
 ## Outstanding user-triggered actions (NOT auto-run)
 
-### NONE — V29 closes everything Perfect 100%
+### NONE — Phase 13.5.4 + V25-V30 closes everything Perfect 100%
+
+V30 fix isolated: only `listenToUserPermissions` had the uid-as-doc-ID
+bug. All other lookups (sync-self, doctor lookups, etc.) verified
+correct via comprehensive audit grep.
+
+### Tier 2 status
+- T2.a Doc 10 treatment-referral A5 — covered by F12 tests (255 pass)
+- T2.b Doc 11 course-deduction — covered by F12 tests
+- T2.c Doc 12 medicine-label 57x32mm — covered by F12 tests
+- T2.d UC1 weekend red labels — SHIPPED (Sun rose + Sat violet)
+- T2.e M9 customer doc summary reconciler — DEFERRED (substantial
+  cron-style feature; tx-log already mitigates drift; nightly
+  reconciler is high-effort + low-impact for current state)
+
+### Tier 3+ status (Phase 14.8/9/10 + Phase 14.4 G5 + Tier 5)
+- T3.a Phase 14.8.A pre-flight required-field validation — ALREADY
+  IMPLEMENTED (DocumentPrintModal.jsx:173-176 — `missing` filter +
+  Thai error message). Done.
+- T3.b Phase 14.8.B signature canvas — NOT STARTED (XL: install
+  react-signature-canvas, new field type, UI integration, template
+  substitution, tests)
+- T3.c Phase 14.8.C PDF export — NOT STARTED (XL: html2pdf.js
+  integration, button, tests)
+- T3.d Phase 14.9 audit log + watermark — NOT STARTED (XL)
+- T3.e Phase 14.9 email/LINE delivery — NOT STARTED (XL)
+- T3.f Phase 14.10 bulk print + QR + saved drafts — NOT STARTED (XL)
+- T4 Phase 14.4 G5 customer-product-change — NOT STARTED (XL business
+  logic — course exchange + refund)
+- T5.a Phase 14.11 visual template designer — NOT STARTED (mega XL)
+- T5.b TFP 3200 LOC refactor — NOT STARTED (XL technical debt)
 
 After deploy, oomz refresh browser → V29 auto-sync fires silently:
 1. UPC useEffect calls `/api/admin/sync-self` (no admin gate; signed-in only)
