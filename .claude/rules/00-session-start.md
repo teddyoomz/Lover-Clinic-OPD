@@ -326,6 +326,42 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   3. **Chip label format is part of the fidelity contract**. Don't ship `HH:MM-HH:MM` when the source shows `HH:MM-HH:MM <name>` — the missing name field is technically working code but pixel-different from the reference.
 - **Rule/audit update**: triangle-inspect skill should add "multi-entity-per-cell" check on calendar/grid replications (count comparison: ProClinic-cell-entries vs ours-cell-entries on the same date). The MS test bank in `tests/schedule-calendar-multi-staff.test.jsx` is the canonical pattern for future grid replications.
 
+### V23 — 2026-04-26 — Patient form submit via QR/link blocked by opd_sessions firestore rule for anon-auth users (live since 2026-03-23 — entire project history)
+- User report (verbatim): "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอดส่งไม่ได้" + "กรอก patientform แล้วกดส่งแล้วผิดพลาด เกิดอะไรขึ้น ทำไมไม่เทสและทดสอบให้ผ่าน หลุดไปได้ยังไง" + "ดูที่อื่นที่หน้าจะพังเหมือนกันนี้ หรือคล้ายๆกันมาด้วย" + "เช็คให้หมดทั้ง frontend แบบ 100% จริงๆ ว่าจะไม่มีบั๊คแบบนี้หรือใกล้เคียงกับแบบนี้อีกแล้ว".
+- **Symptom**: alert "เกิดข้อผิดพลาดของระบบ" (PatientForm.jsx:386) on form submit when accessed via `?session=...` QR/link from non-logged-in device. Plus 2 silent-fail course-refresh writes on `?patient=...` that never surfaced because of `.catch(() => {})` swallow.
+- **Root cause**: `firestore.rules` lines 56-60 (UNCHANGED since initial commit `554506b`, 2026-03-23) had:
+  ```
+  match /opd_sessions/{sessionId} {
+    allow read: if isSignedIn();
+    allow create: if true;  // Patients can submit forms without login
+    allow update, delete: if isClinicStaff();
+  }
+  ```
+  The comment is wrong — patients hit `updateDoc` (PatientForm.jsx:372), not `create`. Original kiosk-only design assumed admin was always logged in on the device, so `isClinicStaff()` was true. Once a patient opens the QR/link on their OWN device, `signInAnonymously` runs (App.jsx:89) — anon users have no `@loverclinic.com` email → `isClinicStaff()` returns false → PERMISSION_DENIED.
+- **Why it slipped through (V11/V13/V14/V21 cluster repeated)**:
+  - V16 (2026-04-25) fix focused on RENDERING (gate render until anon-auth resolves). Nobody tested the WRITE path with anon auth.
+  - `tests/public-link-auth-race.test.js` (V16 lock spec) only asserts source shape (sessionExists init, gate ordering, listener gating). Never simulates a write.
+  - `tests/e2e/public-links-no-auth.spec.js` (commit `2001aa6`) only asserts page RENDER + "Invalid Link" doesn't flash. Never fills + submits.
+  - This is the V21 lesson exactly — source-grep + render tests can encode broken WRITE behavior. Pair with runtime write probes.
+- **Worst part**: this bug was LIVE in production since the initial commit (2026-03-23) — over a month — but only surfaced as widespread customer reports recently. The clinic operated for the entire window because patient submissions usually happen on kiosks where admin is already logged in (so the user IS clinic staff per the rule). QR/link from patient's own device = anon auth = silent failure (or visible alert). The "test once, ship forever" pattern misses these. **The Probe-Deploy-Probe rule (B) had 4 endpoints — none tested anon-auth client writes.** That's the gap that allowed this to slip past V1, V9, AND every subsequent rules deploy.
+- **Comprehensive 100%-frontend sweep result** (per user "ดูที่อื่นที่หน้าจะพังเหมือนกันนี้ + เช็คให้หมดทั้ง frontend แบบ 100%"): EXACTLY 3 anon-reachable Firestore write sites exist. All 3 target the same collection (`opd_sessions`):
+  1. `src/pages/PatientForm.jsx:372` — visible alert (handleSubmit)
+  2. `src/pages/PatientDashboard.jsx:403` — silent fail (.catch fire-and-forget)
+  3. `src/pages/PatientDashboard.jsx:410` — silent fail (console.warn caught at 420)
+  Adjacent risk surfaces verified safe: storage.rules locked to clinic-staff email; Cloud Functions use firebase-admin SDK (bypass rules); /api/proclinic/* runs server-side (Vercel + ProClinic creds). No upload paths or other anon-write paths exist.
+- **Fix** (single rule narrow + V21-paired test bank):
+  1. firestore.rules opd_sessions block — narrow `update` to `isClinicStaff()` OR (`isSignedIn()` AND `affectedKeys().hasOnly([11-field whitelist])`); mirrors V19 pattern.
+  2. `.claude/rules/01-iron-clad.md` Rule B — extend probe list 4 → 5 endpoints (NEW: anon-auth PATCH opd_sessions whitelisted field). Future rules deploys catch this regression class permanently.
+  3. NEW `tests/firestore-rules-anon-patient-update.test.js` — A1-A5 source-grep regression bank (24 tests).
+  4. EXTEND `tests/public-link-auth-race.test.js` — R7 group (5 tests) covering writer-side patterns.
+  5. EXTEND `tests/e2e/public-links-no-auth.spec.js` — V23-lock test (Playwright fill + submit + assert success — runtime, not just shape).
+- **Lessons**:
+  1. **Probe list must cover EVERY auth state that writes** — unauth REST (V1/V9), anon-auth client (V23), service account, custom claims. One probe per auth state. Add NEW probe whenever a new auth-state-write-path is introduced.
+  2. **Render tests aren't write tests**. V16 made the page LOAD without flashing. The fix didn't verify that the page actually WORKED for anon users. Always pair load tests with action tests.
+  3. **Source-grep tests can lock in working OR broken behavior** (V21 cluster). Patient form passing source-grep tests doesn't mean it's functional. Fill + submit + assert success in a real environment OR a faithful jsdom simulation.
+  4. **Long-lived bugs are the most dangerous** — they pass every audit because they were never tested. New audit category: "long-lived auth-write-blocked silent failures". Add to `/audit-anti-vibe-code` AV13.
+- **Rule/audit update**: Rule B probe list extended permanently (5 endpoints). Future deploys catch this. The new test bank locks the fix shape so re-tightening can't ship without breaking tests.
+
 ---
 
 ## 3. TOOLS — WHEN TO REACH FOR WHICH

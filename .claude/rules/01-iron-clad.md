@@ -11,20 +11,37 @@
 2. `curl -X PATCH .../pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
 3. `curl -X PATCH .../clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
 4. `curl -X PATCH .../clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
-5. `firebase deploy --only firestore:rules`
-6. รัน probe 1-4 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-7. ลบ probe docs ทิ้ง + PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field (sentinel ไม่ให้ปนกับ cookies จริง)
+5. **NEW V23 (2026-04-26)** — anon Firebase auth + PATCH opd_sessions whitelisted field:
+   ```
+   # Step A: provision anonymous ID token
+   ANON_TOKEN=$(curl -s -X POST \
+     "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$FIREBASE_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"returnSecureToken":true}' | jq -r .idToken)
+   # Step B: PATCH a whitelisted field on a real or test opd_sessions doc
+   curl -X PATCH ".../opd_sessions/test-probe-anon-$(date +%s)?updateMask.fieldPaths=isUnread" \
+     -H "Authorization: Bearer $ANON_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"fields":{"isUnread":{"booleanValue":true}}}'
+   # → ต้อง 200 (patient form submit + dashboard course-refresh path)
+   # FIREBASE_API_KEY = web API key from Firebase Console → Project Settings
+   ```
+6. `firebase deploy --only firestore:rules`
+7. รัน probe 1-5 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+8. ลบ probe docs ทิ้ง + PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field (sentinel ไม่ให้ปนกับ cookies จริง) + DELETE opd_sessions test-probe-anon doc
 
-**Why:** Multiple serverless/extension paths เขียน Firestore ผ่าน REST **โดยไม่มี Firebase auth** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
+**Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)
 - `pc_*` collection — ProClinic mirror sync (`api/proclinic/courses.js` + อื่นๆ)
 - `clinic_settings/proclinic_session` + `_trial` — Cookie Relay Chrome Extension (PATCH via REST ตรง, ไม่มี Bearer token)
+- `opd_sessions/{id}` whitelisted-field updates — PatientForm submit + PatientDashboard course-refresh from anon-auth (signInAnonymously) reachable via `?session=` / `?patient=` QR/link routes
 
-ถ้า probe ตัวใดตัวหนึ่ง 403 = ลืมเปิด rule = ระบบพัง. Probe list นี้ต้องเพิ่มขึ้นเมื่อมี unauth-write path ใหม่. Deploy ทุกครั้ง = อ่าน list นี้ก่อน.
+ถ้า probe ตัวใดตัวหนึ่ง 403 = ลืมเปิด rule = ระบบพัง. Probe list นี้ต้องเพิ่มขึ้นเมื่อมี unauth-write หรือ anon-auth-write path ใหม่. Deploy ทุกครั้ง = อ่าน list นี้ก่อน.
 
-**V1 + V9 anti-examples**:
+**V1 + V9 + V23 anti-examples**:
 - V1 (2026-04-19, deploy `8fc2ed9`) — ทับ Console rule ที่เปิด `chat_conversations` + `pc_*` → chat + ปฏิทินตาย
 - V9 (2026-04-20, deploy `5636eb4` = Phase 11.2) — **ทับ Console rule ที่เปิด `clinic_settings/proclinic_session*` → cookie-relay extension เขียน cookie ไม่ได้ → frontend "ทดสอบการเชื่อมต่อ" fail ทุกครั้ง** (V1 ซ้ำรอบ 2 เพราะ probe list ขาด 2 endpoints). Fix: commit `34ef493` เพิ่ม explicit rules + probe list extended.
+- V23 (2026-04-26) — opd_sessions update rule shipped as `if isClinicStaff()` since the initial commit (2026-03-23). Patients submitting form via QR/link (anon auth) hit PERMISSION_DENIED for the entire history of the project. The probe list never tested anon-auth paths because the V1/V9 lessons focused on unauth REST, not anon-auth client. Fix: probe list extended to cover anon-auth paths (this step 5).
 
 **Pattern เข้าใจให้ชัด**: ทุกครั้งที่ `firebase deploy --only firestore:rules` = file-in-repo ทับ live-rules-on-Firebase 100%. Console-side edit ไม่ reflect ใน file = หายหลัง deploy. Fix: ถ้าเห็น Console edit → copy กลับมาลง file ก่อน → ค่อย deploy.
 

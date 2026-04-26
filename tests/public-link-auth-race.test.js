@@ -215,4 +215,64 @@ describe('Race-condition fix: public-link pages must not flash error pre-auth', 
       }
     });
   });
+
+  // ─── R7: V23 (2026-04-26) — writer-side anon-update contract ─────────
+  // V16 made the page LOAD without flashing "Invalid Link". V23 made the
+  // SUBMIT actually work for anon users. R7 locks the writer-side patterns
+  // so future refactors can't reintroduce the bug.
+  describe('R7: V23 — writer-side anon-update patterns intact', () => {
+    const pf = READ('src/pages/PatientForm.jsx');
+    const pd = READ('src/pages/PatientDashboard.jsx');
+
+    it('R7.1: PatientForm handleSubmit catch alert exists (Thai/EN error text)', () => {
+      // The catch block at PatientForm.jsx:386 shows the user-facing alert
+      // Locking this so future refactors don't accidentally swallow the error
+      expect(pf).toMatch(/alert\([\s\S]*?(System Error|เกิดข้อผิดพลาดของระบบ)/);
+    });
+
+    it('R7.2: handleSubmit calls updateDoc with status + patientData payload', () => {
+      // Lock the V23 fix surface — payload must include status + patientData
+      // (and nothing else outside the whitelist; full check in
+      // tests/firestore-rules-anon-patient-update.test.js A2.1)
+      const submitArea = pf.match(/await\s+updateDoc\([\s\S]*?\}\)/);
+      expect(submitArea).toBeTruthy();
+      expect(submitArea[0]).toMatch(/status:\s*['"]completed['"]/);
+      expect(submitArea[0]).toMatch(/patientData:\s*submitData/);
+    });
+
+    it('R7.3: PatientDashboard fetchCoursesViaApi awaited updateDoc preserved (line ~410)', () => {
+      // Course-refresh metadata write — V23 enables this for anon ?patient= visitor
+      const awaited = pd.match(/await\s+updateDoc\(ref,\s*\{[\s\S]*?brokerStatus[\s\S]*?\}\)/);
+      expect(awaited, 'PatientDashboard awaited updateDoc not found').toBeTruthy();
+      expect(awaited[0]).toMatch(/brokerStatus:\s*['"]done['"]/);
+      expect(awaited[0]).toMatch(/latestCourses:/);
+    });
+
+    it('R7.4: PatientDashboard fire-and-forget pattern preserved (line ~403)', () => {
+      // The fire-and-forget timestamp write must stay non-blocking — V23
+      // enables it for anon, but the .catch(()=>{}) safety stays so even
+      // future regressions are silent (don't crash the page)
+      const fireForget = pd.match(/updateDoc\(ref,\s*\{[\s\S]*?lastCoursesAutoFetch[\s\S]*?\}\)\.catch\(/);
+      expect(fireForget, 'PatientDashboard fire-and-forget pattern not found').toBeTruthy();
+    });
+
+    it('R7.5: V23 sweep — exact updateDoc count per anon-reachable page', () => {
+      // V23 100% sweep finding: EXACTLY 3 anon-reachable Firestore writes,
+      // all in opd_sessions. If this count changes, the firestore.rules
+      // whitelist + tests/firestore-rules-anon-patient-update.test.js A2.4
+      // both need review.
+      const cs = READ('src/pages/ClinicSchedule.jsx');
+      expect((pf.match(/updateDoc\s*\(/g) || []).length).toBe(1);
+      expect((pd.match(/updateDoc\s*\(/g) || []).length).toBe(2);
+      expect((cs.match(/updateDoc\s*\(/g) || []).length).toBe(0);
+      // Also: no setDoc / addDoc / writeBatch / runTransaction in any of them
+      for (const [name, src] of [['PatientForm', pf], ['PatientDashboard', pd], ['ClinicSchedule', cs]]) {
+        expect(src.includes('setDoc('), `${name} should not use setDoc`).toBe(false);
+        expect(src.includes('addDoc('), `${name} should not use addDoc`).toBe(false);
+        expect(src.includes('writeBatch('), `${name} should not use writeBatch`).toBe(false);
+        expect(src.includes('runTransaction('), `${name} should not use runTransaction`).toBe(false);
+        expect(src.includes('uploadBytes('), `${name} should not upload to Storage`).toBe(false);
+      }
+    });
+  });
 });

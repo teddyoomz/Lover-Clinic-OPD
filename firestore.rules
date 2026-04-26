@@ -53,10 +53,27 @@ service cloud.firestore {
       }
 
       // ── OPD Sessions (patient form submissions) ──
+      // V23 (2026-04-26) — narrowed `update: if isClinicStaff()` after bug
+      // "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอด
+      // ส่งไม่ได้". Patients reach the form via signInAnonymously
+      // (App.jsx:89) — anon users have no @loverclinic.com email → the
+      // staff check fails → PERMISSION_DENIED on PatientForm submit
+      // + PatientDashboard course-refresh.
+      // Fix: whitelist the exact 11 fields anon clients legitimately
+      // write (PatientForm.jsx:372 + PatientDashboard.jsx:403,410).
+      // Staff can still write any field. Mirrors V19 hasOnly() pattern.
+      // Anon attacker who guesses a sessionId can only modify those 11
+      // fields — cannot flip isArchived, sessionName, formType,
+      // customTemplate, createdAt, brokerProClinicId, patientLinkToken.
       match /opd_sessions/{sessionId} {
         allow read: if isSignedIn();
-        allow create: if true;  // Patients can submit forms without login
-        allow update, delete: if isClinicStaff();
+        allow create: if true;  // Patients (anon) can create new sessions
+        allow update: if isClinicStaff() ||
+          (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'patientData', 'submittedAt', 'updatedAt', 'isUnread',
+                     'lastCoursesAutoFetch', 'coursesRefreshRequest',
+                     'brokerStatus', 'brokerError', 'brokerJob', 'latestCourses']));
+        allow delete: if isClinicStaff();
       }
 
       // ── Backend: Customers (cloned from ProClinic) ──

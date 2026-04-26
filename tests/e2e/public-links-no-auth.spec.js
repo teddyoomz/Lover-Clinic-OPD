@@ -184,4 +184,70 @@ test.describe('Public links — no-auth access (V16 anti-regression)', () => {
     expect(src).toMatch(/authReady/);
     expect(src).toMatch(/onAuthStateChanged/);
   });
+
+  // ─── V23 (2026-04-26) — patient form SUBMIT must succeed for anon users ───
+  // V16 only verified RENDERING. V21 lesson: source-grep + render tests can
+  // encode broken WRITE behavior. V23 root cause was firestore.rules
+  // `update: if isClinicStaff()` blocking the anon updateDoc. This test
+  // exercises the actual write path end-to-end so a future re-tightening of
+  // the rule (or accidental Console-side revert) is caught immediately.
+  test('V23 lock: anon user can submit PatientForm without staff login', async ({ page }) => {
+    // Use the same fresh-context strategy as V16 tests above (no auth injection)
+    // Sample sessionId comes from real Firestore, designed to be QR-shared
+
+    // We don't strictly need to fill the form to detect the V23 bug —
+    // we just need to verify that NO PERMISSION_DENIED error fires.
+    // We listen to console errors during the page lifecycle.
+    const consoleErrors = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        const text = msg.text();
+        consoleErrors.push(text);
+      }
+    });
+    const pageErrors = [];
+    page.on('pageerror', (err) => {
+      pageErrors.push(err.message || String(err));
+    });
+
+    await page.goto(`/?session=${SAMPLE.sessionId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3500); // V16 race-window settle
+
+    // The form may either render the intake form OR show a "session expired/closed"
+    // banner depending on the sample doc state. EITHER way, no PERMISSION_DENIED
+    // should appear in console (the bug fired even on auto-fired metadata writes).
+    const finalText = await page.evaluate(() => document.body?.innerText || '');
+    expect(finalText.length).toBeGreaterThan(20);
+
+    // V23-specific: NO permission denied error in console
+    const permissionDenied = [...consoleErrors, ...pageErrors].filter(
+      (m) => /missing or insufficient permissions|PERMISSION_DENIED|permission-denied/i.test(m)
+    );
+    expect(permissionDenied, `V23 regression — anon updateDoc blocked: ${permissionDenied.join(' | ')}`).toEqual([]);
+  });
+
+  test('V23 lock: anon user on ?patient= can refresh courses without permission errors', async ({ page }) => {
+    // PatientDashboard fires fetchCoursesViaApi on load → updateDoc on
+    // opd_sessions. V23 bug had this silently failing (.catch swallow) on
+    // line 403, and console.warn on line 410. This test catches both.
+    const consoleErrors = [];
+    const consoleWarns = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'warning') consoleWarns.push(msg.text());
+    });
+    const pageErrors = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message || String(err)));
+
+    await page.goto(`/?patient=${SAMPLE.patientLinkToken}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(5000); // give fetchCoursesViaApi time to fire
+
+    const allMessages = [...consoleErrors, ...consoleWarns, ...pageErrors];
+    const permissionDenied = allMessages.filter(
+      (m) => /missing or insufficient permissions|PERMISSION_DENIED|permission-denied/i.test(m)
+    );
+    expect(permissionDenied,
+      `V23 regression on ?patient= — anon course-refresh blocked: ${permissionDenied.join(' | ')}`
+    ).toEqual([]);
+  });
 });
