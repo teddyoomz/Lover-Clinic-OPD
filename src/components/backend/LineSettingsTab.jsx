@@ -26,6 +26,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Save, Loader2, AlertCircle, CheckCircle2, Copy, Wifi, WifiOff, MessageCircle, QrCode, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react';
 import { db, appId } from '../../firebase.js';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+// V32-tris-ter-fix (2026-04-26) — direct browser → api.line.me fails CORS
+// preflight (LINE doesn't send Access-Control-Allow-Origin). Proxy via
+// admin-gated /api/admin/line-test endpoint instead.
+import { testLineConnection } from '../../lib/lineTestClient.js';
 
 const CHAT_CONFIG_PATH = ['artifacts', '__APP__', 'public', 'data', 'clinic_settings', 'chat_config'];
 
@@ -147,20 +151,16 @@ export default function LineSettingsTab({ clinicSettings }) {
     setTesting(true);
     setTestResult(null);
     try {
+      // V32-tris-ter-fix: route through backend proxy. The proxy reads
+      // the SAVED token from clinic_settings/chat_config (not the unsaved
+      // form value) — admin must Save before testing. We check unsaved
+      // state first to give a clearer error than "CONFIG_MISSING".
       if (!form.channelAccessToken) {
-        setTestResult({ ok: false, message: 'ยังไม่ได้กรอก Channel Access Token' });
+        setTestResult({ ok: false, message: 'ยังไม่ได้กรอก Channel Access Token — โปรดใส่ + กดบันทึกก่อนทดสอบ' });
         return;
       }
-      const res = await fetch('https://api.line.me/v2/bot/info', {
-        headers: { Authorization: `Bearer ${String(form.channelAccessToken).trim()}` },
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        setTestResult({ ok: false, message: `LINE API ${res.status}: ${t.slice(0, 200)}` });
-      } else {
-        const info = await res.json();
-        setTestResult({ ok: true, message: `เชื่อมต่อสำเร็จ — ${info.displayName || info.basicId || 'OK'}` });
-      }
+      const result = await testLineConnection();
+      setTestResult(result);
     } catch (e) {
       setTestResult({ ok: false, message: e.message || 'เกิดข้อผิดพลาดขณะทดสอบ' });
     } finally {

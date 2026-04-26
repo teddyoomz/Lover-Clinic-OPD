@@ -11,6 +11,8 @@
 //      replies with active courses or upcoming appointments.
 
 import crypto from 'crypto';
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import {
   interpretCustomerMessage,
   formatCoursesReply,
@@ -24,6 +26,34 @@ import {
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
+
+// V32-tris-ter-fix (2026-04-26) — be_* collections (be_customer_link_tokens,
+// be_customers, be_appointments) have firestore.rules that DENY unauth REST
+// reads. The webhook is anon-auth-less by design (LINE signature is the
+// gate) so we can't authenticate as a clinic-staff user. Solution: use
+// firebase-admin SDK which bypasses rules. Requires FIREBASE_ADMIN_*
+// env vars in Vercel (already set for api/admin/* endpoints).
+let cachedAdminDb = null;
+function getAdminFirestore() {
+  if (cachedAdminDb) return cachedAdminDb;
+  let app;
+  if (getApps().length > 0) {
+    app = getApp();
+  } else {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    if (!clientEmail || !rawKey) throw new Error('firebase-admin not configured');
+    app = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+        clientEmail,
+        privateKey: rawKey.replace(/\\n/g, '\n'),
+      }),
+    });
+  }
+  cachedAdminDb = getFirestore(app);
+  return cachedAdminDb;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -77,56 +107,11 @@ async function firestoreGet(path) {
   return await res.json();
 }
 
-async function firestoreDelete(path) {
-  await fetch(`${FIRESTORE_BASE}/${path}`, { method: 'DELETE' });
-}
-
-// runQuery via Firestore REST runQuery (used to find a customer by
-// lineUserId field — no need for an index since `where` against a
-// keyword field is auto-indexed). Returns array of plain customer docs.
-async function runQuery(structuredQuery) {
-  const url = `${FIRESTORE_BASE}:runQuery`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ structuredQuery }),
-  });
-  if (!res.ok) return [];
-  const arr = await res.json();
-  return Array.isArray(arr)
-    ? arr.filter(r => r?.document).map(r => unwrapDoc(r.document))
-    : [];
-}
-
-// Convert Firestore REST doc → plain JS object (depth-1 unwrap; tolerates
-// nested mapValue/arrayValue for the 2 fields we read here: courses[]
-// and appointmentDate). Sufficient for V32-tris-ter bot replies; a full
-// recursive unwrap would belong in a shared lib.
-function unwrapDoc(doc) {
-  if (!doc?.fields) return { id: doc?.name?.split('/').pop() };
-  const out = { id: doc.name?.split('/').pop() };
-  for (const [k, v] of Object.entries(doc.fields)) out[k] = unwrapValue(v);
-  return out;
-}
-
-function unwrapValue(v) {
-  if (v == null) return null;
-  if ('stringValue' in v) return v.stringValue;
-  if ('integerValue' in v) return Number(v.integerValue);
-  if ('doubleValue' in v) return Number(v.doubleValue);
-  if ('booleanValue' in v) return !!v.booleanValue;
-  if ('timestampValue' in v) return v.timestampValue;
-  if ('nullValue' in v) return null;
-  if ('mapValue' in v) {
-    const o = {};
-    for (const [k, vv] of Object.entries(v.mapValue?.fields || {})) o[k] = unwrapValue(vv);
-    return o;
-  }
-  if ('arrayValue' in v) {
-    return (v.arrayValue?.values || []).map(unwrapValue);
-  }
-  return null;
-}
+// V32-tris-ter-fix (2026-04-26): firestoreDelete + runQuery + unwrapDoc/
+// unwrapValue helpers were used only for be_* paths which now go through
+// firebase-admin SDK (see consumeLinkToken / findCustomerByLineUserId /
+// findUpcomingAppointmentsForCustomer). Removed; firestoreGet stays for
+// chat_conversations existence check (public read rule).
 
 async function pushLineMessage(userId, text, accessToken) {
   if (!userId || !text || !accessToken) return false;
@@ -157,92 +142,93 @@ async function replyLineMessage(replyToken, text, accessToken) {
 // V32-tris-ter — consume a LINK-<token> message: validate token, ensure
 // not expired, ensure no other customer already linked to this lineUserId,
 // then write be_customers.lineUserId + delete the token.
+//
+// V32-tris-ter-fix (2026-04-26): switched from unauth REST to firebase-
+// admin SDK because be_customer_link_tokens + be_customers rules are
+// "if false" / "if isClinicStaff()" — unauth REST returns 403, breaking
+// the bot. Admin SDK bypasses rules (server-side privileged op). The
+// rule lockdown stays — defense-in-depth: client SDK can't read tokens.
 async function consumeLinkToken(token, lineUserId) {
   if (!token || !lineUserId) return { ok: false, reason: 'invalid' };
-  const tokenPath = `artifacts/${APP_ID}/public/data/be_customer_link_tokens/${encodeURIComponent(token)}`;
-  const tokenDoc = await firestoreGet(tokenPath);
-  if (!tokenDoc?.fields) return { ok: false, reason: 'invalid' };
-  const customerId = tokenDoc.fields.customerId?.stringValue || '';
-  const expiresAt = tokenDoc.fields.expiresAt?.stringValue || '';
+
+  const db = getAdminFirestore();
+  const tokenRef = db.doc(`artifacts/${APP_ID}/public/data/be_customer_link_tokens/${token}`);
+  const tokenSnap = await tokenRef.get();
+  if (!tokenSnap.exists) return { ok: false, reason: 'invalid' };
+
+  const tokenData = tokenSnap.data() || {};
+  const customerId = String(tokenData.customerId || '');
+  const expiresAt = String(tokenData.expiresAt || '');
   if (!customerId) return { ok: false, reason: 'invalid' };
   if (expiresAt && expiresAt < new Date().toISOString()) {
     // Best-effort cleanup of expired token (don't await — webhook timing)
-    firestoreDelete(tokenPath).catch(() => {});
+    tokenRef.delete().catch(() => {});
     return { ok: false, reason: 'expired' };
   }
 
   // Check no other customer is already linked to this lineUserId
-  const collisions = await runQuery({
-    from: [{ collectionId: 'be_customers' }],
-    where: {
-      compositeFilter: {
-        op: 'AND',
-        filters: [{
-          fieldFilter: {
-            field: { fieldPath: 'lineUserId' },
-            op: 'EQUAL',
-            value: { stringValue: lineUserId },
-          },
-        }],
-      },
-    },
-    limit: 1,
-  }).catch(() => []);
-  const otherCustomer = collisions.find(c => c.id !== customerId);
-  if (otherCustomer) {
-    firestoreDelete(tokenPath).catch(() => {});
-    return { ok: false, reason: 'already-linked' };
+  const customersCol = db.collection(`artifacts/${APP_ID}/public/data/be_customers`);
+  const collisionSnap = await customersCol
+    .where('lineUserId', '==', lineUserId)
+    .limit(2)
+    .get()
+    .catch(() => null);
+  if (collisionSnap) {
+    const otherDoc = collisionSnap.docs.find(d => d.id !== customerId);
+    if (otherDoc) {
+      tokenRef.delete().catch(() => {});
+      return { ok: false, reason: 'already-linked' };
+    }
   }
 
   // Write lineUserId onto the customer
-  const customerPath = `artifacts/${APP_ID}/public/data/be_customers/${encodeURIComponent(customerId)}`;
-  await firestorePatch(customerPath, {
-    lineUserId: { stringValue: lineUserId },
-    lineLinkedAt: { stringValue: new Date().toISOString() },
+  const customerRef = db.doc(`artifacts/${APP_ID}/public/data/be_customers/${customerId}`);
+  await customerRef.update({
+    lineUserId,
+    lineLinkedAt: new Date().toISOString(),
   });
 
   // Read the customer name for the success reply
-  const cDoc = await firestoreGet(customerPath);
-  const customerName = cDoc?.fields?.customerName?.stringValue
-    || cDoc?.fields?.name?.stringValue
-    || '';
+  const cSnap = await customerRef.get().catch(() => null);
+  const cData = cSnap?.exists ? cSnap.data() : {};
+  const customerName = String(cData.customerName || cData.name || '');
 
-  // Delete the token (one-time use)
-  firestoreDelete(tokenPath).catch(() => {});
+  // Delete the token (one-time use). Best-effort.
+  tokenRef.delete().catch(() => {});
 
   return { ok: true, customerId, customerName };
 }
 
 async function findCustomerByLineUserId(lineUserId) {
   if (!lineUserId) return null;
-  const customers = await runQuery({
-    from: [{ collectionId: 'be_customers' }],
-    where: {
-      fieldFilter: {
-        field: { fieldPath: 'lineUserId' },
-        op: 'EQUAL',
-        value: { stringValue: lineUserId },
-      },
-    },
-    limit: 1,
-  }).catch(() => []);
-  return customers[0] || null;
+  try {
+    const db = getAdminFirestore();
+    const snap = await db
+      .collection(`artifacts/${APP_ID}/public/data/be_customers`)
+      .where('lineUserId', '==', lineUserId)
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    const d = snap.docs[0];
+    return { id: d.id, ...(d.data() || {}) };
+  } catch {
+    return null;
+  }
 }
 
 async function findUpcomingAppointmentsForCustomer(customerId) {
   if (!customerId) return [];
-  const appts = await runQuery({
-    from: [{ collectionId: 'be_appointments' }],
-    where: {
-      fieldFilter: {
-        field: { fieldPath: 'customerId' },
-        op: 'EQUAL',
-        value: { stringValue: String(customerId) },
-      },
-    },
-    limit: 50,
-  }).catch(() => []);
-  return appts;
+  try {
+    const db = getAdminFirestore();
+    const snap = await db
+      .collection(`artifacts/${APP_ID}/public/data/be_appointments`)
+      .where('customerId', '==', String(customerId))
+      .limit(50)
+      .get();
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+  } catch {
+    return [];
+  }
 }
 
 // Decide + emit the bot reply for an incoming customer text message.

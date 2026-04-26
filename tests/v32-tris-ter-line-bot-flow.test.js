@@ -332,15 +332,21 @@ describe('L8 api/webhook/line.js bot integration', () => {
     expect(fn).toMatch(/lineLinkedAt/);
   });
   test('L8.7 consumeLinkToken deletes token after success (one-time use)', () => {
-    expect(WEBHOOK_SRC).toMatch(/firestoreDelete\(tokenPath\)/);
+    // V32-tris-ter-fix: switched from firestoreDelete REST to admin SDK delete
+    expect(WEBHOOK_SRC).toMatch(/tokenRef\.delete\(\)/);
   });
-  test('L8.8 unwrapDoc handles depth-1 mapValue + arrayValue', () => {
-    expect(WEBHOOK_SRC).toMatch(/function unwrapValue/);
-    expect(WEBHOOK_SRC).toMatch(/'mapValue' in v/);
-    expect(WEBHOOK_SRC).toMatch(/'arrayValue' in v/);
+  test('L8.8 webhook unwraps Firestore docs via admin SDK (no manual unwrap helpers)', () => {
+    // V32-tris-ter-fix: unwrapDoc/unwrapValue removed; admin SDK returns
+    // plain JS objects already (snap.data()).
+    expect(WEBHOOK_SRC).toMatch(/\.data\(\)/);
+    expect(WEBHOOK_SRC).not.toMatch(/^function unwrapDoc/m);
   });
-  test('L8.9 runQuery uses Firestore REST :runQuery (no SDK)', () => {
-    expect(WEBHOOK_SRC).toMatch(/:runQuery/);
+  test('L8.9 webhook uses admin SDK collection.where (no Firestore REST :runQuery)', () => {
+    // V32-tris-ter-fix: be_* queries now use admin SDK; REST :runQuery
+    // was rule-blocked. Admin SDK bypasses rules (server-side priv op).
+    expect(WEBHOOK_SRC).not.toMatch(/:runQuery/);
+    expect(WEBHOOK_SRC).toMatch(/\.collection\([^)]*be_customers/);
+    expect(WEBHOOK_SRC).toMatch(/\.where\(['"]lineUserId['"]/);
   });
   test('L8.10 not-linked customer triggers formatNotLinkedReply', () => {
     expect(WEBHOOK_SRC).toMatch(/findCustomerByLineUserId/);
@@ -387,7 +393,10 @@ describe('L9 LineSettingsTab', () => {
     // testid is set conditionally via ternary expression — substrings present.
     expect(SETTINGS_SRC).toMatch(/line-settings-test-ok/);
     expect(SETTINGS_SRC).toMatch(/line-settings-test-fail/);
-    expect(SETTINGS_SRC).toMatch(/api\.line\.me\/v2\/bot\/info/);
+    // V32-tris-ter-fix: api.line.me call moved to backend proxy (CORS).
+    // Settings tab now calls testLineConnection() from lineTestClient.
+    expect(SETTINGS_SRC).toMatch(/testLineConnection\(\)/);
+    expect(SETTINGS_SRC).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/lineTestClient\.js['"]/);
   });
   test('L9.7 save button persists via setDoc with merge:true', () => {
     expect(SETTINGS_SRC).toMatch(/data-testid=["']line-settings-save["']/);
