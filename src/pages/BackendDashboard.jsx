@@ -75,6 +75,7 @@ const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTa
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 import { setUseTrialServer } from '../lib/brokerClient.js';
+import { useTabAccess } from '../hooks/useTabAccess.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
@@ -97,6 +98,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
 
   const [hydrated, setHydrated] = useState(false);
 
+  // Phase 13.5.2 — permission-aware navigation. canAccess() guards the
+  // initial deep-link tab AND every handleNavigate call. The redirect
+  // useEffect (below) catches the case where permissions arrive after
+  // hydration and the active tab is no longer reachable.
+  const { canAccess, first: firstAllowedTab, loaded: permsLoaded } = useTabAccess();
+
   // Deep link: ?backend=1&customer=ID → auto-load customer detail
   // Deep link: ?backend=1&tab=finance&subtab=deposit → switch to finance tab
   useEffect(() => {
@@ -117,6 +124,17 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       setHydrated(true);
     }
   }, []);
+
+  // Phase 13.5.2 — redirect if active tab becomes inaccessible after the
+  // permission listener resolves. Idempotent: skips if access is already
+  // granted. Runs only after BOTH hydration + perms-loaded so we don't
+  // bounce the user during the brief loading window.
+  useEffect(() => {
+    if (!hydrated || !permsLoaded) return;
+    if (canAccess(activeTab)) return;
+    const fallback = firstAllowedTab(['appointments', 'customers', 'reports', 'sales']);
+    if (fallback && fallback !== activeTab) setActiveTab(fallback);
+  }, [hydrated, permsLoaded, activeTab, canAccess, firstAllowedTab]);
 
   // Keep URL in sync with state.
   useEffect(() => {
@@ -159,13 +177,18 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
 
   // Stable handler so memo'd nav children don't re-render on every parent
   // state change (e.g. linkCopied toggle, viewingCustomer refresh).
+  // Phase 13.5.2 — defense-in-depth: filter at sidebar/palette already hides
+  // disallowed tabs, but a malicious / stale call from elsewhere is also
+  // blocked here. Permissions still loading? Allow navigation (sidebar can't
+  // have rendered the disallowed tab yet, so this is safe).
   const handleNavigate = useCallback((tabId) => {
+    if (permsLoaded && !canAccess(tabId)) return;
     // If inside customer detail / sale / finance overlay, exit and switch tab.
     setViewingCustomer(null);
     setSaleMode(false);
     setFinanceMode(false);
     setActiveTab(tabId);
-  }, []);
+  }, [permsLoaded, canAccess]);
 
   // Breadcrumb chrome (shown above content via BackendNav topBarSlot) —
   // only when viewing a specific customer or in a modal-style overlay.

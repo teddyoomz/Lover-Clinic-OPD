@@ -14,10 +14,11 @@
 //   button[aria-current=page] — active item
 //   button[aria-expanded]    — section toggle
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Search, Database } from 'lucide-react';
 import { NAV_SECTIONS, PINNED_ITEMS, TAB_COLOR_MAP, sectionOf } from './navConfig.js';
 import { hexToRgb } from '../../../utils.js';
+import { useTabAccess } from '../../../hooks/useTabAccess.js';
 
 const STORAGE_KEY_COLLAPSED = 'backend-nav-collapsed-v1';
 const STORAGE_KEY_EXPANDED_SECTIONS = 'backend-nav-expanded-sections-v1';
@@ -53,6 +54,21 @@ export default function BackendSidebar({
 }) {
   const [collapsed, setCollapsed] = useState(() => forceExpanded ? false : loadCollapsed());
   const [expandedSections, setExpandedSections] = useState(() => loadExpandedSections(activeTabId));
+
+  // Phase 13.5.2 — gate visible items by user permissions. Sections with
+  // zero allowed items are hidden entirely (don't render an empty header).
+  // canAccess() is a stable callback from useTabAccess.
+  const { canAccess, loaded: permsLoaded } = useTabAccess();
+  const visiblePinned = useMemo(
+    () => PINNED_ITEMS.filter(item => canAccess(item.id)),
+    [canAccess]
+  );
+  const visibleSections = useMemo(
+    () => NAV_SECTIONS
+      .map(section => ({ ...section, items: section.items.filter(it => canAccess(it.id)) }))
+      .filter(section => section.items.length > 0),
+    [canAccess]
+  );
 
   useEffect(() => { if (!forceExpanded) saveCollapsed(collapsed); }, [collapsed, forceExpanded]);
   useEffect(() => { saveExpandedSections(expandedSections); }, [expandedSections]);
@@ -131,10 +147,11 @@ export default function BackendSidebar({
       )}
 
       {/* Pinned items — flat, no section header. Rendered above groups for
-          one-click access to frequently-used pages (e.g. นัดหมาย). */}
-      {PINNED_ITEMS.length > 0 && (
+          one-click access to frequently-used pages (e.g. นัดหมาย).
+          Phase 13.5.2: permission-filtered via visiblePinned. */}
+      {visiblePinned.length > 0 && (
         <ul className="px-2 pt-1 pb-2 border-b border-[var(--bd)] space-y-0.5" role="list">
-          {PINNED_ITEMS.map(item => {
+          {visiblePinned.map(item => {
             const ItemIcon = item.icon;
             const isActive = activeTabId === item.id;
             const cm = TAB_COLOR_MAP[item.color] || TAB_COLOR_MAP.rose;
@@ -169,7 +186,7 @@ export default function BackendSidebar({
           - Items: regular case, larger (12px), indented under header with a
             left rail (border-l) so the visual grouping is unmistakable. */}
       <ul className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-3 space-y-1 [scrollbar-width:thin]" role="list">
-        {NAV_SECTIONS.map((section) => {
+        {visibleSections.map((section) => {
           const Icon = section.icon;
           const isExpanded = !!expandedSections[section.id];
           const activeInThisSection = section.items.some(it => it.id === activeTabId);

@@ -5,12 +5,26 @@
 // cmdk handles: keyboard nav (Arrow↑↓, Enter, ESC), filtering, accessibility
 // (roles/aria). We layer our Tailwind styles + section grouping on top.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Command } from 'cmdk';
 import { Search, CornerDownLeft } from 'lucide-react';
 import { NAV_SECTIONS, PINNED_ITEMS, TAB_COLOR_MAP } from './navConfig.js';
+import { useTabAccess } from '../../../hooks/useTabAccess.js';
 
 export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
+  // Phase 13.5.2 — filter palette results by user permissions. Hidden tabs
+  // never appear in fuzzy search; empty sections collapse out.
+  const { canAccess } = useTabAccess();
+  const visiblePinned = useMemo(
+    () => PINNED_ITEMS.filter(it => canAccess(it.id)),
+    [canAccess]
+  );
+  const visibleSections = useMemo(
+    () => NAV_SECTIONS
+      .map(s => ({ ...s, items: s.items.filter(it => canAccess(it.id)) }))
+      .filter(s => s.items.length > 0),
+    [canAccess]
+  );
   // Global ⌘K / Ctrl+K hotkey.
   useEffect(() => {
     const onKey = (e) => {
@@ -61,13 +75,14 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
             ไม่พบเมนูที่ตรงกับคำค้น
           </Command.Empty>
 
-          {/* Pinned — always first for frequent-access items */}
-          {PINNED_ITEMS.length > 0 && (
+          {/* Pinned — always first for frequent-access items
+              (Phase 13.5.2: visiblePinned = perm-filtered) */}
+          {visiblePinned.length > 0 && (
             <Command.Group
               heading="ใช้บ่อย"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-[var(--tx-muted)]"
             >
-              {PINNED_ITEMS.map(item => {
+              {visiblePinned.map(item => {
                 const ItemIcon = item.icon;
                 const cm = TAB_COLOR_MAP[item.color] || TAB_COLOR_MAP.rose;
                 return (
@@ -88,7 +103,7 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
             </Command.Group>
           )}
 
-          {NAV_SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <Command.Group
               key={section.id}
               heading={section.label}

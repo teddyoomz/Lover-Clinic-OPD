@@ -31,6 +31,8 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   sales:                 { requires: ['sale_management', 'sale_view'] },
   quotations:            { requires: ['quotation_management', 'quotation_view'] },
   'online-sales':        { requires: ['online_sale'] },
+  'insurance-claims':    { requires: ['sale_management', 'sale_view'] },
+  'vendor-sales':        { requires: ['vendor_sale_management'] },
 
   // Stock
   stock:                 { requires: ['stock_management', 'stock_movement'] },
@@ -73,6 +75,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   courses:               { adminOnly: true },
   'finance-master':      { adminOnly: true },
   'df-groups':           { requires: ['df_group'], adminOnly: false },
+  'document-templates':  { adminOnly: true },
 });
 
 /**
