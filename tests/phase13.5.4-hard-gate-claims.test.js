@@ -246,6 +246,127 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
     });
   });
 
+  // ─── V25-bis (2026-04-26) — Genesis admin bootstrap endpoint ──────────────
+  // The Phase 13.5.4 D1 deploy revealed admin user
+  // (loverclinic@loverclinic.com) had neither admin:true claim NOR
+  // FIREBASE_ADMIN_BOOTSTRAP_UIDS env entry. Migration button hit 403 from
+  // /api/admin/users. New endpoint /api/admin/bootstrap-self breaks the
+  // chicken-and-egg with strict genesis guards: caller email must match
+  // @loverclinic.com AND no other admin may exist.
+  describe('H6: V25-bis genesis admin bootstrap endpoint (/api/admin/bootstrap-self)', () => {
+    const BOOTSTRAP_API = READ('api/admin/bootstrap-self.js');
+
+    it('H6.1: endpoint file exists with default export handler', () => {
+      expect(BOOTSTRAP_API).toMatch(/export\s+default\s+async\s+function\s+handler/);
+    });
+
+    it('H6.2: requires Bearer token (signature verified, NOT admin gate)', () => {
+      // We do NOT call verifyAdminToken here (chicken-and-egg). We DO
+      // verify the token signature ourselves so we can extract caller's
+      // UID + email.
+      expect(BOOTSTRAP_API).toMatch(/Bearer/);
+      expect(BOOTSTRAP_API).toMatch(/verifyIdToken/);
+      // Must NOT call verifyAdminToken (would 403 the genesis caller)
+      expect(BOOTSTRAP_API).not.toMatch(/verifyAdminToken\s*\(/);
+    });
+
+    it('H6.3: caller email must match @loverclinic.com', () => {
+      expect(BOOTSTRAP_API).toMatch(/LOVERCLINIC_EMAIL_RE/);
+      expect(BOOTSTRAP_API).toMatch(/@loverclinic\\\./);
+      expect(BOOTSTRAP_API).toMatch(/Forbidden:\s*caller\s+email\s+must\s+match/);
+    });
+
+    it('H6.4: genesis check — refuses if any other admin exists (409 Conflict)', () => {
+      expect(BOOTSTRAP_API).toMatch(/findExistingAdmin/);
+      expect(BOOTSTRAP_API).toMatch(/another\s+admin\s+already\s+exists/);
+      expect(BOOTSTRAP_API).toMatch(/409/);
+    });
+
+    it('H6.5: idempotent — already-admin caller still gets isClinicStaff added', () => {
+      // If decoded.admin === true, set the claim (with isClinicStaff added)
+      // and return alreadyAdmin: true (don't refuse, but no genesis flag)
+      expect(BOOTSTRAP_API).toMatch(/decoded\.admin\s*===\s*true/);
+      expect(BOOTSTRAP_API).toMatch(/alreadyAdmin:\s*true/);
+    });
+
+    it('H6.6: grants both admin: true AND isClinicStaff: true on success', () => {
+      // The genesis path must set BOTH claims so the user passes both
+      // verifyAdminToken (admin) and Phase 13.5.4 Deploy 2 rule
+      // (isClinicStaff). The two-claim grant is the whole point.
+      const genesisBlock = BOOTSTRAP_API.match(/All gates passed[\s\S]*?await auth\.setCustomUserClaims/);
+      expect(genesisBlock).toBeTruthy();
+      expect(genesisBlock[0]).toMatch(/admin:\s*true/);
+      expect(genesisBlock[0]).toMatch(/isClinicStaff:\s*true/);
+    });
+
+    it('H6.7: preserves existing custom claims (spread)', () => {
+      // Just like setPermission, must NOT drop other claims (spread + override)
+      expect(BOOTSTRAP_API).toMatch(/\.\.\.\(existing\.customClaims\s*\|\|\s*\{\}\)/);
+    });
+
+    it('H6.8: logs the genesis grant for audit trail', () => {
+      expect(BOOTSTRAP_API).toMatch(/console\.log\([^)]*bootstrap-self/);
+      expect(BOOTSTRAP_API).toMatch(/genesis\s+admin\s+granted/);
+    });
+
+    it('H6.9: pagination cap on findExistingAdmin (DoS protection)', () => {
+      // The list-all-admins check is paginated — cap at 10 batches × 1000
+      // = 10k users so a huge user table doesn't cause perf degradation
+      const fnBlock = BOOTSTRAP_API.match(/async\s+function\s+findExistingAdmin[\s\S]*?\n\}/);
+      expect(fnBlock).toBeTruthy();
+      expect(fnBlock[0]).toMatch(/page\s*<\s*10/);
+      expect(fnBlock[0]).toMatch(/listUsers\(1000/);
+    });
+  });
+
+  describe('H7: V25-bis client wrapper + UI button', () => {
+    it('H7.1: bootstrapSelfAsAdmin client wrapper exported', () => {
+      expect(ADMIN_CLIENT).toMatch(/export\s+async\s+function\s+bootstrapSelfAsAdmin/);
+    });
+
+    it('H7.2: client wrapper hits the bootstrap-self endpoint (NOT /api/admin/users)', () => {
+      const fnBlock = ADMIN_CLIENT.match(/async\s+function\s+bootstrapSelfAsAdmin[\s\S]*?\n\}/);
+      expect(fnBlock).toBeTruthy();
+      expect(fnBlock[0]).toMatch(/['"]\/api\/admin\/bootstrap-self['"]/);
+      expect(fnBlock[0]).toMatch(/method:\s*['"]POST['"]/);
+      expect(fnBlock[0]).toMatch(/Authorization:\s*`Bearer\s*\$\{token\}`/);
+    });
+
+    it('H7.3: client wrapper attaches status + payload to thrown error', () => {
+      // When the server returns 409 with existingAdmin info, the UI needs
+      // both the HTTP status and the payload to surface it
+      const fnBlock = ADMIN_CLIENT.match(/async\s+function\s+bootstrapSelfAsAdmin[\s\S]*?\n\}/);
+      expect(fnBlock[0]).toMatch(/err\.status\s*=\s*res\.status/);
+      expect(fnBlock[0]).toMatch(/err\.payload\s*=\s*payload/);
+    });
+
+    it('H7.4: PermissionGroupsTab imports bootstrapSelfAsAdmin', () => {
+      expect(PG_TAB).toMatch(/bootstrapSelfAsAdmin/);
+    });
+
+    it('H7.5: handleBootstrapSelf function defined in PermissionGroupsTab', () => {
+      expect(PG_TAB).toMatch(/handleBootstrapSelf\s*=\s*async/);
+    });
+
+    it('H7.6: bootstrap button has data-testid="permission-bootstrap-self-button"', () => {
+      expect(PG_TAB).toMatch(/data-testid=["']permission-bootstrap-self-button["']/);
+    });
+
+    it('H7.7: bootstrap success forces ID token refresh (getIdToken(true))', () => {
+      const fnBlock = PG_TAB.match(/handleBootstrapSelf\s*=\s*async[\s\S]*?\n\s*\};/);
+      expect(fnBlock).toBeTruthy();
+      expect(fnBlock[0]).toMatch(/getIdToken\(true\)/);
+    });
+
+    it('H7.8: bootstrap result UI surfaces 409 conflict with existingAdmin info', () => {
+      // The UI must show the existing admin's email/uid when bootstrap is
+      // refused — so the user knows who to ask for grantAdmin
+      expect(PG_TAB).toMatch(/data-testid=["']permission-bootstrap-result["']/);
+      expect(PG_TAB).toMatch(/existingAdmin/);
+      expect(PG_TAB).toMatch(/grantAdmin/);
+    });
+  });
+
   describe('H5: Phase 13.5.4 staging — Deploy 1 vs Deploy 2 separation', () => {
     it('H5.1: firestore.rules unchanged in this commit (Deploy 1 ships rules-unchanged)', () => {
       // After Deploy 1 + user runs migration button + verification,

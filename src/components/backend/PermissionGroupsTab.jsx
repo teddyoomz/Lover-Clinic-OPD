@@ -3,9 +3,9 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound } from 'lucide-react';
+import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound, Shield } from 'lucide-react';
 import { listPermissionGroups, deletePermissionGroup, listStaff } from '../../lib/backendClient.js';
-import { setUserPermission } from '../../lib/adminUsersClient.js';
+import { setUserPermission, bootstrapSelfAsAdmin } from '../../lib/adminUsersClient.js';
 import { auth } from '../../firebase.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -159,6 +159,44 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
     }
   };
 
+  // ─── Genesis admin bootstrap (V25-bis) ───────────────────────────────
+  // If migration button hits 403 "admin privilege required", caller has no
+  // admin: true claim AND isn't in FIREBASE_ADMIN_BOOTSTRAP_UIDS env. The
+  // bootstrap button calls /api/admin/bootstrap-self which has its own
+  // chicken-and-egg-breaking guards (genesis-only, @loverclinic email).
+  // After success, force token refresh so the new claim takes effect.
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapResult, setBootstrapResult] = useState(null);
+  const handleBootstrapSelf = async () => {
+    if (!window.confirm(
+      'Bootstrap ตัวคุณเป็น admin (genesis grant)?\n\n' +
+      'ใช้ตอนเดียว — กรณี Vercel env ไม่มี FIREBASE_ADMIN_BOOTSTRAP_UIDS\n' +
+      'และยังไม่มี admin คนไหนมี custom claim. หลัง bootstrap แล้ว token\n' +
+      'จะ refresh อัตโนมัติ + คุณจะเป็น admin ใน custom claim.'
+    )) return;
+
+    setBootstrapping(true);
+    setBootstrapResult(null);
+    setError('');
+    try {
+      const data = await bootstrapSelfAsAdmin();
+      // Force ID token refresh so the new claim is picked up immediately
+      try {
+        await auth.currentUser?.getIdToken(true);
+      } catch { /* non-fatal */ }
+      setBootstrapResult({ ok: true, ...data });
+    } catch (e) {
+      setBootstrapResult({
+        ok: false,
+        status: e?.status || 0,
+        error: e?.message || 'Unknown error',
+        existingAdmin: e?.payload?.existingAdmin || null,
+      });
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
   const extraFilters = (
     <div className="flex items-center gap-2">
       <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
@@ -166,6 +204,16 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
         <option value="">สถานะทั้งหมด</option>
         {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
+      <button
+        type="button"
+        data-testid="permission-bootstrap-self-button"
+        onClick={handleBootstrapSelf}
+        disabled={bootstrapping || !canDelete}
+        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'Genesis-only admin grant — ใช้เมื่อ migration button คืน 403 admin error'}
+        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-violet-700/40 hover:text-violet-300 transition-all disabled:opacity-50">
+        {bootstrapping ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+        Bootstrap ตัวเองเป็น admin
+      </button>
       <button
         type="button"
         data-testid="permission-claims-migrate-button"
@@ -259,6 +307,33 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
           })}
         </div>
       </MarketingTabShell>
+
+      {bootstrapResult && (
+        <div data-testid="permission-bootstrap-result"
+          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
+          <div className="font-bold text-[var(--tx-heading)] mb-1">ผล Bootstrap admin (genesis grant)</div>
+          {bootstrapResult.ok ? (
+            <div className="text-emerald-400">
+              ✓ {bootstrapResult.alreadyAdmin
+                ? `${bootstrapResult.email || bootstrapResult.uid} เป็น admin อยู่แล้ว — ตั้ง isClinicStaff claim ครบแล้ว`
+                : `Genesis admin granted: ${bootstrapResult.email || bootstrapResult.uid}. Token refreshed อัตโนมัติ.`}
+              <div className="text-[11px] text-[var(--tx-muted)] mt-1">
+                ลองกดปุ่ม "Sync ทุก staff → Claims" ใหม่ครับ — ควรจะ synced=1 (ตัวคุณ) + skipped=20 + failed=0
+              </div>
+            </div>
+          ) : (
+            <div className="text-red-400">
+              ✗ ล้มเหลว ({bootstrapResult.status}): {bootstrapResult.error}
+              {bootstrapResult.existingAdmin && (
+                <div className="text-[11px] text-amber-300 mt-1">
+                  มี admin อยู่แล้ว: {bootstrapResult.existingAdmin.email || bootstrapResult.existingAdmin.uid}
+                  — ขอ admin คนนั้น grant สิทธิ์ผ่าน /api/admin/users grantAdmin แทน
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {migrateResult && (
         <div data-testid="permission-claims-migrate-result"

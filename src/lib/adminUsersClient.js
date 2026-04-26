@@ -79,3 +79,32 @@ export function setUserPermission({ uid, permissionGroupId } = {}) {
 export function clearUserPermission(uid) {
   return callAdminUsers('clearPermission', { uid });
 }
+
+// ─── Genesis admin bootstrap (V25-bis) ─────────────────────────────────────
+// One-shot admin grant for the FIRST @loverclinic.com user. Hits the
+// dedicated /api/admin/bootstrap-self endpoint (which bypasses the chicken-
+// and-egg "needs admin to grant admin" loop with strict genesis guards).
+//
+// After success, MUST call auth.currentUser.getIdToken(true) on the client
+// to refresh the ID token with the new claim.
+export async function bootstrapSelfAsAdmin() {
+  const token = await getIdToken();
+  const res = await fetch('/api/admin/bootstrap-self', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: '{}',
+  });
+  let payload = null;
+  try { payload = await res.json(); } catch { /* non-JSON */ }
+  if (!res.ok || !payload?.success) {
+    const msg = payload?.error || `bootstrap-self ล้มเหลว (HTTP ${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.payload = payload;
+    throw err;
+  }
+  return payload.data;
+}
