@@ -7,20 +7,69 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 13 EOD2 — V33.4 + V33.5 LINE-OA redesign DEPLOYED
+- **Date last updated**: 2026-04-27 session 14 — V33.6 mobile Flex no-truncation DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `231b2f5 feat(line-oa): V33.5 — Flex Message bot replies + doctor in appointments + smart-display`
-- **Test count**: **1385** focused (+289 since s12 baseline 1096: V33 159 + V33.2 24 + V33.3 23 + V33.4 42 + V33.5 41)
-- **Build**: clean. BackendDashboard chunk ~995 KB
-- **Deploy state**: ✅ **PRODUCTION = `231b2f5`** (V15 combined deploy session 13 EOD2 — V33.4 + V33.5 LIVE)
-  - Vercel: `lover-clinic-6mt57qih5-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (56s)
-  - Firestore rules: v17 LIVE (unchanged since V33 — re-deployed for Console-drift safety per V1/V9)
-  - Storage rules: V26 claim-based (unchanged — re-deployed)
-  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, cleanup 4/4 = 200, smoke 3/3 = 200 (incl. /?customer=LC-26000001 = 200)
-- **Rule B probe list permanent**: 7 endpoints + 3 negative
+- **Last commit**: `380f05d feat(line-oa): V33.6 — Flex bubble vertical-stacked rows (mobile no-truncation)`
+- **Test count**: **1439** focused (+54 since s13: V33.6.A-G full-flow simulate)
+- **Build**: clean. BackendDashboard chunk 994.86 KB (≈ unchanged)
+- **Deploy state**: ✅ **PRODUCTION = `380f05d`** (V15 combined deploy session 14 — V33.6 LIVE)
+  - Vercel: `lover-clinic-ekusiibat-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (53s)
+  - Firestore rules: v17 LIVE (rules unchanged — already-up-to-date re-deploy per V1/V9 anti-drift)
+  - Storage rules: V26 claim-based (unchanged)
+  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, smoke 3/3 = 200 (root + /?customer=LC-26000001 + /?backend=1)
+- **Rule B probe list permanent**: 6 positive + 3 negative
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
+
+### Session 2026-04-27 session 14 (1 commit, `380f05d`) — V33.6 mobile Flex no-truncation
+
+User reported via mobile screenshots (03:33): V33.5 Flex Bubbles
+truncated critical data on mobile LINE viewer:
+- Course "คงเหลือ" col: "0 / 3 a..." (vs "0 / 3 ครั้ง")
+- Course "หมดอายุ" cell: "เหมาตา..." (vs "เหมาตามจริง")
+- Appointment "เวลา": "10:00–10..." (vs "10:00–10:30")
+- Doctor name in red (Rule 04 spirit: red on names = ชื่อคนตายฯ)
+
+User constraint: "ไม่อยากแก้หลายรอบเพราะ deploy มันเสียตังทุกครั้ง" —
+fix must be definitive, no V33.7 round 2.
+
+**Root cause**: horizontal table flex:5/2/2 + wrap:false on data cells.
+Mega bubble ~290px - padding → cols ~[116, 47, 47]px. wrap:false +
+narrow column made LINE auto-truncate Thai/Latin mixed strings.
+
+**Fix**: eliminate truncation as a bug CLASS (not patch one ratio):
+- Course rows: horizontal 3-col table → vertical-stacked card per row.
+  Name (bold, full width, wrap:true) on top; "คงเหลือ X · หมดอายุ Y"
+  inline meta below. NEW exported helper `buildCourseMetaLine()`.
+- Appointment date+time: combined horizontal row → two stacked sub-rows
+  (📅 own line, 🕐 own line). Time always full width, never truncates.
+- Provider color: `accentColor` (#dc2626 red) → `#222222` dark. Rule 04
+  spirit; clinic-red preserved on header band only.
+- Column-header table row dropped (data is self-labeled inline).
+
+**Tests** (Rule I full-flow simulate): +54 across V33.6.A-G:
+- A buildCourseMetaLine pure helper — 10 tests
+- B course bubble structural contract — 10 tests
+- C appt date+time split layout — 7 tests
+- D provider color #222 (Rule 04) — 5 tests
+- E adversarial inputs (no truncation possible) — 12 tests
+- F source-grep regression guards — 6 tests
+- G backward compat (existing exports + empty paths) — 4 tests
+Plus 5 V33.5 shape-lock updates (C6/D1/D2/D3/E5).
+
+**Verification**:
+- npm test --run: 1385 → 1439, all green
+- npm run build: clean, BD 994 KB (≈ unchanged)
+- Pre-probe 6/6 + 3/3 GREEN, post 6/6 + 3/3 GREEN
+- Production HTTP smoke: 3/3 = 200
+
+**1 commit**:
+```
+380f05d feat(line-oa): V33.6 — Flex bubble vertical-stacked rows (mobile no-truncation)
+```
+
+Detail: this V-entry + commit body.
 
 ### Session 2026-04-27 session 13 EOD2 (8 commits, `1f0faff` → `ea8a09c`) — Customer create/edit + LINE-OA full redesign
 
@@ -280,22 +329,22 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 EOD2.
+Resume LoverClinic — continue from 2026-04-27 s14.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ea8a09c, prod=231b2f5)
-3. .agents/active.md (1385 focused tests pass)
+2. SESSION_HANDOFF.md (master=380f05d, prod=380f05d)
+3. .agents/active.md (1439 focused tests pass)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
 5. .agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md
 
-Status: master=ea8a09c, 1385 / 1385 tests pass, prod=231b2f5 LIVE
+Status: master=380f05d, 1439/1439 tests pass, prod=380f05d LIVE (V33.6)
 Next: idle — awaiting user direction
 Outstanding (user-triggered):
-  - Live QA bot Flex replies in LINE OA (DM "คอร์ส" / "นัด" / bare-13-digit)
-  - Admin test suspend/resume/unlink in "ผูกแล้ว" tab
-  - V33.5+ cleanup: remove orphan QR-token plumbing (24h grace period)
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (7+3 endpoints)
+  - Live mobile QA: DM "คอร์ส" / "นัด" / bare-13-digit to LINE OA — verify stacked Flex layout renders fully (no `…` truncation) on smartphone
+  - Admin test suspend/resume/unlink in "ผูกแล้ว" tab (carry-over)
+  - V33.5+ cleanup: remove orphan QR-token plumbing (24h grace period — eligible from 2026-04-28)
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (6+3 endpoints — path is `artifacts/loverclinic-opd-4c39b/public/data/...`)
 
 /session-start
 ```
