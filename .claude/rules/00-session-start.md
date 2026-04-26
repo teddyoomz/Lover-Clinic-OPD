@@ -308,6 +308,24 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Lesson**: Any rule that says `allow update: if false` is a contract with the codebase. **Run a grep for `updateDoc(<collection>` and `tx.update(<collection>` BEFORE adding such a rule** — if the grep is non-empty, narrow the rule to the specific fields the code touches, don't blanket-block. Period.
 - **Rule/audit update**: this V19 entry locks the lesson into institutional memory. Consider extending `/audit-firestore-correctness` (or creating `/audit-rules-vs-callers`) to mechanically grep this every release.
 
+### V22 — 2026-04-26 — Schedule calendar replicated 1:1 but FILTERED to selected staff (ProClinic shows ALL stacked); chip text could leak numeric user_id
+- During Phase 13.2.7-13.2.8 ProClinic-fidelity replication of `/admin/schedule/{doctor,employee}`, I shipped DoctorSchedulesTab + EmployeeSchedulesTab with the schedule-load filtered to `{ staffId: selectedDoctorId }`. The calendar therefore showed ONLY the selected staff's schedules, while ProClinic shows ALL staff stacked in each cell with multi-color chips (one color per user_id). The right-rail sidebar (งานประจำสัปดาห์/งานรายวัน/วันลา) is the per-selected-staff scope; the calendar grid is everyone.
+- 75 source-grep + RTL tests had passed for both tabs, but NONE of them asserted the multi-staff render — they only checked that a single chip's time format was correct. The user caught it manually: "ใน proclinic ตารางหมอและพนง มันโชว์หมดนะ ไม่ได้แยกโชว์เหมือนเรา ของเราทำผิด ... มันโชว์ทุกคนซ้อนกันในตารางเดียวเลยนะ ของเรามันแยกโชว์เวลาเลือกคนซึ่งผิด".
+- Plus a V21-class regression risk: chip label was `${e.startTime}-${e.endTime}` only — no name. If we'd ever surfaced staff identity in the chip, the natural fallback would be `e.staffId` (numeric ProClinic user_id), which the user explicitly forbids: "ฝาก make sure ด้วยว่าทุกที่แสดงชื่อแพทย์และพนง เป็น text ไม่ใช่ตัวเลย".
+- **Worst part**: Triangle Rule F-bis was followed (3 ProClinic screenshots captured Phase 0). The screenshots clearly showed multi-staff cells. I read them but interpreted "ProClinic shows the SELECTED staff's schedule" because of the right-sidebar staff-selector. Wrong inference. The screenshot title reads "ตารางแพทย์" (single tab) and the selector is for the SIDEBAR sections, not the calendar grid filter.
+- **Fix** (Phase 13.2.7-bis, commit `e574897`):
+  1. DoctorSchedulesTab + EmployeeSchedulesTab: drop `{staffId: selectedDoctorId}` filter; load ALL schedules; filter via doctor/staff Set after fetch.
+  2. MonthCalendarGrid accepts `staffMap` prop (id → { name }) and `selectedStaffId` for highlight ring.
+  3. Chip text: `HH:MM-HH:MM <name>` (working) or `<TYPE_LABEL> <name>` (non-working). Per-staff color via 10-color hash palette.
+  4. `resolveStaffName` fallback chain: staffMap → entry.staffName → "?" — NEVER returns staffId. Locked by `MS.C.4` test (numeric staffId in `data-staff-id` attr OK; in visible text NOT OK).
+  5. Sidebar entries (recurring/override/leave) STILL filter to selected staff — only the calendar grid changed.
+- **Live verified**: wrote 3 recurring Sunday shifts for 3 distinct doctorIds → calendar cell rendered 3 chips with text names ("นาสาว An เอ (เอ)" / "Wee 523" / etc.); `namesAreText: true`; cleanup deleted all 3.
+- **Lessons**: 
+  1. **Multi-instance render must have multi-instance test fixtures**. A test that passes 1 entry and asserts time format is FALSE confidence. MS.C.1 now passes 3 entries and asserts 3 chips render in the same cell.
+  2. **Screenshots aren't enough — count entries per cell**. Phase 0 captures should include "given N entries, expect N chips" rule baked into the audit. Add to /triangle-inspect skill.
+  3. **Chip label format is part of the fidelity contract**. Don't ship `HH:MM-HH:MM` when the source shows `HH:MM-HH:MM <name>` — the missing name field is technically working code but pixel-different from the reference.
+- **Rule/audit update**: triangle-inspect skill should add "multi-entity-per-cell" check on calendar/grid replications (count comparison: ProClinic-cell-entries vs ours-cell-entries on the same date). The MS test bank in `tests/schedule-calendar-multi-staff.test.jsx` is the canonical pattern for future grid replications.
+
 ---
 
 ## 3. TOOLS — WHEN TO REACH FOR WHICH

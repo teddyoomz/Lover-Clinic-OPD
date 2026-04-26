@@ -7,15 +7,15 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 4 — P1 polish batch + Phase 13.5 permission system (4 commits)
+- **Date last updated**: 2026-04-26 session 5 — Phase 13.2.6-13.2.16 ProClinic schedule replication (10 commits)
 - **Branch**: `master`
-- **Last commit**: `242107a phase(13.5.3): inline button gates on 9 critical destructive actions`
-- **Test count**: 5061 vitest + 75 E2E (no E2E delta this session) = **5136 total tests passing** (+100 from session 3 EOD: 72 polish + 29 PT1 + 23 PS1 + 44 PB1 — minus 68 dedup overlap)
-- **Build**: clean. **BackendDashboard chunk: 920 KB → 924 KB (+4 KB / +0.5%)** after permission system + dompurify (negligible bundle impact)
-- **Deploy state**: ⚠️ **4 commits ahead of prod** — production still at `093d4d9` (last V15 combined deploy 2026-04-26 EOD); pending "deploy" command for current 4 commits per V18 lesson
+- **Last commit**: `0c4a90d phase(13.2.16): legacy StaffSchedulesTab cleanup — list-view deleted`
+- **Test count**: ~5190 vitest passing (+ 234 schedule-domain tests across SR/DST/EST/MS/TDP/AFC/SC/MM/SD; -105 deleted list-view UI tests; net +129)
+- **Build**: clean. BackendDashboard chunk ~925 KB
+- **Deploy state**: ⚠️ **14 commits ahead of prod** — production still at `093d4d9` (last V15 deploy EOD session 3); pending "deploy" command per V18 lesson
   - Vercel: `093d4d9` aliased to https://lover-clinic-app.vercel.app
-  - Firestore rules: v10 (UNCHANGED this session — no rules deploy needed unless user wants Phase 13.5.4 hard-gate later)
-  - **Pending deploy**: 4 commits (`02ee2ef → 242107a`) — user must say "deploy" THIS turn per V18
+  - Firestore rules: v10 (UNCHANGED — no rules deploy needed)
+  - **Pending deploy**: 14 commits (session 4: `02ee2ef → 242107a` — 5 commits + session 5: `3bf9f31 → 0c4a90d` — 10 commits + 1 docs)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **Chrome MCP**: Browser 1 connected (Windows, deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d`)
@@ -32,6 +32,29 @@
 - ✅ **Phase 14.1** — Document Templates System: 13 seeds + CRUD + print engine
 - ✅ **V14 + V15 + V16 + V17 logged** — Firestore-undefined-reject + combined-deploy + race-condition + mobile-resume reconnect
 - ✅ **Phase 14.2.A-E** — All 16 doc templates (9 with ProClinic-fidelity replication via Chrome MCP, 4 our-own designs, 3 deferred to Phase 16). F1-F16 test banks (255 tests).
+
+### Session 2026-04-26 session 5 (10 commits, `3bf9f31` → `0c4a90d`) — Phase 13.2.6-13.2.16 ProClinic schedule replication
+User directive: "ทำให้ระบบนี้ให้เหมือน proclinic เป๊ะๆ ไม่ต้องคิดเอง...ทั้งหน้า /admin/schedule/doctor และ /admin/schedule/employee แบบ 100% และ wiring ไปในส่วนที่จำเป็นเช่นส่วนการนัดหมาย ส่วนที่แจ้งว่าวันนี้หมอเข้ากี่คนห้องไหนบ้าง"
+
+Triangle capture (Phase 0): 3 ProClinic screenshots + opd.js intel + network analysis confirmed:
+- /admin/schedule/{doctor,employee} use month-calendar grid + per-staff right sidebar
+- Calendar shows ALL staff stacked per cell (color-coded)
+- Right sidebar has 3 sections: งานประจำสัปดาห์ (recurring) / งานรายวัน (override) / วันลา (leave)
+- /admin/appointment "แพทย์เข้าตรวจ N คน" panel sources from /admin/api/schedule/today (recurring shifts), NOT appointments
+
+What shipped:
+- ✅ **Phase 13.2.6** (`3bf9f31`) — schema extension: 'recurring' type + dayOfWeek field + mergeSchedulesForDate + getActiveSchedulesForDate + listenToScheduleByDay; 44 SR tests; checkAppointmentCollision rewired to honor recurring
+- ✅ **Phase 13.2.7** (`7ff124d`) — DoctorSchedulesTab calendar view + scheduling/* shared components (MonthCalendarGrid + ScheduleSidebarPanel + ScheduleEntryFormModal); nav entry doctor-schedules + permission gate; 29 DST tests
+- ✅ **Phase 13.2.8** (`5b2d4cb`) — EmployeeSchedulesTab calendar view (replaces list-view StaffSchedulesTab); reuses scheduling/*; 25 EST tests
+- ✅ **Phase 13.2.9** (`b2e31bc`) — TodaysDoctorsPanel in AppointmentTab, schedule-derived (NOT appointment-derived); fixes the V21-class bug where doctors-with-no-bookings disappeared from the panel; 21 TDP tests
+- ✅ **Phase 13.2.10** (`e192b0c`) — AppointmentFormModal collision check honors recurring shifts (drops {startDate,endDate} filter that excluded recurring entries); 15 AFC tests
+- ✅ **Phase 13.2.7-bis HOTFIX** (`e574897`) — V22 user correction: calendar shows ALL staff stacked (not filtered to selected); chip text = "HH:MM-HH:MM <name>" per-staff color hash; sidebar still per-selected; 20 MS tests including V21-anti `data-testid` numeric-id-leak guard
+- ✅ **Phase 13.2.13** (`326ef6c`) — ProClinic schedule sync: api/proclinic/master action='syncSchedules' + brokerClient.syncSchedules + MasterDataTab "ตารางหมอ + พนักงาน" sync button; 27 SC tests
+- ✅ **Phase 13.2.14** (`a7bf674`) — migrateMasterStaffSchedulesToBe: FK-resolves proClinicStaffId via be_doctors first then be_staff; orphan reporting (no crash); MasterDataTab MIGRATE_TARGETS entry; 23 MM tests
+- ✅ **Phase 13.2.15** (`14f4feb`) — synced-data wiring E2E: 30 SD tests (pure pipeline simulator) + LIVE preview_eval verifying all 5 consumer paths read synced data correctly (Tue recurring / Wed leave-override-wins / collision-OK on Tue / collision-blocked-ลา on Wed / Sun panel name resolution)
+- ✅ **Phase 13.2.16** (`0c4a90d`) — legacy StaffSchedulesTab.jsx deleted (replaced by Doctor + Employee variants); 105 list-view UI tests deleted; 4 references updated
+
+V22 logged: multi-staff calendar correction (user caught: "ของเรามันแยกโชว์เวลาเลือกคนซึ่งผิด"). Source-grep tests previously passed because they only checked time format, not multi-staff render — added MS.C.4 explicit assertion that numeric staffId NEVER renders as visible chip text.
 
 ### Session 2026-04-26 session 4 (4 commits, `02ee2ef` → `242107a`) — Polish batch + Phase 13.5 permission system
 - ✅ **P1 Polish batch** (`02ee2ef`) — DocumentPrintModal DOMPurify XSS + safeImgTag URL allowlist (27 PX1 tests) + FileUploadField URL.revokeObjectURL leak fix (15 FU1 tests) + RequiredAsterisk amber-500 component migrating 39 inline asterisks across 17 backend modals (14 RA1 tests) + ChartTemplateSelector 19 hardcoded colors → CSS vars (16 CT1 tests). 72 new tests; +21 KB BackendDashboard from dompurify. **NOT YET DEPLOYED.**
