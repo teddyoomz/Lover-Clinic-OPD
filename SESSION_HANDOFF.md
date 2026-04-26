@@ -7,22 +7,19 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 13 — V33 + V33.2 Customer Create page DEPLOYED
+- **Date last updated**: 2026-04-27 session 13 — V33.3 Edit Customer page + profile card surgery DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `b4326c3 feat(customer): V33.2 — modal→full-page + DateField + simplified blood types + receipt wiring + cleanup helper`
-- **Test count**: **1279** focused (+183 since s12: V33 159 + V33.2 24)
-- **Build**: clean. BackendDashboard chunk ~991 KB
-- **Deploy state**: ✅ **PRODUCTION = `b4326c3`** (V15 combined deploy session 13 — V33 + V33.2 LIVE)
-  - Vercel: `lover-clinic-621zzs42r-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (52s)
-  - Firestore rules: **v17 LIVE** (added be_customer_counter)
-  - Storage rules: **migrated to V26 isClinicStaff() claim-based** (V33.2 catch-up — was still using email regex since project init)
-  - Probe-Deploy-Probe: pre 5/5 + 2 negative = GREEN, post 5/5 + 2 negative + storage S1 = GREEN
-  - Cleanup: pc_appointments DELETE x 2 + clinic_settings strip x 2 = 4/4 = 200
-  - Production HTTP smoke: / + ?session= + ?patient= = 3/3 = 200
-  - **53 test customers cleaned** via deleteCustomerDocOnly helper (425 → 372; 0 remaining matching criteria)
-- **Rule B probe list now**: 7 endpoints + 3 negative (be_customer_counter + be_customers + storage be_customers path)
+- **Last commit**: `2cc67ef feat(customer): V33.3 — Edit Customer page + profile card surgery`
+- **Test count**: **1302** focused (+206 since s12: V33 159 + V33.2 24 + V33.3 23)
+- **Build**: clean. BackendDashboard chunk ~987 KB
+- **Deploy state**: ✅ **PRODUCTION = `2cc67ef`** (V15 combined deploy session 13 final — V33.3 LIVE)
+  - Vercel: `lover-clinic-ncn9butvf-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (55s)
+  - Firestore rules: v17 LIVE (unchanged since V33 — re-deployed for Console-drift safety per V1/V9)
+  - Storage rules: V26 claim-based (unchanged — re-deployed)
+  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, cleanup 4/4 = 200, smoke 3/3 = 200 (incl. /?customer=LC-26000001 = 200)
+- **Rule B probe list permanent**: 7 endpoints + 3 negative
 - **Production URL**: https://lover-clinic-app.vercel.app
-- **Remote sync**: master = origin/master ✅ (everything pushed; deploy verified)
+- **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
 
 ### Session 2026-04-27 session 12 EOD (4 commits, `203581f` → `66ab18b`) — V32-tris-ter-fix + V32-tris-quater LINE OA completion

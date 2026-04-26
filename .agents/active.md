@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-27 (s13 EOD — V33 + V33.2 Customer create page DEPLOYED)"
-status: "Production = b4326c3 LIVE. Manual customer creation working end-to-end. Backend full-page takeover; receipt info wired into SalePrintView+QuotationPrintView. 53 test customers cleaned (425→372)."
+updated_at: "2026-04-27 (s13 EOD — V33 + V33.2 + V33.3 Customer create + Edit page DEPLOYED)"
+status: "Production = 2cc67ef LIVE. Manual customer create + edit pages both working end-to-end. Edit Customer page mirrors ProClinic /admin/customer/{id}/edit. Profile card surgery: nationalId/nationality display fixed + Edit/LINE buttons relocated."
 current_focus: "Idle. All s13 work deployed + verified. Ready for user QA / next feature."
 branch: "master"
-last_commit: "b4326c3"
-tests: 1279
+last_commit: "2cc67ef"
+tests: 1302
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "b4326c3"
+production_commit: "2cc67ef"
 firestore_rules_version: 17
 storage_rules_version: 2
 ---
@@ -14,22 +14,25 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `b4326c3`, **1279** focused vitest pass (~5200 in `tests/extended/` opt-in)
-- Production = `b4326c3` LIVE. **Firestore rules v17 LIVE** (added be_customer_counter). **Storage rules migrated to V26 claim-based isClinicStaff()** (V33.2 catch-up).
-- Working tree clean. Build clean. V15 combined deploy verified: pre 7/7 = 200/403 + post 7/7 = 200/403 + storage neg 403 + cleanup 4/4 + smoke 3/3.
+- master = `2cc67ef`, **1302** focused vitest pass (~5200 in `tests/extended/` opt-in)
+- Production = `2cc67ef` LIVE (vercel `lover-clinic-ncn9butvf` aliased to lover-clinic-app.vercel.app). Firestore rules v17 + storage rules V26 — unchanged since prior deploy.
+- V33.3 V15 combined deploy verified: pre 6/6 + 3/3 negative + post 6/6 + 3/3 negative + cleanup 4/4 + smoke 3/3 (incl. /?customer=LC-26000001 → 200).
+- Working tree clean. Build clean.
 
 ## What this session shipped (s13)
-2 commits (`1f0faff` → `b4326c3`). Detail in
+4 commits (`1f0faff` → `2cc67ef`). Detail in
 `.agents/sessions/2026-04-27-session13-customer-create.md` (to be written).
 
-- **V33** (`1f0faff`) — Backend "เพิ่มลูกค้า" Add Customer modal. Full ProClinic /admin/customer/create parity (89 fields, 7 sections, address cascade, profile + gallery uploads, customer-type/receipt toggles). New `addCustomer` orchestrator + HN counter `LC-YY######` + buildPatientDataFromForm camelCase mirror. Storage.rules V26 catch-up to claim-based gating.
-- **V33.2** (`b4326c3`) — Five user directives:
-  1. Modal → full-page CustomerCreatePage (BackendDashboard `creatingCustomer` takeover)
-  2. DateField for birthdate (rule 04)
-  3. Blood types simplified to ['', 'A', 'B', 'O', 'AB']
-  4. Receipt info snapshot wired through SaleTab + QuotationFormModal → SalePrintView + QuotationPrintView (personal/company/inherit modes)
-  5. 53 test customers cleaned via NEW `deleteCustomerDocOnly` helper (425 → 372)
-- **183 new tests total** (1096 → 1279): V33 (159) + V33.2 (24).
+- **V33** (`1f0faff`) — Backend "เพิ่มลูกค้า" Add Customer modal. Full ProClinic /admin/customer/create parity. Storage.rules V26 catch-up.
+- **V33.2** (`b4326c3`) — Five user directives: modal→page, DateField, blood-types simplified, receipt-info snapshot wired, 53 test customers cleaned.
+- **V33.3** (`2cc67ef`) — Four user directives:
+  1. Edit Customer page (CustomerCreatePage dual-mode `mode='create'|'edit'` + `initialCustomer` prop)
+  2. Old "เลขบัตร" button + EditCustomerIdsModal removed (full-page edit replaces it)
+  3. Profile card data binding fixed: nationalId/nationalityCountry/passport read both legacy + canonical shapes
+  4. Edit + LINE buttons relocated into profile card (image-1 area)
+  - NEW backendClient helpers: `buildFormFromCustomer` (reverse mapper, BE→CE birthdate reconstruction) + `updateCustomerFromForm` (atomic update; preserves hn_no; rebuilds patientData mirror)
+  - BackendDashboard.editingCustomer state + takeover branch
+- **206 new tests total** (1096 → 1302): V33 (159) + V33.2 (24) + V33.3 (23).
 
 ## Next action
 None pending. If user wants to continue:
