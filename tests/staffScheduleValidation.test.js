@@ -33,13 +33,21 @@ describe('validateStaffScheduleStrict — required + enums (SS-1..SS-3)', () => 
   it('SV5: invalid type rejected', () => {
     expect(validateStaffScheduleStrict({ ...base(), type: 'bogus' })?.[0]).toBe('type');
   });
-  it('SV6: all 5 TYPE_OPTIONS accepted', () => {
+  it('SV6: all 6 TYPE_OPTIONS accepted (recurring + 5 per-date)', () => {
+    // Phase 13.2.6: TYPE_OPTIONS now includes 'recurring' (weekly shift,
+    // dayOfWeek instead of date). All other types remain per-date.
     for (const t of TYPE_OPTIONS) {
-      const f = base({ type: t });
-      if (t === 'work' || t === 'halfday') {
+      let f;
+      if (t === 'recurring') {
+        // recurring uses dayOfWeek + start/end; date forbidden
+        f = { ...base(), type: t, date: undefined, dayOfWeek: 1, startTime: '09:00', endTime: '18:00' };
+        delete f.date;
+      } else if (t === 'work' || t === 'halfday') {
+        f = base({ type: t });
         f.startTime = '09:00';
         f.endTime = '18:00';
       } else {
+        f = base({ type: t });
         f.startTime = '';
         f.endTime = '';
       }
@@ -200,9 +208,11 @@ describe('checkAppointmentCollision — Phase 13.2.4 helper', () => {
 });
 
 describe('frozen constants', () => {
-  it('SV26: TYPE_OPTIONS frozen with 5 entries', () => {
+  it('SV26: TYPE_OPTIONS frozen with 6 entries (recurring + 5 per-date)', () => {
+    // Phase 13.2.6 added 'recurring' for ProClinic-fidelity weekly shifts.
     expect(Object.isFrozen(TYPE_OPTIONS)).toBe(true);
-    expect(TYPE_OPTIONS.length).toBe(5);
+    expect(TYPE_OPTIONS.length).toBe(6);
+    expect(TYPE_OPTIONS).toContain('recurring');
   });
   it('SV27: TYPE_LABEL has Thai labels', () => {
     expect(TYPE_LABEL.work).toBe('ทำงาน');

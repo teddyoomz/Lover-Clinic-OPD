@@ -7147,6 +7147,73 @@ export async function deleteStaffSchedule(scheduleId) {
 }
 
 /**
+ * Phase 13.2.6 — return the EFFECTIVE schedule for a single date, merging
+ * per-date overrides over recurring weekly shifts (override wins).
+ *
+ * Pure-data — fetches all be_staff_schedules then filters via the pure
+ * `mergeSchedulesForDate` helper from staffScheduleValidation.js.
+ *
+ * @param {string} targetDate - YYYY-MM-DD
+ * @param {Array<string>} [staffIdsFilter]
+ * @returns {Promise<Array<{staffId, type, source, startTime, endTime, ...}>>}
+ */
+export async function getActiveSchedulesForDate(targetDate, staffIdsFilter) {
+  const { mergeSchedulesForDate } = await import('./staffScheduleValidation.js');
+  const all = await listStaffSchedules();
+  return mergeSchedulesForDate(targetDate, all, staffIdsFilter);
+}
+
+/**
+ * Phase 13.2.6 — live listener variant of getActiveSchedulesForDate. Fires
+ * the callback whenever ANY be_staff_schedules entry mutates. Caller is
+ * expected to debounce in their state setter (or use existing
+ * listener-cluster pattern). Returns unsub function.
+ *
+ * @param {string} targetDate - YYYY-MM-DD
+ * @param {(merged: Array) => void} onChange
+ * @param {Array<string>} [staffIdsFilter]
+ * @param {(err: Error) => void} [onError]
+ */
+export function listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onError) {
+  let timer = null;
+  const fire = (merged) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      try { onChange?.(merged); } catch (e) {
+        if (onError) onError(e);
+        else console.warn('[listenToScheduleByDay] handler threw', e);
+      }
+    }, 200);
+  };
+  // We have to import inside the closure to avoid a top-level circular
+  // import (staffScheduleValidation imports nothing from backendClient).
+  let mergeFn = null;
+  import('./staffScheduleValidation.js').then((m) => { mergeFn = m.mergeSchedulesForDate; });
+
+  const unsub = onSnapshot(
+    staffSchedulesCol(),
+    (snap) => {
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // mergeFn might still be loading on the very first snapshot — fall
+      // back to a sync require pattern if so. In practice the import
+      // resolves microtasks before the first snapshot, but be defensive.
+      if (!mergeFn) {
+        import('./staffScheduleValidation.js').then((m) => {
+          fire(m.mergeSchedulesForDate(targetDate, all, staffIdsFilter));
+        });
+        return;
+      }
+      fire(mergeFn(targetDate, all, staffIdsFilter));
+    },
+    (err) => { if (onError) onError(err); },
+  );
+  return () => {
+    if (timer) clearTimeout(timer);
+    unsub();
+  };
+}
+
+/**
  * Phase 13.1.4 — Convert a quotation into a be_sales draft.
  * OUR feature (not in ProClinic). Copies customer + line items + seller
  * into a new draft sale, then marks the quotation as 'converted' with
