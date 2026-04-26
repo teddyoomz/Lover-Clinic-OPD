@@ -26,3 +26,16 @@ export function useTabAccess() {
     first: (candidates) => firstAllowedTab(permissions, isAdmin, candidates),
   }), [isAdmin, permissions, loaded, groupName, bootstrap, hasPermission]);
 }
+
+/**
+ * Phase 13.5.3 — single-key permission check. Returns true when user is
+ * admin OR group.permissions[key] === true. Stable identity (referenced
+ * via context-derived hasPermission). Use for inline button gates:
+ *
+ *   const canCancel = useHasPermission('sale_cancel');
+ *   <button disabled={!canCancel} title={canCancel ? '' : 'ไม่มีสิทธิ์'}>...</button>
+ */
+export function useHasPermission(key) {
+  const { hasPermission } = useUserPermission();
+  return hasPermission(key);
+}

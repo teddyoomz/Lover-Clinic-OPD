@@ -7,6 +7,7 @@ import { Edit2, Trash2, CalendarX, Loader2, Repeat } from 'lucide-react';
 import { listenToHolidays, deleteHoliday } from '../../lib/backendClient.js';
 import HolidayFormModal from './HolidayFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import {
   STATUS_OPTIONS,
   HOLIDAY_TYPES,
@@ -33,6 +34,8 @@ export default function HolidaysTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate holiday delete on holiday_setting. Admin bypasses.
+  const canDelete = useHasPermission('holiday_setting');
 
   // Phase 14.7.H follow-up H (2026-04-26): replaced one-shot listHolidays
   // with onSnapshot via listenToHolidays. Multi-tab CRUD (admin A creates a
@@ -180,8 +183,9 @@ export default function HolidaysTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(g)} disabled={busy}
+                  <button onClick={() => handleDelete(g)} disabled={busy || !canDelete}
                     aria-label={`ลบวันหยุด ${g.note || id}`}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบวันหยุด' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

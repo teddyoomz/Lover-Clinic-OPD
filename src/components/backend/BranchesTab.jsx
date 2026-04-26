@@ -7,6 +7,7 @@ import { Edit2, Trash2, Building2, Loader2, Phone, MapPin, Star } from 'lucide-r
 import { listBranches, deleteBranch } from '../../lib/backendClient.js';
 import BranchFormModal from './BranchFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS } from '../../lib/branchValidation.js';
 
 const STATUS_BADGE = {
@@ -23,6 +24,8 @@ export default function BranchesTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate branch delete on branch_management. Admin bypasses.
+  const canDelete = useHasPermission('branch_management');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -151,8 +154,9 @@ export default function BranchesTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(b)} disabled={busy}
+                  <button onClick={() => handleDelete(b)} disabled={busy || !canDelete}
                     aria-label={`ลบสาขา ${b.name || ''}`}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบสาขา' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

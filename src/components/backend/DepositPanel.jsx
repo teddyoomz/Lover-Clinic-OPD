@@ -16,6 +16,7 @@ import { fmtThaiDate } from '../../lib/dateFormat.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
@@ -62,6 +63,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const inputCls = `w-full rounded-lg px-3 py-2 text-xs outline-none border transition-all ${isDark ? 'bg-[var(--bg-surface)] border-[var(--bd)] text-[var(--tx-primary)] focus:border-emerald-500' : 'bg-white border-gray-200 text-gray-800 focus:border-emerald-400'}`;
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
+  // Phase 13.5.3 — gate refund button on deposit_cancel. Admin bypasses.
+  const canRefund = useHasPermission('deposit_cancel');
 
   // ── List state ─────────────────────────────────────────────────────────
   const [deposits, setDeposits] = useState([]);
@@ -572,7 +575,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
             </div>
             <div className={`px-5 py-4 border-t flex justify-end gap-2 ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
               <button onClick={() => setRefundModal(null)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-[var(--bg-hover)] text-[var(--tx-muted)]' : 'bg-gray-100 text-gray-600'}`}>ปิด</button>
-              <button onClick={handleRefund} disabled={refundSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-700 text-white hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1.5">
+              <button onClick={handleRefund} disabled={refundSaving || !canRefund}
+                title={!canRefund ? 'ไม่มีสิทธิ์คืนมัดจำ' : undefined}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-700 text-white hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1.5">
                 {refundSaving ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
                 ยืนยันคืน
               </button>

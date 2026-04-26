@@ -5,6 +5,7 @@ import { Edit2, Trash2, Gift, Calendar, Loader2 } from 'lucide-react';
 import { listVouchers, deleteVoucher } from '../../lib/backendClient.js';
 import VoucherFormModal from './VoucherFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 
@@ -17,6 +18,8 @@ export default function VoucherTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate voucher delete on voucher_management.
+  const canDelete = useHasPermission('voucher_management');
 
   const ac = clinicSettings?.accentColor || '#dc2626';
   const isDark = resolveIsDark(theme);
@@ -104,7 +107,8 @@ export default function VoucherTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-sky-700/40 hover:text-sky-400 disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(v)} disabled={busy}
+                  <button onClick={() => handleDelete(v)} disabled={busy || !canDelete}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบ Voucher' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-red-700/40 hover:text-red-400 disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

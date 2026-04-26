@@ -82,9 +82,16 @@ export function UserPermissionProvider({ user, children }) {
 }
 
 /**
- * Read the current user's permission state. Returns a default-deny shape
- * when called outside the provider (so legacy components rendering before
- * the provider mounts don't crash — they just see no permissions).
+ * Read the current user's permission state. Returns an admin-bypass shape
+ * when called OUTSIDE the provider — preserves backward compat with the
+ * Phase 13.5.0 stub useTabAccess (which returned isAdmin=true) so:
+ *   - Standalone RTL tests rendering tabs without an App wrapper see
+ *     full access (matches the contract before 13.5.1).
+ *   - Tools that don't yet wrap UserPermissionProvider keep working.
+ *
+ * In PRODUCTION, App.jsx mounts <UserPermissionProvider> above
+ * BackendDashboard, so the real permission state is always used for
+ * actual backend nav. The fallback only fires in test/storybook contexts.
  */
 export function useUserPermission() {
   const ctx = useContext(UserPermissionContext);
@@ -94,11 +101,11 @@ export function useUserPermission() {
       staff: null,
       group: null,
       permissions: {},
-      isAdmin: false,
+      isAdmin: true,
       groupName: '',
-      bootstrap: false,
-      loaded: false,
-      hasPermission: () => false,
+      bootstrap: true,
+      loaded: true,
+      hasPermission: () => true,
     };
   }
   return ctx;

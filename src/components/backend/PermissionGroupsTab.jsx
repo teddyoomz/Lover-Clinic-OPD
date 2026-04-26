@@ -7,6 +7,7 @@ import { Edit2, Trash2, ShieldCheck, Loader2 } from 'lucide-react';
 import { listPermissionGroups, deletePermissionGroup } from '../../lib/backendClient.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import {
   STATUS_OPTIONS,
   ALL_PERMISSION_KEYS,
@@ -27,6 +28,9 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate delete on permission_group_management. Admin
+  // bypasses (useHasPermission returns true for admins).
+  const canDelete = useHasPermission('permission_group_management');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -152,8 +156,9 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(p)} disabled={busy}
+                  <button onClick={() => handleDelete(p)} disabled={busy || !canDelete}
                     aria-label={`ลบกลุ่มสิทธิ์ ${p.name || ''}`}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบกลุ่มสิทธิ์' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

@@ -5,6 +5,7 @@ import { Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
 import { listCoupons, deleteCoupon } from '../../lib/backendClient.js';
 import CouponFormModal from './CouponFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 import { thaiTodayISO } from '../../utils.js';
 
@@ -19,6 +20,8 @@ export default function CouponTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate coupon delete on coupon_management.
+  const canDelete = useHasPermission('coupon_management');
 
   const ac = clinicSettings?.accentColor || '#dc2626';
   const isDark = resolveIsDark(theme);
@@ -123,7 +126,8 @@ export default function CouponTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(c)} disabled={busy}
+                  <button onClick={() => handleDelete(c)} disabled={busy || !canDelete}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบคูปอง' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

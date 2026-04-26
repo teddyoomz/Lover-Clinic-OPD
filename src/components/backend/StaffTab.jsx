@@ -10,6 +10,7 @@ import { listStaff, deleteStaff } from '../../lib/backendClient.js';
 import { deleteAdminUser } from '../../lib/adminUsersClient.js';
 import StaffFormModal from './StaffFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS, POSITION_OPTIONS } from '../../lib/staffValidation.js';
 
 const STATUS_BADGE = {
@@ -27,6 +28,8 @@ export default function StaffTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate staff delete on user_management. Admin bypasses.
+  const canDelete = useHasPermission('user_management');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -171,8 +174,9 @@ export default function StaffTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(s)} disabled={busy}
+                  <button onClick={() => handleDelete(s)} disabled={busy || !canDelete}
                     aria-label={`ลบพนักงาน ${fullName}`}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบพนักงาน' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

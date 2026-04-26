@@ -10,6 +10,7 @@ import { Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
 import { listPromotions, deletePromotion } from '../../lib/backendClient.js';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 
 const STATUS_BADGE = {
@@ -32,6 +33,9 @@ export default function PromotionTab({ clinicSettings, theme }) {
   const [editingPromotion, setEditingPromotion] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate promotion delete on promotion_management. Admin
+  // bypasses (clinic_promotion_management is the broader admin scope).
+  const canDelete = useHasPermission('promotion_management');
 
   const ac = clinicSettings?.accentColor || '#dc2626';
   const isDark = resolveIsDark(theme);
@@ -191,7 +195,8 @@ export default function PromotionTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(p)} disabled={busy}
+                  <button onClick={() => handleDelete(p)} disabled={busy || !canDelete}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบโปรโมชัน' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>

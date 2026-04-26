@@ -8,6 +8,7 @@ import { listDoctors, deleteDoctor } from '../../lib/backendClient.js';
 import { deleteAdminUser } from '../../lib/adminUsersClient.js';
 import DoctorFormModal from './DoctorFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS, POSITION_OPTIONS } from '../../lib/doctorValidation.js';
 
 const STATUS_BADGE = {
@@ -30,6 +31,8 @@ export default function DoctorsTab({ clinicSettings, theme }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState('');
+  // Phase 13.5.3 — gate doctor delete on doctor_management. Admin bypasses.
+  const canDelete = useHasPermission('doctor_management');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -178,8 +181,9 @@ export default function DoctorsTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(d)} disabled={busy}
+                  <button onClick={() => handleDelete(d)} disabled={busy || !canDelete}
                     aria-label={`ลบ ${fullName}`}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบแพทย์' : undefined}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>
