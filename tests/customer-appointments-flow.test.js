@@ -299,13 +299,15 @@ describe('F6: AppointmentTab uses shared AppointmentFormModal (Phase 14.7.C)', (
     expect(src).not.toMatch(/from\s*['"][^'"]*DateField/);
   });
 
-  it('F6.3: no inline form state hooks remain (formData / formSaving / formError / customerSearch / doctors / staff)', () => {
+  it('F6.3: no inline FORM state hooks remain (formData / formSaving / formError / customerSearch)', () => {
+    // Phase 14.7.C moved form state into shared AppointmentFormModal.
+    // Note: `doctors` + `staff` state remain in AppointmentTab — they're
+    // used for the TodaysDoctorsPanel (sidebar display), NOT for the form.
+    // Both readers + writers of the form state must be gone.
     expect(src).not.toMatch(/setFormData/);
     expect(src).not.toMatch(/setFormSaving/);
     expect(src).not.toMatch(/setFormError/);
     expect(src).not.toMatch(/setCustomerSearch/);
-    expect(src).not.toMatch(/const\s*\[\s*doctors,\s*setDoctors\s*\]/);
-    expect(src).not.toMatch(/const\s*\[\s*staff,\s*setStaff\s*\]/);
   });
 
   it('F6.4: AppointmentFormModal rendered with skipStaffScheduleCheck={false} (preserve Phase 13.2.4 behavior)', () => {

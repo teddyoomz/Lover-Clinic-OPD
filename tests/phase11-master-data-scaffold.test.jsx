@@ -40,7 +40,9 @@ import {
 import ComingSoon from '../src/components/backend/ComingSoon.jsx';
 import { FolderTree, Wrench } from 'lucide-react';
 
-// Phase 11.1 stubs + Phase 12.1 people + Phase 13.2 staff-schedules + Phase 12.2 catalog + Phase 12.5 finance + Phase 13.3 df-groups.
+// Phase 11.1 stubs + Phase 12.1 people + Phase 13.2 staff-schedules +
+// Phase 13.2.7 doctor-schedules + Phase 12.2 catalog + Phase 12.5 finance +
+// Phase 13.3 df-groups + Phase 14.1 document templates.
 // Keep list append-only so sidebar ordering stays stable.
 const MASTER_STUB_IDS = [
   'product-groups',
@@ -51,6 +53,7 @@ const MASTER_STUB_IDS = [
   'permission-groups',
   'staff',
   'staff-schedules',
+  'doctor-schedules',
   'doctors',
   'products',
   'courses',
@@ -70,9 +73,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 15 items — 1 sync + 6 P11 + 2 P12.1 + 1 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 docs', () => {
+  it('M2 master section has exactly 16 items — 1 sync + 6 P11 + 2 P12.1 + 2 P13.2 (staff+doctor schedules) + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 docs', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(15);
+    expect(master.items.length).toBe(16);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 

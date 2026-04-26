@@ -52,6 +52,14 @@ vi.mock('../src/lib/backendClient.js', () => ({
     );
     return () => {};
   },
+  // Phase 13.2.6+ — schedule + doctor list dependencies on AppointmentTab
+  // (TodaysDoctorsPanel + collision check). Empty results are fine for W
+  // tests which only exercise the holiday banner branch.
+  listenToScheduleByDay: (_dow, onChange) => {
+    if (onChange) onChange([]);
+    return () => {};
+  },
+  listDoctors: vi.fn(() => Promise.resolve([])),
 }));
 
 describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {

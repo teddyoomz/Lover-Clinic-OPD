@@ -4,17 +4,48 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { fakeAuth } = vi.hoisted(() => ({
-  fakeAuth: {
+// V31 (2026-04-26) — added getUserByEmail + revokeRefreshTokens (and
+// firebase-admin/firestore mock) so handleCreate orphan recovery + handleUpdate
+// credential-change revoke can run end-to-end against the mocked SDK.
+const { fakeAuth, fakeFirestore } = vi.hoisted(() => {
+  const fakeAuth = {
     verifyIdToken: vi.fn(),
     listUsers: vi.fn(),
     getUser: vi.fn(),
+    getUserByEmail: vi.fn(),
     createUser: vi.fn(),
     updateUser: vi.fn(),
     deleteUser: vi.fn(),
     setCustomUserClaims: vi.fn(),
-  },
-}));
+    revokeRefreshTokens: vi.fn(async () => undefined),
+  };
+  // V31 — minimal Firestore mock so findStaffOrDoctorByFirebaseUid +
+  // setPermission group lookup can run without crashing the module.
+  // Tests that don't exercise these paths get the default empty-collection
+  // result; tests that need cross-ref must override per-test.
+  const emptySnap = { empty: true, docs: [] };
+  const queryStub = {
+    where: () => queryStub,
+    limit: () => queryStub,
+    get: vi.fn(async () => emptySnap),
+  };
+  const collectionStub = {
+    doc: () => collectionStub,
+    collection: () => collectionStub,
+    where: queryStub.where,
+    limit: queryStub.limit,
+    get: vi.fn(async () => ({ exists: false, data: () => null })),
+  };
+  // Glue it together so collection().doc().collection().doc().collection()
+  // chain resolves; `.where().limit().get()` returns empty
+  collectionStub.doc = () => ({ ...collectionStub, collection: () => collectionStub });
+  collectionStub.collection = () => collectionStub;
+  collectionStub.where = () => queryStub;
+  const fakeFirestore = {
+    collection: () => collectionStub,
+  };
+  return { fakeAuth, fakeFirestore };
+});
 
 vi.mock('firebase-admin/app', () => ({
   initializeApp: vi.fn(() => ({})),
@@ -25,6 +56,10 @@ vi.mock('firebase-admin/app', () => ({
 
 vi.mock('firebase-admin/auth', () => ({
   getAuth: vi.fn(() => fakeAuth),
+}));
+
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: vi.fn(() => fakeFirestore),
 }));
 
 const { default: handler } = await import('../api/admin/users.js');

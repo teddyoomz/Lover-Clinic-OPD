@@ -17,10 +17,19 @@
 
 import { getAdminAuth, verifyAdminToken, isBootstrapAdmin } from './_lib/adminAuth.js';
 import { getFirestore } from 'firebase-admin/firestore';
+import { decideOrphanRecovery, decisionToErrorMessage } from './_lib/orphanRecovery.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD = 6;
 const APP_ID = 'loverclinic-opd-4c39b';
+
+// V31 (2026-04-26) — OWNER_EMAILS + clinic-domain regex for orphan recovery
+// MUST stay in sync with src/lib/ownerEmails.js + api/admin/bootstrap-self.js.
+// Audit grep: `grep -n "OWNER_EMAILS" src/lib/ownerEmails.js api/admin/bootstrap-self.js api/admin/users.js`
+const OWNER_EMAILS = [
+  'oomz.peerapat@gmail.com',
+];
+const LOVERCLINIC_EMAIL_RE = /@loverclinic\.com$/i;
 
 // V28-tris (2026-04-26) — Firestore Admin SDK accessor for group lookup
 // in setPermission. Reuses the firebase-admin app initialized by adminAuth.js.
@@ -72,6 +81,34 @@ async function handleGet(auth, params) {
   return serializeUser(user);
 }
 
+// V31 (2026-04-26) — find any be_staff or be_doctors doc that references
+// the given Firebase Auth uid. Returns { role, id } or null.
+async function findStaffOrDoctorByFirebaseUid(uid) {
+  if (!uid) return null;
+  const db = getAdminFirestore();
+  const dataRef = db
+    .collection('artifacts').doc(APP_ID)
+    .collection('public').doc('data');
+
+  // Check be_staff first (most common)
+  const staffSnap = await dataRef.collection('be_staff')
+    .where('firebaseUid', '==', uid).limit(1).get();
+  if (!staffSnap.empty) {
+    const doc = staffSnap.docs[0];
+    return { role: 'staff', id: doc.data()?.staffId || doc.id };
+  }
+
+  // Check be_doctors
+  const doctorSnap = await dataRef.collection('be_doctors')
+    .where('firebaseUid', '==', uid).limit(1).get();
+  if (!doctorSnap.empty) {
+    const doc = doctorSnap.docs[0];
+    return { role: 'doctor', id: doc.data()?.doctorId || doc.id };
+  }
+
+  return null;
+}
+
 async function handleCreate(auth, params) {
   const email = String(params.email || '').trim();
   const password = String(params.password || '');
@@ -81,7 +118,45 @@ async function handleCreate(auth, params) {
   if (!EMAIL_RE.test(email)) throw new Error('invalid email format');
   if (password.length < MIN_PASSWORD) throw new Error(`password must be at least ${MIN_PASSWORD} characters`);
 
-  const user = await auth.createUser({ email, password, displayName, disabled });
+  let user;
+  try {
+    user = await auth.createUser({ email, password, displayName, disabled });
+  } catch (err) {
+    // V31 (2026-04-26) — orphan Firebase Auth recovery on create.
+    // User report: deleted staff but Firebase Auth user wasn't (silent
+    // catch in StaffTab.handleDelete). Recreate with same email then
+    // throws auth/email-already-exists. Auto-recover when safe.
+    if (err?.code !== 'auth/email-already-exists') throw err;
+
+    const existing = await auth.getUserByEmail(email).catch(() => null);
+    if (!existing) {
+      // Race: user vanished between throw + lookup. Retry create once.
+      user = await auth.createUser({ email, password, displayName, disabled });
+    } else {
+      const crossRef = await findStaffOrDoctorByFirebaseUid(existing.uid);
+      const decision = decideOrphanRecovery({
+        email,
+        existingUid: existing.uid,
+        crossRef,
+        ownerEmails: OWNER_EMAILS,
+        clinicEmailRegex: LOVERCLINIC_EMAIL_RE,
+      });
+
+      if (decision === 'recover') {
+        // Orphan: no be_staff/be_doctors references uid AND not owner/clinic.
+        // eslint-disable-next-line no-console
+        console.log(`[handleCreate V31] orphan recovery: deleting orphan uid=${existing.uid} email=${email}`);
+        await auth.deleteUser(existing.uid);
+        user = await auth.createUser({ email, password, displayName, disabled });
+      } else {
+        const message = decisionToErrorMessage(decision, { email, crossRef });
+        const e = new Error(message || 'email already in use');
+        e.code = 'auth/email-already-exists';
+        e.recovery = decision;
+        throw e;
+      }
+    }
+  }
 
   if (params.makeAdmin === true) {
     await auth.setCustomUserClaims(user.uid, { admin: true });
@@ -110,7 +185,67 @@ async function handleUpdate(auth, params) {
 
   if (Object.keys(update).length === 0) throw new Error('no update fields provided — at least one field required');
 
-  const user = await auth.updateUser(uid, update);
+  // V31 (2026-04-26) — credential-change flow with orphan recovery + revoke.
+  // User directive: "เวลามีการเปลี่ยน id ในพนักงานคนเดิม id เดิม ก็ต้อง
+  // ใช้ไม่ได้ด้วย" + "การเปลี่ยนรหัส หรือแก้ไขอื่นๆก็ต้องรองรับและ
+  // ทำงานได้สมบูรณ์ด้วย".
+  let user;
+  try {
+    user = await auth.updateUser(uid, update);
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') {
+      // Stale firebaseUid in be_staff/be_doctors — give actionable error
+      throw new Error(`Firebase user ${uid} ไม่พบ — บัญชีอาจถูกลบไปแล้ว ให้ล้างค่า firebaseUid ในข้อมูลพนักงาน/แพทย์ แล้วสร้าง Firebase ใหม่`);
+    }
+    // Orphan recovery on email change — mirrors handleCreate logic
+    if (err?.code === 'auth/email-already-exists' && update.email !== undefined) {
+      const existing = await auth.getUserByEmail(update.email).catch(() => null);
+      if (!existing || existing.uid === uid) {
+        // Race or self-collision: retry update once
+        user = await auth.updateUser(uid, update);
+      } else {
+        const crossRef = await findStaffOrDoctorByFirebaseUid(existing.uid);
+        const decision = decideOrphanRecovery({
+          email: update.email,
+          existingUid: existing.uid,
+          crossRef,
+          ownerEmails: OWNER_EMAILS,
+          clinicEmailRegex: LOVERCLINIC_EMAIL_RE,
+        });
+        if (decision === 'recover') {
+          // eslint-disable-next-line no-console
+          console.log(`[handleUpdate V31] orphan recovery on email change: deleting orphan uid=${existing.uid} email=${update.email}`);
+          await auth.deleteUser(existing.uid);
+          user = await auth.updateUser(uid, update);
+        } else {
+          const message = decisionToErrorMessage(decision, { email: update.email, crossRef });
+          const e = new Error(message || 'email already in use');
+          e.code = 'auth/email-already-exists';
+          e.recovery = decision;
+          throw e;
+        }
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  // V31 (2026-04-26) — revoke refresh tokens on ANY credential change
+  // (email, password, or disabled flag). Without this:
+  //   - Old email's existing session keeps working for ~1h after admin
+  //     changed email
+  //   - Old password's existing session keeps working for ~1h after reset
+  //   - Disabled user retains active session for ~1h until token refresh
+  // verifyIdToken(token, true) called by /api/admin/* checks revocation
+  // timestamp, so revoked tokens are rejected immediately on next API call.
+  const credentialsChanged =
+    update.email !== undefined ||
+    update.password !== undefined ||
+    update.disabled !== undefined;
+  if (credentialsChanged) {
+    await auth.revokeRefreshTokens(uid);
+  }
+
   return serializeUser(user);
 }
 
@@ -118,8 +253,18 @@ async function handleDelete(auth, params, caller) {
   const uid = String(params.uid || '').trim();
   if (!uid) throw new Error('uid required');
   if (uid === caller.uid) throw new Error('cannot delete own account');
-  await auth.deleteUser(uid);
-  return { uid, deleted: true };
+  // V31 (2026-04-26) — tolerate already-gone Firebase Auth users so
+  // admin can still complete Firestore cleanup of orphan be_staff/
+  // be_doctors docs whose firebaseUid no longer resolves.
+  try {
+    await auth.deleteUser(uid);
+    return { uid, deleted: true };
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') {
+      return { uid, deleted: false, alreadyGone: true };
+    }
+    throw err;
+  }
 }
 
 async function handleGrantAdmin(auth, params) {
@@ -145,6 +290,10 @@ async function handleRevokeAdmin(auth, params, caller) {
   const claims = { ...(existing.customClaims || {}) };
   delete claims.admin;
   await auth.setCustomUserClaims(uid, claims);
+  // V31 (2026-04-26) — revoke refresh tokens so removed admin claim takes
+  // effect within 1h ID-token TTL. Without this, old admin sessions retain
+  // admin privileges until manual sign-out.
+  await auth.revokeRefreshTokens(uid);
   return serializeUser(await auth.getUser(uid));
 }
 
@@ -218,6 +367,11 @@ async function handleSetPermission(auth, params) {
   }
 
   await auth.setCustomUserClaims(uid, claims);
+  // V31 (2026-04-26) — revoke refresh tokens so new permissionGroupId claim
+  // takes effect within 1h ID-token TTL (otherwise group change is invisible
+  // to a logged-in user until their token expires). Aligns with user
+  // directive "id เดิม ก็ต้องใช้ไม่ได้" — old permissions stop applying.
+  await auth.revokeRefreshTokens(uid);
   return serializeUser(await auth.getUser(uid));
 }
 
@@ -236,6 +390,9 @@ async function handleClearPermission(auth, params, caller) {
   delete claims.isClinicStaff;
   delete claims.permissionGroupId;
   await auth.setCustomUserClaims(uid, claims);
+  // V31 (2026-04-26) — revoke refresh tokens so cleared claims take effect
+  // immediately (next API call rejected with auth/id-token-revoked).
+  await auth.revokeRefreshTokens(uid);
   return serializeUser(await auth.getUser(uid));
 }
 

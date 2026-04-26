@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, User, Loader2, Mail, ShieldCheck, Ban } from 'lucide-react';
+import { auth } from '../../firebase.js';
 import { listStaff, deleteStaff } from '../../lib/backendClient.js';
 import { deleteAdminUser } from '../../lib/adminUsersClient.js';
 import StaffFormModal from './StaffFormModal.jsx';
@@ -66,6 +67,14 @@ export default function StaffTab({ clinicSettings, theme }) {
     const id = s.staffId || s.id;
     const name = `${s.firstname || ''} ${s.lastname || ''}`.trim() || 'พนักงาน';
     const hasFbUser = !!s.firebaseUid;
+    // V31 (2026-04-26) — block self-delete per user directive "ห้ามลบตัวเอง
+    // ป้องกันปัญหา". Server-side handleDelete already rejects with "cannot
+    // delete own account" but failing fast on the client gives clearer UX.
+    const currentUid = auth?.currentUser?.uid || '';
+    if (hasFbUser && currentUid && s.firebaseUid === currentUid) {
+      setError('ไม่สามารถลบบัญชีของตัวเองได้ — ป้องกันการล็อคตัวเองออกจากระบบ');
+      return;
+    }
     const msg = hasFbUser
       ? `ลบพนักงาน "${name}" ?\n\nจะลบทั้ง Firestore + Firebase Auth account\n(ย้อนไม่ได้)`
       : `ลบพนักงาน "${name}" ?\n\nลบจาก Firestore — ย้อนไม่ได้`;
@@ -74,8 +83,21 @@ export default function StaffTab({ clinicSettings, theme }) {
     setError('');
     try {
       if (hasFbUser) {
-        try { await deleteAdminUser(s.firebaseUid); }
-        catch (e) { console.warn('[StaffTab] Firebase delete failed (continuing with Firestore delete):', e.message); }
+        // V31 (2026-04-26) — surface Firebase Auth deletion errors instead
+        // of silently swallowing. Old behaviour created orphan Firebase
+        // Auth users (login still worked, email blocked re-creation). Server
+        // tolerates auth/user-not-found via alreadyGone:true. Anything else
+        // = real error → abort + surface so admin can retry.
+        try {
+          await deleteAdminUser(s.firebaseUid);
+        } catch (fbErr) {
+          const fbMsg = fbErr?.message || '';
+          const alreadyGone = /user-not-found|user does not exist|no user record/i.test(fbMsg);
+          if (!alreadyGone) {
+            throw new Error(`ลบ Firebase account ล้มเหลว: ${fbMsg}\nลองอีกครั้ง — ถ้ายังพังให้แจ้ง admin`);
+          }
+          console.warn('[StaffTab V31] Firebase user already gone — proceeding with Firestore delete');
+        }
       }
       await deleteStaff(id);
       await reload();
@@ -128,6 +150,9 @@ export default function StaffTab({ clinicSettings, theme }) {
             const statusCfg = STATUS_BADGE[s.status || 'ใช้งาน'] || STATUS_BADGE['ใช้งาน'];
             const busy = deleting === id;
             const fullName = `${s.firstname || ''} ${s.lastname || ''}`.trim();
+            // V31 — self-row detection for delete-button gate
+            const currentUid = auth?.currentUser?.uid || '';
+            const isSelfRow = !!(s.firebaseUid && currentUid && s.firebaseUid === currentUid);
 
             return (
               <div key={id} data-testid={`staff-card-${id}`}
@@ -174,9 +199,10 @@ export default function StaffTab({ clinicSettings, theme }) {
                     className="flex-1 px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-sky-700/40 hover:text-sky-400 transition-all disabled:opacity-50">
                     <Edit2 size={12} /> แก้ไข
                   </button>
-                  <button onClick={() => handleDelete(s)} disabled={busy || !canDelete}
+                  <button onClick={() => handleDelete(s)} disabled={busy || !canDelete || isSelfRow}
                     aria-label={`ลบพนักงาน ${fullName}`}
-                    title={!canDelete ? 'ไม่มีสิทธิ์ลบพนักงาน' : undefined}
+                    data-self-row={isSelfRow ? 'true' : undefined}
+                    title={!canDelete ? 'ไม่มีสิทธิ์ลบพนักงาน' : (isSelfRow ? 'ไม่สามารถลบบัญชีของตัวเองได้' : undefined)}
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>
