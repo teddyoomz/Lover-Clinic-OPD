@@ -1,21 +1,28 @@
-// ─── useTabAccess — Phase 13.5 scaffolding hook ───────────────────────────
-// Returns the current user's tab-access context. TODO: when Firebase custom
-// claims integration lands (follow-on Phase), swap the stub for a real read
-// of claims + user's be_permission_groups doc.
+// ─── useTabAccess — Phase 13.5.1 wired ─────────────────────────────────────
+// Returns the current user's tab-access context. Reads from
+// UserPermissionContext (provider mounted in App.jsx above BackendDashboard
+// route) and forwards to the pure tabPermissions helpers.
 //
-// Current behaviour: treat every authenticated user as admin. This preserves
-// existing UX while letting components adopt the `canAccess` API so we can
-// flip the switch in one place later.
+// Outside the provider (or when context is loading) → all-deny defaults.
+// Bootstrap admins (@loverclinic.com user with no be_staff doc) get full
+// access so the first staff member can wire up their own permission group.
 
 import { useMemo } from 'react';
 import { canAccessTab, filterAllowedTabs, firstAllowedTab } from '../lib/tabPermissions.js';
+import { useUserPermission } from '../contexts/UserPermissionContext.jsx';
 
 export function useTabAccess() {
+  const { isAdmin, permissions, loaded, hasPermission, groupName, bootstrap } = useUserPermission();
+
   return useMemo(() => ({
-    isAdmin: true, // TODO: replace with Firebase custom claim `admin` lookup
-    permissions: {}, // TODO: populate from user's be_permission_groups/{user.permissionGroupId}
-    canAccess: (tabId) => canAccessTab(tabId, {}, true),
-    filter: (tabIds) => filterAllowedTabs(tabIds, {}, true),
-    first: (candidates) => firstAllowedTab({}, true, candidates),
-  }), []);
+    isAdmin,
+    permissions,
+    loaded,
+    groupName,
+    bootstrap,
+    hasPermission,
+    canAccess: (tabId) => canAccessTab(tabId, permissions, isAdmin),
+    filter: (tabIds) => filterAllowedTabs(tabIds, permissions, isAdmin),
+    first: (candidates) => firstAllowedTab(permissions, isAdmin, candidates),
+  }), [isAdmin, permissions, loaded, groupName, bootstrap, hasPermission]);
 }

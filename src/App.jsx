@@ -3,6 +3,7 @@ import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
+import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
 // DEBUG: expose auth for console API calls (DEV ONLY — Vite tree-shakes
 // the entire `if` block in prod builds; closes Rule C2 security exposure
 // surfaced by pre-Phase-15 survey scout 2026-04-26).
@@ -209,9 +210,16 @@ export default function App() {
     return <AdminLogin auth={auth} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />;
   }
 
-  // Backend Dashboard — opens in a new browser tab
+  // Backend Dashboard — opens in a new browser tab.
+  // UserPermissionProvider wraps so any descendant (BackendNav, tabs,
+  // critical-action buttons) can call useUserPermission() / useTabAccess()
+  // to gate visibility + actions. Phase 13.5.1.
   if (backendMode === '1') {
-    return <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>;
+    return (
+      <UserPermissionProvider user={user}>
+        <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
+      </UserPermissionProvider>
+    );
   }
 
   return (

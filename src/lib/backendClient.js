@@ -5510,6 +5510,80 @@ export async function deletePermissionGroup(permissionGroupId) {
   await deleteDoc(permissionGroupDoc(id));
 }
 
+/**
+ * Phase 13.5.1 — chained listener for the current user's permission state.
+ * Subscribes to be_staff/{uid} and (when staff.permissionGroupId is set)
+ * be_permission_groups/{groupId}. Fires `onChange({ staff, group })` on any
+ * mutation to either doc.
+ *
+ * Pattern follows Phase 14.7.H listener-cluster: 200ms debounce coalesces
+ * rapid changes to avoid React re-render storms.
+ *
+ * Returns an unsubscribe function that tears down BOTH listeners.
+ *
+ * @param {string} uid - Firebase user uid; if empty, listener returns no-op
+ * @param {(state: { staff: object | null, group: object | null }) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ */
+export function listenToUserPermissions(uid, onChange, onError) {
+  if (!uid || typeof uid !== 'string') {
+    // No uid — fire empty state once and return no-op unsub
+    Promise.resolve().then(() => onChange?.({ staff: null, group: null }));
+    return () => {};
+  }
+  let lastStaff = null;
+  let lastGroup = null;
+  let groupUnsub = null;
+  let currentGroupId = null;
+  let debounceTimer = null;
+
+  const fire = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      try { onChange?.({ staff: lastStaff, group: lastGroup }); } catch (e) {
+        if (onError) onError(e);
+        else console.warn('[listenToUserPermissions] onChange handler threw', e);
+      }
+    }, 200);
+  };
+
+  const subscribeToGroup = (groupId) => {
+    if (groupUnsub) { groupUnsub(); groupUnsub = null; }
+    lastGroup = null;
+    if (!groupId) { fire(); return; }
+    groupUnsub = onSnapshot(
+      permissionGroupDoc(groupId),
+      (gsnap) => {
+        lastGroup = gsnap.exists() ? { id: gsnap.id, ...gsnap.data() } : null;
+        fire();
+      },
+      (err) => { if (onError) onError(err); }
+    );
+  };
+
+  const staffUnsub = onSnapshot(
+    staffDoc(uid),
+    (snap) => {
+      lastStaff = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      const newGroupId = lastStaff?.permissionGroupId || null;
+      if (newGroupId !== currentGroupId) {
+        currentGroupId = newGroupId;
+        subscribeToGroup(newGroupId);
+      } else {
+        // Same group ref — staff metadata changed but listener carries on
+        fire();
+      }
+    },
+    (err) => { if (onError) onError(err); }
+  );
+
+  return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    staffUnsub();
+    if (groupUnsub) groupUnsub();
+  };
+}
+
 // ─── Phase 11.8b: Bulk-import master_data/* → be_* (DEV scaffolding) ─────────
 // Each migrator reads `master_data/{type}/items/*` and writes to the
 // corresponding `be_*` collection. Called from MasterDataTab's "นำเข้า" button
