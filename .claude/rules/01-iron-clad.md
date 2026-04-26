@@ -11,14 +11,25 @@
 2. `curl -X PATCH .../pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
 3. `curl -X PATCH .../clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
 4. `curl -X PATCH .../clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
-5. **NEW V23 (2026-04-26)** — anon Firebase auth + PATCH opd_sessions whitelisted field:
+5. **NEW V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
    ```
    # Step A: provision anonymous ID token
    ANON_TOKEN=$(curl -s -X POST \
      "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$FIREBASE_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"returnSecureToken":true}' | jq -r .idToken)
-   # Step B: PATCH a whitelisted field on a real or test opd_sessions doc
+   # Step B: CREATE probe doc with isArchived=true + status=completed
+   #         CRITICAL (V27 lesson): MUST set isArchived:true OR status:'completed'
+   #         on CREATE. Old pattern (status:'pending') made probes appear in
+   #         the patient queue UI as "ไม่ระบุชื่อ" entries → user reported
+   #         "มึงมาเทสสร้างเหี้ยไรหน้านี้แล้วทำไมไม่ลบ ากปรกเกะกะ เลอะเทะ".
+   #         Anon CREATE has NO field whitelist (allow create: if true) so
+   #         we can set staff-only fields like isArchived on creation.
+   curl -X POST ".../opd_sessions?documentId=test-probe-anon-$(date +%s)" \
+     -H "Authorization: Bearer $ANON_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"fields":{"status":{"stringValue":"completed"},"isArchived":{"booleanValue":true},"patientData":{"mapValue":{"fields":{}}}}}'
+   # Step C: PATCH a whitelisted field — proves V23 hasOnly path works
    curl -X PATCH ".../opd_sessions/test-probe-anon-$(date +%s)?updateMask.fieldPaths=isUnread" \
      -H "Authorization: Bearer $ANON_TOKEN" \
      -H "Content-Type: application/json" \
@@ -28,7 +39,14 @@
    ```
 6. `firebase deploy --only firestore:rules`
 7. รัน probe 1-5 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-8. ลบ probe docs ทิ้ง + PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field (sentinel ไม่ให้ปนกับ cookies จริง) + DELETE opd_sessions test-probe-anon doc
+8. ลบ probe docs ทิ้ง:
+   - DELETE `pc_appointments/test-probe-{TS}` x 2 (anon allowed)
+   - PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field
+   - DELETE `chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
+   - DELETE `opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
+     → For periodic admin cleanup: PermissionGroupsTab "ลบ test-probe ค้าง" button
+     → Calls `/api/admin/cleanup-test-probes` (admin-only, firebase-admin Firestore SDK)
+   - V27 fix: CREATE step now uses isArchived=true so docs hide from queue UI even before cleanup
 
 **Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)

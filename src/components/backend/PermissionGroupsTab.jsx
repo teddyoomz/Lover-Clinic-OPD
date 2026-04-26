@@ -3,9 +3,9 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound, Shield } from 'lucide-react';
+import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound, Shield, Eraser } from 'lucide-react';
 import { listPermissionGroups, deletePermissionGroup, listStaff } from '../../lib/backendClient.js';
-import { setUserPermission, bootstrapSelfAsAdmin } from '../../lib/adminUsersClient.js';
+import { setUserPermission, bootstrapSelfAsAdmin, cleanupTestProbes } from '../../lib/adminUsersClient.js';
 import { auth } from '../../firebase.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -197,8 +197,40 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
     }
   };
 
+  // ─── V27 — Cleanup test-probe-anon-* docs from queue ─────────────────
+  // Rule B probe protocol creates opd_sessions docs we can't anon-delete
+  // (rule blocks). Old probe pattern (status='pending') made them visible.
+  // V27 fixes both: (a) refactored probe pattern hides new docs via
+  // isArchived=true; (b) this cleanup button removes legacy clutter.
+  const [cleaningProbes, setCleaningProbes] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState(null);
+  const handleCleanupTestProbes = async () => {
+    if (!window.confirm(
+      'ลบ opd_sessions/test-probe-anon-* ทุก doc?\n\n' +
+      'Cleanup mess จาก Rule B Probe-Deploy-Probe ที่สร้างค้างไว้.\n' +
+      'ใช้ /api/admin/cleanup-test-probes (firebase-admin Firestore SDK).\n' +
+      'ลบเฉพาะ docs ที่ขึ้นต้น "test-probe-anon-" ใน opd_sessions เท่านั้น.'
+    )) return;
+
+    setCleaningProbes(true);
+    setCleanupResult(null);
+    setError('');
+    try {
+      const data = await cleanupTestProbes();
+      setCleanupResult({ ok: true, ...data });
+    } catch (e) {
+      setCleanupResult({
+        ok: false,
+        status: e?.status || 0,
+        error: e?.message || 'Unknown error',
+      });
+    } finally {
+      setCleaningProbes(false);
+    }
+  };
+
   const extraFilters = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
         className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
         <option value="">สถานะทั้งหมด</option>
@@ -223,6 +255,16 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
         className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-amber-700/40 hover:text-amber-300 transition-all disabled:opacity-50">
         {migrating ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
         Sync ทุก staff → Claims
+      </button>
+      <button
+        type="button"
+        data-testid="cleanup-test-probes-button"
+        onClick={handleCleanupTestProbes}
+        disabled={cleaningProbes || !canDelete}
+        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'ลบ opd_sessions/test-probe-anon-* ทุก doc (V27 cleanup)'}
+        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-rose-700/40 hover:text-rose-300 transition-all disabled:opacity-50">
+        {cleaningProbes ? <Loader2 size={14} className="animate-spin" /> : <Eraser size={14} />}
+        ลบ test-probe ค้าง
       </button>
     </div>
   );
@@ -307,6 +349,30 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
           })}
         </div>
       </MarketingTabShell>
+
+      {cleanupResult && (
+        <div data-testid="cleanup-test-probes-result"
+          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
+          <div className="font-bold text-[var(--tx-heading)] mb-1">ผลลบ test-probe ค้าง (V27)</div>
+          {cleanupResult.ok ? (
+            <div className="text-emerald-400">
+              ✓ ลบ {cleanupResult.deletedCount} docs สำเร็จ
+              {cleanupResult.deletedCount > 0 && (
+                <details className="mt-1">
+                  <summary className="text-[11px] text-[var(--tx-muted)] cursor-pointer">รายชื่อ {cleanupResult.deletedCount} docs ที่ลบ</summary>
+                  <ul className="mt-1 text-[11px] text-[var(--tx-muted)] list-disc list-inside max-h-32 overflow-y-auto font-mono">
+                    {(cleanupResult.deleted || []).map((id) => <li key={id}>{id}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ) : (
+            <div className="text-red-400">
+              ✗ ล้มเหลว ({cleanupResult.status}): {cleanupResult.error}
+            </div>
+          )}
+        </div>
+      )}
 
       {bootstrapResult && (
         <div data-testid="permission-bootstrap-result"

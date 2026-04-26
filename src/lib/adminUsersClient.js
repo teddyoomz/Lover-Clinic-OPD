@@ -108,3 +108,29 @@ export async function bootstrapSelfAsAdmin() {
   }
   return payload.data;
 }
+
+// ─── Cleanup test-probe-anon-* docs (V27) ──────────────────────────────────
+// One-shot admin cleanup for the visible-queue clutter from Rule B
+// Probe-Deploy-Probe protocol. Hits /api/admin/cleanup-test-probes which
+// uses firebase-admin Firestore SDK (bypasses anon-delete rule).
+export async function cleanupTestProbes() {
+  const token = await getIdToken();
+  const res = await fetch('/api/admin/cleanup-test-probes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: '{}',
+  });
+  let payload = null;
+  try { payload = await res.json(); } catch { /* non-JSON */ }
+  if (!res.ok || !payload?.success) {
+    const msg = payload?.error || `cleanup-test-probes ล้มเหลว (HTTP ${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.payload = payload;
+    throw err;
+  }
+  return payload.data;
+}
