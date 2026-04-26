@@ -326,6 +326,39 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   3. **Chip label format is part of the fidelity contract**. Don't ship `HH:MM-HH:MM` when the source shows `HH:MM-HH:MM <name>` — the missing name field is technically working code but pixel-different from the reference.
 - **Rule/audit update**: triangle-inspect skill should add "multi-entity-per-cell" check on calendar/grid replications (count comparison: ProClinic-cell-entries vs ours-cell-entries on the same date). The MS test bank in `tests/schedule-calendar-multi-staff.test.jsx` is the canonical pattern for future grid replications.
 
+### V24 — 2026-04-26 — ProClinic schedule sync only fetched doctor data (employee schedule empty since shipping)
+- User report (verbatim): "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์ ช่องตารางพนักงานเหมือนไม่มีข้อมูลเลย ฝากแก้ตรงนี้ก่อน deploy".
+- **Symptom**: After Phase 13.2.13/13.2.14 shipped (2026-04-26 session 5), admin clicks MasterDataTab "ดูดตารางหมอ + พนักงาน" → master_data populated → migrate to be_staff_schedules → DoctorSchedulesTab calendar shows real data. **EmployeeSchedulesTab calendar empty**. Migrator orphan reports (if any) might explain partial gaps but not 100% empty employee data.
+- **Root cause**: `api/proclinic/master.js` `handleSyncSchedules` fetched `/admin/api/schedule/today` — single endpoint comment said "covers ALL staff (doctors + employees)". But ProClinic actually exposes TWO separate FullCalendar feeds, one per role:
+  - `/admin/api/schedule/แพทย์?start=...&end=...` (doctor schedule page)
+  - `/admin/api/schedule/พนักงาน?start=...&end=...` (employee schedule page)
+  The path segment is the URL-encoded Thai role name. `/admin/api/schedule/today` either returns only doctor data or returns nothing useful (the `today` slug is wrong — confirmed via `docs/proclinic-scan/detailed-adminscheduleemployee.json` capture showing the actual URL pattern).
+- **Why it slipped through**: Phase 13.2.15 (synced-data wiring E2E) verified the consumer paths via preview_eval against **hand-crafted test data in be_staff_schedules**. Nobody live-tested the actual sync button against real ProClinic — the test data bypassed the sync API entirely. V21 + V13 lessons: source-grep + UI tests cannot catch API endpoint mismatches; only end-to-end real-data verification can.
+- **Worst part**: The bug shipped + V15 deploy completed (production at `9169363`). Doctor sync coincidentally worked (probably because `/admin/api/schedule/today` defaulted to doctors), masking the employee gap. User caught it manually only when actually exercising the sync flow in production.
+- **Fix** (commit pending V24, to be deployed alongside Phase 13.5.4 Deploy 1):
+  1. `buildScheduleDateRange()` helper — generates `start=...&end=...` query window (-180d back, +365d forward) so per-date overrides + leave entries come through. Recurring entries return regardless of range.
+  2. `handleSyncSchedules` rewritten:
+     - Build doctor URL: `/admin/api/schedule/${encodeURIComponent('แพทย์')}?{range}`
+     - Build employee URL: `/admin/api/schedule/${encodeURIComponent('พนักงาน')}?{range}`
+     - `Promise.all` parallel fetch with `.catch(()=>null)` per endpoint (one failure does not block the other)
+     - Throw only when BOTH endpoints fail (returns non-array)
+     - Merge + dedup by `proClinicId` via `Set` (defensive against overlap)
+     - Return shape adds `rawDoctor` + `rawEmployee` count fields for diagnostics
+- **Test bank** (`tests/proclinic-schedule-sync.test.js`): SC.E.2 + SC.E.3 updated for new URL pattern + new return shape. **NEW SC.G group (7 tests)** locks V24 fix:
+  - SC.G.1 buildScheduleDateRange helper exists with start+end params
+  - SC.G.2 date range covers > 6 months (-180d, +365d, +07:00 TZ)
+  - SC.G.3 Promise.all parallel fetch (not serial)
+  - SC.G.4 each fetch has `.catch(()=>null)` (one failure does not block other)
+  - SC.G.5 throws ONLY when both endpoints fail
+  - SC.G.6 dedup by proClinicId via Set
+  - SC.G.7 V24 marker in code (institutional memory grep)
+- **Lessons**:
+  1. **End-to-end real-data verification ≠ synthetic-data verification**. Phase 13.2.15 SD test bank simulated be_staff_schedules with hand-crafted data. The pipeline downstream of be_staff_schedules worked perfectly. The pipeline UPSTREAM (sync API → master_data → migrate) was never tested with real ProClinic responses. Always trace the data the user actually sees from origin to destination — never trust mid-pipeline simulators alone.
+  2. **API endpoint path comments lie when written without verification**. The "single endpoint covers all staff" comment in `handleSyncSchedules` was aspirational, not factual. Comments based on guesses ship bugs. If you can't verify the comment is true via opd.js / curl, mark it `// TODO verify endpoint scope` instead.
+  3. **One-endpoint fits all is a code smell**. ProClinic exposes per-role pages — they're VERY likely to expose per-role APIs too. When a sync API URL doesn't include the obvious discriminator (role / type / scope), suspect it's wrong.
+  4. **URL-encoded Thai path segments are easy to miss in greps**. `encodeURIComponent('แพทย์')` = `%E0%B9%81%E0%B8%9E%E0%B8%97%E0%B8%A2%E0%B9%8C` — capture files contain the encoded form. Searching for "แพทย์" in capture files won't match. Decode first OR search for the encoded prefix `/admin/api/schedule/%E0%B9`.
+- **Rule/audit update**: `/triangle-inspect` skill should add "verify the sync endpoint URL via opd.js network capture" to the Phase 0 audit. Add a new audit invariant to `/audit-anti-vibe-code` AV13: "any sync endpoint with no role/scope discriminator must be reviewed against the real ProClinic page's network feed". Capture the FullCalendar feed URL pattern in `docs/proclinic-feed-urls.md` for future Phase work.
+
 ### V23 — 2026-04-26 — Patient form submit via QR/link blocked by opd_sessions firestore rule for anon-auth users (live since 2026-03-23 — entire project history)
 - User report (verbatim): "ตอนนี้กดส่งข้อมูลคนไข้ผ่านลิ้งหรือ QR code แล้วขึ้นผิดพลาดตลอดส่งไม่ได้" + "กรอก patientform แล้วกดส่งแล้วผิดพลาด เกิดอะไรขึ้น ทำไมไม่เทสและทดสอบให้ผ่าน หลุดไปได้ยังไง" + "ดูที่อื่นที่หน้าจะพังเหมือนกันนี้ หรือคล้ายๆกันมาด้วย" + "เช็คให้หมดทั้ง frontend แบบ 100% จริงๆ ว่าจะไม่มีบั๊คแบบนี้หรือใกล้เคียงกับแบบนี้อีกแล้ว".
 - **Symptom**: alert "เกิดข้อผิดพลาดของระบบ" (PatientForm.jsx:386) on form submit when accessed via `?session=...` QR/link from non-logged-in device. Plus 2 silent-fail course-refresh writes on `?patient=...` that never surfaced because of `.catch(() => {})` swallow.

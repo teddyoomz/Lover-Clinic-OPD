@@ -210,18 +210,32 @@ describe('SC — Phase 13.2.13 ProClinic schedule sync', () => {
       expect(masterSrc).toMatch(/case\s+['"]syncSchedules['"]:\s*return\s+await\s+handleSyncSchedules/);
     });
 
-    it('SC.E.2 master.js handleSyncSchedules hits /admin/api/schedule/today', () => {
-      expect(masterSrc).toMatch(/['"`].*\/admin\/api\/schedule\/today.*['"`]/);
+    it('SC.E.2 master.js handleSyncSchedules hits BOTH /admin/api/schedule/{แพทย์,พนักงาน} (V24 fix)', () => {
+      // V24 (2026-04-26) — earlier code hit /admin/api/schedule/today which
+      // returned only doctor entries (or some legacy default). Fix uses two
+      // explicit role-based endpoints in parallel.
+      expect(masterSrc).toMatch(/encodeURIComponent\(['"]แพทย์['"]\)/);
+      expect(masterSrc).toMatch(/encodeURIComponent\(['"]พนักงาน['"]\)/);
       expect(masterSrc).toMatch(/session\.fetchJSON/);
+      // The legacy /today URL must NOT remain in CODE (allowed in comments
+      // for institutional memory). Anti-regression for V24.
+      const noCommentSrc = masterSrc
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//'))
+        .join('\n');
+      expect(noCommentSrc).not.toMatch(/['"`].*\/admin\/api\/schedule\/today.*['"`]/);
     });
 
-    it('SC.E.3 master.js returns shape { success, type, count, totalPages, items }', () => {
+    it('SC.E.3 master.js returns shape { success, type, count, totalPages, rawDoctor, rawEmployee, items }', () => {
       const idx = masterSrc.indexOf('handleSyncSchedules');
       const fn = masterSrc.slice(idx, idx + 3500);
       expect(fn).toMatch(/success:\s*true/);
       expect(fn).toMatch(/type:\s*['"]staff_schedules['"]/);
       expect(fn).toMatch(/count:\s*items\.length/);
       expect(fn).toMatch(/items,/);
+      // V24 — both raw counts surfaced for diagnostics
+      expect(fn).toMatch(/rawDoctor:/);
+      expect(fn).toMatch(/rawEmployee:/);
     });
 
     it('SC.E.4 master.js exports mapProClinicScheduleEvent for tests', () => {
@@ -276,6 +290,73 @@ describe('SC — Phase 13.2.13 ProClinic schedule sync', () => {
         expect(it).toHaveProperty('proClinicStaffName');
         expect(it).toHaveProperty('type');
       }
+    });
+  });
+
+  // ─── V24 (2026-04-26) — Bug: sync only returned doctor data, employee empty ──
+  // User report: "ตอนนี้ทำไม sync หรือ นำเข้า ตารางมาได้แค่แพทย์
+  // ช่องตารางพนักงานเหมือนไม่มีข้อมูลเลย".
+  // Root cause: code used /admin/api/schedule/today; ProClinic actually exposes
+  // two separate FullCalendar feeds — /admin/api/schedule/แพทย์ +
+  // /admin/api/schedule/พนักงาน — each scoped to one role.
+  describe('SC.G — V24 (2026-04-26): two-endpoint parallel fetch', () => {
+    it('SC.G.1 buildScheduleDateRange helper exists with start+end query params', () => {
+      // Helper builds the FullCalendar feed window; recurring entries return
+      // regardless of range, but per-date entries (override/leave) are
+      // window-bound.
+      expect(masterSrc).toMatch(/function\s+buildScheduleDateRange\s*\(/);
+      expect(masterSrc).toMatch(/start=\$\{encodeURIComponent/);
+      expect(masterSrc).toMatch(/end=\$\{encodeURIComponent/);
+    });
+
+    it('SC.G.2 date range covers > 6 months (180d back, 365d forward)', () => {
+      const idx = masterSrc.indexOf('function buildScheduleDateRange');
+      const fn = masterSrc.slice(idx, idx + 800);
+      // Must look back AT LEAST 90 days and forward AT LEAST 180 days
+      expect(fn).toMatch(/setDate\(start\.getDate\(\)\s*-\s*180\)/);
+      expect(fn).toMatch(/setDate\(end\.getDate\(\)\s*\+\s*365\)/);
+      // Bangkok timezone offset
+      expect(fn).toMatch(/\+07:00/);
+    });
+
+    it('SC.G.3 both endpoints fetched via Promise.all (parallel, not serial)', () => {
+      const idx = masterSrc.indexOf('handleSyncSchedules');
+      const fn = masterSrc.slice(idx, idx + 3500);
+      expect(fn).toMatch(/Promise\.all/);
+      expect(fn).toMatch(/doctorUrl/);
+      expect(fn).toMatch(/employeeUrl/);
+    });
+
+    it('SC.G.4 each fetch has .catch(()=>null) so one failure does not block the other', () => {
+      // Resilient fetch — if one endpoint times out / 5xx, the other still
+      // delivers data. Per-array null-check below converts to []. This
+      // matches V19/V21 lesson: silent-fail-safe but not silent-bug.
+      const idx = masterSrc.indexOf('handleSyncSchedules');
+      const fn = masterSrc.slice(idx, idx + 3500);
+      // Both fetch lines should have .catch(()=>null) suffix
+      const catches = fn.match(/\.catch\(\(\)\s*=>\s*null\)/g) || [];
+      expect(catches.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('SC.G.5 throws ONLY when BOTH endpoints fail (returns non-array)', () => {
+      const idx = masterSrc.indexOf('handleSyncSchedules');
+      const fn = masterSrc.slice(idx, idx + 3500);
+      // Guard: !Array.isArray(doctorData) && !Array.isArray(employeeData) → throw
+      expect(fn).toMatch(/!Array\.isArray\(doctorData\)\s*&&\s*!Array\.isArray\(employeeData\)/);
+      expect(fn).toMatch(/throw new Error/);
+    });
+
+    it('SC.G.6 dedup by proClinicId via Set (defensive against overlap)', () => {
+      const idx = masterSrc.indexOf('handleSyncSchedules');
+      const fn = masterSrc.slice(idx, idx + 3500);
+      expect(fn).toMatch(/seen\.has\(norm\.proClinicId\)/);
+      expect(fn).toMatch(/seen\.add\(norm\.proClinicId\)/);
+    });
+
+    it('SC.G.7 V24 marker comment present (institutional memory)', () => {
+      // Future maintainers should be able to grep for "V24" and find this
+      // bug's lesson without context-switching to the violation log.
+      expect(masterSrc).toMatch(/V24/);
     });
   });
 });

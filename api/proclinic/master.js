@@ -728,33 +728,67 @@ export function mapProClinicScheduleEvent(event) {
   };
 }
 
+// Build a generous date range for FullCalendar feed query. Recurring entries
+// (rrule) come through regardless of range; per-date overrides + leave only
+// appear in the requested window. -180d back, +365d forward catches most
+// active schedules without per-day re-fetch loops.
+function buildScheduleDateRange() {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - 180);
+  const end = new Date(now);
+  end.setDate(end.getDate() + 365);
+  const fmtIso = (d) => d.toISOString().slice(0, 19) + '+07:00';
+  return `start=${encodeURIComponent(fmtIso(start))}&end=${encodeURIComponent(fmtIso(end))}`;
+}
+
 async function handleSyncSchedules(req, res) {
   const session = await getSession(req.body);
   const base = session.origin;
 
-  // Fetch the FullCalendar feed — single endpoint covers ALL staff
-  // (doctors + employees) recurring shifts + per-date overrides + leave.
-  const data = await withRetry(
-    () => session.fetchJSON(`${base}/admin/api/schedule/today`, FETCH_OPTS),
-    RETRY_OPTS,
-  );
+  // V24 (2026-04-26) — ProClinic uses TWO separate FullCalendar feed endpoints,
+  // one per role. The path segment is the URL-encoded Thai role name:
+  //   /admin/api/schedule/แพทย์?start=...&end=...     (doctor schedule page)
+  //   /admin/api/schedule/พนักงาน?start=...&end=...   (employee schedule page)
+  //
+  // Earlier code used `/admin/api/schedule/today` — that path returns ONLY
+  // doctor entries (or possibly an unintended legacy default). Result: user
+  // synced "ตารางหมอ + พนักงาน" but employees came back empty.
+  // Fix: hit both endpoints in parallel + merge. Each entry has a unique
+  // event.id ("recurring-{userId}-{day}") so dedup is implicit on Firestore
+  // doc-id.
+  const range = buildScheduleDateRange();
+  const doctorUrl = `${base}/admin/api/schedule/${encodeURIComponent('แพทย์')}?${range}`;
+  const employeeUrl = `${base}/admin/api/schedule/${encodeURIComponent('พนักงาน')}?${range}`;
 
-  if (!Array.isArray(data)) {
-    throw new Error('expected array from /admin/api/schedule/today');
+  const [doctorData, employeeData] = await Promise.all([
+    withRetry(() => session.fetchJSON(doctorUrl, FETCH_OPTS), RETRY_OPTS).catch(() => null),
+    withRetry(() => session.fetchJSON(employeeUrl, FETCH_OPTS), RETRY_OPTS).catch(() => null),
+  ]);
+
+  if (!Array.isArray(doctorData) && !Array.isArray(employeeData)) {
+    throw new Error('expected array from at least one of /admin/api/schedule/{แพทย์,พนักงาน}');
   }
+
+  const rawDoctor = Array.isArray(doctorData) ? doctorData : [];
+  const rawEmployee = Array.isArray(employeeData) ? employeeData : [];
+  const data = [...rawDoctor, ...rawEmployee];
 
   // Normalize + drop malformed entries. Each normalized item exposes `id`
   // = proClinicId so runMasterDataSync uses it as the Firestore doc key
   // (idempotent re-sync overwrites the same doc).
+  // Dedup by proClinicId in case the two endpoints overlap on shared
+  // entries — last-write-wins on duplicates is fine because the data shape
+  // is identical.
+  const seen = new Set();
   const items = [];
   let dropped = 0;
   for (const event of data) {
     const norm = mapProClinicScheduleEvent(event);
-    if (norm) {
-      items.push({ id: norm.proClinicId, ...norm });
-    } else {
-      dropped++;
-    }
+    if (!norm) { dropped++; continue; }
+    if (seen.has(norm.proClinicId)) continue;
+    seen.add(norm.proClinicId);
+    items.push({ id: norm.proClinicId, ...norm });
   }
 
   // Match the shape runMasterDataSync expects: top-level items + count.
@@ -764,7 +798,8 @@ async function handleSyncSchedules(req, res) {
     count: items.length,
     totalPages: 1,
     dropped,
-    raw: data.length,
+    rawDoctor: rawDoctor.length,
+    rawEmployee: rawEmployee.length,
     items,
   });
 }
