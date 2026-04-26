@@ -23,6 +23,7 @@ import BranchSelector from '../components/backend/BranchSelector.jsx';
 
 import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
+import CustomerCreatePage from '../components/backend/CustomerCreatePage.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 import AppointmentTab from '../components/backend/AppointmentTab.jsx';
@@ -90,6 +91,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('clone');
   const [viewingCustomer, setViewingCustomer] = useState(null);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);   // V33.2 — full-page Add Customer takeover
+  const [customerListRefresh, setCustomerListRefresh] = useState(0); // bump after Save so list reloads on return
   const [treatmentFormMode, setTreatmentFormMode] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [saleInitialCustomer, setSaleInitialCustomer] = useState(null);
@@ -361,10 +364,21 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'clone' ? (
           <CloneTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'customers' && creatingCustomer ? (
+          /* V33.2 — full-page Add Customer takeover (replaces previous modal) */
+          <CustomerCreatePage
+            onSaved={() => {
+              // Bump CustomerListTab's refresh signal so the new HN appears at the top
+              setCustomerListRefresh((n) => n + 1);
+            }}
+            onCancel={() => setCreatingCustomer(false)}
+          />
         ) : activeTab === 'customers' ? (
           <CustomerListTab
             clinicSettings={clinicSettings}
             theme={theme}
+            refreshSignal={customerListRefresh}
+            onCreateCustomer={() => setCreatingCustomer(true)}
             onViewCustomer={(c) => {
               const url = `${window.location.origin}?backend=1&customer=${c.proClinicId || c.id}`;
               window.open(url, '_blank');

@@ -493,11 +493,19 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       const walletTypeIdPayload = selectedWallet?.walletTypeId && walletApplied > 0 ? String(selectedWallet.walletTypeId) : '';
       const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet.walletTypeName || '') : '';
       const firstSeller = pmSellers.find(s => s.enabled && s.id);
+      // V33-customer-create — snapshot customer's receipt config onto the sale
+      // so SalePrintView renders the right name/tax-id/address (personal vs
+      // company vs inherit). Frozen at create time per accounting standards.
+      const { resolveCustomerReceiptInfo } = await import('../../lib/customerReceiptInfo.js');
+      const currentCustomerDoc = customers.find(c => String(c.proClinicId || c.id) === String(customerId)) || null;
+      const receiptInfoSnapshot = resolveCustomerReceiptInfo(currentCustomerDoc);
+
       const data = clean({
         customerId, customerName, customerHN, saleDate, saleNote,
         couponCode: couponCode || null,
         appointmentId: appointmentId || null,
         items: grouped,
+        receiptInfo: receiptInfoSnapshot,
         billing: {
           subtotal: billing.subtotal,
           billDiscount: billing.discount,

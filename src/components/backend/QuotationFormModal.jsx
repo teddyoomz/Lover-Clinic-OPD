@@ -187,8 +187,13 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
     setSaving(true);
     try {
       const id = isEdit ? (quotation.quotationId || quotation.id) : generateQuotationId();
+      // V33-customer-create — snapshot customer's receipt config onto the quotation.
+      const { resolveCustomerReceiptInfo } = await import('../../lib/customerReceiptInfo.js');
+      const currentCustomerDoc = customers.find(c => String(c.proClinicId || c.id) === String(form.customerId)) || null;
+      const receiptInfoSnapshot = resolveCustomerReceiptInfo(currentCustomerDoc);
       await saveQuotation(id, {
         ...normalized,
+        receiptInfo: receiptInfoSnapshot,
         branchId: selectedBranchId,
         createdAt: isEdit ? (quotation.createdAt || new Date().toISOString()) : new Date().toISOString(),
       });

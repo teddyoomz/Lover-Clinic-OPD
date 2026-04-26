@@ -9,9 +9,8 @@ import { hexToRgb } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';
 import BulkPrintModal from './BulkPrintModal.jsx';
-import CustomerFormModal from './CustomerFormModal.jsx';
 
-export default function CustomerListTab({ clinicSettings, theme, onViewCustomer }) {
+export default function CustomerListTab({ clinicSettings, theme, onViewCustomer, onCreateCustomer, refreshSignal = 0 }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme !== 'light';
@@ -26,8 +25,11 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
-  // V33-customer-create — add-customer modal
-  const [addOpen, setAddOpen] = useState(false);
+
+  // V33.2 — refresh when external signal increments (e.g. parent saved new customer)
+  useEffect(() => {
+    if (refreshSignal > 0) setRefreshKey((k) => k + 1);
+  }, [refreshSignal]);
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -111,10 +113,10 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
           >
             <FileText size={15} /> {selectMode ? 'ยกเลิก' : 'พิมพ์ Bulk'}
           </button>
-          {/* V33-customer-create — manual add customer */}
-          {canCreate && (
+          {/* V33-customer-create — manual add customer (V33.2: full-page takeover) */}
+          {canCreate && onCreateCustomer && (
             <button
-              onClick={() => setAddOpen(true)}
+              onClick={() => onCreateCustomer()}
               disabled={loading}
               data-testid="add-customer-button"
               className="px-5 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-900/30"
@@ -278,16 +280,8 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer 
           onClose={() => { setBulkOpen(false); exitSelectMode(); }}
         />
       )}
-
-      {/* V33-customer-create — Add customer modal */}
-      <CustomerFormModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSaved={(result) => {
-          // Refresh list so the new customer appears at the top.
-          setRefreshKey((k) => k + 1);
-        }}
-      />
+      {/* V33.2 — CustomerCreatePage is now mounted as a sibling page in
+          BackendDashboard via creatingCustomer takeover, NOT a modal here. */}
     </div>
   );
 }

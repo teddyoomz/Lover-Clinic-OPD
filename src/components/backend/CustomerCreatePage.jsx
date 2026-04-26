@@ -1,25 +1,28 @@
-// V33-customer-create — full ProClinic-parity Customer create modal.
+// V33-customer-create — full ProClinic-parity Customer CREATE PAGE.
 // Mirrors `/admin/customer/create` 100%: every field, every upload,
 // dependent-field cascades, conditional Thai/foreigner + receipt-type toggles.
 // Writes to `be_customers/{LC-YY######}` via addCustomer orchestrator
 // (counter + uploads + setDoc atomic).
 //
+// V33.2 (2026-04-27, user directive "ทำเป็นหน้าใหม่ทั้งหน้าไม่เอา modal"):
+// converted from modal overlay to full-page takeover via BackendDashboard's
+// `creatingCustomer` state — same pattern as `viewingCustomer` for
+// CustomerDetailView. Date inputs migrated from native `<input type="date">`
+// to canonical `<DateField locale="ce">` per rule 04-thai-ui (backend = ค.ศ.).
+//
 // Architecture:
 //   - 6 sections, all rendered inline (one file = easier to keep in sync
-//     with ProClinic field list; ~700 LOC is acceptable for a single-use modal).
+//     with ProClinic field list; ~700 LOC is acceptable for a single-use page).
 //   - State held once via useState(emptyCustomerForm()); plus profileFile +
 //     galleryFiles + ui state (saving/error/success).
 //   - Conditional visibility uses plain `&&` — NO IIFE-in-JSX (Vite OXC
 //     parser bug, rule 03-stack §2).
-//   - Submit chain: validate → build files → addCustomer → onSaved + close.
-//
-// Follows the EditCustomerIdsModal layout pattern (z-50 overlay, header
-// with X close, footer with Save+Cancel).
+//   - Submit chain: validate → build files → addCustomer → onSaved + back.
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  UserPlus, Save, X, Loader2, AlertCircle, CheckCircle2,
-  User, Phone, MapPin, Receipt, HeartPulse, Camera, Image as ImageIcon, Trash2, Plus,
+  UserPlus, Save, ArrowLeft, Loader2, AlertCircle, CheckCircle2,
+  User, Phone, MapPin, Receipt, HeartPulse, Camera, Image as ImageIcon, Trash2, Plus, X,
 } from 'lucide-react';
 import {
   emptyCustomerForm,
@@ -28,6 +31,7 @@ import {
 } from '../../lib/customerValidation.js';
 import { addCustomer } from '../../lib/backendClient.js';
 import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
+import DateField from '../DateField.jsx';
 import ThaiAddressSelect from './customer-form/ThaiAddressSelect.jsx';
 
 const COUNTRIES = [
@@ -41,7 +45,10 @@ const COUNTRIES = [
 ];
 
 const PREFIX_OPTIONS = ['', 'นาย', 'นาง', 'นางสาว', 'เด็กชาย', 'เด็กหญิง', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.', 'ภญ.', 'ภก.'];
-const BLOOD_TYPES = ['', 'O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+// V33-customer-create user directive 2026-04-27: simplify blood types to
+// 4 base groups + "ไม่ทราบ" (rh +/- not tracked at intake — admin can edit
+// later if needed; matches Thai clinic practice).
+const BLOOD_TYPES = ['', 'A', 'B', 'O', 'AB'];
 const CUSTOMER_TYPE_2_OPTIONS = ['', 'ลูกค้าทั่วไป', 'ลูกค้ารีวิว', 'Influencer'];
 
 // Phase 9 — referral source choices match ProClinic dropdown (#source select).
@@ -61,10 +68,9 @@ function inputCls(extra = '') {
 const sectionCls = 'p-4 rounded-xl border border-[var(--bd)] bg-[var(--bg-base)] space-y-3';
 const sectionTitleCls = 'flex items-center gap-2 text-sm font-bold text-[var(--tx-heading)] mb-2';
 
-export default function CustomerFormModal({
-  open,
-  onClose,
+export default function CustomerCreatePage({
   onSaved,
+  onCancel,
   branchId = null,
   createdBy = null,
 }) {
@@ -79,19 +85,18 @@ export default function CustomerFormModal({
   const profileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
-  // Reset state when re-opened.
+  // Reset state on mount (page is unmounted/remounted by BackendDashboard
+  // takeover when creatingCustomer toggles, so this fires per session).
   useEffect(() => {
-    if (open) {
-      setForm(emptyCustomerForm());
-      setProfileFile(null);
-      setProfilePreview('');
-      setGalleryFiles([]);
-      setGalleryPreviews([]);
-      setSaving(false);
-      setError('');
-      setSuccess('');
-    }
-  }, [open]);
+    setForm(emptyCustomerForm());
+    setProfileFile(null);
+    setProfilePreview('');
+    setGalleryFiles([]);
+    setGalleryPreviews([]);
+    setSaving(false);
+    setError('');
+    setSuccess('');
+  }, []);
 
   // Cleanup blob URLs on unmount or when previews change.
   useEffect(() => {
@@ -199,8 +204,9 @@ export default function CustomerFormModal({
       });
       setSuccess(`บันทึกเรียบร้อย — HN: ${result.hn}`);
       onSaved?.(result);
-      // Brief delay so user sees the success message.
-      setTimeout(() => { onClose?.(); }, 800);
+      // Brief delay so user sees the success message before BackendDashboard
+      // tears down the page (sets creatingCustomer=false).
+      setTimeout(() => { onCancel?.(); }, 800);
     } catch (err) {
       const field = err.field || 'firstname';
       const msg = err.message || 'บันทึกล้มเหลว';
@@ -211,23 +217,36 @@ export default function CustomerFormModal({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto" data-testid="customer-form-modal">
-      <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-5xl my-4 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2 p-4 border-b border-[var(--bd)] sticky top-0 bg-[var(--bg-base)] z-10 rounded-t-xl">
-          <div className="flex items-center gap-2">
-            <UserPlus size={20} className="text-emerald-400" />
-            <h3 className="text-lg font-bold text-[var(--tx-heading)]">เพิ่มลูกค้าใหม่</h3>
-          </div>
-          <button onClick={onClose} disabled={saving} className="p-1 rounded hover:bg-[var(--bg-hover)] disabled:opacity-50" aria-label="ปิด">
-            <X size={18} />
+    <div className="space-y-4" data-testid="customer-create-page">
+      {/* Page header — back button + title */}
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-4 shadow-lg flex items-center justify-between gap-3 border border-[var(--bd)]">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            data-testid="customer-create-back"
+            className="p-2 rounded-lg hover:bg-[var(--bg-hover)] disabled:opacity-50 transition-colors"
+            aria-label="กลับ"
+          >
+            <ArrowLeft size={18} />
           </button>
+          <div className="flex items-center gap-2">
+            <UserPlus size={22} className="text-emerald-400" />
+            <h2 className="text-xl font-black text-[var(--tx-heading)]">เพิ่มลูกค้าใหม่</h2>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="px-4 py-2 rounded-lg text-sm bg-neutral-700 text-white disabled:opacity-50 hidden md:inline-flex"
+        >
+          ยกเลิก
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* ── Section 1: รูปโปรไฟล์ + Customer type ───────────────── */}
           <div className={sectionCls}>
             <div className={sectionTitleCls}><Camera size={16} /> ข้อมูลส่วนตัว / ประเภทลูกค้า</div>
@@ -356,9 +375,16 @@ export default function CustomerFormModal({
                   <option value="F">หญิง</option>
                 </select>
               </div>
-              <div>
+              <div data-field="birthdate" data-testid="customer-form-birthdate">
                 <label className="block text-xs text-[var(--tx-muted)] mb-1">วันเกิด</label>
-                <input type="date" value={form.birthdate || ''} onChange={(e) => setField('birthdate', e.target.value)} data-field="birthdate" data-testid="customer-form-birthdate" className={inputCls()} />
+                {/* Rule 04-thai-ui: backend uses DateField locale='ce' (ค.ศ.), dd/mm/yyyy display */}
+                <DateField
+                  value={form.birthdate || ''}
+                  onChange={(v) => setField('birthdate', v)}
+                  locale="ce"
+                  fieldClassName={inputCls()}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
               </div>
               <div>
                 <label className="block text-xs text-[var(--tx-muted)] mb-1">น้ำหนัก (kg)</label>
@@ -688,24 +714,28 @@ export default function CustomerFormModal({
               <div>{success}</div>
             </div>
           )}
-        </form>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-3 border-t border-[var(--bd)] sticky bottom-0 bg-[var(--bg-base)] rounded-b-xl">
-          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm bg-neutral-700 text-white disabled:opacity-50">
-            ยกเลิก
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            data-testid="customer-form-save"
-            className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {saving ? 'กำลังบันทึก...' : 'บันทึกลูกค้าใหม่'}
-          </button>
-        </div>
-      </div>
+          {/* Sticky footer with Save / Cancel buttons */}
+          <div className="sticky bottom-0 bg-[var(--bg-base)] border border-[var(--bd)] rounded-2xl p-3 shadow-2xl flex items-center justify-end gap-2 z-10">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg text-sm bg-neutral-700 text-white disabled:opacity-50"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              data-testid="customer-form-save"
+              className="px-5 py-2 rounded-lg text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? 'กำลังบันทึก...' : 'บันทึกลูกค้าใหม่'}
+            </button>
+          </div>
+        </form>
     </div>
   );
 }

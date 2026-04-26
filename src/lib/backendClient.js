@@ -79,6 +79,23 @@ export async function updateCustomer(proClinicId, fields) {
   await updateDoc(customerDoc(proClinicId), fields);
 }
 
+/**
+ * V33-customer-create cleanup helper — delete ONLY the be_customers doc,
+ * no cascade. Use when audit-immutable collections (be_wallet_transactions,
+ * be_point_transactions, etc.) block the full deleteCustomerCascade due to
+ * their `delete: if false` rules. Linked records become orphaned but
+ * acceptable for test-data cleanup.
+ *
+ * Audit trail: caller must pass `opts.confirm = true` to acknowledge that
+ * orphaned linked records are intentional.
+ */
+export async function deleteCustomerDocOnly(proClinicId, opts = {}) {
+  if (!opts.confirm) {
+    throw new Error('deleteCustomerDocOnly requires opts.confirm=true (orphans linked records)');
+  }
+  await deleteDoc(customerDoc(proClinicId));
+}
+
 // ─── V33-customer-create — patientData camelCase mapper ─────────────────────
 //
 // Why: emptyCustomerForm() uses LOWERCASE ProClinic-shape keys (firstname,

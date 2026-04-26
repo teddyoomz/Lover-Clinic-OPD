@@ -146,6 +146,18 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
             <div className="text-[10px] tracking-widest uppercase text-neutral-500 mb-0.5">เรียน (Customer)</div>
             <div className="text-[15px] font-bold text-neutral-900">{q.customerName || '—'}</div>
             {q.customerHN && <div className="text-[11px] text-neutral-600 mt-0.5">HN {q.customerHN}</div>}
+            {/* V33-customer-create — receipt-info block snapshot */}
+            {q.receiptInfo && (q.receiptInfo.taxId || q.receiptInfo.address || (q.receiptInfo.name && q.receiptInfo.name !== q.customerName)) && (
+              <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">
+                <div className="text-[9px] tracking-widest uppercase text-neutral-500 mb-0.5">
+                  {q.receiptInfo.type === 'company' ? 'ออกใบเสนอราคาในนามนิติบุคคล' : q.receiptInfo.type === 'personal' ? 'ออกใบเสนอราคาในนามบุคคล' : 'ออกใบเสนอราคาตามข้อมูลลูกค้า'}
+                </div>
+                {q.receiptInfo.name && q.receiptInfo.name !== q.customerName && <div className="font-semibold">{q.receiptInfo.name}</div>}
+                {q.receiptInfo.taxId && <div>เลขประจำตัวผู้เสียภาษี: {q.receiptInfo.taxId}</div>}
+                {q.receiptInfo.address && <div>{q.receiptInfo.address}</div>}
+                {q.receiptInfo.phone && <div>โทร. {q.receiptInfo.phone}</div>}
+              </div>
+            )}
           </div>
 
           <div className="col-span-5 grid grid-cols-2 gap-x-4 gap-y-2">
