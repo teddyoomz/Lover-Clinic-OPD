@@ -48,6 +48,8 @@ import {
   Shield,
   // Phase 14.1 document-templates tab icon
   FileText as FileTextIcon,
+  // V32-tris-ter (2026-04-26) LINE settings tab icon
+  MessageCircle,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -149,6 +151,7 @@ export const NAV_SECTIONS = [
       { id: 'finance-master',       label: 'ตั้งค่าการเงิน',       icon: Banknote,      color: 'amber', palette: 'bank account expense category ค่าใช้จ่าย บัญชีธนาคาร finance' },
       { id: 'df-groups',            label: 'กลุ่ม DF (ค่ามือ)',     icon: Percent,       color: 'amber', palette: 'df doctor fee group rate commission ค่ามือ กลุ่ม อัตรา เปอร์เซ็นต์' },
       { id: 'document-templates',   label: 'เทมเพลตเอกสาร',        icon: FileTextIcon,  color: 'amber', palette: 'document template certificate medical fit-to-fly medicine label consent referral เทมเพลต เอกสาร ใบรับรอง ฉลากยา ส่งตัว' },
+      { id: 'line-settings',        label: 'ตั้งค่า LINE OA',       icon: MessageCircle, color: 'emerald', palette: 'line official account messaging chat bot qr link channel webhook ลายน์ ออฟฟิเชียล แชท บอท ผูก qr' },
     ],
   },
 ];

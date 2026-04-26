@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import DOMPurify from 'dompurify';
-import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2, Download, Mail, MessageCircle } from 'lucide-react';
+import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2, Download, MessageCircle } from 'lucide-react';
 import DateField from '../DateField.jsx';
 import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint, saveDocumentDraft, findResumableDraft, deleteDocumentDraft } from '../../lib/backendClient.js';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../lib/documentTemplateValidation.js';
 import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
-import { sendDocumentEmail, sendDocumentLine } from '../../lib/sendDocumentClient.js';
+import { sendDocumentLine } from '../../lib/sendDocumentClient.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
 import StaffSelectField from './StaffSelectField.jsx';
@@ -298,9 +298,10 @@ export default function DocumentPrintModal({
   // so it doesn't bloat the main bundle. UI shows "กำลังสร้าง PDF..."
   // during the ~1-3s render; download triggers automatically on success.
   const [pdfBusy, setPdfBusy] = useState(false);
-  // T3.e (2026-04-26) — email + LINE delivery state. busy/result/error
-  // shared so the modal can show one inline status banner at a time.
-  const [deliveryBusy, setDeliveryBusy] = useState('');         // '' | 'email' | 'line'
+  // T3.e (2026-04-26) — LINE delivery state. Email/SMTP intentionally NOT
+  // supported per user directive ("มีแค่ระบบ line official"). busy/result
+  // /error so the modal shows one inline status banner.
+  const [deliveryBusy, setDeliveryBusy] = useState('');         // '' | 'line'
   const [deliveryResult, setDeliveryResult] = useState(null);   // { channel, recipient } | null
   const [deliveryError, setDeliveryError] = useState('');
   const handleExportPdf = async () => {
@@ -348,91 +349,7 @@ export default function DocumentPrintModal({
     }
   };
 
-  // T3.e (2026-04-26) — render PDF blob in-memory + send via email or LINE.
-  // Reuses exportDocumentToPdf with a captured-blob mode (suppresses the
-  // browser download). Recipient pulled from customer.email / customer
-  // .lineUserId by default; admin can override via prompt.
-  const renderPdfBlob = async () => {
-    if (!selected) return null;
-    const missing = (selected.fields || []).filter(f => f.required && !String(values[f.key] || '').trim());
-    if (missing.length > 0) {
-      setError(`กรุณากรอก: ${missing.map(f => f.label || f.key).join(', ')}`);
-      return null;
-    }
-    setError('');
-    // Suppress automatic download by intercepting <a>.click() during the
-    // engine's URL-based trigger. Engine is shared with the regular PDF
-    // export path so we can't change its API; this is the cleanest hook.
-    const origCreate = document.createElement.bind(document);
-    document.createElement = function (tag) {
-      const el = origCreate(tag);
-      if (tag === 'a') {
-        const orig = el.click.bind(el);
-        el.click = () => { /* swallow download click */ void orig; };
-      }
-      return el;
-    };
-    try {
-      const result = await exportDocumentToPdf({
-        template: selected,
-        clinic: clinicSettings || {},
-        customer: customer || {},
-        values,
-        language,
-        toggles,
-      });
-      return result?.blob || null;
-    } finally {
-      document.createElement = origCreate;
-    }
-  };
-
-  const handleSendEmail = async () => {
-    if (deliveryBusy) return;
-    const defaultEmail = customer?.email || customer?.patientData?.email || '';
-    const recipient = window.prompt(
-      'ส่งเอกสารไปที่อีเมลลูกค้า — โปรดยืนยันที่อยู่อีเมล:',
-      defaultEmail,
-    );
-    if (!recipient) return;
-    setDeliveryBusy('email');
-    setDeliveryError('');
-    setDeliveryResult(null);
-    try {
-      const blob = await renderPdfBlob();
-      if (!blob) throw new Error('ไม่สามารถสร้าง PDF');
-      await sendDocumentEmail({
-        recipient: recipient.trim(),
-        pdfBlob: blob,
-        filename: `${selected.docType || 'document'}.pdf`,
-        subject: `เอกสารจาก ${clinicSettings?.clinicName || 'คลินิก'}`,
-        message: `เรียน คุณ${customer?.customerName || ''}\n\nเอกสารแนบมาในไฟล์`,
-      });
-      setDeliveryResult({ channel: 'email', recipient });
-      // Audit log
-      recordDocumentPrint({
-        templateId: selected.id,
-        templateName: selected.name,
-        docType: selected.docType,
-        customerId: customer?.customerId || customer?.id,
-        customerHN: customer?.proClinicHN || customer?.hn,
-        customerName: customer?.customerName || customer?.name,
-        action: 'email',
-        recipient,
-        language: language || selected.language,
-        paperSize: selected.paperSize,
-      }).catch(() => { /* non-fatal */ });
-    } catch (e) {
-      if (e.code === 'CONFIG_MISSING') {
-        setDeliveryError(`ยังไม่ได้ตั้งค่า SMTP — โปรดให้ผู้ดูแลตั้งค่าใน clinic_settings/email_config (host/user/pass) ก่อน. (${e.message})`);
-      } else {
-        setDeliveryError(e.message || 'ส่งอีเมลล้มเหลว');
-      }
-    } finally {
-      setDeliveryBusy('');
-    }
-  };
-
+  // T3.e (2026-04-26) LINE-only — email/SMTP intentionally not supported.
   const handleSendLine = async () => {
     if (deliveryBusy) return;
     const defaultLine = customer?.lineUserId || customer?.patientData?.lineUserId || '';
@@ -1023,13 +940,6 @@ export default function DocumentPrintModal({
         {step === STEP_FILL && (
           <div className="flex items-center justify-end gap-2 p-3 border-t border-[var(--bd)]">
             <button onClick={onClose} className="px-3 py-1.5 rounded text-xs bg-neutral-700 text-white">ยกเลิก</button>
-            <button onClick={handleSendEmail} disabled={!!deliveryBusy || pdfBusy}
-              data-testid="document-send-email"
-              title="ส่งเอกสารทางอีเมล"
-              className="px-3 py-1.5 rounded text-xs font-bold bg-violet-700 text-white inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed">
-              {deliveryBusy === 'email' ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-              {deliveryBusy === 'email' ? 'กำลังส่ง...' : 'ส่ง Email'}
-            </button>
             <button onClick={handleSendLine} disabled={!!deliveryBusy || pdfBusy}
               data-testid="document-send-line"
               title="แจ้ง LINE ลูกค้า"

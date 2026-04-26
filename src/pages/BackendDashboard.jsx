@@ -70,6 +70,8 @@ import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab
 // EmployeeSchedulesTab each pull rich form modals + scheduling components.
 // Same Suspense boundary handles all.
 const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
+// V32-tris-ter (2026-04-26) — LINE OA settings tab
+const LineSettingsTab      = lazy(() => import('../components/backend/LineSettingsTab.jsx'));
 const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
 // Phase 13.2.8 (2026-04-26) — list-view StaffSchedulesTab replaced by
 // calendar-view EmployeeSchedulesTab (ProClinic-fidelity). Old file
@@ -457,6 +459,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <DfGroupsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'document-templates' ? (
           <DocumentTemplatesTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'line-settings' ? (
+          <LineSettingsTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
         </Suspense>
       </div>

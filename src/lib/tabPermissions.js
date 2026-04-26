@@ -77,6 +77,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'finance-master':      { adminOnly: true },
   'df-groups':           { requires: ['df_group'], adminOnly: false },
   'document-templates':  { adminOnly: true },
+  'line-settings':       { adminOnly: true },  // V32-tris-ter — LINE OA channel + bot config
 });
 
 /**

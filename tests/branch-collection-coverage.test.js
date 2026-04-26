@@ -77,6 +77,7 @@ const COLLECTION_MATRIX = {
   'be_document_prints':    { scope: 'global',  reason: 'Print audit ledger (Phase 14.9 — append-only)' },
   'be_document_drafts':    { scope: 'global',  reason: 'Print form drafts (Phase 14.10 — caller-scoped via staffUid)' },
   'be_course_changes':     { scope: 'global',  reason: 'Course exchange + refund audit ledger (T4 / Phase 14.4 G5 — append-only, customer-scoped via field)' },
+  'be_customer_link_tokens': { scope: 'global', reason: 'LINE customer-link one-time tokens (V32-tris-ter — admin-mint via firebase-admin SDK; webhook consumes via REST; client SDK blocked)' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },

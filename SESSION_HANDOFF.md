@@ -7,10 +7,10 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-26 session 11 EOD — P1-P3 ALL: T3.e + T4 + T5.b + T5.a + V32-tris + M9 reconciler
+- **Date last updated**: 2026-04-26 session 11 EOD-2 — P1-P3 + V32-tris-ter (LINE OA Q&A bot + QR linking + LineSettingsTab) + email stripped
 - **Branch**: `master`
 - **Last commit**: `9a9cde8 fix(phase14.10-tris): backend 100% be_* — zero master_data reads + listAllSellers` (LOCAL: V32-tris commit pending)
-- **Test count**: 6126 vitest passing (+121 session 11 P1-P3 — T3.e 26, T4 39, T5.b 35, T5.a 21)
+- **Test count**: 6205 vitest passing (+200 session 11: T3.e 23 LINE-only, T4 39, T5.b 35, T5.a 21, V32-tris-ter LINE flow 82)
 - **Build**: clean. BackendDashboard chunk ~938 KB (+html2canvas + jspdf direct deps)
 - **Deploy state**: ⚠️ **6 COMMITS UNPUSHED-TO-PROD** — production at `b2784cf` (T3.f saved drafts deploy)
   - Vercel: `lover-clinic-93z2j8492` aliased to https://lover-clinic-app.vercel.app (40s)

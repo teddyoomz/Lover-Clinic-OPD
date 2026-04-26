@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode
 } from 'lucide-react';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
@@ -23,6 +23,7 @@ import {
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
 } from '../../lib/backendClient.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
+import LinkLineQrModal from './LinkLineQrModal.jsx';
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
@@ -132,6 +133,7 @@ export default function CustomerDetailView({
   const [shareModal, setShareModal] = useState(null); // { courseIndex, course }
   // Phase 14.5 — print document modal
   const [printDocOpen, setPrintDocOpen] = useState(false);
+  const [lineQrOpen, setLineQrOpen] = useState(false);
   // Phase 14.2.B (2026-04-25) — per-treatment-row print modal:
   //   { treatmentId, type: 'cert' | 'record' }
   // 'cert' filters to TREATMENT_CERT_DOC_TYPES (8 medical-cert variants).
@@ -563,6 +565,16 @@ export default function CustomerDetailView({
                 {customer?.treatmentCount || treatmentSummary.length}
               </span>
               <div className="ml-auto flex items-center gap-1.5">
+                {/* V32-tris-ter (2026-04-26) — LINE link QR. Mints a one-time
+                    token + shows QR for customer to scan. After scan + send,
+                    /api/webhook/line writes lineUserId onto this customer record. */}
+                <button onClick={() => setLineQrOpen(true)}
+                  data-testid="link-line-btn"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
+                  style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
+                  title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
+                  <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
+                </button>
                 <button onClick={() => setPrintDocOpen(true)}
                   data-testid="print-document-btn"
                   className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
@@ -1009,6 +1021,13 @@ export default function CustomerDetailView({
         clinicSettings={clinicSettings || { accentColor: ac }}
         customer={customer}
       />
+      {/* V32-tris-ter (2026-04-26) — LINE link QR modal */}
+      {lineQrOpen && (
+        <LinkLineQrModal
+          customer={customer}
+          onClose={() => setLineQrOpen(false)}
+        />
+      )}
       {/* Phase 14.2.C (2026-04-25) — per-treatment-row print modals.
           Prefill maps every ProClinic Medical History field from the actual
           be_treatments / be_customers schema (verified via preview_eval):
