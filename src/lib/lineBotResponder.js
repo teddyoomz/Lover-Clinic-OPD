@@ -168,6 +168,18 @@ export function interpretCustomerMessage(text) {
  * @param {Array} courses — customer.courses[]
  * @returns {string}
  */
+// V33.5 — smart "is-meaningful" guard. The screenshot showed every course
+// with "หมดอายุ -" because `c.expiry === '-'` is truthy, so the old
+// ternary `c.expiry ? ... : ''` always rendered the empty placeholder.
+// Treat null / undefined / '' / '-' / 'ไม่มี' / 'ไม่ระบุ' as missing.
+export function isMeaningfulValue(v) {
+  if (v == null) return false;
+  const s = String(v).trim();
+  if (!s) return false;
+  if (s === '-' || s === '—' || s === 'ไม่มี' || s === 'ไม่ระบุ' || s === 'N/A') return false;
+  return true;
+}
+
 export function formatCoursesReply(courses) {
   if (!Array.isArray(courses) || courses.length === 0) {
     return 'ยังไม่มีคอร์สในระบบ';
@@ -183,8 +195,9 @@ export function formatCoursesReply(courses) {
   active.slice(0, 20).forEach((c, i) => {
     const name = c.name || c.product || '(ไม่ระบุ)';
     const qty = c.qty || c.remaining || '';
-    const expiry = c.expiry ? ` หมดอายุ ${formatThaiDate(c.expiry)}` : '';
-    lines.push(`${i + 1}. ${name}${qty ? ` — ${qty}` : ''}${expiry}`);
+    // V33.5 — skip expiry chip when value is an empty placeholder ("-" etc.)
+    const expiry = isMeaningfulValue(c.expiry) ? ` หมดอายุ ${formatThaiDate(c.expiry)}` : '';
+    lines.push(`${i + 1}. ${name}${isMeaningfulValue(qty) ? ` — ${qty}` : ''}${expiry}`);
   });
   if (active.length > 20) {
     lines.push('');
@@ -225,9 +238,17 @@ export function formatAppointmentsReply(appointments, todayISO = '') {
   const lines = ['📅 นัดหมายล่วงหน้า:', ''];
   upcoming.slice(0, 10).forEach((a, i) => {
     const date = String(a.appointmentDate || a.date || '').slice(0, 10);
-    const time = a.appointmentTime || a.time || '';
+    // V33.5 — show start-end time if both present (HH:MM-HH:MM); else just startTime/time
+    const start = a.startTime || a.appointmentTime || a.time || '';
+    const end = a.endTime || '';
+    const time = start && end ? `${start}-${end}` : start;
+    // V33.5 (directive #2) — include doctor / staff name. doctorName is
+    // denormalized on every be_appointments doc per AppointmentFormModal save.
+    const provider = String(a.doctorName || a.staffName || a.advisorName || '').trim();
     const note = a.note || a.title || a.treatment || '';
-    lines.push(`${i + 1}. ${formatThaiDate(date)}${time ? ` เวลา ${time}` : ''}${note ? ` — ${note}` : ''}`);
+    lines.push(`${i + 1}. ${formatThaiDate(date)}${time ? ` เวลา ${time}` : ''}`);
+    if (provider) lines.push(`   👨‍⚕️ ${provider}`);
+    if (note) lines.push(`   📝 ${note}`);
   });
   if (upcoming.length > 10) {
     lines.push('');
@@ -342,4 +363,295 @@ export function generateLinkToken() {
     }
   }
   return out;
+}
+
+// ─── V33.5 — LINE Flex Message builders ─────────────────────────────────
+//
+// Replaces ugly multi-line text replies with structured Flex Bubbles.
+// LINE Messaging API spec: https://developers.line.biz/en/reference/messaging-api/#flex-message
+//
+// Design (per V33.5 user decisions):
+//   - U1: Single Bubble with table-style rows (not Carousel)
+//   - U2: Clinic accent color (#dc2626 red default; overridable via opts.accentColor)
+//   - U3: NO action buttons in v1 (no customer portal yet)
+//   - U4: Hide inactive courses (active-only filter preserved from text formatter)
+//
+// Each builder returns: { type: 'flex', altText, contents: bubble }
+// altText = the existing plain-text formatter output (graceful fallback for
+// LINE clients < 8.11 that can't render Flex).
+
+const DEFAULT_ACCENT = '#dc2626';
+const DEFAULT_CLINIC_NAME = 'Lover Clinic';
+const COURSES_FLEX_MAX_ROWS = 25;
+const APPOINTMENTS_FLEX_MAX_ITEMS = 10;
+
+// Truncate Thai/English text safely (counts code units; good enough for display).
+function truncateText(text, maxLen) {
+  const s = String(text || '');
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen - 1) + '…';
+}
+
+/**
+ * Build a single Flex bubble for the empty / no-data case.
+ * Used by both courses + appointments when their respective lists are empty.
+ */
+export function buildEmptyStateFlex(title, message, opts = {}) {
+  const accentColor = opts.accentColor || DEFAULT_ACCENT;
+  const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
+  const altText = `${title}\n\n${message}`;
+  return {
+    type: 'flex',
+    altText: truncateText(altText, 400),
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', paddingAll: 'md',
+        backgroundColor: accentColor,
+        contents: [
+          { type: 'text', text: clinicName, color: '#FFFFFF', weight: 'bold', size: 'sm' },
+          { type: 'text', text: title, color: '#FFFFFF', weight: 'bold', size: 'md', margin: 'xs' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: 'lg', spacing: 'sm',
+        contents: [
+          { type: 'text', text: message, wrap: true, size: 'sm', color: '#666666' },
+        ],
+      },
+    },
+  };
+}
+
+/**
+ * Build a Flex bubble showing the customer's active courses in a table.
+ * Mirrors the filter logic of `formatCoursesReply` for consistency.
+ *
+ * Layout per row (3 columns):
+ *   [Name (60% flex) | Qty (20% flex, mono) | Expiry (20% flex, BE)]
+ *
+ * Empty fields hidden per V33.5 user directive — NO "หมดอายุ -" placeholders.
+ */
+export function buildCoursesFlex(courses, opts = {}) {
+  const accentColor = opts.accentColor || DEFAULT_ACCENT;
+  const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
+  const maxRows = Number.isFinite(opts.maxRows) ? opts.maxRows : COURSES_FLEX_MAX_ROWS;
+
+  const altText = formatCoursesReply(courses);
+
+  if (!Array.isArray(courses) || courses.length === 0) {
+    return buildEmptyStateFlex('คอร์สคงเหลือ', 'ยังไม่มีคอร์สในระบบ', { accentColor, clinicName });
+  }
+  const active = courses.filter((c) => {
+    const status = String(c?.status || '').trim();
+    return status === 'กำลังใช้งาน' || status === '' || status === 'active';
+  });
+  if (active.length === 0) {
+    return buildEmptyStateFlex(
+      'คอร์สคงเหลือ',
+      'ไม่พบคอร์สที่ยังใช้ได้\n(คอร์สทั้งหมดอาจใช้หมดแล้ว / ยกเลิก / คืนเงิน)',
+      { accentColor, clinicName },
+    );
+  }
+
+  const visible = active.slice(0, maxRows);
+  const remaining = active.length - visible.length;
+
+  // Header row of the table
+  const headerRow = {
+    type: 'box', layout: 'horizontal', spacing: 'sm', paddingBottom: 'sm',
+    contents: [
+      { type: 'text', text: 'คอร์ส', size: 'xs', color: '#888888', weight: 'bold', flex: 5, wrap: false },
+      { type: 'text', text: 'คงเหลือ', size: 'xs', color: '#888888', weight: 'bold', flex: 2, align: 'end', wrap: false },
+      { type: 'text', text: 'หมดอายุ', size: 'xs', color: '#888888', weight: 'bold', flex: 2, align: 'end', wrap: false },
+    ],
+  };
+
+  // Data rows
+  const courseRows = visible.map((c, i) => {
+    const name = truncateText(c.name || c.product || '(ไม่ระบุ)', 50);
+    const qty = isMeaningfulValue(c.qty)
+      ? String(c.qty)
+      : (isMeaningfulValue(c.remaining) ? String(c.remaining) : '-');
+    const expiryDisplay = isMeaningfulValue(c.expiry) ? formatThaiDate(c.expiry) : '';
+    return {
+      type: 'box', layout: 'horizontal', spacing: 'sm', paddingTop: 'sm', paddingBottom: 'sm',
+      borderColor: '#EEEEEE',
+      borderWidth: i === 0 ? 'none' : '1px',
+      contents: [
+        { type: 'text', text: name, size: 'sm', color: '#333333', flex: 5, wrap: true },
+        { type: 'text', text: qty, size: 'sm', color: '#222222', flex: 2, align: 'end', weight: 'bold' },
+        { type: 'text', text: expiryDisplay || '—', size: 'xs', color: expiryDisplay ? '#555555' : '#CCCCCC', flex: 2, align: 'end' },
+      ],
+    };
+  });
+
+  const bodyContents = [headerRow, ...courseRows];
+  if (remaining > 0) {
+    bodyContents.push({
+      type: 'box', layout: 'vertical', paddingTop: 'md',
+      contents: [
+        { type: 'text', text: `และอีก ${remaining} รายการ — ติดต่อคลินิกเพื่อรายละเอียด`, size: 'xs', color: '#888888', align: 'center', wrap: true },
+      ],
+    });
+  }
+
+  return {
+    type: 'flex',
+    altText: truncateText(altText, 400),
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box', layout: 'vertical', paddingAll: 'md',
+        backgroundColor: accentColor,
+        contents: [
+          { type: 'text', text: clinicName, color: '#FFFFFF', weight: 'bold', size: 'sm' },
+          {
+            type: 'box', layout: 'horizontal', margin: 'xs',
+            contents: [
+              { type: 'text', text: '📋 คอร์สคงเหลือ', color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
+              { type: 'text', text: `${active.length} รายการ`, color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
+            ],
+          },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: 'md', spacing: 'none',
+        contents: bodyContents,
+      },
+    },
+  };
+}
+
+/**
+ * Build a Flex bubble showing upcoming appointments.
+ * Mirrors the filter logic of `formatAppointmentsReply`.
+ *
+ * Each appointment = bordered box with:
+ *   - Top: 📅 date (Thai BE) + 🕐 time (HH:MM-HH:MM 24h)
+ *   - Middle: 👨‍⚕️ doctorName (or staffName fallback; OMITTED if both empty)
+ *   - Bottom: 📝 note / treatment (OMITTED if empty)
+ */
+export function buildAppointmentsFlex(appointments, opts = {}) {
+  const accentColor = opts.accentColor || DEFAULT_ACCENT;
+  const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
+  const maxItems = Number.isFinite(opts.maxItems) ? opts.maxItems : APPOINTMENTS_FLEX_MAX_ITEMS;
+  const todayISO = opts.todayISO || new Date().toISOString().slice(0, 10);
+
+  const altText = formatAppointmentsReply(appointments, todayISO);
+
+  if (!Array.isArray(appointments) || appointments.length === 0) {
+    return buildEmptyStateFlex('นัดหมายของคุณ', 'ไม่พบรายการนัดหมายในระบบ', { accentColor, clinicName });
+  }
+  const upcoming = appointments
+    .filter((a) => {
+      const s = String(a?.status || '').toLowerCase();
+      if (s === 'cancelled' || s === 'completed' || s === 'no-show') return false;
+      const date = String(a?.appointmentDate || a?.date || '').slice(0, 10);
+      return date >= todayISO;
+    })
+    .sort((a, b) => {
+      const da = String(a?.appointmentDate || a?.date || '');
+      const db = String(b?.appointmentDate || b?.date || '');
+      return da.localeCompare(db);
+    });
+
+  if (upcoming.length === 0) {
+    return buildEmptyStateFlex(
+      'นัดหมายของคุณ',
+      'ไม่พบรายการนัดหมายล่วงหน้า\n(หากต้องการนัดหมายใหม่ ติดต่อคลินิกได้เลย)',
+      { accentColor, clinicName },
+    );
+  }
+
+  const visible = upcoming.slice(0, maxItems);
+  const remaining = upcoming.length - visible.length;
+
+  const apptBoxes = visible.map((a, i) => {
+    const date = String(a.appointmentDate || a.date || '').slice(0, 10);
+    const start = a.startTime || a.appointmentTime || a.time || '';
+    const end = a.endTime || '';
+    const time = start && end ? `${start}–${end}` : start;
+    const provider = String(a.doctorName || a.staffName || a.advisorName || '').trim();
+    const note = String(a.note || a.title || a.treatment || '').trim();
+
+    const innerRows = [
+      // Date + time row
+      {
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '📅', size: 'sm', flex: 0 },
+          { type: 'text', text: formatThaiDate(date), size: 'sm', weight: 'bold', color: '#222222', flex: 4, wrap: false },
+          ...(time ? [
+            { type: 'text', text: '🕐', size: 'sm', flex: 0 },
+            { type: 'text', text: time, size: 'sm', color: '#444444', flex: 2, align: 'end', wrap: false },
+          ] : []),
+        ],
+      },
+    ];
+    if (isMeaningfulValue(provider)) {
+      innerRows.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'xs',
+        contents: [
+          { type: 'text', text: '👨‍⚕️', size: 'sm', flex: 0 },
+          { type: 'text', text: truncateText(provider, 60), size: 'sm', color: accentColor, flex: 1, wrap: true },
+        ],
+      });
+    }
+    if (isMeaningfulValue(note)) {
+      innerRows.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'xs',
+        contents: [
+          { type: 'text', text: '📝', size: 'sm', flex: 0 },
+          { type: 'text', text: truncateText(note, 80), size: 'xs', color: '#666666', flex: 1, wrap: true },
+        ],
+      });
+    }
+
+    return {
+      type: 'box', layout: 'vertical', spacing: 'xs', paddingAll: 'md',
+      borderColor: '#EEEEEE', cornerRadius: 'md',
+      borderWidth: '1px',
+      margin: i === 0 ? 'none' : 'md',
+      contents: innerRows,
+    };
+  });
+
+  if (remaining > 0) {
+    apptBoxes.push({
+      type: 'box', layout: 'vertical', paddingTop: 'md',
+      contents: [
+        { type: 'text', text: `และอีก ${remaining} นัด — ติดต่อคลินิกเพื่อรายละเอียด`, size: 'xs', color: '#888888', align: 'center', wrap: true },
+      ],
+    });
+  }
+
+  return {
+    type: 'flex',
+    altText: truncateText(altText, 400),
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box', layout: 'vertical', paddingAll: 'md',
+        backgroundColor: accentColor,
+        contents: [
+          { type: 'text', text: clinicName, color: '#FFFFFF', weight: 'bold', size: 'sm' },
+          {
+            type: 'box', layout: 'horizontal', margin: 'xs',
+            contents: [
+              { type: 'text', text: '📅 นัดหมายล่วงหน้า', color: '#FFFFFF', weight: 'bold', size: 'lg', flex: 5 },
+              { type: 'text', text: `${upcoming.length} นัด`, color: '#FFFFFF', size: 'sm', align: 'end', flex: 2, gravity: 'center' },
+            ],
+          },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', paddingAll: 'md', spacing: 'sm',
+        contents: apptBoxes,
+      },
+    },
+  };
 }

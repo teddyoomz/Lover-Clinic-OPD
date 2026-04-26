@@ -24,6 +24,9 @@ import {
   formatIdRequestAck,
   formatIdRequestRateLimitedReply,
   formatIdRequestInvalidFormat,
+  // V33.5 — Flex message builders for richer course/appointment replies
+  buildCoursesFlex,
+  buildAppointmentsFlex,
 } from '../../src/lib/lineBotResponder.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
@@ -71,10 +74,15 @@ async function getChatConfig() {
   const doc = await res.json();
   if (!doc.fields?.line?.mapValue?.fields) return null;
   const f = doc.fields.line.mapValue.fields;
+  // V33.5 — also surface clinicName + accentColor for Flex bubble theming.
+  // These read from the parent doc (clinic_settings/chat_config) and are
+  // optional. Webhook falls back to defaults inside the Flex builders.
   return {
     channelAccessToken: f.channelAccessToken?.stringValue || '',
     channelSecret: f.channelSecret?.stringValue || '',
     enabled: f.enabled?.booleanValue === true,
+    clinicName: doc.fields?.clinicName?.stringValue || '',
+    accentColor: doc.fields?.accentColor?.stringValue || '',
   };
 }
 
@@ -129,15 +137,29 @@ async function pushLineMessage(userId, text, accessToken) {
   return res.ok;
 }
 
-async function replyLineMessage(replyToken, text, accessToken) {
-  if (!replyToken || !text || !accessToken) return false;
+/**
+ * Send a LINE reply.
+ * @param {string} replyToken
+ * @param {string|Array<object>} payload — string text OR array of LINE message
+ *   objects (e.g. [{ type: 'flex', altText, contents }, { type: 'text', text }]).
+ *   String is wrapped into [{type:'text', text}] for backward compatibility.
+ *   Array is passed through (max 5 per LINE API limit).
+ * @param {string} accessToken
+ */
+async function replyLineMessage(replyToken, payload, accessToken) {
+  if (!replyToken || !payload || !accessToken) return false;
+  // V33.5 — accept either string (legacy) or array of message objects (Flex).
+  const messages = Array.isArray(payload)
+    ? payload.slice(0, 5)
+    : [{ type: 'text', text: String(payload) }];
+  if (messages.length === 0) return false;
   const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }),
+    body: JSON.stringify({ replyToken, messages }),
   });
   return res.ok;
 }
@@ -417,15 +439,21 @@ async function maybeEmitBotReply(event, config) {
       await replyLineMessage(event.replyToken, formatNotLinkedReply(), config.channelAccessToken);
       return true;
     }
+    // V33.5 — read clinic name + accent color from chat_config (best-effort).
+    // Fall back to defaults if missing.
+    const clinicName = config.clinicName || 'Lover Clinic';
+    const accentColor = config.accentColor || '#dc2626';
     if (intent.intent === 'courses') {
-      const replyText = formatCoursesReply(customer.courses || []);
-      await replyLineMessage(event.replyToken, replyText, config.channelAccessToken);
+      // V33.5 — send Flex bubble. altText embedded for graceful fallback on
+      // older LINE clients (<8.11) that can't render Flex.
+      const flex = buildCoursesFlex(customer.courses || [], { accentColor, clinicName });
+      await replyLineMessage(event.replyToken, [flex], config.channelAccessToken);
       return true;
     }
     if (intent.intent === 'appointments') {
       const appts = await findUpcomingAppointmentsForCustomer(customer.id);
-      const replyText = formatAppointmentsReply(appts);
-      await replyLineMessage(event.replyToken, replyText, config.channelAccessToken);
+      const flex = buildAppointmentsFlex(appts, { accentColor, clinicName });
+      await replyLineMessage(event.replyToken, [flex], config.channelAccessToken);
       return true;
     }
   }
