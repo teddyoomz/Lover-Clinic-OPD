@@ -109,10 +109,10 @@ export async function bootstrapSelfAsAdmin() {
   return payload.data;
 }
 
-// ─── Cleanup test-probe-anon-* docs (V27) ──────────────────────────────────
-// One-shot admin cleanup for the visible-queue clutter from Rule B
-// Probe-Deploy-Probe protocol. Hits /api/admin/cleanup-test-probes which
-// uses firebase-admin Firestore SDK (bypasses anon-delete rule).
+// ─── Cleanup test-probe-anon-* docs (V27, kept for legacy/dev use) ────────
+// Admin cleanup endpoint. UI button REMOVED in V29 per user directive — use
+// the bash post-deploy script (V27-tris anon DELETE) for normal cleanup.
+// Endpoint kept as fallback for emergency manual cleanup if needed.
 export async function cleanupTestProbes() {
   const token = await getIdToken();
   const res = await fetch('/api/admin/cleanup-test-probes', {
@@ -127,6 +127,34 @@ export async function cleanupTestProbes() {
   try { payload = await res.json(); } catch { /* non-JSON */ }
   if (!res.ok || !payload?.success) {
     const msg = payload?.error || `cleanup-test-probes ล้มเหลว (HTTP ${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.payload = payload;
+    throw err;
+  }
+  return payload.data;
+}
+
+// ─── Self-service claim sync (V29) ─────────────────────────────────────────
+// Any signed-in user can sync their own custom claims based on their
+// be_staff doc + group permissions. Does NOT require admin claim — only
+// affects caller's own claims. UserPermissionContext auto-calls on login.
+// Returns synced=false if caller has no be_staff doc (then UPC falls back
+// to bootstrapSelfAsAdmin for owner accounts).
+export async function syncClaimsSelf() {
+  const token = await getIdToken();
+  const res = await fetch('/api/admin/sync-self', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: '{}',
+  });
+  let payload = null;
+  try { payload = await res.json(); } catch { /* non-JSON */ }
+  if (!res.ok || !payload?.success) {
+    const msg = payload?.error || `sync-self ล้มเหลว (HTTP ${res.status})`;
     const err = new Error(msg);
     err.status = res.status;
     err.payload = payload;

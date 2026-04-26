@@ -184,103 +184,36 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
     });
   });
 
-  describe('H4: PermissionGroupsTab migration button', () => {
-    it('H4.1: imports listStaff + setUserPermission', () => {
-      expect(PG_TAB).toMatch(/listStaff/);
-      expect(PG_TAB).toMatch(/setUserPermission/);
+  describe('H4 (V29 REMOVED): manual buttons removed — auto-sync via UPC + sync-self', () => {
+    // V29 (2026-04-26) — User directive: "เอาปุ่ม Bootstrap ตัวเองเป็น admin,
+    // Sync ทุก staff → Claims, ลบ test-probe ค้าง. ออกให้หมด ไม่ต้องการ
+    // ระบบ manual เหล่านี้". All 3 manual buttons removed.
+    it('H4-removed.1: handleMigrateAllToClaims function REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/handleMigrateAllToClaims/);
     });
 
-    it('H4.2: handleMigrateAllToClaims function defined', () => {
-      expect(PG_TAB).toMatch(/handleMigrateAllToClaims\s*=/);
+    it('H4-removed.2: "Sync ทุก staff → Claims" button data-testid REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/data-testid=["']permission-claims-migrate-button["']/);
     });
 
-    it('H4.3: button has data-testid="permission-claims-migrate-button"', () => {
-      expect(PG_TAB).toMatch(/data-testid=["']permission-claims-migrate-button["']/);
+    it('H4-removed.3: handleBootstrapSelf function REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/handleBootstrapSelf/);
     });
 
-    it('H4.4: button gated on canDelete (permission_group_management permission)', () => {
-      const buttonIdx = PG_TAB.indexOf('permission-claims-migrate-button');
-      const ctx = PG_TAB.slice(buttonIdx, buttonIdx + 500);
-      expect(ctx).toMatch(/disabled=\{[^}]*!canDelete/);
+    it('H4-removed.4: "Bootstrap ตัวเองเป็น admin" button data-testid REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/data-testid=["']permission-bootstrap-self-button["']/);
     });
 
-    it('H4.5: migration loops every be_staff with firebaseUid', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock).toBeTruthy();
-      const body = fnBlock[0];
-      expect(body).toMatch(/await\s+listStaff\(\)/);
-      expect(body).toMatch(/for\s*\(\s*const\s+s\s+of\s+allStaff\s*\)/);
-      expect(body).toMatch(/s\.firebaseUid/);
-      expect(body).toMatch(/await\s+setUserPermission/);
+    it('H4-removed.5: handleCleanupTestProbes function REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/handleCleanupTestProbes/);
     });
 
-    it('H4.6: skips entries without firebaseUid (Firestore-only records)', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock[0]).toMatch(/if\s*\(\s*!uid\s*\)\s*\{[^}]*skipped/);
+    it('H4-removed.6: "ลบ test-probe ค้าง" button data-testid REMOVED', () => {
+      expect(PG_TAB).not.toMatch(/data-testid=["']cleanup-test-probes-button["']/);
     });
 
-    it('H4.7: per-staff error caught — one failure does not abort the whole loop', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      // Inside the for-loop, must have try/catch with failed counter
-      expect(fnBlock[0]).toMatch(/try\s*\{[\s\S]*?setUserPermission[\s\S]*?\}\s*catch[\s\S]*?failed\s*\+=\s*1/);
-    });
-
-    it('H4.8: result UI shows synced/skipped/failed counts + Deploy 2 readiness hint', () => {
-      expect(PG_TAB).toMatch(/data-testid=["']permission-claims-migrate-result["']/);
-      expect(PG_TAB).toMatch(/synced/);
-      expect(PG_TAB).toMatch(/skipped/);
-      expect(PG_TAB).toMatch(/failed/);
-      expect(PG_TAB).toMatch(/Deploy\s*2/);
-    });
-
-    it('H4.9: window.confirm guard before destructive operation', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock[0]).toMatch(/window\.confirm/);
-    });
-
-    // ─── V25 (2026-04-26) — Admin self-bootstrap (lockout-prevention) ──
-    // Discovered when user ran migration: 20 staff / 0 synced / 20 skipped
-    // (none had firebaseUid). The CURRENT logged-in admin would have NO
-    // claim either → Deploy 2 (claim-only rule) = lockout. Fix: button
-    // ALSO syncs auth.currentUser.uid as gp-owner if not in be_staff.
-    it('H4.10: imports auth from firebase.js (for current-user lookup)', () => {
-      expect(PG_TAB).toMatch(/import\s*\{[^}]*\bauth\b/);
-      expect(PG_TAB).toMatch(/from\s+['"]\.\.\/\.\.\/firebase\.js['"]/);
-    });
-
-    it('H4.11: admin self-bootstrap reads auth.currentUser.uid', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock[0]).toMatch(/auth\?\.currentUser\?\.uid/);
-    });
-
-    it('H4.12: admin self-bootstrap only fires when uid NOT in be_staff (foundInBeStaff guard)', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock[0]).toMatch(/foundInBeStaff/);
-      expect(fnBlock[0]).toMatch(/if\s*\(\s*!foundInBeStaff\s*\)/);
-    });
-
-    it('H4.13: admin self-bootstrap calls setUserPermission with gp-owner default', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      // The bootstrap call must use gp-owner (admin assumption)
-      expect(fnBlock[0]).toMatch(/setUserPermission\(\s*\{\s*uid:\s*myUid,\s*permissionGroupId:\s*['"]gp-owner['"]/);
-    });
-
-    it('H4.14: result tracks adminBootstrap field for UI surfacing', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock[0]).toMatch(/adminBootstrap:/);
-      // UI block surfaces it to the admin
-      expect(PG_TAB).toMatch(/migrateResult\.adminBootstrap/);
-      expect(PG_TAB).toMatch(/Admin\s+self-bootstrap/);
-    });
-
-    it('H4.15: bootstrap error caught — counts as failed but does NOT abort the loop', () => {
-      const fnBlock = PG_TAB.match(/handleMigrateAllToClaims\s*=\s*async[\s\S]*?\n\s*\};/);
-      // The bootstrap try/catch must increment result.failed and push an
-      // error (with admin marker) — and the FOR loop below must still run
-      const bootstrapBlock = fnBlock[0].match(/if\s*\(\s*!foundInBeStaff\s*\)\s*\{[\s\S]*?\}\s*\}/);
-      expect(bootstrapBlock).toBeTruthy();
-      expect(bootstrapBlock[0]).toMatch(/try\s*\{[\s\S]*?setUserPermission[\s\S]*?\}\s*catch/);
-      expect(bootstrapBlock[0]).toMatch(/admin self-bootstrap/);
+    it('H4-removed.7: V29 marker comment in tab explaining removal', () => {
+      expect(PG_TAB).toMatch(/V29[\s\S]{0,200}REMOVED|Removed manual buttons|All manual admin buttons REMOVED/);
     });
   });
 
@@ -393,30 +326,99 @@ describe('Phase 13.5.4 — Hard-Gate Custom Claims (Deploy 1: app + endpoint + b
       expect(fnBlock[0]).toMatch(/err\.payload\s*=\s*payload/);
     });
 
-    it('H7.4: PermissionGroupsTab imports bootstrapSelfAsAdmin', () => {
-      expect(PG_TAB).toMatch(/bootstrapSelfAsAdmin/);
+    it('H7.4 (V29 REMOVED): PermissionGroupsTab does NOT import bootstrapSelfAsAdmin (button removed)', () => {
+      // V29: bootstrap button removed; auto-sync via UserPermissionContext
+      // useEffect handles owner accounts on login. The endpoint still
+      // exists (for manual emergency use) but the UI button is gone.
+      expect(PG_TAB).not.toMatch(/bootstrapSelfAsAdmin/);
     });
 
-    it('H7.5: handleBootstrapSelf function defined in PermissionGroupsTab', () => {
-      expect(PG_TAB).toMatch(/handleBootstrapSelf\s*=\s*async/);
+    it('H7.5 (V29 REMOVED): handleBootstrapSelf function gone from PermissionGroupsTab', () => {
+      expect(PG_TAB).not.toMatch(/handleBootstrapSelf/);
     });
 
-    it('H7.6: bootstrap button has data-testid="permission-bootstrap-self-button"', () => {
-      expect(PG_TAB).toMatch(/data-testid=["']permission-bootstrap-self-button["']/);
+    it('H7.6 (V29 REMOVED): bootstrap button data-testid gone', () => {
+      expect(PG_TAB).not.toMatch(/data-testid=["']permission-bootstrap-self-button["']/);
     });
 
-    it('H7.7: bootstrap success forces ID token refresh (getIdToken(true))', () => {
-      const fnBlock = PG_TAB.match(/handleBootstrapSelf\s*=\s*async[\s\S]*?\n\s*\};/);
-      expect(fnBlock).toBeTruthy();
-      expect(fnBlock[0]).toMatch(/getIdToken\(true\)/);
+    // bootstrapSelfAsAdmin client wrapper still exists for UPC auto-sync use
+    it('H7.7-keep: bootstrapSelfAsAdmin client wrapper still exported', () => {
+      expect(ADMIN_CLIENT).toMatch(/export\s+async\s+function\s+bootstrapSelfAsAdmin/);
     });
 
-    it('H7.8: bootstrap result UI surfaces 409 conflict with existingAdmin info', () => {
-      // The UI must show the existing admin's email/uid when bootstrap is
-      // refused — so the user knows who to ask for grantAdmin
-      expect(PG_TAB).toMatch(/data-testid=["']permission-bootstrap-result["']/);
-      expect(PG_TAB).toMatch(/existingAdmin/);
-      expect(PG_TAB).toMatch(/grantAdmin/);
+    it('H7.8-keep: client wrapper attaches status + payload (UPC auto-sync uses this)', () => {
+      const fnBlock = ADMIN_CLIENT.match(/async\s+function\s+bootstrapSelfAsAdmin[\s\S]*?\n\}/);
+      expect(fnBlock[0]).toMatch(/err\.status\s*=\s*res\.status/);
+    });
+  });
+
+  describe('H8 (V29): /api/admin/sync-self endpoint + auto-sync via UPC', () => {
+    const SYNC_SELF_API = READ('api/admin/sync-self.js');
+    const UPC = READ('src/contexts/UserPermissionContext.jsx');
+
+    it('H8.1: /api/admin/sync-self endpoint exists with default export handler', () => {
+      expect(SYNC_SELF_API).toMatch(/export\s+default\s+async\s+function\s+handler/);
+    });
+
+    it('H8.2: requires Bearer token (signature verified, NOT admin gate)', () => {
+      // Self-service: any signed-in user can sync THEIR OWN claims
+      expect(SYNC_SELF_API).toMatch(/Bearer/);
+      expect(SYNC_SELF_API).toMatch(/verifyIdToken/);
+      expect(SYNC_SELF_API).not.toMatch(/verifyAdminToken\s*\(/);
+    });
+
+    it('H8.3: looks up be_staff WHERE firebaseUid == caller uid (own only)', () => {
+      expect(SYNC_SELF_API).toMatch(/be_staff/);
+      expect(SYNC_SELF_API).toMatch(/firebaseUid/);
+      expect(SYNC_SELF_API).toMatch(/where\(['"]firebaseUid['"]\s*,\s*['"]==['"]\s*,\s*callerUid\)/);
+    });
+
+    it('H8.4: returns synced=false when no be_staff doc (UPC falls back to bootstrap-self)', () => {
+      expect(SYNC_SELF_API).toMatch(/synced:\s*false/);
+      expect(SYNC_SELF_API).toMatch(/no be_staff doc/);
+    });
+
+    it('H8.5: sets isClinicStaff + permissionGroupId claims', () => {
+      expect(SYNC_SELF_API).toMatch(/isClinicStaff:\s*true/);
+      expect(SYNC_SELF_API).toMatch(/permissionGroupId/);
+      expect(SYNC_SELF_API).toMatch(/setCustomUserClaims/);
+    });
+
+    it('H8.6: V28-tris auto-grants admin if gp-owner OR meta-perm group', () => {
+      expect(SYNC_SELF_API).toMatch(/permissionGroupId\s*===\s*['"]gp-owner['"]/);
+      expect(SYNC_SELF_API).toMatch(/be_permission_groups/);
+      expect(SYNC_SELF_API).toMatch(/permission_group_management\s*===\s*true/);
+    });
+
+    it('H8.7: preserves existing custom claims (spread + override)', () => {
+      expect(SYNC_SELF_API).toMatch(/\.\.\.\(existing\.customClaims\s*\|\|\s*\{\}\)/);
+    });
+
+    it('H8.8: UPC imports syncClaimsSelf', () => {
+      expect(UPC).toMatch(/syncClaimsSelf/);
+      expect(UPC).toMatch(/from\s+['"]\.\.\/lib\/adminUsersClient/);
+    });
+
+    it('H8.9: UPC auto-sync useEffect tries sync-self FIRST, then falls back to bootstrap-self', () => {
+      // Sync-self call must come BEFORE bootstrap-self in the same effect
+      const fnBlock = UPC.match(/Auto-sync claims on every login[\s\S]*?\n\s*\}\,\s*\[user\?\.uid/);
+      expect(fnBlock, 'V29 auto-sync useEffect not found').toBeTruthy();
+      const body = fnBlock[0];
+      const syncIdx = body.indexOf('syncClaimsSelf');
+      const bootstrapIdx = body.indexOf('bootstrapSelfAsAdmin');
+      expect(syncIdx).toBeGreaterThan(-1);
+      expect(bootstrapIdx).toBeGreaterThan(-1);
+      expect(syncIdx).toBeLessThan(bootstrapIdx);
+    });
+
+    it('H8.10: UPC group-change useEffect re-syncs claims when staff.permissionGroupId changes', () => {
+      expect(UPC).toMatch(/Re-sync claims when admin changes group/);
+      expect(UPC).toMatch(/lastSyncedGroupRef/);
+      expect(UPC).toMatch(/staff\?\.permissionGroupId/);
+    });
+
+    it('H8.11: UPC forces token refresh after sync (getIdToken(true))', () => {
+      expect(UPC).toMatch(/getIdToken\(true\)/);
     });
   });
 

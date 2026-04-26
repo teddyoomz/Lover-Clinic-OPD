@@ -21,7 +21,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { listenToUserPermissions } from '../lib/backendClient.js';
 import { isOwnerEmail } from '../lib/ownerEmails.js';
-import { bootstrapSelfAsAdmin } from '../lib/adminUsersClient.js';
+import { bootstrapSelfAsAdmin, syncClaimsSelf } from '../lib/adminUsersClient.js';
 
 const UserPermissionContext = createContext(null);
 
@@ -85,19 +85,28 @@ export function UserPermissionProvider({ user, children }) {
     return () => unsub();
   }, [user?.uid]);
 
-  // ─── V28-bis (2026-04-26) — Auto-bootstrap admin claim on owner login ──
-  // After V27-bis added OWNER_EMAILS allowlist (gmail owners pass soft-gate),
-  // a SECOND chicken-and-egg surfaced: gmail owner could see the backend
-  // sidebar (soft-gate ✓) but couldn't call /api/admin/users (hard-gate
-  // requires admin: true claim). They had to manually click "Bootstrap
-  // ตัวเองเป็น admin" button before any admin action would work.
+  // ─── V29 (2026-04-26) — Auto-sync claims on every login (self-service) ──
+  // User directive: "ไม่ต้องการระบบ manual เหล่านี้ ... ทำให้ Perfect 100%
+  // กับทุก id ทุกสิทธิ์ที่ id นั้นได้รับด้วย".
   //
-  // V28-bis: when an authorized user (loverclinic email OR OWNER_EMAILS)
-  // logs in WITHOUT admin claim, silently auto-call bootstrap-self +
-  // force token refresh. Idempotent — alreadyAdmin returns 200 fast.
+  // Replaces V28-bis (auto-bootstrap only for OWNER_EMAILS) with universal
+  // self-sync that handles ALL user types automatically:
+  //
+  //   1. Try /api/admin/sync-self — works for any signed-in user with
+  //      a be_staff doc. Sets isClinicStaff + permissionGroupId claims.
+  //      Auto-grants admin if group is gp-owner OR has meta-perm.
+  //
+  //   2. If sync-self returns synced=false (no be_staff doc), fall back
+  //      to /api/admin/bootstrap-self — handles owner accounts
+  //      (@loverclinic.com OR OWNER_EMAILS) that operate without staff
+  //      records.
+  //
+  //   3. Force ID token refresh after either path so claims propagate
+  //      to current session immediately.
   //
   // Per-session ref guard prevents re-calling on every render. Reset on
-  // user change (logout/login).
+  // user change (logout/login). Idempotent — endpoints handle "already
+  // in sync" gracefully.
   const bootstrapAttemptedRef = useRef(false);
   useEffect(() => {
     if (!user?.uid) {
@@ -109,28 +118,76 @@ export function UserPermissionProvider({ user, children }) {
 
     (async () => {
       try {
-        const tokenResult = await user.getIdTokenResult();
-        // Already admin → skip (avoid unnecessary network call)
-        if (tokenResult?.claims?.admin === true) return;
+        // Try staff-based sync first (covers 99% of users)
+        let staffSynced = false;
+        try {
+          const result = await syncClaimsSelf();
+          if (result?.synced) {
+            staffSynced = true;
+          }
+        } catch (err) {
+          // Network error or 401 — log + continue to fallback
+          // eslint-disable-next-line no-console
+          console.warn('[auto-sync] sync-self failed:', err?.message || err);
+        }
 
-        // Auto-bootstrap only for authorized accounts (loverclinic OR owner)
-        const email = (user.email || '').toLowerCase();
-        const isAuthorized = LOVERCLINIC_EMAIL_RE.test(email) || isOwnerEmail(email);
-        if (!isAuthorized) return;
+        // Fallback: owner-account bootstrap (no be_staff doc)
+        if (!staffSynced) {
+          const email = (user.email || '').toLowerCase();
+          const isAuthorized = LOVERCLINIC_EMAIL_RE.test(email) || isOwnerEmail(email);
+          if (isAuthorized) {
+            try {
+              await bootstrapSelfAsAdmin();
+            } catch (err) {
+              // 409 conflict expected if not owner + admin exists; non-fatal
+              // eslint-disable-next-line no-console
+              console.warn('[auto-sync] bootstrap-self skip:', err?.message || err);
+            }
+          }
+        }
 
-        // Silently call bootstrap-self. 409 (genesis exists + non-owner)
-        // expected for normal staff — caught + logged.
-        await bootstrapSelfAsAdmin();
-        // Force ID token refresh to pick up new admin claim
-        await user.getIdToken(true);
+        // Force token refresh so new claims propagate to current session
+        try {
+          await user.getIdToken(true);
+        } catch { /* non-fatal — next page load picks them up */ }
       } catch (err) {
-        // Non-fatal — manual "Bootstrap ตัวเองเป็น admin" button still
-        // available in PermissionGroupsTab as fallback.
         // eslint-disable-next-line no-console
-        console.warn('[auto-bootstrap] skip:', err?.message || err);
+        console.warn('[auto-sync] failed:', err?.message || err);
       }
     })();
   }, [user?.uid, user?.email]);
+
+  // ─── V29 (2026-04-26) — Re-sync claims when admin changes group ────────
+  // If an admin changes this user's permissionGroupId while they're logged
+  // in, the user's existing token claims are stale until next refresh
+  // (1 hour TTL). The be_staff onSnapshot listener (above) already pushes
+  // the new permissions to the soft-gate immediately — but the hard-gate
+  // (firestore.rules + /api/admin/* gates) still uses the stale claim.
+  //
+  // This effect detects when staff.permissionGroupId differs from the
+  // current claim's permissionGroupId → triggers a re-sync.
+  const lastSyncedGroupRef = useRef(null);
+  useEffect(() => {
+    if (!user?.uid || !loaded) return;
+    const currentGroup = staff?.permissionGroupId || '';
+    // Only resync if group actually changed (not on initial load)
+    if (lastSyncedGroupRef.current === null) {
+      lastSyncedGroupRef.current = currentGroup;
+      return;
+    }
+    if (lastSyncedGroupRef.current === currentGroup) return;
+    lastSyncedGroupRef.current = currentGroup;
+
+    (async () => {
+      try {
+        await syncClaimsSelf();
+        await user.getIdToken(true);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[group-change-resync] failed:', err?.message || err);
+      }
+    })();
+  }, [user?.uid, loaded, staff?.permissionGroupId]);
 
   const state = useMemo(() => ({
     ...deriveState(user, staff, group),

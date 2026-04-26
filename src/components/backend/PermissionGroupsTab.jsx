@@ -3,10 +3,8 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2, KeyRound, Shield, Eraser } from 'lucide-react';
-import { listPermissionGroups, deletePermissionGroup, listStaff } from '../../lib/backendClient.js';
-import { setUserPermission, bootstrapSelfAsAdmin, cleanupTestProbes } from '../../lib/adminUsersClient.js';
-import { auth } from '../../firebase.js';
+import { Edit2, Trash2, ShieldCheck, Loader2 } from 'lucide-react';
+import { listPermissionGroups, deletePermissionGroup } from '../../lib/backendClient.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -15,6 +13,12 @@ import {
   ALL_PERMISSION_KEYS,
   countPermissions,
 } from '../../lib/permissionGroupValidation.js';
+
+// V29 (2026-04-26) — Removed manual buttons (Bootstrap self / Sync ทุก staff /
+// ลบ test-probe ค้าง) per user directive: "ไม่ต้องการระบบ manual เหล่านี้".
+// All claim sync is now AUTOMATIC via UserPermissionContext useEffect on
+// login + group change. Test-probe cleanup runs in bash post-deploy via
+// V27-tris anon DELETE.
 
 const STATUS_BADGE = {
   ใช้งาน:   { cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -82,191 +86,17 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
 
   const handleSaved = async () => { setFormOpen(false); setEditing(null); await reload(); };
 
-  // ─── Phase 13.5.4 — Hard-Gate Migration Button ───────────────────────────
-  // Loops every be_staff doc, calls /api/admin/users setPermission for each
-  // user with a firebaseUid, sets isClinicStaff + permissionGroupId custom
-  // claims. One-time backfill before Deploy 2 of Phase 13.5.4 (claim-only
-  // firestore.rules check).
-  //
-  // Idempotent: re-running just re-asserts the same claims.
-  // Skipped: be_staff entries with no firebaseUid (Firestore-only records).
-  // Self-protection: setPermission endpoint blocks "clear own claim" — but
-  // SET is fine for everyone including the caller.
-  const [migrating, setMigrating] = useState(false);
-  const [migrateResult, setMigrateResult] = useState(null);
-  const handleMigrateAllToClaims = async () => {
-    if (!window.confirm(
-      'Sync ทุก staff → Firebase custom claims?\n\n' +
-      'ขั้นตอน Deploy 1 ของ Phase 13.5.4 hard-gate.\n' +
-      'จะ loop be_staff ทั้งหมด + setCustomUserClaims ตาม permissionGroupId\n' +
-      'ของแต่ละคน. + Auto-bootstrap ตัวคุณเอง (admin login) ด้วย gp-owner\n' +
-      'ถ้ายังไม่มี be_staff record. Idempotent — รันซ้ำได้ปลอดภัย.'
-    )) return;
-
-    setMigrating(true);
-    setMigrateResult(null);
-    setError('');
-    const result = { total: 0, synced: 0, skipped: 0, failed: 0, errors: [], adminBootstrap: null };
-    try {
-      const allStaff = await listStaff();
-      result.total = allStaff.length;
-
-      // ─── ADMIN BOOTSTRAP (V25 — 2026-04-26) ───────────────────────────
-      // Sync the CURRENT logged-in user's claims FIRST. If their auth.uid
-      // is in any be_staff doc, the loop below handles them. If NOT
-      // (bootstrap admin with no be_staff record), self-sync as gp-owner
-      // here so they don't lock themselves out after Deploy 2.
-      // Lockout would happen if Deploy 2 ships claim-only rules and
-      // current admin has no isClinicStaff claim. This guard prevents it.
-      const myUid = auth?.currentUser?.uid || '';
-      const myEmail = auth?.currentUser?.email || '';
-      let foundInBeStaff = false;
-      if (myUid) {
-        for (const s of allStaff) {
-          if ((s.firebaseUid || '') === myUid) { foundInBeStaff = true; break; }
-        }
-        if (!foundInBeStaff) {
-          // Self-sync as gp-owner (bootstrap admin assumption — they can
-          // re-assign themselves to a different group later via PermissionGroupsTab)
-          try {
-            await setUserPermission({ uid: myUid, permissionGroupId: 'gp-owner' });
-            result.synced += 1;
-            result.adminBootstrap = { uid: myUid, email: myEmail, group: 'gp-owner' };
-          } catch (err) {
-            result.failed += 1;
-            result.errors.push(`(admin self-bootstrap ${myEmail || myUid}): ${err?.message || 'unknown'}`);
-          }
-        }
-      }
-
-      for (const s of allStaff) {
-        const uid = s.firebaseUid || '';
-        if (!uid) { result.skipped += 1; continue; }
-        const groupId = s.permissionGroupId || '';
-        try {
-          await setUserPermission({ uid, permissionGroupId: groupId });
-          result.synced += 1;
-        } catch (err) {
-          result.failed += 1;
-          result.errors.push(`${s.firstname || s.id || uid}: ${err?.message || 'unknown'}`);
-        }
-      }
-      setMigrateResult(result);
-    } catch (e) {
-      setError(`Migration error: ${e?.message || 'unknown'}`);
-    } finally {
-      setMigrating(false);
-    }
-  };
-
-  // ─── Genesis admin bootstrap (V25-bis) ───────────────────────────────
-  // If migration button hits 403 "admin privilege required", caller has no
-  // admin: true claim AND isn't in FIREBASE_ADMIN_BOOTSTRAP_UIDS env. The
-  // bootstrap button calls /api/admin/bootstrap-self which has its own
-  // chicken-and-egg-breaking guards (genesis-only, @loverclinic email).
-  // After success, force token refresh so the new claim takes effect.
-  const [bootstrapping, setBootstrapping] = useState(false);
-  const [bootstrapResult, setBootstrapResult] = useState(null);
-  const handleBootstrapSelf = async () => {
-    if (!window.confirm(
-      'Bootstrap ตัวคุณเป็น admin (genesis grant)?\n\n' +
-      'ใช้ตอนเดียว — กรณี Vercel env ไม่มี FIREBASE_ADMIN_BOOTSTRAP_UIDS\n' +
-      'และยังไม่มี admin คนไหนมี custom claim. หลัง bootstrap แล้ว token\n' +
-      'จะ refresh อัตโนมัติ + คุณจะเป็น admin ใน custom claim.'
-    )) return;
-
-    setBootstrapping(true);
-    setBootstrapResult(null);
-    setError('');
-    try {
-      const data = await bootstrapSelfAsAdmin();
-      // Force ID token refresh so the new claim is picked up immediately
-      try {
-        await auth.currentUser?.getIdToken(true);
-      } catch { /* non-fatal */ }
-      setBootstrapResult({ ok: true, ...data });
-    } catch (e) {
-      setBootstrapResult({
-        ok: false,
-        status: e?.status || 0,
-        error: e?.message || 'Unknown error',
-        existingAdmin: e?.payload?.existingAdmin || null,
-      });
-    } finally {
-      setBootstrapping(false);
-    }
-  };
-
-  // ─── V27 — Cleanup test-probe-anon-* docs from queue ─────────────────
-  // Rule B probe protocol creates opd_sessions docs we can't anon-delete
-  // (rule blocks). Old probe pattern (status='pending') made them visible.
-  // V27 fixes both: (a) refactored probe pattern hides new docs via
-  // isArchived=true; (b) this cleanup button removes legacy clutter.
-  const [cleaningProbes, setCleaningProbes] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState(null);
-  const handleCleanupTestProbes = async () => {
-    if (!window.confirm(
-      'ลบ opd_sessions/test-probe-anon-* ทุก doc?\n\n' +
-      'Cleanup mess จาก Rule B Probe-Deploy-Probe ที่สร้างค้างไว้.\n' +
-      'ใช้ /api/admin/cleanup-test-probes (firebase-admin Firestore SDK).\n' +
-      'ลบเฉพาะ docs ที่ขึ้นต้น "test-probe-anon-" ใน opd_sessions เท่านั้น.'
-    )) return;
-
-    setCleaningProbes(true);
-    setCleanupResult(null);
-    setError('');
-    try {
-      const data = await cleanupTestProbes();
-      setCleanupResult({ ok: true, ...data });
-    } catch (e) {
-      setCleanupResult({
-        ok: false,
-        status: e?.status || 0,
-        error: e?.message || 'Unknown error',
-      });
-    } finally {
-      setCleaningProbes(false);
-    }
-  };
+  // V29 (2026-04-26) — All manual admin buttons REMOVED per user directive.
+  // Auto-sync handles claim management for all users on login + group
+  // change (UserPermissionContext useEffect → /api/admin/sync-self).
+  // Test-probe cleanup runs in bash post-deploy via V27-tris anon DELETE.
 
   const extraFilters = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-        className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
-        <option value="">สถานะทั้งหมด</option>
-        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <button
-        type="button"
-        data-testid="permission-bootstrap-self-button"
-        onClick={handleBootstrapSelf}
-        disabled={bootstrapping || !canDelete}
-        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'Genesis-only admin grant — ใช้เมื่อ migration button คืน 403 admin error'}
-        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-violet-700/40 hover:text-violet-300 transition-all disabled:opacity-50">
-        {bootstrapping ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
-        Bootstrap ตัวเองเป็น admin
-      </button>
-      <button
-        type="button"
-        data-testid="permission-claims-migrate-button"
-        onClick={handleMigrateAllToClaims}
-        disabled={migrating || !canDelete}
-        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'Sync ทุก staff → custom claims (Phase 13.5.4)'}
-        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-amber-700/40 hover:text-amber-300 transition-all disabled:opacity-50">
-        {migrating ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-        Sync ทุก staff → Claims
-      </button>
-      <button
-        type="button"
-        data-testid="cleanup-test-probes-button"
-        onClick={handleCleanupTestProbes}
-        disabled={cleaningProbes || !canDelete}
-        title={!canDelete ? 'ต้องมีสิทธิ์ permission_group_management' : 'ลบ opd_sessions/test-probe-anon-* ทุก doc (V27 cleanup)'}
-        className="px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-rose-700/40 hover:text-rose-300 transition-all disabled:opacity-50">
-        {cleaningProbes ? <Loader2 size={14} className="animate-spin" /> : <Eraser size={14} />}
-        ลบ test-probe ค้าง
-      </button>
-    </div>
+    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+      className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
+      <option value="">สถานะทั้งหมด</option>
+      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
   );
 
   return (
@@ -349,85 +179,6 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
           })}
         </div>
       </MarketingTabShell>
-
-      {cleanupResult && (
-        <div data-testid="cleanup-test-probes-result"
-          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
-          <div className="font-bold text-[var(--tx-heading)] mb-1">ผลลบ test-probe ค้าง (V27)</div>
-          {cleanupResult.ok ? (
-            <div className="text-emerald-400">
-              ✓ ลบ {cleanupResult.deletedCount} docs สำเร็จ
-              {cleanupResult.deletedCount > 0 && (
-                <details className="mt-1">
-                  <summary className="text-[11px] text-[var(--tx-muted)] cursor-pointer">รายชื่อ {cleanupResult.deletedCount} docs ที่ลบ</summary>
-                  <ul className="mt-1 text-[11px] text-[var(--tx-muted)] list-disc list-inside max-h-32 overflow-y-auto font-mono">
-                    {(cleanupResult.deleted || []).map((id) => <li key={id}>{id}</li>)}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ) : (
-            <div className="text-red-400">
-              ✗ ล้มเหลว ({cleanupResult.status}): {cleanupResult.error}
-            </div>
-          )}
-        </div>
-      )}
-
-      {bootstrapResult && (
-        <div data-testid="permission-bootstrap-result"
-          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
-          <div className="font-bold text-[var(--tx-heading)] mb-1">ผล Bootstrap admin (genesis grant)</div>
-          {bootstrapResult.ok ? (
-            <div className="text-emerald-400">
-              ✓ {bootstrapResult.alreadyAdmin
-                ? `${bootstrapResult.email || bootstrapResult.uid} เป็น admin อยู่แล้ว — ตั้ง isClinicStaff claim ครบแล้ว`
-                : `Genesis admin granted: ${bootstrapResult.email || bootstrapResult.uid}. Token refreshed อัตโนมัติ.`}
-              <div className="text-[11px] text-[var(--tx-muted)] mt-1">
-                ลองกดปุ่ม "Sync ทุก staff → Claims" ใหม่ครับ — ควรจะ synced=1 (ตัวคุณ) + skipped=20 + failed=0
-              </div>
-            </div>
-          ) : (
-            <div className="text-red-400">
-              ✗ ล้มเหลว ({bootstrapResult.status}): {bootstrapResult.error}
-              {bootstrapResult.existingAdmin && (
-                <div className="text-[11px] text-amber-300 mt-1">
-                  มี admin อยู่แล้ว: {bootstrapResult.existingAdmin.email || bootstrapResult.existingAdmin.uid}
-                  — ขอ admin คนนั้น grant สิทธิ์ผ่าน /api/admin/users grantAdmin แทน
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {migrateResult && (
-        <div data-testid="permission-claims-migrate-result"
-          className="mt-4 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)] text-sm">
-          <div className="font-bold text-[var(--tx-heading)] mb-1">ผลการ Sync Custom Claims</div>
-          <div className="text-[var(--tx-muted)]">
-            ทั้งหมด <span className="text-[var(--tx-primary)] font-bold">{migrateResult.total}</span> /
-            สำเร็จ <span className="text-emerald-400 font-bold">{migrateResult.synced}</span> /
-            ข้าม (ไม่มี firebaseUid) <span className="text-neutral-400 font-bold">{migrateResult.skipped}</span> /
-            ล้มเหลว <span className="text-red-400 font-bold">{migrateResult.failed}</span>
-          </div>
-          {migrateResult.adminBootstrap && (
-            <div className="mt-2 text-[11px] text-amber-300">
-              ⚙ Admin self-bootstrap: <span className="font-mono">{migrateResult.adminBootstrap.email || migrateResult.adminBootstrap.uid}</span> → gp-owner (Phase 13.5.4 lockout-prevention)
-            </div>
-          )}
-          {migrateResult.errors.length > 0 && (
-            <ul className="mt-2 text-[11px] text-red-400 list-disc list-inside max-h-32 overflow-y-auto">
-              {migrateResult.errors.map((e, i) => <li key={i}>{e}</li>)}
-            </ul>
-          )}
-          {migrateResult.failed === 0 && migrateResult.synced > 0 && (
-            <div className="mt-2 text-[11px] text-emerald-400">
-              ✓ พร้อม Deploy 2 — รัน firestore.rules deploy เพื่อเปลี่ยนเป็น claim-only check
-            </div>
-          )}
-        </div>
-      )}
 
       {formOpen && (
         <PermissionGroupFormModal
