@@ -22,6 +22,31 @@
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
 
+### Session 2026-04-27 session 13 EOD2 (8 commits, `1f0faff` → `ea8a09c`) — Customer create/edit + LINE-OA full redesign
+
+Three deploys to production via V15 combined: V33+V33.2 (b4326c3), V33.3
+(2cc67ef), V33.4+V33.5 (231b2f5). Five V-entries across one session.
+
+**8 commits**:
+```
+1f0faff feat(customer): V33 — Add Customer modal + 89 fields + HN counter + storage rules V26
+b4326c3 feat(customer): V33.2 — modal→page + DateField + blood types + receipt wiring + 53 cleanup
+b2193b3 docs(handoff): V33+V33.2 deployed (b4326c3 LIVE)
+2cc67ef feat(customer): V33.3 — Edit Customer page + profile card surgery
+1516786 docs(handoff): V33.3 deployed (2cc67ef LIVE)
+db8ea42 feat(line-oa): V33.4 — bot exact-match + bare-ID + LinkLineInstructions + suspend/unlink
+231b2f5 feat(line-oa): V33.5 — Flex bot replies + doctor in appointments + smart-display
+ea8a09c docs(handoff): V33.4+V33.5 deployed (231b2f5 LIVE)
+```
+
+**5 V-entries** (V33 → V33.5) — full detail in
+`.agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md`.
+
+**Tests**: 1096 → 1385 (+289 across V33 159 + V33.2 24 + V33.3 23 + V33.4 42 + V33.5 41).
+
+**Probe-Deploy-Probe** (each of 3 deploys): pre 6/6 + 3/3 negative GREEN,
+post 6/6 + 3/3 negative GREEN, cleanup 4/4 = 200, smoke 3/3 = 200.
+
 ### Session 2026-04-27 session 12 EOD (4 commits, `203581f` → `66ab18b`) — V32-tris-ter-fix + V32-tris-quater LINE OA completion
 User chain across the session: production-test bug reports → CORS-proxy fix
 + webhook admin SDK switch → user-asked easier-link options → built
@@ -255,59 +280,24 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic OPD — continue from 2026-04-27 session 12 EOD.
+Resume LoverClinic — continue from 2026-04-27 EOD2.
 
 Read in order BEFORE any tool call:
-1. CLAUDE.md (stack + env + rule index)
-2. SESSION_HANDOFF.md (cross-session state of truth — master = 66ab18b, prod = cb387c3)
-3. .agents/active.md (hot state — 1096 focused tests, prod LIVE)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V1-V32-tris-quater)
-5. .agents/sessions/2026-04-27-session12-line-oa-completion.md (this session detail — 4 commits, 107 new tests, 2 deploys, V32-tris-ter-fix + V32-tris-quater shipped)
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=ea8a09c, prod=231b2f5)
+3. .agents/active.md (1385 focused tests pass)
+4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
+5. .agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md
 
-Status summary:
-- master = 66ab18b, 1096 vitest passing (focused; ~5200 in tests/extended/ opt-in), build clean, working tree clean
-- Production = cb387c3 LIVE at https://lover-clinic-app.vercel.app (V15 combined deploy verified: pre 6/6 + post 6/6 + neg 4/4=403 + cleanup 4/4 + smoke 3/3)
-- Firestore rules v16 LIVE (be_course_changes + be_customer_link_tokens + be_link_requests + be_link_attempts all admin-SDK only)
-- LINE OA flow end-to-end LIVE: customer DM "ผูก <ID>" → admin queue → approve → bot reply
-- Extended test bank (~5200 tests in tests/extended/) opt-in via `npm run test:extended`
+Status: master=ea8a09c, 1385 / 1385 tests pass, prod=231b2f5 LIVE
+Next: idle — awaiting user direction
+Outstanding (user-triggered):
+  - Live QA bot Flex replies in LINE OA (DM "คอร์ส" / "นัด" / bare-13-digit)
+  - Admin test suspend/resume/unlink in "ผูกแล้ว" tab
+  - V33.5+ cleanup: remove orphan QR-token plumbing (24h grace period)
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (7+3 endpoints)
 
-This session shipped 4 commits + 107 new tests covering V32-tris-ter-fix
-(CORS proxy + webhook admin SDK for be_*) and V32-tris-quater (admin-
-mediated ID-link approval flow + edit-customer-IDs modal). 2 user-
-reported production bugs fixed. 1 net-new feature.
-
-Next action (when user gives go-ahead):
-- LIKELY no immediate work — all session-12 work deployed + verified
-- If polish wanted: P1 items
-  * LinkLineQrModal warning when botBasicId empty (QR will be text-only)
-  * LineSettingsTab help text for finding Bot Basic ID in LINE Console
-  * Wire welcomeMessage override (LineSettingsTab field exists but webhook
-    hardcodes formatLinkSuccessReply / formatLinkRequestApprovedReply)
-- If new feature: T5.a full drag-drop designer OR TFP refactor (each XL)
-
-Outstanding user-triggered actions (NOT auto-run):
-- Admin needs to fill LineSettingsTab credentials (Channel Secret +
-  Channel Access Token + Bot Basic ID) ONCE in production
-- Admin needs to paste webhook URL into LINE Developers Console:
-  https://lover-clinic-app.vercel.app/api/webhook/line
-- Admin can backfill customer IDs via new "เลขบัตร" button on each
-  customer page (ProClinic-cloned customers may have empty nationalId)
-
-Rules:
-- No deploy unless user explicitly says "deploy" THIS turn (V4/V7/V18)
-- V15 combined: "deploy" = vercel + firestore:rules in parallel
-- Rule B Probe-Deploy-Probe = 7 endpoints + 4 negative-path lockdowns
-  (be_customer_link_tokens + be_course_changes + be_link_requests + be_link_attempts)
-- V32-tris-ter-fix lesson: server-side privileged code (admin SDK) is
-  the correct way to read rule-locked collections — keep client SDK locked
-- V32-tris-quater lesson: same-reply anti-enumeration is required when
-  the threat model says no enumeration; customer doc edits MUST use
-  Firestore dotted-path; customer + audit MUST be batch atomic
-- V31 lesson: silent-swallow try/catch console.warn(continuing) is anti-V21
-- Rule H: backend 100% be_* canonical, NO master_data reads outside MasterDataTab
-- Every bug → test + audit invariant + V-entry (Rule D + Rule I)
-
-Invoke /session-start to boot context.
+/session-start
 ```
 
 ---
