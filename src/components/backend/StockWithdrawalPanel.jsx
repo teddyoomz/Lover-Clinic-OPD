@@ -20,6 +20,8 @@ import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// Phase 15.4 fix — gate legacy-main fallback to branch-tier source only.
+import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -260,7 +262,9 @@ function WithdrawalCreateForm({ locations, sellers, sellersLoading, onClose, onS
     (async () => {
       try {
         // Phase 15.4 (s19 item 2) — includeLegacyMain for pre-V20 batches.
-        const list = await listStockBatches({ branchId: src, status: 'active', includeLegacyMain: true });
+        // Post-deploy bug 4 fix: only opt-in when source is branch tier.
+        const isBranchSrc = deriveLocationType(src) === LOCATION_TYPE.BRANCH;
+        const list = await listStockBatches({ branchId: src, status: 'active', includeLegacyMain: isBranchSrc });
         if (!cancelled) setBatches(list);
       } catch { if (!cancelled) setBatches([]); }
       finally { if (!cancelled) setBatchesLoading(false); }

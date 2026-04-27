@@ -91,23 +91,42 @@ describe('Phase 15.4 BP.C — backward compat: default behaviour preserved', () 
   });
 });
 
-describe('Phase 15.4 BP.D — 3 stock create forms opt in to legacy fallback', () => {
-  it('BP.D.1 — StockAdjustPanel AdjustCreateForm passes includeLegacyMain: true', () => {
+describe('Phase 15.4 BP.D — 3 stock create forms opt in to legacy fallback (gated on branch-tier)', () => {
+  // Post-deploy bug 4 fix: includeLegacyMain MUST be gated on
+  // deriveLocationType === BRANCH. Central-tier (WH-*) MUST NOT pull legacy
+  // 'main' branch-tier batches. Tests assert the conditional pattern, NOT
+  // the bare `: true` (which was the V21-locked bug).
+
+  it('BP.D.1 — StockAdjustPanel passes includeLegacyMain: isBranchTier (gated)', () => {
     const src = read('src/components/backend/StockAdjustPanel.jsx');
-    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*isBranchTier[^}]*\}\s*\)/);
+    expect(src).toMatch(/deriveLocationType\(BRANCH_ID\)\s*===\s*LOCATION_TYPE\.BRANCH/);
   });
 
-  it('BP.D.2 — StockTransferPanel TransferCreateForm passes includeLegacyMain: true', () => {
+  it('BP.D.2 — StockTransferPanel passes includeLegacyMain: isBranchSrc (gated on src tier)', () => {
     const src = read('src/components/backend/StockTransferPanel.jsx');
-    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*isBranchSrc[^}]*\}\s*\)/);
+    expect(src).toMatch(/deriveLocationType\(src\)/);
   });
 
-  it('BP.D.3 — StockWithdrawalPanel WithdrawalCreateForm passes includeLegacyMain: true', () => {
+  it('BP.D.3 — StockWithdrawalPanel passes includeLegacyMain: isBranchSrc (gated on src tier)', () => {
     const src = read('src/components/backend/StockWithdrawalPanel.jsx');
-    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+    expect(src).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*isBranchSrc[^}]*\}\s*\)/);
+    expect(src).toMatch(/deriveLocationType\(src\)/);
   });
 
-  it('BP.D.4 — Phase 15.4 markers present (institutional memory grep)', () => {
+  it('BP.D.4 — V21 anti-regression: bare `includeLegacyMain: true` is GONE in all 3 panels', () => {
+    // Bug 4: pulling 'main' branch-tier batches into central-tab adjust picker.
+    // Lock: only the gated form is acceptable now.
+    const adjustSrc = read('src/components/backend/StockAdjustPanel.jsx');
+    const transferSrc = read('src/components/backend/StockTransferPanel.jsx');
+    const withdrawalSrc = read('src/components/backend/StockWithdrawalPanel.jsx');
+    for (const src of [adjustSrc, transferSrc, withdrawalSrc]) {
+      expect(src).not.toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+    }
+  });
+
+  it('BP.D.5 — Phase 15.4 markers present (institutional memory grep)', () => {
     const adjustSrc = read('src/components/backend/StockAdjustPanel.jsx');
     expect(adjustSrc).toMatch(/Phase 15\.4 \(s19 item 2\)/);
   });

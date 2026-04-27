@@ -49,9 +49,20 @@ import { productDisplayName } from '../../lib/productValidation.js';
 const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 
 // Phase 15.4 (2026-04-28) — extracted to src/lib/unitFieldHelpers.js
-// (Rule C1 Rule-of-3). Re-exported here for backward compat with existing
-// tests + callers that imported the helper from OrderPanel.
-export { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
+// (Rule C1 Rule-of-3). Imported here for LOCAL use inside OrderCreateForm
+// AND re-exported for backward compat with existing tests + callers that
+// imported the helper from OrderPanel.
+//
+// V11-class regression-fix (post-deploy bug, 2026-04-28):
+// Plain `export { ... } from '...'` is a RE-EXPORT ONLY — it does not create
+// a local binding. Inside the module, `getUnitOptionsForProduct` would be
+// `ReferenceError: ... is not defined`. OrderCreateForm uses the helper at
+// 3 sites (line ~393 onPickProduct, ~548 mobile UnitField, ~617 desktop
+// UnitField table), so clicking "create order" → blank screen.
+// Fix: explicit `import` + separate `export`. Re-export still works for
+// external callers (tests etc.) and the local binding is now in scope.
+import { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
+export { getUnitOptionsForProduct };
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';

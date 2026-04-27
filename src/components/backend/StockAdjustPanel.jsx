@@ -27,6 +27,10 @@ import {
 import { db, appId, auth } from '../../firebase.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { productDisplayName } from '../../lib/productValidation.js';
+// Phase 15.4 fix (post-deploy bug 4) — gate legacy-main fallback to branch-tier
+// only. When CentralStockTab passes branchIdOverride=WH-XXX, we MUST NOT pull
+// 'main' (branch-tier) batches into the central adjust picker.
+import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -232,7 +236,11 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
       try {
         // Phase 15.4 (s19 item 2) — includeLegacyMain so pre-V20 batches
         // (written with branchId='main') still surface in picker until admin migrates.
-        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active', includeLegacyMain: true });
+        // Post-deploy bug 4 fix: gate to BRANCH tier only — central-tier
+        // (BRANCH_ID starts with 'WH-') must NOT pull 'main' branch-tier
+        // batches into its picker (they're a different location entirely).
+        const isBranchTier = deriveLocationType(BRANCH_ID) === LOCATION_TYPE.BRANCH;
+        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active', includeLegacyMain: isBranchTier });
         if (!cancelled) {
           setBatches(list);
           // auto-pick first available batch

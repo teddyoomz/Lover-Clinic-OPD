@@ -236,9 +236,19 @@ describe('Phase 15.4 UE.C — anti-regression: OrderPanel uses shared UnitField'
     expect(src).toMatch(/import\s+UnitField\s+from\s+['"]\.\/UnitField\.jsx['"]/);
   });
 
-  it('UE.C.2 — OrderPanel re-exports getUnitOptionsForProduct from unitFieldHelpers', () => {
+  it('UE.C.2 — OrderPanel imports getUnitOptionsForProduct (V11 lock — local binding) + re-exports', () => {
+    // Post-deploy V11-class fix (2026-04-28): bare `export ... from` is a
+    // re-export ONLY and does NOT create a local binding. OrderCreateForm
+    // uses the helper at 3 sites — needs LOCAL import. Then a separate
+    // export for backward compat.
     expect(src).toMatch(
-      /export\s*\{\s*getUnitOptionsForProduct\s*\}\s*from\s+['"]\.\.\/\.\.\/lib\/unitFieldHelpers\.js['"]/
+      /import\s*\{\s*getUnitOptionsForProduct\s*\}\s+from\s+['"]\.\.\/\.\.\/lib\/unitFieldHelpers\.js['"]/
+    );
+    expect(src).toMatch(/export\s*\{\s*getUnitOptionsForProduct\s*\}/);
+    // Anti-regression: bare `export ... from` re-export is NOT used (it would
+    // shadow the need for the local import and re-introduce the V11 bug).
+    expect(src).not.toMatch(
+      /export\s*\{\s*getUnitOptionsForProduct\s*\}\s+from\s+['"]/
     );
   });
 
