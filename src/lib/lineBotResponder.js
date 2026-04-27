@@ -356,9 +356,18 @@ export function formatCoursesReply(courses, language = 'th') {
   if (!Array.isArray(courses) || courses.length === 0) {
     return M.COURSES_NO_DATA;
   }
+  // V33.8 — filter on TWO conditions:
+  //   1. status is "active" (or unset / English equivalent)
+  //   2. NOT consumed (parsed remaining > 0; buffet "เหมาตามจริง" and
+  //      unparseable strings keep through)
+  // ProClinic doesn't auto-flip status when qty hits 0/X → numeric guard
+  // is required on top of status filter.
   const active = courses.filter((c) => {
     const status = String(c?.status || '').trim();
-    return status === 'กำลังใช้งาน' || status === '' || status === 'active';
+    const statusOk = status === 'กำลังใช้งาน' || status === '' || status === 'active';
+    if (!statusOk) return false;
+    if (isCourseConsumed(c)) return false;
+    return true;
   });
   if (active.length === 0) {
     return M.COURSES_NO_ACTIVE;
@@ -566,6 +575,59 @@ function truncateText(text, maxLen) {
 }
 
 /**
+ * V33.8 — Parse the leading "remaining" count from a qty string.
+ * Returns the numeric remaining or null if not parseable.
+ *
+ * Patterns handled:
+ *   "0/3 amp."        → 0
+ *   "0 / 3 amp."      → 0
+ *   "100 / 100 U"     → 100
+ *   "0.5 / 1 U"       → 0.5
+ *   "5"               → 5  (single number)
+ *   "เหมาตามจริง"      → null  (buffet — no count)
+ *   "" / null / undef → null
+ *
+ * @param {string|number} qty
+ * @returns {number|null}
+ */
+export function parseRemainingCount(qty) {
+  if (typeof qty === 'number' && Number.isFinite(qty)) return qty;
+  const s = String(qty || '').trim();
+  if (!s) return null;
+  // Buffet courses ("เหมาตามจริง", "buffet") have no count → not consumed
+  if (/เหมา|buffet|unlimited/i.test(s)) return null;
+  // Pattern 1: leading number followed by "/" or whitespace
+  const m = s.match(/^\s*(\d+(?:\.\d+)?)(?:\s*\/|\s+)/);
+  if (m) return Number(m[1]);
+  // Pattern 2: just a single number
+  const m2 = s.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
+  if (m2) return Number(m2[1]);
+  return null;
+}
+
+/**
+ * V33.8 — Determine whether a course is fully consumed (remaining = 0).
+ * Such courses should NOT appear in bot replies — user directive
+ * 2026-04-27 ("0 มันแปลว่าคอร์สนั้นหมดแล้ว ไม่ควรนับเป็นรายการคอร์ส
+ * เหลือด้วยซ้ำ"). ProClinic doesn't auto-flip status to "ใช้หมดแล้ว"
+ * when qty hits 0/X, so this is a numeric guard layered on top of
+ * status filter.
+ *
+ * @param {object} course — customer.courses[] entry
+ * @returns {boolean} true iff parsed remaining is exactly 0
+ */
+export function isCourseConsumed(course) {
+  const c = course || {};
+  // Prefer qty (display string with both remaining + total),
+  // fall back to remaining (just the count).
+  const primary = parseRemainingCount(c.qty);
+  if (primary !== null) return primary <= 0;
+  const secondary = parseRemainingCount(c.remaining);
+  if (secondary !== null) return secondary <= 0;
+  return false; // unparseable → keep visible (defensive)
+}
+
+/**
  * V33.6 — Build the inline meta line shown beneath each course name in
  * the Flex bubble. Replaces the V33.5 horizontal 3-column table whose
  * narrow `flex: 2` / `wrap: false` cells truncated mobile data ("0 / 3
@@ -649,9 +711,14 @@ export function buildCoursesFlex(courses, opts = {}) {
   if (!Array.isArray(courses) || courses.length === 0) {
     return buildEmptyStateFlex(M.FLEX_COURSES_EMPTY_TITLE, M.FLEX_COURSES_EMPTY_NO_DATA, { accentColor, clinicName });
   }
+  // V33.8 — same dual filter as formatCoursesReply (status + non-consumed).
+  // Header count "N รายการ" reflects displayable courses, NOT raw input length.
   const active = courses.filter((c) => {
     const status = String(c?.status || '').trim();
-    return status === 'กำลังใช้งาน' || status === '' || status === 'active';
+    const statusOk = status === 'กำลังใช้งาน' || status === '' || status === 'active';
+    if (!statusOk) return false;
+    if (isCourseConsumed(c)) return false;
+    return true;
   });
   if (active.length === 0) {
     return buildEmptyStateFlex(

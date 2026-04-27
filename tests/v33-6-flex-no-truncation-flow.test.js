@@ -79,9 +79,11 @@ describe('V33.6.A — buildCourseMetaLine pure helper', () => {
 // V33.6.B — buildCoursesFlex stacked-layout structural contract
 // ────────────────────────────────────────────────────────────────────────
 describe('V33.6.B — buildCoursesFlex stacked layout', () => {
+  // V33.8 — second course had qty='0/3 ครั้ง' (0 remaining) which now
+  // gets filtered as consumed. Bumped to 2/3 so it stays in the active set.
   const SAMPLE = [
     { name: 'Botox 100 U', status: 'กำลังใช้งาน', qty: '100 / 100 U', expiry: '2027-06-30' },
-    { name: 'Acne Tx 12 ครั้ง', status: 'กำลังใช้งาน', qty: '0 / 3 ครั้ง' },
+    { name: 'Acne Tx 12 ครั้ง', status: 'กำลังใช้งาน', qty: '2 / 3 ครั้ง' },
     { name: '11/12 เหมาตามจริง', status: 'กำลังใช้งาน', qty: 'เหมาตามจริง' },
   ];
 
@@ -145,8 +147,9 @@ describe('V33.6.B — buildCoursesFlex stacked layout', () => {
     const flex = buildCoursesFlex(SAMPLE);
     expect(flex.contents.body.contents[0].contents[1].text)
       .toBe('คงเหลือ 100 / 100 U · หมดอายุ 30/06/2570');
+    // V33.8 — SAMPLE second course bumped from 0/3 → 2/3 (V33.8 filters 0)
     expect(flex.contents.body.contents[1].contents[1].text)
-      .toBe('คงเหลือ 0 / 3 ครั้ง');
+      .toBe('คงเหลือ 2 / 3 ครั้ง');
     expect(flex.contents.body.contents[2].contents[1].text)
       .toBe('คงเหลือ เหมาตามจริง');
   });
@@ -345,8 +348,10 @@ describe('V33.6.E — adversarial inputs (no truncation possible)', () => {
     expect(apptBox.contents.length).toBe(4);
   });
   it('E6 — 30 courses → 25 visible + footer (cap regression)', () => {
+    // V33.8 — i starts at 1 so qty=`1/6`, never qty=`0/5` (which would
+    // be filtered as consumed). All 30 stay active → 25 visible + 5 more.
     const courses = Array.from({ length: 30 }, (_, i) => ({
-      name: `Course ${i}`, status: 'กำลังใช้งาน', qty: `${i}/${i + 5}`,
+      name: `Course ${i}`, status: 'กำลังใช้งาน', qty: `${i + 1}/${i + 6}`,
     }));
     const flex = buildCoursesFlex(courses);
     expect(flex.contents.body.contents.length).toBe(26); // 25 rows + footer
@@ -367,11 +372,16 @@ describe('V33.6.E — adversarial inputs (no truncation possible)', () => {
     expect(flex.contents.body.contents.length).toBeGreaterThanOrEqual(1);
     expect(flex.contents.body.contents[0].contents[0].text).toBe('A');
   });
-  it('E9 — course with qty=0 (numeric zero, meaningful) → "คงเหลือ 0"', () => {
+  it('E9 — V33.8: course with qty=0 (numeric zero) → FILTERED as consumed', () => {
+    // Was V33.6: qty=0 rendered as "คงเหลือ 0". V33.8 reclassifies this as
+    // a consumed course (per user directive 2026-04-27): "0 มันแปลว่าคอร์ส
+    // นั้นหมดแล้ว ไม่ควรนับเป็นรายการคอร์สเหลือด้วยซ้ำ".
     const flex = buildCoursesFlex([
       { name: 'A', status: 'กำลังใช้งาน', qty: 0 },
     ]);
-    expect(flex.contents.body.contents[0].contents[1].text).toBe('คงเหลือ 0');
+    // All-consumed input → empty-state bubble (kilo size + "ไม่พบ" altText)
+    expect(flex.contents.size).toBe('kilo');
+    expect(flex.altText).toMatch(/ไม่พบคอร์สที่ยังใช้ได้/);
   });
   it('E10 — qty null but remaining present → "คงเหลือ {remaining}"', () => {
     const flex = buildCoursesFlex([

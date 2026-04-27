@@ -80,9 +80,11 @@ describe('V33.5.C — buildCoursesFlex bubble shape', () => {
     expect(flex.altText).toMatch(/ไม่พบคอร์ส/);
   });
   it('C4 — active courses → mega bubble with table rows', () => {
+    // V33.8 — Course B was qty='0/3' (now filtered as consumed). Bumped
+    // to 1/3 so both courses stay active for the C4 contract test.
     const flex = buildCoursesFlex([
       { name: 'Course A', status: 'กำลังใช้งาน', qty: '5/10', expiry: '2026-12-31' },
-      { name: 'Course B', status: 'กำลังใช้งาน', qty: '0/3' },
+      { name: 'Course B', status: 'กำลังใช้งาน', qty: '1/3' },
     ]);
     expect(flex.contents.size).toBe('mega');
     expect(flex.altText).toMatch(/Course A/);
