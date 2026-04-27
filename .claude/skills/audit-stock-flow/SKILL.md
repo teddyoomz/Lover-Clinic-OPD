@@ -11,12 +11,13 @@ allowed-tools: "Read, Grep, Glob"
 **Purpose**: Detect places where stock quantities can vanish, appear free, or drift from the movement log ledger. FIFO/FEFO correctness, batch integrity, audit-trail completeness. READ-ONLY.
 
 ## Scope
-15 invariants across 5 subsystems:
+**20 invariants across 6 subsystems** (V34 added S16–S20 on 2026-04-28):
 - **Batch integrity**: qty caps, append-only log, status transitions
 - **FIFO/FEFO allocation**: sort ordering monotonic, exactBatchId override, skip-expired/depleted
 - **Movement log**: reversedByMovementId chain intact, user+sourceDocPath always set
 - **Transfer/Withdrawal**: new-batch-at-destination invariant, inherits cost/expiry
 - **Order lifecycle**: cancel-blocked-if-consumed, qty-edit-blocked
+- **V34 conservation + UI** (S16-S20): per-tier sum-check, replay/time-travel, concurrent tx safety, component listener alignment, test-prefix discipline
 
 ## How to run
 1. Read [checklist.md](checklist.md) — full invariant catalog S1–S15

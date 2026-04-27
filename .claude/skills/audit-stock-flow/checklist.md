@@ -116,6 +116,45 @@ Each invariant: **What**, **Why**, **Where**, **How**, **Severity if violated**.
 
 ---
 
+---
+
+## V34 invariants (S16–S20, added 2026-04-28)
+
+> Origin: V34 (silent qty-cap on ADJUST_ADD when batch at full capacity)
+> revealed gaps in the S1–S15 catalog. These invariants close those gaps.
+
+### S16 — Per-tier per-product conservation (sum-check)
+**What**: For every (productId, branchId) tuple, sum(batches.qty.remaining) at that tier must equal sum(movements.signed-delta) for the same tuple — assuming no orphan batches.
+**Why**: V34 shipped because no test reconciled the snapshot against the movement ledger. ADJUST_ADD wrote +20 movements but the batch qty stayed at 10 → sum-check would have fired immediately.
+**Where**: `src/lib/backendClient.js` (every read of be_stock_batches + be_stock_movements) + `tests/v34-stock-invariants.test.js INV.1`
+**How**: After any stock-write change, run `assertConservation(batchSnapshot, movements)` against fresh Firestore data. Drift > 0 = VIOLATION.
+
+### S17 — Time-travel / replay consistency
+**What**: For any historical timestamp T, replaying movements ≤ T gives the batch's qty.remaining at T.
+**Why**: Auditor question "what was stock on Mar 1?" requires this. Drift here means audit log can't reconstruct historical state.
+**Where**: `tests/helpers/stockInvariants.js:replayBalanceAtTime` + `tests/v34-stock-invariants.test.js INV.8`
+**How**: Pick 3 historical timestamps + verify replay matches snapshot at each. WARN if no test exists; VIOLATION if replay diverges.
+
+### S18 — Concurrent-write tx safety + writeBatch atomicity
+**What**: Every code path that writes to ≥ 2 stock-related Firestore docs MUST use either `runTransaction` (for read-then-write) or `writeBatch` (for blind writes). Never sequential `await updateDoc(...); await setDoc(...)`.
+**Why**: Sequential writes can crash mid-loop, leaving system in inconsistent state. V34 found cancelStockOrder + updateStockOrder cost cascade with this pattern; both fixed via writeBatch.
+**Where**: `src/lib/backendClient.js` — all stock mutations
+**How**: Grep `await updateDoc(stockBatchDoc` and `await setDoc(stockMovementDoc` outside `runTransaction` / `writeBatch`. Each hit = candidate VIOLATION.
+
+### S19 — Component listener alignment
+**What**: Every component that displays stock state (StockBalancePanel, MovementLogPanel, StockAdjustPanel, OrderPanel, *CentralStock*Panel) must use either an `onSnapshot` listener (live updates) OR a refresh trigger after sibling-component mutations.
+**Why**: V34's user complaint "ยอดไม่เปลี่ยน" had two layers — the qty math bug (real) AND the panel re-mount-required staleness (latent UX). If qty had updated correctly, user STILL would have seen stale balance until subtab nav.
+**Where**: `src/components/backend/StockBalancePanel.jsx`, `MovementLogPanel.jsx`, `OrderPanel.jsx`, `CentralStock*Panel.jsx`
+**How**: For each, grep `onSnapshot` OR `useEffect.*load` with proper deps. WARN if read-once + no refresh trigger.
+
+### S20 — Test data prefix discipline (V33.11 mirror)
+**What**: Every stock test file that writes to `be_stock_batches` / `be_stock_movements` / `be_stock_adjustments` / `be_central_stock_orders` (real Firestore, not mocked) MUST use TEST- or E2E- prefixed branchId / warehouseId / productId. No production IDs (no 'main', no real WH-XXX, no real BR-XXX) in test fixtures.
+**Why**: Test pollution is invisible until it accumulates. V33.10 cleaned 53 untagged customer test docs. V33.11 mirrors the convention for stock so cleanup is predictable.
+**Where**: `tests/**` writing real Firestore via firebase-admin SDK or preview_eval
+**How**: Grep stock-write call sites in tests. Verify every branchId / warehouseId is `TEST-` or `E2E-` prefixed. VIOLATION if production IDs found.
+
+---
+
 ## Accepted risks
 
 - Decimal precision for qty (e.g., 0.01 U, 0.5 mg). JavaScript number type sufficient at 2-decimal precision per Phase 8 tests (0.01 round-trips exact). Audit no code paths introduce cumulative drift.

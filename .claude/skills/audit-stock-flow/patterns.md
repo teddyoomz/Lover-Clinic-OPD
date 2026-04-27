@@ -133,3 +133,53 @@ Grep: "catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}" in src/lib/backendClient.js src/compo
 Grep: "branchId:" in src/lib/backendClient.js, output_mode=content, -n=true, -B=1 -A=1
 ```
 Confirm every write has `branchId` sourced from a location-lookup (not free-form string).
+
+---
+
+## V34 patterns (S16-S20, added 2026-04-28)
+
+### S16 — Per-tier per-product conservation
+
+```
+Grep: "listStockBatches|listStockMovements" in src/lib/backendClient.js, output_mode=content, -n=true, -C=3
+```
+For every reader, confirm branchId filter is applied. Then in tests:
+```
+Grep: "assertConservation\\(" in tests/, output_mode=content
+```
+Expected: at least one test per tier (branch, central, cross-tier) calls assertConservation.
+
+### S17 — Time-travel / replay consistency
+
+```
+Grep: "replayBalanceAtTime|replayMovementsToBalance" in tests/, output_mode=content
+```
+Expected: at least one test asserts replay balance matches snapshot at midpoint timestamp.
+
+### S18 — Concurrent-write atomicity (writeBatch / runTransaction)
+
+```
+Grep: "await updateDoc\\(stockBatchDoc|await setDoc\\(stockMovementDoc" in src/lib/backendClient.js, output_mode=content, -n=true, -B=10
+```
+Each hit MUST be inside a `runTransaction` callback OR replaced with `wb.update(...)` / `wb.set(...)` inside a `writeBatch`. Naked `await updateDoc(stockBatchDoc(...))` outside a tx is a candidate VIOLATION (V34-class).
+
+### S19 — Component listener alignment
+
+```
+Grep: "listStockBatches|listStockMovements" in src/components/backend/, output_mode=content, -n=true, -B=2 -A=5
+```
+For every read in a component, confirm either `onSnapshot` (live) OR a refresh trigger (state change forces useEffect re-run after sibling-component mutation). Single read on mount with no refresh = WARN (V34's UX layer).
+
+### S20 — Test data prefix discipline
+
+```
+Grep: "createStockAdjustment|createStockOrder|createStockTransfer|createStockWithdrawal|createCentralStockOrder|deductStockFor" in tests/, output_mode=content, -n=true, -B=3 -A=2
+```
+For every call site in tests, the branchId / warehouseId / customerId / productId fixture should be `TEST-` or `E2E-` prefixed. Production IDs (`'main'`, real `'WH-{ts}-{slug}'` from prod data, real `'BR-...'`) = WARN (V33.11 prefix discipline).
+
+### V34 marker grep
+
+```
+Grep: "AUDIT-V34" in src/, output_mode=content, -n=true
+```
+Locate every deferred-bug flag added during V34 systemic audit (Phase 2). Future maintainers can pick these up + close them in V35.

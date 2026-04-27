@@ -372,7 +372,11 @@ describe('Phase 15.2 F5 — backendClient.js exports + helper', () => {
 
   it('F5.9 receiveCentralStockOrder calls _buildBatchFromOrderItem with central tier params', () => {
     const fnStart = backendSrc.indexOf('export async function receiveCentralStockOrder');
-    const after = backendSrc.slice(fnStart, fnStart + 3500);
+    // Slice to next top-level function boundary (more robust than fixed char count
+    // which broke when V34 audit comment added context to the function body).
+    const remainder = backendSrc.slice(fnStart);
+    const nextFnRel = remainder.slice(50).search(/\nexport (async )?function|\nasync function|\n\/\/ ─{3,}/);
+    const after = nextFnRel === -1 ? remainder : remainder.slice(0, 50 + nextFnRel);
     expect(after).toContain('_buildBatchFromOrderItem');
     expect(after).toMatch(/linkedField:\s*'linkedCentralOrderId'/);
     expect(after).toMatch(/locationType:\s*'central'/);

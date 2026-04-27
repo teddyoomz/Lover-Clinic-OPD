@@ -112,6 +112,36 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
   `tests/v33-10-test-customer-prefix.test.js` E1+E2 assert the rule + helper
   file are present.
 
+### 🆕 Test stock-doc prefix (V33.11 — V34 directive codified)
+- **Every test that writes a real Firestore stock doc** (preview_eval scripts,
+  integration tests via firebase-admin SDK, E2E fixtures touching
+  `be_stock_batches` / `be_stock_movements` / `be_stock_adjustments` /
+  `be_central_stock_orders` / `be_stock_orders` / `be_stock_transfers` /
+  `be_stock_withdrawals`) MUST use a branch / warehouse / product / batch ID
+  with prefix `TEST-` or `E2E-`. Mock-only tests don't need it.
+- Use the canonical helpers:
+  ```js
+  import {
+    createTestStockBranchId,
+    createTestCentralWarehouseId,
+    createTestStockProductId,
+    createTestStockBatchId,
+  } from 'tests/helpers/testStockBranch.js';
+  const branchId = createTestStockBranchId();                       // 'TEST-BR-<ts>'
+  const warehouseId = createTestCentralWarehouseId({ suffix: 'src' }); // 'TEST-WH-<ts>-src'
+  ```
+- `isTestStockId(id)` + `getTestStockPrefix(id)` — admin-side cleanup helpers
+  (mirror of V33.10 `isTestCustomerId`).
+- **Why**: V34 (2026-04-28) silent qty-cap bug left zero-effect adjustment
+  movements in production stock data + Phase 0 diagnostic +1 + Phase 1 +5
+  on the chanel batch. Without prefix discipline, these test artifacts
+  compound silently. V33.11 mirrors V33.10 (customer prefix) for stock so
+  cleanup pipeline can identify+nuke them.
+- **Anti-pattern**: hardcoding stock IDs like `'main'`, `'WH-001'`, `'BR-1'`,
+  or real ProClinic-imported batch IDs in tests that hit Firestore. Drift
+  catcher: `tests/v33-11-stock-test-prefix.test.js` asserts the rule +
+  helper file are present.
+
 ### CODEBASE_MAP.md
 อัพเดท `F:\LoverClinic-app\CODEBASE_MAP.md` ทุกครั้งที่เพิ่ม/ลบ/rename/restructure ไฟล์ใน `src/` หรือ `api/` — source of truth สำหรับ onboarding + future sessions.
 

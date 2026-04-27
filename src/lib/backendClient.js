@@ -4272,13 +4272,21 @@ export async function cancelStockOrder(orderId, opts = {}) {
   const reason = String(opts.reason || '');
   const movementIds = [];
 
+  // V34 AUDIT FIX (2026-04-28) — atomic writeBatch.
+  // Previous implementation called updateDoc + setDoc per batch in a sequential
+  // loop with NO transaction wrapper. Crash mid-loop left some batches
+  // cancelled with no CANCEL_IMPORT movement (audit gap) OR order doc still
+  // 'pending' while batches were already 'cancelled' (status divergence).
+  // writeBatch makes the whole cancel atomic — all-or-nothing.
+  const wb = writeBatch(db);
+
   for (const batchId of batchIds) {
     const batch = await getStockBatch(batchId);
     if (!batch) continue;
     const total = Number(batch.qty?.total) || 0;
 
     // Flip batch → cancelled
-    await updateDoc(stockBatchDoc(batchId), {
+    wb.update(stockBatchDoc(batchId), {
       status: BATCH_STATUS.CANCELLED,
       qty: { remaining: 0, total },
       updatedAt: now,
@@ -4287,7 +4295,7 @@ export async function cancelStockOrder(orderId, opts = {}) {
 
     // Append CANCEL_IMPORT movement
     const movementId = _genMovementId();
-    await setDoc(stockMovementDoc(movementId), {
+    wb.set(stockMovementDoc(movementId), {
       movementId,
       type: MOVEMENT_TYPES.CANCEL_IMPORT,
       batchId,
@@ -4309,13 +4317,15 @@ export async function cancelStockOrder(orderId, opts = {}) {
     movementIds.push(movementId);
   }
 
-  await updateDoc(stockOrderDoc(orderId), {
+  wb.update(stockOrderDoc(orderId), {
     status: 'cancelled',
     cancelReason: reason,
     cancelledAt: now,
     cancelledBy: user,
     updatedAt: now,
   });
+
+  await wb.commit();
 
   return { orderId, cancelledBatchIds: batchIds, movementIds, success: true };
 }
@@ -4348,7 +4358,13 @@ export async function updateStockOrder(orderId, patch) {
     docPatch.discountType = patch.discountType === 'percent' ? 'percent' : 'amount';
   }
 
+  // V34 AUDIT FIX (2026-04-28) — atomic writeBatch for cost cascade.
+  // Previous implementation looped items and called updateDoc per batch
+  // sequentially. Crash mid-loop left some batches with new cost, others
+  // with old → costBasis math diverges across the order. writeBatch
+  // ensures the whole cost cascade lands atomically with the order doc.
   if (Array.isArray(patch.items)) {
+    const wb = writeBatch(db);
     const existingItems = Array.isArray(order.items) ? [...order.items] : [];
     for (const pi of patch.items) {
       const key = pi.orderProductId;
@@ -4370,11 +4386,14 @@ export async function updateStockOrder(orderId, patch) {
         if (pi.expiresAt !== undefined) bp.expiresAt = pi.expiresAt || null;
         if (Object.keys(bp).length > 0) {
           bp.updatedAt = now;
-          await updateDoc(stockBatchDoc(before.batchId), bp);
+          wb.update(stockBatchDoc(before.batchId), bp);
         }
       }
     }
     docPatch.items = existingItems;
+    wb.update(stockOrderDoc(orderId), docPatch);
+    await wb.commit();
+    return { orderId, success: true };
   }
 
   await updateDoc(stockOrderDoc(orderId), docPatch);
@@ -4537,6 +4556,20 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
   const user = _normalizeAuditUser(opts.user);
   const sourceDocPath = `artifacts/${appId}/public/data/be_central_stock_orders/${orderId}`;
 
+  // AUDIT-V34 (2026-04-28) — KNOWN CONCURRENT-RECEIVE GAP (deferred to V35):
+  // Idempotency checkpoint reads `existingReceived` here at line ~4541, then
+  // walks the loop creating batches via `_buildBatchFromOrderItem`, and
+  // updates `receivedLineIds` only at the END (line ~4612). Two concurrent
+  // calls (rare but possible if admin double-clicks "รับสินค้า" or two
+  // admins receive simultaneously) would both see existingReceived=[],
+  // both walk the loop, both create batches → duplicate batches at central
+  // tier. Fix sketch: wrap the read+update of `receivedLineIds` in a
+  // runTransaction with the batch creation done atomically inside (claim
+  // each lineId by writing it to receivedLineIds BEFORE batch creation).
+  // Defer until concurrent test bank (Phase 3 T11) surfaces it. Phase 15.2
+  // already added a defensive check (line ~4561) for the related case where
+  // line.receivedBatchId is already set but receivedLineIds drifted.
+  //
   // Idempotency checkpoint: skip lines already in receivedLineIds.
   const existingReceived = new Set(order.receivedLineIds || []);
   const itemsByLineId = new Map((order.items || []).map(it => [it.centralOrderProductId, it]));
@@ -4777,7 +4810,13 @@ export async function listCentralStockOrders({ centralWarehouseId, vendorId, sta
  */
 export async function createStockAdjustment(p, opts = {}) {
   const { stockUtils } = await _stockLib();
-  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, reverseQtyNumeric } = stockUtils;
+  // V32 (2026-04-28) — type='add' now uses adjustAddQtyNumeric (bumps both
+  // total + remaining) instead of reverseQtyNumeric (caps at total). The
+  // old code silently capped admin-discovered extra inventory when the
+  // batch was at full capacity → audit doc + movement written but qty
+  // unchanged. Long-standing production bug; surfaced when user did
+  // ปรับเพิ่ม +20 +20 +10 on a 10/10 chanel batch and saw no change.
+  const { MOVEMENT_TYPES, BATCH_STATUS, deductQtyNumeric, adjustAddQtyNumeric } = stockUtils;
 
   const batchId = p?.batchId;
   const type = p?.type;
@@ -4806,8 +4845,10 @@ export async function createStockAdjustment(p, opts = {}) {
     }
 
     const beforeRemaining = Number(batch.qty?.remaining) || 0;
+    // V32 fix: adjustAddQtyNumeric bumps total+remaining (extra inventory
+    // discovered → expand capacity); deductQtyNumeric for type='reduce'.
     const newQty = type === 'add'
-      ? reverseQtyNumeric(batch.qty, qty)
+      ? adjustAddQtyNumeric(batch.qty, qty)
       : deductQtyNumeric(batch.qty, qty);
     const afterRemaining = newQty.remaining;
     const newStatus = afterRemaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
@@ -5273,6 +5314,15 @@ async function _reverseOneMovement(movementId, { user } = {}) {
  * @returns {{ allocations: Array, skippedItems: Array }}
  * @throws when any item has insufficient stock (after emitting compensations for prior items)
  */
+// AUDIT-V34 (2026-04-28) — KNOWN PARTIAL-ROLLBACK RISK (deferred to V35):
+// If error mid-loop on item N, line 5301 calls reverseStockForSale to
+// compensate. But reverseStockForSale itself is async + can throw on a
+// concurrent batch state change. Inner catch logs but outer throw masks
+// the rollback failure. Stock left partially deducted + partially reversed.
+// Fix sketch: collect successful deductions, on error reverse them inside
+// runTransaction, on reverse-failure flag sale doc with `needsManualReconcile:
+// true` + alert admin. Defer until concurrent test bank (Phase 3 T5) surfaces
+// it under repro stress. Production-impact under low-load: rare.
 export async function deductStockForSale(saleId, items, opts = {}) {
   if (!saleId) throw new Error('saleId required');
   const { stockUtils } = await _stockLib();
@@ -5803,6 +5853,17 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
     }
   }
 
+  // AUDIT-V34 (2026-04-28) — KNOWN CAS+EXTERNAL-WORK PATTERN (deferred to V35):
+  // Status is atomically advanced inside the runTransaction above (line ~5676)
+  // BUT the heavy per-item work below runs OUTSIDE the tx. If `_exportFromSource`
+  // throws after status is flipped to 1, transfer.status='dispatched' but no
+  // batches deducted + no EXPORT_TRANSFER movements. Recovery requires admin
+  // manual reconcile. Fix sketch: do per-item exports/receives INSIDE a
+  // chunked tx (Firestore 500-op limit means most transfers fit; >250 items
+  // would need partition). Defer until concurrent test bank surfaces a
+  // realistic failure mode. Status flip at row level is itself atomic so
+  // no double-fire risk; partial state is the residual concern.
+  //
   // Execute the transition — status is already advanced atomically above.
   // Heavy work (batch mutations + movement writes) happens after the CAS so
   // the transfer doc isn't locked for the full duration.

@@ -122,6 +122,18 @@ export function deductQtyNumeric(qty, takeQty) {
 
 /**
  * Reverse a deduction — caps at total so remaining never exceeds original.
+ *
+ * Use ONLY for reverse-of-deduction (e.g. cancel sale, refund treatment).
+ * The cap is correct: you cannot "un-deduct" more than what was originally
+ * stored. For admin-discovered extra stock (ADJUST_ADD), use
+ * `adjustAddQtyNumeric` instead — it bumps BOTH total and remaining.
+ *
+ * V32 (2026-04-28): a long-standing latent bug in createStockAdjustment used
+ * this helper for type='add' adjustments, silently capping when the batch
+ * was at full capacity (remaining === total). User reported "ปรับเพิ่ม
+ * แล้วยอดไม่เปลี่ยน" — fix: separate the two semantics with a dedicated
+ * adjustAddQtyNumeric helper.
+ *
  * @param {{remaining: number, total: number}} qty
  * @param {number} amount
  * @returns {{remaining: number, total: number}}
@@ -132,6 +144,44 @@ export function reverseQtyNumeric(qty, amount) {
   const amt = toNumber(amount);
   if (amt < 0) throw new Error(`Invalid reverse amount: ${amount} (must be >= 0)`);
   return { remaining: Math.min(remaining + amt, total), total };
+}
+
+/**
+ * ADJUST_ADD math — admin recording additional stock (count correction or
+ * extra inventory found). Always bumps `remaining`; bumps `total` only when
+ * the new remaining would exceed it (soft cap — preserves the existing
+ * "room available within total → keep total" behavior the codebase already
+ * relied on for partial-deduction batches).
+ *
+ * Math: `newRemaining = remaining + amt`, `newTotal = max(total, newRemaining)`.
+ *
+ * Examples (vs old `reverseQtyNumeric` which silently capped at total):
+ *   - { total:50, remaining:40 } + 1   → { total:50,  remaining:41 } (soft cap, total unchanged)
+ *   - { total:10, remaining:10 } + 20  → { total:30,  remaining:30 } (FIXED — was capped at 10)
+ *   - { total:100, remaining:50 } + 100 → { total:150, remaining:150 } (FIXED — was capped at 100)
+ *   - { total:10, remaining:5 } + 3    → { total:10,  remaining:8 }  (count correction, total preserved)
+ *
+ * Distinct from `reverseQtyNumeric`:
+ *   - reverseQtyNumeric: hard cap at total (un-deduct can't exceed original).
+ *   - adjustAddQtyNumeric: soft cap (extra inventory grows total when needed).
+ *
+ * V32 (2026-04-28) introduced this helper to fix the silent-no-op bug where
+ * adding to a full-capacity batch resulted in `before === after` movements
+ * that wrote audit records but never moved the qty. User report:
+ * "ปรับสต็อคเพิ่ม +20 +20 +10 บน chanel batch 10/10 แล้วยอดไม่เปลี่ยน".
+ *
+ * @param {{remaining: number, total: number}} qty
+ * @param {number} amount
+ * @returns {{remaining: number, total: number}}
+ */
+export function adjustAddQtyNumeric(qty, amount) {
+  const remaining = toNumber(qty?.remaining);
+  const total = toNumber(qty?.total);
+  const amt = toNumber(amount);
+  if (amt < 0) throw new Error(`Invalid adjust-add amount: ${amount} (must be >= 0)`);
+  const newRemaining = remaining + amt;
+  const newTotal = Math.max(total, newRemaining);
+  return { remaining: newRemaining, total: newTotal };
 }
 
 /**

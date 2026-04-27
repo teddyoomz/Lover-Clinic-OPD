@@ -1,4 +1,4 @@
-# V-log Archive — full V-entry detail (V1 → V32-tris-quater)
+# V-log Archive — full V-entry detail (V1 → V34)
 
 > **This file is NOT auto-loaded.** It exists so the compressed
 > `00-session-start.md` § 2 can keep one-line summaries while preserving
@@ -513,6 +513,45 @@
 - **Rule/audit update**:
   - V32 entry locked into institutional memory (this V-entry).
   - `audit-anti-vibe-code` should extend AV16: "Source-grep tests for visual output (PDF, canvas, screenshot) MUST be paired with at least one runtime/preview_eval check that measures the actual rendered geometry — text-vs-line distance, page count, computed colors. Source-grep alone is insufficient for visual contracts."
+
+---
+
+### V34 — 2026-04-28 — ADJUST_ADD silent qty-cap on full-capacity batch (production-affecting since stock system shipped)
+- **User report (verbatim, after V15 #2 deploy)**: "ทดลองปรับสต็อคคลังกลาง ผ่านทุกปุ่ม แล้วคลังกลางยอดไม่เปลี่ยน ไม่ปรากฎอะไรใน movement log ด้วย ไอ้เหี้ย มึงไปสำรวจมาเลยนะว่าไม่มีการผิดพลาดอะไรแบบนี้อีกในระบบ Stock ทั้ง Backend ของโปรเจ็คนี้".
+- **Bug class**: long-standing latent semantic mismatch (production-affecting). NOT a wiring bug. NOT s22/s23-related — those commits were innocent bystanders that triggered the user to test the feature thoroughly enough to surface the bug.
+- **Root cause (file:line)**: `src/lib/backendClient.js:4810` (pre-fix) — `createStockAdjustment` for `type='add'` called `reverseQtyNumeric(batch.qty, qty)` which is `{remaining: Math.min(remaining + amt, total), total}`. The `Math.min` cap fires silently when `remaining === total` (batch at full capacity). Result: tx.update writes the same qty unchanged, tx.set movement records (before=10, after=10, qty=20), tx.set adjustment doc all commit successfully → result.success=true → admin sees "บันทึกสำเร็จ" but qty hasn't moved.
+- **Why latent for so long**: `reverseQtyNumeric` was designed for **reversing a deduction** (cap-at-total is correct: you can't un-deduct more than was originally there). `createStockAdjustment` reused it without thinking through the semantic. ADJUST_ADD has DIFFERENT semantics (admin recording extra inventory found / count correction) — should bump total when needed. No test exercised "ADJUST_ADD on remaining===total" because all existing tests used partially-deducted batches (50/40, 100/50, etc.) where the cap doesn't fire.
+- **Why surfaced now**: User received chanel le'bess (10 units) into central tier (RECEIVE qty=10, batch becomes 10/10). Then tested adjusts +20+20+10 (total +50). All 3 movements wrote with before=10 after=10. Balance never moved. User noticed.
+- **Production damage**: any ADJUST_ADD on a batch where remaining had reached total in production has been a silent no-op since the stock system shipped. Movement log shows the +N entries but qty never changed. Admin watching the balance saw stale numbers. 4 known artifacts at minimum (3 user tests + 1 V34 fix-verify of +5 on the same chanel batch). The data is recoverable: replay each ADJUST_ADD movement with the new logic to compute the correct snapshot, OR mark them `void` with a migration script.
+- **Fix surfaces**:
+  1. `src/lib/stockUtils.js` — NEW helper `adjustAddQtyNumeric(qty, amount)` with soft-cap math: `{remaining: remaining + amt, total: max(total, remaining + amt)}`. Bumps total ONLY when new remaining exceeds it (preserves existing behavior for partial-deduction batches; fixes the bug for at-capacity batches).
+  2. `src/lib/backendClient.js` (createStockAdjustment) — destructure `adjustAddQtyNumeric` instead of `reverseQtyNumeric`. `type='add'` branch calls it. `reverseQtyNumeric` semantics preserved for `_reverseOneMovement` (refund/cancel paths) where cap-at-total is correct.
+- **Phase 0 diagnostic** (BEFORE any code change, per V12 lesson): preview_eval on running dev server confirmed:
+  - SDK call worked perfectly: `createStockAdjustment` 50/40 + 1 → 50/41 (the partial-batch case, no cap fired)
+  - Inspecting chanel batch: 3 user-test movements at WH-XXX with `before:10, after:10` — fingerprint of cap bug
+  - Pure helper test `reverseQtyNumeric({total:10, remaining:10}, 20)` → `{remaining:10, total:10}` (cap fires) — confirmed the math layer was the actual bug, not wiring
+- **Phase 1 hotfix**: `adjustAddQtyNumeric` helper + createStockAdjustment update. Live verified on chanel batch: `{total:10, remaining:10}` + 5 → `{total:15, remaining:15}` ✓ (was 10/10 silent cap pre-fix). 41 tests in `tests/v34-stock-adjust-add-qty-cap.test.js` (D1 pure helper + D2 adversarial + D3 reverseQtyNumeric regression guard + D4 source-grep + D5 full-flow simulate + D6 doc lock).
+- **Phase 2 systemic audit** (12 mutation sites read):
+  - **2 P0 fixes shipped**: `cancelStockOrder` migrated from sequential `updateDoc/setDoc` loop to `writeBatch` (atomic). `updateStockOrder` cost cascade migrated to `writeBatch` (atomic).
+  - **4 P0 + 4 P1 deferred**: deductStockForSale partial-rollback risk, updateStockTransferStatus CAS+external-work pattern, receiveCentralStockOrder concurrent-receive race, stockConfig opt-in silent-swallow, _deductOneItem partial-compensation, updateStockWithdrawalStatus CAS patch missing guards, SaleTab silent reverse failures. Flagged with `AUDIT-V34 (2026-04-28)` source comments. Phase 3 invariant tests will surface real-world failures under stress.
+  - **1 false positive resolved**: `updateStockTransferStatus` stale-read post-CAS — false positive. Status is atomically advanced inside the runTransaction; once flipped, no concurrent edit possible.
+- **Phase 3 invariant test bank**: 61 new tests in `tests/v34-stock-invariants.test.js` covering 13 invariant groups (per-batch conservation, atomicity, idempotency, no-negative balance, tier isolation, reverse symmetry, audit completeness, time-travel replay, no-undefined-leaves V14 lock, test-prefix discipline, UI→backend wiring, adversarial inputs, V34 institutional-memory markers). New shared `tests/helpers/stockInvariants.js` with `replayMovementsToBalance` + `assertConservation` + `makeBatchFixture` + `makeMovementFixture` + `filterMovementsForTier` + `assertNoUndefinedLeaves` + `SOURCE_SIDE_TYPES` / `DESTINATION_SIDE_TYPES` / `CROSS_TIER_TYPES`.
+- **Phase 4 audit-stock-flow upgrade**: S1-S15 → S1-S20. Added per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline. Patterns.md extended with S16-S20 grep recipes. Audit-all SKILL.md tier table updated.
+- **Phase 5 V33.11**: `tests/helpers/testStockBranch.js` — `createTestStockBranchId` / `createTestCentralWarehouseId` / `createTestStockProductId` / `createTestStockBatchId` + `isTestStockId` / `getTestStockPrefix` + frozen `TEST_STOCK_PREFIXES`. Mirrors V33.10 customer-prefix discipline for the stock domain. Rule 02-workflow.md updated. Drift catcher `tests/v33-11-stock-test-prefix.test.js` (12 tests).
+- **Final test count**: 2316 → 2389+ across all 6 phases.
+- **Worst part**: This bug was LIVE in production since the stock system first shipped. The fact that admin tested "ปรับสต็อค" all the time without noticing means most adjusts were on partially-deducted batches (where the cap doesn't fire). Only when an admin tried to ADD inventory to a batch already at full capacity did the bug fire — and even then, only the most observant admin would notice the balance hadn't changed because the +N badge in Movement Log creates the illusion of progress. **The qty math layer is the legal record. We had a phantom-stock bug for the entire history of the system.**
+- **Lessons**:
+  1. **Helper-name reuse is dangerous when semantics overlap but diverge.** `reverseQtyNumeric` (cap at total — for refunds) and `adjustAddQtyNumeric` (soft cap — for inventory growth) look superficially similar but represent different operations. Naming + JSDoc must explicitly call out the semantic distinction. Now locked.
+  2. **Source-grep tests + helper-output tests are NECESSARY BUT NOT SUFFICIENT for stock mutations.** preview_eval against real Firestore is the only way to catch math-layer bugs that pass under normal test fixtures. Rule I item (b) is now NON-NEGOTIABLE for stock paths.
+  3. **A passing audit doesn't mean the math is right.** `audit-stock-flow` had S1 ("remaining ≤ total") but not "remaining moves correctly under ADJUST_ADD". S16 (per-tier per-product conservation) closes that gap by replaying movements against the snapshot.
+  4. **Anti-pattern lock**: Any future helper migration in stockUtils.js MUST update audit-stock-flow + write a paired test that exercises the new semantic at full-capacity edge case. `/audit-stock-flow` S18 grep enforces this.
+  5. **Test-prefix discipline (V33.11) is mandatory for stock.** Without it, V34's test artifacts (4 zero-effect movements + 1 verify movement on chanel batch) compound silently in production data. Cleanup pipeline now has a deterministic path.
+- **Rule/audit update**:
+  - This V-entry locked into institutional memory.
+  - Rule I item (b) explicitly hardened for stock (00-session-start.md + 02-workflow.md).
+  - audit-stock-flow S16-S20 added.
+  - V33.11 prefix discipline shipped.
+  - 8 deferred-bug AUDIT-V34 source comments flag concurrency risks for V35 follow-up.
 
 ---
 
