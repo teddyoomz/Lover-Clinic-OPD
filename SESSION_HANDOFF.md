@@ -7,19 +7,51 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 19 — Phase 15.4 polish — 7-item triage SHIPPED (7 commits, NOT deployed)
+- **Date last updated**: 2026-04-28 session 20 — V15 combined deploy COMPLETE (Phase 15.4 + post-deploy bug fixes LIVE)
 - **Branch**: `master`
-- **Last commit**: `26ee312 fix(stock): Phase 15.4 — batch picker legacy-main fallback (item 2)`
-- **Test count**: **2123** focused (+218 since s18: 1905 → 2123)
-- **Build**: clean. BackendDashboard chunk ≈ 924 KB (unchanged)
-- **Deploy state**: ⏳ **PRODUCTION = `75bbc38`** (V33.10 LIVE) · master **17 commits ahead** (10 s18 + 7 s19), awaiting V15 combined deploy
-  - Phase 15.2 (s18) has firestore.rules update (`be_central_stock_orders` + counter blocks) → Probe-Deploy-Probe + extend probe list 6→8 endpoints required
-  - Phase 15.4 (s19) is data-shape + dual-query only — no new rules, but Probe still mandatory per Rule B
-  - User chose strict rule discipline: deploy requires explicit "deploy" THIS turn (V18)
-- **Rule B probe list permanent**: 6 positive + 3 negative (extends to 8 positive + 4 negative on next deploy)
+- **Last commit**: `ae2ab7e test(stock): bug 5 — full Movement Log wiring audit + regression bank` (+ pending docs commit)
+- **Test count**: **2183** focused (+278 since s18: 1905 → 2183)
+- **Build**: clean. BackendDashboard chunk ≈ 911 KB (s19 + post-deploy fixes shipped)
+- **Deploy state**: ✅ **PRODUCTION = `ae2ab7e`** (V15 LIVE — Phase 15.4 + 5 post-deploy bug fixes)
+  - Vercel: `lover-clinic-en5gqnqzd-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 49s deploy
+  - Firestore rules: released to `cloud.firestore` (Phase 15.2 + s19 shape additions)
+  - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 ✓
+  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 200 (FB webhook 403 by-design — rejects unauth GET without hub.verify_token)
+- **Rule B probe list extended permanently**: 6 positive + 4 negative (added `be_central_stock_orders` negative on this deploy)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
-- **SCHEMA_VERSION**: 16 (next deploy bumps to 17 — central stock orders)
+- **SCHEMA_VERSION**: 17 (this deploy: central stock orders + 4 cross-branch movement field additions)
+
+### Session 2026-04-28 session 20 (V15 combined deploy + 5 post-deploy bug fixes)
+
+User pasted 5 post-s19 bug reports immediately after Phase 15.4 ship.
+Auto-mode session shipped 5 fix commits + comprehensive audit + deploy.
+
+**5 post-deploy bug fixes** (all in single sitting):
+
+| # | User words | Commit | Root cause |
+|---|---|---|---|
+| 1 | "ปุ่มสร้างออเดอร์ใหม่หน้า stock ใช้ไม่ได้ กดเข้าแล้วหน้าจอดำ" | `69a5dd9` | V11: bare `export ... from` is re-export-only; OrderCreateForm referenced `getUnitOptionsForProduct` locally → ReferenceError on form mount |
+| 4 | "ปุ่มปรับ stock หน้าคลังกลาง ไปเชื่อมกับ stock สาขา" | `69a5dd9` | Bug-4 cross-tier contamination: `includeLegacyMain: true` always-on pulled 'main' branch-tier batches into central tab. Fix: gate via `deriveLocationType === BRANCH` in 3 stock create forms |
+| 2 | "โอนย้าย/เบิกของยังไม่ขึ้นใน Movement log หน้า stock" | `f2b71ec` | Phase E dual-query Promise.all had silent-fail trap. Refactor to client-side branchId filter (`m.branchId === X || m.branchIds.includes(X)`); no composite index, no silent fails |
+| 3 | "รายการหน้าปรับสต็อคต้องกดเข้าไปดูรายละเอียดได้เหมือนหน้าอื่นๆ" | `244e909` | NEW AdjustDetailModal mirrors Transfer/Withdrawal pattern. Wires StockAdjustPanel row click → modal. 10 data-testids + V12 backward compat + V22 branch-name resolution |
+| 5 | "ตรวจสอบ wiring flow + logic ทุก stock movement" | `ae2ab7e` | Full audit of 12 emit sites: branchId set ✓, 4 cross-branch types have branchIds ✓, reverse spreads `...m` ✓, reader catches all via client-side filter. 22 regression tests lock the architecture |
+
+**Test count**: 2123 → 2183 (+60 across 5 fix commits + audit).
+
+**V15 combined deploy** (this turn — explicit "deploy" authorization):
+- Pre-probe: 6/6 positive 200 + 4/4 negative 403 ✓
+- Vercel: `--prod --yes` (49s, 911 KB chunk)
+- Firestore rules: `--only firestore:rules` (cloud.firestore released)
+- Post-probe: 6/6 positive 200 + 4/4 negative 403 ✓
+- Cleanup: 4/4 (pc_appointments DELETE x2 + clinic_settings PATCH strip x2)
+- HTTP smoke: root + /admin + /api/webhook/line = 200 ✓
+
+**Negative probe list extended**: added `be_central_stock_orders` (Phase 15.2 collection from s18). Probe list now 6 positive + 4 negative permanently.
+
+Detail: `.agents/sessions/2026-04-28-session20-v15-deploy-+-5-post-deploy-fixes.md`
+
+
 
 ### Session 2026-04-27 session 19 (7 commits, `0792359` → `26ee312`) — Phase 15.4 polish — 7 user-EOD items SHIPPED
 
@@ -571,31 +603,32 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s19 EOD.
+Resume LoverClinic — continue from 2026-04-28 s20 (post V15 deploy).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=26ee312, prod=75bbc38 — 17 commits unpushed-to-prod)
-3. .agents/active.md (2123 tests pass; Phase 15.4 7-items SHIPPED)
+2. SESSION_HANDOFF.md (master=ae2ab7e, prod=ae2ab7e LIVE — fully synced)
+3. .agents/active.md (2183 tests pass; Phase 15.4 + 5 post-deploy fixes deployed)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-27-session19-phase15.4-7-items.md
+5. .agents/sessions/2026-04-28-session20-v15-deploy-+-5-post-deploy-fixes.md
 
-Status: master=26ee312, 2123/2123 tests pass, prod=75bbc38 LIVE (V33.10 baseline)
-Phase 15.4 — all 7 user-EOD items shipped this session (pagination · batch
-picker · 2× movement log visibility · 2× detail modal 3-roles · auto-unit)
-— NOT deployed.
+Status: master=ae2ab7e == prod=ae2ab7e LIVE. 2183/2183 tests pass.
+V15 combined deploy COMPLETE this session. All 5 user-reported post-s19
+bugs fixed + audit shipped. Phase 15.4 + post-deploy fixes LIVE.
 
-Next: Decide V15 combined deploy (17 commits = 10 s18 + 7 s19). Phase 15.2
-(s18) has rules update; Phase 15.4 is shape-only but Probe-Deploy-Probe
-required. Probe list: 6→8 endpoints (`be_central_stock_orders` + counter).
+Next: Live QA on the deployed fixes:
+  - Bug 1: open OrderPanel "+ สร้าง" — form should render (no blank screen)
+  - Bug 4: central tab adjust picker — should show ONLY warehouse batches (not 'main' branch)
+  - Bug 2: branch stock-tab MovementLog — should show transfer + withdrawal cross-branch
+  - Bug 3: Adjust list rows — clickable to detail modal
+  - Bug 5: audit confirms all stock movements wired correctly
 
-Then ActorPicker branchIds filter (deferred from s19's refined list);
-Phase 15.5 central dispatch + withdrawal approval admin endpoint.
+Then queue for next session:
+  - ActorPicker branchIds[] filter (deferred from s19)
+  - Phase 15.4 central→branch dispatch flow + Phase 15.5 withdrawal approval
+  - Admin tasks: LineSettingsTab creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix
 
-Outstanding (user-triggered):
-  - V15 combined deploy 17 pending commits
-  - Admin: fill LineSettingsTab credentials + webhook URL · backfill customer IDs · TEST-/E2E- prefix
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe.
 
 /session-start
 ```
