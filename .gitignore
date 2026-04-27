@@ -34,3 +34,5 @@ skills-lock.json
 *.tmp.ts
 # agent-context-kit: commit scaffold; only private/ stays local.
 .agents/private/
+# Runtime lock files for scheduled-tasks MCP (never commit)
+.claude/scheduled_tasks.lock
