@@ -634,30 +634,37 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 s20 (post V15 deploy).
+Resume LoverClinic — continue from 2026-04-28 s21 (post V15 #2 deploy).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ae2ab7e, prod=ae2ab7e LIVE — fully synced)
-3. .agents/active.md (2183 tests pass; Phase 15.4 + 5 post-deploy fixes deployed)
+2. SESSION_HANDOFF.md (master=bd755f5, prod=e46eda2 LIVE — synced)
+3. .agents/active.md (2214 tests pass; bug 2 v3 + v4 deployed)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-28-session20-v15-deploy-+-5-post-deploy-fixes.md
+5. .agents/sessions/2026-04-28-session21-bug2-v3-v4-deploy.md
 
-Status: master=ae2ab7e == prod=ae2ab7e LIVE. 2183/2183 tests pass.
-V15 combined deploy COMPLETE this session. All 5 user-reported post-s19
-bugs fixed + audit shipped. Phase 15.4 + post-deploy fixes LIVE.
+Status: master=bd755f5 (prod=e46eda2 — docs commit ahead). 2214/2214 tests pass.
+Movement log architecture corrected this session: single-tier per movement,
+counterparty NAME shown via branchIds[] metadata. NOT duplicated on both sides.
 
-Next: Live QA on the deployed fixes:
-  - Bug 1: open OrderPanel "+ สร้าง" — form should render (no blank screen)
-  - Bug 4: central tab adjust picker — should show ONLY warehouse batches (not 'main' branch)
-  - Bug 2: branch stock-tab MovementLog — should show transfer + withdrawal cross-branch
-  - Bug 3: Adjust list rows — clickable to detail modal
-  - Bug 5: audit confirms all stock movements wired correctly
+Architecture lock (institutional memory):
+- Cross-tier movements split into 2 docs (EXPORT at source + RECEIVE at destination)
+- Each visible at OWN tier only
+- branchIds[] is metadata for COUNTERPARTY NAME (NOT filter alias)
+- Type 8/10 source-side: "ส่งออกไป/เบิกโดย {dest}"
+- Type 9/13 destination-side: "รับเข้าจาก/รับเบิกจาก {src}"
+- Legacy-main fallback STAYS (default-branch ID-mismatch fix)
 
-Then queue for next session:
-  - ActorPicker branchIds[] filter (deferred from s19)
-  - Phase 15.4 central→branch dispatch flow + Phase 15.5 withdrawal approval
-  - Admin tasks: LineSettingsTab creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix
+Next: Live QA verification:
+  - Korat → Central transfer: Korat ONE row "ส่งออกไป คลังกลาง...", Central ONE row "รับเข้าจาก สาขาโคราช"
+  - Withdrawal: similar one-side semantics
+  - Default branch (สาขาหลัก) MovementLog now shows transfers (legacy-main fallback)
+
+Then queue: ActorPicker branchIds filter; Phase 15.5 central dispatch +
+withdrawal approval admin endpoint.
+
+Outstanding (admin tasks): LineSettingsTab creds + webhook URL · backfill
+customer IDs · TEST-/E2E- prefix.
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe.
 
