@@ -37,8 +37,12 @@ const backendSrc = read('src/lib/backendClient.js');
 const movementLogSrc = read('src/components/backend/MovementLogPanel.jsx');
 
 // ============================================================================
-describe('Phase 15.4 ML.A — listStockMovements dual-query when branchId filter set', () => {
-  // Slice the function for focused grep.
+describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', () => {
+  // POST-DEPLOY FIX (bug 2 v2): the dual-query Promise.all approach (initial
+  // s19 ship) had a silent-fail trap when Firestore composite index was
+  // missing. Refactored to client-side filter: fetch with non-branch
+  // server-filters, then filter by branchId/branchIds in JS. Robust + no
+  // index dependency.
   const fnStart = backendSrc.indexOf('export async function listStockMovements');
   expect(fnStart, 'listStockMovements not found').toBeGreaterThan(0);
   const fnSlice = backendSrc.slice(fnStart, fnStart + 3000);
@@ -47,52 +51,115 @@ describe('Phase 15.4 ML.A — listStockMovements dual-query when branchId filter
     expect(fnStart).toBeGreaterThan(0);
   });
 
-  it('ML.A.2 — single-branch query (Q1) uses where("branchId", "==", X)', () => {
-    expect(fnSlice).toMatch(/where\(['"]branchId['"],\s*['"]==['"],\s*branchIdStr/);
+  it('ML.A.2 — branchId filter is CLIENT-SIDE (filter() with branchId === branchIdStr)', () => {
+    expect(fnSlice).toMatch(/String\(m\.branchId\s*\|\|\s*['"]['"]\)\s*===\s*branchIdStr/);
   });
 
-  it('ML.A.3 — cross-branch query (Q2) uses where("branchIds", "array-contains", X)', () => {
-    expect(fnSlice).toMatch(/where\(['"]branchIds['"],\s*['"]array-contains['"],\s*branchIdStr/);
+  it('ML.A.3 — branchId filter ALSO checks Array.isArray(m.branchIds) && includes(X)', () => {
+    expect(fnSlice).toMatch(/Array\.isArray\(m\.branchIds\)\s*&&\s*m\.branchIds\.includes\(branchIdStr\)/);
   });
 
-  it('ML.A.4 — Q1 + Q2 fired in parallel via Promise.all', () => {
-    expect(fnSlice).toMatch(/Promise\.all\(\[/);
+  it('ML.A.4 — V21 anti-regression: NO Promise.all dual-query (was the silent-fail trap)', () => {
+    // The dual-query pattern was deployed briefly but had silent-fail risk.
+    // Lock: no `Promise.all([...])` pattern in this function.
+    expect(fnSlice).not.toMatch(/Promise\.all\(\[/);
   });
 
-  it('ML.A.5 — dedupes results by movementId', () => {
-    expect(fnSlice).toMatch(/seen\s*=\s*new\s+Set\(\)/);
-    expect(fnSlice).toMatch(/seen\.has/);
-    expect(fnSlice).toMatch(/seen\.add/);
+  it('ML.A.5 — V21 anti-regression: NO server-side array-contains query (caused index needs)', () => {
+    expect(fnSlice).not.toMatch(/where\(['"]branchIds['"],\s*['"]array-contains['"]/);
   });
 
-  it('ML.A.6 — branchId filter REMOVED from common mapFields (must run dual-query, not single)', () => {
+  it('ML.A.6 — branchId filter NOT in mapFields (mapFields stays server-side; branchId is client-side)', () => {
     const mapFieldsLine = fnSlice.match(/mapFields\s*=\s*\[[^\]]+\]/s);
     expect(mapFieldsLine).toBeTruthy();
     expect(mapFieldsLine[0]).not.toContain("'branchId'");
+    // 'branchIds' (plural) also not in mapFields — that's server-fetched into the result, used client-side.
+    expect(mapFieldsLine[0]).not.toContain("'branchIds'");
+  });
+
+  it('ML.A.7 — backward compat: old movements (no branchIds[]) still match via branchId arm', () => {
+    // Both arms must be in the filter (one matches old, one matches new).
+    expect(fnSlice).toMatch(/m\.branchId/);
+    expect(fnSlice).toMatch(/m\.branchIds/);
+  });
+
+  it('ML.A.8 — null/undefined branchId skips the filter entirely (returns all server-fetched)', () => {
+    expect(fnSlice).toMatch(/if\s*\(\s*filters\.branchId\s*!=\s*null\s*\)/);
   });
 });
 
-describe('Phase 15.4 ML.B — listStockMovements graceful fallback', () => {
-  const fnStart = backendSrc.indexOf('export async function listStockMovements');
-  const fnSlice = backendSrc.slice(fnStart, fnStart + 3000);
+describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', () => {
+  // Pure simulate of the filter chain (no Firestore needed).
+  function simulateBranchFilter(movements, filters) {
+    let mvts = [...movements];
+    if (filters.branchId != null) {
+      const branchIdStr = String(filters.branchId);
+      mvts = mvts.filter((m) => {
+        if (String(m.branchId || '') === branchIdStr) return true;
+        if (Array.isArray(m.branchIds) && m.branchIds.includes(branchIdStr)) return true;
+        return false;
+      });
+    }
+    return mvts;
+  }
 
-  it('ML.B.1 — Q2 wrapped in .catch with soft-fail (no UI crash on missing index)', () => {
-    expect(fnSlice).toMatch(/getDocs\(q2\)\.catch/);
+  const FIXTURE = [
+    // Pre-Phase-15.4 (no branchIds[]) — only matches via branchId
+    { movementId: 'old-1', branchId: 'BR-A' },
+    { movementId: 'old-2', branchId: 'WH-X' },
+    // Post-Phase-15.4 transfer movements (branchIds set on writer)
+    { movementId: 'tr-export', branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] },
+    { movementId: 'tr-receive', branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] },
+    // Withdrawal pair
+    { movementId: 'wd-export', branchId: 'WH-X', branchIds: ['WH-X', 'BR-A'] },
+    { movementId: 'wd-confirm', branchId: 'BR-A', branchIds: ['WH-X', 'BR-A'] },
+    // Cross-branch transfer (BR-A ↔ BR-B)
+    { movementId: 'cb-export', branchId: 'BR-A', branchIds: ['BR-A', 'BR-B'] },
+    { movementId: 'cb-receive', branchId: 'BR-B', branchIds: ['BR-A', 'BR-B'] },
+  ];
+
+  it('ML.B.1 — at branch BR-A: sees own movements + cross-branch involving BR-A', () => {
+    const result = simulateBranchFilter(FIXTURE, { branchId: 'BR-A' });
+    const ids = result.map((m) => m.movementId).sort();
+    expect(ids).toEqual([
+      'cb-export', 'cb-receive', // BR-A ↔ BR-B (BR-A in branchIds for both)
+      'old-1',                    // legacy own
+      'tr-export', 'tr-receive',  // BR-A ↔ WH-X (BR-A in branchIds for both)
+      'wd-confirm', 'wd-export',  // WH-X ↔ BR-A (BR-A in branchIds for both)
+    ]);
   });
 
-  it('ML.B.2 — soft-fail returns empty docs array (Q1 results still surface)', () => {
-    expect(fnSlice).toMatch(/return\s*\{\s*docs:\s*\[\]\s*\}/);
+  it('ML.B.2 — at central WH-X: sees own + cross-branch involving WH-X', () => {
+    const result = simulateBranchFilter(FIXTURE, { branchId: 'WH-X' });
+    const ids = result.map((m) => m.movementId).sort();
+    expect(ids).toEqual([
+      'old-2',                    // legacy own
+      'tr-export', 'tr-receive',  // (WH-X in branchIds for both)
+      'wd-confirm', 'wd-export',  // (WH-X in branchIds for both)
+    ]);
   });
 
-  it('ML.B.3 — V31 anti-regression: catch logs warn, NOT silent', () => {
-    expect(fnSlice).toMatch(/console\.warn\(/);
-    // V31 lock: don't use the "continuing" pattern that hides errors.
-    expect(fnSlice).not.toMatch(/console\.warn\([^)]*continuing/i);
+  it('ML.B.3 — at branch BR-B (not involved in transfers WH-X side): sees only BR-A↔BR-B', () => {
+    const result = simulateBranchFilter(FIXTURE, { branchId: 'BR-B' });
+    const ids = result.map((m) => m.movementId).sort();
+    expect(ids).toEqual(['cb-export', 'cb-receive']);
   });
 
-  it('ML.B.4 — null/undefined branchId still uses single query path (no dual)', () => {
-    expect(fnSlice).toMatch(/if\s*\(\s*filters\.branchId\s*!=\s*null\s*\)/);
-    expect(fnSlice).toMatch(/\}\s*else\s*\{/);
+  it('ML.B.4 — null branchId returns ALL', () => {
+    const result = simulateBranchFilter(FIXTURE, {});
+    expect(result.length).toBe(FIXTURE.length);
+  });
+
+  it('ML.B.5 — pre-15.4 movement WITHOUT branchIds[] still matches via branchId arm', () => {
+    const result = simulateBranchFilter([{ movementId: 'a', branchId: 'BR-A' }], { branchId: 'BR-A' });
+    expect(result).toHaveLength(1);
+  });
+
+  it('ML.B.6 — post-15.4 movement with branchIds[src,dst]: visible from BOTH sides', () => {
+    const fixture = [{ movementId: 'x', branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] }];
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-A' })).toHaveLength(1);
+    expect(simulateBranchFilter(fixture, { branchId: 'WH-X' })).toHaveLength(1);
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-B' })).toHaveLength(0);
   });
 });
 

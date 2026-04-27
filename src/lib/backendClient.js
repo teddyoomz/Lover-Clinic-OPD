@@ -3934,15 +3934,20 @@ export async function listStockMovements(filters = {}) {
   //   - WITHDRAWAL_CONFIRM (type 13): branchId = destination
   //
   // Old behaviour: filter `where('branchId', '==', X)` returned ONLY the side
-  // whose branchId matched. Result: at branch BR-A's stock-tab MovementLog,
-  // a transfer FROM central → BR-A showed nothing until "รับ" was clicked
-  // (RECEIVE only fires at status 1→2). User reported as bug.
+  // whose branchId matched. User saw transfers in central tab but not in
+  // stock tab (or vice versa).
   //
   // Fix: writer also sets `branchIds: [src, dst]` on those 4 movement types.
-  // Reader does dual-query when branchId filter is set:
-  //   Q1: where('branchId', '==', X)            — legacy + single-branch
-  //   Q2: where('branchIds', 'array-contains', X) — new cross-branch
-  // Merge + dedupe by movementId. Old movements (no branchIds[]) still match Q1.
+  // Reader fetches with non-branch server-filters (productId/type/etc.),
+  // then filters branchId CLIENT-SIDE: match if `m.branchId === X` OR
+  // `m.branchIds.includes(X)`. This avoids composite-index dependencies +
+  // dual-query silent-fail traps that the dual-query approach (deployed
+  // briefly post-s19) had. For clinic-scale data (<50k movements per
+  // collection) the extra fetch is acceptable; trade reliability for a
+  // small bandwidth tax.
+  //
+  // Old movements (no branchIds[]) still surface via the `branchId === X`
+  // arm — backward compat preserved without schema migration.
 
   const mapFields = [
     'linkedSaleId', 'linkedTreatmentId', 'linkedOrderId', 'linkedCentralOrderId',
@@ -3950,42 +3955,23 @@ export async function listStockMovements(filters = {}) {
     'batchId', 'productId',
   ];
 
-  function commonClauses() {
-    const cs = [];
-    for (const f of mapFields) {
-      if (filters[f] != null) cs.push(where(f, '==', String(filters[f])));
-    }
-    if (filters.type != null) cs.push(where('type', '==', Number(filters.type)));
-    return cs;
+  const clauses = [];
+  for (const f of mapFields) {
+    if (filters[f] != null) clauses.push(where(f, '==', String(filters[f])));
   }
+  if (filters.type != null) clauses.push(where('type', '==', Number(filters.type)));
 
-  let mvts = [];
+  const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
+  const snap = await getDocs(q);
+  let mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
   if (filters.branchId != null) {
     const branchIdStr = String(filters.branchId);
-    const q1 = query(stockMovementsCol(), ...commonClauses(), where('branchId', '==', branchIdStr));
-    const q2 = query(stockMovementsCol(), ...commonClauses(), where('branchIds', 'array-contains', branchIdStr));
-    const [s1, s2] = await Promise.all([
-      getDocs(q1),
-      // Q2 may fail if Firestore lacks the composite index (auto-created on
-      // first run; subsequent calls work). Soft-fail to Q1 results only.
-      getDocs(q2).catch((e) => {
-        console.warn('[listStockMovements] branchIds array-contains query failed (composite index?):', e?.message || e);
-        return { docs: [] };
-      }),
-    ]);
-    const seen = new Set();
-    for (const d of [...s1.docs, ...s2.docs]) {
-      const data = { id: d.id, ...d.data() };
-      const mid = data.movementId || d.id;
-      if (seen.has(mid)) continue;
-      seen.add(mid);
-      mvts.push(data);
-    }
-  } else {
-    const clauses = commonClauses();
-    const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
-    const snap = await getDocs(q);
-    mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    mvts = mvts.filter((m) => {
+      if (String(m.branchId || '') === branchIdStr) return true;
+      if (Array.isArray(m.branchIds) && m.branchIds.includes(branchIdStr)) return true;
+      return false;
+    });
   }
 
   if (!filters.includeReversed) {
