@@ -39,36 +39,11 @@ describe('F1 webhook uses firebase-admin SDK (not unauth REST) for be_* paths', 
     expect(WEBHOOK_SRC).toMatch(/if \(getApps\(\)\.length > 0\)\s*\{[\s\S]{0,80}getApp\(\)/);
   });
 
-  test('F1.4 consumeLinkToken uses admin SDK doc().get() (not unauth REST)', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/getAdminFirestore\(\)/);
-    expect(fn).toMatch(/db\.doc\([^)]*be_customer_link_tokens/);
-    expect(fn).toMatch(/\.get\(\)/);
-    // NEGATIVE: no firestoreGet/firestorePatch/firestoreDelete on be_* paths
-    expect(fn).not.toMatch(/firestoreGet\([^)]*be_customer_link_tokens/);
-    expect(fn).not.toMatch(/firestorePatch\([^)]*be_customers/);
-    expect(fn).not.toMatch(/firestoreDelete\([^)]*be_customer_link_tokens/);
-  });
-
-  test('F1.5 consumeLinkToken admin SDK update on be_customers (lineUserId + lineLinkedAt)', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/db\.doc\([^)]*be_customers/);
-    expect(fn).toMatch(/\.update\(\{[\s\S]*?lineUserId[\s\S]*?lineLinkedAt/);
-  });
-
-  test('F1.6 consumeLinkToken admin SDK delete after success (one-time use)', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/tokenRef\.delete\(\)/);
-  });
-
-  test('F1.7 consumeLinkToken expiry branch uses admin SDK delete (best-effort cleanup)', () => {
-    expect(WEBHOOK_SRC).toMatch(/expiresAt\s*<\s*new Date\(\)\.toISOString\(\)/);
-  });
-
-  test('F1.8 consumeLinkToken collision check via admin SDK where()', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/\.where\(['"]lineUserId['"],\s*['"]==['"],\s*lineUserId\)/);
-    expect(fn).toMatch(/\.limit\(2\)/);
+  // V33.9 — F1.4-F1.8 (consumeLinkToken assertions) REMOVED. Function deleted
+  // along with the pre-V33.4 QR-token consumption flow. The admin-SDK-only-
+  // for-be_* contract is still preserved by F1.9 + F1.10 below.
+  test('F1.4 V33.9: consumeLinkToken function REMOVED from webhook', () => {
+    expect(WEBHOOK_SRC).not.toMatch(/^async function consumeLinkToken/m);
   });
 
   test('F1.9 findCustomerByLineUserId uses admin SDK collection().where()', () => {
@@ -223,27 +198,14 @@ describe('F5 logical correctness (no live network)', () => {
     expect(fn).toMatch(/text\.trim\(\)\.length\s*>=?\s*2/);
   });
 
-  test('F5.2 consumeLinkToken returns 4 distinct reasons that map to formatLinkFailureReply', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/reason:\s*['"]invalid['"]/);
-    expect(fn).toMatch(/reason:\s*['"]expired['"]/);
-    expect(fn).toMatch(/reason:\s*['"]already-linked['"]/);
-    expect(fn).toMatch(/ok:\s*true/);
-  });
+  // V33.9 — F5.2 + F5.4 (consumeLinkToken inspection) REMOVED. Function
+  // deleted. Customer-doc-write anti-clobber contract is preserved by
+  // V32-tris-quater link-requests approval flow which uses .update() too;
+  // tested in v32-tris-quater-id-link-request.test.jsx.
 
   test('F5.3 try/catch swallow ensures bot errors never break the webhook', () => {
     expect(WEBHOOK_SRC).toMatch(/try\s*\{[\s\S]{0,200}maybeEmitBotReply[\s\S]{0,200}\}\s*catch/);
     expect(WEBHOOK_SRC).toMatch(/console\.warn.*\[line-webhook\] bot reply failed/);
-  });
-
-  test('F5.4 customer write path uses .update() not .set() (anti-clobber on customer doc)', () => {
-    // Critical: customer doc has many fields. Using set() without {merge:true}
-    // would WIPE patientData/courses/etc. update() only writes specified keys.
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    const updateCount = (fn.match(/customerRef\.update\(/g) || []).length;
-    const setCount = (fn.match(/customerRef\.set\(/g) || []).length;
-    expect(updateCount).toBe(1);
-    expect(setCount).toBe(0);
   });
 
   test('F5.5 admin endpoint Firestore path matches APP_ID + chat_config exactly', () => {

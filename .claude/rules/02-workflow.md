@@ -90,6 +90,28 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
    | Modal, form validation, nav | Playwright E2E |
    | CSS/visual | Preview screenshot (ไม่บ่อย) |
 
+### 🆕 Test customer doc-id prefix (V33.10 — V33.2 directive codified)
+- **Every test that writes a real Firestore customer doc** (preview_eval scripts,
+  integration tests via firebase-admin SDK, E2E playwright fixtures) MUST use
+  a doc-id with prefix `TEST-` or `E2E-`. Mock-only tests don't need it.
+- Use the canonical helper:
+  ```js
+  import { createTestCustomerId } from 'tests/helpers/testCustomer.js';
+  const customerId = createTestCustomerId();                    // 'TEST-<ts>'
+  const customerId = createTestCustomerId({ prefix: 'E2E' });   // 'E2E-<ts>'
+  const customerId = createTestCustomerId({ suffix: 'sale' });  // 'TEST-<ts>-sale'
+  ```
+- `isTestCustomerId(id)` + `getTestCustomerPrefix(id)` — admin-side cleanup
+  helpers; safe-by-default identification of test docs eligible for batch
+  deletion.
+- **Why**: V33.2 cleaned 53 untagged test customers out of production data.
+  Without the prefix convention, future test pollution is invisible until
+  it accumulates again.
+- **Anti-pattern**: hardcoding doc IDs like `'CUST-test-1234'` or
+  `'preview-customer-abc'` in tests that hit Firestore. Drift catcher:
+  `tests/v33-10-test-customer-prefix.test.js` E1+E2 assert the rule + helper
+  file are present.
+
 ### CODEBASE_MAP.md
 อัพเดท `F:\LoverClinic-app\CODEBASE_MAP.md` ทุกครั้งที่เพิ่ม/ลบ/rename/restructure ไฟล์ใน `src/` หรือ `api/` — source of truth สำหรับ onboarding + future sessions.
 

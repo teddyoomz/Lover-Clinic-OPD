@@ -277,14 +277,11 @@ service cloud.firestore {
       }
 
       // ── Backend: V32-tris-ter (2026-04-26) LINE Customer Link Tokens ──
-      // One-time tokens minted by /api/admin/customer-link → consumed by
-      // /api/webhook/line. Admin writes via firebase-admin SDK (server-
-      // side, bypasses rules). Webhook reads via REST without auth (LINE
-      // signature verification + token-as-secret IS the gate). Client
-      // SDK access blocked entirely — token leak prevention.
-      match /be_customer_link_tokens/{token} {
-        allow read, write: if false;
-      }
+      // V33.9 — be_customer_link_tokens rule REMOVED. Pre-V33.4 QR-token
+      // flow stripped (admin-mint endpoint + webhook consumer + client
+      // helper deleted). Default-deny applies to any residual ghost docs;
+      // they're inert. Admin-mediated id-link-request via be_link_requests
+      // below is the sole linking mechanism.
 
       // ── Backend: V32-tris-quater (2026-04-26) LINE Link Requests Queue ──
       // Customer DM'd "ผูก <ID>" → webhook validated ID via admin SDK +

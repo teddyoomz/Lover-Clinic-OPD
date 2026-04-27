@@ -2,13 +2,13 @@
 // Receives messages from LINE Messaging API → stores in Firestore
 // No Firebase auth — uses LINE signature verification instead.
 //
-// V32-tris-ter (2026-04-26) — extended with bot Q&A + customer LINK
-// consumer. ProClinic-style flow:
-//   1. Customer scans QR on customer detail page → opens LINE chat with
-//      bot → sends "LINK-<token>" → webhook consumes token + writes
-//      lineUserId onto be_customers/{cid} → bot replies success.
+// V32-tris-ter (2026-04-26) → V33.4 redesign → V33.9 cleanup (2026-04-27):
+//   1. Customer DMs national-ID/passport → bot creates pending
+//      be_link_requests entry → admin approves in LinkRequestsTab → push
+//      success reply + write lineUserId on be_customers.
 //   2. Customer types "คอร์ส" / "นัด" → bot looks up by lineUserId →
 //      replies with active courses or upcoming appointments.
+// V33.9 stripped the obsolete pre-V33.4 QR-token consumption path entirely.
 
 import crypto from 'crypto';
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
@@ -18,8 +18,6 @@ import {
   formatCoursesReply,
   formatAppointmentsReply,
   formatHelpReply,
-  formatLinkSuccessReply,
-  formatLinkFailureReply,
   formatNotLinkedReply,
   formatIdRequestAck,
   formatIdRequestRateLimitedReply,
@@ -30,18 +28,21 @@ import {
   // V33.7 — i18n: derive customer's preferred language (lineLanguage field
   // OR customer_type:'foreigner' fallback → 'en'; else 'th').
   getLanguageForCustomer,
+  // V33.9 — formatLinkSuccessReply + formatLinkFailureReply removed
+  // (pre-V33.4 QR-token flow stripped; admin-mediated approval uses
+  // formatLinkRequestApprovedReply via linkRequestsClient).
 } from '../../src/lib/lineBotResponder.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
 
-// V32-tris-ter-fix (2026-04-26) — be_* collections (be_customer_link_tokens,
-// be_customers, be_appointments) have firestore.rules that DENY unauth REST
-// reads. The webhook is anon-auth-less by design (LINE signature is the
-// gate) so we can't authenticate as a clinic-staff user. Solution: use
-// firebase-admin SDK which bypasses rules. Requires FIREBASE_ADMIN_*
-// env vars in Vercel (already set for api/admin/* endpoints).
+// V32-tris-ter-fix (2026-04-26) — be_* collections (be_customers,
+// be_appointments, be_link_requests, be_link_attempts) have firestore.rules
+// that DENY unauth REST reads. The webhook is anon-auth-less by design
+// (LINE signature is the gate) so we can't authenticate as a clinic-staff
+// user. Solution: use firebase-admin SDK which bypasses rules. Requires
+// FIREBASE_ADMIN_* env vars in Vercel (already set for api/admin/* endpoints).
 let cachedAdminDb = null;
 function getAdminFirestore() {
   if (cachedAdminDb) return cachedAdminDb;
@@ -123,7 +124,7 @@ async function firestoreGet(path) {
 
 // V32-tris-ter-fix (2026-04-26): firestoreDelete + runQuery + unwrapDoc/
 // unwrapValue helpers were used only for be_* paths which now go through
-// firebase-admin SDK (see consumeLinkToken / findCustomerByLineUserId /
+// firebase-admin SDK (see findCustomerByLineUserId /
 // findUpcomingAppointmentsForCustomer). Removed; firestoreGet stays for
 // chat_conversations existence check (public read rule).
 
@@ -167,65 +168,11 @@ async function replyLineMessage(replyToken, payload, accessToken) {
   return res.ok;
 }
 
-// V32-tris-ter — consume a LINK-<token> message: validate token, ensure
-// not expired, ensure no other customer already linked to this lineUserId,
-// then write be_customers.lineUserId + delete the token.
-//
-// V32-tris-ter-fix (2026-04-26): switched from unauth REST to firebase-
-// admin SDK because be_customer_link_tokens + be_customers rules are
-// "if false" / "if isClinicStaff()" — unauth REST returns 403, breaking
-// the bot. Admin SDK bypasses rules (server-side privileged op). The
-// rule lockdown stays — defense-in-depth: client SDK can't read tokens.
-async function consumeLinkToken(token, lineUserId) {
-  if (!token || !lineUserId) return { ok: false, reason: 'invalid' };
-
-  const db = getAdminFirestore();
-  const tokenRef = db.doc(`artifacts/${APP_ID}/public/data/be_customer_link_tokens/${token}`);
-  const tokenSnap = await tokenRef.get();
-  if (!tokenSnap.exists) return { ok: false, reason: 'invalid' };
-
-  const tokenData = tokenSnap.data() || {};
-  const customerId = String(tokenData.customerId || '');
-  const expiresAt = String(tokenData.expiresAt || '');
-  if (!customerId) return { ok: false, reason: 'invalid' };
-  if (expiresAt && expiresAt < new Date().toISOString()) {
-    // Best-effort cleanup of expired token (don't await — webhook timing)
-    tokenRef.delete().catch(() => {});
-    return { ok: false, reason: 'expired' };
-  }
-
-  // Check no other customer is already linked to this lineUserId
-  const customersCol = db.collection(`artifacts/${APP_ID}/public/data/be_customers`);
-  const collisionSnap = await customersCol
-    .where('lineUserId', '==', lineUserId)
-    .limit(2)
-    .get()
-    .catch(() => null);
-  if (collisionSnap) {
-    const otherDoc = collisionSnap.docs.find(d => d.id !== customerId);
-    if (otherDoc) {
-      tokenRef.delete().catch(() => {});
-      return { ok: false, reason: 'already-linked' };
-    }
-  }
-
-  // Write lineUserId onto the customer
-  const customerRef = db.doc(`artifacts/${APP_ID}/public/data/be_customers/${customerId}`);
-  await customerRef.update({
-    lineUserId,
-    lineLinkedAt: new Date().toISOString(),
-  });
-
-  // Read the customer name for the success reply
-  const cSnap = await customerRef.get().catch(() => null);
-  const cData = cSnap?.exists ? cSnap.data() : {};
-  const customerName = String(cData.customerName || cData.name || '');
-
-  // Delete the token (one-time use). Best-effort.
-  tokenRef.delete().catch(() => {});
-
-  return { ok: true, customerId, customerName };
-}
+// V33.9 — consumeLinkToken REMOVED. Pre-V33.4 QR-token consumption path
+// stripped along with be_customer_link_tokens collection. Customer messages
+// matching "LINK-<token>" now fall through interpretCustomerMessage →
+// 'unknown' intent → no bot reply (silent ignore). Admin-mediated id-link-
+// request flow (V33.4) is the sole linking mechanism.
 
 // V32-tris-quater (2026-04-26) — id-link-request flow. Customer DMs
 // "ผูก 1234567890123" (or passport) → bot looks up customer by ID via
@@ -372,14 +319,8 @@ async function maybeEmitBotReply(event, config) {
 
   const intent = interpretCustomerMessage(text);
 
-  if (intent.intent === 'link') {
-    const result = await consumeLinkToken(intent.payload?.token || '', userId);
-    const replyText = result.ok
-      ? formatLinkSuccessReply(result.customerName || '')
-      : formatLinkFailureReply(result.reason);
-    await replyLineMessage(event.replyToken, replyText, config.channelAccessToken);
-    return true;
-  }
+  // V33.9 — intent === 'link' branch REMOVED (pre-V33.4 QR-token flow
+  // stripped). LINK-<token> messages now hit 'unknown' → no reply.
 
   // V32-tris-quater (2026-04-26) — id-link-request: customer DM'd
   // "ผูก <ID>" (legacy) OR a bare 13-digit/passport (V33.4 D3).

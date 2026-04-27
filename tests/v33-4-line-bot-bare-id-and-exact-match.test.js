@@ -114,10 +114,10 @@ describe('V33.4.F — exact-match keyword triggers (no substring)', () => {
   });
 });
 
-describe('V33.4.G — priority order (LINK > prefix > bare-id > keywords > unknown)', () => {
-  it('G1 — LINK token wins over keywords', () => {
-    expect(interpretCustomerMessage('LINK-abc12345').intent).toBe('link');
-    expect(interpretCustomerMessage('คอร์ส LINK-abc12345').intent).toBe('link');
+describe('V33.4.G — priority order (V33.9: LINK regex stripped — id-link-request > keywords > unknown)', () => {
+  it('G1 — V33.9: LINK token regex removed — messages now → unknown', () => {
+    expect(interpretCustomerMessage('LINK-abc12345').intent).toBe('unknown');
+    expect(interpretCustomerMessage('คอร์ส LINK-abc12345').intent).toBe('unknown');
   });
   it('G2 — "ผูก " prefix wins over bare 13-digit detection', () => {
     // Both formats would match 13-digit, but the prefix path wins (specifies legacy)

@@ -1,16 +1,20 @@
-// V32-tris-ter (2026-04-26) — LINE bot Q&A + customer linking flow
+// V32-tris-ter (2026-04-26) → V33.4 redesign → V33.9 cleanup (2026-04-27).
+// LINE bot Q&A + admin-mediated customer linking flow.
 //
-// User chain across session 11:
-//   "ทำหน้า setting line ต่างหากมาใน backend ด้วยนะ ... รองรับทุกสถานการณ์"
-//   "ทำแล้ว test มาทุกแบบเท่าที่จะแน่ใจว่า flow ถูก wiring ถูก logic ถูก"
-//   "พยายามจั๊บบั๊คให้ได้ก่อนที่ผมจะจับได้ในฐานะ user จริง"
+// V33.9 stripped tests for the obsolete pre-V33.4 QR-token path:
+//   - L1.2-L1.4 LINK-<token> intent='link' (regex removed from interpretCustomerMessage)
+//   - L1.11 LINK-<token> priority (no priority since 'link' intent gone)
+//   - L5.2-L5.5 formatLinkSuccessReply / formatLinkFailureReply (functions removed)
+//   - L6 generateLinkToken (function removed)
+//   - L7 api/admin/customer-link.js (file deleted)
+//   - L8.1 webhook formatLinkSuccess/Failure imports (no longer imported)
+//   - L8.5-L8.7 consumeLinkToken assertions (function removed)
+//   - L11 firestore.rules be_customer_link_tokens block (rule removed)
 //
-// Adversarial tests for the LINE bot Q&A + QR linking flow. Covers:
-//   - lineBotResponder pure helpers (intent detection, formatters, token gen)
-//   - api/admin/customer-link endpoint shape (admin gate, validation)
-//   - api/webhook/line bot reply integration (LINK consumer, courses, appts)
-//   - LineSettingsTab + LinkLineQrModal source-grep regression guards
-//   - firestore.rules be_customer_link_tokens lockdown
+// Surviving tests cover: intent routing (id-link-request + courses + appts +
+// help + unknown), formatThaiDate, formatCoursesReply, formatAppointmentsReply,
+// formatHelpReply, formatNotLinkedReply, webhook integration shape, settings
+// tab + instructions modal source-grep, nav/dashboard wiring.
 
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -19,15 +23,11 @@ import {
   formatCoursesReply,
   formatAppointmentsReply,
   formatHelpReply,
-  formatLinkSuccessReply,
-  formatLinkFailureReply,
   formatNotLinkedReply,
   formatThaiDate,
-  generateLinkToken,
 } from '../src/lib/lineBotResponder.js';
 
 const RESPONDER_SRC = readFileSync('src/lib/lineBotResponder.js', 'utf8');
-const ADMIN_LINK_SRC = readFileSync('api/admin/customer-link.js', 'utf8');
 const WEBHOOK_SRC = readFileSync('api/webhook/line.js', 'utf8');
 const SETTINGS_SRC = readFileSync('src/components/backend/LineSettingsTab.jsx', 'utf8');
 // V33.4 (2026-04-27) — LinkLineQrModal.jsx renamed to LinkLineInstructionsModal.jsx.
@@ -46,19 +46,13 @@ describe('L1 interpretCustomerMessage — intent routing', () => {
     expect(interpretCustomerMessage(null).intent).toBe('help');
     expect(interpretCustomerMessage(undefined).intent).toBe('help');
   });
-  test('L1.2 LINK-<token> uppercase prefix matches', () => {
-    const r = interpretCustomerMessage('LINK-ABC123XYZ7');
-    expect(r.intent).toBe('link');
-    expect(r.payload.token).toBe('ABC123XYZ7');
-  });
-  test('L1.3 case-insensitive prefix', () => {
-    expect(interpretCustomerMessage('link-ABC123XYZ7').intent).toBe('link');
-    expect(interpretCustomerMessage('Link-ABC123XYZ7').intent).toBe('link');
-  });
-  test('L1.4 LINK token tolerates surrounding text', () => {
-    const r = interpretCustomerMessage('สวัสดี LINK-ABC123XYZ7 ขอบคุณ');
-    expect(r.intent).toBe('link');
-    expect(r.payload.token).toBe('ABC123XYZ7');
+  // V33.9 — L1.2 / L1.3 / L1.4 (LINK-<token> intent='link' assertions) REMOVED.
+  // Pre-V33.4 QR-token regex stripped from interpretCustomerMessage. LINK-XXXX
+  // messages now hit 'unknown' intent (silent ignore).
+  test('L1.2 V33.9: LINK-<token> messages now → unknown (token flow stripped)', () => {
+    expect(interpretCustomerMessage('LINK-ABC123XYZ7').intent).toBe('unknown');
+    expect(interpretCustomerMessage('link-ABC123XYZ7').intent).toBe('unknown');
+    expect(interpretCustomerMessage('สวัสดี LINK-ABC123XYZ7 ขอบคุณ').intent).toBe('unknown');
   });
   // V33.4 (2026-04-27, D9) — bot now returns 'unknown' for unrecognized messages
   // (was 'help'). 'help' is reserved for explicit HELP_TRIGGERS phrases.
@@ -95,9 +89,9 @@ describe('L1 interpretCustomerMessage — intent routing', () => {
     expect(interpretCustomerMessage('สวัสดีครับ').intent).toBe('unknown');
     expect(interpretCustomerMessage('hello').intent).toBe('unknown');
   });
-  test('L1.11 LINK takes priority over keyword in same message', () => {
-    expect(interpretCustomerMessage('LINK-ABC123XYZ7 คอร์ส').intent).toBe('link');
-  });
+  // V33.9 — L1.11 (LINK priority) REMOVED. Mixed "LINK-XXXX คอร์ส" no longer
+  // matches a special priority since 'link' intent is gone; it would fall
+  // through to 'unknown' (no exact keyword match either).
   test('L1.12 emoji-only / sticker text → unknown (V33.4 — was help)', () => {
     expect(interpretCustomerMessage('🙂').intent).toBe('unknown');
   });
@@ -226,109 +220,36 @@ describe('L4 formatAppointmentsReply', () => {
   });
 });
 
-// ─── L5 — formatHelpReply / formatLinkSuccessReply / Failure ─────────────
+// ─── L5 — formatHelpReply / formatNotLinkedReply ─────────────────────────
+// V33.9 — L5.2-L5.5 (formatLinkSuccessReply / formatLinkFailureReply)
+// REMOVED. Functions stripped along with QR-token flow.
 describe('L5 reply templates', () => {
   test('L5.1 help message includes both intent prompts', () => {
     const h = formatHelpReply();
     expect(h).toMatch(/คอร์ส/);
     expect(h).toMatch(/นัด/);
   });
-  test('L5.2 link success includes customer name when given', () => {
-    expect(formatLinkSuccessReply('สมชาย')).toMatch(/สมชาย/);
-  });
-  test('L5.3 link success without name still works', () => {
-    expect(formatLinkSuccessReply('')).toMatch(/ผูกบัญชี LINE สำเร็จ/);
-    expect(formatLinkSuccessReply(undefined)).toMatch(/ผูกบัญชี LINE สำเร็จ/);
-  });
-  test('L5.4 link failure has 3 distinct reasons', () => {
-    const a = formatLinkFailureReply('invalid');
-    const b = formatLinkFailureReply('expired');
-    const c = formatLinkFailureReply('already-linked');
-    expect(a).not.toBe(b);
-    expect(b).not.toBe(c);
-    expect(a).toMatch(/ไม่พบ|ไม่ถูก/);
-    expect(b).toMatch(/หมดอายุ/);
-    expect(c).toMatch(/ผูกกับ/);
-  });
-  test('L5.5 link failure default → invalid', () => {
-    expect(formatLinkFailureReply('weird')).toBe(formatLinkFailureReply('invalid'));
-    expect(formatLinkFailureReply()).toBe(formatLinkFailureReply('invalid'));
-  });
   test('L5.6 not-linked reply present + non-empty', () => {
     expect(formatNotLinkedReply().length).toBeGreaterThan(10);
   });
 });
 
-// ─── L6 — generateLinkToken ──────────────────────────────────────────────
-describe('L6 generateLinkToken', () => {
-  test('L6.1 produces 24-char base32 string', () => {
-    const t = generateLinkToken();
-    expect(typeof t).toBe('string');
-    expect(t).toMatch(/^[A-Z2-7]{24}$/);
-  });
-  test('L6.2 returns unique tokens across rapid calls (>1000)', () => {
-    const set = new Set();
-    for (let i = 0; i < 1000; i++) set.add(generateLinkToken());
-    expect(set.size).toBe(1000);
-  });
-  test('L6.3 every char is in the base32 alphabet (RFC4648)', () => {
-    const valid = new Set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567');
-    for (let i = 0; i < 50; i++) {
-      const t = generateLinkToken();
-      for (const c of t) expect(valid.has(c)).toBe(true);
-    }
-  });
-});
-
-// ─── L7 — admin/customer-link.js source-grep ─────────────────────────────
-describe('L7 admin/customer-link.js', () => {
-  test('L7.1 verifyAdminToken gate', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/await verifyAdminToken\(req,\s*res\)/);
-  });
-  test('L7.2 imports generateLinkToken from shared responder', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/generateLinkToken/);
-    expect(ADMIN_LINK_SRC).toMatch(/from\s+['"]\.\.\/\.\.\/src\/lib\/lineBotResponder\.js['"]/);
-  });
-  test('L7.3 validates action === "create"', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/action\s*!==\s*['"]create['"]/);
-  });
-  test('L7.4 validates customerId required (string)', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/customerId required/);
-  });
-  test('L7.5 verifies customer exists via Firestore Admin SDK', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/be_customers/);
-    expect(ADMIN_LINK_SRC).toMatch(/cSnap\.exists/);
-  });
-  test('L7.6 token TTL clamped to [1, 7 days]', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(60\s*\*\s*24\s*\*\s*7/);
-  });
-  test('L7.7 writes be_customer_link_tokens with customerId + expiresAt + createdBy + createdAt', () => {
-    const block = ADMIN_LINK_SRC.match(/be_customer_link_tokens[\s\S]{0,400}/)?.[0] || '';
-    expect(block).toMatch(/customerId/);
-    expect(block).toMatch(/expiresAt/);
-    expect(block).toMatch(/createdBy/);
-    expect(block).toMatch(/createdAt/);
-  });
-  test('L7.8 returns deepLink with botBasicId when configured', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/line\.me\/R\/oaMessage/);
-    expect(ADMIN_LINK_SRC).toMatch(/encodeURIComponent\(botBasicId\)/);
-  });
-  test('L7.9 falls back to bare LINK-<token> when botBasicId not set', () => {
-    expect(ADMIN_LINK_SRC).toMatch(/`LINK-\$\{token\}`/);
-  });
-});
+// V33.9 — L6 (generateLinkToken) + L7 (admin/customer-link.js) describe
+// blocks REMOVED. generateLinkToken function + api/admin/customer-link.js
+// file deleted.
 
 // ─── L8 — webhook/line.js bot reply integration ──────────────────────────
 describe('L8 api/webhook/line.js bot integration', () => {
-  test('L8.1 imports interpretCustomerMessage + reply formatters', () => {
+  test('L8.1 imports interpretCustomerMessage + surviving reply formatters', () => {
     expect(WEBHOOK_SRC).toMatch(/from ['"]\.\.\/\.\.\/src\/lib\/lineBotResponder\.js['"]/);
     expect(WEBHOOK_SRC).toMatch(/interpretCustomerMessage/);
     expect(WEBHOOK_SRC).toMatch(/formatCoursesReply/);
     expect(WEBHOOK_SRC).toMatch(/formatAppointmentsReply/);
     expect(WEBHOOK_SRC).toMatch(/formatHelpReply/);
-    expect(WEBHOOK_SRC).toMatch(/formatLinkSuccessReply/);
-    expect(WEBHOOK_SRC).toMatch(/formatLinkFailureReply/);
     expect(WEBHOOK_SRC).toMatch(/formatNotLinkedReply/);
+    // V33.9 — formatLinkSuccessReply + formatLinkFailureReply NO LONGER imported
+    expect(WEBHOOK_SRC).not.toMatch(/^\s*formatLinkSuccessReply,\s*$/m);
+    expect(WEBHOOK_SRC).not.toMatch(/^\s*formatLinkFailureReply,\s*$/m);
   });
   test('L8.2 maybeEmitBotReply ONLY processes text messages', () => {
     expect(WEBHOOK_SRC).toMatch(/event\.message\?\.type\s*!==?\s*['"]text['"]/);
@@ -343,18 +264,17 @@ describe('L8 api/webhook/line.js bot integration', () => {
   test('L8.4 bot errors do NOT block webhook (try/catch swallow)', () => {
     expect(WEBHOOK_SRC).toMatch(/maybeEmitBotReply\(event,\s*config\)[\s\S]{0,300}console\.warn/);
   });
-  test('L8.5 consumeLinkToken validates expiry + collision', () => {
-    expect(WEBHOOK_SRC).toMatch(/expiresAt\s*&&\s*expiresAt\s*<\s*new Date\(\)\.toISOString\(\)/);
-    expect(WEBHOOK_SRC).toMatch(/already-linked/);
+  // V33.9 — L8.5-L8.7 (consumeLinkToken assertions) REMOVED. Function deleted.
+  test('L8.5 V33.9: consumeLinkToken function REMOVED from webhook', () => {
+    expect(WEBHOOK_SRC).not.toMatch(/^async function consumeLinkToken/m);
   });
-  test('L8.6 consumeLinkToken writes lineUserId + lineLinkedAt onto customer', () => {
-    const fn = WEBHOOK_SRC.match(/async function consumeLinkToken[\s\S]*?^\}/m)?.[0] || '';
-    expect(fn).toMatch(/lineUserId/);
-    expect(fn).toMatch(/lineLinkedAt/);
+  test('L8.6 V33.9: intent === "link" branch REMOVED from maybeEmitBotReply', () => {
+    expect(WEBHOOK_SRC).not.toMatch(/intent\.intent === ['"]link['"]/);
   });
-  test('L8.7 consumeLinkToken deletes token after success (one-time use)', () => {
-    // V32-tris-ter-fix: switched from firestoreDelete REST to admin SDK delete
-    expect(WEBHOOK_SRC).toMatch(/tokenRef\.delete\(\)/);
+  test('L8.7 V33.9: be_customer_link_tokens path REMOVED from webhook code', () => {
+    // Comment mentions are OK; CODE writes/reads should be gone.
+    const stripped = WEBHOOK_SRC.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(stripped).not.toMatch(/be_customer_link_tokens/);
   });
   test('L8.8 webhook unwraps Firestore docs via admin SDK (no manual unwrap helpers)', () => {
     // V32-tris-ter-fix: unwrapDoc/unwrapValue removed; admin SDK returns
@@ -477,14 +397,12 @@ describe('L10 LinkLineInstructionsModal (V33.4 — replaces LinkLineQrModal)', (
   });
 });
 
-// ─── L11 — firestore.rules be_customer_link_tokens lockdown ──────────────
-describe('L11 firestore.rules be_customer_link_tokens', () => {
-  test('L11.1 collection match block exists', () => {
-    expect(RULES_SRC).toMatch(/match \/be_customer_link_tokens\/\{token\}/);
-  });
-  test('L11.2 client SDK access blocked entirely (read+write deny)', () => {
-    const block = RULES_SRC.match(/match \/be_customer_link_tokens\/\{token\}\s*\{[\s\S]*?\}/)?.[0] || '';
-    expect(block).toMatch(/allow read,\s*write:\s+if false/);
+// ─── L11 — V33.9: be_customer_link_tokens rule REMOVED ──────────────────
+// Pre-V33.4 QR-token collection rule deleted from firestore.rules. Default-
+// deny applies to any residual ghost docs; client SDK still blocked.
+describe('L11 V33.9: be_customer_link_tokens rule removed', () => {
+  test('L11.1 firestore.rules has NO match block for be_customer_link_tokens', () => {
+    expect(RULES_SRC).not.toMatch(/match \/be_customer_link_tokens\/\{token\}/);
   });
 });
 

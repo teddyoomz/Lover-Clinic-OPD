@@ -1,22 +1,36 @@
 // ─── LINE Bot Responder — Phase 14.9 (LINE Q&A + customer linking) ──────
-// V32-tris-ter (2026-04-26) — pure helpers for the LINE Official Account
-// bot. Mirrors the ProClinic flow:
-//   1. Customer scans QR on customer detail page → opens LINE chat with
-//      bot → message "LINK-<token>" auto-pasted → customer sends → bot
-//      consumes token + writes lineUserId onto be_customers/{cid}.
-//   2. Customer types "คอร์ส" / "นัด" → bot looks up customer by
-//      lineUserId → replies with active courses or upcoming appointments.
+// V32-tris-ter (2026-04-26) → V33.4 redesign → V33.9 cleanup (2026-04-27).
+// Pure helpers for the LINE Official Account bot.
+//
+// Customer linking flow (V33.4 admin-mediated, post-V33.9 cleanup):
+//   1. Customer DMs OA with national-ID (13 digits) or passport — either
+//      bare ("1234567890123") or with prefix ("ผูก 1234567890123").
+//   2. Webhook validates ID format + rate-limits + creates a pending
+//      be_link_requests entry. Same-reply anti-enumeration ack regardless
+//      of match.
+//   3. Admin reviews queue in LinkRequestsTab → approves → push success
+//      reply to customer + write lineUserId on be_customers.
+//
+// Q&A flow:
+//   - Customer types "คอร์ส" / "นัด" → bot looks up be_customers by
+//     lineUserId → replies with active courses or upcoming appointments.
+//
+// V33.9 stripped the obsolete pre-V33.4 QR-token linking path:
+//   - generateLinkToken() / consumeLinkToken() / intent='link' / LINK-<token>
+//     regex / formatLinkSuccessReply / formatLinkFailureReply / LINK_SUCCESS
+//     / LINK_FAIL_* messages / be_customer_link_tokens collection.
+// All admin-mediated linking is preserved (V33.4 directive #2).
 //
 // All helpers are PURE — no Firestore, no fetch. The webhook handler
 // (api/webhook/line.js) calls these to interpret incoming text + format
-// outgoing replies. Pure separation lets us unit-test the bot logic
-// without mocking the LINE API.
+// outgoing replies.
 //
 // Intent detection is keyword-based:
-//   - "LINK-<base32>" prefix       → intent: 'link', payload.token = <base32>
+//   - "1234567890123" / "ผูก 1234567890123" → intent: 'id-link-request'
 //   - "คอร์ส" / "courses" / "เหลือ" → intent: 'courses'
 //   - "นัด" / "appointment" / "วันนัด" → intent: 'appointments'
-//   - default                      → intent: 'help'
+//   - whitelisted help keywords → intent: 'help'
+//   - default                      → intent: 'unknown' (no reply)
 
 // ─── V33.7 (2026-04-27) — i18n MESSAGES dictionary ──────────────────────
 // All customer-facing strings are keyed by language. Default = 'th'.
@@ -35,16 +49,8 @@ const MESSAGES = {
       '',
       'หรือพิมพ์คำถามอื่น พนักงานคลินิกจะตอบโดยเร็วที่สุด.',
     ].join('\n'),
-    LINK_SUCCESS: (name) => [
-      `🎉 ผูกบัญชี LINE สำเร็จ${name ? ` คุณ${name}` : ''}`,
-      '',
-      'ตอนนี้คุณสามารถ:',
-      '• พิมพ์ "คอร์ส" เพื่อดูคอร์สที่ใช้ได้คงเหลือ',
-      '• พิมพ์ "นัด" เพื่อดูวันนัดหมาย',
-    ].join('\n'),
-    LINK_FAIL_INVALID: 'ไม่พบรหัสผูกบัญชีนี้ในระบบ — โปรดให้คลินิกสร้าง QR ใหม่.',
-    LINK_FAIL_EXPIRED: 'รหัสผูกบัญชีหมดอายุแล้ว — โปรดให้คลินิกสร้าง QR ใหม่.',
-    LINK_FAIL_ALREADY_LINKED: 'บัญชี LINE นี้ผูกกับลูกค้ารายอื่นในระบบอยู่แล้ว.',
+    // V33.9 — LINK_SUCCESS + LINK_FAIL_* removed (QR-token flow stripped;
+    // admin-mediated approval uses LINK_REQUEST_APPROVED below).
     NOT_LINKED: [
       'บัญชี LINE นี้ยังไม่ได้ผูกกับลูกค้าในระบบ.',
       'หากต้องการผูก โปรดส่งเลขบัตรประชาชน (13 หลัก) หรือเลขพาสปอร์ต',
@@ -108,16 +114,7 @@ const MESSAGES = {
       '',
       'Or type any other question — clinic staff will reply shortly.',
     ].join('\n'),
-    LINK_SUCCESS: (name) => [
-      `🎉 LINE account linked successfully${name ? `, ${name}` : ''}`,
-      '',
-      'You can now:',
-      '• Type "courses" to see your remaining courses',
-      '• Type "appointments" to see your upcoming appointments',
-    ].join('\n'),
-    LINK_FAIL_INVALID: 'Linking code not found — please ask the clinic to generate a new QR.',
-    LINK_FAIL_EXPIRED: 'Linking code has expired — please ask the clinic to generate a new QR.',
-    LINK_FAIL_ALREADY_LINKED: 'This LINE account is already linked to another customer.',
+    // V33.9 — LINK_SUCCESS + LINK_FAIL_* removed (QR-token flow stripped).
     NOT_LINKED: [
       'This LINE account is not yet linked to a customer.',
       'To link, please send your national ID (13 digits) or passport number,',
@@ -249,8 +246,8 @@ export function formatLongDate(iso, language = 'th') {
  * Bot creates a pending request → admin verifies + approves manually.
  *
  * @param {string} text — raw message body
- * @returns {{ intent: 'link'|'id-link-request'|'courses'|'appointments'|'help'|'unknown',
- *             payload?: { token?: string, idType?: 'national-id'|'passport',
+ * @returns {{ intent: 'id-link-request'|'courses'|'appointments'|'help'|'unknown',
+ *             payload?: { idType?: 'national-id'|'passport',
  *                         idValue?: string, wasBarePrefix?: boolean } }}
  */
 // V33.4 (D9) — EXACT-match standalone keyword whitelists. Substring match
@@ -272,15 +269,10 @@ export function interpretCustomerMessage(text) {
   const raw = String(text || '').trim();
   if (!raw) return { intent: 'help' };
 
-  // LINK-<token> — case-insensitive prefix match. Token is base32-ish
-  // (alphanumeric, 8-32 chars). Tolerant of trailing whitespace + wrapping
-  // quotes / brackets / Thai punctuation around the token.
-  // V33.5 cleanup target — token-based linking deprecated by V33.4 directive
-  // #2; webhook still consumes legacy tokens during grace period.
-  const linkMatch = raw.match(/LINK-([A-Za-z0-9_-]{6,64})/i);
-  if (linkMatch) {
-    return { intent: 'link', payload: { token: linkMatch[1] } };
-  }
+  // V33.9 — LINK-<token> regex + 'link' intent REMOVED. Pre-V33.4 QR-token
+  // path replaced by V33.4 admin-mediated id-link-request flow. Customer
+  // messages containing "LINK-XXXX" now fall through to 'unknown' intent
+  // (no bot reply, message still stored in chat for admin visibility).
 
   // National ID / passport link request — TWO accepted formats:
   //
@@ -448,19 +440,9 @@ export function formatHelpReply(language = 'th') {
   return MESSAGES[normLang(language)].HELP;
 }
 
-export function formatLinkSuccessReply(customerName = '', language = 'th') {
-  return MESSAGES[normLang(language)].LINK_SUCCESS(String(customerName || '').trim());
-}
-
-export function formatLinkFailureReply(reason, language = 'th') {
-  const M = MESSAGES[normLang(language)];
-  switch (reason) {
-    case 'expired': return M.LINK_FAIL_EXPIRED;
-    case 'already-linked': return M.LINK_FAIL_ALREADY_LINKED;
-    case 'invalid':
-    default: return M.LINK_FAIL_INVALID;
-  }
-}
+// V33.9 — formatLinkSuccessReply + formatLinkFailureReply REMOVED.
+// Pre-V33.4 QR-token flow stripped; admin-mediated success uses
+// formatLinkRequestApprovedReply below.
 
 export function formatNotLinkedReply(language = 'th') {
   return MESSAGES[normLang(language)].NOT_LINKED;
@@ -520,32 +502,9 @@ export function formatThaiDate(iso) {
   return `${d}/${m}/${be}`;
 }
 
-/**
- * Generate a one-time link token. Crypto-random base32-like (alphanumeric
- * + dash). 24 chars → 24*5 = 120 bits of entropy.
- *
- * Pure: depends only on `getRandomValues` (Web Crypto). Caller persists
- * the returned token to be_customer_link_tokens/{token}.
- */
-export function generateLinkToken() {
-  if (typeof globalThis.crypto?.getRandomValues !== 'function') {
-    throw new Error('Web Crypto unavailable — link token generation requires getRandomValues');
-  }
-  const bytes = new Uint8Array(15);
-  globalThis.crypto.getRandomValues(bytes);
-  // base32-ish encode (A-Z + 2-7) per RFC4648; 15 bytes → 24 chars exactly.
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = 0, value = 0, out = '';
-  for (const b of bytes) {
-    value = (value << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      out += alphabet[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  return out;
-}
+// V33.9 — generateLinkToken REMOVED. Pre-V33.4 QR-token mint helper had
+// no remaining callers after admin-mediated flow shipped (V33.4 directive
+// #2). Eliminated alongside api/admin/customer-link.js + customerLinkClient.js.
 
 // ─── V33.5 — LINE Flex Message builders ─────────────────────────────────
 //

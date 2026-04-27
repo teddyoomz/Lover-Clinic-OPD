@@ -19,8 +19,6 @@ import {
   formatCoursesReply,
   formatAppointmentsReply,
   formatHelpReply,
-  formatLinkSuccessReply,
-  formatLinkFailureReply,
   formatNotLinkedReply,
   formatIdRequestAck,
   formatIdRequestRateLimitedReply,
@@ -31,6 +29,7 @@ import {
   formatLongDate,
   getLanguageForCustomer,
   isMeaningfulValue,
+  // V33.9 — formatLinkSuccessReply / formatLinkFailureReply REMOVED
 } from '../src/lib/lineBotResponder.js';
 
 const FUTURE = '2099-01-01';
@@ -137,17 +136,9 @@ describe('V33.7.C — reply functions accept language param', () => {
     expect(out).toMatch(/appointments/i);
     expect(out).not.toMatch(/[฀-๿]/);
   });
-  it('C3 — formatLinkSuccessReply switches', () => {
-    expect(formatLinkSuccessReply('John', 'th')).toMatch(/ผูกบัญชี LINE สำเร็จ/);
-    expect(formatLinkSuccessReply('John', 'en')).toMatch(/linked successfully/i);
-    expect(formatLinkSuccessReply('John', 'en')).toMatch(/John/);
-  });
-  it('C4 — formatLinkFailureReply by reason × language', () => {
-    expect(formatLinkFailureReply('expired', 'th')).toMatch(/หมดอายุ/);
-    expect(formatLinkFailureReply('expired', 'en')).toMatch(/expired/i);
-    expect(formatLinkFailureReply('already-linked', 'en')).toMatch(/already linked/i);
-    expect(formatLinkFailureReply('invalid', 'en')).toMatch(/not found/i);
-  });
+  // V33.9 — C3 / C4 (formatLinkSuccessReply / formatLinkFailureReply tests)
+  // REMOVED. Functions stripped along with QR-token flow. Admin-mediated
+  // approval push uses formatLinkRequestApprovedReply (covered by C9 below).
   it('C5 — formatNotLinkedReply', () => {
     expect(formatNotLinkedReply('th')).toMatch(/ยังไม่ได้ผูก/);
     expect(formatNotLinkedReply('en')).toMatch(/not yet linked/i);

@@ -6,9 +6,10 @@
 //
 // Reads + writes Firestore `clinic_settings/chat_config` (line.* keys).
 // Single source of truth used by:
-//   - api/webhook/line.js (bot Q&A + LINK consumer)
+//   - api/webhook/line.js (bot Q&A + admin-mediated id-link request flow)
 //   - api/admin/send-document.js (LINE Push delivery)
-//   - api/admin/customer-link.js (deep-link generation)
+//   - api/admin/customer-line-link.js (link-status admin actions)
+// V33.9 — api/admin/customer-link.js (QR-token mint) removed.
 //
 // Sections:
 //   1. ช่อง / Channel — channelId, channelSecret, channelAccessToken,
@@ -16,8 +17,7 @@
 //   2. ทดสอบการเชื่อมต่อ — push to LINE /v2/bot/info
 //   3. Bot Q&A — bot enabled, intent keywords, max-list sizes,
 //      help/welcome/error message overrides
-//   4. ผูกบัญชีลูกค้า — token TTL, "already linked" rule (block / replace),
-//      success message
+//   4. ผูกบัญชีลูกค้า — admin-mediated id-link flow config
 //   5. Webhook URL — display-only, copy button (paste into LINE Developers)
 //
 // All edits stage on a local form + commit on Save (single Firestore write).

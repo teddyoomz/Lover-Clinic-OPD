@@ -85,8 +85,8 @@ describe('Q1 ผูก <ID> intent detection', () => {
     expect(r.payload.idType).toBe('invalid');
     expect(r.payload.idValue).toBe('');
   });
-  test('Q1.9 "LINK-<token>" (existing QR flow) takes priority over id-link-request', () => {
-    expect(interpretCustomerMessage('LINK-ABCDEF12345').intent).toBe('link');
+  test('Q1.9 V33.9: LINK-<token> regex removed → unknown (was: priority "link")', () => {
+    expect(interpretCustomerMessage('LINK-ABCDEF12345').intent).toBe('unknown');
   });
   test('Q1.10 "ผูก" alone (no ID) → unknown (V33.4 D9 — was "help" pre-V33.4)', () => {
     const r = interpretCustomerMessage('ผูก');
