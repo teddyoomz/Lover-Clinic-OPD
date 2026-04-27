@@ -32,10 +32,14 @@ function currentAuditUser() {
 const fmtDate = fmtSlashDateTime;
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
-export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
+export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed, branchIdOverride }) {
   const isDark = theme === 'dark';
   // Phase 14.7.H follow-up A — branch-scoped batch lookups + adjust writes.
-  const { branchId: BRANCH_ID } = useSelectedBranch();
+  // Phase 15.3 (2026-04-27) — branchIdOverride lets CentralStockTab open this
+  // panel against a central warehouse instead of BranchContext's branch.
+  // Mirrors the pattern from MovementLogPanel.jsx (Phase 15.1).
+  const { branchId: ctxBranchId } = useSelectedBranch();
+  const BRANCH_ID = branchIdOverride || ctxBranchId;
   const [adjustments, setAdjustments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -54,7 +58,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
       setAdjustments(list);
     } catch (e) { console.error('[StockAdjustPanel] load failed:', e); setAdjustments([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [BRANCH_ID]);
 
   useEffect(() => { loadAdjustments(); }, [loadAdjustments]);
 
@@ -85,6 +89,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
         products={products}
         productsLoading={productsLoading}
         prefillProduct={pendingPrefill}
+        branchId={BRANCH_ID}
         onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
         onSaved={async () => { setFormOpen(false); setPendingPrefill(null); await loadAdjustments(); }}
       />
@@ -164,7 +169,13 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   );
 }
 
-function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, onClose, onSaved }) {
+function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, onClose, onSaved }) {
+  // Phase 15.3 (2026-04-27) — branchId passed in from StockAdjustPanel.
+  // Pre-existing bug: BRANCH_ID was referenced inside this sibling function
+  // (lines 191 + 220 below) but never declared in its scope — silently
+  // resolved to `undefined` at runtime, causing batch picker to show empty.
+  // Now explicitly threaded so central-tier adjusts work correctly.
+  const BRANCH_ID = branchId;
   const [productId, setProductId] = useState(prefillProduct ? String(prefillProduct.productId || prefillProduct.id) : '');
   const [productName, setProductName] = useState(prefillProduct ? (prefillProduct.productName || prefillProduct.name || '') : '');
   const [batches, setBatches] = useState([]);

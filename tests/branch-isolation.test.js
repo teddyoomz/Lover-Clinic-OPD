@@ -140,7 +140,10 @@ describe('BR3: SaleTab + 4 stock panels + TreatmentFormPage source branchId from
   it('BR3.4: StockAdjustPanel sources branchId from hook', () => {
     const src = READ('src/components/backend/StockAdjustPanel.jsx');
     expect(src).toMatch(/useSelectedBranch/);
-    expect(src).toMatch(/const\s*\{\s*branchId:\s*BRANCH_ID\s*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 15.3 — branchIdOverride introduced; destructure renamed to
+    // ctxBranchId so override can take precedence. Either alias is fine —
+    // contract: "no hardcoded 'main' literal" (mirrors BR3.2 fix).
+    expect(src).toMatch(/const\s*\{\s*branchId:\s*(BRANCH_ID|ctxBranchId)\s*\}\s*=\s*useSelectedBranch\(\)/);
     expect(src).not.toMatch(/^const BRANCH_ID = 'main';/m);
   });
 

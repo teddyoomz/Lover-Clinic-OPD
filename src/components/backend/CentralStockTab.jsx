@@ -22,12 +22,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Warehouse, Package, ShoppingBag, Truck, ClipboardCheck, Activity,
-  Plus, Loader2,
+  Plus, Loader2, SlidersHorizontal,
 } from 'lucide-react';
 import { listCentralWarehouses } from '../../lib/backendClient.js';
 import StockBalancePanel from './StockBalancePanel.jsx';
 import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
+import StockAdjustPanel from './StockAdjustPanel.jsx';
 import MovementLogPanel from './MovementLogPanel.jsx';
 import CentralWarehousePanel from './CentralWarehousePanel.jsx';
 // Phase 15.2 (2026-04-27) — Central PO write flow
@@ -36,6 +37,7 @@ import CentralStockOrderPanel from './CentralStockOrderPanel.jsx';
 const SUB_TABS = [
   { id: 'balance',     label: 'ยอดคงเหลือ',  icon: <Package size={14} /> },
   { id: 'orders',      label: 'นำเข้าจาก Vendor', icon: <ShoppingBag size={14} /> },
+  { id: 'adjust',      label: 'ปรับสต็อก',    icon: <SlidersHorizontal size={14} /> },
   { id: 'transfers',   label: 'ส่งออก/รับเข้า', icon: <Truck size={14} /> },
   { id: 'withdrawals', label: 'คำขอเบิก',     icon: <ClipboardCheck size={14} /> },
   { id: 'movements',   label: 'Movement Log', icon: <Activity size={14} /> },
@@ -185,6 +187,13 @@ export default function CentralStockTab({ clinicSettings, theme }) {
         <CentralStockOrderPanel
           centralWarehouseId={selectedWarehouseId}
           theme={theme}
+        />
+      )}
+
+      {subTab === 'adjust' && (
+        <StockAdjustPanel
+          clinicSettings={clinicSettings} theme={theme}
+          branchIdOverride={selectedWarehouseId}
         />
       )}
 
