@@ -232,6 +232,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   // resolved to `undefined` at runtime, causing batch picker to show empty.
   // Now explicitly threaded so central-tier adjusts work correctly.
   const BRANCH_ID = branchId;
+  const isBranchTier = deriveLocationType(BRANCH_ID) === LOCATION_TYPE.BRANCH;
 
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker.
   const [actorId, setActorId] = useState('');
@@ -247,19 +248,54 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Load batches when product picked
+  // Phase 15.4 post-deploy s23 (2026-04-28) — TIER-SCOPED PRODUCT FILTER.
+  // User report: at central tab adjust, the product dropdown showed ALL
+  // master products (including products only stocked at branch tier).
+  // User picks a branch-only product → batch dropdown empty → "ไม่มี batch
+  // — สร้าง Order ก่อน" → confusion → user thinks "system pulls branch stock".
+  //
+  // Fix: pre-load all active batches at THIS tier once, derive the unique
+  // productIds that have stock here, filter the products dropdown to that
+  // set. Same logic in branch tier so users only see products with branch
+  // batches. Empty result → helpful CTA to create an order first.
+  const [availableProductIds, setAvailableProductIds] = useState(null); // null = loading
+  useEffect(() => {
+    if (!BRANCH_ID) { setAvailableProductIds(new Set()); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listStockBatches({ branchId: BRANCH_ID, status: 'active', includeLegacyMain: isBranchTier });
+        if (cancelled) return;
+        const ids = new Set();
+        for (const b of list || []) {
+          if (b?.productId) ids.add(String(b.productId));
+        }
+        setAvailableProductIds(ids);
+      } catch (e) {
+        console.error('[AdjustForm] preload available batches failed:', e);
+        if (!cancelled) setAvailableProductIds(new Set());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [BRANCH_ID, isBranchTier]);
+
+  const availableProducts = useMemo(() => {
+    if (!availableProductIds) return []; // still loading
+    if (availableProductIds.size === 0) return [];
+    return products.filter((p) => availableProductIds.has(String(p.id)));
+  }, [products, availableProductIds]);
+
+  // Load batches when product picked.
+  // Phase 15.4 (s19 item 2): includeLegacyMain so pre-V20 batches written
+  // with branchId='main' surface in picker until admin migrates.
+  // Bug 4 (s20): gated to BRANCH tier only — central-tier MUST NOT pull
+  // 'main' branch-tier batches into its picker.
   useEffect(() => {
     if (!productId) { setBatches([]); setBatchId(''); return; }
     let cancelled = false;
     setBatchesLoading(true);
     (async () => {
       try {
-        // Phase 15.4 (s19 item 2) — includeLegacyMain so pre-V20 batches
-        // (written with branchId='main') still surface in picker until admin migrates.
-        // Post-deploy bug 4 fix: gate to BRANCH tier only — central-tier
-        // (BRANCH_ID starts with 'WH-') must NOT pull 'main' branch-tier
-        // batches into its picker (they're a different location entirely).
-        const isBranchTier = deriveLocationType(BRANCH_ID) === LOCATION_TYPE.BRANCH;
         const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active', includeLegacyMain: isBranchTier });
         if (!cancelled) {
           setBatches(list);
@@ -273,7 +309,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
       } finally { if (!cancelled) setBatchesLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [productId]);
+  }, [productId, BRANCH_ID, isBranchTier]);
 
   const selectedBatch = useMemo(() => batches.find(b => b.batchId === batchId), [batches, batchId]);
   const actorUser = resolveActorUser(actorId, sellers);
@@ -337,11 +373,29 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>สินค้า *</label>
-            <select value={productId} onChange={e => onPickProduct(e.target.value)} className={inputCls}>
+            <select
+              value={productId}
+              onChange={e => onPickProduct(e.target.value)}
+              className={inputCls}
+              data-testid="adjust-product-select"
+              disabled={availableProductIds === null}
+            >
               <option value="">— เลือกสินค้า —</option>
-              {products.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
+              {/* Phase 15.4 post-deploy s23 — TIER-SCOPED: only products with
+                  active batches at this branch/warehouse appear in dropdown.
+                  Prevents user from picking branch-only products at central
+                  tab (and vice versa). */}
+              {availableProducts.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
             </select>
             {productsLoading && <div className="text-[10px] text-[var(--tx-muted)] mt-1">กำลังโหลดรายการสินค้า...</div>}
+            {!productsLoading && availableProductIds !== null && availableProducts.length === 0 && (
+              <div className="text-[10px] text-orange-400 mt-1" data-testid="adjust-no-products">
+                ⚠ ยังไม่มีสินค้าในคลังนี้ — สร้าง Order นำเข้าก่อน
+              </div>
+            )}
+            {availableProductIds === null && (
+              <div className="text-[10px] text-[var(--tx-muted)] mt-1">กำลังโหลดสินค้าในคลังนี้...</div>
+            )}
           </div>
           <div>
             <label className={labelCls}>Batch / Lot *</label>
