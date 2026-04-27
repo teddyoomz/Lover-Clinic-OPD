@@ -5578,6 +5578,15 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       patch.deliveredTrackingNumber = String(opts.deliveredTrackingNumber || '');
       patch.deliveredNote = String(opts.deliveredNote || '');
       patch.deliveredImageUrl = String(opts.deliveredImageUrl || '');
+      // Phase 15.4 (s19 item 5) — capture ผู้ส่ง on status 0→1.
+      // V14 lock: _normalizeAuditUser returns {userId,userName} not undefined.
+      patch.dispatchedByUser = _normalizeAuditUser(opts.user);
+      patch.dispatchedAt = now;
+    }
+    if (next === 2) {
+      // Phase 15.4 (s19 item 5) — capture ผู้รับ on status 1→2.
+      patch.receivedByUser = _normalizeAuditUser(opts.user);
+      patch.receivedAt = now;
     }
     if (next === 3) patch.canceledNote = String(opts.canceledNote || '');
     if (next === 4) patch.rejectedNote = String(opts.rejectedNote || '');
@@ -5824,6 +5833,19 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       throw new Error(`Invalid withdrawal status transition ${curStat} → ${next}`);
     }
     const patch = { status: next, updatedAt: now };
+    if (next === 1) {
+      // Phase 15.4 (s19 item 6) — capture ผู้อนุมัติและส่งสินค้า on status 0→1.
+      // Withdrawal "approve+dispatch" is a single action (the admin approves
+      // the request and immediately dispatches the goods).
+      // V14 lock: _normalizeAuditUser returns {userId,userName} not undefined.
+      patch.approvedByUser = _normalizeAuditUser(opts.user);
+      patch.approvedAt = now;
+    }
+    if (next === 2) {
+      // Phase 15.4 (s19 item 6) — capture ผู้รับสินค้า on status 1→2.
+      patch.receivedByUser = _normalizeAuditUser(opts.user);
+      patch.receivedAt = now;
+    }
     if (next === 3) patch.canceledNote = String(opts.canceledNote || '');
     tx.update(ref, patch);
     return { ...c, _prevStatus: curStat };

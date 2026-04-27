@@ -111,8 +111,31 @@ export default function WithdrawalDetailModal({ withdrawalId, onClose }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้สร้าง</div>
-                <div>{data.user?.userName || '-'}</div>
+                <div data-testid="withdrawal-creator-name">{data.user?.userName || '-'}</div>
+                {data.createdAt && (
+                  <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.createdAt)}</div>
+                )}
               </div>
+              {/* Phase 15.4 (s19 item 6) — ผู้อนุมัติและส่งสินค้า (status 0→1) */}
+              {(status >= 1 || data.approvedByUser) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้อนุมัติและส่งสินค้า</div>
+                  <div data-testid="withdrawal-approver-name">{data.approvedByUser?.userName || '-'}</div>
+                  {data.approvedAt && (
+                    <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.approvedAt)}</div>
+                  )}
+                </div>
+              )}
+              {/* Phase 15.4 (s19 item 6) — ผู้รับสินค้า (status 1→2) */}
+              {(status >= 2 || data.receivedByUser) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้รับสินค้า</div>
+                  <div data-testid="withdrawal-receiver-name">{data.receivedByUser?.userName || '-'}</div>
+                  {data.receivedAt && (
+                    <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.receivedAt)}</div>
+                  )}
+                </div>
+              )}
               {data.note && (
                 <div className="col-span-2 md:col-span-3">
                   <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">หมายเหตุ</div>

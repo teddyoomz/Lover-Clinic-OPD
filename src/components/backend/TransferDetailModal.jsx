@@ -112,8 +112,31 @@ export default function TransferDetailModal({ transferId, onClose }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้สร้าง</div>
-                <div>{data.user?.userName || '-'}</div>
+                <div data-testid="transfer-creator-name">{data.user?.userName || '-'}</div>
+                {data.createdAt && (
+                  <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.createdAt)}</div>
+                )}
               </div>
+              {/* Phase 15.4 (s19 item 5) — ผู้ส่ง (status 0→1) */}
+              {(status >= 1 || data.dispatchedByUser) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้ส่ง</div>
+                  <div data-testid="transfer-dispatcher-name">{data.dispatchedByUser?.userName || '-'}</div>
+                  {data.dispatchedAt && (
+                    <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.dispatchedAt)}</div>
+                  )}
+                </div>
+              )}
+              {/* Phase 15.4 (s19 item 5) — ผู้รับ (status 1→2) */}
+              {(status >= 2 || data.receivedByUser) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ผู้รับ</div>
+                  <div data-testid="transfer-receiver-name">{data.receivedByUser?.userName || '-'}</div>
+                  {data.receivedAt && (
+                    <div className="text-[9px] text-[var(--tx-muted)] mt-0.5">{fmtDateTime(data.receivedAt)}</div>
+                  )}
+                </div>
+              )}
               {data.note && (
                 <div className="col-span-2 md:col-span-3">
                   <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">หมายเหตุ</div>
