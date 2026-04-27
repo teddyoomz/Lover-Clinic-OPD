@@ -25,12 +25,17 @@ import {
   listVendors, listProducts,
   // 2026-04-27 actor tracking
   listAllSellers,
+  // Phase 15.4 (2026-04-28) item 7 — smart unit dropdown
+  listProductUnitGroups,
 } from '../../lib/backendClient.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// Phase 15.4 (2026-04-28) item 7 — smart unit dropdown (Rule C1 shared).
+import UnitField from './UnitField.jsx';
+import { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -75,6 +80,8 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   const [formOpen, setFormOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
+  // Phase 15.4 item 7 — load unit groups for smart unit dropdown in items
+  const [unitGroups, setUnitGroups] = useState([]);
   const [mastersLoading, setMastersLoading] = useState(false);
   const [search, setSearch] = useState('');
   // 2026-04-27 actor tracking
@@ -115,12 +122,15 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   const loadMasters = useCallback(async () => {
     setMastersLoading(true);
     try {
-      const [v, p] = await Promise.all([
+      // Phase 15.4 item 7 — also load unit groups for smart UnitField dropdown.
+      const [v, p, ug] = await Promise.all([
         listVendors({ activeOnly: true }),
         listProducts(),
+        listProductUnitGroups().catch(() => []),
       ]);
       setVendors(Array.isArray(v) ? v : []);
       setProducts(Array.isArray(p) ? p : []);
+      setUnitGroups(Array.isArray(ug) ? ug : []);
     } catch (e) {
       console.error('[CentralStockOrderPanel] masters load failed:', e);
     } finally {
@@ -165,6 +175,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
         centralWarehouseId={centralWarehouseId}
         vendors={vendors}
         products={products}
+        unitGroups={unitGroups}
         mastersLoading={mastersLoading}
         sellers={sellers}
         sellersLoading={sellersLoading}
@@ -314,7 +325,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   );
 }
 
-function CentralOrderCreateForm({ centralWarehouseId, vendors, products, mastersLoading, sellers, sellersLoading, onClose, onSaved }) {
+function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGroups = [], mastersLoading, sellers, sellersLoading, onClose, onSaved }) {
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
   const [actorId, setActorId] = useState('');
   const [form, setForm] = useState(() => ({
@@ -509,8 +520,16 @@ function CentralOrderCreateForm({ centralWarehouseId, vendors, products, masters
                         <DateField value={it.expiresAt} onChange={(v) => updateItem(idx, { expiresAt: v })} />
                       </td>
                       <td className="px-2 py-2">
-                        <input type="text" value={it.unit}
-                          onChange={e => updateItem(idx, { unit: e.target.value })} className={inputCls} />
+                        {/* Phase 15.4 item 7 — smart unit dropdown auto-populated from
+                            product's defaultProductUnitGroupId. Falls back to free-text
+                            input when product has no configured unit group (legacy data). */}
+                        <UnitField
+                          testId={`cpo-unit-${idx}`}
+                          value={it.unit}
+                          options={getUnitOptionsForProduct(it.productId, products, unitGroups)}
+                          inputCls={inputCls}
+                          onChange={e => updateItem(idx, { unit: e.target.value })}
+                        />
                       </td>
                       <td className="px-2 py-2 text-center">
                         <button onClick={() => removeItem(idx)} disabled={form.items.length === 1}

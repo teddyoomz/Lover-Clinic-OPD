@@ -355,6 +355,8 @@ function TransferCreateForm({ locations, sellers, sellersLoading, onClose, onSav
                 <tr>
                   <th className="px-2 py-2 w-8">#</th>
                   <th className="px-2 py-2 text-left font-bold">Batch ต้นทาง *</th>
+                  {/* Phase 15.4 item 7 — auto-show unit when batch picked (no confusion) */}
+                  <th className="px-2 py-2 text-left font-bold w-16">หน่วย</th>
                   <th className="px-2 py-2 text-left font-bold w-20">จำนวน *</th>
                   <th className="px-2 py-2 w-10"></th>
                 </tr>
@@ -374,6 +376,10 @@ function TransferCreateForm({ locations, sellers, sellersLoading, onClose, onSav
                             </option>
                           ))}
                         </select>
+                      </td>
+                      {/* Phase 15.4 item 7 — auto-show unit (read-only) so user doesn't confuse units */}
+                      <td className="px-2 py-2 text-[var(--tx-primary)] text-[11px]" data-testid={`transfer-unit-${idx}`}>
+                        {b?.unit || <span className="text-[var(--tx-muted)]">-</span>}
                       </td>
                       <td className="px-2 py-2">
                         <input type="number" min="0" step="0.01" value={it.qty} onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls}

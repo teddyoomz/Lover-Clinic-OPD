@@ -358,6 +358,12 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
           <label className={labelCls}>จำนวน *</label>
           <input type="number" min="0" step="0.01" value={qty} onChange={e => setQty(e.target.value)}
             className={inputCls} placeholder="กรอกจำนวนที่ต้องการปรับ" />
+          {/* Phase 15.4 item 7 — auto-show unit when batch picked (no confusion) */}
+          {selectedBatch && (
+            <div className="text-[10px] text-[var(--tx-muted)] mt-1" data-testid="adjust-unit-display">
+              หน่วย: <span className="font-bold text-[var(--tx-primary)]">{selectedBatch.unit || '-'}</span>
+            </div>
+          )}
           {selectedBatch && type === 'reduce' && Number(qty) > Number(selectedBatch.qty.remaining) && (
             <div className="text-[10px] text-red-400 mt-1">⚠ เกินยอดคงเหลือ ({fmtQty(selectedBatch.qty.remaining)})</div>
           )}
