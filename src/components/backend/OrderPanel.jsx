@@ -31,6 +31,7 @@ import DateField from '../DateField.jsx';
 import StockSeedPanel from './StockSeedPanel.jsx';
 import OrderDetailModal from './OrderDetailModal.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { productDisplayName } from '../../lib/productValidation.js';
 
 // fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
@@ -293,7 +294,8 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
     if (!p) { updateItem(idx, { productId: '', productName: '', unit: '' }); return; }
     updateItem(idx, {
       productId: String(p.id),
-      productName: p.name || '',
+      // Phase 14.10-tris fix (2026-04-27) — be_products canonical productName
+      productName: productDisplayName(p),
       unit: p.unit || items[idx]?.unit || '',
     });
   };
@@ -413,7 +415,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
                   <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">สินค้า *</label>
                   <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)} className={inputCls}>
                     <option value="">— เลือกสินค้า —</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {products.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -479,7 +481,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
                       <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)} className={inputCls}>
                         <option value="">— เลือกสินค้า —</option>
                         {products.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>{productDisplayName(p)}</option>
                         ))}
                       </select>
                     </td>

@@ -149,6 +149,32 @@ export function normalizeProduct(form) {
   };
 }
 
+/**
+ * Display-name resolver for a be_products doc.
+ *
+ * Phase 14.10-tris (2026-04-26) migrated products from `master_data/products`
+ * (legacy `.name` field) to `be_products` with canonical `productName`.
+ * Old migrated docs got `name` preserved via the `...form` spread in
+ * `normalizeProduct`, but new docs created via UI have ONLY `productName`.
+ * 5 callers across StockAdjustPanel + OrderPanel still rendered `p.name`
+ * — old products displayed by accident, new ones showed empty options.
+ *
+ * Lookup chain:
+ *   1. p.productName (canonical, written by normalizeProduct)
+ *   2. p.name (legacy spread alias from master_data origin)
+ *   3. '' (NEVER `undefined` — V14)
+ *
+ * @param {object} p — be_products doc OR legacy master_data product
+ * @returns {string}
+ */
+export function productDisplayName(p) {
+  if (!p || typeof p !== 'object') return '';
+  const canonical = typeof p.productName === 'string' ? p.productName.trim() : '';
+  if (canonical) return canonical;
+  const legacy = typeof p.name === 'string' ? p.name.trim() : '';
+  return legacy;
+}
+
 export function generateProductId() {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const bytes = new Uint8Array(8);

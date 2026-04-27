@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db, appId, auth } from '../../firebase.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { productDisplayName } from '../../lib/productValidation.js';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -216,7 +217,8 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   const onPickProduct = (pid) => {
     const p = products.find(x => String(x.id) === String(pid));
     setProductId(pid);
-    setProductName(p?.name || '');
+    // Phase 14.10-tris fix (2026-04-27) — be_products canonical productName
+    setProductName(productDisplayName(p));
   };
 
   const handleSave = async () => {
@@ -268,7 +270,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
             <label className={labelCls}>สินค้า *</label>
             <select value={productId} onChange={e => onPickProduct(e.target.value)} className={inputCls}>
               <option value="">— เลือกสินค้า —</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {products.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
             </select>
             {productsLoading && <div className="text-[10px] text-[var(--tx-muted)] mt-1">กำลังโหลดรายการสินค้า...</div>}
           </div>
