@@ -30,6 +30,8 @@ import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
 import MovementLogPanel from './MovementLogPanel.jsx';
 import CentralWarehousePanel from './CentralWarehousePanel.jsx';
+// Phase 15.2 (2026-04-27) — Central PO write flow
+import CentralStockOrderPanel from './CentralStockOrderPanel.jsx';
 
 const SUB_TABS = [
   { id: 'balance',     label: 'ยอดคงเหลือ',  icon: <Package size={14} /> },
@@ -180,14 +182,10 @@ export default function CentralStockTab({ clinicSettings, theme }) {
       )}
 
       {subTab === 'orders' && (
-        <div className="bg-[var(--bg-surface)] rounded-2xl p-10 text-center border border-[var(--bd)]" data-testid="central-orders-coming-soon">
-          <ShoppingBag size={48} className="mx-auto text-[var(--tx-muted)] mb-3" />
-          <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-2">นำเข้าจาก Vendor (Central PO)</h3>
-          <p className="text-xs text-[var(--tx-muted)] max-w-md mx-auto">
-            เพิ่มในเฟส 15.2 — สร้าง Purchase Order จาก vendor เข้าคลังกลาง,
-            รับสินค้า → batches ใน be_stock_batches พร้อม locationType: 'central'
-          </p>
-        </div>
+        <CentralStockOrderPanel
+          centralWarehouseId={selectedWarehouseId}
+          theme={theme}
+        />
       )}
 
       {subTab === 'transfers' && (

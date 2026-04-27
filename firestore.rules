@@ -377,6 +377,19 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Phase 15.2 (2026-04-27) — Central PO (vendor → central warehouse).
+      // Status flips: pending → partial → received | cancelled |
+      // cancelled_post_receive. Never deleted (audit trail).
+      match /be_central_stock_orders/{orderId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isClinicStaff();
+        allow delete: if false;
+      }
+      // Atomic counter for PO-CST-YYYYMM-NNNN sequence.
+      match /be_central_stock_orders_counter/{counterId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Master Data (products, doctors, staff, courses, promotions) ──
       match /master_data/{type} {
         allow read: if isSignedIn();

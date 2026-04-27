@@ -14,8 +14,12 @@ export const DEFAULT_BRANCH_ID = 'main';
 // ProClinic movement type enum — stored as numeric codes.
 // Grouped pairs (2|5, 3|4, 6|7, 8|10, 12|13) are semantic aliases in ProClinic's
 // filter UI. We store one code per movement; the pair is used only in log filtering.
+//
+// Phase 15.2 (2026-04-27) — types 15+16 added as audit-only (qty=0) for the
+// approval state-flip on be_stock_withdrawals. They ride V19's existing rule
+// (`hasOnly(['reversedByMovementId'])`) — no rule change needed.
 export const MOVEMENT_TYPES = {
-  IMPORT: 1,             // นำเข้า (vendor order receive)
+  IMPORT: 1,             // นำเข้า (vendor order receive — branch OR central)
   SALE: 2,               // ขาย (retail customer sale)
   ADJUST_ADD: 3,         // ปรับสต็อคเพิ่ม
   ADJUST_REDUCE: 4,      // ปรับสต็อคลด
@@ -28,7 +32,48 @@ export const MOVEMENT_TYPES = {
   WITHDRAWAL_REQUEST: 12,// เบิก (request)
   WITHDRAWAL_CONFIRM: 13,// เบิก (confirm receive)
   CANCEL_IMPORT: 14,     // ยกเลิกนำเข้า
+  WITHDRAWAL_APPROVE: 15,// อนุมัติเบิก — Phase 15.5 audit-only (qty=0, paired w/ withdrawalId)
+  WITHDRAWAL_REJECT: 16, // ปฏิเสธเบิก — Phase 15.5 audit-only (qty=0, paired w/ rejectReason)
 };
+
+// Phase 15.2 (2026-04-27) — location-type discriminator for be_stock_batches.
+// Additive: existing branch batches don't need locationType to keep working;
+// new central batches carry locationType:'central'. Read-side fallback via
+// deriveLocationType() so legacy docs render correctly until backfill.
+export const LOCATION_TYPE = Object.freeze({
+  BRANCH: 'branch',
+  CENTRAL: 'central',
+});
+
+/**
+ * Derive a location's tier from its id. Convention: central warehouses use
+ * `WH-` prefix (set by createCentralWarehouse), branches use either 'main'
+ * or any other id from be_branches.
+ *
+ * Phase 15.1 read-side fallback for legacy docs missing the explicit
+ * `locationType` field. New writers populate locationType on every write.
+ *
+ * @param {string} locationId
+ * @returns {'branch' | 'central'}
+ */
+export function deriveLocationType(locationId) {
+  const id = String(locationId || '');
+  return id.startsWith('WH-') ? LOCATION_TYPE.CENTRAL : LOCATION_TYPE.BRANCH;
+}
+
+// Central PO status enum (Phase 15.2)
+//   - pending  → 1+ items not yet received (initial state)
+//   - partial  → some lines received, others still pending
+//   - received → all lines fully received (all items have receivedBatchId)
+//   - cancelled → cancelled before any receive (no batches created)
+//   - cancelled_post_receive → cancelled AFTER receive; batches got CANCEL_IMPORT
+export const CENTRAL_ORDER_STATUS = Object.freeze({
+  PENDING: 'pending',
+  PARTIAL: 'partial',
+  RECEIVED: 'received',
+  CANCELLED: 'cancelled',
+  CANCELLED_POST_RECEIVE: 'cancelled_post_receive',
+});
 
 // Transfer status enum (ProClinic parity)
 export const TRANSFER_STATUS = {

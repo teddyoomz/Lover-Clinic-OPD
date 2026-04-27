@@ -183,6 +183,18 @@ artifacts/{appId}/public/data/
 - `MovementLogPanel({ branchIdOverride })` — overrides BranchContext's branchId for this panel only
 - `CentralWarehousePanel({ onAfterCreate })` — callback after first create (not edit)
 
+**Phase 15.2 (2026-04-27) — Central PO write flow:**
+- New collection `be_central_stock_orders/{PO-CST-YYYYMM-NNNN}`: orderId, centralWarehouseId, vendorId, vendorName, importedDate, items[{centralOrderProductId, productId, productName, qty, cost, expiresAt, unit, isPremium, receivedBatchId, receivedQty}], discount, discountType, status (pending|partial|received|cancelled|cancelled_post_receive), receivedLineIds[], createdBy, createdAt, updatedAt
+- New collection `be_central_stock_orders_counter/counter`: yearMonth, seq, updatedAt — atomic via runTransaction (mirrors generateInvoiceNumber)
+- New `src/lib/centralStockOrderValidation.js` — validate / normalize / emptyForm / validateLineReceipts (V14-safe — never emits undefined leaves)
+- `backendClient.js` Phase 15.2 additions: `generateCentralOrderId` / `createCentralStockOrder` / `receiveCentralStockOrder` (idempotent partial via receivedLineIds checkpoint) / `cancelCentralStockOrder` (V19-style movement-trail check) / `listCentralStockOrders({centralWarehouseId, vendorId, status})` / `getCentralStockOrder` 
+- **Rule C1 (Rule of 3) — `_buildBatchFromOrderItem` shared helper extracted**: writes batch + IMPORT movement; called by BOTH `createStockOrder` (branch tier, linkedField='linkedOrderId') and `receiveCentralStockOrder` (central tier, linkedField='linkedCentralOrderId'). Adds locationType + locationId fields to batch docs (additive — V12-safe). createStockOrder body refactored to delegate.
+- `listStockMovements` mapFields gains `linkedCentralOrderId` (filter contract for central-tier movement queries).
+- `stockUtils.js`: `LOCATION_TYPE` enum + `deriveLocationType(locationId)` helper + `CENTRAL_ORDER_STATUS` enum + `MOVEMENT_TYPES.WITHDRAWAL_APPROVE=15` + `WITHDRAWAL_REJECT=16` (audit-only, qty=0 — used in Phase 15.5).
+- New `src/components/backend/CentralStockOrderPanel.jsx` — list + create form + receive (per-line) + cancel (with reason prompt). Mirrors OrderPanel.jsx pattern but keyed to centralWarehouseId. Wired into CentralStockTab `orders` sub-tab (replaces 15.1 placeholder).
+- `firestore.rules`: `be_central_stock_orders` (read/create/update; delete:false) + `be_central_stock_orders_counter` (read,write) blocks. **Movements rule UNCHANGED** — V19's `hasOnly(['reversedByMovementId'])` already type-agnostic (covers types 15+16 + new linkedCentralOrderId field).
+- Tests: `tests/phase15.2-central-po-flow-simulate.test.js` — 86 in 10 groups (F1 stockUtils enum / F2 validate / F3 normalize+V14 walk / F4 validateLineReceipts / F5 backendClient exports / F6 _buildBatchFromOrderItem contract / F7 firestore.rules / F8 UI wiring / F9 iron-clad guards / F10 adversarial state-machine simulate).
+
 **Schema additions** (in master section):
 ```
 be_stock_transfers/{TRF-ts-rand}   transferId, sourceLocationId, destinationLocationId, items: [{sourceBatchId, productId, qty, cost, expiresAt, isPremium, destinationBatchId?}], status 0..4, delivered{TrackingNumber,Note,ImageUrl}, canceledNote?, rejectedNote?, user, createdAt, updatedAt

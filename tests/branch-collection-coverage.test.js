@@ -89,6 +89,11 @@ const COLLECTION_MATRIX = {
   'be_vendors':            { scope: 'global',  reason: 'Vendor directory' },
   'be_medicine_labels':    { scope: 'global',  reason: 'Label presets' },
   'be_central_stock_warehouses': { scope: 'global', reason: 'Central warehouse master (Phase 15)' },
+  // Phase 15.2 (2026-04-27) — central PO collection + counter. Both global because
+  // central inventory is shared across branches; warehouse-scope filtering happens
+  // via centralWarehouseId field at query time, not via branchId.
+  'be_central_stock_orders': { scope: 'global', reason: 'Central PO doc (Phase 15.2 — vendor → central warehouse). Filter by centralWarehouseId at read.' },
+  'be_central_stock_orders_counter': { scope: 'global', reason: 'Atomic central-PO id sequencer (Phase 15.2 — singleton doc, monthly reset)' },
   'be_sales_counter':      { scope: 'global',  reason: 'Atomic sale-id sequencer (singleton doc)' },
   'be_customer_counter':   { scope: 'global',  reason: 'V33-customer-create — atomic HN sequencer for manually-created customers (singleton doc)' },
 

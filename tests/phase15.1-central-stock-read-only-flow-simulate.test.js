@@ -144,9 +144,13 @@ describe('Phase 15.1 F4 — CentralStockTab structure', () => {
     expect(centralTabSrc).toContain('สร้างคลังกลางแห่งแรก');
   });
 
-  it('F4.5 orders sub-tab is a placeholder (Phase 15.2 lands the real PO write flow)', () => {
-    expect(centralTabSrc).toContain('central-orders-coming-soon');
-    expect(centralTabSrc).toContain('15.2');
+  it('F4.5 orders sub-tab renders CentralStockOrderPanel (Phase 15.2 wired in commit AFTER dba27ad)', () => {
+    // Phase 15.1 originally shipped a placeholder; Phase 15.2 replaced it
+    // with the real CentralStockOrderPanel. This assertion locks the
+    // post-15.2 wiring contract — future slices must not regress it.
+    expect(centralTabSrc).toMatch(/import CentralStockOrderPanel from/);
+    expect(centralTabSrc).toMatch(/subTab\s*===\s*'orders'\s*&&\s*\(\s*<CentralStockOrderPanel/);
+    expect(centralTabSrc).not.toContain('central-orders-coming-soon');
   });
 
   it('F4.6 reuses existing panels (Rule C1 — no fork)', () => {

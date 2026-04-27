@@ -3896,8 +3896,9 @@ export async function listStockOrders({ branchId, status } = {}) {
 export async function listStockMovements(filters = {}) {
   const clauses = [];
   const mapFields = [
-    'linkedSaleId', 'linkedTreatmentId', 'linkedOrderId', 'linkedAdjustId',
-    'linkedTransferId', 'linkedWithdrawalId', 'batchId', 'productId', 'branchId',
+    'linkedSaleId', 'linkedTreatmentId', 'linkedOrderId', 'linkedCentralOrderId',
+    'linkedAdjustId', 'linkedTransferId', 'linkedWithdrawalId',
+    'batchId', 'productId', 'branchId',
   ];
   for (const f of mapFields) {
     if (filters[f] != null) clauses.push(where(f, '==', String(filters[f])));
@@ -3918,6 +3919,164 @@ export async function listStockMovements(filters = {}) {
 // ─── Stock Order CRUD ───────────────────────────────────────────────────────
 
 /**
+ * Phase 15.2 (2026-04-27) — shared helper extracted per Rule C1 (Rule of 3).
+ *
+ * Creates one batch doc + one IMPORT movement from a single order-line item.
+ * Used by:
+ *   - createStockOrder (branch tier, linkedField='linkedOrderId')
+ *   - receiveCentralStockOrder (central tier, linkedField='linkedCentralOrderId')
+ *
+ * V12-safe: every shipped field is also written to legacy paths (branchId
+ * stays the canonical filter; locationType + locationId are additive).
+ * V14-safe: never returns undefined fields — every optional path resolves
+ * to '' / null / 0 / false explicitly.
+ * V19-safe: movement is append-only; only `reversedByMovementId` will ever
+ * mutate via firestore.rules narrowing.
+ *
+ * @param {object} args
+ *   - item: order-line input (productId, productName, qty, cost, expiresAt?, unit?, isPremium?)
+ *   - idx: index in items[] for orderProductId fallback
+ *   - locationId: branchId for branch tier OR centralWarehouseId for central tier
+ *   - locationType: 'branch' | 'central'
+ *   - orderId: parent order doc id
+ *   - sourceDocPath: full firestore path (movement.sourceDocPath)
+ *   - linkedField: 'linkedOrderId' (branch) or 'linkedCentralOrderId' (central)
+ *   - user: normalized audit user
+ *   - now: ISO timestamp shared by batch + movement (so both line up in audit)
+ *   - note: optional movement note (propagated from order.note or receive note)
+ *   - optInStockConfig: default true — auto-set stockConfig.trackStock=true on the product doc
+ * @returns {{ batchId, movementId, resolvedItem }}
+ */
+async function _buildBatchFromOrderItem({
+  item, idx, locationId, locationType, orderId,
+  sourceDocPath, linkedField, user, now, note,
+  optInStockConfig = true,
+}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS, buildQtyNumeric } = stockUtils;
+
+  const qtyNum = Number(item.qty);
+  if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+    throw new Error(`Item #${idx + 1} invalid qty: ${item.qty}`);
+  }
+  const orderProductId = String(
+    item.orderProductId || item.centralOrderProductId || `${orderId}-${idx}`
+  );
+  const cost = Number(item.cost) || 0;
+  const isPremium = !!item.isPremium;
+  const batchId = _genBatchId();
+
+  // Auto opt-in stockConfig — preserved from the legacy createStockOrder
+  // flow. Skipped silently if no productId or product doesn't exist
+  // (rare post-migration). Errors are logged + swallowed because failing
+  // to opt-in is non-fatal for this receive operation; the batch still
+  // lands and admin can manually set trackStock later.
+  if (optInStockConfig && item.productId) {
+    try {
+      const existing = await _getProductStockConfig(item.productId);
+      if (!existing) {
+        const beRef = doc(db, ...basePath(), 'be_products', String(item.productId));
+        const beSnap = await getDoc(beRef);
+        if (beSnap.exists()) {
+          await updateDoc(beRef, {
+            stockConfig: {
+              trackStock: true,
+              minAlert: 0,
+              unit: String(item.unit || ''),
+              isControlled: false,
+            },
+            _stockConfigSetBy: '_buildBatchFromOrderItem',
+            _stockConfigSetAt: now,
+          });
+        } else {
+          const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
+          const legacySnap = await getDoc(legacyRef);
+          if (legacySnap.exists()) {
+            await updateDoc(legacyRef, {
+              stockConfig: {
+                trackStock: true,
+                minAlert: 0,
+                unit: String(item.unit || ''),
+                isControlled: false,
+              },
+              _stockConfigSetBy: '_buildBatchFromOrderItem',
+              _stockConfigSetAt: now,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Non-fatal; log + continue. NOT V31 silent-swallow: this is a
+      // best-effort optimization (auto-set on first stocked batch),
+      // not the primary side-effect.
+      console.warn('[_buildBatchFromOrderItem] failed to auto-set stockConfig for', item.productId, e);
+    }
+  }
+
+  // 1) Create the batch doc (Phase 15.2: locationType + locationId added).
+  await setDoc(stockBatchDoc(batchId), {
+    batchId,
+    productId: String(item.productId || ''),
+    productName: String(item.productName || ''),
+    branchId: String(locationId),
+    locationType: locationType || 'branch',
+    locationId: String(locationId),
+    orderProductId,
+    sourceOrderId: String(orderId),
+    receivedAt: now,
+    expiresAt: item.expiresAt || null,
+    unit: String(item.unit || ''),
+    qty: buildQtyNumeric(qtyNum),
+    originalCost: cost,
+    isPremium,
+    status: BATCH_STATUS.ACTIVE,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // 2) Append IMPORT movement (V14: build object without any undefined leaves).
+  const movementId = _genMovementId();
+  const movementDoc = {
+    movementId,
+    type: MOVEMENT_TYPES.IMPORT,
+    batchId,
+    productId: String(item.productId || ''),
+    productName: String(item.productName || ''),
+    qty: qtyNum,
+    before: 0,
+    after: qtyNum,
+    branchId: String(locationId),
+    sourceDocPath: String(sourceDocPath),
+    revenueImpact: 0,
+    costBasis: cost * qtyNum,
+    isPremium,
+    user,
+    note: String(note || ''),
+    createdAt: now,
+  };
+  // Branch order writes linkedOrderId; central PO writes linkedCentralOrderId.
+  // BOTH fields participate in listStockMovements filtering (mapFields).
+  movementDoc[linkedField] = String(orderId);
+  await setDoc(stockMovementDoc(movementId), movementDoc);
+
+  return {
+    batchId,
+    movementId,
+    resolvedItem: {
+      orderProductId,
+      batchId,
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      qty: qtyNum,
+      cost,
+      expiresAt: item.expiresAt || null,
+      isPremium,
+      unit: String(item.unit || ''),
+    },
+  };
+}
+
+/**
  * Create a vendor order: one order doc + N batch docs + N IMPORT movements.
  *
  * NOT wrapped in runTransaction because these are all new documents (no
@@ -3934,7 +4093,7 @@ export async function listStockMovements(filters = {}) {
  */
 export async function createStockOrder(data, opts = {}) {
   const { stockUtils } = await _stockLib();
-  const { MOVEMENT_TYPES, BATCH_STATUS, buildQtyNumeric, DEFAULT_BRANCH_ID } = stockUtils;
+  const { DEFAULT_BRANCH_ID } = stockUtils;
 
   const items = Array.isArray(data?.items) ? data.items : [];
   if (items.length === 0) throw new Error('Order must have at least one item');
@@ -3948,119 +4107,25 @@ export async function createStockOrder(data, opts = {}) {
   const batchIds = [];
   const resolvedItems = [];
 
+  // Phase 15.2 — delegate per-line batch+movement creation to shared helper.
+  // Branch tier: linkedField='linkedOrderId', locationType='branch'.
   for (const [idx, item] of items.entries()) {
-    const qtyNum = Number(item.qty);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      throw new Error(`Item #${idx + 1} invalid qty: ${item.qty}`);
-    }
-    const batchId = _genBatchId();
-    const orderProductId = item.orderProductId || `${orderId}-${idx}`;
-    const cost = Number(item.cost) || 0;
-    const isPremium = !!item.isPremium;
-
-    // First time we see this productId via an order → opt it in to stock tracking.
-    // If stockConfig already exists (user set trackStock=false deliberately, or it's
-    // already true), leave it alone. Missing stockConfig only.
-    //
-    // Phase 12.2b follow-up (2026-04-24): write to be_products (Rule H-tris
-    // — single source of truth). Legacy master_data fallback kept ONLY for
-    // docs that haven't been migrated yet; if the be_products doc doesn't
-    // exist either, silently skip the opt-in (product likely deleted).
-    if (item.productId) {
-      try {
-        const existing = await _getProductStockConfig(item.productId);
-        if (!existing) {
-          const beRef = doc(db, ...basePath(), 'be_products', String(item.productId));
-          const beSnap = await getDoc(beRef);
-          if (beSnap.exists()) {
-            await updateDoc(beRef, {
-              stockConfig: {
-                trackStock: true,
-                minAlert: 0,
-                unit: String(item.unit || ''),
-                isControlled: false,
-              },
-              _stockConfigSetBy: 'createStockOrder',
-              _stockConfigSetAt: now,
-            });
-          } else {
-            // Last-chance legacy fallback — should be rare post-Phase 11.9.
-            const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
-            const legacySnap = await getDoc(legacyRef);
-            if (legacySnap.exists()) {
-              await updateDoc(legacyRef, {
-                stockConfig: {
-                  trackStock: true,
-                  minAlert: 0,
-                  unit: String(item.unit || ''),
-                  isControlled: false,
-                },
-                _stockConfigSetBy: 'createStockOrder',
-                _stockConfigSetAt: now,
-              });
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[createStockOrder] failed to auto-set stockConfig for', item.productId, e);
-      }
-    }
-
-    // 1. Create batch doc
-    await setDoc(stockBatchDoc(batchId), {
-      batchId,
-      productId: String(item.productId || ''),
-      productName: String(item.productName || ''),
-      branchId,
-      orderProductId,
-      sourceOrderId: orderId,
-      receivedAt: now,
-      expiresAt: item.expiresAt || null,
-      unit: String(item.unit || ''),
-      qty: buildQtyNumeric(qtyNum),
-      originalCost: cost,
-      isPremium,
-      status: BATCH_STATUS.ACTIVE,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // 2. Append IMPORT movement (type=1) — immutable log entry
-    const movementId = _genMovementId();
-    await setDoc(stockMovementDoc(movementId), {
-      movementId,
-      type: MOVEMENT_TYPES.IMPORT,
-      batchId,
-      productId: String(item.productId || ''),
-      productName: String(item.productName || ''),
-      qty: qtyNum,
-      before: 0,
-      after: qtyNum,
-      branchId,
+    const { batchId, resolvedItem } = await _buildBatchFromOrderItem({
+      item, idx,
+      locationId: branchId,
+      locationType: 'branch',
+      orderId,
       sourceDocPath: `artifacts/${appId}/public/data/be_stock_orders/${orderId}`,
-      linkedOrderId: orderId,
-      revenueImpact: 0,
-      costBasis: cost * qtyNum,
-      isPremium,
+      linkedField: 'linkedOrderId',
       user,
-      note: data.note || '',
-      createdAt: now,
+      now,
+      note: data.note,
     });
-
     batchIds.push(batchId);
-    resolvedItems.push({
-      orderProductId, batchId,
-      productId: String(item.productId || ''),
-      productName: String(item.productName || ''),
-      qty: qtyNum,
-      cost,
-      expiresAt: item.expiresAt || null,
-      isPremium,
-      unit: String(item.unit || ''),
-    });
+    resolvedItems.push(resolvedItem);
   }
 
-  // 3. Finally: create the order doc (with resolved batchIds baked in)
+  // Finally: create the order doc (with resolved batchIds baked in).
   await setDoc(stockOrderDoc(orderId), {
     orderId,
     vendorName: String(data.vendorName || ''),
@@ -4224,6 +4289,385 @@ export async function updateStockOrder(orderId, patch) {
 
   await updateDoc(stockOrderDoc(orderId), docPatch);
   return { orderId, success: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 15.2 — Central Stock Orders (vendor → central warehouse PO)
+// ═══════════════════════════════════════════════════════════════════════════
+// Lifecycle:
+//   pending  ─receiveCentralStockOrder(allLines)→  received  (terminal)
+//   pending  ─receiveCentralStockOrder(someLines)→ partial   ─receiveCentralStockOrder(rest)→ received
+//   pending  ─cancelCentralStockOrder→             cancelled (terminal, no batches were created)
+//   partial/received ─cancelCentralStockOrder→     cancelled_post_receive (V19-style:
+//     blocked if any batch had movements beyond IMPORT; emits CANCEL_IMPORT compensations)
+//
+// Schema:
+//   be_central_stock_orders/{PO-CST-YYYYMM-NNNN}
+//   be_central_stock_orders_counter/counter  { yearMonth, seq, updatedAt }
+//
+// Movements: type=1 IMPORT (with linkedCentralOrderId), type=14 CANCEL_IMPORT
+// for cancel-post-receive compensations. branchId on movement = central
+// warehouse id (locationType derived via deriveLocationType).
+//
+// Iron-clad:
+//   E    no brokerClient, no /api/proclinic — 100% Firestore writes
+//   H    no ProClinic sync — central stock is OURS
+//   I    full-flow simulate covers create→partial→full receive→cancel
+//   C1   _buildBatchFromOrderItem shared with createStockOrder (Rule of 3)
+//   C3   ONE new collection + ONE new counter doc — both justified
+//   V14  every setDoc input traverses validator → no undefined leaves
+//   V19  movements rule unchanged (hasOnly(['reversedByMovementId']))
+// ═══════════════════════════════════════════════════════════════════════════
+
+const centralStockOrdersCol = () => collection(db, ...basePath(), 'be_central_stock_orders');
+const centralStockOrderDoc = (id) => doc(db, ...basePath(), 'be_central_stock_orders', String(id));
+const centralStockOrderCounterDoc = () => doc(db, ...basePath(), 'be_central_stock_orders_counter', 'counter');
+
+/**
+ * Generate the next central PO id: PO-CST-YYYYMM-NNNN.
+ * Atomic via runTransaction (mirrors generateInvoiceNumber pattern).
+ * Counter resets each month so the 4-digit suffix has comfortable headroom.
+ */
+export async function generateCentralOrderId() {
+  const { runTransaction } = await import('firebase/firestore');
+  const today = new Date();
+  const ym = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+  const seq = await runTransaction(db, async (tx) => {
+    const ref = centralStockOrderCounterDoc();
+    const snap = await tx.get(ref);
+    let nextSeq = 1;
+    if (snap.exists()) {
+      const d = snap.data();
+      if (d.yearMonth === ym) nextSeq = (d.seq || 0) + 1;
+    }
+    tx.set(ref, { yearMonth: ym, seq: nextSeq, updatedAt: new Date().toISOString() });
+    return nextSeq;
+  });
+
+  return `PO-CST-${ym}-${String(seq).padStart(4, '0')}`;
+}
+
+/**
+ * Create a central PO header. NO batches written yet — those land on
+ * receiveCentralStockOrder. This shape mirrors the validator's normalized
+ * output exactly so no extra coercion is required at write time.
+ *
+ * @param {object} data — output of normalizeCentralStockOrder (centralStockOrderValidation.js)
+ * @param {object} [opts] — { user: { userId, userName } }
+ * @returns {{ orderId, success: true }}
+ */
+export async function createCentralStockOrder(data, opts = {}) {
+  const wh = String(data?.centralWarehouseId || '').trim();
+  if (!wh) throw new Error('centralWarehouseId required');
+  const items = Array.isArray(data?.items) ? data.items : [];
+  if (items.length === 0) throw new Error('Central PO must have at least one item');
+  for (const [idx, it] of items.entries()) {
+    const qty = Number(it?.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error(`Item #${idx + 1} invalid qty: ${it?.qty}`);
+    }
+  }
+
+  const orderId = await generateCentralOrderId();
+  const now = new Date().toISOString();
+  const user = _normalizeAuditUser(opts.user);
+
+  // Items get stable centralOrderProductId per line (V14: never undefined).
+  const persistedItems = items.map((it, idx) => ({
+    centralOrderProductId: String(it.centralOrderProductId || `${orderId}-${idx}`),
+    productId: String(it.productId || ''),
+    productName: String(it.productName || ''),
+    qty: Number(it.qty) || 0,
+    cost: Number(it.cost) || 0,
+    expiresAt: it.expiresAt || null,
+    unit: String(it.unit || ''),
+    isPremium: !!it.isPremium,
+    receivedBatchId: null,
+    receivedQty: 0,
+  }));
+
+  await setDoc(centralStockOrderDoc(orderId), {
+    orderId,
+    centralWarehouseId: wh,
+    vendorId: String(data.vendorId || ''),
+    vendorName: String(data.vendorName || ''),
+    importedDate: data.importedDate || new Date().toISOString().slice(0, 10),
+    note: String(data.note || ''),
+    discount: Number(data.discount) || 0,
+    discountType: data.discountType === 'percent' ? 'percent' : 'amount',
+    items: persistedItems,
+    status: 'pending',
+    receivedLineIds: [],   // idempotent partial-receive checkpoint (V31-safe retry)
+    createdBy: user,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return { orderId, success: true };
+}
+
+/**
+ * Receive (partially or fully) a central PO.
+ *
+ * Each receipt: { centralOrderProductId, qty? }. qty defaults to the line's
+ * total qty (full-line receive). Phase 15.2 ships full-line only; partial-
+ * line is a Phase 15.7+ enhancement.
+ *
+ * Idempotent: rerunning with the same lineIds is safe — already-received
+ * lines (in `receivedLineIds`) skip silently. Caller can retry on partial
+ * failure without double-creating batches.
+ *
+ * Order status flips:
+ *   pending → partial  (some lines received; others not)
+ *   pending → received (all lines received in one call)
+ *   partial → received (residual receive completes the order)
+ *
+ * @param {string} orderId
+ * @param {{centralOrderProductId:string, qty?:number}[]} receipts
+ * @param {object} [opts] — { user: { userId, userName } }
+ * @returns {{ orderId, status, batchIds, movementIds, alreadyReceived }}
+ */
+export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
+  if (!orderId) throw new Error('orderId required');
+  if (!Array.isArray(receipts) || receipts.length === 0) {
+    throw new Error('receipts[] required');
+  }
+
+  const order = await getCentralStockOrder(orderId);
+  if (!order) throw new Error(`Central order ${orderId} not found`);
+  if (order.status === 'cancelled' || order.status === 'cancelled_post_receive') {
+    throw new Error(`Cannot receive a cancelled order (${orderId})`);
+  }
+  if (order.status === 'received') {
+    return { orderId, status: 'received', batchIds: [], movementIds: [], alreadyReceived: true };
+  }
+
+  const now = new Date().toISOString();
+  const user = _normalizeAuditUser(opts.user);
+  const sourceDocPath = `artifacts/${appId}/public/data/be_central_stock_orders/${orderId}`;
+
+  // Idempotency checkpoint: skip lines already in receivedLineIds.
+  const existingReceived = new Set(order.receivedLineIds || []);
+  const itemsByLineId = new Map((order.items || []).map(it => [it.centralOrderProductId, it]));
+
+  const batchIds = [];
+  const movementIds = [];
+  const updatedItems = [...(order.items || [])];
+  const newlyReceivedLineIds = [];
+
+  for (const r of receipts) {
+    const lineId = String(r.centralOrderProductId || '').trim();
+    if (!lineId) continue;
+    if (existingReceived.has(lineId)) {
+      // Already-received lines are no-ops (V31 — classify silently as idempotent
+      // skip; this is NOT an error to swallow, it's a designed retry path).
+      continue;
+    }
+    const line = itemsByLineId.get(lineId);
+    if (!line) {
+      throw new Error(`Line ${lineId} not found in order ${orderId}`);
+    }
+    if (line.receivedBatchId) {
+      // Defensive: doc says line received but receivedLineIds didn't.
+      // Treat as already-received + repair receivedLineIds at end.
+      newlyReceivedLineIds.push(lineId);
+      continue;
+    }
+
+    const orderIdx = updatedItems.findIndex(it => it.centralOrderProductId === lineId);
+    const itemQty = Number(line.qty) || 0;
+    const receiveQty = r.qty != null ? Number(r.qty) : itemQty;
+    if (!Number.isFinite(receiveQty) || receiveQty <= 0) {
+      throw new Error(`Line ${lineId} invalid receive qty: ${r.qty}`);
+    }
+    if (receiveQty !== itemQty) {
+      throw new Error(`Line ${lineId} partial-line receive not supported in Phase 15.2 (got ${receiveQty}, expected ${itemQty})`);
+    }
+
+    // Delegate to shared helper — central tier writes locationType:'central'
+    // + linkedCentralOrderId. Branch order writes linkedOrderId via the
+    // same helper (Rule C1).
+    const { batchId, movementId } = await _buildBatchFromOrderItem({
+      item: line,
+      idx: orderIdx >= 0 ? orderIdx : 0,
+      locationId: order.centralWarehouseId,
+      locationType: 'central',
+      orderId,
+      sourceDocPath,
+      linkedField: 'linkedCentralOrderId',
+      user,
+      now,
+      note: order.note || '',
+    });
+
+    batchIds.push(batchId);
+    movementIds.push(movementId);
+    if (orderIdx >= 0) {
+      updatedItems[orderIdx] = {
+        ...updatedItems[orderIdx],
+        receivedBatchId: batchId,
+        receivedQty: receiveQty,
+      };
+    }
+    newlyReceivedLineIds.push(lineId);
+  }
+
+  // Flip order status.
+  const allLineIds = (order.items || []).map(it => it.centralOrderProductId);
+  const totalReceivedSet = new Set([...existingReceived, ...newlyReceivedLineIds]);
+  const allReceived = allLineIds.every(id => totalReceivedSet.has(id));
+  const newStatus = allReceived ? 'received' : 'partial';
+
+  await updateDoc(centralStockOrderDoc(orderId), {
+    items: updatedItems,
+    receivedLineIds: Array.from(totalReceivedSet),
+    status: newStatus,
+    receivedAt: allReceived ? now : (order.receivedAt || null),
+    updatedAt: now,
+  });
+
+  return { orderId, status: newStatus, batchIds, movementIds, alreadyReceived: false };
+}
+
+/**
+ * Cancel a central PO.
+ *
+ * Two paths:
+ *   1) status=='pending' (no batches yet) → flip to 'cancelled', no movements.
+ *   2) status in {'partial','received'} → V19-style movement-trail check:
+ *      every received batch must have IMPORT movement ONLY. If any batch
+ *      saw further activity (sale/transfer/withdrawal/etc.), throw —
+ *      we will NOT silently overwrite stock that's been used.
+ *      Otherwise: flip each batch to cancelled qty=0, emit CANCEL_IMPORT
+ *      with linkedCentralOrderId, and order status → 'cancelled_post_receive'.
+ *
+ * @param {string} orderId
+ * @param {object} [opts] — { user, reason }
+ * @returns {{ orderId, status, cancelledBatchIds, movementIds }}
+ */
+export async function cancelCentralStockOrder(orderId, opts = {}) {
+  const { stockUtils } = await _stockLib();
+  const { MOVEMENT_TYPES, BATCH_STATUS } = stockUtils;
+
+  const order = await getCentralStockOrder(orderId);
+  if (!order) throw new Error(`Central order ${orderId} not found`);
+  if (order.status === 'cancelled' || order.status === 'cancelled_post_receive') {
+    return {
+      orderId,
+      status: order.status,
+      cancelledBatchIds: [],
+      movementIds: [],
+      alreadyCancelled: true,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const user = _normalizeAuditUser(opts.user);
+  const reason = String(opts.reason || '');
+
+  // Pre-receive cancel — no batches exist, just flip the doc.
+  if (order.status === 'pending') {
+    await updateDoc(centralStockOrderDoc(orderId), {
+      status: 'cancelled',
+      cancelReason: reason,
+      cancelledAt: now,
+      cancelledBy: user,
+      updatedAt: now,
+    });
+    return { orderId, status: 'cancelled', cancelledBatchIds: [], movementIds: [] };
+  }
+
+  // Post-receive cancel — V19-style movement-trail check.
+  const receivedBatchIds = (order.items || [])
+    .map(it => it.receivedBatchId)
+    .filter(Boolean);
+
+  for (const batchId of receivedBatchIds) {
+    const allMvts = await listStockMovements({ batchId, includeReversed: true });
+    const nonImport = allMvts.filter(m => m.type !== MOVEMENT_TYPES.IMPORT);
+    if (nonImport.length > 0) {
+      throw new Error(
+        `Cannot cancel central order ${orderId}: batch ${batchId} has ${nonImport.length} non-import movement(s). ` +
+        `ยกเลิกไม่ได้เพราะสต็อกบางส่วนถูกใช้แล้ว`
+      );
+    }
+  }
+
+  const movementIds = [];
+  const cancelledBatchIds = [];
+
+  for (const batchId of receivedBatchIds) {
+    const batch = await getStockBatch(batchId);
+    if (!batch) continue;
+    const total = Number(batch.qty?.total) || 0;
+
+    // Flip batch → cancelled.
+    await updateDoc(stockBatchDoc(batchId), {
+      status: BATCH_STATUS.CANCELLED,
+      qty: { remaining: 0, total },
+      updatedAt: now,
+      cancelReason: reason,
+    });
+
+    // Append CANCEL_IMPORT movement (V14: explicit non-undefined fields).
+    const movementId = _genMovementId();
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: MOVEMENT_TYPES.CANCEL_IMPORT,
+      batchId,
+      productId: String(batch.productId || ''),
+      productName: String(batch.productName || ''),
+      qty: -total,
+      before: total,
+      after: 0,
+      branchId: String(batch.branchId || order.centralWarehouseId),
+      sourceDocPath: `artifacts/${appId}/public/data/be_central_stock_orders/${orderId}`,
+      linkedCentralOrderId: orderId,
+      revenueImpact: 0,
+      costBasis: (Number(batch.originalCost) || 0) * total,
+      isPremium: !!batch.isPremium,
+      user,
+      note: reason,
+      createdAt: now,
+    });
+    movementIds.push(movementId);
+    cancelledBatchIds.push(batchId);
+  }
+
+  await updateDoc(centralStockOrderDoc(orderId), {
+    status: 'cancelled_post_receive',
+    cancelReason: reason,
+    cancelledAt: now,
+    cancelledBy: user,
+    updatedAt: now,
+  });
+
+  return {
+    orderId,
+    status: 'cancelled_post_receive',
+    cancelledBatchIds,
+    movementIds,
+  };
+}
+
+/** Fetch one central order by id. */
+export async function getCentralStockOrder(orderId) {
+  const snap = await getDoc(centralStockOrderDoc(orderId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/** List central orders with optional filters. Sorted by importedDate DESC. */
+export async function listCentralStockOrders({ centralWarehouseId, vendorId, status } = {}) {
+  const clauses = [];
+  if (centralWarehouseId) clauses.push(where('centralWarehouseId', '==', String(centralWarehouseId)));
+  if (vendorId) clauses.push(where('vendorId', '==', String(vendorId)));
+  if (status) clauses.push(where('status', '==', String(status)));
+  const q = clauses.length ? query(centralStockOrdersCol(), ...clauses) : centralStockOrdersCol();
+  const snap = await getDocs(q);
+  const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  orders.sort((a, b) => (b.importedDate || '').localeCompare(a.importedDate || ''));
+  return orders;
 }
 
 // ─── Stock Adjustment ───────────────────────────────────────────────────────

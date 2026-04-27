@@ -1,0 +1,479 @@
+// ─── CentralStockOrderPanel — Phase 15.2 (vendor → central PO) ──────────────
+// List + create + receive + cancel for be_central_stock_orders.
+//
+// Mirrors OrderPanel.jsx (branch tier) shape but keyed to centralWarehouseId.
+// On receive, batches are minted in be_stock_batches with locationType='central'
+// + the IMPORT movement carries linkedCentralOrderId (so listStockMovements
+// can filter central activity vs branch activity).
+//
+// Iron-clad:
+//   E    no brokerClient — Firestore-only
+//   H    no ProClinic sync
+//   I    flow-simulate test in tests/phase15.2-* covers all paths
+//   C2   no Math.random for IDs (server-side via generateCentralOrderId)
+//   V14  validator strips undefined; setDoc is V14-safe
+//   V31  no silent-swallow — every alert classifies the error
+
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  ShoppingBag, Plus, Loader2, AlertCircle, CheckCircle2, ArrowLeft, X,
+  PackageCheck, XCircle, Search,
+} from 'lucide-react';
+import {
+  listCentralStockOrders, createCentralStockOrder,
+  receiveCentralStockOrder, cancelCentralStockOrder,
+  listVendors, listProducts,
+} from '../../lib/backendClient.js';
+import { auth } from '../../firebase.js';
+import { thaiTodayISO } from '../../utils.js';
+import { fmtMoney } from '../../lib/financeUtils.js';
+import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+import {
+  validateCentralStockOrder,
+  emptyCentralStockOrderForm,
+  normalizeCentralStockOrder,
+} from '../../lib/centralStockOrderValidation.js';
+import DateField from '../DateField.jsx';
+
+function currentAuditUser() {
+  const u = auth.currentUser;
+  return {
+    userId: u?.uid || '',
+    userName: u?.email?.split('@')[0] || u?.displayName || '',
+  };
+}
+
+function fmtQty(n) {
+  return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+}
+const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
+
+const STATUS_INFO = {
+  pending: { label: 'รอรับ', color: 'amber' },
+  partial: { label: 'รับบางส่วน', color: 'sky' },
+  received: { label: 'รับครบ', color: 'emerald' },
+  cancelled: { label: 'ยกเลิก', color: 'red' },
+  cancelled_post_receive: { label: 'ยกเลิก (หลังรับ)', color: 'red' },
+};
+const STATUS_BADGE = {
+  amber: 'bg-orange-900/30 text-orange-400 border-orange-800',
+  sky: 'bg-sky-900/30 text-sky-400 border-sky-800',
+  emerald: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
+  red: 'bg-red-900/30 text-red-400 border-red-800',
+};
+
+export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [mastersLoading, setMastersLoading] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const loadOrders = useCallback(async () => {
+    if (!centralWarehouseId) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      setOrders(await listCentralStockOrders({ centralWarehouseId }));
+    } catch (e) {
+      console.error('[CentralStockOrderPanel] load orders failed:', e);
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [centralWarehouseId]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  const loadMasters = useCallback(async () => {
+    setMastersLoading(true);
+    try {
+      const [v, p] = await Promise.all([
+        listVendors({ activeOnly: true }),
+        listProducts(),
+      ]);
+      setVendors(Array.isArray(v) ? v : []);
+      setProducts(Array.isArray(p) ? p : []);
+    } catch (e) {
+      console.error('[CentralStockOrderPanel] masters load failed:', e);
+    } finally {
+      setMastersLoading(false);
+    }
+  }, []);
+
+  const openCreate = () => {
+    loadMasters();
+    setFormOpen(true);
+  };
+
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return orders;
+    const q = search.toLowerCase();
+    return orders.filter(o =>
+      (o.vendorName || '').toLowerCase().includes(q) ||
+      (o.orderId || '').toLowerCase().includes(q)
+    );
+  }, [orders, search]);
+
+  const handleReceive = async (order) => {
+    const remaining = (order.items || []).filter(it => !it.receivedBatchId);
+    if (remaining.length === 0) {
+      alert('ทุกรายการรับครบแล้ว');
+      return;
+    }
+    const msg = `รับสินค้า ${remaining.length} รายการสำหรับ ${order.orderId}?\nระบบจะสร้าง batch ใน be_stock_batches + IMPORT movement ในคลังกลาง`;
+    if (!confirm(msg)) return;
+    try {
+      const receipts = remaining.map(it => ({
+        centralOrderProductId: it.centralOrderProductId,
+        qty: it.qty,
+      }));
+      await receiveCentralStockOrder(order.orderId, receipts, { user: currentAuditUser() });
+      await loadOrders();
+    } catch (e) {
+      alert(`รับสินค้าไม่สำเร็จ: ${e.message}`);
+    }
+  };
+
+  const handleCancel = async (order) => {
+    const isPostReceive = order.status === 'partial' || order.status === 'received';
+    const warning = isPostReceive
+      ? '\nสินค้าบาง batch อาจถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) — ระบบจะบล็อกถ้ามี non-import movement'
+      : '';
+    const reason = prompt(`เหตุผลการยกเลิก ${order.orderId}:${warning}\n(ไม่บังคับ)`);
+    if (reason === null) return;
+    try {
+      await cancelCentralStockOrder(order.orderId, { reason, user: currentAuditUser() });
+      await loadOrders();
+    } catch (e) {
+      alert(`ยกเลิกไม่สำเร็จ: ${e.message}`);
+    }
+  };
+
+  if (formOpen) {
+    return (
+      <CentralOrderCreateForm
+        centralWarehouseId={centralWarehouseId}
+        vendors={vendors}
+        products={products}
+        mastersLoading={mastersLoading}
+        onClose={() => setFormOpen(false)}
+        onSaved={async () => { setFormOpen(false); await loadOrders(); }}
+      />
+    );
+  }
+
+  if (!centralWarehouseId) {
+    return (
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)]">
+        <ShoppingBag size={32} className="mx-auto text-[var(--tx-muted)] mb-2" />
+        <p className="text-xs text-[var(--tx-muted)]">เลือกคลังกลางก่อน</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-orange-900/30 border border-orange-800">
+            <ShoppingBag size={22} className="text-orange-400" />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <h2 className="text-lg font-bold text-[var(--tx-heading)]">นำเข้าจาก Vendor (Central PO)</h2>
+            <p className="text-xs text-[var(--tx-muted)]">{orders.length} ใบสั่งซื้อ — รับสินค้า → batches ในคลังกลาง + IMPORT movement</p>
+          </div>
+          <div className="flex-1 relative min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาเลขที่/vendor..."
+              className="w-full pl-9 pr-3 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+          </div>
+          <button onClick={openCreate}
+            className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 flex items-center gap-1.5">
+            <Plus size={14} /> สร้าง PO
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">
+          <Loader2 size={16} className="animate-spin mr-2" /> กำลังโหลด...
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)]">
+          <ShoppingBag size={32} className="mx-auto text-[var(--tx-muted)] mb-2" />
+          <p className="text-xs text-[var(--tx-muted)]">
+            {orders.length === 0 ? 'ยังไม่มีใบสั่งซื้อ — กด "สร้าง PO" เพื่อเริ่ม' : 'ไม่พบใบสั่งซื้อตามเงื่อนไข'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-[var(--bg-surface)] rounded-2xl overflow-x-auto shadow-lg border border-[var(--bd)]">
+          <table className="w-full text-xs min-w-[900px]">
+            <thead className="bg-[var(--bg-hover)] text-[var(--tx-muted)] uppercase tracking-wider">
+              <tr>
+                <th className="px-3 py-2 text-left font-bold">เลขที่</th>
+                <th className="px-3 py-2 text-left font-bold">วันที่</th>
+                <th className="px-3 py-2 text-left font-bold">Vendor</th>
+                <th className="px-3 py-2 text-center font-bold">รายการ</th>
+                <th className="px-3 py-2 text-right font-bold">ส่วนลด</th>
+                <th className="px-3 py-2 text-center font-bold">สถานะ</th>
+                <th className="px-3 py-2 text-right font-bold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.map(o => {
+                const info = STATUS_INFO[o.status] || { label: o.status, color: 'amber' };
+                const canReceive = o.status === 'pending' || o.status === 'partial';
+                const canCancel = o.status !== 'cancelled' && o.status !== 'cancelled_post_receive';
+                return (
+                  <tr key={o.orderId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                    <td className="px-3 py-2 font-mono text-orange-400" data-testid="cpo-row-id">{o.orderId}</td>
+                    <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(o.importedDate || o.createdAt)}</td>
+                    <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">{o.vendorName || o.vendorId}</td>
+                    <td className="px-3 py-2 text-center">{(o.items || []).length}</td>
+                    <td className="px-3 py-2 text-right text-[var(--tx-muted)]">
+                      {Number(o.discount) > 0 ? `${fmtMoney(o.discount)} ${o.discountType === 'percent' ? '%' : '฿'}` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`} data-testid="cpo-status-badge">
+                        {info.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {canReceive && (
+                        <button onClick={() => handleReceive(o)}
+                          className="px-2 py-1 rounded text-[10px] bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-800 inline-flex items-center gap-1 mr-1"
+                          data-testid="cpo-receive-btn">
+                          <PackageCheck size={10} /> รับ
+                        </button>
+                      )}
+                      {canCancel && (
+                        <button onClick={() => handleCancel(o)}
+                          className="px-2 py-1 rounded text-[10px] bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-800 inline-flex items-center gap-1"
+                          data-testid="cpo-cancel-btn">
+                          <XCircle size={10} /> ยกเลิก
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CentralOrderCreateForm({ centralWarehouseId, vendors, products, mastersLoading, onClose, onSaved }) {
+  const [form, setForm] = useState(() => ({
+    ...emptyCentralStockOrderForm(),
+    centralWarehouseId,
+    importedDate: thaiTodayISO(),
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const updateField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+  const updateItem = (idx, patch) => setForm(prev => ({
+    ...prev,
+    items: prev.items.map((it, i) => i === idx ? { ...it, ...patch } : it),
+  }));
+  const addItem = () => setForm(prev => ({
+    ...prev,
+    items: [...prev.items, { productId: '', productName: '', qty: '', cost: '', expiresAt: '', unit: '', isPremium: false }],
+  }));
+  const removeItem = (idx) => setForm(prev => ({
+    ...prev,
+    items: prev.items.length === 1 ? prev.items : prev.items.filter((_, i) => i !== idx),
+  }));
+
+  // Auto-fill productName + unit + cost when product is picked.
+  const onPickProduct = (idx, productId) => {
+    const p = products.find(x => x.id === productId || x.productId === productId);
+    updateItem(idx, {
+      productId,
+      productName: p?.productName || p?.name || '',
+      unit: p?.mainUnitName || p?.unit || '',
+      cost: p?.cost ?? p?.price ?? '',
+    });
+  };
+
+  // Auto-fill vendorName when vendor picked.
+  const onPickVendor = (vendorId) => {
+    const v = vendors.find(x => x.vendorId === vendorId || x.id === vendorId);
+    setForm(prev => ({
+      ...prev,
+      vendorId,
+      vendorName: v?.name || prev.vendorName,
+    }));
+  };
+
+  const validItems = form.items.filter(it => String(it.productId).trim() && Number(it.qty) > 0);
+  const canSave = !!(form.centralWarehouseId && form.vendorId && validItems.length > 0);
+
+  const handleSave = async () => {
+    setError('');
+    const err = validateCentralStockOrder(form);
+    if (err) {
+      setError(err[1] || 'ข้อมูลไม่ถูกต้อง');
+      return;
+    }
+    setSaving(true);
+    try {
+      const normalized = normalizeCentralStockOrder(form);
+      await createCentralStockOrder(normalized, { user: currentAuditUser() });
+      setSuccess(true);
+      setTimeout(onSaved, 500);
+    } catch (e) {
+      setError(e.message);
+      setSaving(false);
+    }
+  };
+
+  const inputCls = `w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]`;
+  const labelCls = 'block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 bg-[var(--bg-surface)] rounded-2xl p-4 shadow-lg border border-[var(--bd)]">
+        <button onClick={onClose}
+          className="px-3 py-2 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] border border-[var(--bd)] flex items-center gap-1.5">
+          <ArrowLeft size={14} /> กลับ
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-[var(--tx-heading)]">สร้าง Central PO</h2>
+          <p className="text-xs text-[var(--tx-muted)]">vendor → คลังกลาง — สถานะเริ่มที่ pending จนกว่าจะกด "รับ"</p>
+        </div>
+        <button onClick={handleSave} disabled={!canSave || saving}
+          className="px-5 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 disabled:opacity-40 flex items-center gap-1.5"
+          data-testid="cpo-save-btn">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <CheckCircle2 size={14} /> : <Plus size={14} />}
+          {saving ? 'กำลังบันทึก' : success ? 'สำเร็จ' : 'สร้าง'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-950/40 border border-red-800 rounded-lg p-3 text-xs text-red-400 flex items-start gap-2">
+          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" /> {error}
+        </div>
+      )}
+
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg border border-[var(--bd)] space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className={labelCls}>Vendor *</label>
+            <select value={form.vendorId} onChange={e => onPickVendor(e.target.value)} className={inputCls} data-testid="cpo-vendor-select">
+              <option value="">— เลือก vendor —</option>
+              {vendors.map(v => (
+                <option key={v.vendorId || v.id} value={v.vendorId || v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>วันที่นำเข้า *</label>
+            <DateField value={form.importedDate} onChange={(v) => updateField('importedDate', v)} />
+          </div>
+          <div>
+            <label className={labelCls}>หมายเหตุ</label>
+            <input type="text" value={form.note} onChange={e => updateField('note', e.target.value)}
+              className={inputCls} placeholder="เช่น ครบ ครั้งที่ 1" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className={labelCls}>ส่วนลด</label>
+            <input type="number" min="0" step="0.01" value={form.discount}
+              onChange={e => updateField('discount', e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>ประเภทส่วนลด</label>
+            <select value={form.discountType} onChange={e => updateField('discountType', e.target.value)} className={inputCls}>
+              <option value="amount">บาท</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg border border-[var(--bd)]">
+        <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">รายการสินค้า</h3>
+        {mastersLoading ? (
+          <div className="text-[11px] text-[var(--tx-muted)] flex items-center gap-2">
+            <Loader2 size={12} className="animate-spin" /> โหลด vendors + products...
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse min-w-[700px]">
+                <thead className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)]">
+                  <tr>
+                    <th className="px-2 py-2 w-8">#</th>
+                    <th className="px-2 py-2 text-left font-bold">สินค้า *</th>
+                    <th className="px-2 py-2 text-left font-bold w-20">จำนวน *</th>
+                    <th className="px-2 py-2 text-left font-bold w-20">ต้นทุน *</th>
+                    <th className="px-2 py-2 text-left font-bold w-32">หมดอายุ</th>
+                    <th className="px-2 py-2 text-left font-bold w-16">หน่วย</th>
+                    <th className="px-2 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((it, idx) => (
+                    <tr key={idx} className="border-t border-[var(--bd)]">
+                      <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
+                      <td className="px-2 py-2">
+                        <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)}
+                          className={inputCls} data-testid={`cpo-product-${idx}`}>
+                          <option value="">— เลือกสินค้า —</option>
+                          {products.map(p => (
+                            <option key={p.id || p.productId} value={p.id || p.productId}>
+                              {p.productName || p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min="0" step="0.01" value={it.qty}
+                          onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min="0" step="0.01" value={it.cost}
+                          onChange={e => updateItem(idx, { cost: e.target.value })} className={inputCls} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <DateField value={it.expiresAt} onChange={(v) => updateItem(idx, { expiresAt: v })} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="text" value={it.unit}
+                          onChange={e => updateItem(idx, { unit: e.target.value })} className={inputCls} />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <button onClick={() => removeItem(idx)} disabled={form.items.length === 1}
+                          className="p-1 rounded text-[var(--tx-muted)] hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed">
+                          <X size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={addItem}
+              className="mt-3 px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-orange-400 border border-[var(--bd)] hover:border-orange-700 flex items-center gap-1.5"
+              data-testid="cpo-add-item-btn">
+              <Plus size={12} /> เพิ่มรายการ
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
