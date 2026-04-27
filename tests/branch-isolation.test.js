@@ -126,7 +126,7 @@ describe('BR3: SaleTab + 4 stock panels + TreatmentFormPage source branchId from
     // Phase 15.1 — branchIdOverride introduced; the destructure was renamed to
     // ctxBranchId so the override can take precedence. Either alias is fine —
     // the contract is "no hardcoded 'main' literal".
-    expect(src).toMatch(/const\s*\{\s*branchId:\s*(BRANCH_ID|ctxBranchId)\s*\}\s*=\s*useSelectedBranch\(\)/);
+    expect(src).toMatch(/const\s*\{\s*branchId:\s*(BRANCH_ID|ctxBranchId)(?:\s*,\s*\w+)*\s*\}\s*=\s*useSelectedBranch\(\)/);
     expect(src).not.toMatch(/^const BRANCH_ID = 'main';/m);
   });
 
@@ -143,7 +143,7 @@ describe('BR3: SaleTab + 4 stock panels + TreatmentFormPage source branchId from
     // Phase 15.3 — branchIdOverride introduced; destructure renamed to
     // ctxBranchId so override can take precedence. Either alias is fine —
     // contract: "no hardcoded 'main' literal" (mirrors BR3.2 fix).
-    expect(src).toMatch(/const\s*\{\s*branchId:\s*(BRANCH_ID|ctxBranchId)\s*\}\s*=\s*useSelectedBranch\(\)/);
+    expect(src).toMatch(/const\s*\{\s*branchId:\s*(BRANCH_ID|ctxBranchId)(?:\s*,\s*\w+)*\s*\}\s*=\s*useSelectedBranch\(\)/);
     expect(src).not.toMatch(/^const BRANCH_ID = 'main';/m);
   });
 

@@ -43,8 +43,10 @@ describe('Phase 15.3 F1 — StockAdjustPanel branchIdOverride prop', () => {
   });
 
   it('F1.2 destructure renamed to ctxBranchId; BRANCH_ID = override || ctx', () => {
+    // Phase 15.4 post-deploy bug 3 — extension allows co-destructure of
+    // `branches` (passed to AdjustDetailModal for branch-name resolution).
     expect(adjustPanelSrc).toMatch(
-      /const\s*\{\s*branchId:\s*ctxBranchId\s*\}\s*=\s*useSelectedBranch\(\)/
+      /const\s*\{\s*branchId:\s*ctxBranchId(?:\s*,\s*\w+)*\s*\}\s*=\s*useSelectedBranch\(\)/
     );
     expect(adjustPanelSrc).toMatch(
       /const\s+BRANCH_ID\s*=\s*branchIdOverride\s*\|\|\s*ctxBranchId/
