@@ -230,7 +230,9 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
     setBatchesLoading(true);
     (async () => {
       try {
-        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active' });
+        // Phase 15.4 (s19 item 2) — includeLegacyMain so pre-V20 batches
+        // (written with branchId='main') still surface in picker until admin migrates.
+        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active', includeLegacyMain: true });
         if (!cancelled) {
           setBatches(list);
           // auto-pick first available batch

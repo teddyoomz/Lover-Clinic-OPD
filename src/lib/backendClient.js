@@ -3851,16 +3851,47 @@ export async function getStockBatch(batchId) {
  * List batches for a product at a branch. Caller filters by status as needed.
  * Returns sorted by receivedAt ASC (so batchFifoAllocate can consume).
  */
-export async function listStockBatches({ productId, branchId, status } = {}) {
-  const clauses = [];
-  if (productId) clauses.push(where('productId', '==', String(productId)));
-  if (branchId) clauses.push(where('branchId', '==', String(branchId)));
-  if (status) clauses.push(where('status', '==', String(status)));
-  const q = clauses.length
-    ? query(stockBatchesCol(), ...clauses)
-    : stockBatchesCol();
-  const snap = await getDocs(q);
-  const batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+export async function listStockBatches({ productId, branchId, status, includeLegacyMain = false } = {}) {
+  // Phase 15.4 (s19 item 2) — `includeLegacyMain` opt-in fallback.
+  // Pre-V20 multi-branch data was written with branchId='main'. After V20
+  // BranchContext returns BR-XXX. Calls with branchId='BR-XXX' filtered out
+  // legacy batches → user reported "ปรับสต็อคไม่ได้ ติด Batch / Lot เลือกไม่ได้".
+  // Stock create forms (Adjust/Transfer/Withdrawal) opt in via this flag so
+  // user can still pick legacy batches until admin runs a migration. Default
+  // false keeps non-create callers strict.
+  const buildClauses = (bid) => {
+    const cs = [];
+    if (productId) cs.push(where('productId', '==', String(productId)));
+    if (bid) cs.push(where('branchId', '==', String(bid)));
+    if (status) cs.push(where('status', '==', String(status)));
+    return cs;
+  };
+
+  let batches = [];
+  if (includeLegacyMain && branchId && String(branchId) !== 'main') {
+    const [s1, s2] = await Promise.all([
+      getDocs(query(stockBatchesCol(), ...buildClauses(branchId))),
+      // V31 no-silent-swallow: log + return empty so primary results still surface.
+      getDocs(query(stockBatchesCol(), ...buildClauses('main'))).catch((e) => {
+        console.warn('[listStockBatches] legacy-main fallback query failed:', e?.message || e);
+        return { docs: [] };
+      }),
+    ]);
+    const seen = new Set();
+    for (const d of [...s1.docs, ...s2.docs]) {
+      const data = { id: d.id, ...d.data() };
+      const bid = data.batchId || d.id;
+      if (seen.has(bid)) continue;
+      seen.add(bid);
+      batches.push(data);
+    }
+  } else {
+    const clauses = buildClauses(branchId);
+    const q = clauses.length ? query(stockBatchesCol(), ...clauses) : stockBatchesCol();
+    const snap = await getDocs(q);
+    batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
   batches.sort((a, b) => (a.receivedAt || '').localeCompare(b.receivedAt || ''));
   return batches;
 }

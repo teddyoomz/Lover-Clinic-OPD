@@ -259,7 +259,8 @@ function WithdrawalCreateForm({ locations, sellers, sellersLoading, onClose, onS
     setBatchesLoading(true);
     (async () => {
       try {
-        const list = await listStockBatches({ branchId: src, status: 'active' });
+        // Phase 15.4 (s19 item 2) — includeLegacyMain for pre-V20 batches.
+        const list = await listStockBatches({ branchId: src, status: 'active', includeLegacyMain: true });
         if (!cancelled) setBatches(list);
       } catch { if (!cancelled) setBatches([]); }
       finally { if (!cancelled) setBatchesLoading(false); }
