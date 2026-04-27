@@ -3894,19 +3894,69 @@ export async function listStockOrders({ branchId, status } = {}) {
  *          type, includeReversed (default false — hide already-reversed entries)
  */
 export async function listStockMovements(filters = {}) {
-  const clauses = [];
+  // Phase 15.4 (s19 items 3+4) — multi-branch visibility.
+  //
+  // Transfer/withdrawal movements span TWO branches (source + destination):
+  //   - EXPORT_TRANSFER (type 8): branchId = source
+  //   - RECEIVE (type 9): branchId = destination
+  //   - EXPORT_WITHDRAWAL (type 10): branchId = source
+  //   - WITHDRAWAL_CONFIRM (type 13): branchId = destination
+  //
+  // Old behaviour: filter `where('branchId', '==', X)` returned ONLY the side
+  // whose branchId matched. Result: at branch BR-A's stock-tab MovementLog,
+  // a transfer FROM central → BR-A showed nothing until "รับ" was clicked
+  // (RECEIVE only fires at status 1→2). User reported as bug.
+  //
+  // Fix: writer also sets `branchIds: [src, dst]` on those 4 movement types.
+  // Reader does dual-query when branchId filter is set:
+  //   Q1: where('branchId', '==', X)            — legacy + single-branch
+  //   Q2: where('branchIds', 'array-contains', X) — new cross-branch
+  // Merge + dedupe by movementId. Old movements (no branchIds[]) still match Q1.
+
   const mapFields = [
     'linkedSaleId', 'linkedTreatmentId', 'linkedOrderId', 'linkedCentralOrderId',
     'linkedAdjustId', 'linkedTransferId', 'linkedWithdrawalId',
-    'batchId', 'productId', 'branchId',
+    'batchId', 'productId',
   ];
-  for (const f of mapFields) {
-    if (filters[f] != null) clauses.push(where(f, '==', String(filters[f])));
+
+  function commonClauses() {
+    const cs = [];
+    for (const f of mapFields) {
+      if (filters[f] != null) cs.push(where(f, '==', String(filters[f])));
+    }
+    if (filters.type != null) cs.push(where('type', '==', Number(filters.type)));
+    return cs;
   }
-  if (filters.type != null) clauses.push(where('type', '==', Number(filters.type)));
-  const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
-  const snap = await getDocs(q);
-  let mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  let mvts = [];
+  if (filters.branchId != null) {
+    const branchIdStr = String(filters.branchId);
+    const q1 = query(stockMovementsCol(), ...commonClauses(), where('branchId', '==', branchIdStr));
+    const q2 = query(stockMovementsCol(), ...commonClauses(), where('branchIds', 'array-contains', branchIdStr));
+    const [s1, s2] = await Promise.all([
+      getDocs(q1),
+      // Q2 may fail if Firestore lacks the composite index (auto-created on
+      // first run; subsequent calls work). Soft-fail to Q1 results only.
+      getDocs(q2).catch((e) => {
+        console.warn('[listStockMovements] branchIds array-contains query failed (composite index?):', e?.message || e);
+        return { docs: [] };
+      }),
+    ]);
+    const seen = new Set();
+    for (const d of [...s1.docs, ...s2.docs]) {
+      const data = { id: d.id, ...d.data() };
+      const mid = data.movementId || d.id;
+      if (seen.has(mid)) continue;
+      seen.add(mid);
+      mvts.push(data);
+    }
+  } else {
+    const clauses = commonClauses();
+    const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
+    const snap = await getDocs(q);
+    mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
   if (!filters.includeReversed) {
     // Hide both sides of a reversed pair: the original (reversedByMovementId set)
     // AND the compensating reverse entry (reverseOf set). Default view = live, un-reversed activity only.
@@ -5623,6 +5673,10 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
         before,
         after: newQty.remaining,
         branchId: b.branchId,
+        // Phase 15.4 (s19 items 3+4) — multi-branch visibility:
+        // both source + destination branches see this movement via
+        // listStockMovements({branchId}) array-contains query.
+        branchIds: [b.branchId, cur.destinationLocationId].filter(Boolean),
         sourceDocPath: docPath,
         linkedTransferId: transferId,
         revenueImpact: null,
@@ -5669,6 +5723,9 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       before: 0,
       after: item.qty,
       branchId: cur.destinationLocationId,
+      // Phase 15.4 (s19 items 3+4) — multi-branch visibility:
+      // both source + destination see this RECEIVE movement.
+      branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
       sourceDocPath: docPath,
       linkedTransferId: transferId,
       revenueImpact: null,
@@ -5879,6 +5936,8 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
         before,
         after: newQty.remaining,
         branchId: b.branchId,
+        // Phase 15.4 (s19 items 3+4) — multi-branch visibility.
+        branchIds: [b.branchId, cur.destinationLocationId].filter(Boolean),
         sourceDocPath: docPath,
         linkedWithdrawalId: withdrawalId,
         revenueImpact: null,
@@ -5921,6 +5980,8 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       before: 0,
       after: item.qty,
       branchId: cur.destinationLocationId,
+      // Phase 15.4 (s19 items 3+4) — multi-branch visibility.
+      branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
       sourceDocPath: docPath,
       linkedWithdrawalId: withdrawalId,
       revenueImpact: null,

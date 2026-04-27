@@ -40,6 +40,10 @@ const TYPE_LABELS = {
   12: { label: 'เบิก (request)', color: 'purple', group: 'withdrawal' },
   13: { label: 'เบิก (confirm)', color: 'purple', group: 'withdrawal' },
   14: { label: 'ยกเลิกนำเข้า', color: 'red', group: 'cancel' },
+  // Phase 15.4 (s19) — admin approval/rejection of withdrawal requests
+  // (audit-only; no stock change — emitted from updateStockWithdrawalStatus).
+  15: { label: 'อนุมัติเบิก', color: 'emerald', group: 'withdrawal' },
+  16: { label: 'ปฏิเสธเบิก', color: 'red', group: 'withdrawal' },
 };
 
 // Filter groups: mimic ProClinic multi-type filter
@@ -52,7 +56,7 @@ const TYPE_GROUPS = [
   { id: 'treatment', label: 'รักษา', types: [6, 7] },
   { id: 'export', label: 'ส่งออก', types: [8, 10] },
   { id: 'receive', label: 'รับเข้า', types: [9] },
-  { id: 'withdrawal', label: 'เบิก', types: [12, 13] },
+  { id: 'withdrawal', label: 'เบิก', types: [12, 13, 15, 16] },
 ];
 
 const fmtDate = fmtSlashDateTime;
