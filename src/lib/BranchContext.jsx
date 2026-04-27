@@ -138,3 +138,38 @@ export function resetBranchSelection() {
 }
 
 export const __BRANCH_FALLBACK_ID = FALLBACK_ID;
+
+/**
+ * Resolve a human-readable branch name from a branch id.
+ *
+ * V22 pattern (2026-04-26 user lock: "ทุกที่แสดงชื่อ ... เป็น text ไม่ใช่
+ * ตัวเลข"). User report 2026-04-27: "สาขา BR-1777095572005-ae97f911 เป็นโค๊ด
+ * อ่านไม่รู้เรื่อง ต้องการชื่อสาขาแบบมนุษย์อ่านรู้เรื่อง". Helper centralizes
+ * the lookup so future render paths can't accidentally leak the raw id.
+ *
+ * Lookup chain:
+ *   1. branches[].name (canonical from be_branches)
+ *   2. branches[].nameEn (English fallback if Thai missing)
+ *   3. ''  ← V22 contract: caller decides UI placeholder ('สาขาหลัก' / '-')
+ *
+ * Returns empty string when branchId is empty/falsy OR when the branch
+ * isn't loaded yet (BranchProvider hasn't fired its onSnapshot). Caller
+ * should guard accordingly OR pass `'main'` semantic fallback.
+ *
+ * @param {string} branchId
+ * @param {Array<{id, branchId?, name?, nameEn?}>} branches
+ * @returns {string}
+ */
+export function resolveBranchName(branchId, branches) {
+  if (branchId == null || branchId === '') return '';
+  if (!Array.isArray(branches) || branches.length === 0) return '';
+  const idStr = String(branchId);
+  const match = branches.find((b) => {
+    if (!b) return false;
+    return String(b.branchId || b.id) === idStr;
+  });
+  if (!match) return '';
+  if (typeof match.name === 'string' && match.name.trim()) return match.name.trim();
+  if (typeof match.nameEn === 'string' && match.nameEn.trim()) return match.nameEn.trim();
+  return '';
+}

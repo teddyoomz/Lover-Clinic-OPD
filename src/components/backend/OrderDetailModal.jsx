@@ -13,6 +13,7 @@ import {
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 import { fmtMoney } from '../../lib/financeUtils.js';
+import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -26,6 +27,11 @@ function currentAuditUser() {
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function OrderDetailModal({ orderId, onClose, onSaved }) {
+  // 2026-04-27 fix — branch list for human-readable name lookup.
+  // Pre-fix the modal rendered `order.branchId` raw → user saw codes like
+  // "BR-1777095572005-ae97f911" which are unreadable. resolveBranchName
+  // looks up the branch name from be_branches via BranchProvider.
+  const { branches } = useSelectedBranch();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -203,7 +209,9 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">สาขา</div>
-                <div className="text-sm text-[var(--tx-primary)]">{order.branchId || '-'}</div>
+                <div className="text-sm text-[var(--tx-primary)]" data-testid="order-detail-branch-name">
+                  {resolveBranchName(order.branchId, branches) || (order.branchId === 'main' ? 'สาขาหลัก' : '-')}
+                </div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold mb-1">ยอดรวม</div>
