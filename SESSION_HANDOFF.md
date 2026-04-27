@@ -7,19 +7,56 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 18 — Phase 15.1+15.2+15.3 + 5 bug fixes (9 commits, NOT deployed)
+- **Date last updated**: 2026-04-27 session 19 — Phase 15.4 polish — 7-item triage SHIPPED (7 commits, NOT deployed)
 - **Branch**: `master`
-- **Last commit**: `1066711 feat(stock): actor tracking — every state-flip records ผู้ทำรายการ`
-- **Test count**: **1905** focused (+310 since s17: 1595 → 1905)
-- **Build**: clean. BackendDashboard chunk 924 KB (≈ unchanged — CentralStockTab lazy-loaded)
-- **Deploy state**: ⏳ **PRODUCTION = `75bbc38`** (V33.10 LIVE) · master 9 commits ahead, awaiting V15 combined deploy
-  - Phase 15.2 has firestore.rules update (`be_central_stock_orders` + counter blocks) → Probe-Deploy-Probe + extend probe list 6→8 endpoints required
-  - Vercel + Firestore rules: NOT YET deployed for s18 work
+- **Last commit**: `26ee312 fix(stock): Phase 15.4 — batch picker legacy-main fallback (item 2)`
+- **Test count**: **2123** focused (+218 since s18: 1905 → 2123)
+- **Build**: clean. BackendDashboard chunk ≈ 924 KB (unchanged)
+- **Deploy state**: ⏳ **PRODUCTION = `75bbc38`** (V33.10 LIVE) · master **17 commits ahead** (10 s18 + 7 s19), awaiting V15 combined deploy
+  - Phase 15.2 (s18) has firestore.rules update (`be_central_stock_orders` + counter blocks) → Probe-Deploy-Probe + extend probe list 6→8 endpoints required
+  - Phase 15.4 (s19) is data-shape + dual-query only — no new rules, but Probe still mandatory per Rule B
   - User chose strict rule discipline: deploy requires explicit "deploy" THIS turn (V18)
 - **Rule B probe list permanent**: 6 positive + 3 negative (extends to 8 positive + 4 negative on next deploy)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16 (next deploy bumps to 17 — central stock orders)
+
+### Session 2026-04-27 session 19 (7 commits, `0792359` → `26ee312`) — Phase 15.4 polish — 7 user-EOD items SHIPPED
+
+User pasted refined 7-item list at start of s19 ("ทำภายใต้กฎของเราอย่างเคร่งครัด").
+All 7 mapped 1:1 to commits. Tests 1905 → 2123 (+218). NOT deployed.
+
+**7 commits**:
+```
+0792359 — Phase A.1 extract UnitField + getUnitOptionsForProduct (+40 tests)
+84ce7b0 — Phase A.2 shared Pagination + usePagination hook (+37 tests)
+541ad0b — Phase B  pagination 20/page across 6 panels — item 1 (+44 tests)
+3bf01c2 — Phase C  transfer + withdrawal 3-role split — items 5+6 (+35 tests)
+95336a5 — Phase D  auto-show unit on batch row across 4 forms — item 7 (+23 tests)
+94626c8 — Phase E  movement log cross-branch visibility — items 3+4 (+23 tests)
+26ee312 — Phase F  batch picker legacy-main fallback — item 2 (+16 tests)
+```
+
+**7 items → fix path**:
+1. Pagination 20/page recent-first → shared `usePagination` + `<Pagination>` + 6-panel rollout
+2. Batch picker bug → `listStockBatches` opt-in `includeLegacyMain: true` (legacy `branchId='main'` fallback)
+3. Transfer movements not in stock log → writer adds `branchIds: [src, dst]`; reader dual-queries
+4. Withdrawal movements not in stock log → same as 3
+5. Transfer detail modal needs ผู้สร้าง+ผู้ส่ง+ผู้รับ → schema +4 fields (dispatchedByUser/At + receivedByUser/At)
+6. Withdrawal detail modal 3 roles → schema +4 fields (approvedByUser/At + receivedByUser/At)
+7. Auto-show unit on batch row → CentralPO smart UnitField; Adjust/Transfer/Withdrawal read-only unit cell
+
+**Pre-rollout extracts (Rule C1 Rule of 3)**: UnitField + Pagination both extracted to shared modules before being applied across all consumers. OrderPanel migrated; other panels reuse.
+
+**V14 lock everywhere**: `_normalizeAuditUser` for actor fields, `.filter(Boolean)` for branchIds[], no undefined leaves to setDoc.
+
+**V31 no-silent-swallow**: composite-index soft-fails (dual-query Q2) use `console.warn` not silent.
+
+**V21 anti-regression**: every new test file pairs source-grep guards with NEW pattern assertion (not OLD locked-in). One earlier test (`order-panel-branch-id-and-unit-dropdown.test.js` O3.5-.8) flipped from "function UnitField inline" to "import from ./UnitField.jsx" per V21 lesson.
+
+Detail: `.agents/sessions/2026-04-27-session19-phase15.4-7-items.md`
+
+
 
 ### Session 2026-04-27 session 18 (9 commits, `dba27ad` → `1066711`) — Phase 15.1-15.3 + 5 bug fixes + actor tracking
 
@@ -534,29 +571,30 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s18 EOD.
+Resume LoverClinic — continue from 2026-04-27 s19 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=1066711, prod=75bbc38 — 9 commits unpushed-to-prod)
-3. .agents/active.md (1905 focused tests pass; 7 outstanding items queued)
+2. SESSION_HANDOFF.md (master=26ee312, prod=75bbc38 — 17 commits unpushed-to-prod)
+3. .agents/active.md (2123 tests pass; Phase 15.4 7-items SHIPPED)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-27-session18-phase15-1-2-3-plus-fixes.md
+5. .agents/sessions/2026-04-27-session19-phase15.4-7-items.md
 
-Status: master=1066711, 1905/1905 tests pass, prod=75bbc38 LIVE (V33.10)
-Phase 15.1+15.2+15.3 + 5 bug fixes + actor tracking shipped this session — NOT deployed.
+Status: master=26ee312, 2123/2123 tests pass, prod=75bbc38 LIVE (V33.10 baseline)
+Phase 15.4 — all 7 user-EOD items shipped this session (pagination · batch
+picker · 2× movement log visibility · 2× detail modal 3-roles · auto-unit)
+— NOT deployed.
 
-Next: triage 7 user-reported items (verbatim from s18 EOD message):
-  1. Pagination 20/page recent-first — all stock+central tabs
-  2. ปรับสต็อค Batch/Lot dropdown เลือกไม่ได้ (likely legacy branchId='main' mismatch)
-  3+4. Transfer/Withdrawal movements not in Stock Movement Log (only Central)
-  5. Transfer detail modal needs ผู้สร้าง+ผู้ส่ง+ผู้รับ (3 actor roles)
-  6. Auto-show unit on batch row in Adjust/Transfer/Withdrawal/Central PO (OrderPanel done)
-  7. ActorPicker filter by staff.branchIds[]/doctor.branchIds[] (schema exists)
+Next: Decide V15 combined deploy (17 commits = 10 s18 + 7 s19). Phase 15.2
+(s18) has rules update; Phase 15.4 is shape-only but Probe-Deploy-Probe
+required. Probe list: 6→8 endpoints (`be_central_stock_orders` + counter).
+
+Then ActorPicker branchIds filter (deferred from s19's refined list);
+Phase 15.5 central dispatch + withdrawal approval admin endpoint.
 
 Outstanding (user-triggered):
-  - V15 combined deploy 9 pending commits (Phase 15.2 has rules update — Probe-Deploy-Probe + extend probe list 6→8)
-  - Admin: fill LineSettingsTab credentials + webhook URL · backfill customer IDs · TEST-/E2E- prefix convention
+  - V15 combined deploy 17 pending commits
+  - Admin: fill LineSettingsTab credentials + webhook URL · backfill customer IDs · TEST-/E2E- prefix
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe
 
 /session-start
