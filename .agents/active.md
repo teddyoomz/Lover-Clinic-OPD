@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-27 (s16 — V33.8 zero-remaining filter DEPLOYED)"
-status: "Production = 14396ab LIVE. V33.8 fixes the bot reply leaking consumed (0-remaining) courses + over-counting in '199 รายการ' header. NEW parseRemainingCount + isCourseConsumed pure helpers; both formatCoursesReply + buildCoursesFlex extended with numeric guard on top of status filter."
-current_focus: "Idle. V33.8 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Phase 15 (Central Stock Conditional) prereqs all green; carry-overs surveyed."
+updated_at: "2026-04-27 (s17 — V33.9 orphan QR cleanup + V33.10 prefix enforcement DEPLOYED)"
+status: "Production = 75bbc38 LIVE. V33.9 stripped pre-V33.4 QR-token plumbing (api/admin/customer-link.js + customerLinkClient.js DELETED; generateLinkToken + consumeLinkToken + LINK-<token> regex + LINK_*/LINK_FAIL_* messages + formatLinkSuccess/FailureReply REMOVED; be_customer_link_tokens rule block REMOVED). V33.10 codified TEST-/E2E- prefix enforcement (createTestCustomerId helper + workflow rule note + tests). Live QA runbook ready in .agents/qa/."
+current_focus: "Idle. V33.9 + V33.10 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Phase 15 (Central Stock Conditional) prereqs all green; awaiting user QA pass via .agents/qa/2026-04-27-line-oa-checklist.md + Phase 15 go-ahead."
 branch: "master"
-last_commit: "14396ab"
-tests: 1576
+last_commit: "75bbc38"
+tests: 1595
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "14396ab"
+production_commit: "75bbc38"
 firestore_rules_version: 17
 storage_rules_version: 2
 ---
@@ -14,14 +14,35 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `231b2f5`, **1385** focused vitest pass (~5200 in `tests/extended/` opt-in)
-- Production = `231b2f5` LIVE (vercel `lover-clinic-6mt57qih5` aliased to lover-clinic-app.vercel.app). Firestore rules v17 + storage rules V26 — unchanged since prior deploy.
-- V33.4 + V33.5 V15 combined deploy verified: pre 6/6 + 3/3 negative + post 6/6 + 3/3 negative + cleanup 4/4 + smoke 3/3 (incl. /?customer=LC-26000001 → 200).
+- master = `75bbc38`, **1595** focused vitest pass (~5200 in `tests/extended/` opt-in)
+- Production = `75bbc38` LIVE (vercel `lover-clinic-9p89gvv6h` aliased to lover-clinic-app.vercel.app). Firestore rules v18 (be_customer_link_tokens block REMOVED) + storage rules V26.
+- V33.9 + V33.10 V15 combined deploy verified: pre 6/6 + 3/3 negative + post 6/6 + 3/3 negative + smoke 3/3 (root + /?customer=LC-26000001 + /?backend=1).
 - Working tree clean. Build clean.
 
-## What this session shipped (s15)
-1 commit (`2ff8803`). Detail follows.
+## What this session shipped (s17)
+1 commit (`75bbc38`) — V33.9 + V33.10 + Live QA runbook in one chore commit.
 
+- **V33.9** — Orphan QR-token plumbing cleanup. DELETED:
+  api/admin/customer-link.js + src/lib/customerLinkClient.js. REMOVED:
+  generateLinkToken / consumeLinkToken / intent='link' / LINK regex /
+  LINK_SUCCESS+LINK_FAIL_* messages / formatLinkSuccessReply +
+  formatLinkFailureReply / be_customer_link_tokens rule + matrix entry.
+  PRESERVED V33.4 admin-mediated id-link request flow.
+- **V33.10** — TEST-/E2E- customer ID prefix enforcement.
+  NEW tests/helpers/testCustomer.js (createTestCustomerId +
+  isTestCustomerId + getTestCustomerPrefix + TEST_CUSTOMER_PREFIXES).
+  Workflow rule note in .claude/rules/02-workflow.md.
+- **Live QA runbook** — .agents/qa/2026-04-27-line-oa-checklist.md
+  (structured tick-off for V33.6/V33.7/V33.8/V33.9 mobile verification).
+- Tests: 1576 → 1595 (+19 net; -38 token tests, +57 V33.9/10).
+- V15 combined deploy: pre+post probe 6/6 + 3/3 GREEN; smoke 3/3 = 200.
+- Vercel: lover-clinic-9p89gvv6h aliased; firestore.rules v18.
+
+## What s16 shipped (prior)
+1 commit (`14396ab`) — V33.8 zero-remaining filter (parseRemainingCount +
+isCourseConsumed; both formatCoursesReply + buildCoursesFlex extended).
+
+## What s15 shipped (prior)
 - **V33.7** (`2ff8803`) — TH/EN i18n + full-date + admin language toggle.
   - 3 user directives: full weekday/month date, auto-EN for foreign
     customers, manual TH/EN toggle in 2 UI surfaces.

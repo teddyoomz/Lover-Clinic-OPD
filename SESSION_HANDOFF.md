@@ -7,20 +7,89 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 16 — V33.8 zero-remaining filter DEPLOYED
+- **Date last updated**: 2026-04-27 session 17 — V33.9 orphan QR cleanup + V33.10 prefix enforcement DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `14396ab fix(line-oa): V33.8 — filter consumed (0-remaining) courses from bot reply`
-- **Test count**: **1576** focused (+46 since s15: V33.8.A-F)
+- **Last commit**: `75bbc38 chore(line-oa): V33.9 + V33.10 — orphan QR-token cleanup + TEST-/E2E- prefix enforcement + Live QA runbook`
+- **Test count**: **1595** focused (+19 net since s16: -38 token tests removed, +57 V33.9/10 added)
 - **Build**: clean. BackendDashboard chunk 995.30 KB (≈ unchanged)
-- **Deploy state**: ✅ **PRODUCTION = `14396ab`** (V15 combined deploy session 16 — V33.8 LIVE)
-  - Vercel: `lover-clinic-rg15zfczo-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (48s)
-  - Firestore rules: v17 LIVE (rules unchanged — already-up-to-date re-deploy per V1/V9 anti-drift)
+- **Deploy state**: ✅ **PRODUCTION = `75bbc38`** (V15 combined deploy session 17 — V33.9 + V33.10 LIVE)
+  - Vercel: `lover-clinic-9p89gvv6h-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (48s)
+  - Firestore rules: v18 LIVE (be_customer_link_tokens block REMOVED — default-deny still applies to ghost docs)
   - Storage rules: V26 claim-based (unchanged)
-  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, smoke 3/3 = 200 (root + /?customer=LC-26000001 + /?backend=1)
+  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN (N1 stays 403 from default-deny even though rule block was stripped), smoke 3/3 = 200
 - **Rule B probe list permanent**: 6 positive + 3 negative
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
+
+### Session 2026-04-27 session 17 (1 commit, `75bbc38`) — V33.9 orphan QR cleanup + V33.10 prefix enforcement + Live QA runbook
+
+User authorized "เก็บให้หมดเตรียมไป 15 เลย ทำภายใต้กฎอย่างเคร่งครัด"
+(clean it all up, prepare for Phase 15, strictly under the rules) — chose
+"Everything" scope (orphan QR + prefix enforcement + QA prep).
+
+**V33.9 — Orphan QR-token plumbing cleanup**:
+DELETED:
+- `api/admin/customer-link.js` (token mint endpoint)
+- `src/lib/customerLinkClient.js` (token mint client)
+
+REMOVED:
+- `lineBotResponder.js`: generateLinkToken function + LINK-`<token>` regex
+  in interpretCustomerMessage + intent type 'link' + LINK_SUCCESS /
+  LINK_FAIL_INVALID / LINK_FAIL_EXPIRED / LINK_FAIL_ALREADY_LINKED messages
+  (TH + EN dicts) + formatLinkSuccessReply + formatLinkFailureReply functions
+- `api/webhook/line.js`: consumeLinkToken function + intent === 'link' branch
+  + 2 stale imports
+- `firestore.rules`: be_customer_link_tokens match block (default-deny applies
+  to ghost docs; client SDK still locked)
+- `tests/branch-collection-coverage.test.js`: be_customer_link_tokens entry
+  in COLLECTION_MATRIX
+
+PRESERVED (V33.4 admin-mediated id-link flow):
+- id-link-request intent + payload (national-id + passport detection)
+- be_link_requests + be_link_attempts collections + rules
+- LinkRequestsTab admin queue UI + LinkLineInstructionsModal
+- formatLinkRequestApprovedReply + formatLinkRequestRejectedReply
+
+Behavior change: customers DM'ing old "LINK-<token>" QR codes hit 'unknown'
+intent → silent ignore. The window of issued QR codes was tiny (<24h between
+V33.4 redesign launch and this cleanup); admin-mediated id-link is now sole
+linking mechanism.
+
+**V33.10 — TEST-/E2E- customer ID prefix enforcement**:
+- NEW `tests/helpers/testCustomer.js`: createTestCustomerId({prefix, suffix,
+  timestamp}) + isTestCustomerId + getTestCustomerPrefix +
+  TEST_CUSTOMER_PREFIXES (frozen). Codifies V33.2 directive after 53
+  untagged test customers polluted production data.
+- NEW section in `.claude/rules/02-workflow.md` — convention + helper
+  usage example + anti-pattern lock.
+- Drift catcher: tests/v33-10-test-customer-prefix.test.js E1+E2 assert
+  the rule + helper file are present.
+
+**Live QA runbook**:
+- NEW `.agents/qa/2026-04-27-line-oa-checklist.md` — structured tick-off
+  for V33.6 + V33.7 + V33.8 + V33.9 mobile verification. Sections:
+  pre-flight + V33.6 no-truncation + V33.7 i18n + V33.8 zero-remaining
+  + V33.9 orphan regression + admin "ผูกแล้ว" actions + smoke +
+  failure-report template.
+
+**Tests**: NEW v33-9-orphan-qr-cleanup.test.js (37 tests, A-G groups)
++ v33-10-test-customer-prefix.test.js (21 tests). Plus carry-over fixups
+in v32-tris-ter-line-bot-flow + v32-tris-ter-line-bot-fix +
+v33-7-line-bot-i18n + v33-4-line-bot-bare-id-and-exact-match +
+v32-tris-quater-id-link-request (drop V33.5 token-flow assertions).
+Total: 1576 → 1595 (+19 net).
+
+**Verification**:
+- npm test --run: 1595/1595 green
+- npm run build: clean, BD 995.30 KB (≈ unchanged)
+- Pre-probe 6/6 + 3 negative GREEN
+- Post-probe 6/6 + 3 negative GREEN
+- HTTP smoke 3/3 = 200
+
+**1 commit**: `75bbc38`
+
+Detail: this V-entry + commit body.
 
 ### Session 2026-04-27 session 16 (1 commit, `14396ab`) — V33.8 zero-remaining filter
 
@@ -431,16 +500,16 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s16.
+Resume LoverClinic — continue from 2026-04-27 s17.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=14396ab, prod=14396ab)
-3. .agents/active.md (1576 focused tests pass)
+2. SESSION_HANDOFF.md (master=75bbc38, prod=75bbc38)
+3. .agents/active.md (1595 focused tests pass)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md
+5. .agents/qa/2026-04-27-line-oa-checklist.md (live QA tick-off pending)
 
-Status: master=14396ab, 1576/1576 tests pass, prod=14396ab LIVE (V33.8)
+Status: master=75bbc38, 1595/1595 tests pass, prod=75bbc38 LIVE (V33.9 + V33.10)
 Next: idle — awaiting user direction
 Outstanding (user-triggered):
   - V33.7 mobile QA: Thai customer DM "คอร์ส" / "นัด" → confirm full
