@@ -36,6 +36,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
 
   // Stock
   stock:                 { requires: ['stock_management', 'stock_movement'] },
+  'central-stock':       { requires: ['central_stock'] },  // Phase 15.1 — central warehouse view (read-only in 15.1)
 
   // Finance
   finance:               { requires: ['deposit', 'wallet_management'] },

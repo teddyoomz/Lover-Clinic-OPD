@@ -59,9 +59,12 @@ function fmtQty(n) {
   return num.toLocaleString('th-TH', { maximumFractionDigits: 2 });
 }
 
-export default function MovementLogPanel({ clinicSettings, theme }) {
+export default function MovementLogPanel({ clinicSettings, theme, branchIdOverride }) {
   // Phase 14.7.H follow-up A — branch-scoped audit log queries.
-  const { branchId: BRANCH_ID } = useSelectedBranch();
+  // Phase 15.1 — branchIdOverride lets CentralStockTab query a central
+  // warehouse's movements without changing the global BranchContext.
+  const { branchId: ctxBranchId } = useSelectedBranch();
+  const BRANCH_ID = branchIdOverride || ctxBranchId;
   const isDark = theme === 'dark';
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);

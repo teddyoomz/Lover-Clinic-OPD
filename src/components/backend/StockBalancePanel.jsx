@@ -13,14 +13,17 @@ import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
-export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct }) {
+export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, defaultLocationId, lockLocation }) {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [locations, setLocations] = useState([{ id: 'main', name: 'สาขาหลัก', kind: 'branch' }]);
-  const [locationId, setLocationId] = useState('main');
+  // Phase 15.1 (2026-04-27) — defaultLocationId pre-selects a specific
+  // location (e.g. central warehouse from CentralStockTab). lockLocation
+  // hides the dropdown when caller wants the location fixed.
+  const [locationId, setLocationId] = useState(defaultLocationId || 'main');
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +35,15 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Phase 15.1 — sync locationId when caller updates defaultLocationId
+  // (e.g. CentralStockTab loads warehouses async then passes the first one).
+  useEffect(() => {
+    if (defaultLocationId && defaultLocationId !== locationId) {
+      setLocationId(defaultLocationId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultLocationId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,17 +139,19 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">สถานที่:</label>
-            <select value={locationId} onChange={e => setLocationId(e.target.value)}
-              className="px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 min-w-[180px]">
-              {locations.map(l => (
-                <option key={l.id} value={l.id}>
-                  {l.name}{l.kind === 'central' ? ' (คลังกลาง)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!lockLocation && (
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">สถานที่:</label>
+              <select value={locationId} onChange={e => setLocationId(e.target.value)}
+                className="px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 min-w-[180px]">
+                {locations.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}{l.kind === 'central' ? ' (คลังกลาง)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex-1 relative min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาสินค้า..."

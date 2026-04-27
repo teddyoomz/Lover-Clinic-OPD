@@ -170,10 +170,18 @@ artifacts/{appId}/public/data/
 - `listStockWithdrawals({locationId, status})`, `getStockWithdrawal`
 
 **UI additions:**
-- `StockTransferPanel.jsx` — list transfers w/ state-aware action buttons (ส่ง/รับ/ยกเลิก/ปฏิเสธ) + create form (src→dst location selectors, batch picker, qty per row)
-- `StockWithdrawalPanel.jsx` — similar shape + direction radio (central→branch / branch→central)
-- `CentralWarehousePanel.jsx` — warehouse card grid w/ CRUD (soft-delete), showInactive toggle
+- `StockTransferPanel.jsx` — list transfers w/ state-aware action buttons (ส่ง/รับ/ยกเลิก/ปฏิเสธ) + create form (src→dst location selectors, batch picker, qty per row). **Phase 15.1**: accepts `filterLocationId` prop to narrow to transfers involving a specific warehouse.
+- `StockWithdrawalPanel.jsx` — similar shape + direction radio (central→branch / branch→central). **Phase 15.1**: accepts `filterLocationId` prop.
+- `CentralWarehousePanel.jsx` — warehouse card grid w/ CRUD (soft-delete), showInactive toggle. **Phase 15.1**: accepts `onAfterCreate` callback (fires after first create, not edit) so CentralStockTab can refresh + redirect.
 - `StockTab.jsx` — 7 sub-tabs now: Balance / Orders / Adjust / Transfer / Withdrawal / Warehouses / MovementLog
+- **Phase 15.1 (2026-04-27)** `CentralStockTab.jsx` — new top-level tab "คลังกลาง" (lazy-loaded). Warehouse selector at top + 6 sub-tabs (Balance / Orders[15.2] / Transfers / Withdrawals / Movements / Warehouses). Reuses existing panels via `defaultLocationId` + `lockLocation` (Balance) / `filterLocationId` (Transfer + Withdrawal) / `branchIdOverride` (Movement). Zero-state guides admin to create first warehouse. Wired to `central_stock` permission key.
+
+**Phase 15.1 panel prop additions (additive — V12-safe, no migration):**
+- `StockBalancePanel({ defaultLocationId, lockLocation })` — pre-selects location; hides dropdown when locked
+- `StockTransferPanel({ filterLocationId })` — query filter via `listStockTransfers({locationId})`
+- `StockWithdrawalPanel({ filterLocationId })` — query filter via `listStockWithdrawals({locationId})`
+- `MovementLogPanel({ branchIdOverride })` — overrides BranchContext's branchId for this panel only
+- `CentralWarehousePanel({ onAfterCreate })` — callback after first create (not edit)
 
 **Schema additions** (in master section):
 ```

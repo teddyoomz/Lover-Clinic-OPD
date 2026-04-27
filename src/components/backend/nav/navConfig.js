@@ -25,7 +25,7 @@ import {
   // section icons
   UsersRound, Briefcase, Package, Wallet, Megaphone, Settings, BarChart3, Database,
   // tab icons
-  Download, Users, CalendarDays, ShoppingCart,
+  Download, Users, CalendarDays, ShoppingCart, Warehouse,
   Package as PackageIcon, Tag, Ticket, Gift, Wallet as WalletIcon,
   LayoutDashboard, Receipt, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
   // Phase 11 master-data tab icons
@@ -86,7 +86,11 @@ export const NAV_SECTIONS = [
     label: 'คลังสินค้า',
     icon: Package,
     items: [
-      { id: 'stock',       label: 'สต็อก',           icon: PackageIcon, color: 'rose', palette: 'stock inventory warehouse batch คลัง สต็อก สินค้า' },
+      { id: 'stock',         label: 'สต็อก',     icon: PackageIcon, color: 'rose',   palette: 'stock inventory warehouse batch คลัง สต็อก สินค้า' },
+      // Phase 15.1 (2026-04-27) — central stock conditional (multi-branch).
+      // Visible to anyone with central_stock permission; zero-state guides
+      // admin to create the first warehouse.
+      { id: 'central-stock', label: 'คลังกลาง',  icon: Warehouse,   color: 'orange', palette: 'central stock warehouse multi-branch dispatch withdrawal คลังกลาง สาขา จัดส่ง เบิก สำรอง' },
     ],
   },
   {

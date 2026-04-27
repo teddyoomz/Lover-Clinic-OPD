@@ -30,6 +30,9 @@ import AppointmentTab from '../components/backend/AppointmentTab.jsx';
 import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
 import StockTab from '../components/backend/StockTab.jsx';
+// Phase 15.1 (2026-04-27) — Central Stock Conditional, lazy-loaded so the
+// shell stays slim for branches that don't use central warehouse.
+const CentralStockTab = lazy(() => import('../components/backend/CentralStockTab.jsx'));
 import PromotionTab from '../components/backend/PromotionTab.jsx';
 import CouponTab from '../components/backend/CouponTab.jsx';
 import VoucherTab from '../components/backend/VoucherTab.jsx';
@@ -420,6 +423,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'stock' ? (
           <StockTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'central-stock' ? (
+          <CentralStockTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'promotions' ? (
           <PromotionTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'coupons' ? (

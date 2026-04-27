@@ -30,21 +30,26 @@ const STATUS_BADGE = {
   red: 'bg-red-900/30 text-red-400 border-red-800',
 };
 
-export default function StockWithdrawalPanel({ clinicSettings, theme }) {
+export default function StockWithdrawalPanel({ clinicSettings, theme, filterLocationId }) {
   const [withdrawals, setWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [locations, setLocations] = useState([]);
   const [detailId, setDetailId] = useState(null);
 
+  // Phase 15.1 — when caller supplies filterLocationId, only show withdrawals
+  // where source OR destination matches it (central-warehouse-focused view).
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, locs] = await Promise.all([listStockWithdrawals(), listStockLocations()]);
+      const [list, locs] = await Promise.all([
+        listStockWithdrawals(filterLocationId ? { locationId: filterLocationId } : undefined),
+        listStockLocations(),
+      ]);
       setWithdrawals(list); setLocations(locs);
     } catch (e) { console.error('[Withdrawal]', e); }
     finally { setLoading(false); }
-  }, []);
+  }, [filterLocationId]);
   useEffect(() => { load(); }, [load]);
 
   const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);

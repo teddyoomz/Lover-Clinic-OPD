@@ -10,7 +10,7 @@ import {
   listCentralWarehouses, createCentralWarehouse, updateCentralWarehouse, deleteCentralWarehouse,
 } from '../../lib/backendClient.js';
 
-export default function CentralWarehousePanel({ clinicSettings, theme }) {
+export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCreate }) {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -35,7 +35,15 @@ export default function CentralWarehousePanel({ clinicSettings, theme }) {
   if (formOpen) {
     return (
       <WarehouseForm editing={editing} onClose={() => { setFormOpen(false); setEditing(null); }}
-        onSaved={async () => { setFormOpen(false); setEditing(null); await load(); }} />
+        onSaved={async () => {
+          setFormOpen(false); setEditing(null);
+          await load();
+          // Phase 15.1 — let parent CentralStockTab refresh its warehouse list +
+          // jump to balance after the first warehouse is created.
+          if (typeof onAfterCreate === 'function' && !editing) {
+            try { await onAfterCreate(); } catch (e) { console.error('[CentralWarehousePanel] onAfterCreate failed:', e); }
+          }
+        }} />
     );
   }
 
