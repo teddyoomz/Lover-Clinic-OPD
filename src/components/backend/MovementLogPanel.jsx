@@ -6,10 +6,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
 // Phase 14.10-tris (2026-04-26) — be_products canonical (was master_data mirror)
-import { listStockMovements, listProducts } from '../../lib/backendClient.js';
+import { listStockMovements, listProducts, listStockLocations } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
-import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
@@ -66,6 +66,27 @@ function fmtQty(n) {
   return num.toLocaleString('th-TH', { maximumFractionDigits: 2 });
 }
 
+// Phase 15.4 post-deploy bug 2 v4 (2026-04-28) — counterparty label for the
+// 4 cross-tier movement types. Each movement stays at ITS branch only; the
+// label tells the user what's on the OTHER side. Computed from `branchIds`
+// (Phase E metadata: [src, dst]).
+//
+// Types 8 + 10 are SOURCE-SIDE (we sent stock OUT). Counterparty = destination.
+// Types 9 + 13 are DESTINATION-SIDE (we received stock IN). Counterparty = source.
+const COUNTERPARTY_TEMPLATES = {
+  8: 'ส่งออกไป',     // EXPORT_TRANSFER — outbound transfer to {dest}
+  9: 'รับเข้าจาก',    // RECEIVE — inbound transfer from {src}
+  10: 'เบิกโดย',      // EXPORT_WITHDRAWAL — withdrawn-by {requester=dest}
+  13: 'รับเบิกจาก',   // WITHDRAWAL_CONFIRM — received-via-withdrawal-from {src}
+};
+
+function getCounterpartyId(m) {
+  if (!Array.isArray(m?.branchIds) || m.branchIds.length < 2) return null;
+  const own = String(m.branchId || '');
+  const other = m.branchIds.find((b) => String(b) !== own);
+  return other ? String(other) : null;
+}
+
 export default function MovementLogPanel({ clinicSettings, theme, branchIdOverride }) {
   // Phase 14.7.H follow-up A — branch-scoped audit log queries.
   // Phase 15.1 — branchIdOverride lets CentralStockTab query a central
@@ -93,6 +114,8 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
+  // Phase 15.4 post-deploy bug 2 v4 — counterparty name lookup
+  const [locations, setLocations] = useState([]);
   const [productId, setProductId] = useState('');
   const [typeGroup, setTypeGroup] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -107,6 +130,26 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
       catch { setProducts([]); }
     })();
   }, []);
+
+  // Load locations for counterparty name resolution (Phase 15.4 bug 2 v4)
+  useEffect(() => {
+    (async () => {
+      try { setLocations(await listStockLocations() || []); }
+      catch { setLocations([]); }
+    })();
+  }, []);
+
+  // Resolve counterparty's human-readable name from id.
+  // Lookup chain: listStockLocations (covers 'main' + WH-*) → be_branches
+  // (covers BR-*) → fall back to id itself if nothing matches.
+  const resolveCounterpartyName = useCallback((id) => {
+    if (!id) return '';
+    const fromLoc = locations.find((l) => String(l?.id) === String(id));
+    if (fromLoc?.name) return String(fromLoc.name);
+    const fromBranch = resolveBranchName(id, branches);
+    if (fromBranch) return fromBranch;
+    return String(id);
+  }, [locations, branches]);
 
   const loadMovements = useCallback(async () => {
     setLoading(true);
@@ -269,12 +312,21 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                   m.linkedTransferId ? `Transfer: ${m.linkedTransferId}` :
                   m.linkedWithdrawalId ? `Withdraw: ${m.linkedWithdrawalId}` : '';
                 const isReverse = !!m.reverseOf;
+                // Phase 15.4 post-deploy bug 2 v4 — counterparty label for cross-tier types
+                const cpId = COUNTERPARTY_TEMPLATES[m.type] ? getCounterpartyId(m) : null;
+                const cpName = cpId ? resolveCounterpartyName(cpId) : '';
+                const labelText = (cpId && cpName)
+                  ? `${COUNTERPARTY_TEMPLATES[m.type]} ${cpName}`
+                  : (info?.label || `type=${m.type}`);
                 return (
                   <tr key={m.movementId} className={`border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] ${m.reversedByMovementId || isReverse ? 'opacity-60' : ''}`}>
                     <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(m.createdAt)}</td>
                     <td className="px-3 py-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${BADGE_CLASSES[color] || BADGE_CLASSES.gray}`}>
-                        {info?.label || `type=${m.type}`}
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${BADGE_CLASSES[color] || BADGE_CLASSES.gray}`}
+                        data-testid="movement-type-label"
+                      >
+                        {labelText}
                       </span>
                       {isReverse && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)]">REV</span>}
                       {m.skipped && <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)]">SKIP</span>}

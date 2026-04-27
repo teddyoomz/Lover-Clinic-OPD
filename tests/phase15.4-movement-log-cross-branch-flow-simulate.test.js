@@ -58,8 +58,14 @@ describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', (
     expect(fnSlice).toMatch(/aliases\.includes\(String\(m\.branchId\s*\|\|\s*['"]['"]\)\)/);
   });
 
-  it('ML.A.3 — branchId filter ALSO checks branchIds.some((b) => aliases.includes(b))', () => {
-    expect(fnSlice).toMatch(/Array\.isArray\(m\.branchIds\)\s*&&\s*m\.branchIds\.some\(\([^)]*\)\s*=>\s*aliases\.includes\(/);
+  it('ML.A.3 — V21 anti-regression: NO branchIds.some(...) cross-branch matching (single-tier per movement)', () => {
+    // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): the cross-branch alias
+    // match (v2/v3) caused 2× duplication — same movement visible from both
+    // source and destination. User correction: each movement at OWN tier only.
+    // EXPORT_TRANSFER at source → only at source view. RECEIVE at destination
+    // → only at destination view. The `branchIds[]` field is STILL written
+    // (Phase E) but used by UI for counterparty NAMES, not for filter match.
+    expect(fnSlice).not.toMatch(/m\.branchIds\.some/);
   });
 
   it('ML.A.4 — V21 anti-regression: NO Promise.all dual-query (was the silent-fail trap)', () => {
@@ -92,10 +98,9 @@ describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', (
 });
 
 describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', () => {
-  // Bumped from 3000 → 5000 to cover legacy-main fallback block (post v3).
-  // Pure simulate of the filter chain (no Firestore needed).
-  // Mirrors the listStockMovements implementation including legacy-main
-  // fallback (post-deploy bug 2 v3, 2026-04-28).
+  // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): SINGLE-TIER filter.
+  // No `branchIds.some(...)` check — each movement visible at OWN tier only.
+  // Legacy-main fallback STILL applies (separate ID-mismatch fix).
   function simulateBranchFilter(movements, filters) {
     let mvts = [...movements];
     if (filters.branchId != null) {
@@ -104,11 +109,7 @@ describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', 
       if (filters.includeLegacyMain && branchIdStr !== 'main') {
         aliases.push('main');
       }
-      mvts = mvts.filter((m) => {
-        if (aliases.includes(String(m.branchId || ''))) return true;
-        if (Array.isArray(m.branchIds) && m.branchIds.some((b) => aliases.includes(b))) return true;
-        return false;
-      });
+      mvts = mvts.filter((m) => aliases.includes(String(m.branchId || '')));
     }
     return mvts;
   }
@@ -128,31 +129,35 @@ describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', 
     { movementId: 'cb-receive', branchId: 'BR-B', branchIds: ['BR-A', 'BR-B'] },
   ];
 
-  it('ML.B.1 — at branch BR-A: sees own movements + cross-branch involving BR-A', () => {
+  it('ML.B.1 — V4 SINGLE-TIER at BR-A: sees ONLY movements where branchId === BR-A', () => {
+    // Phase 15.4 post-deploy bug 2 v4: each movement at OWN tier only.
+    // BR-A sees: own EXPORT (tr-export, cb-export, wd-confirm) + own legacy (old-1).
+    // BR-A does NOT see: tr-receive (at WH-X), wd-export (at WH-X), cb-receive (at BR-B).
     const result = simulateBranchFilter(FIXTURE, { branchId: 'BR-A' });
     const ids = result.map((m) => m.movementId).sort();
     expect(ids).toEqual([
-      'cb-export', 'cb-receive', // BR-A ↔ BR-B (BR-A in branchIds for both)
+      'cb-export',                // BR-A ↔ BR-B EXPORT (at BR-A)
       'old-1',                    // legacy own
-      'tr-export', 'tr-receive',  // BR-A ↔ WH-X (BR-A in branchIds for both)
-      'wd-confirm', 'wd-export',  // WH-X ↔ BR-A (BR-A in branchIds for both)
+      'tr-export',                // BR-A ↔ WH-X EXPORT (at BR-A)
+      'wd-confirm',               // WH-X → BR-A WITHDRAWAL_CONFIRM at BR-A (RECEIVE side)
     ]);
   });
 
-  it('ML.B.2 — at central WH-X: sees own + cross-branch involving WH-X', () => {
+  it('ML.B.2 — V4 SINGLE-TIER at WH-X: sees ONLY movements where branchId === WH-X', () => {
     const result = simulateBranchFilter(FIXTURE, { branchId: 'WH-X' });
     const ids = result.map((m) => m.movementId).sort();
     expect(ids).toEqual([
       'old-2',                    // legacy own
-      'tr-export', 'tr-receive',  // (WH-X in branchIds for both)
-      'wd-confirm', 'wd-export',  // (WH-X in branchIds for both)
+      'tr-receive',               // BR-A ↔ WH-X RECEIVE (at WH-X)
+      'wd-export',                // WH-X EXPORT_WITHDRAWAL (at WH-X)
     ]);
   });
 
-  it('ML.B.3 — at branch BR-B (not involved in transfers WH-X side): sees only BR-A↔BR-B', () => {
+  it('ML.B.3 — V4 SINGLE-TIER at BR-B: sees ONLY cb-receive (its OWN side of BR-A↔BR-B)', () => {
     const result = simulateBranchFilter(FIXTURE, { branchId: 'BR-B' });
     const ids = result.map((m) => m.movementId).sort();
-    expect(ids).toEqual(['cb-export', 'cb-receive']);
+    // cb-export is at BR-A's tier (NOT visible from BR-B). Only cb-receive at BR-B is visible.
+    expect(ids).toEqual(['cb-receive']);
   });
 
   it('ML.B.4 — null branchId returns ALL', () => {
@@ -165,31 +170,43 @@ describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', 
     expect(result).toHaveLength(1);
   });
 
-  it('ML.B.6 — post-15.4 movement with branchIds[src,dst]: visible from BOTH sides', () => {
-    const fixture = [{ movementId: 'x', branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] }];
-    expect(simulateBranchFilter(fixture, { branchId: 'BR-A' })).toHaveLength(1);
-    expect(simulateBranchFilter(fixture, { branchId: 'WH-X' })).toHaveLength(1);
+  it('ML.B.6 — V4 SINGLE-TIER: cross-branch movement visible at OWN tier only (NOT both)', () => {
+    // EXPORT at source: only at source view. RECEIVE at destination: only at destination.
+    // User correction: NO 2× duplication.
+    const fixture = [
+      { movementId: 'tex', branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] }, // EXPORT at BR-A
+      { movementId: 'rec', branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] }, // RECEIVE at WH-X
+    ];
+    // BR-A view: only EXPORT (its own movement)
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-A' }).map((m) => m.movementId)).toEqual(['tex']);
+    // WH-X view: only RECEIVE (its own movement)
+    expect(simulateBranchFilter(fixture, { branchId: 'WH-X' }).map((m) => m.movementId)).toEqual(['rec']);
+    // Uninvolved BR-B: neither
     expect(simulateBranchFilter(fixture, { branchId: 'BR-B' })).toHaveLength(0);
   });
 
-  // Phase 15.4 post-deploy bug 2 v3: legacy-main fallback for default branch.
+  // Phase 15.4 post-deploy bug 2 v3 + v4: legacy-main fallback for default branch.
   // Pre-V20 stock data has branchId='main'; BranchContext returns 'BR-XXX'.
   // listStockLocations() hardcodes id:'main' for transfer/withdrawal — so
-  // even POST-V20 data has branchId='main'. Default branch view must alias.
+  // even POST-V20 data has branchId='main' for default-branch operations.
 
   it('ML.B.7 — legacy-main fallback: default-branch BR-XXX with includeLegacyMain matches branchId=main', () => {
     const fixture = [{ movementId: 'tex', branchId: 'main', branchIds: ['main', 'WH-X'] }];
     // Without flag: invisible at BR-XXX
     expect(simulateBranchFilter(fixture, { branchId: 'BR-default' })).toHaveLength(0);
-    // With flag: visible
+    // With flag: visible (legacy-main alias)
     expect(simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true })).toHaveLength(1);
   });
 
-  it('ML.B.8 — legacy-main fallback: also matches via branchIds["main", ...] some()', () => {
+  it('ML.B.8 — legacy-main fallback does NOT cross-match branchIds[]: receive at WH-X stays invisible at default branch', () => {
+    // V4 single-tier: even with includeLegacyMain, the RECEIVE movement at
+    // WH-X (branchId='WH-X') is NOT visible at default branch view (which
+    // aliases to ['BR-default', 'main']). 'WH-X' is not in aliases.
     const fixture = [
       { movementId: 'rec', branchId: 'WH-X', branchIds: ['main', 'WH-X'] },
     ];
-    expect(simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true })).toHaveLength(1);
+    const result = simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true });
+    expect(result).toHaveLength(0);
   });
 
   it('ML.B.9 — central-tier (WH-*) with includeLegacyMain=false: legacy "main" data NOT visible (no cross-tier contamination)', () => {
@@ -215,19 +232,139 @@ describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', 
     expect(simulateBranchFilter(fixture, { branchId: 'main', includeLegacyMain: true })).toHaveLength(1);
   });
 
-  it('ML.B.12 — full default-branch view: sees own (BR-X) movements + legacy (main) + cross-branch w/ "main"', () => {
+  it('ML.B.12 — full default-branch view: sees own EXPORT only (NOT RECEIVE at WH-X)', () => {
+    // V4 single-tier semantics: default branch sees its own movements only.
+    // Cross-branch RECEIVE counterpart lives at central tier.
     const fixture = [
-      { movementId: 'old-main-imp', branchId: 'main' },                          // pre-V20 legacy
+      { movementId: 'old-main-imp', branchId: 'main' },                          // pre-V20 legacy IMPORT
       { movementId: 'new-br-imp', branchId: 'BR-default' },                      // post-V20 (rare)
-      { movementId: 'tex', branchId: 'main', branchIds: ['main', 'WH-X'] },      // transfer EXPORT
-      { movementId: 'rec', branchId: 'WH-X', branchIds: ['main', 'WH-X'] },      // transfer RECEIVE
+      { movementId: 'tex', branchId: 'main', branchIds: ['main', 'WH-X'] },      // transfer EXPORT (at default)
+      { movementId: 'rec', branchId: 'WH-X', branchIds: ['main', 'WH-X'] },      // transfer RECEIVE (at central — NOT visible here)
       { movementId: 'wh-own', branchId: 'WH-X' },                                // central own
       { movementId: 'br-y-own', branchId: 'BR-Y' },                              // OTHER branch
     ];
     const result = simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true });
     const ids = result.map((m) => m.movementId).sort();
-    // Default branch sees: own legacy + own new + cross-branch with main + RECEIVE-back
-    expect(ids).toEqual(['new-br-imp', 'old-main-imp', 'rec', 'tex']);
+    expect(ids).toEqual(['new-br-imp', 'old-main-imp', 'tex']);
+    // RECEIVE at WH-X is NOT visible — correct per V4 single-tier
+    expect(ids).not.toContain('rec');
+  });
+});
+
+// ============================================================================
+describe('Phase 15.4 ML.I — Counterparty label rendering (post-deploy bug 2 v4)', () => {
+  // User wants: source-side (type 8/10) shows "ส่งออกไป {dest}" / "เบิกโดย {dest}",
+  // destination-side (type 9/13) shows "รับเข้าจาก {src}" / "รับเบิกจาก {src}".
+  // Counterparty derived from `branchIds[]`: the entry that's NOT m.branchId.
+  const panelSrc = read('src/components/backend/MovementLogPanel.jsx');
+
+  it('ML.I.1 — COUNTERPARTY_TEMPLATES const has 4 entries (types 8, 9, 10, 13)', () => {
+    expect(panelSrc).toMatch(/COUNTERPARTY_TEMPLATES\s*=\s*\{[\s\S]{0,400}8:\s*['"]ส่งออกไป['"]/);
+    expect(panelSrc).toMatch(/9:\s*['"]รับเข้าจาก['"]/);
+    expect(panelSrc).toMatch(/10:\s*['"]เบิกโดย['"]/);
+    expect(panelSrc).toMatch(/13:\s*['"]รับเบิกจาก['"]/);
+  });
+
+  it('ML.I.2 — getCounterpartyId helper picks the entry of branchIds NOT equal to m.branchId', () => {
+    expect(panelSrc).toMatch(/function\s+getCounterpartyId/);
+    expect(panelSrc).toMatch(/m\.branchIds\.find\(\([^)]*\)\s*=>\s*String\([^)]+\)\s*!==\s*own\)/);
+  });
+
+  it('ML.I.3 — getCounterpartyId returns null for movements without branchIds[] (legacy + single-tier)', () => {
+    expect(panelSrc).toMatch(/!Array\.isArray\(m\?\.branchIds\)\s*\|\|\s*m\.branchIds\.length\s*<\s*2/);
+  });
+
+  it('ML.I.4 — renders cross-tier label as "{template} {counterpartyName}" (template + name)', () => {
+    expect(panelSrc).toMatch(/labelText\s*=\s*\(cpId\s*&&\s*cpName\)/);
+    expect(panelSrc).toMatch(/\$\{COUNTERPARTY_TEMPLATES\[m\.type\]\}\s*\$\{cpName\}/);
+  });
+
+  it('ML.I.5 — falls back to TYPE_LABELS[m.type].label when no counterparty (legacy / single-tier)', () => {
+    expect(panelSrc).toMatch(/info\?\.label\s*\|\|\s*`type=\$\{m\.type\}`/);
+  });
+
+  it('ML.I.6 — resolveCounterpartyName helper: locations → branches → fallback to id', () => {
+    expect(panelSrc).toMatch(/function|const\s+resolveCounterpartyName/);
+    expect(panelSrc).toMatch(/locations\.find\(\([^)]*\)\s*=>\s*String\([^)]+\)\s*===\s*String\(id\)\)/);
+    expect(panelSrc).toMatch(/resolveBranchName\(id,\s*branches\)/);
+  });
+
+  it('ML.I.7 — listStockLocations imported + fetched on mount', () => {
+    expect(panelSrc).toMatch(/import\s*\{[^}]*listStockLocations[^}]*\}/);
+    expect(panelSrc).toMatch(/setLocations\(/);
+  });
+
+  it('ML.I.8 — movement-type-label data-testid for preview_eval addressability', () => {
+    expect(panelSrc).toMatch(/data-testid="movement-type-label"/);
+  });
+});
+
+// Functional simulate of the counterparty resolution (no React mount).
+describe('Phase 15.4 ML.I-sim — counterparty resolution simulate', () => {
+  const COUNTERPARTY_TEMPLATES = {
+    8: 'ส่งออกไป',
+    9: 'รับเข้าจาก',
+    10: 'เบิกโดย',
+    13: 'รับเบิกจาก',
+  };
+
+  function getCounterpartyId(m) {
+    if (!Array.isArray(m?.branchIds) || m.branchIds.length < 2) return null;
+    const own = String(m.branchId || '');
+    const other = m.branchIds.find((b) => String(b) !== own);
+    return other ? String(other) : null;
+  }
+
+  function buildLabel(m, info, resolveName) {
+    const cpId = COUNTERPARTY_TEMPLATES[m.type] ? getCounterpartyId(m) : null;
+    const cpName = cpId ? resolveName(cpId) : '';
+    return (cpId && cpName)
+      ? `${COUNTERPARTY_TEMPLATES[m.type]} ${cpName}`
+      : (info?.label || `type=${m.type}`);
+  }
+
+  const FIXTURE_LOCATIONS = [
+    { id: 'main', name: 'สาขาหลัก (main)' },
+    { id: 'WH-X', name: 'คลังกลางกรุงเทพ' },
+    { id: 'BR-Korat', name: 'สาขาโคราช' },
+  ];
+  const resolveName = (id) => FIXTURE_LOCATIONS.find((l) => l.id === id)?.name || id;
+
+  it('ML.I-sim.1 — type 8 (EXPORT_TRANSFER) at Korat: "ส่งออกไป คลังกลางกรุงเทพ"', () => {
+    const m = { type: 8, branchId: 'BR-Korat', branchIds: ['BR-Korat', 'WH-X'] };
+    expect(buildLabel(m, { label: 'ส่งออก (transfer)' }, resolveName)).toBe('ส่งออกไป คลังกลางกรุงเทพ');
+  });
+
+  it('ML.I-sim.2 — type 9 (RECEIVE) at central: "รับเข้าจาก สาขาโคราช"', () => {
+    const m = { type: 9, branchId: 'WH-X', branchIds: ['BR-Korat', 'WH-X'] };
+    expect(buildLabel(m, { label: 'รับเข้า' }, resolveName)).toBe('รับเข้าจาก สาขาโคราช');
+  });
+
+  it('ML.I-sim.3 — type 10 (EXPORT_WITHDRAWAL) at Korat: "เบิกโดย คลังกลางกรุงเทพ"', () => {
+    const m = { type: 10, branchId: 'BR-Korat', branchIds: ['BR-Korat', 'WH-X'] };
+    expect(buildLabel(m, { label: 'ส่งออก (withdrawal)' }, resolveName)).toBe('เบิกโดย คลังกลางกรุงเทพ');
+  });
+
+  it('ML.I-sim.4 — type 13 (WITHDRAWAL_CONFIRM) at central: "รับเบิกจาก สาขาโคราช"', () => {
+    const m = { type: 13, branchId: 'WH-X', branchIds: ['BR-Korat', 'WH-X'] };
+    expect(buildLabel(m, { label: 'เบิก (confirm)' }, resolveName)).toBe('รับเบิกจาก สาขาโคราช');
+  });
+
+  it('ML.I-sim.5 — legacy movement without branchIds[]: falls back to TYPE_LABELS', () => {
+    const m = { type: 8, branchId: 'main' }; // no branchIds
+    expect(buildLabel(m, { label: 'ส่งออก (transfer)' }, resolveName)).toBe('ส่งออก (transfer)');
+  });
+
+  it('ML.I-sim.6 — non-cross-tier types use TYPE_LABELS unchanged', () => {
+    expect(buildLabel({ type: 1, branchId: 'main' }, { label: 'นำเข้า' }, resolveName)).toBe('นำเข้า');
+    expect(buildLabel({ type: 2, branchId: 'main' }, { label: 'ขาย' }, resolveName)).toBe('ขาย');
+  });
+
+  it('ML.I-sim.7 — V14 lock: counterparty resolution never returns undefined', () => {
+    const m = { type: 8, branchId: 'main', branchIds: ['main', 'unknown-id'] };
+    const result = buildLabel(m, { label: 'ส่งออก (transfer)' }, resolveName);
+    expect(result).toBeTypeOf('string');
+    expect(result).not.toContain('undefined');
   });
 });
 
@@ -248,8 +385,9 @@ describe('Phase 15.4 ML.G — listStockMovements: includeLegacyMain filter signa
     expect(fnSlice).toMatch(/branchIdStr\s*!==\s*['"]main['"]/);
   });
 
-  it('ML.G.4 — branchIds.some((b) => aliases.includes(b)) is the check pattern', () => {
-    expect(fnSlice).toMatch(/branchIds\.some\(\([^)]*\)\s*=>\s*aliases\.includes\(/);
+  it('ML.G.4 — V4 anti-regression: NO branchIds.some(...) — single-tier only', () => {
+    // Reverted in v4 (2026-04-28): cross-branch alias caused 2× duplication.
+    expect(fnSlice).not.toMatch(/branchIds\.some/);
   });
 });
 

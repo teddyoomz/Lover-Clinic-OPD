@@ -190,18 +190,20 @@ describe('Phase 15.4 AU.D — reverse movements propagate branchIds via {...m} s
 });
 
 // ============================================================================
-describe('Phase 15.4 AU.E — listStockMovements client-side filter catches every emit', () => {
+describe('Phase 15.4 AU.E — listStockMovements SINGLE-TIER filter (post-deploy bug 2 v4)', () => {
   // The reader is the truth for "does it show up in MovementLog?". Verified
   // by simulate fixtures matching every writer's emit shape.
+  //
+  // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): SINGLE-TIER filter only.
+  // Each movement appears at its OWN branchId tier only. Cross-tier movements
+  // (transfer/withdrawal) split into 2 docs — EXPORT at source, RECEIVE at
+  // destination — each visible from its own side. Counterparty NAME shown
+  // via UI label using `branchIds[]` metadata.
 
   function simulateBranchFilter(movements, branchId) {
     if (branchId == null) return movements;
     const branchIdStr = String(branchId);
-    return movements.filter((m) => {
-      if (String(m.branchId || '') === branchIdStr) return true;
-      if (Array.isArray(m.branchIds) && m.branchIds.includes(branchIdStr)) return true;
-      return false;
-    });
+    return movements.filter((m) => String(m.branchId || '') === branchIdStr);
   }
 
   // Realistic fixture: one of each emit type.
@@ -211,46 +213,48 @@ describe('Phase 15.4 AU.E — listStockMovements client-side filter catches ever
     { movementId: 'adj+', type: 3, branchId: 'BR-A' },                                   // ADJUST_ADD
     { movementId: 'adj-', type: 4, branchId: 'BR-A' },                                   // ADJUST_REDUCE
     { movementId: 'tre', type: 6, branchId: 'BR-A' },                                    // TREATMENT
-    { movementId: 'tex', type: 8, branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] },       // EXPORT_TRANSFER
-    { movementId: 'rec', type: 9, branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] },       // RECEIVE
-    { movementId: 'wex', type: 10, branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] },      // EXPORT_WITHDRAWAL
-    { movementId: 'wco', type: 13, branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] },      // WITHDRAWAL_CONFIRM
+    { movementId: 'tex', type: 8, branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] },       // EXPORT_TRANSFER (at BR-A)
+    { movementId: 'rec', type: 9, branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] },       // RECEIVE (at WH-X)
+    { movementId: 'wex', type: 10, branchId: 'BR-A', branchIds: ['BR-A', 'WH-X'] },      // EXPORT_WITHDRAWAL (at BR-A)
+    { movementId: 'wco', type: 13, branchId: 'WH-X', branchIds: ['BR-A', 'WH-X'] },      // WITHDRAWAL_CONFIRM (at WH-X)
     { movementId: 'can', type: 14, branchId: 'BR-A' },                                    // CANCEL_IMPORT
-    // Cross-branch transfer (BR-A → BR-B, no central involved)
+    // Cross-branch transfer (BR-A → BR-B)
     { movementId: 'tex2', type: 8, branchId: 'BR-A', branchIds: ['BR-A', 'BR-B'] },
     { movementId: 'rec2', type: 9, branchId: 'BR-B', branchIds: ['BR-A', 'BR-B'] },
     // Legacy movement (pre-Phase-E, no branchIds[])
     { movementId: 'lex', type: 8, branchId: 'BR-A' },
   ];
 
-  it('AU.E.1 — at branch BR-A: sees 5 single-tier own + 4 cross-branch (involving BR-A) + 1 legacy = 10', () => {
+  it('AU.E.1 — V4 SINGLE-TIER at BR-A: sees ONLY movements where branchId === BR-A', () => {
     const result = simulateBranchFilter(FIXTURE, 'BR-A');
     const ids = result.map((m) => m.movementId).sort();
+    // BR-A view: own single-tier types (imp/sal/adj+/adj-/tre/can) + EXPORT
+    // (tex/tex2/wex) + legacy (lex). NOT rec/rec2/wco — those are at the
+    // OTHER tier (WH-X / BR-B).
     expect(ids).toEqual([
       'adj+', 'adj-',                      // own ADJUST
       'can',                               // own CANCEL_IMPORT
       'imp',                               // own IMPORT
       'lex',                               // legacy own EXPORT_TRANSFER
-      'rec',                               // RECEIVE involving BR-A
-      'rec2',                              // RECEIVE BR-A↔BR-B
       'sal',                               // own SALE
-      'tex', 'tex2',                       // EXPORT_TRANSFER involving BR-A (2 of them)
+      'tex', 'tex2',                       // own EXPORT_TRANSFER (2 of them)
       'tre',                               // own TREATMENT
-      'wco',                               // WITHDRAWAL_CONFIRM involving BR-A
-      'wex',                               // EXPORT_WITHDRAWAL involving BR-A
+      'wex',                               // own EXPORT_WITHDRAWAL
     ]);
   });
 
-  it('AU.E.2 — at central WH-X: sees only cross-branch (NOT BR-A single-tier)', () => {
+  it('AU.E.2 — V4 SINGLE-TIER at WH-X: sees ONLY movements where branchId === WH-X', () => {
     const result = simulateBranchFilter(FIXTURE, 'WH-X');
     const ids = result.map((m) => m.movementId).sort();
-    expect(ids).toEqual(['rec', 'tex', 'wco', 'wex']);
+    // WH-X view: only RECEIVE/CONFIRM at WH-X. EXPORT side stays at BR-A.
+    expect(ids).toEqual(['rec', 'wco']);
   });
 
-  it('AU.E.3 — at branch BR-B (only BR-A↔BR-B cross): sees only 2 movements', () => {
+  it('AU.E.3 — V4 SINGLE-TIER at BR-B: sees ONLY rec2 (its OWN side of BR-A↔BR-B)', () => {
     const result = simulateBranchFilter(FIXTURE, 'BR-B');
     const ids = result.map((m) => m.movementId).sort();
-    expect(ids).toEqual(['rec2', 'tex2']);
+    // tex2 is at BR-A's tier; only rec2 visible from BR-B.
+    expect(ids).toEqual(['rec2']);
   });
 
   it('AU.E.4 — null branchId: returns all (admin global view)', () => {
@@ -258,14 +262,22 @@ describe('Phase 15.4 AU.E — listStockMovements client-side filter catches ever
     expect(result.length).toBe(FIXTURE.length);
   });
 
-  it('AU.E.5 — V21 anti-regression: single-tier movements NOT visible at central from BR-A', () => {
-    // Bug 4 was the inverse: central pulled BR-A stock. Inverse failure: BR-A
-    // pulled WH-X stock. Both must be cleanly separated.
+  it('AU.E.5 — V21 anti-regression: BR-A single-tier types NOT visible at WH-X (no cross-tier contamination)', () => {
     const wh = simulateBranchFilter(FIXTURE, 'WH-X');
     expect(wh.find((m) => m.movementId === 'sal')).toBeUndefined(); // BR-A's SALE not visible
     expect(wh.find((m) => m.movementId === 'imp')).toBeUndefined();
     expect(wh.find((m) => m.movementId === 'tre')).toBeUndefined();
-    expect(wh.find((m) => m.movementId === 'lex')).toBeUndefined(); // legacy BR-A not visible at WH-X
+    expect(wh.find((m) => m.movementId === 'lex')).toBeUndefined();
+    // V4: cross-tier EXPORT side also NOT visible at destination tier
+    expect(wh.find((m) => m.movementId === 'tex')).toBeUndefined();
+    expect(wh.find((m) => m.movementId === 'wex')).toBeUndefined();
+  });
+
+  it('AU.E.6 — V21 anti-regression: cross-tier RECEIVE (rec) NOT visible from source side BR-A', () => {
+    // Inverse of AU.E.5 — RECEIVE at WH-X must NOT show at BR-A.
+    const a = simulateBranchFilter(FIXTURE, 'BR-A');
+    expect(a.find((m) => m.movementId === 'rec')).toBeUndefined();
+    expect(a.find((m) => m.movementId === 'wco')).toBeUndefined();
   });
 });
 

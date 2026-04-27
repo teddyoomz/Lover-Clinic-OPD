@@ -3967,28 +3967,34 @@ export async function listStockMovements(filters = {}) {
 
   if (filters.branchId != null) {
     const branchIdStr = String(filters.branchId);
-    // Phase 15.4 post-deploy bug 2 v3 (2026-04-28): legacy-main fallback.
+    // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): SINGLE-TIER filter +
+    // legacy-main fallback ONLY (no cross-branch alias).
     //
-    // Pre-V20 stock data wrote branchId='main' (hardcoded). After V20
-    // multi-branch (s18), be_branches has BR-XXX docs and BranchContext
-    // returns 'BR-XXX' for the default branch. But:
-    //   - listStockLocations() (line 5509) STILL hardcodes id:'main' for
-    //     the main branch in the transfer/withdrawal location dropdown
-    //   - All resulting movement docs write branchId='main' (from batch.branchId)
-    //   - MovementLog at default branch (BR-XXX) → no match → invisible
+    // User correction (after v2/v3): each cross-tier movement must show on
+    // its OWN tier only. Korat → Central transfer: Korat sees EXPORT only
+    // ("ส่งออกไปคลังกลาง"), Central sees RECEIVE only ("รับเข้าจากสาขาโคราช").
+    // NOT both rows on both pages. The cross-branch alias in v2/v3 caused
+    // 2× duplication.
     //
-    // Same legacy-main pattern as listStockBatches (Phase F). Caller passes
-    // `includeLegacyMain: true` when current view is the default branch.
+    // Branch-tier isolation:
+    //   EXPORT_TRANSFER (8): branchId=source       → only at source view
+    //   RECEIVE (9):          branchId=destination  → only at destination view
+    //   EXPORT_WITHDRAWAL (10): branchId=source     → only at source view
+    //   WITHDRAWAL_CONFIRM (13): branchId=destination → only at destination view
+    //
+    // Legacy-main fallback STAYS (separate fix for ID-mismatch). Pre-V20
+    // stock data wrote branchId='main' (listStockLocations hardcoded id:'main')
+    // but BranchContext returns 'BR-XXX' for default branch post-V20. Caller
+    // passes `includeLegacyMain: true` when current view is the default branch.
     // Central tier (WH-*) and non-default branches do NOT opt in.
+    //
+    // The branchIds[] field is STILL written (Phase E) but used by the UI
+    // to compute the counterparty NAME for labels (not for branch matching).
     const aliases = [branchIdStr];
     if (filters.includeLegacyMain && branchIdStr !== 'main') {
       aliases.push('main');
     }
-    mvts = mvts.filter((m) => {
-      if (aliases.includes(String(m.branchId || ''))) return true;
-      if (Array.isArray(m.branchIds) && m.branchIds.some((b) => aliases.includes(b))) return true;
-      return false;
-    });
+    mvts = mvts.filter((m) => aliases.includes(String(m.branchId || '')));
   }
 
   if (!filters.includeReversed) {
