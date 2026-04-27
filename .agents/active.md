@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-28 (s20 — V15 combined deploy COMPLETE; Phase 15.4 + 5 post-deploy fixes LIVE in production)"
-status: "Production = ae2ab7e LIVE (matches master). All 5 post-s19 bug reports addressed + audit shipped. V15 combined deploy verified Pre+Post probe 6/6 + 4/4 negative."
-current_focus: "Live QA on the 5 post-deploy fixes — verify in production browser"
+updated_at: "2026-04-28 (s21 — V15 #2 combined deploy COMPLETE; bug 2 v3 + v4 LIVE — single-tier movement log + counterparty label)"
+status: "Production = e46eda2 LIVE (matches master). Movement log architecture corrected: single-tier per movement, counterparty NAME shown via branchIds[] metadata. Pre+Post probe 6/6 + 4/4 negative ✓. Cleanup 4/4 ✓. HTTP smoke 3/3 = 200."
+current_focus: "Live QA on the corrected movement log architecture"
 branch: "master"
-last_commit: "ae2ab7e"
-tests: 2183
+last_commit: "e46eda2"
+tests: 2214
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ae2ab7e"
+production_commit: "e46eda2"
 firestore_rules_version: 19
 storage_rules_version: 2
 ---
@@ -14,38 +14,47 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `ae2ab7e` · **2183/2183** focused vitest pass · build clean (BD ~911 KB)
-- Production = `ae2ab7e` LIVE — synced with master (V15 combined deploy complete this session)
+- master = `e46eda2` · **2214/2214** focused vitest pass · build clean (BD ~911 KB)
+- Production = `e46eda2` LIVE — fully synced (V15 #2 deploy complete this session)
 - Working tree clean (after EOD docs commit)
 
-## V15 combined deploy results (s20)
-- **Vercel**: `lover-clinic-en5gqnqzd-teddyoomz-4523s-projects.vercel.app` → aliased `lover-clinic-app.vercel.app` (49s)
-- **Firestore rules**: released to cloud.firestore (Phase 15.2 + s19 shape additions)
+## V15 #2 deploy results (s21)
+- **Vercel**: `lover-clinic-gbhf7r5hv-teddyoomz-4523s-projects.vercel.app` → aliased `lover-clinic-app.vercel.app` (55s)
+- **Firestore rules**: released to cloud.firestore (no rule changes; clean redeploy)
 - **Pre-probe**: 6/6 positive 200 + 4/4 negative 403 ✓
 - **Post-probe**: 6/6 positive 200 + 4/4 negative 403 ✓
-- **Cleanup**: 4/4 (pc_appointments DELETE x2 + clinic_settings PATCH strip x2)
-- **HTTP smoke**: root + /admin + /api/webhook/line = 200 ✓ (FB webhook 403 by-design)
-- **Probe list extended**: 6 pos + 4 neg permanent (added `be_central_stock_orders` negative)
+- **Cleanup**: 4/4 (pc_appointments DELETE x2 + clinic_settings strip x2)
+- **HTTP smoke**: root + /admin + /api/webhook/line = 200 ✓
 
-## What this session shipped (s20 — 2026-04-28)
-6 commits:
-- `69a5dd9` — bug 1 (V11 OrderPanel local-import) + bug 4 (gate includeLegacyMain on branch-tier) + 12 tests
-- `f2b71ec` — bug 2 v2 (listStockMovements client-side branchId filter; drop dual-query Promise.all) + 27 tests refresh
-- `244e909` — bug 3 AdjustDetailModal (mirrors Transfer/Withdrawal) + getStockAdjustment + wire row click + 21 tests
-- `ae2ab7e` — bug 5 audit (12 emit sites + 22 regression tests + 2 regex relaxations)
-- (this commit) — EOD docs + V15 deploy verification
+## What this session shipped (s21 — 2026-04-28)
+2 commits:
+- `de90130` — bug 2 v3 (legacy-main fallback for default branch ID-mismatch)
+- `e46eda2` — bug 2 v4 (single-tier filter + counterparty label correction)
 
-Tests: 2123 → 2183 (+60 across 5 post-deploy fixes + audit).
+User correction in v4: "stock movement เป็นอันเดียวกัน ซ้ำกันทั้งสองหน้า ซึ่งผิด" — v2/v3 fix accidentally caused 2× duplication via cross-branch alias. v4 reverts the alias; each movement at OWN tier only with counterparty NAME shown in label.
+
+Tests: 2183 → 2214 (+31).
+
+## Architecture lock (institutional memory)
+- 4 cross-tier movement types (8/9/10/13) split into 2 docs (EXPORT at source + RECEIVE at destination)
+- Each movement visible at OWN tier only — NOT duplicated on both sides
+- `branchIds[]` field still written (Phase E) but used as METADATA for counterparty NAME, NOT for filter alias
+- Type 8/10 (source-side): label "ส่งออกไป/เบิกโดย {dest.name}"
+- Type 9/13 (destination-side): label "รับเข้าจาก/รับเบิกจาก {src.name}"
+- Legacy-main fallback STAYS for default-branch ID-mismatch (separate concern from cross-tier)
 
 ## Next action
-**Live QA on the 5 deployed fixes** — verify in production browser:
-- Bug 1: stock tab → "+ สร้าง" → form renders (no blank screen)
-- Bug 4: central tab → ปรับสต็อค → batch picker shows ONLY warehouse batches
-- Bug 2: stock tab MovementLog → see both transfer + withdrawal cross-branch
-- Bug 3: stock tab adjust list → click row → detail modal opens
-- Bug 5: every movement type appears in correct branch+central logs
+**Live QA verification on the corrected architecture**:
+1. Korat → Central transfer:
+   - Korat stock-tab MovementLog: ONE row "ส่งออกไป คลังกลาง..."
+   - Central tab MovementLog: ONE row "รับเข้าจาก สาขาโคราช"
+2. Withdrawal between Central and Branch:
+   - Source MovementLog: "เบิกโดย {requester}"
+   - Destination MovementLog: "รับเบิกจาก {supplier}"
+3. สาขาหลัก (default branch) post-V20 with legacy 'main' data:
+   - Stock-tab MovementLog now shows transfers (legacy-main fallback working)
 
 ## Outstanding user-triggered actions (NOT auto-run)
-- Live QA on the 5 fixes (above)
-- Carry-over: admin LineSettings creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix convention
-- Deferred to Phase 15.5+: ActorPicker branchIds[] filter (was s18 EOD #7); Phase 15.4 central→branch dispatch flow; Phase 15.5 withdrawal approval admin endpoint
+- Live QA on corrected movement log + counterparty labels
+- Carry-over: admin LineSettings creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix
+- Deferred to Phase 15.5+: ActorPicker branchIds[] filter; Phase 15.4 central→branch dispatch flow; Phase 15.5 withdrawal approval admin endpoint

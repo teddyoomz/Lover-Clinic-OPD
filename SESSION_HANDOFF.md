@@ -7,20 +7,51 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 session 20 — V15 combined deploy COMPLETE (Phase 15.4 + post-deploy bug fixes LIVE)
+- **Date last updated**: 2026-04-28 session 21 — V15 combined deploy #2 COMPLETE (bug 2 v3 + v4 LIVE — single-tier movement log + counterparty label)
 - **Branch**: `master`
-- **Last commit**: `ae2ab7e test(stock): bug 5 — full Movement Log wiring audit + regression bank` (+ pending docs commit)
-- **Test count**: **2183** focused (+278 since s18: 1905 → 2183)
-- **Build**: clean. BackendDashboard chunk ≈ 911 KB (s19 + post-deploy fixes shipped)
-- **Deploy state**: ✅ **PRODUCTION = `ae2ab7e`** (V15 LIVE — Phase 15.4 + 5 post-deploy bug fixes)
-  - Vercel: `lover-clinic-en5gqnqzd-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 49s deploy
-  - Firestore rules: released to `cloud.firestore` (Phase 15.2 + s19 shape additions)
+- **Last commit**: `e46eda2 fix(stock): bug 2 v4 — single-tier movement log + counterparty label`
+- **Test count**: **2214** focused (+31 since s20: 2183 → 2214)
+- **Build**: clean. BackendDashboard chunk ≈ 911 KB
+- **Deploy state**: ✅ **PRODUCTION = `e46eda2`** (V15 #2 LIVE — bug 2 v3 + v4)
+  - Vercel (s21): `lover-clinic-gbhf7r5hv-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 55s deploy
+  - Firestore rules: released to `cloud.firestore` (no rule changes in s21; redeployed clean)
   - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 ✓
-  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 200 (FB webhook 403 by-design — rejects unauth GET without hub.verify_token)
+  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 200
 - **Rule B probe list extended permanently**: 6 positive + 4 negative (added `be_central_stock_orders` negative on this deploy)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (this deploy: central stock orders + 4 cross-branch movement field additions)
+
+### Session 2026-04-28 session 21 (2 commits + V15 #2 deploy) — Movement Log architecture corrected to single-tier with counterparty label
+
+User correction (after s20 V15 deploy):
+1. "โอนย้ายหรือเบิกของระหว่างสาขาหลักกับคลังกลาง แล้ว movement log ของสาขาหลักไม่ขึ้นเหี้ยไรเลย ยังเป็นอยู่"
+   → Bug 2 v3 fix: legacy-main fallback for default branch ID-mismatch (de90130)
+2. "stock movement มึงเป็นอันเดียวกัน ซ้ำกันทั้งสองหน้าแล้ว ซึ่งผิด"
+   → Bug 2 v4 fix: revert v2/v3 cross-branch alias; single-tier filter + counterparty label (e46eda2)
+
+**v3 (de90130)**: legacy-main fallback in `listStockMovements` + `MovementLogPanel`. Default branch (BR-XXX) view now also matches `branchId='main'` (legacy data from `listStockLocations` hardcoded `id:'main'`). Central tier + non-default branches stay strict.
+
+**v4 (e46eda2)**: corrected architecture per user spec.
+- Each movement at OWN tier ONCE (not duplicated on both sides)
+- Reader: drop `m.branchIds.some(...)` cross-match; branchId-equality only
+- UI: render counterparty label using `branchIds[]` metadata (still written by Phase E):
+  - Type 8 (EXPORT_TRANSFER at source): "ส่งออกไป {dest.name}"
+  - Type 9 (RECEIVE at destination): "รับเข้าจาก {src.name}"
+  - Type 10 (EXPORT_WITHDRAWAL at source): "เบิกโดย {requester.name}"
+  - Type 13 (WITHDRAWAL_CONFIRM at destination): "รับเบิกจาก {supplier.name}"
+- New helpers: `getCounterpartyId` + `resolveCounterpartyName` (locations → branches → fallback)
+
+**Architecture clarification (locked into institutional memory)**:
+The 4 cross-tier movement types remain split into 2 docs (one per tier).
+`branchIds[]` is METADATA for label resolution — NOT a cross-branch filter alias.
+Counterparty NAME shown in UI but the movement physically lives at its own tier.
+
+**Tests**: 2183 → 2214 (+31). ML.A.3/.G.4 flipped to assert NO `branchIds.some()` (V21 anti-regression). ML.B simulate updated to single-tier. AU.E flipped to single-tier expectations + AU.E.6 added. ML.I (8 source-grep) + ML.I-sim (7 functional) added for counterparty label.
+
+**V15 #2 deploy**: full Probe-Deploy-Probe sequence (pre + post 6/6 + 4/4 ✓; cleanup 4/4 ✓; HTTP smoke 3/3 = 200).
+
+Detail: `.agents/sessions/2026-04-28-session21-bug2-v3-v4-deploy.md`
 
 ### Session 2026-04-28 session 20 (V15 combined deploy + 5 post-deploy bug fixes)
 
