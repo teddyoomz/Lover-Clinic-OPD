@@ -3967,9 +3967,26 @@ export async function listStockMovements(filters = {}) {
 
   if (filters.branchId != null) {
     const branchIdStr = String(filters.branchId);
+    // Phase 15.4 post-deploy bug 2 v3 (2026-04-28): legacy-main fallback.
+    //
+    // Pre-V20 stock data wrote branchId='main' (hardcoded). After V20
+    // multi-branch (s18), be_branches has BR-XXX docs and BranchContext
+    // returns 'BR-XXX' for the default branch. But:
+    //   - listStockLocations() (line 5509) STILL hardcodes id:'main' for
+    //     the main branch in the transfer/withdrawal location dropdown
+    //   - All resulting movement docs write branchId='main' (from batch.branchId)
+    //   - MovementLog at default branch (BR-XXX) → no match → invisible
+    //
+    // Same legacy-main pattern as listStockBatches (Phase F). Caller passes
+    // `includeLegacyMain: true` when current view is the default branch.
+    // Central tier (WH-*) and non-default branches do NOT opt in.
+    const aliases = [branchIdStr];
+    if (filters.includeLegacyMain && branchIdStr !== 'main') {
+      aliases.push('main');
+    }
     mvts = mvts.filter((m) => {
-      if (String(m.branchId || '') === branchIdStr) return true;
-      if (Array.isArray(m.branchIds) && m.branchIds.includes(branchIdStr)) return true;
+      if (aliases.includes(String(m.branchId || ''))) return true;
+      if (Array.isArray(m.branchIds) && m.branchIds.some((b) => aliases.includes(b))) return true;
       return false;
     });
   }

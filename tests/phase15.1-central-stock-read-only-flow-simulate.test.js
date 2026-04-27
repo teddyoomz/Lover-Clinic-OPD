@@ -255,7 +255,9 @@ describe('Phase 15.1 F6 — anti-regression (V12 multi-reader sweep)', () => {
   });
 
   it('F6.5 MovementLogPanel still uses BranchContext when no override', () => {
-    expect(movementPanelSrc).toMatch(/const\s*\{\s*branchId:\s*ctxBranchId\s*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 15.4 post-deploy bug 2 v3 — destructure extended to also include
+    // `branches` for default-branch detection (legacy-main fallback gate).
+    expect(movementPanelSrc).toMatch(/const\s*\{\s*branchId:\s*ctxBranchId(?:\s*,\s*\w+)*\s*\}\s*=\s*useSelectedBranch\(\)/);
   });
 });
 

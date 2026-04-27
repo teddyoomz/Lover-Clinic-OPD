@@ -45,18 +45,21 @@ describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', (
   // index dependency.
   const fnStart = backendSrc.indexOf('export async function listStockMovements');
   expect(fnStart, 'listStockMovements not found').toBeGreaterThan(0);
-  const fnSlice = backendSrc.slice(fnStart, fnStart + 3000);
+  // Bumped from 3000 → 5000 to cover the legacy-main fallback block (post v3).
+  const fnSlice = backendSrc.slice(fnStart, fnStart + 5000);
 
   it('ML.A.1 — function exists', () => {
     expect(fnStart).toBeGreaterThan(0);
   });
 
-  it('ML.A.2 — branchId filter is CLIENT-SIDE (filter() with branchId === branchIdStr)', () => {
-    expect(fnSlice).toMatch(/String\(m\.branchId\s*\|\|\s*['"]['"]\)\s*===\s*branchIdStr/);
+  it('ML.A.2 — branchId filter is CLIENT-SIDE (aliases.includes(m.branchId))', () => {
+    // Phase 15.4 post-deploy bug 2 v3 — uses an `aliases` set (branchIdStr +
+    // optional 'main') instead of direct === comparison.
+    expect(fnSlice).toMatch(/aliases\.includes\(String\(m\.branchId\s*\|\|\s*['"]['"]\)\)/);
   });
 
-  it('ML.A.3 — branchId filter ALSO checks Array.isArray(m.branchIds) && includes(X)', () => {
-    expect(fnSlice).toMatch(/Array\.isArray\(m\.branchIds\)\s*&&\s*m\.branchIds\.includes\(branchIdStr\)/);
+  it('ML.A.3 — branchId filter ALSO checks branchIds.some((b) => aliases.includes(b))', () => {
+    expect(fnSlice).toMatch(/Array\.isArray\(m\.branchIds\)\s*&&\s*m\.branchIds\.some\(\([^)]*\)\s*=>\s*aliases\.includes\(/);
   });
 
   it('ML.A.4 — V21 anti-regression: NO Promise.all dual-query (was the silent-fail trap)', () => {
@@ -89,14 +92,21 @@ describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', (
 });
 
 describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', () => {
+  // Bumped from 3000 → 5000 to cover legacy-main fallback block (post v3).
   // Pure simulate of the filter chain (no Firestore needed).
+  // Mirrors the listStockMovements implementation including legacy-main
+  // fallback (post-deploy bug 2 v3, 2026-04-28).
   function simulateBranchFilter(movements, filters) {
     let mvts = [...movements];
     if (filters.branchId != null) {
       const branchIdStr = String(filters.branchId);
+      const aliases = [branchIdStr];
+      if (filters.includeLegacyMain && branchIdStr !== 'main') {
+        aliases.push('main');
+      }
       mvts = mvts.filter((m) => {
-        if (String(m.branchId || '') === branchIdStr) return true;
-        if (Array.isArray(m.branchIds) && m.branchIds.includes(branchIdStr)) return true;
+        if (aliases.includes(String(m.branchId || ''))) return true;
+        if (Array.isArray(m.branchIds) && m.branchIds.some((b) => aliases.includes(b))) return true;
         return false;
       });
     }
@@ -160,6 +170,115 @@ describe('Phase 15.4 ML.B — Functional simulate of client-side filter logic', 
     expect(simulateBranchFilter(fixture, { branchId: 'BR-A' })).toHaveLength(1);
     expect(simulateBranchFilter(fixture, { branchId: 'WH-X' })).toHaveLength(1);
     expect(simulateBranchFilter(fixture, { branchId: 'BR-B' })).toHaveLength(0);
+  });
+
+  // Phase 15.4 post-deploy bug 2 v3: legacy-main fallback for default branch.
+  // Pre-V20 stock data has branchId='main'; BranchContext returns 'BR-XXX'.
+  // listStockLocations() hardcodes id:'main' for transfer/withdrawal — so
+  // even POST-V20 data has branchId='main'. Default branch view must alias.
+
+  it('ML.B.7 — legacy-main fallback: default-branch BR-XXX with includeLegacyMain matches branchId=main', () => {
+    const fixture = [{ movementId: 'tex', branchId: 'main', branchIds: ['main', 'WH-X'] }];
+    // Without flag: invisible at BR-XXX
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-default' })).toHaveLength(0);
+    // With flag: visible
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true })).toHaveLength(1);
+  });
+
+  it('ML.B.8 — legacy-main fallback: also matches via branchIds["main", ...] some()', () => {
+    const fixture = [
+      { movementId: 'rec', branchId: 'WH-X', branchIds: ['main', 'WH-X'] },
+    ];
+    expect(simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true })).toHaveLength(1);
+  });
+
+  it('ML.B.9 — central-tier (WH-*) with includeLegacyMain=false: legacy "main" data NOT visible (no cross-tier contamination)', () => {
+    const fixture = [
+      { movementId: 'leg-main', branchId: 'main' }, // legacy branch data
+      { movementId: 'wh-own', branchId: 'WH-X' },   // central own
+    ];
+    const result = simulateBranchFilter(fixture, { branchId: 'WH-X', includeLegacyMain: false });
+    expect(result.map((m) => m.movementId)).toEqual(['wh-own']);
+  });
+
+  it('ML.B.10 — non-default branch BR-Y with includeLegacyMain=false: does NOT see "main" data (default-branch isolation)', () => {
+    const fixture = [
+      { movementId: 'leg-main', branchId: 'main' },
+      { movementId: 'br-y-own', branchId: 'BR-Y' },
+    ];
+    const result = simulateBranchFilter(fixture, { branchId: 'BR-Y', includeLegacyMain: false });
+    expect(result.map((m) => m.movementId)).toEqual(['br-y-own']);
+  });
+
+  it('ML.B.11 — branchId="main" itself with includeLegacyMain=true: NO duplicate alias (still single match)', () => {
+    const fixture = [{ movementId: 'mm', branchId: 'main' }];
+    expect(simulateBranchFilter(fixture, { branchId: 'main', includeLegacyMain: true })).toHaveLength(1);
+  });
+
+  it('ML.B.12 — full default-branch view: sees own (BR-X) movements + legacy (main) + cross-branch w/ "main"', () => {
+    const fixture = [
+      { movementId: 'old-main-imp', branchId: 'main' },                          // pre-V20 legacy
+      { movementId: 'new-br-imp', branchId: 'BR-default' },                      // post-V20 (rare)
+      { movementId: 'tex', branchId: 'main', branchIds: ['main', 'WH-X'] },      // transfer EXPORT
+      { movementId: 'rec', branchId: 'WH-X', branchIds: ['main', 'WH-X'] },      // transfer RECEIVE
+      { movementId: 'wh-own', branchId: 'WH-X' },                                // central own
+      { movementId: 'br-y-own', branchId: 'BR-Y' },                              // OTHER branch
+    ];
+    const result = simulateBranchFilter(fixture, { branchId: 'BR-default', includeLegacyMain: true });
+    const ids = result.map((m) => m.movementId).sort();
+    // Default branch sees: own legacy + own new + cross-branch with main + RECEIVE-back
+    expect(ids).toEqual(['new-br-imp', 'old-main-imp', 'rec', 'tex']);
+  });
+});
+
+describe('Phase 15.4 ML.G — listStockMovements: includeLegacyMain filter signature', () => {
+  // Source-grep: backendClient.js listStockMovements supports the flag.
+  const fnStart = backendSrc.indexOf('export async function listStockMovements');
+  const fnSlice = backendSrc.slice(fnStart, fnStart + 4000);
+
+  it('ML.G.1 — fnSlice contains includeLegacyMain handling', () => {
+    expect(fnSlice).toMatch(/filters\.includeLegacyMain/);
+  });
+
+  it('ML.G.2 — aliases array used to expand match set', () => {
+    expect(fnSlice).toMatch(/const\s+aliases\s*=\s*\[branchIdStr\]/);
+  });
+
+  it('ML.G.3 — main NOT added to aliases when branchIdStr === "main" (no duplicate)', () => {
+    expect(fnSlice).toMatch(/branchIdStr\s*!==\s*['"]main['"]/);
+  });
+
+  it('ML.G.4 — branchIds.some((b) => aliases.includes(b)) is the check pattern', () => {
+    expect(fnSlice).toMatch(/branchIds\.some\(\([^)]*\)\s*=>\s*aliases\.includes\(/);
+  });
+});
+
+describe('Phase 15.4 ML.H — MovementLogPanel passes includeLegacyMain only at default branch', () => {
+  const panelSrc = read('src/components/backend/MovementLogPanel.jsx');
+
+  it('ML.H.1 — destructures `branches` from useSelectedBranch', () => {
+    expect(panelSrc).toMatch(/const\s*\{\s*branchId:\s*ctxBranchId\s*,\s*branches\s*\}\s*=\s*useSelectedBranch\(\)/);
+  });
+
+  it('ML.H.2 — gates includeLegacyMain on stock-tab + default-branch detection', () => {
+    expect(panelSrc).toMatch(/includeLegacyMain\s*=\s*!branchIdOverride/);
+    expect(panelSrc).toMatch(/b\.isDefault\s*===\s*true/);
+  });
+
+  it('ML.H.3 — central-tab (branchIdOverride) → includeLegacyMain false (no cross-tier pull)', () => {
+    // The `!branchIdOverride` short-circuit ensures it.
+    expect(panelSrc).toMatch(/!branchIdOverride/);
+  });
+
+  it('ML.H.4 — passes includeLegacyMain to listStockMovements call', () => {
+    expect(panelSrc).toMatch(/listStockMovements\([^)]*\)/);
+    // It's in a filters object — verify the filters object has the flag.
+    expect(panelSrc).toMatch(/includeLegacyMain[\s,}]/);
+  });
+
+  it('ML.H.5 — `main` literal alias check for legacy BranchContext fallback', () => {
+    // When BranchProvider falls back to 'main' (no be_branches), still apply.
+    expect(panelSrc).toMatch(/String\(BRANCH_ID\)\s*===\s*['"]main['"]/);
   });
 });
 
