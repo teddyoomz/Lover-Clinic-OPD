@@ -49,6 +49,23 @@ export default function CentralStockTab({ clinicSettings, theme }) {
   const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [subTab, setSubTab] = useState('balance');
+  // Phase 15.4 post-deploy s22 (2026-04-28) — prefill state for cross-subtab
+  // navigation triggered by StockBalancePanel's per-row "ปรับ"/"+" buttons.
+  // Bugs reported in s22: "+" button no-op + (suspected) cross-tier confusion.
+  // Fix mirrors StockTab.jsx pattern: clicking "ปรับ" on a Balance row routes
+  // to the central 'adjust' sub-tab with the picked product prefilled.
+  // Clicking "+" routes to 'orders' (Central PO) with the picked product prefilled.
+  const [adjustPrefill, setAdjustPrefill] = useState(null);
+  const [orderPrefill, setOrderPrefill] = useState(null);
+
+  const handleCentralAdjustProduct = (product) => {
+    setAdjustPrefill(product);
+    setSubTab('adjust');
+  };
+  const handleCentralAddStockForProduct = (product) => {
+    setOrderPrefill(product);
+    setSubTab('orders');
+  };
 
   const loadWarehouses = useCallback(async () => {
     setWarehousesLoading(true);
@@ -180,6 +197,10 @@ export default function CentralStockTab({ clinicSettings, theme }) {
           clinicSettings={clinicSettings} theme={theme}
           defaultLocationId={selectedWarehouseId}
           lockLocation
+          // Phase 15.4 post-deploy s22 — wire row-action buttons to central
+          // sub-tabs (was no-op before; user reported broken UX).
+          onAdjustProduct={handleCentralAdjustProduct}
+          onAddStockForProduct={handleCentralAddStockForProduct}
         />
       )}
 
@@ -187,6 +208,8 @@ export default function CentralStockTab({ clinicSettings, theme }) {
         <CentralStockOrderPanel
           centralWarehouseId={selectedWarehouseId}
           theme={theme}
+          prefillProduct={orderPrefill}
+          onPrefillConsumed={() => setOrderPrefill(null)}
         />
       )}
 
@@ -194,6 +217,8 @@ export default function CentralStockTab({ clinicSettings, theme }) {
         <StockAdjustPanel
           clinicSettings={clinicSettings} theme={theme}
           branchIdOverride={selectedWarehouseId}
+          prefillProduct={adjustPrefill}
+          onPrefillConsumed={() => setAdjustPrefill(null)}
         />
       )}
 

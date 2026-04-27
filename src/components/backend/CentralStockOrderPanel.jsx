@@ -36,6 +36,9 @@ import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.4 (2026-04-28) item 7 — smart unit dropdown (Rule C1 shared).
 import UnitField from './UnitField.jsx';
 import { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
+// Phase 15.4 post-deploy s22 (2026-04-28) — row-click detail modal + inline summary.
+import CentralOrderDetailModal from './CentralOrderDetailModal.jsx';
+import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -74,7 +77,7 @@ const STATUS_BADGE = {
   red: 'bg-red-900/30 text-red-400 border-red-800',
 };
 
-export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
+export default function CentralStockOrderPanel({ centralWarehouseId, theme, prefillProduct, onPrefillConsumed }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -88,6 +91,12 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { kind:'receive'|'cancel', order }
+  // Phase 15.4 post-deploy s22 — Central Balance "+" button hands a product
+  // here for pre-filled Central PO creation. Mirrors OrderPanel.jsx pattern
+  // for branch-tier prefill.
+  const [pendingPrefill, setPendingPrefill] = useState(null);
+  // Phase 15.4 post-deploy s22 — row-click detail modal state
+  const [detailOrderId, setDetailOrderId] = useState(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -138,10 +147,21 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
     }
   }, []);
 
-  const openCreate = () => {
+  const openCreate = (prefill = null) => {
     loadMasters();
+    setPendingPrefill(prefill);
     setFormOpen(true);
   };
+
+  // Phase 15.4 post-deploy s22 — auto-open form when parent hands a prefill
+  // (StockBalancePanel "+" button at central tab). Mirrors OrderPanel pattern.
+  useEffect(() => {
+    if (prefillProduct) {
+      openCreate(prefillProduct);
+      onPrefillConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillProduct]);
 
   const filteredOrders = useMemo(() => {
     if (!search.trim()) return orders;
@@ -179,8 +199,9 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
         mastersLoading={mastersLoading}
         sellers={sellers}
         sellersLoading={sellersLoading}
-        onClose={() => setFormOpen(false)}
-        onSaved={async () => { setFormOpen(false); await loadOrders(); }}
+        prefillProduct={pendingPrefill}
+        onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
+        onSaved={async () => { setFormOpen(false); setPendingPrefill(null); await loadOrders(); }}
       />
     );
   }
@@ -248,12 +269,29 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
                 const info = STATUS_INFO[o.status] || { label: o.status, color: 'amber' };
                 const canReceive = o.status === 'pending' || o.status === 'partial';
                 const canCancel = o.status !== 'cancelled' && o.status !== 'cancelled_post_receive';
+                // Phase 15.4 post-deploy s22 — inline product summary so admin
+                // can scan list without clicking each row.
+                const itemsSummary = formatOrderItemsSummary(o.items || []);
                 return (
-                  <tr key={o.orderId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                  <tr
+                    key={o.orderId}
+                    onClick={() => setDetailOrderId(o.orderId)}
+                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer"
+                    data-testid="cpo-row"
+                  >
                     <td className="px-3 py-2 font-mono text-orange-400" data-testid="cpo-row-id">{o.orderId}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(o.importedDate || o.createdAt)}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]">{o.vendorName || o.vendorId}</td>
-                    <td className="px-3 py-2 text-center">{(o.items || []).length}</td>
+                    <td className="px-3 py-2 text-[var(--tx-primary)]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[var(--tx-primary)]">{(o.items || []).length}</span>
+                        {itemsSummary && (
+                          <span className="text-[10px] text-[var(--tx-muted)] truncate max-w-[280px]" title={itemsSummary} data-testid="cpo-items-summary">
+                            {itemsSummary}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right text-[var(--tx-muted)]">
                       {Number(o.discount) > 0 ? `${fmtMoney(o.discount)} ${o.discountType === 'percent' ? '%' : '฿'}` : '—'}
                     </td>
@@ -262,7 +300,12 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
                         {info.label}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-3 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setDetailOrderId(o.orderId)}
+                        className="px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 inline-flex items-center gap-1 mr-1"
+                        data-testid="cpo-detail-btn">
+                        ดู
+                      </button>
                       {canReceive && (
                         <button onClick={() => handleReceive(o)}
                           className="px-2 py-1 rounded text-[10px] bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-800 inline-flex items-center gap-1 mr-1"
@@ -285,6 +328,14 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
           </table>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
+      )}
+
+      {/* Phase 15.4 post-deploy s22 — row-click detail modal */}
+      {detailOrderId && (
+        <CentralOrderDetailModal
+          orderId={detailOrderId}
+          onClose={() => setDetailOrderId(null)}
+        />
       )}
 
       {/* 2026-04-27 actor tracking — confirm receive / cancel with ผู้ทำรายการ */}
@@ -325,14 +376,34 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   );
 }
 
-function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGroups = [], mastersLoading, sellers, sellersLoading, onClose, onSaved }) {
+function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGroups = [], mastersLoading, sellers, sellersLoading, prefillProduct, onClose, onSaved }) {
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
   const [actorId, setActorId] = useState('');
-  const [form, setForm] = useState(() => ({
-    ...emptyCentralStockOrderForm(),
-    centralWarehouseId,
-    importedDate: thaiTodayISO(),
-  }));
+  const [form, setForm] = useState(() => {
+    const base = {
+      ...emptyCentralStockOrderForm(),
+      centralWarehouseId,
+      importedDate: thaiTodayISO(),
+    };
+    // Phase 15.4 post-deploy s22 — pre-fill items[0] when handed a product
+    // from StockBalancePanel "+" button. User then picks vendor + qty + saves.
+    if (prefillProduct) {
+      const pid = String(prefillProduct.productId || prefillProduct.id || '');
+      const pname = String(prefillProduct.productName || prefillProduct.name || '');
+      const punit = String(prefillProduct.unit || prefillProduct.mainUnitName || '');
+      const pcost = prefillProduct.cost ?? prefillProduct.price ?? '';
+      base.items = [{
+        productId: pid,
+        productName: pname,
+        qty: '',
+        cost: pcost === '' ? '' : String(pcost),
+        expiresAt: '',
+        unit: punit,
+        isPremium: false,
+      }];
+    }
+    return base;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);

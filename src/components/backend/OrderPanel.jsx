@@ -25,6 +25,8 @@ import UnitField from './UnitField.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager (item 1 of s19 user EOD).
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// Phase 15.4 post-deploy s22 (2026-04-28) — inline product summary in row.
+import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -252,13 +254,25 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
               {visibleItems.map(o => {
                 const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                 const total = (o.items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
+                // Phase 15.4 post-deploy s22 — inline product summary
+                const itemsSummary = formatOrderItemsSummary(o.items || []);
                 return (
                   <tr key={o.orderId} onClick={() => openDetail(o.orderId)}
-                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer">
+                    className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer"
+                    data-testid="order-row">
                     <td className="px-3 py-2 font-mono text-sky-400">{o.orderId}</td>
                     <td className="px-3 py-2 text-[var(--tx-primary)]">{o.vendorName || '-'}</td>
                     <td className="px-3 py-2 text-[var(--tx-muted)]">{fmtDate(o.importedDate)}</td>
-                    <td className="px-3 py-2 text-center text-[var(--tx-primary)]">{itemCount}</td>
+                    <td className="px-3 py-2 text-[var(--tx-primary)]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">{itemCount}</span>
+                        {itemsSummary && (
+                          <span className="text-[10px] text-[var(--tx-muted)] truncate max-w-[280px]" title={itemsSummary} data-testid="order-items-summary">
+                            {itemsSummary}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right font-mono text-orange-400">{fmtMoney(total)}</td>
                     <td className="px-3 py-2 text-center">
                       {o.status === 'cancelled' ? (
