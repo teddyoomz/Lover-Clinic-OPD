@@ -500,24 +500,27 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s17.
+Resume LoverClinic — continue from 2026-04-27 s17 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
 2. SESSION_HANDOFF.md (master=75bbc38, prod=75bbc38)
-3. .agents/active.md (1595 focused tests pass)
+3. .agents/active.md (1595 focused tests pass; Phase 15 next)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/qa/2026-04-27-line-oa-checklist.md (live QA tick-off pending)
+5. .agents/sessions/2026-04-27-session17-v33.6-v33.10-cleanup-phase15-ready.md
 
-Status: master=75bbc38, 1595/1595 tests pass, prod=75bbc38 LIVE (V33.9 + V33.10)
-Next: idle — awaiting user direction
+Status: master=75bbc38, 1595/1595 tests pass, prod=75bbc38 LIVE (V33.10)
+Next: Phase 15 (Central Stock Conditional) MULTI-BRANCH planning.
+User directive 2026-04-27 EOD (verbatim): "แพลน phase 15 ได้เลย แบบ
+Multi-branch ภายใต้กฎของเราอย่างเคร่งครัด และคิดให้รอบคอบในการ plan
+ทั้ง wiring flow logic จะต้องถูกต้องตามหลักความเป็นจริงที่ควรจะเป็น
+ทุกประการของระบบที่จะเพิ่มใน phase 15".
+Workflow: enter plan mode → Phase 1 Explore (opd.js intel /admin/central-stock/* 8 routes + grep be_stock_* + V20 multi-branch infra + memory phase12_to_18_roadmap Phase 17 section = our Phase 15) → Phase 2 Plan agents → Phase 3 AskUserQuestion edge cases → final plan → ExitPlanMode.
+
 Outstanding (user-triggered):
-  - V33.7 mobile QA: Thai customer DM "คอร์ส" / "นัด" → confirm full
-    weekday + month date ("อังคาร 28 เมษายน 2569"). Admin toggle a foreign
-    customer to EN via LinkLineInstructionsModal or LinkRequestsTab "ผูกแล้ว"
-    row → that customer DMs → confirm English replies + "Tuesday 28 April 2026"
-  - Admin test suspend/resume/unlink in "ผูกแล้ว" tab (carry-over)
-  - V33.5+ cleanup: remove orphan QR-token plumbing (24h grace period — eligible from 2026-04-28)
+  - Admin: fill LineSettingsTab credentials + paste webhook URL into LINE Console
+  - Admin: backfill customer IDs via "เลขบัตร" button
+  - Convention: future test customers MUST use TEST-/E2E- prefix via tests/helpers/testCustomer.js (V33.10)
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (6+3 endpoints — path is `artifacts/loverclinic-opd-4c39b/public/data/...`)
 
 /session-start
