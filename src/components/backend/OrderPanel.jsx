@@ -22,6 +22,9 @@ import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared smart-unit-dropdown (Rule C1 Rule-of-3).
 // Was inlined here; extracted so Adjust/Transfer/Withdrawal/CentralPO can reuse.
 import UnitField from './UnitField.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager (item 1 of s19 user EOD).
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -128,6 +131,11 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
     );
   }, [orders, search]);
 
+  // Phase 15.4 — pagination 20/page recent-first. Reset on filter change.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filteredOrders, {
+    key: `${BRANCH_ID}|${search}`,
+  });
+
   // 2026-04-27 actor tracking — handleCancel now opens ActorConfirmModal
   // instead of confirm(). User must pick "ผู้ทำรายการ" before the cancel
   // proceeds; the picked actor is stored on the CANCEL_IMPORT movement.
@@ -230,7 +238,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(o => {
+              {visibleItems.map(o => {
                 const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                 const total = (o.items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
                 return (
@@ -267,6 +275,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
 

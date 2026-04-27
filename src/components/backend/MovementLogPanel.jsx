@@ -10,6 +10,9 @@ import { listStockMovements, listProducts } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager.
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 
 // Tailwind needs explicit class names in source for JIT — no dynamic `bg-${color}`.
 const BADGE_CLASSES = {
@@ -123,6 +126,11 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
     );
   }, [movements, search]);
 
+  // Phase 15.4 — pagination 20/page recent-first. Reset on any filter change.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(displayMovements, {
+    key: `${BRANCH_ID}|${productId}|${typeGroup}|${dateFrom}|${dateTo}|${search}|${includeReversed}`,
+  });
+
   const summary = useMemo(() => {
     const byGroup = {};
     for (const m of movements) {
@@ -230,7 +238,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
               </tr>
             </thead>
             <tbody>
-              {displayMovements.map(m => {
+              {visibleItems.map(m => {
                 const info = TYPE_LABELS[m.type];
                 const color = info?.color || 'gray';
                 const link = m.linkedSaleId ? `Sale: ${m.linkedSaleId}` :
@@ -277,6 +285,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
     </div>

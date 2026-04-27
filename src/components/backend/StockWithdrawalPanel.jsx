@@ -17,6 +17,9 @@ import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import WithdrawalDetailModal from './WithdrawalDetailModal.jsx';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager.
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -70,6 +73,11 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
     finally { setLoading(false); }
   }, [filterLocationId]);
   useEffect(() => { load(); }, [load]);
+
+  // Phase 15.4 — pagination 20/page recent-first. Reset on filter change.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(withdrawals, {
+    key: String(filterLocationId || ''),
+  });
 
   const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);
 
@@ -128,7 +136,7 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
               </tr>
             </thead>
             <tbody>
-              {withdrawals.map(w => {
+              {visibleItems.map(w => {
                 const s = Number(w.status);
                 const info = STATUS_INFO[s] || { label: '-', color: 'amber' };
                 return (
@@ -167,6 +175,7 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
 

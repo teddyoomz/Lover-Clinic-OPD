@@ -28,6 +28,9 @@ import {
 } from '../../lib/backendClient.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager.
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -139,6 +142,11 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
     );
   }, [orders, search]);
 
+  // Phase 15.4 — pagination 20/page recent-first. Reset on warehouse/search change.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filteredOrders, {
+    key: `${centralWarehouseId || ''}|${search}`,
+  });
+
   // 2026-04-27 actor tracking — open ActorConfirmModal instead of confirm()/prompt()
   const handleReceive = (order) => {
     const remaining = (order.items || []).filter(it => !it.receivedBatchId);
@@ -225,7 +233,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(o => {
+              {visibleItems.map(o => {
                 const info = STATUS_INFO[o.status] || { label: o.status, color: 'amber' };
                 const canReceive = o.status === 'pending' || o.status === 'partial';
                 const canCancel = o.status !== 'cancelled' && o.status !== 'cancelled_post_receive';
@@ -264,6 +272,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
 

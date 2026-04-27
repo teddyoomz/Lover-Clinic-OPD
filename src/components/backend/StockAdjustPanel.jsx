@@ -17,6 +17,9 @@ import {
   listAllSellers,
 } from '../../lib/backendClient.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager.
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import {
   getFirestore, collection, getDocs, query, where,
@@ -82,6 +85,11 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   }, [BRANCH_ID]);
 
   useEffect(() => { loadAdjustments(); }, [loadAdjustments]);
+
+  // Phase 15.4 — pagination 20/page recent-first. Reset on branch change.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(adjustments, {
+    key: BRANCH_ID,
+  });
 
   const openCreate = async (prefill = null) => {
     setProductsLoading(true);
@@ -160,7 +168,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
               </tr>
             </thead>
             <tbody>
-              {adjustments.map(a => (
+              {visibleItems.map(a => (
                 <tr key={a.adjustmentId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
                   <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(a.createdAt)}</td>
                   <td className="px-3 py-2 text-[var(--tx-primary)]">{a.productName}</td>
@@ -186,6 +194,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
     </div>

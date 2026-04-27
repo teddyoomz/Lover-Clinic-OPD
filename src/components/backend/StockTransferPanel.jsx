@@ -18,6 +18,9 @@ import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import TransferDetailModal from './TransferDetailModal.jsx';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
+// Phase 15.4 (2026-04-28) — shared 20/page pager.
+import Pagination from './Pagination.jsx';
+import { usePagination } from '../../lib/usePagination.js';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -79,6 +82,12 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
 
   useEffect(() => { load(); }, [load]);
 
+  // Phase 15.4 — pagination 20/page recent-first. Reset on filter-location change.
+  // listStockTransfers already sorts createdAt DESC.
+  const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(transfers, {
+    key: String(filterLocationId || ''),
+  });
+
   const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);
 
   // 2026-04-27 actor tracking — opens ActorConfirmModal instead of native
@@ -138,7 +147,7 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
               </tr>
             </thead>
             <tbody>
-              {transfers.map(t => {
+              {visibleItems.map(t => {
                 const s = Number(t.status);
                 const info = STATUS_INFO[s] || { label: '-', color: 'amber' };
                 return (
@@ -177,6 +186,7 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
       )}
 
