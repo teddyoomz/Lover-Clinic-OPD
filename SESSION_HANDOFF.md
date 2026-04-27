@@ -7,20 +7,54 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 17 — V33.9 orphan QR cleanup + V33.10 prefix enforcement DEPLOYED
+- **Date last updated**: 2026-04-27 session 18 — Phase 15.1+15.2+15.3 + 5 bug fixes (9 commits, NOT deployed)
 - **Branch**: `master`
-- **Last commit**: `75bbc38 chore(line-oa): V33.9 + V33.10 — orphan QR-token cleanup + TEST-/E2E- prefix enforcement + Live QA runbook`
-- **Test count**: **1595** focused (+19 net since s16: -38 token tests removed, +57 V33.9/10 added)
-- **Build**: clean. BackendDashboard chunk 995.30 KB (≈ unchanged)
-- **Deploy state**: ✅ **PRODUCTION = `75bbc38`** (V15 combined deploy session 17 — V33.9 + V33.10 LIVE)
-  - Vercel: `lover-clinic-9p89gvv6h-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (48s)
-  - Firestore rules: v18 LIVE (be_customer_link_tokens block REMOVED — default-deny still applies to ghost docs)
-  - Storage rules: V26 claim-based (unchanged)
-  - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN (N1 stays 403 from default-deny even though rule block was stripped), smoke 3/3 = 200
-- **Rule B probe list permanent**: 6 positive + 3 negative
+- **Last commit**: `1066711 feat(stock): actor tracking — every state-flip records ผู้ทำรายการ`
+- **Test count**: **1905** focused (+310 since s17: 1595 → 1905)
+- **Build**: clean. BackendDashboard chunk 924 KB (≈ unchanged — CentralStockTab lazy-loaded)
+- **Deploy state**: ⏳ **PRODUCTION = `75bbc38`** (V33.10 LIVE) · master 9 commits ahead, awaiting V15 combined deploy
+  - Phase 15.2 has firestore.rules update (`be_central_stock_orders` + counter blocks) → Probe-Deploy-Probe + extend probe list 6→8 endpoints required
+  - Vercel + Firestore rules: NOT YET deployed for s18 work
+  - User chose strict rule discipline: deploy requires explicit "deploy" THIS turn (V18)
+- **Rule B probe list permanent**: 6 positive + 3 negative (extends to 8 positive + 4 negative on next deploy)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
-- **SCHEMA_VERSION**: 16
+- **SCHEMA_VERSION**: 16 (next deploy bumps to 17 — central stock orders)
+
+### Session 2026-04-27 session 18 (9 commits, `dba27ad` → `1066711`) — Phase 15.1-15.3 + 5 bug fixes + actor tracking
+
+User directive: "แพลน phase 15 ได้เลย แบบ Multi-branch ภายใต้กฎของเราอย่างเคร่งครัด"
++ multiple bug reports through the day. Day-long arc, 9 commits, 5 bug
+classes squashed in flight, +310 tests (1595 → 1905). NOT deployed.
+
+**9 commits**:
+```
+dba27ad — Phase 15.1 read-only CentralStockTab + V20 multi-branch foundation (+46 tests)
+a4307e3 — Phase 15.2 Central PO write flow + Rule C1 _buildBatchFromOrderItem helper (+86 tests)
+22cf0b9 — chore: untrack scheduled_tasks.lock
+7550c10 — chore: gitignore for lock file
+88a2174 — V22-bis seller numeric-id leak fix + resolveSellerName helper (+33 tests)
+e65d335 — Phase 15.3 Central adjustments + AdjustForm scope-bug fix (+19 tests)
+12d6081 — product picker p.name regression sweep (Phase 14.10-tris fallout, +19 tests)
+74985b8 — OrderPanel BRANCH_ID scope + smart unit dropdown (+25 tests)
+ece1868 — OrderDetailModal raw branchId → resolveBranchName helper (+20 tests)
+1066711 — actor tracking: ActorPicker + ActorConfirmModal + 5 forms + 6 state-flips + MovementLogPanel ผู้ทำ column (+62 tests)
+```
+
+**3 entity-name resolver helpers extracted (Rule of 3 trending)**: resolveSellerName · productDisplayName · resolveBranchName — all return `''` (never raw IDs); pattern locked across 9+ render sites.
+
+**Phase 15 status**: 15.1-15.3 ✅ shipped. 15.4 (central→branch dispatch) + 15.5 (withdrawal approval admin endpoint + manual fallback) queued.
+
+**7 user-reported items queued for next session** (Phase 15.4+ + UX):
+1. Pagination 20/page recent-first — all stock+central tabs
+2. Batch picker bug in StockAdjustPanel (legacy branchId='main' vs new BR-XXX)
+3. Transfer/Withdrawal movements not appearing in Stock Movement Log (only Central)
+4. Same as 3 for withdrawals
+5. Transfer detail modal needs ผู้สร้าง+ผู้ส่ง+ผู้รับ (3 actor roles)
+6. Auto-show unit on batch row in all create forms (extend OrderPanel pattern from 74985b8)
+7. ActorPicker dropdown filter by `staff.branchIds[]`/`doctor.branchIds[]` (schema exists)
+
+Detail: `.agents/sessions/2026-04-27-session18-phase15-1-2-3-plus-fixes.md`
 
 ### Session 2026-04-27 session 17 (1 commit, `75bbc38`) — V33.9 orphan QR cleanup + V33.10 prefix enforcement + Live QA runbook
 
@@ -500,28 +534,30 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s17 EOD.
+Resume LoverClinic — continue from 2026-04-27 s18 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=75bbc38, prod=75bbc38)
-3. .agents/active.md (1595 focused tests pass; Phase 15 next)
+2. SESSION_HANDOFF.md (master=1066711, prod=75bbc38 — 9 commits unpushed-to-prod)
+3. .agents/active.md (1905 focused tests pass; 7 outstanding items queued)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-27-session17-v33.6-v33.10-cleanup-phase15-ready.md
+5. .agents/sessions/2026-04-27-session18-phase15-1-2-3-plus-fixes.md
 
-Status: master=75bbc38, 1595/1595 tests pass, prod=75bbc38 LIVE (V33.10)
-Next: Phase 15 (Central Stock Conditional) MULTI-BRANCH planning.
-User directive 2026-04-27 EOD (verbatim): "แพลน phase 15 ได้เลย แบบ
-Multi-branch ภายใต้กฎของเราอย่างเคร่งครัด และคิดให้รอบคอบในการ plan
-ทั้ง wiring flow logic จะต้องถูกต้องตามหลักความเป็นจริงที่ควรจะเป็น
-ทุกประการของระบบที่จะเพิ่มใน phase 15".
-Workflow: enter plan mode → Phase 1 Explore (opd.js intel /admin/central-stock/* 8 routes + grep be_stock_* + V20 multi-branch infra + memory phase12_to_18_roadmap Phase 17 section = our Phase 15) → Phase 2 Plan agents → Phase 3 AskUserQuestion edge cases → final plan → ExitPlanMode.
+Status: master=1066711, 1905/1905 tests pass, prod=75bbc38 LIVE (V33.10)
+Phase 15.1+15.2+15.3 + 5 bug fixes + actor tracking shipped this session — NOT deployed.
+
+Next: triage 7 user-reported items (verbatim from s18 EOD message):
+  1. Pagination 20/page recent-first — all stock+central tabs
+  2. ปรับสต็อค Batch/Lot dropdown เลือกไม่ได้ (likely legacy branchId='main' mismatch)
+  3+4. Transfer/Withdrawal movements not in Stock Movement Log (only Central)
+  5. Transfer detail modal needs ผู้สร้าง+ผู้ส่ง+ผู้รับ (3 actor roles)
+  6. Auto-show unit on batch row in Adjust/Transfer/Withdrawal/Central PO (OrderPanel done)
+  7. ActorPicker filter by staff.branchIds[]/doctor.branchIds[] (schema exists)
 
 Outstanding (user-triggered):
-  - Admin: fill LineSettingsTab credentials + paste webhook URL into LINE Console
-  - Admin: backfill customer IDs via "เลขบัตร" button
-  - Convention: future test customers MUST use TEST-/E2E- prefix via tests/helpers/testCustomer.js (V33.10)
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe (6+3 endpoints — path is `artifacts/loverclinic-opd-4c39b/public/data/...`)
+  - V15 combined deploy 9 pending commits (Phase 15.2 has rules update — Probe-Deploy-Probe + extend probe list 6→8)
+  - Admin: fill LineSettingsTab credentials + webhook URL · backfill customer IDs · TEST-/E2E- prefix convention
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe
 
 /session-start
 ```
