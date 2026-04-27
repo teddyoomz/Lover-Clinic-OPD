@@ -483,19 +483,24 @@ describe('Phase 15.2 F8 — CentralStockOrderPanel + CentralStockTab wiring', ()
     expect(panelSrc).toMatch(/auth\.currentUser/);
   });
 
-  it('F8.6 panel handleReceive maps remaining lines into receipts (idempotent)', () => {
-    const fnStart = panelSrc.indexOf('handleReceive');
-    const after = panelSrc.slice(fnStart, fnStart + 1000);
-    expect(after).toContain('!it.receivedBatchId');
-    expect(after).toContain('receiveCentralStockOrder');
+  it('F8.6 panel handleReceive opens ActorConfirmModal (2026-04-27 actor tracking)', () => {
+    // Before: handleReceive mapped receipts inline + called receiveCentralStockOrder.
+    // After: handleReceive opens ActorConfirmModal; the receipt mapping +
+    // writer call moved to onConfirm. The actual writer call is searchable
+    // file-wide; receipt mapping now lives next to the modal.
+    expect(panelSrc).toContain('receiveCentralStockOrder');
+    expect(panelSrc).toMatch(/setPendingAction\(\{\s*kind:\s*'receive'/);
+    // Receipt mapping still threads "!it.receivedBatchId" filter
+    expect(panelSrc).toContain('!it.receivedBatchId');
   });
 
-  it('F8.7 panel handleCancel uses prompt + classifies error message', () => {
-    const fnStart = panelSrc.indexOf('handleCancel');
-    const after = panelSrc.slice(fnStart, fnStart + 1000);
-    expect(after).toContain('cancelCentralStockOrder');
-    // V31 — no silent-swallow; alert classifies the failure
-    expect(after).toMatch(/alert\(`ยกเลิกไม่สำเร็จ:\s*\$\{e\.message\}`\)/);
+  it('F8.7 panel handleCancel opens ActorConfirmModal with reason field', () => {
+    expect(panelSrc).toContain('cancelCentralStockOrder');
+    expect(panelSrc).toMatch(/setPendingAction\(\{\s*kind:\s*'cancel'/);
+    // V31 — modal surfaces error via setError; no silent-swallow.
+    // The legacy alert(ยกเลิกไม่สำเร็จ) pattern is gone — modal handles UX now.
+    const stripped = panelSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*\n/g, '\n');
+    expect(stripped).not.toMatch(/alert\(`ยกเลิกไม่สำเร็จ/);
   });
 });
 

@@ -23,7 +23,11 @@ import {
   listCentralStockOrders, createCentralStockOrder,
   receiveCentralStockOrder, cancelCentralStockOrder,
   listVendors, listProducts,
+  // 2026-04-27 actor tracking
+  listAllSellers,
 } from '../../lib/backendClient.js';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import ActorConfirmModal from './ActorConfirmModal.jsx';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -70,6 +74,21 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
   const [vendors, setVendors] = useState([]);
   const [mastersLoading, setMastersLoading] = useState(false);
   const [search, setSearch] = useState('');
+  // 2026-04-27 actor tracking
+  const [sellers, setSellers] = useState([]);
+  const [sellersLoading, setSellersLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState(null);  // { kind:'receive'|'cancel', order }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) { console.error('[CentralStockOrderPanel] listAllSellers failed:', e); }
+      finally { if (!cancelled) setSellersLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadOrders = useCallback(async () => {
     if (!centralWarehouseId) {
@@ -120,40 +139,17 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
     );
   }, [orders, search]);
 
-  const handleReceive = async (order) => {
+  // 2026-04-27 actor tracking — open ActorConfirmModal instead of confirm()/prompt()
+  const handleReceive = (order) => {
     const remaining = (order.items || []).filter(it => !it.receivedBatchId);
     if (remaining.length === 0) {
       alert('ทุกรายการรับครบแล้ว');
       return;
     }
-    const msg = `รับสินค้า ${remaining.length} รายการสำหรับ ${order.orderId}?\nระบบจะสร้าง batch ใน be_stock_batches + IMPORT movement ในคลังกลาง`;
-    if (!confirm(msg)) return;
-    try {
-      const receipts = remaining.map(it => ({
-        centralOrderProductId: it.centralOrderProductId,
-        qty: it.qty,
-      }));
-      await receiveCentralStockOrder(order.orderId, receipts, { user: currentAuditUser() });
-      await loadOrders();
-    } catch (e) {
-      alert(`รับสินค้าไม่สำเร็จ: ${e.message}`);
-    }
+    setPendingAction({ kind: 'receive', order });
   };
 
-  const handleCancel = async (order) => {
-    const isPostReceive = order.status === 'partial' || order.status === 'received';
-    const warning = isPostReceive
-      ? '\nสินค้าบาง batch อาจถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) — ระบบจะบล็อกถ้ามี non-import movement'
-      : '';
-    const reason = prompt(`เหตุผลการยกเลิก ${order.orderId}:${warning}\n(ไม่บังคับ)`);
-    if (reason === null) return;
-    try {
-      await cancelCentralStockOrder(order.orderId, { reason, user: currentAuditUser() });
-      await loadOrders();
-    } catch (e) {
-      alert(`ยกเลิกไม่สำเร็จ: ${e.message}`);
-    }
-  };
+  const handleCancel = (order) => setPendingAction({ kind: 'cancel', order });
 
   if (formOpen) {
     return (
@@ -162,6 +158,8 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
         vendors={vendors}
         products={products}
         mastersLoading={mastersLoading}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
         onClose={() => setFormOpen(false)}
         onSaved={async () => { setFormOpen(false); await loadOrders(); }}
       />
@@ -268,11 +266,48 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme }) {
           </table>
         </div>
       )}
+
+      {/* 2026-04-27 actor tracking — confirm receive / cancel with ผู้ทำรายการ */}
+      <ActorConfirmModal
+        open={!!pendingAction}
+        title={pendingAction
+          ? (pendingAction.kind === 'receive'
+            ? `รับสินค้า ${pendingAction.order.orderId}`
+            : `ยกเลิก ${pendingAction.order.orderId}`)
+          : ''}
+        message={pendingAction && (pendingAction.kind === 'receive'
+          ? `ระบบจะสร้าง batch ใน be_stock_batches + IMPORT movement (type 1) สำหรับ ${(pendingAction.order.items || []).filter(it => !it.receivedBatchId).length} รายการที่ยังไม่ได้รับ`
+          : 'ถ้าสินค้าบาง batch ถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) ระบบจะบล็อก. มิฉะนั้นจะ cancel + emit CANCEL_IMPORT (type 14) compensations')}
+        actionLabel={pendingAction ? (pendingAction.kind === 'receive' ? 'รับสินค้า' : 'ยกเลิก') : 'ยืนยัน'}
+        actionColor={pendingAction && pendingAction.kind === 'cancel' ? 'red' : 'emerald'}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
+        reasonOptional={pendingAction && pendingAction.kind === 'cancel'}
+        reasonLabel={pendingAction && pendingAction.kind === 'cancel' ? 'เหตุผลการยกเลิก' : 'หมายเหตุการรับ'}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={async ({ actor, reason }) => {
+          const order = pendingAction.order;
+          if (pendingAction.kind === 'receive') {
+            const remaining = (order.items || []).filter(it => !it.receivedBatchId);
+            const receipts = remaining.map(it => ({
+              centralOrderProductId: it.centralOrderProductId,
+              qty: it.qty,
+            }));
+            await receiveCentralStockOrder(order.orderId, receipts, { user: actor });
+          } else {
+            await cancelCentralStockOrder(order.orderId, { reason, user: actor });
+          }
+          setPendingAction(null);
+          await loadOrders();
+        }}
+      />
     </div>
   );
 }
 
-function CentralOrderCreateForm({ centralWarehouseId, vendors, products, mastersLoading, onClose, onSaved }) {
+function CentralOrderCreateForm({ centralWarehouseId, vendors, products, mastersLoading, sellers, sellersLoading, onClose, onSaved }) {
+  // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
+  const [actorId, setActorId] = useState('');
   const [form, setForm] = useState(() => ({
     ...emptyCentralStockOrderForm(),
     centralWarehouseId,
@@ -318,10 +353,12 @@ function CentralOrderCreateForm({ centralWarehouseId, vendors, products, masters
   };
 
   const validItems = form.items.filter(it => String(it.productId).trim() && Number(it.qty) > 0);
-  const canSave = !!(form.centralWarehouseId && form.vendorId && validItems.length > 0);
+  const actorUser = resolveActorUser(actorId, sellers);
+  const canSave = !!(form.centralWarehouseId && form.vendorId && validItems.length > 0 && actorUser);
 
   const handleSave = async () => {
     setError('');
+    if (!actorUser) { setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก'); return; }
     const err = validateCentralStockOrder(form);
     if (err) {
       setError(err[1] || 'ข้อมูลไม่ถูกต้อง');
@@ -330,7 +367,7 @@ function CentralOrderCreateForm({ centralWarehouseId, vendors, products, masters
     setSaving(true);
     try {
       const normalized = normalizeCentralStockOrder(form);
-      await createCentralStockOrder(normalized, { user: currentAuditUser() });
+      await createCentralStockOrder(normalized, { user: actorUser });
       setSuccess(true);
       setTimeout(onSaved, 500);
     } catch (e) {
@@ -400,6 +437,17 @@ function CentralOrderCreateForm({ centralWarehouseId, vendors, products, masters
               <option value="amount">บาท</option>
               <option value="percent">%</option>
             </select>
+          </div>
+          <div className="col-span-2">
+            {/* 2026-04-27 actor tracking — required ผู้ทำรายการ picker */}
+            <ActorPicker
+              value={actorId}
+              onChange={setActorId}
+              sellers={sellers}
+              loading={sellersLoading}
+              inputCls={inputCls}
+              testId="central-po-create-actor"
+            />
           </div>
         </div>
       </div>

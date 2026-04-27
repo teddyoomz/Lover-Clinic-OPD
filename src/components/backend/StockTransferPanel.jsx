@@ -11,9 +11,13 @@ import {
 import {
   listStockTransfers, createStockTransfer, updateStockTransferStatus,
   listStockLocations, listStockBatches,
+  // 2026-04-27 actor tracking
+  listAllSellers,
 } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import TransferDetailModal from './TransferDetailModal.jsx';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import ActorConfirmModal from './ActorConfirmModal.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -38,6 +42,25 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
   const [formOpen, setFormOpen] = useState(false);
   const [locations, setLocations] = useState([]);
   const [detailId, setDetailId] = useState(null);
+  // 2026-04-27 actor tracking — eager-load sellers + pending-action state
+  // for the ActorConfirmModal (replaces confirm()+prompt() for 4 transitions)
+  const [sellers, setSellers] = useState([]);
+  const [sellersLoading, setSellersLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState(null);  // { transfer, next }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) {
+        console.error('[StockTransferPanel] listAllSellers failed:', e);
+      } finally {
+        if (!cancelled) setSellersLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Phase 15.1 — when caller supplies filterLocationId, only show transfers
   // where source OR destination matches it (central-warehouse-focused view).
@@ -58,20 +81,20 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
 
   const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);
 
-  const handleTransition = async (t, next, opts = {}) => {
-    const labels = { 1: 'ส่งของ', 2: 'ยืนยันรับ', 3: 'ยกเลิก', 4: 'ปฏิเสธ' };
-    if (!confirm(`${labels[next]} — transfer ${t.transferId}?`)) return;
-    try {
-      const extra = {};
-      if (next === 3) extra.canceledNote = prompt('เหตุผลการยกเลิก (ไม่บังคับ):') || '';
-      if (next === 4) extra.rejectedNote = prompt('เหตุผลการปฏิเสธ (ไม่บังคับ):') || '';
-      await updateStockTransferStatus(t.transferId, next, extra);
-      await load();
-    } catch (e) { alert(e.message); }
-  };
+  // 2026-04-27 actor tracking — opens ActorConfirmModal instead of native
+  // confirm(). User must pick "ผู้ทำรายการ" + (for cancel/reject) reason.
+  // The picked actor is passed to updateStockTransferStatus so the emitted
+  // EXPORT_TRANSFER / RECEIVE / reverse movements record WHO triggered them.
+  const handleTransition = (t, next) => setPendingAction({ transfer: t, next });
 
   if (formOpen) {
-    return <TransferCreateForm locations={locations} onClose={() => setFormOpen(false)} onSaved={async () => { setFormOpen(false); await load(); }} />;
+    return <TransferCreateForm
+      locations={locations}
+      sellers={sellers}
+      sellersLoading={sellersLoading}
+      onClose={() => setFormOpen(false)}
+      onSaved={async () => { setFormOpen(false); await load(); }}
+    />;
   }
 
   return (
@@ -160,11 +183,50 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
       {detailId && (
         <TransferDetailModal transferId={detailId} onClose={() => setDetailId(null)} />
       )}
+
+      {/* 2026-04-27 actor tracking — confirm transition with required ผู้ทำรายการ */}
+      <ActorConfirmModal
+        open={!!pendingAction}
+        title={pendingAction
+          ? (() => {
+            const labels = { 1: 'ส่งของ', 2: 'ยืนยันรับสินค้า', 3: 'ยกเลิก', 4: 'ปฏิเสธ' };
+            return `${labels[pendingAction.next] || 'เปลี่ยนสถานะ'} — ${pendingAction.transfer.transferId}`;
+          })()
+          : ''}
+        message={pendingAction && (pendingAction.next === 1
+          ? 'ระบบจะหักสต็อกจากต้นทาง + เขียน EXPORT_TRANSFER movement (type 8)'
+          : pendingAction.next === 2
+            ? 'ระบบจะสร้าง batch ที่ปลายทาง + เขียน RECEIVE movement (type 9)'
+            : 'ระบบจะ reverse EXPORT_TRANSFER ถ้าสถานะ 1 ก่อนหน้านี้')}
+        actionLabel={pendingAction
+          ? ({ 1: 'ส่งของ', 2: 'ยืนยันรับ', 3: 'ยกเลิก', 4: 'ปฏิเสธ' }[pendingAction.next] || 'ยืนยัน')
+          : 'ยืนยัน'}
+        actionColor={pendingAction && (pendingAction.next === 3 || pendingAction.next === 4) ? 'red' : 'sky'}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
+        reasonOptional={pendingAction && (pendingAction.next === 3 || pendingAction.next === 4)}
+        reasonLabel={pendingAction
+          ? (pendingAction.next === 3 ? 'เหตุผลการยกเลิก' : pendingAction.next === 4 ? 'เหตุผลการปฏิเสธ' : 'หมายเหตุ')
+          : 'หมายเหตุ'}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={async ({ actor, reason }) => {
+          const t = pendingAction.transfer;
+          const next = pendingAction.next;
+          const extra = { user: actor };
+          if (next === 3) extra.canceledNote = reason;
+          if (next === 4) extra.rejectedNote = reason;
+          await updateStockTransferStatus(t.transferId, next, extra);
+          setPendingAction(null);
+          await load();
+        }}
+      />
     </div>
   );
 }
 
-function TransferCreateForm({ locations, onClose, onSaved }) {
+function TransferCreateForm({ locations, sellers, sellersLoading, onClose, onSaved }) {
+  // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
+  const [actorId, setActorId] = useState('');
   const [src, setSrc] = useState('main');
   const [dst, setDst] = useState('');
   const [note, setNote] = useState('');
@@ -194,10 +256,15 @@ function TransferCreateForm({ locations, onClose, onSaved }) {
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const validItems = items.filter(it => it.sourceBatchId && Number(it.qty) > 0);
-  const canSave = src && dst && src !== dst && validItems.length > 0;
+  const actorUser = resolveActorUser(actorId, sellers);
+  const canSave = src && dst && src !== dst && validItems.length > 0 && !!actorUser;
 
   const handleSave = async () => {
-    if (!canSave) { setError('กรุณากรอกต้นทาง ปลายทาง และ batch อย่างน้อย 1 รายการ'); return; }
+    if (!canSave) {
+      if (!actorUser) setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      else setError('กรุณากรอกต้นทาง ปลายทาง และ batch อย่างน้อย 1 รายการ');
+      return;
+    }
     setSaving(true); setError('');
     try {
       await createStockTransfer({
@@ -205,7 +272,7 @@ function TransferCreateForm({ locations, onClose, onSaved }) {
         destinationLocationId: dst,
         note,
         items: validItems.map(it => ({ sourceBatchId: it.sourceBatchId, qty: Number(it.qty) })),
-      });
+      }, { user: actorUser });
       setSuccess(true);
       setTimeout(onSaved, 500);
     } catch (e) { setError(e.message); setSaving(false); }
@@ -250,6 +317,17 @@ function TransferCreateForm({ locations, onClose, onSaved }) {
             <label className={labelCls}>หมายเหตุ</label>
             <input type="text" value={note} onChange={e => setNote(e.target.value)} className={inputCls} placeholder="เช่น ย้ายเพื่อเติมสต็อกสาขาหลัก" />
           </div>
+        </div>
+        {/* 2026-04-27 actor tracking — required ผู้ทำรายการ picker */}
+        <div className="mt-3">
+          <ActorPicker
+            value={actorId}
+            onChange={setActorId}
+            sellers={sellers}
+            loading={sellersLoading}
+            inputCls={inputCls}
+            testId="transfer-create-actor"
+          />
         </div>
       </div>
 

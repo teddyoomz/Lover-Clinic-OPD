@@ -10,9 +10,13 @@ import {
 import {
   listStockWithdrawals, createStockWithdrawal, updateStockWithdrawalStatus,
   listStockLocations, listStockBatches,
+  // 2026-04-27 actor tracking
+  listAllSellers,
 } from '../../lib/backendClient.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import WithdrawalDetailModal from './WithdrawalDetailModal.jsx';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import ActorConfirmModal from './ActorConfirmModal.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -36,6 +40,21 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
   const [formOpen, setFormOpen] = useState(false);
   const [locations, setLocations] = useState([]);
   const [detailId, setDetailId] = useState(null);
+  // 2026-04-27 actor tracking
+  const [sellers, setSellers] = useState([]);
+  const [sellersLoading, setSellersLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState(null);  // { withdrawal, next }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) { console.error('[StockWithdrawalPanel] listAllSellers failed:', e); }
+      finally { if (!cancelled) setSellersLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Phase 15.1 — when caller supplies filterLocationId, only show withdrawals
   // where source OR destination matches it (central-warehouse-focused view).
@@ -54,19 +73,17 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
 
   const locationName = useCallback((id) => locations.find(l => l.id === id)?.name || id, [locations]);
 
-  const handleTransition = async (w, next) => {
-    const labels = { 1: 'อนุมัติและส่ง', 2: 'ยืนยันรับ', 3: 'ยกเลิก' };
-    if (!confirm(`${labels[next]} — withdrawal ${w.withdrawalId}?`)) return;
-    try {
-      const extra = {};
-      if (next === 3) extra.canceledNote = prompt('เหตุผลการยกเลิก (ไม่บังคับ):') || '';
-      await updateStockWithdrawalStatus(w.withdrawalId, next, extra);
-      await load();
-    } catch (e) { alert(e.message); }
-  };
+  // 2026-04-27 actor tracking — opens ActorConfirmModal instead of confirm()
+  const handleTransition = (w, next) => setPendingAction({ withdrawal: w, next });
 
   if (formOpen) {
-    return <WithdrawalCreateForm locations={locations} onClose={() => setFormOpen(false)} onSaved={async () => { setFormOpen(false); await load(); }} />;
+    return <WithdrawalCreateForm
+      locations={locations}
+      sellers={sellers}
+      sellersLoading={sellersLoading}
+      onClose={() => setFormOpen(false)}
+      onSaved={async () => { setFormOpen(false); await load(); }}
+    />;
   }
 
   return (
@@ -156,11 +173,47 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
       {detailId && (
         <WithdrawalDetailModal withdrawalId={detailId} onClose={() => setDetailId(null)} />
       )}
+
+      {/* 2026-04-27 actor tracking — confirm transition with required ผู้ทำรายการ */}
+      <ActorConfirmModal
+        open={!!pendingAction}
+        title={pendingAction
+          ? (() => {
+            const labels = { 1: 'อนุมัติและส่งสินค้า', 2: 'ยืนยันรับสินค้า', 3: 'ยกเลิกใบเบิก' };
+            return `${labels[pendingAction.next] || 'เปลี่ยนสถานะ'} — ${pendingAction.withdrawal.withdrawalId}`;
+          })()
+          : ''}
+        message={pendingAction && (pendingAction.next === 1
+          ? 'ระบบจะหักสต็อกจากต้นทาง + เขียน EXPORT_WITHDRAWAL movement (type 10)'
+          : pendingAction.next === 2
+            ? 'ระบบจะสร้าง batch ที่ปลายทาง + เขียน WITHDRAWAL_CONFIRM movement (type 13)'
+            : 'ระบบจะ reverse EXPORT_WITHDRAWAL ถ้าสถานะ 1 ก่อนหน้านี้')}
+        actionLabel={pendingAction
+          ? ({ 1: 'อนุมัติ + ส่ง', 2: 'ยืนยันรับ', 3: 'ยกเลิก' }[pendingAction.next] || 'ยืนยัน')
+          : 'ยืนยัน'}
+        actionColor={pendingAction && pendingAction.next === 3 ? 'red' : 'violet'}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
+        reasonOptional={pendingAction && pendingAction.next === 3}
+        reasonLabel={pendingAction && pendingAction.next === 3 ? 'เหตุผลการยกเลิก' : 'หมายเหตุ'}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={async ({ actor, reason }) => {
+          const w = pendingAction.withdrawal;
+          const next = pendingAction.next;
+          const extra = { user: actor };
+          if (next === 3) extra.canceledNote = reason;
+          await updateStockWithdrawalStatus(w.withdrawalId, next, extra);
+          setPendingAction(null);
+          await load();
+        }}
+      />
     </div>
   );
 }
 
-function WithdrawalCreateForm({ locations, onClose, onSaved }) {
+function WithdrawalCreateForm({ locations, sellers, sellersLoading, onClose, onSaved }) {
+  // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
+  const [actorId, setActorId] = useState('');
   const [direction, setDirection] = useState('central_to_branch');
   // Central → branch: source=central warehouse, dest=branch
   // Branch → central: source=central warehouse (provides), dest=branch requests
@@ -210,10 +263,15 @@ function WithdrawalCreateForm({ locations, onClose, onSaved }) {
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const validItems = items.filter(it => it.sourceBatchId && Number(it.qty) > 0);
-  const canSave = src && dst && src !== dst && validItems.length > 0;
+  const actorUser = resolveActorUser(actorId, sellers);
+  const canSave = src && dst && src !== dst && validItems.length > 0 && !!actorUser;
 
   const handleSave = async () => {
-    if (!canSave) { setError('กรุณากรอกให้ครบ'); return; }
+    if (!canSave) {
+      if (!actorUser) setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      else setError('กรุณากรอกให้ครบ');
+      return;
+    }
     setSaving(true); setError('');
     try {
       await createStockWithdrawal({
@@ -222,7 +280,7 @@ function WithdrawalCreateForm({ locations, onClose, onSaved }) {
         destinationLocationId: dst,
         note,
         items: validItems.map(it => ({ sourceBatchId: it.sourceBatchId, qty: Number(it.qty) })),
-      });
+      }, { user: actorUser });
       setSuccess(true);
       setTimeout(onSaved, 500);
     } catch (e) { setError(e.message); setSaving(false); }
@@ -281,6 +339,17 @@ function WithdrawalCreateForm({ locations, onClose, onSaved }) {
             <label className={labelCls}>หมายเหตุ</label>
             <input type="text" value={note} onChange={e => setNote(e.target.value)} className={inputCls} />
           </div>
+        </div>
+        {/* 2026-04-27 actor tracking — required ผู้ทำรายการ picker */}
+        <div className="mt-3">
+          <ActorPicker
+            value={actorId}
+            onChange={setActorId}
+            sellers={sellers}
+            loading={sellersLoading}
+            inputCls={inputCls}
+            testId="withdrawal-create-actor"
+          />
         </div>
       </div>
 

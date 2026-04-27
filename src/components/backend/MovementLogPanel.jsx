@@ -224,6 +224,8 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                 <th className="px-3 py-2 text-right font-bold w-20">จำนวน</th>
                 <th className="px-3 py-2 text-right font-bold w-16">ก่อน</th>
                 <th className="px-3 py-2 text-right font-bold w-16">หลัง</th>
+                {/* 2026-04-27 actor tracking — show ผู้ทำรายการ for every movement */}
+                <th className="px-3 py-2 text-left font-bold w-28">ผู้ทำ</th>
                 <th className="px-3 py-2 text-left font-bold">link / note</th>
               </tr>
             </thead>
@@ -260,6 +262,12 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
                     </td>
                     <td className="px-3 py-2 text-right text-[var(--tx-muted)] font-mono">{m.before != null ? fmtQty(m.before) : '-'}</td>
                     <td className="px-3 py-2 text-right text-[var(--tx-muted)] font-mono">{m.after != null ? fmtQty(m.after) : '-'}</td>
+                    {/* 2026-04-27 actor tracking — show user.userName per movement.
+                        Falls back to '-' for legacy movements without user
+                        (pre-actor-picker era). NEVER displays raw userId. */}
+                    <td className="px-3 py-2 text-[var(--tx-primary)] text-[11px]" data-testid="movement-actor">
+                      {(typeof m.user?.userName === 'string' && m.user.userName.trim()) ? m.user.userName : '-'}
+                    </td>
                     <td className="px-3 py-2 text-[var(--tx-muted)] text-[11px]">
                       {link && <div className="font-mono">{link}</div>}
                       {m.note && <div className="italic">{m.note}</div>}

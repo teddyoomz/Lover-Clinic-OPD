@@ -14,7 +14,11 @@ import {
   listProducts,
   // 2026-04-27 fix — load unit groups for smart unit dropdown in create form
   listProductUnitGroups,
+  // 2026-04-27 actor tracking — staff + doctors picker for "ผู้ทำรายการ"
+  listAllSellers,
 } from '../../lib/backendClient.js';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import ActorConfirmModal from './ActorConfirmModal.jsx';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -68,6 +72,26 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const [search, setSearch] = useState('');
   const [pendingPrefill, setPendingPrefill] = useState(null);
   const [detailOrderId, setDetailOrderId] = useState(null);
+  // 2026-04-27 actor tracking — eager-load sellers (be_staff + be_doctors)
+  // for ActorPicker. Load once on mount; reused across the create form +
+  // cancel-confirm modal.
+  const [sellers, setSellers] = useState([]);
+  const [sellersLoading, setSellersLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) {
+        console.error('[OrderPanel] listAllSellers failed:', e);
+      } finally {
+        if (!cancelled) setSellersLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -112,16 +136,10 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
     );
   }, [orders, search]);
 
-  const handleCancel = async (order) => {
-    const msg = `ยกเลิกใบสั่งซื้อ ${order.orderId}?\nถ้ามีสินค้าบาง lot ถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) — ระบบจะบล็อกไม่ให้ยกเลิก`;
-    if (!confirm(msg)) return;
-    try {
-      await cancelStockOrder(order.orderId, { reason: '', user: currentAuditUser() });
-      await loadOrders();
-    } catch (e) {
-      alert(`ยกเลิกไม่สำเร็จ: ${e.message}`);
-    }
-  };
+  // 2026-04-27 actor tracking — handleCancel now opens ActorConfirmModal
+  // instead of confirm(). User must pick "ผู้ทำรายการ" before the cancel
+  // proceeds; the picked actor is stored on the CANCEL_IMPORT movement.
+  const handleCancel = (order) => setCancelTarget(order);
 
   const openDetail = (orderId) => setDetailOrderId(orderId);
   const closeDetail = () => setDetailOrderId(null);
@@ -142,6 +160,8 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
         products={products}
         productsLoading={productsLoading}
         prefillProduct={pendingPrefill}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
         onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
         onSaved={async () => {
           setFormOpen(false);
@@ -265,6 +285,30 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
           onSaved={loadOrders}
         />
       )}
+
+      {/* 2026-04-27 actor tracking — cancel-confirm modal with required ผู้ทำรายการ picker */}
+      <ActorConfirmModal
+        open={!!cancelTarget}
+        title={cancelTarget ? `ยกเลิกใบสั่งซื้อ ${cancelTarget.orderId}` : ''}
+        message="ถ้ามีสินค้าบาง lot ถูกใช้ไปแล้ว (ขาย/ปรับ/ย้าย) ระบบจะบล็อกไม่ให้ยกเลิก"
+        actionLabel="ยกเลิกใบสั่งซื้อ"
+        actionColor="red"
+        sellers={sellers}
+        sellersLoading={sellersLoading}
+        reasonOptional
+        reasonLabel="เหตุผลการยกเลิก"
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={async ({ actor, reason }) => {
+          try {
+            await cancelStockOrder(cancelTarget.orderId, { reason, user: actor });
+            setCancelTarget(null);
+            await loadOrders();
+          } catch (e) {
+            // V31 — surface error; modal stays open via setError pathway in modal
+            throw e;
+          }
+        }}
+      />
     </div>
   );
 }
@@ -272,13 +316,18 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
 // ═══════════════════════════════════════════════════════════════════════════
 // Order Create Form
 // ═══════════════════════════════════════════════════════════════════════════
-function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, onClose, onSaved }) {
+function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
   // 2026-04-27 fix — branchId passed in from OrderPanel (parent).
   // Pre-existing scope bug: BRANCH_ID was referenced inside this sibling
   // function (line 318 below) but never declared in its scope —
   // ReferenceError at save time. Mirrors StockAdjustPanel.AdjustCreateForm
   // fix shipped earlier today (Phase 15.3 commit e65d335).
   const BRANCH_ID = branchId;
+
+  // 2026-04-27 actor tracking — required "ผู้ทำรายการ" picker. User
+  // directive: empty default + force-pick every time. resolveActorUser
+  // converts the picked id → {userId, userName} for the writer's user field.
+  const [actorId, setActorId] = useState('');
 
   // 2026-04-27 — unit groups for smart unit dropdown. Loaded once on mount
   // (cheap query against be_product_units). Each group has units[] with
@@ -352,12 +401,20 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
   };
 
   const validItems = items.filter(it => it.productId && Number(it.qty) > 0);
-  const canSave = vendorName.trim() && importedDate && validItems.length > 0;
+  // 2026-04-27 actor tracking — picked actor must resolve to a real seller
+  // for canSave to flip true. resolveActorUser returns null if id missing
+  // OR if the loaded sellers list doesn't contain the id (race-safe).
+  const actorUser = resolveActorUser(actorId, sellers);
+  const canSave = vendorName.trim() && importedDate && validItems.length > 0 && !!actorUser;
   const total = validItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
 
   const handleSave = async () => {
     if (!canSave) {
-      setError('กรุณากรอก vendor + วันที่ + รายการสินค้าอย่างน้อย 1 รายการ');
+      if (!actorUser) {
+        setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      } else {
+        setError('กรุณากรอก vendor + วันที่ + รายการสินค้าอย่างน้อย 1 รายการ');
+      }
       return;
     }
     setSaving(true); setError('');
@@ -377,7 +434,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
           isPremium: !!it.isPremium,
         })),
       };
-      await createStockOrder(payload, { user: currentAuditUser() });
+      await createStockOrder(payload, { user: actorUser });
       setSuccess(true);
       setTimeout(onSaved, 600);
     } catch (e) {
@@ -426,6 +483,15 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
             <DateField value={importedDate} onChange={setImportedDate} locale="ce" size="sm" />
           </div>
         </div>
+        {/* 2026-04-27 actor tracking — required ผู้ทำรายการ picker */}
+        <ActorPicker
+          value={actorId}
+          onChange={setActorId}
+          sellers={sellers}
+          loading={sellersLoading}
+          inputCls={inputCls}
+          testId="order-create-actor"
+        />
         <div>
           <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">หมายเหตุ</label>
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}

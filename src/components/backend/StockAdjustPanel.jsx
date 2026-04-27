@@ -13,7 +13,10 @@ import {
   listStockMovements, getStockBatch,
   // Phase 14.10-tris (2026-04-26) — be_products canonical
   listProducts,
+  // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
+  listAllSellers,
 } from '../../lib/backendClient.js';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import {
   getFirestore, collection, getDocs, query, where,
@@ -47,6 +50,23 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState(null);
+  // 2026-04-27 actor tracking — eager-load sellers (be_staff + be_doctors)
+  const [sellers, setSellers] = useState([]);
+  const [sellersLoading, setSellersLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) {
+        console.error('[StockAdjustPanel] listAllSellers failed:', e);
+      } finally {
+        if (!cancelled) setSellersLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadAdjustments = useCallback(async () => {
     setLoading(true);
@@ -91,6 +111,8 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
         productsLoading={productsLoading}
         prefillProduct={pendingPrefill}
         branchId={BRANCH_ID}
+        sellers={sellers}
+        sellersLoading={sellersLoading}
         onClose={() => { setFormOpen(false); setPendingPrefill(null); }}
         onSaved={async () => { setFormOpen(false); setPendingPrefill(null); await loadAdjustments(); }}
       />
@@ -170,13 +192,16 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   );
 }
 
-function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, onClose, onSaved }) {
+function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, sellers, sellersLoading, onClose, onSaved }) {
   // Phase 15.3 (2026-04-27) — branchId passed in from StockAdjustPanel.
   // Pre-existing bug: BRANCH_ID was referenced inside this sibling function
   // (lines 191 + 220 below) but never declared in its scope — silently
   // resolved to `undefined` at runtime, causing batch picker to show empty.
   // Now explicitly threaded so central-tier adjusts work correctly.
   const BRANCH_ID = branchId;
+
+  // 2026-04-27 actor tracking — required ผู้ทำรายการ picker.
+  const [actorId, setActorId] = useState('');
   const [productId, setProductId] = useState(prefillProduct ? String(prefillProduct.productId || prefillProduct.id) : '');
   const [productName, setProductName] = useState(prefillProduct ? (prefillProduct.productName || prefillProduct.name || '') : '');
   const [batches, setBatches] = useState([]);
@@ -212,7 +237,8 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   }, [productId]);
 
   const selectedBatch = useMemo(() => batches.find(b => b.batchId === batchId), [batches, batchId]);
-  const canSave = productId && batchId && Number(qty) > 0 && type;
+  const actorUser = resolveActorUser(actorId, sellers);
+  const canSave = productId && batchId && Number(qty) > 0 && type && !!actorUser;
 
   const onPickProduct = (pid) => {
     const p = products.find(x => String(x.id) === String(pid));
@@ -222,12 +248,16 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   };
 
   const handleSave = async () => {
-    if (!canSave) { setError('กรุณากรอกข้อมูลให้ครบ'); return; }
+    if (!canSave) {
+      if (!actorUser) setError('กรุณาเลือกผู้ทำรายการก่อนบันทึก');
+      else setError('กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
     setSaving(true); setError('');
     try {
       await createStockAdjustment(
         { batchId, type, qty: Number(qty), note: note.trim(), branchId: BRANCH_ID },
-        { user: currentAuditUser() }
+        { user: actorUser }
       );
       setSuccess(true);
       setTimeout(onSaved, 600);
@@ -329,6 +359,16 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
             className={`${inputCls} resize-none`} placeholder="เหตุผลการปรับสต็อก (เช่น นับสต็อก, ของเสีย, คืน vendor)" />
         </div>
+
+        {/* 2026-04-27 actor tracking — required ผู้ทำรายการ picker */}
+        <ActorPicker
+          value={actorId}
+          onChange={setActorId}
+          sellers={sellers}
+          loading={sellersLoading}
+          inputCls={inputCls}
+          testId="adjust-create-actor"
+        />
 
         <div className="p-3 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[10px] text-[var(--tx-muted)]">
           ℹ การปรับจะเขียน movement log (type=3 เพิ่ม / type=4 ลด) ไม่สามารถแก้ไขหรือลบทีหลังได้ — ถ้าผิดให้สร้าง adjustment ใหม่ในทิศทางตรงกันข้าม
