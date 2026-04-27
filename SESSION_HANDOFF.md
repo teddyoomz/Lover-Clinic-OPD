@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 session 21 — V15 combined deploy #2 COMPLETE (bug 2 v3 + v4 LIVE — single-tier movement log + counterparty label)
+- **Date last updated**: 2026-04-28 session 22+23 — central tab wiring + tier-scoped product filter (2 commits, NOT deployed)
 - **Branch**: `master`
-- **Last commit**: `e46eda2 fix(stock): bug 2 v4 — single-tier movement log + counterparty label`
-- **Test count**: **2214** focused (+31 since s20: 2183 → 2214)
-- **Build**: clean. BackendDashboard chunk ≈ 911 KB
-- **Deploy state**: ✅ **PRODUCTION = `e46eda2`** (V15 #2 LIVE — bug 2 v3 + v4)
+- **Last commit**: `93c71d6 fix(stock): s23 — tier-scoped product filter in AdjustCreateForm`
+- **Test count**: **2275** focused (+61 since s21: 2214 → 2275)
+- **Build**: clean
+- **Deploy state**: ⏳ **PRODUCTION = `e46eda2`** (V15 #2 LIVE) · master 2 commits ahead, awaiting V15 #3 combined deploy
   - Vercel (s21): `lover-clinic-gbhf7r5hv-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 55s deploy
   - Firestore rules: released to `cloud.firestore` (no rule changes in s21; redeployed clean)
   - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 ✓
@@ -21,6 +21,25 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (this deploy: central stock orders + 4 cross-branch movement field additions)
+
+### Session 2026-04-28 session 22+23 (2 commits, NOT deployed) — Central tab wiring + tier-scoped product filter
+
+User reported 4 + 1 issues across two messages:
+1. "ระบบปรับ stock ของ tab คลังกลาง มันมั่ว" — wired buttons + (later) tier-scoped product filter
+2. "ปุ่ม + ในหน้า ยอดคงเหลือ ของ tab คลังกลาง กดไม่ได้" — wired
+3. "ใน tab คลังกลาง การนำเข้าจาก Vendor ให้กดเข้าไปดูรายละเอียด + แสดงสินค้าคร่าวๆ" — NEW CentralOrderDetailModal + inline summary
+4. "ใน tab stock ก็เช่นกัน ตรงรายการ Orders" — inline summary in OrderPanel
+5. (with screenshot, frustrated) "ในหน้าปรับสต็อคของคลังกลาง เวลากดปุ่มปรับสต็อคใหม่ แล้วมันไปเอาสินค้าจากคลังสาขามาให้เลือก" — TIER-SCOPED PRODUCT FILTER (s23)
+
+**s22 (`25ed70a`)**: CentralStockTab now wires StockBalancePanel callbacks (onAdjustProduct/onAddStockForProduct) → navigates to central subTab='adjust'/'orders' with prefill. CentralStockOrderPanel accepts prefillProduct + auto-opens with items[0] pre-filled. NEW `CentralOrderDetailModal.jsx` (read-only mirror of OrderDetailModal). NEW `src/lib/orderItemsSummary.js` shared helper. Both Order panels: clickable rows + inline "Botox x10 · Filler x5 · +N รายการ" summary.
+
+**s23 (`93c71d6`)**: AdjustCreateForm pre-loads all active batches at current tier, derives unique productIds, filters product dropdown. Branch tier sees only branch-stocked products; central tier sees only central-stocked products. Empty state CTA + loading state. Same legacy-main gate preserved.
+
+**Tests**: 2214 → 2275 (+61: 39 in s22 + 22 in s23). Build clean.
+
+**Bug 3 answer (no code change)**: Vendor data comes from `be_vendors` Firestore collection, populated via existing VendorSalesTab (Phase 14.3).
+
+Detail: `.agents/sessions/2026-04-28-session22-23-central-tab-wiring-and-tier-filter.md`
 
 ### Session 2026-04-28 session 21 (2 commits + V15 #2 deploy) — Movement Log architecture corrected to single-tier with counterparty label
 
@@ -634,34 +653,27 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 s21 (post V15 #2 deploy).
+Resume LoverClinic — continue from 2026-04-28 s22+s23 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=bd755f5, prod=e46eda2 LIVE — synced)
-3. .agents/active.md (2214 tests pass; bug 2 v3 + v4 deployed)
+2. SESSION_HANDOFF.md (master=93c71d6, prod=e46eda2 — 2 commits unpushed)
+3. .agents/active.md (2275 tests pass; s22+s23 NOT deployed)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-28-session21-bug2-v3-v4-deploy.md
+5. .agents/sessions/2026-04-28-session22-23-central-tab-wiring-and-tier-filter.md
 
-Status: master=bd755f5 (prod=e46eda2 — docs commit ahead). 2214/2214 tests pass.
-Movement log architecture corrected this session: single-tier per movement,
-counterparty NAME shown via branchIds[] metadata. NOT duplicated on both sides.
+Status: master=93c71d6, 2275/2275 tests pass, prod=e46eda2 LIVE.
+2 commits ready for V15 #3: s22 (central tab wiring + Order detail UX) +
+s23 (tier-scoped product filter in AdjustCreateForm).
 
-Architecture lock (institutional memory):
-- Cross-tier movements split into 2 docs (EXPORT at source + RECEIVE at destination)
-- Each visible at OWN tier only
-- branchIds[] is metadata for COUNTERPARTY NAME (NOT filter alias)
-- Type 8/10 source-side: "ส่งออกไป/เบิกโดย {dest}"
-- Type 9/13 destination-side: "รับเข้าจาก/รับเบิกจาก {src}"
-- Legacy-main fallback STAYS (default-branch ID-mismatch fix)
+Next: V15 #3 combined deploy when user authorizes (Probe-Deploy-Probe required
+per Rule B; rules version unchanged in s22/s23 but probe still mandatory).
 
-Next: Live QA verification:
-  - Korat → Central transfer: Korat ONE row "ส่งออกไป คลังกลาง...", Central ONE row "รับเข้าจาก สาขาโคราช"
-  - Withdrawal: similar one-side semantics
-  - Default branch (สาขาหลัก) MovementLog now shows transfers (legacy-main fallback)
-
-Then queue: ActorPicker branchIds filter; Phase 15.5 central dispatch +
-withdrawal approval admin endpoint.
+After deploy live QA:
+- Central adjust: dropdown shows ONLY products in คลังกลาง (not branch products)
+- Empty central → CTA "สร้าง Order นำเข้าก่อน"
+- Balance row "ปรับ"/"+" buttons in central tab now navigate correctly
+- Vendor PO list (both tiers): row-click → detail modal + inline product summary
 
 Outstanding (admin tasks): LineSettingsTab creds + webhook URL · backfill
 customer IDs · TEST-/E2E- prefix.
