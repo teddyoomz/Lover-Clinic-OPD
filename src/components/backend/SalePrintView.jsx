@@ -6,6 +6,7 @@
 import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
+import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -152,16 +153,13 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
   // empty parens. Fix: read `name` (canonical) with fallback chain.
   const customerDisplay = s.customerName || (s.customerHN ? `HN ${s.customerHN}` : '');
   const firstSeller = (s.sellers || [])[0] || {};
-  // Resolve name via lookup when saved record only has id (legacy data)
-  const lookupName = firstSeller.id && Array.isArray(sellersLookup)
-    ? sellersLookup.find((opt) => String(opt.id) === String(firstSeller.id))?.name
-    : '';
-  const sellerDisplay = firstSeller.name
-    || firstSeller.sellerName
-    || lookupName
-    || firstSeller.id
+  // V22 follow-up (2026-04-27) — resolveSellerName never falls back to
+  // numeric seller.id; if nothing resolves we use createdBy* / blank
+  // (NEVER the numeric ProClinic staff_id like "614").
+  const sellerName = resolveSellerName(firstSeller, sellersLookup);
+  const sellerDisplay = sellerName
     || s.createdByName
-    || s.createdBy
+    || (typeof s.createdBy === 'string' ? s.createdBy : '')
     || '';
 
   // Render via React Portal into document.body so print CSS can hide #root

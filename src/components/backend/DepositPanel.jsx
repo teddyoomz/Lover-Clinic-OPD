@@ -15,6 +15,7 @@ import {
 } from '../../lib/backendClient.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
+import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
@@ -994,7 +995,8 @@ function DetailModal({ dep, isDark, onClose }) {
               <div className="space-y-0.5">
                 {dep.sellers.map((s, i) => (
                   <div key={i} className="flex justify-between">
-                    <span>{s.name || s.id}</span>
+                    {/* V22 follow-up (2026-04-27) — never leak numeric s.id */}
+                    <span>{resolveSellerName(s, []) || 'ไม่ระบุ'}</span>
                     <span className="text-[var(--tx-muted)]">{s.percent}% / {fmtMoney(s.total)} บาท</span>
                   </div>
                 ))}

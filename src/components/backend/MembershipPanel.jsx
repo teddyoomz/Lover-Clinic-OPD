@@ -16,6 +16,7 @@ import {
 } from '../../lib/backendClient.js';
 import { fmtMoney, calcMembershipExpiry, isMembershipExpired } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
+import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import { thaiTodayISO } from '../../utils.js';
@@ -651,7 +652,8 @@ function DetailModal({ m, isDark, onClose }) {
           {m.sellers?.length > 0 && (
             <div>
               <p className={labelCls}>พนักงานขาย</p>
-              {m.sellers.map((s, i) => <div key={i} className="flex justify-between py-0.5"><span>{s.name || s.id}</span><span className="text-[var(--tx-muted)]">{s.percent}%</span></div>)}
+              {/* V22 follow-up (2026-04-27) — never leak numeric s.id */}
+              {m.sellers.map((s, i) => <div key={i} className="flex justify-between py-0.5"><span>{resolveSellerName(s, sellerList) || 'ไม่ระบุ'}</span><span className="text-[var(--tx-muted)]">{s.percent}%</span></div>)}
             </div>
           )}
           {m.renewals?.length > 0 && (

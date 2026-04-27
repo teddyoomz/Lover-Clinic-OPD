@@ -43,6 +43,45 @@ export function composeStaffDisplayName(p) {
 }
 
 /**
+ * Resolve the display name for a saved-on-sale seller record.
+ *
+ * Sales/quotations/memberships/deposits store sellers as
+ *   `{ id, name, percent, total }` (4 callers, Rule of 3 met).
+ *
+ * Lookup chain:
+ *   1. seller.name (saved at write time — usually present for new sales)
+ *   2. seller.sellerName (legacy alias)
+ *   3. lookup[].find(opt => opt.id === seller.id).name (covers legacy
+ *      records where name wasn't captured at write time, e.g. early-V20
+ *      sales saved before the dropdown change)
+ *   4. ''   ← V22 contract: NEVER fall back to seller.id (numeric).
+ *      User directive 2026-04-26: "ทุกที่แสดงชื่อแพทย์และพนง เป็น text
+ *      ไม่ใช่ตัวเลย"
+ *
+ * Pure — no Firestore, no React. Easy to unit-test.
+ *
+ * @param {object} seller   — { id, name?, sellerName?, percent?, ... }
+ * @param {Array<{id, name}>} [lookup]   — be_staff + be_doctors merged
+ *                                         list (e.g. listAllSellers result)
+ * @returns {string}  display name; empty string when nothing resolves
+ */
+export function resolveSellerName(seller, lookup) {
+  if (!seller || typeof seller !== 'object') return '';
+  const direct = typeof seller.name === 'string' ? seller.name.trim() : '';
+  if (direct) return direct;
+  const alt = typeof seller.sellerName === 'string' ? seller.sellerName.trim() : '';
+  if (alt) return alt;
+  if (Array.isArray(lookup) && seller.id != null && seller.id !== '') {
+    const match = lookup.find((opt) => opt && String(opt.id) === String(seller.id));
+    if (match && typeof match.name === 'string' && match.name.trim()) {
+      return match.name.trim();
+    }
+  }
+  // V22 lock — never leak numeric ID. Caller decides UI placeholder.
+  return '';
+}
+
+/**
  * Build a "search-and-display" subtitle string for one staff/doctor record.
  * Used in dropdown lists to help admin pick the right person when there
  * are 27+ doctors with similar names.

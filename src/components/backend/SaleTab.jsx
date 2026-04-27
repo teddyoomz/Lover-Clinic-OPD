@@ -35,6 +35,7 @@ import {
 // fall back to 'main' (BranchContext's default), so existing behavior
 // is preserved 100%.
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { LocalInput, LocalTextarea } from '../form/LocalField.jsx';
@@ -192,6 +193,28 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     finally { setListLoading(false); }
   }, []);
   useEffect(() => { loadSales(); }, [loadSales]);
+
+  // ── Eager-load seller lookup on mount (V22 fix 2026-04-27) ──
+  // Before the fix, sellers[] only loaded inside `loadOptions` (called from
+  // openCreate / openEdit / initialCustomer-driven openCreate). View modal +
+  // PDF print opened BEFORE any of those fired → sellersLookup empty →
+  // resolveSellerName fell back to s.id which leaked the numeric ProClinic
+  // staff_id (e.g. "614") into the UI. Loading the seller list eagerly is
+  // ~1 small fetch (listAllSellers reads be_staff + be_doctors); cheap
+  // enough to do on tab mount so every render path gets a populated lookup.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listAllSellers();
+        if (!cancelled && Array.isArray(list)) setSellers(list);
+      } catch (e) {
+        // Non-fatal: subsequent loadOptions still re-fetches when form opens.
+        console.warn('[SaleTab] eager listAllSellers failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load cancel analysis (courses + money + stock) whenever the cancel modal opens
   useEffect(() => {
@@ -989,17 +1012,18 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   Phase 14.10-tris (2026-04-26) — fallback lookup against
                   loaded `sellers` state when saved record's `s.name` is
                   empty (legacy data where dropdown didn't capture name).
-                  User reported numeric "614" showing instead of staff name. */}
+                  V22 follow-up (2026-04-27) — never leak numeric s.id.
+                  Sellers list eagerly loaded on mount so the lookup path
+                  always has data. resolveSellerName returns '' when
+                  nothing resolves; UI shows "ไม่ระบุ" placeholder. */}
               {viewingSale.sellers?.length > 0 && (
                 <div>
                   <h4 className={labelCls}>พนักงานขาย</h4>
                   {viewingSale.sellers.map((s, i) => {
-                    const resolvedName = s.name
-                      || sellers.find(opt => String(opt.id) === String(s.id))?.name
-                      || s.id;
+                    const resolvedName = resolveSellerName(s, sellers);
                     return (
                       <div key={i} className="flex justify-between py-0.5">
-                        <span>{resolvedName}</span>
+                        <span>{resolvedName || 'ไม่ระบุ'}</span>
                         <span>{s.percent}%</span>
                       </div>
                     );
