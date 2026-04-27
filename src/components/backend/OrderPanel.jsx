@@ -19,6 +19,9 @@ import {
 } from '../../lib/backendClient.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
+// Phase 15.4 (2026-04-28) — shared smart-unit-dropdown (Rule C1 Rule-of-3).
+// Was inlined here; extracted so Adjust/Transfer/Withdrawal/CentralPO can reuse.
+import UnitField from './UnitField.jsx';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
@@ -42,21 +45,10 @@ import { productDisplayName } from '../../lib/productValidation.js';
 // fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 
-// 2026-04-27 — derive unit-name options for a picked product from be_product_units.
-// Returns [] when product has no configured unit group → caller falls back to free text.
-// Module-level export so tests can target the pure logic without mounting React.
-export function getUnitOptionsForProduct(productId, products, unitGroups) {
-  if (!productId || !Array.isArray(products) || !Array.isArray(unitGroups)) return [];
-  const p = products.find(x => String(x.id) === String(productId));
-  if (!p) return [];
-  const groupId = String(p.defaultProductUnitGroupId || '').trim();
-  if (!groupId) return [];
-  const grp = unitGroups.find(g => String(g.id || g.unitGroupId) === groupId);
-  if (!grp || !Array.isArray(grp.units)) return [];
-  return grp.units
-    .map(u => (u && typeof u.name === 'string' ? u.name.trim() : ''))
-    .filter(Boolean);
-}
+// Phase 15.4 (2026-04-28) — extracted to src/lib/unitFieldHelpers.js
+// (Rule C1 Rule-of-3). Re-exported here for backward compat with existing
+// tests + callers that imported the helper from OrderPanel.
+export { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
@@ -544,6 +536,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
                   <div>
                     <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">หน่วย</label>
                     <UnitField
+                      testId="order-unit"
                       value={it.unit}
                       options={getUnitOptionsForProduct(it.productId, products, unitGroups)}
                       inputCls={inputCls}
@@ -613,6 +606,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
                     </td>
                     <td className="px-2 py-2">
                       <UnitField
+                        testId="order-unit"
                         value={it.unit}
                         options={getUnitOptionsForProduct(it.productId, products, unitGroups)}
                         inputCls={inputCls}
@@ -659,31 +653,7 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
   );
 }
 
-// 2026-04-27 — Unit field with smart dropdown.
-// When the picked product has a configured `defaultProductUnitGroupId`,
-// renders a <select> with all unit names from that group (base + larger
-// packs). Falls back to free-text <input> for products without a group
-// (legacy data, or admin hasn't set up unit-group yet) so existing
-// orders keep working.
-//
-// Extracted into a sibling sub-component (NOT IIFE) per Rule 03-stack
-// V5 — Vite OXC parser crashes on JSX-inline IIFE patterns.
-function UnitField({ value, options, inputCls, onChange }) {
-  if (Array.isArray(options) && options.length > 0) {
-    return (
-      <select value={value || ''} onChange={onChange} className={inputCls} data-testid="order-unit-select">
-        {options.map(name => <option key={name} value={name}>{name}</option>)}
-      </select>
-    );
-  }
-  return (
-    <input
-      type="text"
-      value={value || ''}
-      onChange={onChange}
-      className={inputCls}
-      placeholder="U"
-      data-testid="order-unit-input"
-    />
-  );
-}
+// Phase 15.4 (2026-04-28) — UnitField extracted to ./UnitField.jsx
+// (Rule C1 Rule-of-3) so Adjust/Transfer/Withdrawal/CentralPO panels can
+// reuse the smart-unit-dropdown pattern. Use-sites pass testId="order-unit"
+// to keep the existing data-testid="order-unit-select" / "-input" contract.

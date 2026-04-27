@@ -170,31 +170,38 @@ describe('OrderPanel O3 — smart unit dropdown', () => {
     expect(after).toMatch(/p\.mainUnitName\s*\|\|\s*p\.unit/);
   });
 
-  it('O3.5 UnitField sub-component exists at module scope', () => {
-    expect(orderPanelSrc).toMatch(/^function UnitField\(\{[^}]+\}\)/m);
+  // 2026-04-28 (Phase 15.4 UnitField extract — Rule C1):
+  // O3.5/.6/.7 originally asserted INLINE `function UnitField` in OrderPanel.
+  // Per Rule C1, UnitField is now extracted to ./UnitField.jsx so 4 other
+  // panels (Adjust/Transfer/Withdrawal/CentralPO) can reuse the pattern.
+  // These three tests now assert the NEW shape — V21 lesson: when refactoring,
+  // flip the regression guard to the new pattern, don't keep it locked to old.
+
+  it('O3.5 OrderPanel imports UnitField from shared ./UnitField.jsx', () => {
+    expect(orderPanelSrc).toMatch(/import\s+UnitField\s+from\s+['"]\.\/UnitField\.jsx['"]/);
   });
 
-  it('O3.6 UnitField renders <select> when options.length > 0', () => {
-    const fnStart = orderPanelSrc.indexOf('function UnitField');
-    const after = orderPanelSrc.slice(fnStart, fnStart + 800);
-    expect(after).toContain('options.length > 0');
-    expect(after).toContain('<select');
-    expect(after).toContain('data-testid="order-unit-select"');
+  it('O3.6 OrderPanel does NOT inline-define UnitField (Rule C1 lock)', () => {
+    expect(orderPanelSrc).not.toMatch(/^function UnitField\s*\(/m);
   });
 
-  it('O3.7 UnitField renders <input> fallback for products without group', () => {
-    const fnStart = orderPanelSrc.indexOf('function UnitField');
-    const after = orderPanelSrc.slice(fnStart, fnStart + 800);
-    expect(after).toContain('<input');
-    expect(after).toContain('data-testid="order-unit-input"');
+  it('O3.7 shared UnitField.jsx renders both <select> and <input> with testId-driven data-testids', () => {
+    const unitFieldSrc = read('src/components/backend/UnitField.jsx');
+    expect(unitFieldSrc).toContain('options.length > 0');
+    expect(unitFieldSrc).toContain('<select');
+    expect(unitFieldSrc).toContain('<input');
+    // testId pattern — backward compat: OrderPanel passes testId="order-unit"
+    expect(unitFieldSrc).toMatch(/data-testid=\{?\s*[`'"]?\$?\{?testId\}?[-`'"]/);
   });
 
-  it('O3.8 BOTH unit field call sites use UnitField (mobile card + desktop table)', () => {
-    // grep all <UnitField uses
-    const matches = (orderPanelSrc.match(/<UnitField[\s\S]{0,300}\/>/g) || []);
+  it('O3.8 BOTH unit field call sites use UnitField + getUnitOptionsForProduct + testId="order-unit"', () => {
+    // Bumped from {0,300} to {0,500} after testId prop landed (s19 Phase 15.4).
+    const matches = (orderPanelSrc.match(/<UnitField[\s\S]{0,500}\/>/g) || []);
     expect(matches.length).toBeGreaterThanOrEqual(2);
     for (const m of matches) {
       expect(m).toContain('options={getUnitOptionsForProduct(it.productId, products, unitGroups)}');
+      // Phase 15.4 backward compat: OrderPanel use sites pass testId="order-unit"
+      expect(m).toMatch(/testId=["']order-unit["']/);
     }
   });
 
