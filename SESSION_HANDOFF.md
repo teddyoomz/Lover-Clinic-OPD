@@ -7,13 +7,13 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-27 session 15 — V33.7 i18n + full-date + admin lang toggle DEPLOYED
+- **Date last updated**: 2026-04-27 session 16 — V33.8 zero-remaining filter DEPLOYED
 - **Branch**: `master`
-- **Last commit**: `2ff8803 feat(line-oa): V33.7 — TH/EN i18n + full-date format + admin language toggle`
-- **Test count**: **1530** focused (+91 since s14: V33.7.A-J + LP1-LP6)
+- **Last commit**: `14396ab fix(line-oa): V33.8 — filter consumed (0-remaining) courses from bot reply`
+- **Test count**: **1576** focused (+46 since s15: V33.8.A-F)
 - **Build**: clean. BackendDashboard chunk 995.30 KB (≈ unchanged)
-- **Deploy state**: ✅ **PRODUCTION = `2ff8803`** (V15 combined deploy session 15 — V33.7 LIVE)
-  - Vercel: `lover-clinic-1g876hou3-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (56s)
+- **Deploy state**: ✅ **PRODUCTION = `14396ab`** (V15 combined deploy session 16 — V33.8 LIVE)
+  - Vercel: `lover-clinic-rg15zfczo-teddyoomz-4523s-projects` aliased to https://lover-clinic-app.vercel.app (48s)
   - Firestore rules: v17 LIVE (rules unchanged — already-up-to-date re-deploy per V1/V9 anti-drift)
   - Storage rules: V26 claim-based (unchanged)
   - Probe-Deploy-Probe: pre 6/6 + 3 negative = GREEN, post 6/6 + 3 negative = GREEN, smoke 3/3 = 200 (root + /?customer=LC-26000001 + /?backend=1)
@@ -21,6 +21,49 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 16
+
+### Session 2026-04-27 session 16 (1 commit, `14396ab`) — V33.8 zero-remaining filter
+
+User report (mobile screenshot 12:03): bot's "Active Courses" bubble
+showed "Acne Tx 12 ครั้ง / Remaining 0 / 3 amp." + "HIFU 500 Shot... /
+Remaining 0 / 1 Shot" + "Allergan 100 unit / Remaining 0 / 100 U" — courses
+with 0 remaining were leaking into the active list AND the "199 รายการ"
+header count.
+
+**Root cause**: ProClinic doesn't auto-flip course.status to 'ใช้หมดแล้ว'
+when remaining hits 0/X — status stays 'กำลังใช้งาน'. V33.5/.6/.7 active
+filter checked status only, so consumed courses leaked through.
+
+**Fix** (numeric guard on top of status filter):
+- NEW exported pure helpers in `lineBotResponder.js`:
+  - `parseRemainingCount(qty)` — parses leading number from "0/3 amp.",
+    "100 / 100 U", "0.5/1", single "5", numeric `0`, or buffet patterns
+    ("เหมาตามจริง" / "buffet" → null = uncountable)
+  - `isCourseConsumed(course)` — checks qty first, falls back to remaining
+- `formatCoursesReply` + `buildCoursesFlex` filter:
+  ```
+  statusOk && !isCourseConsumed(c)
+  ```
+- Header count "N รายการ" / "N items" reflects FILTERED active set
+- Buffet courses + unparseable strings keep through (defensive)
+
+**Tests**: +46 in V33.8.A-F (parseRemainingCount + isCourseConsumed +
+formatCoursesReply hides + buildCoursesFlex hides + screenshot-regression
++ source-grep guards).
+
+**Carry-over test fixups** (qty='0/X' patterns now filtered):
+- V33.5.C4: Course B `0/3` → `1/3`
+- V33.6 SAMPLE: Acne Tx `0/3` → `2/3`
+- V33.6.B9: meta line assertion to `2 / 3 ครั้ง`
+- V33.6.E6: array generator `i+1/i+6` (skip i=0 case)
+- V33.6.E9: flipped — qty=0 numeric now FILTERS as consumed (was rendered)
+
+**Verification**:
+- npm test --run: 1530 → 1576, all green
+- npm run build: clean, BD 995.30 KB (≈ unchanged)
+- Pre+Post probes 6/6 + 3/3 GREEN; HTTP smoke 3/3 = 200
+
+**1 commit**: `14396ab`
 
 ### Session 2026-04-27 session 15 (1 commit, `2ff8803`) — V33.7 TH/EN i18n + full-date + admin language toggle
 
@@ -388,16 +431,16 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-27 s15.
+Resume LoverClinic — continue from 2026-04-27 s16.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=2ff8803, prod=2ff8803)
-3. .agents/active.md (1530 focused tests pass)
+2. SESSION_HANDOFF.md (master=14396ab, prod=14396ab)
+3. .agents/active.md (1576 focused tests pass)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
 5. .agents/sessions/2026-04-27-session13-customer-create-and-line-oa-redesign.md
 
-Status: master=2ff8803, 1530/1530 tests pass, prod=2ff8803 LIVE (V33.7)
+Status: master=14396ab, 1576/1576 tests pass, prod=14396ab LIVE (V33.8)
 Next: idle — awaiting user direction
 Outstanding (user-triggered):
   - V33.7 mobile QA: Thai customer DM "คอร์ส" / "นัด" → confirm full

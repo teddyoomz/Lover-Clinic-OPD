@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-27 (s15 — V33.7 i18n + full-date + admin lang toggle DEPLOYED)"
-status: "Production = 2ff8803 LIVE. V33.7 ships TH/EN i18n (foreign customers auto-EN via customer_type), full-weekday-month date format (อังคาร 28 เมษายน 2569 / Tuesday 28 April 2026), admin language toggle in LinkLineInstructionsModal + LinkRequestsTab 'ผูกแล้ว' rows + DocumentPrintModal refactor. Plus หมดอายุ smart-hide leak fix (V33.6 follow-up)."
-current_focus: "Idle. V33.7 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Awaiting user mobile QA + foreign-customer admin-toggle test."
+updated_at: "2026-04-27 (s16 — V33.8 zero-remaining filter DEPLOYED)"
+status: "Production = 14396ab LIVE. V33.8 fixes the bot reply leaking consumed (0-remaining) courses + over-counting in '199 รายการ' header. NEW parseRemainingCount + isCourseConsumed pure helpers; both formatCoursesReply + buildCoursesFlex extended with numeric guard on top of status filter."
+current_focus: "Idle. V33.8 verified via 6/6+3/3 P-D-P + 3/3 HTTP smoke. Phase 15 (Central Stock Conditional) prereqs all green; carry-overs surveyed."
 branch: "master"
-last_commit: "2ff8803"
-tests: 1530
+last_commit: "14396ab"
+tests: 1576
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "2ff8803"
+production_commit: "14396ab"
 firestore_rules_version: 17
 storage_rules_version: 2
 ---
