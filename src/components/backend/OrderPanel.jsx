@@ -12,6 +12,8 @@ import {
   listStockOrders, createStockOrder, cancelStockOrder,
   // Phase 14.10-tris (2026-04-26) — be_products canonical
   listProducts,
+  // 2026-04-27 fix — load unit groups for smart unit dropdown in create form
+  listProductUnitGroups,
 } from '../../lib/backendClient.js';
 import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
@@ -35,6 +37,22 @@ import { productDisplayName } from '../../lib/productValidation.js';
 
 // fmtMoney — imported from financeUtils (Rule of 3: was duplicated across 3 files).
 const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
+
+// 2026-04-27 — derive unit-name options for a picked product from be_product_units.
+// Returns [] when product has no configured unit group → caller falls back to free text.
+// Module-level export so tests can target the pure logic without mounting React.
+export function getUnitOptionsForProduct(productId, products, unitGroups) {
+  if (!productId || !Array.isArray(products) || !Array.isArray(unitGroups)) return [];
+  const p = products.find(x => String(x.id) === String(productId));
+  if (!p) return [];
+  const groupId = String(p.defaultProductUnitGroupId || '').trim();
+  if (!groupId) return [];
+  const grp = unitGroups.find(g => String(g.id || g.unitGroupId) === groupId);
+  if (!grp || !Array.isArray(grp.units)) return [];
+  return grp.units
+    .map(u => (u && typeof u.name === 'string' ? u.name.trim() : ''))
+    .filter(Boolean);
+}
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
   const isDark = theme === 'dark';
@@ -119,6 +137,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   if (formOpen) {
     return (
       <OrderCreateForm
+        branchId={BRANCH_ID}
         isDark={isDark}
         products={products}
         productsLoading={productsLoading}
@@ -253,7 +272,35 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
 // ═══════════════════════════════════════════════════════════════════════════
 // Order Create Form
 // ═══════════════════════════════════════════════════════════════════════════
-function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, onClose, onSaved }) {
+function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, branchId, onClose, onSaved }) {
+  // 2026-04-27 fix — branchId passed in from OrderPanel (parent).
+  // Pre-existing scope bug: BRANCH_ID was referenced inside this sibling
+  // function (line 318 below) but never declared in its scope —
+  // ReferenceError at save time. Mirrors StockAdjustPanel.AdjustCreateForm
+  // fix shipped earlier today (Phase 15.3 commit e65d335).
+  const BRANCH_ID = branchId;
+
+  // 2026-04-27 — unit groups for smart unit dropdown. Loaded once on mount
+  // (cheap query against be_product_units). Each group has units[] with
+  // base + larger packs; the dropdown shows all options for the picked
+  // product's defaultProductUnitGroupId, with row-0 (base) selected by
+  // default. Products without a configured group fall back to free-text
+  // input so legacy data still works.
+  const [unitGroups, setUnitGroups] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listProductUnitGroups();
+        if (!cancelled && Array.isArray(list)) setUnitGroups(list);
+      } catch (e) {
+        // Non-fatal — falls back to free-text input.
+        console.warn('[OrderCreateForm] listProductUnitGroups failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const today = thaiTodayISO();
   const [vendorName, setVendorName] = useState('');
   const [importedDate, setImportedDate] = useState(today);
@@ -292,11 +339,15 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
   const onPickProduct = (idx, productId) => {
     const p = products.find(x => String(x.id) === String(productId));
     if (!p) { updateItem(idx, { productId: '', productName: '', unit: '' }); return; }
+    // 2026-04-27 — auto-pick base unit from product's configured unit group.
+    // Fallback chain: group base unit → p.mainUnitName → legacy p.unit → ''.
+    const opts = getUnitOptionsForProduct(productId, products, unitGroups);
+    const baseUnit = opts[0] || p.mainUnitName || p.unit || items[idx]?.unit || '';
     updateItem(idx, {
       productId: String(p.id),
       // Phase 14.10-tris fix (2026-04-27) — be_products canonical productName
       productName: productDisplayName(p),
-      unit: p.unit || items[idx]?.unit || '',
+      unit: baseUnit,
     });
   };
 
@@ -426,7 +477,12 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
                   </div>
                   <div>
                     <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">หน่วย</label>
-                    <input type="text" value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className={inputCls} placeholder="U" />
+                    <UnitField
+                      value={it.unit}
+                      options={getUnitOptionsForProduct(it.productId, products, unitGroups)}
+                      inputCls={inputCls}
+                      onChange={e => updateItem(idx, { unit: e.target.value })}
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">ต้นทุน/หน่วย</label>
@@ -490,7 +546,12 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
                         onChange={e => updateItem(idx, { qty: e.target.value })} className={inputCls} />
                     </td>
                     <td className="px-2 py-2">
-                      <input type="text" value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className={inputCls} placeholder="U" />
+                      <UnitField
+                        value={it.unit}
+                        options={getUnitOptionsForProduct(it.productId, products, unitGroups)}
+                        inputCls={inputCls}
+                        onChange={e => updateItem(idx, { unit: e.target.value })}
+                      />
                     </td>
                     <td className="px-2 py-2">
                       <input type="number" min="0" step="0.01" value={it.cost}
@@ -529,5 +590,34 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, on
         </div>
       </div>
     </div>
+  );
+}
+
+// 2026-04-27 — Unit field with smart dropdown.
+// When the picked product has a configured `defaultProductUnitGroupId`,
+// renders a <select> with all unit names from that group (base + larger
+// packs). Falls back to free-text <input> for products without a group
+// (legacy data, or admin hasn't set up unit-group yet) so existing
+// orders keep working.
+//
+// Extracted into a sibling sub-component (NOT IIFE) per Rule 03-stack
+// V5 — Vite OXC parser crashes on JSX-inline IIFE patterns.
+function UnitField({ value, options, inputCls, onChange }) {
+  if (Array.isArray(options) && options.length > 0) {
+    return (
+      <select value={value || ''} onChange={onChange} className={inputCls} data-testid="order-unit-select">
+        {options.map(name => <option key={name} value={name}>{name}</option>)}
+      </select>
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={value || ''}
+      onChange={onChange}
+      className={inputCls}
+      placeholder="U"
+      data-testid="order-unit-input"
+    />
   );
 }

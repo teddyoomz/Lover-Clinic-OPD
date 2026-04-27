@@ -124,7 +124,9 @@ describe('product-display P4 — OrderPanel', () => {
   });
 
   it('P4.2 onPickProduct save path uses helper (was: empty productName saved bug)', () => {
-    const block = orderPanelSrc.match(/const onPickProduct[\s\S]{0,400}/);
+    // 2026-04-27 — onPickProduct grew to include smart-unit auto-pick;
+    // expand slice to cover the productName line at the bottom of the body.
+    const block = orderPanelSrc.match(/const onPickProduct[\s\S]{0,800}/);
     expect(block).toBeTruthy();
     expect(block[0]).toContain('productDisplayName(p)');
     // old broken code path must be gone
