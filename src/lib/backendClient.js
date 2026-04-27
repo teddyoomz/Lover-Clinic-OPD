@@ -4841,6 +4841,16 @@ export async function createStockAdjustment(p, opts = {}) {
   return { ...result, success: true };
 }
 
+/**
+ * Phase 15.4 post-deploy bug 3 (2026-04-28) — fetch single adjustment by id.
+ * Used by AdjustDetailModal to render the row-click detail view (mirrors
+ * Transfer/Withdrawal detail modal pattern).
+ */
+export async function getStockAdjustment(adjustmentId) {
+  const snap = await getDoc(stockAdjustmentDoc(adjustmentId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 // ─── Internal: stockUtils bridge (avoids top-of-file circular-like import cost) ─
 let __stockLibCache = null;
 async function _stockLib() {

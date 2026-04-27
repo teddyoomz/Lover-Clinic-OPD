@@ -20,6 +20,10 @@ import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// Phase 15.4 post-deploy bug 3 (2026-04-28) — Adjust detail modal mirroring
+// Transfer/Withdrawal pattern. User report: "รายการหน้าปรับสต็อคจะต้องกด
+// เข้าไปดูรายละเอียดในแต่ละรายการได้เหมือนหน้าอื่นๆ".
+import AdjustDetailModal from './AdjustDetailModal.jsx';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import {
   getFirestore, collection, getDocs, query, where,
@@ -49,9 +53,11 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   // Phase 15.3 (2026-04-27) — branchIdOverride lets CentralStockTab open this
   // panel against a central warehouse instead of BranchContext's branch.
   // Mirrors the pattern from MovementLogPanel.jsx (Phase 15.1).
-  const { branchId: ctxBranchId } = useSelectedBranch();
+  const { branchId: ctxBranchId, branches } = useSelectedBranch();
   const BRANCH_ID = branchIdOverride || ctxBranchId;
   const [adjustments, setAdjustments] = useState([]);
+  // Phase 15.4 post-deploy bug 3 — row-click detail modal state.
+  const [detailId, setDetailId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [products, setProducts] = useState([]);
@@ -173,7 +179,12 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
             </thead>
             <tbody>
               {visibleItems.map(a => (
-                <tr key={a.adjustmentId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]">
+                <tr
+                  key={a.adjustmentId}
+                  onClick={() => setDetailId(a.adjustmentId)}
+                  className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)] cursor-pointer"
+                  data-testid="adjust-row"
+                >
                   <td className="px-3 py-2 text-[var(--tx-muted)] whitespace-nowrap">{fmtDate(a.createdAt)}</td>
                   <td className="px-3 py-2 text-[var(--tx-primary)]">{a.productName}</td>
                   <td className="px-3 py-2 font-mono text-[10px] text-[var(--tx-muted)]" title={a.batchId}>…{a.batchId?.slice(-8)}</td>
@@ -200,6 +211,15 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
           </table>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalCount={totalCount} />
         </div>
+      )}
+
+      {/* Phase 15.4 post-deploy bug 3 — row-click detail modal */}
+      {detailId && (
+        <AdjustDetailModal
+          adjustmentId={detailId}
+          branches={branches}
+          onClose={() => setDetailId(null)}
+        />
       )}
     </div>
   );
