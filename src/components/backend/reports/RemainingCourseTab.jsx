@@ -10,7 +10,7 @@
 // Spec: docs/superpowers/specs/2026-04-29-phase16-5-remaining-course-design.md
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import RemainingCourseRow from './RemainingCourseRow.jsx';
 import {
@@ -55,6 +55,11 @@ export default function RemainingCourseTab({ clinicSettings }) {
   const [courseTypeFilter, setCourseTypeFilter] = useState('');
   const [hasRemainingOnly, setHasRemainingOnly] = useState(true);
 
+  // Phase 16.5 fix (2026-04-29 user request "ไม่เกิน 20 รายการ ต่อหน้า"):
+  // pagination 20 rows/page. Page resets to 0 whenever any filter changes.
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(0);
+
   // Modal state
   const [modalKind, setModalKind] = useState(''); // '' | 'cancel' | 'refund' | 'exchange'
   const [modalRow, setModalRow] = useState(null);
@@ -86,6 +91,16 @@ export default function RemainingCourseTab({ clinicSettings }) {
   const sortedRows = useMemo(() => sortCourses(filteredRows, 'purchaseDate', 'desc'), [filteredRows]);
 
   const stats = useMemo(() => aggregateRemainingStats(sortedRows), [sortedRows]);
+
+  // Reset page whenever filtered result-set shrinks below current offset.
+  useEffect(() => { setPage(0); }, [search, statusFilter, courseTypeFilter, hasRemainingOnly, branchId]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedRows = useMemo(
+    () => sortedRows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [sortedRows, safePage],
+  );
 
   const handleAction = useCallback((kind, row) => {
     setModalKind(kind);
@@ -200,12 +215,46 @@ export default function RemainingCourseTab({ clinicSettings }) {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((row) => (
-                <RemainingCourseRow key={`${row.customerId}-${row.courseId}`} row={row} onAction={handleAction} />
+              {pagedRows.map((row) => (
+                <RemainingCourseRow key={`${row.customerId}-${row.courseId}-${row.courseIndex}`} row={row} onAction={handleAction} />
               ))}
             </tbody>
           </table>
         </div>
+
+        {sortedRows.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between mt-3 px-1" data-testid="remaining-course-pagination">
+            <div className="text-xs text-[var(--tx-muted)]">
+              หน้า {safePage + 1} / {totalPages}
+              {' · '}
+              <span className="text-[var(--tx-secondary)]">
+                แสดง {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, sortedRows.length)}
+                {' จาก '}
+                {sortedRows.length.toLocaleString('th-TH')} รายการ
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="px-3 py-1.5 rounded-md text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-secondary)] hover:text-[var(--tx-primary)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                data-testid="remaining-course-prev-page"
+              >
+                <ChevronLeft size={14} /> ก่อนหน้า
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="px-3 py-1.5 rounded-md text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-secondary)] hover:text-[var(--tx-primary)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                data-testid="remaining-course-next-page"
+              >
+                ถัดไป <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </ReportShell>
 
       <CancelCourseModal

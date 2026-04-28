@@ -38,10 +38,40 @@ describe('C1 applyCourseCancel', () => {
     expect(cancelledAt).toBe('2026-04-29T12:00:00Z');
   });
 
-  test('C1.2 throws on missing customer / courseId', () => {
+  test('C1.2 throws on missing customer; throws when neither courseId nor courseIndex provided', () => {
     expect(() => applyCourseCancel(null, 'c-1')).toThrow(/customer required/);
-    expect(() => applyCourseCancel(baseCustomer, '')).toThrow(/courseId required/);
-    expect(() => applyCourseCancel(baseCustomer, null)).toThrow(/courseId required/);
+    expect(() => applyCourseCancel(baseCustomer, '')).toThrow(/courseId or opts\.courseIndex required/);
+    expect(() => applyCourseCancel(baseCustomer, null)).toThrow(/courseId or opts\.courseIndex required/);
+  });
+
+  test('C1.2-bis Phase 16.5 — courseIndex fallback when courseId missing', () => {
+    // Real ProClinic-cloned courses don't have courseId. Caller passes
+    // opts.courseIndex from the row instead.
+    const cloned = {
+      courses: [
+        { name: 'A', status: 'กำลังใช้งาน' }, // no courseId
+        { name: 'B', status: 'กำลังใช้งาน' },
+      ],
+    };
+    const { nextCourses, fromCourse } = applyCourseCancel(cloned, '', {
+      courseIndex: 1, reason: 'r',
+    });
+    expect(nextCourses[1].status).toBe('ยกเลิก');
+    expect(nextCourses[0].status).toBe('กำลังใช้งาน'); // sibling untouched
+    expect(fromCourse.name).toBe('B');
+  });
+
+  test('C1.2-tris courseIndex out-of-range still throws course-not-found', () => {
+    expect(() => applyCourseCancel(baseCustomer, '', { courseIndex: 99 })).toThrow(/not found/);
+    expect(() => applyCourseCancel(baseCustomer, '', { courseIndex: -1 }))
+      .toThrow(/courseId or opts\.courseIndex required/);
+  });
+
+  test('C1.2-quater courseId resolves first; courseIndex ignored when courseId valid', () => {
+    // If both provided, courseId wins. Index fallback only fires on miss.
+    const { nextCourses } = applyCourseCancel(baseCustomer, 'c-1', { courseIndex: 1, reason: 'r' });
+    expect(nextCourses[0].status).toBe('ยกเลิก'); // c-1 (index 0), not c-2 (index 1)
+    expect(nextCourses[1].status).toBe('กำลังใช้งาน');
   });
 
   test('C1.3 throws when course not found', () => {

@@ -39,7 +39,7 @@ export function parseValueFromCourseString(valueStr) {
 }
 
 /**
- * Determine the effective status of a course. Defaults to STATUS_ACTIVE
+ * Determine the raw stored status of a course. Defaults to STATUS_ACTIVE
  * when missing (legacy course objects pre-Phase 16.5 didn't all have
  * `status` field).
  */
@@ -47,6 +47,24 @@ export function parseStatusFromCourse(course) {
   const raw = course?.status;
   if (raw && ALL_STATUSES.includes(raw)) return raw;
   return STATUS_ACTIVE;
+}
+
+/**
+ * Phase 16.5 fix (2026-04-29 user report "คอร์สใช้หมดแล้ว ไม่มีในตารางเลย"):
+ * ProClinic data does NOT auto-flip course.status to 'ใช้หมดแล้ว' when
+ * qty hits 0. So 1384/1384 courses have status='กำลังใช้งาน' even when
+ * qty=0/N. We derive an EFFECTIVE status: if qty totally consumed AND
+ * stored status is still active → display as 'ใช้หมดแล้ว'. Terminal
+ * statuses (refunded/cancelled) are preserved untouched.
+ *
+ * @param {string} rawStatus  — output of parseStatusFromCourse
+ * @param {number} qtyTotal
+ * @param {number} qtyRemaining
+ */
+export function deriveEffectiveStatus(rawStatus, qtyTotal, qtyRemaining) {
+  if (rawStatus === STATUS_REFUNDED || rawStatus === STATUS_CANCELLED) return rawStatus;
+  if (rawStatus === STATUS_ACTIVE && qtyTotal > 0 && qtyRemaining <= 0) return STATUS_USED;
+  return rawStatus;
 }
 
 /**
@@ -80,12 +98,23 @@ export function flattenCustomerCourses(customers) {
     const customerBranchId = cust.branchId || '';
 
     cust.courses.forEach((course, courseIndex) => {
-      if (!course || !course.courseId) return;
-      const status = parseStatusFromCourse(course);
+      if (!course) return;
+      // Phase 16.5 fix (2026-04-29): ProClinic-cloned courses (1384/1384 in
+      // dev) do NOT have a `courseId` field — only V32-tris-bis-era new
+      // courses do. Pre-fix the defensive `if (!course.courseId) return;`
+      // skipped 100% of legacy courses. Now: synthesize a stable fallback
+      // id from courseIndex; expose `hasRealCourseId` so action handlers
+      // can fall back to courseIndex-based lookup in backend helpers.
+      const realCourseId = course.courseId ? String(course.courseId) : '';
+      const rowCourseId = realCourseId || `idx-${courseIndex}`;
+      const rawStatus = parseStatusFromCourse(course);
       const qtyParsed = parseQtyString(course.qty || '');
       const qtyTotal = Number(qtyParsed.total) || 0;
       const qtyRemaining = Number(qtyParsed.remaining) || 0;
       const qtyUsed = Math.max(0, qtyTotal - qtyRemaining);
+      // Effective status: ProClinic data doesn't auto-flip 'กำลังใช้งาน' →
+      // 'ใช้หมดแล้ว' when qty=0. Promote here for display + filter.
+      const status = deriveEffectiveStatus(rawStatus, qtyTotal, qtyRemaining);
       const qtyUnit = qtyParsed.unit || '';
       const totalSpent = parseValueFromCourseString(course.value);
 
@@ -112,7 +141,8 @@ export function flattenCustomerCourses(customers) {
         customerPhone,
         customerBranchId,
         courseIndex,
-        courseId: String(course.courseId),
+        courseId: rowCourseId,
+        hasRealCourseId: !!realCourseId,
         courseName: String(course.name || ''),
         courseType: String(course.courseType || ''),
         product: String(course.product || ''),
@@ -160,10 +190,26 @@ export function filterCourses(rows, filters = {}) {
     }
     if (statusFilter && row.status !== statusFilter) return false;
     if (typeFilter && row.courseType !== typeFilter) return false;
+
+    // Phase 16.5 fix (2026-04-29 user report "คอร์สใช้หมดแล้ว/คืนเงิน/ยกเลิก
+    // ไม่มีในตารางเลย"): hasRemainingOnly is the DEFAULT-friendly view
+    // showing only active+remaining courses. When user explicitly picks a
+    // status from the dropdown, that pick wins — hasRemainingOnly only
+    // applies to active rows (terminal statuses have no "remaining"
+    // concept). Pre-fix: hasRemainingOnly forcibly excluded all non-active
+    // rows even when user picked status='ยกเลิก'.
     if (hasRemainingOnly) {
-      if (row.qtyRemaining <= 0) return false;
-      if (row.status !== STATUS_ACTIVE) return false;
+      if (statusFilter && statusFilter !== STATUS_ACTIVE) {
+        // Explicit non-active status pick — hasRemainingOnly irrelevant.
+      } else if (statusFilter === STATUS_ACTIVE) {
+        if (row.qtyRemaining <= 0) return false;
+      } else {
+        // No explicit status (default view) — apply full filter.
+        if (row.qtyRemaining <= 0) return false;
+        if (row.status !== STATUS_ACTIVE) return false;
+      }
     }
+
     if (branchId) {
       // Branch-scoped: include rows whose customer is in this branch OR
       // has no branchId (legacy ProClinic-cloned — visible everywhere).

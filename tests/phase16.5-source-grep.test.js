@@ -78,6 +78,39 @@ describe('G3 status fallback + Thai enum + audit log', () => {
     expect(UTILS_SRC).toMatch(/parseStatusFromCourse\(course\)/);
   });
 
+  test('G3.1-bis Phase 16.5 fix: flatten emits hasRealCourseId + synthetic id-${courseIndex} fallback', () => {
+    expect(UTILS_SRC).toMatch(/hasRealCourseId/);
+    expect(UTILS_SRC).toMatch(/idx-\$\{courseIndex\}/);
+    // Anti-regression: NO defensive courseId-required skip remains
+    expect(UTILS_SRC).not.toMatch(/if \(!course\s*\|\|\s*!course\.courseId\)\s*return;/);
+  });
+
+  test('G3.1-tris cancel/refund modals pass courseIndex to backend wrapper', () => {
+    expect(CANCEL_MODAL).toMatch(/courseIndex:\s*row\.courseIndex/);
+    expect(REFUND_MODAL).toMatch(/courseIndex:\s*row\.courseIndex/);
+    expect(CANCEL_MODAL).toMatch(/row\.hasRealCourseId/);
+    expect(REFUND_MODAL).toMatch(/row\.hasRealCourseId/);
+  });
+
+  test('G3.1-quater applyCourseCancel + applyCourseRefund accept opts.courseIndex fallback', () => {
+    expect(COURSE_EXCH).toMatch(/applyCourseCancel[\s\S]*?opts\.courseIndex/);
+    expect(COURSE_EXCH).toMatch(/applyCourseRefund[\s\S]*?opts\.courseIndex/);
+  });
+
+  test('G7.1 Phase 16.5 fix: pagination (20/page) wired into RemainingCourseTab', () => {
+    expect(TAB_SRC).toMatch(/PAGE_SIZE\s*=\s*20/);
+    expect(TAB_SRC).toMatch(/data-testid="remaining-course-pagination"/);
+    expect(TAB_SRC).toMatch(/data-testid="remaining-course-prev-page"/);
+    expect(TAB_SRC).toMatch(/data-testid="remaining-course-next-page"/);
+    expect(TAB_SRC).toMatch(/pagedRows/);
+  });
+
+  test('G7.2 Phase 16.5 fix: status filter pick wins over hasRemainingOnly for terminal statuses', () => {
+    // Lock the fix shape — hasRemainingOnly only applies to active or empty status
+    expect(UTILS_SRC).toMatch(/hasRemainingOnly is the DEFAULT-friendly view/);
+    expect(UTILS_SRC).toMatch(/statusFilter && statusFilter !== STATUS_ACTIVE/);
+  });
+
   test('G3.2 status enum uses Thai strings (not English)', () => {
     expect(UTILS_SRC).toMatch(/STATUS_ACTIVE\s*=\s*['"]กำลังใช้งาน['"]/);
     expect(UTILS_SRC).toMatch(/STATUS_USED\s*=\s*['"]ใช้หมดแล้ว['"]/);

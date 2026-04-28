@@ -36,7 +36,14 @@ export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
     setError('');
     try {
       const actor = auth?.currentUser?.email || auth?.currentUser?.uid || '';
-      await cancelCustomerCourse(row.customerId, row.courseId, reason.trim(), { actor });
+      // Phase 16.5 fix: pass courseIndex when row has no real courseId
+      // (ProClinic-cloned courses don't have one). Backend resolves via
+      // courseIndex fallback in applyCourseCancel.
+      const lookupCourseId = row.hasRealCourseId ? row.courseId : '';
+      await cancelCustomerCourse(row.customerId, lookupCourseId, reason.trim(), {
+        actor,
+        courseIndex: row.courseIndex,
+      });
       setReason('');
       onSuccess?.();
     } catch (e) {

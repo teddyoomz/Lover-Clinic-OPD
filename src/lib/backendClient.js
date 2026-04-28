@@ -2726,7 +2726,7 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
     const customer = { id: cSnap.id, ...cSnap.data() };
 
     const { nextCourses, fromCourse, refundAmount: refundedAmount } = applyCourseRefund(
-      customer, courseId, refundAmount, { reason: opts.reason || '' },
+      customer, courseId, refundAmount, { reason: opts.reason || '', courseIndex: opts.courseIndex },
     );
 
     tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });
@@ -2769,7 +2769,7 @@ export async function cancelCustomerCourse(customerId, courseId, reason, opts = 
     const customer = { id: cSnap.id, ...cSnap.data() };
 
     const { nextCourses, fromCourse, cancelledAt } = applyCourseCancel(
-      customer, courseId, { reason: reason || '' },
+      customer, courseId, { reason: reason || '', courseIndex: opts.courseIndex },
     );
 
     tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });

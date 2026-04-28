@@ -44,9 +44,14 @@ export default function RefundCourseModal({ open, row, onSuccess, onCancel }) {
     setError('');
     try {
       const actor = auth?.currentUser?.email || auth?.currentUser?.uid || '';
-      await refundCustomerCourse(row.customerId, row.courseId, amountNum, {
+      // Phase 16.5 fix: pass courseIndex when row has no real courseId
+      // (ProClinic-cloned courses don't have one). Backend resolves via
+      // courseIndex fallback in applyCourseRefund.
+      const lookupCourseId = row.hasRealCourseId ? row.courseId : '';
+      await refundCustomerCourse(row.customerId, lookupCourseId, amountNum, {
         reason: reason.trim(),
         actor,
+        courseIndex: row.courseIndex,
       });
       setAmount('');
       setReason('');

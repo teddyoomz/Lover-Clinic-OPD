@@ -69,15 +69,29 @@ describe('M1 CancelCourseModal', () => {
     expect(screen.getByTestId('cancel-course-submit')).not.toBeDisabled();
   });
 
-  test('M1.3 submit calls cancelCustomerCourse + onSuccess', async () => {
+  test('M1.3 submit calls cancelCustomerCourse + onSuccess (real courseId path)', async () => {
     cancelMock.mockResolvedValue({ changeId: 'cc-1', cancelledAt: '2026-04-29T00:00:00Z' });
     const onSuccess = vi.fn();
-    render(<CancelCourseModal open={true} row={baseRow} onSuccess={onSuccess} onCancel={() => {}} />);
+    render(<CancelCourseModal open={true} row={{ ...baseRow, hasRealCourseId: true }} onSuccess={onSuccess} onCancel={() => {}} />);
     fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'wrong entry' } });
     fireEvent.click(screen.getByTestId('cancel-course-submit'));
     await waitFor(() => expect(cancelMock).toHaveBeenCalledTimes(1));
-    expect(cancelMock).toHaveBeenCalledWith('cust-1', 'crs-X', 'wrong entry', { actor: 'admin@test.local' });
+    // Phase 16.5: helper now receives courseIndex too (defensive courseIndex fallback)
+    expect(cancelMock).toHaveBeenCalledWith('cust-1', 'crs-X', 'wrong entry', {
+      actor: 'admin@test.local',
+      courseIndex: 2,
+    });
     expect(onSuccess).toHaveBeenCalled();
+  });
+
+  test('M1.3-bis Phase 16.5 — legacy course (hasRealCourseId=false) → empty courseId + courseIndex', async () => {
+    cancelMock.mockResolvedValue({ changeId: 'cc-2', cancelledAt: '2026-04-29T00:00:00Z' });
+    const legacyRow = { ...baseRow, courseId: 'idx-2', hasRealCourseId: false };
+    render(<CancelCourseModal open={true} row={legacyRow} onSuccess={() => {}} onCancel={() => {}} />);
+    fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'r' } });
+    fireEvent.click(screen.getByTestId('cancel-course-submit'));
+    await waitFor(() => expect(cancelMock).toHaveBeenCalled());
+    expect(cancelMock).toHaveBeenCalledWith('cust-1', '', 'r', { actor: 'admin@test.local', courseIndex: 2 });
   });
 
   test('M1.4 error banner shown on backend failure (V31 anti-silent-swallow)', async () => {
@@ -124,19 +138,34 @@ describe('M2 RefundCourseModal', () => {
     expect(screen.getByTestId('refund-course-submit')).toBeDisabled();
   });
 
-  test('M2.4 submit calls refundCustomerCourse with correct args', async () => {
+  test('M2.4 submit calls refundCustomerCourse with courseIndex (real courseId path)', async () => {
     refundMock.mockResolvedValue({ changeId: 'cc-2' });
     const onSuccess = vi.fn();
-    render(<RefundCourseModal open={true} row={baseRow} onSuccess={onSuccess} onCancel={() => {}} />);
+    render(<RefundCourseModal open={true} row={{ ...baseRow, hasRealCourseId: true }} onSuccess={onSuccess} onCancel={() => {}} />);
     fireEvent.change(screen.getByTestId('refund-course-reason'), { target: { value: 'customer request' } });
     fireEvent.change(screen.getByTestId('refund-course-amount'), { target: { value: '500' } });
     fireEvent.click(screen.getByTestId('refund-course-submit'));
     await waitFor(() => expect(refundMock).toHaveBeenCalled());
+    // Phase 16.5: helper now receives courseIndex (defensive courseIndex fallback)
     expect(refundMock).toHaveBeenCalledWith('cust-1', 'crs-X', 500, {
       reason: 'customer request',
       actor: 'admin@test.local',
+      courseIndex: 2,
     });
     expect(onSuccess).toHaveBeenCalled();
+  });
+
+  test('M2.4-bis Phase 16.5 — legacy refund with empty courseId + courseIndex fallback', async () => {
+    refundMock.mockResolvedValue({ changeId: 'cc-3' });
+    const legacyRow = { ...baseRow, courseId: 'idx-2', hasRealCourseId: false };
+    render(<RefundCourseModal open={true} row={legacyRow} onSuccess={() => {}} onCancel={() => {}} />);
+    fireEvent.change(screen.getByTestId('refund-course-reason'), { target: { value: 'r' } });
+    fireEvent.change(screen.getByTestId('refund-course-amount'), { target: { value: '500' } });
+    fireEvent.click(screen.getByTestId('refund-course-submit'));
+    await waitFor(() => expect(refundMock).toHaveBeenCalled());
+    expect(refundMock).toHaveBeenCalledWith('cust-1', '', 500, {
+      reason: 'r', actor: 'admin@test.local', courseIndex: 2,
+    });
   });
 
   test('M2.5 error banner on failure', async () => {

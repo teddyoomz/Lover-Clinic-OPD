@@ -96,12 +96,22 @@ export function applyCourseExchange(customer, fromCourseId, newMasterCourse, opt
  */
 export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
   if (!customer) throw new Error('customer required');
-  if (!courseId) throw new Error('courseId required');
+  // Phase 16.5 fix (2026-04-29): courseIndex fallback for legacy courses
+  // missing courseId field. Caller passes opts.courseIndex when the row's
+  // `hasRealCourseId === false`. Lookup tries courseId first, then falls
+  // back to opts.courseIndex.
+  const hasIdInput = courseId !== '' && courseId !== null && courseId !== undefined;
+  const hasIdxInput = typeof opts.courseIndex === 'number' && opts.courseIndex >= 0;
+  if (!hasIdInput && !hasIdxInput) throw new Error('courseId or opts.courseIndex required');
   if (typeof refundAmount !== 'number' || refundAmount < 0 || !Number.isFinite(refundAmount)) {
     throw new Error('refundAmount must be non-negative finite number');
   }
-  const idx = findCourseIndex(customer, courseId);
-  if (idx < 0) throw new Error(`course not found: ${courseId}`);
+  let idx = hasIdInput ? findCourseIndex(customer, courseId) : -1;
+  if (idx < 0 && hasIdxInput) {
+    const len = Array.isArray(customer.courses) ? customer.courses.length : 0;
+    if (opts.courseIndex < len) idx = opts.courseIndex;
+  }
+  if (idx < 0) throw new Error(`course not found: ${courseId || `index ${opts.courseIndex}`}`);
 
   const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
   const target = prevCourses[idx];
@@ -147,9 +157,19 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
  */
 export function applyCourseCancel(customer, courseId, opts = {}) {
   if (!customer) throw new Error('customer required');
-  if (!courseId) throw new Error('courseId required');
-  const idx = findCourseIndex(customer, courseId);
-  if (idx < 0) throw new Error(`course not found: ${courseId}`);
+  // Phase 16.5 fix (2026-04-29): courseIndex fallback for legacy courses
+  // missing courseId field (ProClinic-cloned). Caller passes opts.courseIndex
+  // when the row's `hasRealCourseId === false`. Lookup tries courseId first,
+  // then falls back to opts.courseIndex.
+  const hasIdInput = courseId !== '' && courseId !== null && courseId !== undefined;
+  const hasIdxInput = typeof opts.courseIndex === 'number' && opts.courseIndex >= 0;
+  if (!hasIdInput && !hasIdxInput) throw new Error('courseId or opts.courseIndex required');
+  let idx = hasIdInput ? findCourseIndex(customer, courseId) : -1;
+  if (idx < 0 && hasIdxInput) {
+    const len = Array.isArray(customer.courses) ? customer.courses.length : 0;
+    if (opts.courseIndex < len) idx = opts.courseIndex;
+  }
+  if (idx < 0) throw new Error(`course not found: ${courseId || `index ${opts.courseIndex}`}`);
 
   const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
   const target = prevCourses[idx];

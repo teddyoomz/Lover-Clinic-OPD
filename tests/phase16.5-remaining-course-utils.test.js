@@ -22,6 +22,7 @@ import {
   isTerminalRow,
   parseValueFromCourseString,
   parseStatusFromCourse,
+  deriveEffectiveStatus,
   STATUS_ACTIVE,
   STATUS_USED,
   STATUS_REFUNDED,
@@ -94,7 +95,10 @@ describe('F1 flattenCustomerCourses', () => {
     expect(rows.map(r => r.courseIndex)).toEqual([0, 1, 0]);
   });
 
-  test('F1.4 skips courses missing courseId (defensive)', () => {
+  test('F1.4 legacy courses missing courseId produce rows w/ synthetic id (Phase 16.5 fix)', () => {
+    // Pre-fix: defensive skip eliminated 1384/1384 ProClinic-cloned courses.
+    // Post-fix: every course produces a row; legacy ones get `idx-${courseIndex}`
+    // synthetic id and `hasRealCourseId: false` flag.
     const c = mkCustomer({
       courses: [
         mkCourse({ courseId: 'good' }),
@@ -104,7 +108,9 @@ describe('F1 flattenCustomerCourses', () => {
       ],
     });
     const rows = flattenCustomerCourses([c]);
-    expect(rows.map(r => r.courseId)).toEqual(['good', 'good-2']);
+    expect(rows.map(r => r.courseId)).toEqual(['good', 'idx-1', 'idx-2', 'good-2']);
+    expect(rows.map(r => r.hasRealCourseId)).toEqual([true, false, false, true]);
+    expect(rows.map(r => r.courseIndex)).toEqual([0, 1, 2, 3]);
   });
 
   test('F1.5 legacy course missing status → defaults to STATUS_ACTIVE', () => {
@@ -216,10 +222,28 @@ describe('F2 filterCourses', () => {
     expect(filterCourses(sampleRows, { courseType: 'package' })).toHaveLength(2);
   });
 
-  test('F2.7 hasRemainingOnly: keeps only qtyRemaining>0 AND status=active', () => {
+  test('F2.7 hasRemainingOnly default view (no status picked): keeps only qtyRemaining>0 + active', () => {
     const r = filterCourses(sampleRows, { hasRemainingOnly: true });
     expect(r).toHaveLength(2);
     expect(r.every(x => x.qtyRemaining > 0 && x.status === STATUS_ACTIVE)).toBe(true);
+  });
+
+  test('F2.7-bis Phase 16.5 fix: hasRemainingOnly + explicit non-active status → status pick wins', () => {
+    // Pre-fix bug: user reports "คอร์สใช้หมดแล้ว/คืนเงิน/ยกเลิก ไม่มีในตารางเลย" —
+    // hasRemainingOnly forcibly excluded all non-active rows even when user
+    // explicitly picked one of those statuses. Post-fix: status pick wins.
+    const used = filterCourses(sampleRows, { status: STATUS_USED, hasRemainingOnly: true });
+    expect(used.map(r => r.courseId)).toEqual(['a2']);
+
+    const refunded = filterCourses(sampleRows, { status: STATUS_REFUNDED, hasRemainingOnly: true });
+    expect(refunded.map(r => r.courseId)).toEqual(['cc1']);
+  });
+
+  test('F2.7-tris hasRemainingOnly + status=active: keeps qtyRemaining>0 (intersect)', () => {
+    const r = filterCourses(sampleRows, { status: STATUS_ACTIVE, hasRemainingOnly: true });
+    // a1 (3/5 active) + b1 (2/2 active) — same as F2.7 but explicit
+    expect(r).toHaveLength(2);
+    expect(r.every(x => x.status === STATUS_ACTIVE && x.qtyRemaining > 0)).toBe(true);
   });
 
   test('F2.8 branchId filter: matches exact branch + includes empty branchId (legacy)', () => {
@@ -372,6 +396,31 @@ describe('F5 supporting helpers', () => {
     expect(parseStatusFromCourse({ status: 'unknown' })).toBe(STATUS_ACTIVE);
     expect(parseStatusFromCourse({})).toBe(STATUS_ACTIVE);
     expect(parseStatusFromCourse(null)).toBe(STATUS_ACTIVE);
+  });
+
+  test('F5.4-bis Phase 16.5 fix — deriveEffectiveStatus promotes active+qty=0 → USED', () => {
+    // ProClinic data: status stays "กำลังใช้งาน" even when qty hits zero.
+    // Effective status promotion makes used-up courses filterable as USED.
+    expect(deriveEffectiveStatus(STATUS_ACTIVE, 5, 0)).toBe(STATUS_USED);
+    expect(deriveEffectiveStatus(STATUS_ACTIVE, 5, 5)).toBe(STATUS_ACTIVE); // not used
+    expect(deriveEffectiveStatus(STATUS_ACTIVE, 5, 1)).toBe(STATUS_ACTIVE); // partial
+    // Edge: qtyTotal=0 means no qty info → preserve raw status
+    expect(deriveEffectiveStatus(STATUS_ACTIVE, 0, 0)).toBe(STATUS_ACTIVE);
+    // Terminal statuses preserved untouched (don't promote to USED)
+    expect(deriveEffectiveStatus(STATUS_REFUNDED, 5, 0)).toBe(STATUS_REFUNDED);
+    expect(deriveEffectiveStatus(STATUS_CANCELLED, 5, 0)).toBe(STATUS_CANCELLED);
+    expect(deriveEffectiveStatus(STATUS_USED, 5, 0)).toBe(STATUS_USED);
+  });
+
+  test('F5.4-tris flatten promotes effective status when qty=0/N + active', () => {
+    const rows = flattenCustomerCourses([
+      mkCustomer({ courses: [
+        mkCourse({ courseId: 'a', qty: '0/5', status: STATUS_ACTIVE }), // promoted → USED
+        mkCourse({ courseId: 'b', qty: '5/5', status: STATUS_ACTIVE }), // stays ACTIVE
+        mkCourse({ courseId: 'c', qty: '0/3', status: STATUS_REFUNDED }), // stays REFUNDED
+      ] }),
+    ]);
+    expect(rows.map(r => r.status)).toEqual([STATUS_USED, STATUS_ACTIVE, STATUS_REFUNDED]);
   });
 
   test('F5.5 status enum exports — Thai strings + ALL_STATUSES array', () => {
