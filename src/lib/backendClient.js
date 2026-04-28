@@ -3912,7 +3912,15 @@ export async function listStockOrders({ branchId, status } = {}) {
     : stockOrdersCol();
   const snap = await getDocs(q);
   const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  orders.sort((a, b) => (b.importedDate || '').localeCompare(a.importedDate || ''));
+  // V35.2-quater (2026-04-28) — sort newest-first per user directive
+  // "ทุกหน้าที่มีตารางของระบบสต็อค ... รายการที่ทำล่าสุดต้องอยู่บนสุด".
+  // createdAt is the auto-set ISO timestamp (always present; unique to ms);
+  // importedDate is admin-entered YYYY-MM-DD (ties on same day). Use
+  // createdAt as primary so same-day orders stay in entry order.
+  orders.sort((a, b) =>
+    (b.createdAt || '').localeCompare(a.createdAt || '') ||
+    (b.importedDate || '').localeCompare(a.importedDate || '')
+  );
   return orders;
 }
 
@@ -4821,7 +4829,11 @@ export async function listCentralStockOrders({ centralWarehouseId, vendorId, sta
   const q = clauses.length ? query(centralStockOrdersCol(), ...clauses) : centralStockOrdersCol();
   const snap = await getDocs(q);
   const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  orders.sort((a, b) => (b.importedDate || '').localeCompare(a.importedDate || ''));
+  // V35.2-quater (2026-04-28) — newest-first per user directive (mirror listStockOrders).
+  orders.sort((a, b) =>
+    (b.createdAt || '').localeCompare(a.createdAt || '') ||
+    (b.importedDate || '').localeCompare(a.importedDate || '')
+  );
   return orders;
 }
 

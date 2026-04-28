@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package, Plus, Trash2, X, Loader2, AlertCircle, CheckCircle2,
-  ShoppingBag, ArrowLeft, Search, Filter, Database,
+  ShoppingBag, ArrowLeft, Search, Filter,
 } from 'lucide-react';
 import {
   listStockOrders, createStockOrder, cancelStockOrder,
@@ -45,7 +45,10 @@ function currentAuditUser() {
   };
 }
 import DateField from '../DateField.jsx';
-import StockSeedPanel from './StockSeedPanel.jsx';
+// V35.2-quater (2026-04-28) — StockSeedPanel button removed per user
+// directive "เอาปุ่ม นำเข้าจากข้อมูลพื้นฐานออกไป". Component file kept
+// (still exists in repo) but not imported here. Re-add the import + state
+// + button if the bulk-seed flow is needed again.
 import OrderDetailModal from './OrderDetailModal.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { productDisplayName } from '../../lib/productValidation.js';
@@ -76,7 +79,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
-  const [seedOpen, setSeedOpen] = useState(false);
+  // V35.2-quater — seedOpen state removed (button gone per user directive)
   const [editingOrder, setEditingOrder] = useState(null);
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -163,14 +166,6 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const openDetail = (orderId) => setDetailOrderId(orderId);
   const closeDetail = () => setDetailOrderId(null);
 
-  if (seedOpen) {
-    return (
-      <StockSeedPanel
-        onClose={() => setSeedOpen(false)}
-        onSaved={async () => { setSeedOpen(false); await loadOrders(); }}
-      />
-    );
-  }
   if (formOpen) {
     return (
       <OrderCreateForm
@@ -203,11 +198,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
             <h2 className="text-lg font-bold text-[var(--tx-heading)] flex items-center gap-2">Orders นำเข้าสินค้า</h2>
             <p className="text-xs text-[var(--tx-muted)]">นำเข้าสินค้าจาก vendor → สร้าง batch (FIFO) → สต็อกตามคำสั่งซื้อจริง</p>
           </div>
-          <button onClick={() => setSeedOpen(true)}
-            className="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-rose-400 border border-[var(--bd)] hover:border-rose-700 flex items-center gap-1.5"
-            title="เลือกสินค้าจากข้อมูลพื้นฐาน แล้วคีย์ qty/ต้นทุน/วันหมดอายุ ทีละหลายๆ ตัวในครั้งเดียว">
-            <Database size={14} /> นำเข้าจากข้อมูลพื้นฐาน
-          </button>
+          {/* V35.2-quater (2026-04-28) — "นำเข้าจากข้อมูลพื้นฐาน" button removed */}
           <button onClick={openCreate}
             className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
             <Plus size={14} /> สร้าง Order ใหม่
@@ -228,16 +219,13 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
       ) : filteredOrders.length === 0 ? (
         <div className="bg-[var(--bg-surface)] rounded-2xl p-8 text-center border border-[var(--bd)] space-y-4">
           <Package size={32} className="mx-auto text-[var(--tx-muted)]" />
-          <p className="text-xs text-[var(--tx-muted)]">{search ? 'ไม่พบ order ที่ตรงกับคำค้น' : 'ยังไม่มี order — เริ่มได้ 2 วิธี'}</p>
+          <p className="text-xs text-[var(--tx-muted)]">{search ? 'ไม่พบ order ที่ตรงกับคำค้น' : 'ยังไม่มี order'}</p>
           {!search && (
             <div className="flex justify-center gap-3">
-              <button onClick={() => setSeedOpen(true)}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
-                <Database size={14} /> นำเข้าจากข้อมูลพื้นฐาน (แนะนำ — bulk)
-              </button>
+              {/* V35.2-quater — "นำเข้าจากข้อมูลพื้นฐาน" CTA removed */}
               <button onClick={openCreate}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-rose-400 border border-[var(--bd)] flex items-center gap-1.5">
-                <Plus size={14} /> สร้าง Order รายการเดียว
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-700 text-white hover:bg-rose-600 flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)]">
+                <Plus size={14} /> สร้าง Order ใหม่
               </button>
             </div>
           )}
