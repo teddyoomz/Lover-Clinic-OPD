@@ -7,12 +7,27 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 EOD — Phase 15.5 bundle (4 features) + audit S21-S25 + coverage spot-check
+- **Date last updated**: 2026-04-28 EOD — Phase 15.6 / V35 stock bug sweep + Phase D + V15 #4 deploy + production cleanup (82 docs)
 - **Branch**: `master`
-- **Last commit**: `ac75ad0 chore(audit): Phase G + H — audit-stock-flow S21-S25 + coverage spot-check`
-- **Test count**: **2527** focused (+138 this session: 28 + 51 + 38 + 21)
+- **Last commit**: `79a974c feat(stock): Phase 15.6 / V35 Phase D — searchable ProductSelectField + migrate 4 stock pickers`
+- **Test count**: **2740** focused (+213 from V35 session: 170 P0 + 43 Phase D)
 - **Build**: clean
-- **Deploy state**: ⏳ **PRODUCTION = `da15849`** (V15 #3 LIVE) · master 4 commits ahead, awaiting V15 #4 combined deploy
+- **Deploy state**: ✅ **PRODUCTION = `79a974c`** (V15 #4 LIVE) · 6 commits shipped: 248416e + d037cf0 + 89c5607 + ac75ad0 + 6075136 + 79a974c
+  - Vercel (V15 #4): `lover-clinic-kfrlkir4l-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+  - Firestore rules: released to `cloud.firestore` (be_admin_audit added)
+  - Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 + strip 2/2 = 200
+  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 401 (LINE sig check on empty body — expected)
+- **Production cleanup (V15 #4 post-deploy)**:
+  - 31 orphan stock batches deleted via /api/admin/cleanup-orphan-stock (auditId: cleanup-orphan-1777363491282)
+  - 9 cascade-blocked batches deleted via direct firebase-admin SDK (test products had batches; orphan endpoint missed them since productId WAS in be_products)
+  - 40 test products (ADVS-/ADVT-*) deleted via /api/admin/cleanup-test-products (auditId: cleanup-test-products-...)
+  - 2 user-named test sales deleted via direct firebase-admin SDK (TEST-SALE-DEFAULT-1777123845203 + TEST-SALE-1777123823846 stored as saleId FIELD on INV-20260425-0004/0005 — endpoint regex on doc.id missed them; one-shot deletion documented in audit log)
+  - **Total: 82 docs cleaned. Verification: all 3 endpoints DRY-RUN returns 0.**
+  - Counts: be_stock_batches 369→329 (-40), be_products 377→337 (-40), be_sales 52→50 (-2)
+- **Rule B probe list**: 6 positive + 5 negative (Phase 15.6 added be_admin_audit to negative list)
+- **Production URL**: https://lover-clinic-app.vercel.app
+- **Remote sync**: master = origin/master ✅
+- **SCHEMA_VERSION**: 18 (V35 added be_admin_audit collection + FK validation at batch creators)
   - Vercel (V15 #3): `lover-clinic-9cama0xir-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 44s deploy
   - Firestore rules: released to `cloud.firestore` (no rule changes in this deploy; idempotent re-publish)
   - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 = 200 + 2/2 strip = 200
@@ -22,7 +37,30 @@
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
 
-### Session 2026-04-28 EOD — Phase 15.5 bundle (4 features) + audit S21-S25 + coverage spot-check (NOT deployed)
+### Session 2026-04-28 — Phase 15.6 / V35 stock bug sweep + Phase D + V15 #4 deploy + production cleanup
+
+User reported 5 stock-system issues in one message after V15 #3 deploy. Auto-mode session shipped V35 in 2 commits + V15 #4 combined deploy + production cleanup (82 docs).
+
+**Commits this session**:
+- `6075136` Phase 15.6 P0 (Issues 1+2+3+5 — 21 files: balance fix, sale-delete try/catch, FK validation, 3 cleanup endpoints, V33.12 testSale prefix, capacity tooltip; +170 tests)
+- `79a974c` Phase 15.6 Phase D (Issue 4 — searchable ProductSelectField + 4 stock picker migrations + +43 tests)
+
+**5 user-reported issues**:
+1. ✅ Branch stock balance silent miss → StockBalancePanel mirrors MovementLogPanel includeLegacyMain (Phase 15.4 incomplete-fix gap)
+2. ✅ ความจุ semantic confusion → header tooltip + per-row "(เป้าหมาย: N)" sub-label
+3. ✅ Orphan products in stock → NEW _assertProductExists hoisted helper at every batch creator + cleanup endpoint
+4. ✅ Searchable product dropdown → NEW ProductSelectField + productSearchUtils + 4 stock pickers migrated; non-stock pickers (Course/Promotion/Quotation/Sale) deferred to follow-up
+5. ✅ Test pollution + sale delete black-screen → SaleTab try/catch + 3 cleanup endpoints + V33.12 testSale prefix; production cleanup deleted 82 docs
+
+**V35 V-entry locked** in 00-session-start.md § 2 + verbose in v-log-archive.md. audit-stock-flow upgraded S20→S28 (S26 includeLegacyMain at default-branch readers, S27 FK at batch creators, S28 ProductSelectField Rule C1 lock).
+
+**V15 #4 deploy verification**: pre+post probes 6/6 + 5/5 (be_admin_audit added to negative list); HTTP smoke 200/200/401 ✓; vercel aliased ✓; firebase rules released ✓.
+
+**Production cleanup runbook proven**: api/admin/cleanup-orphan-stock + cleanup-test-products + cleanup-test-sales endpoints + admin token mint via firebase-admin custom-token + Identity Toolkit exchange. The 9 cascade-blocked batches + 2 saleId-field-only test sales required one-shot direct firebase-admin SDK deletes (audit log written for both).
+
+Detail: `.agents/sessions/2026-04-28-session25-phase15-6-v35-deploy.md` (NOT YET written — defer to follow-up session-end)
+
+### Session 2026-04-28 EOD — Phase 15.5 bundle (4 features) + audit S21-S25 + coverage spot-check (DEPLOYED in V15 #4)
 
 User chained 4 directives across the session: (1) ลุย Phase 15.5 (15.5A actor filter + 15.5B withdrawal approval); (2) per-product balance warnings; (3) ProductFormModal unit dropdown enrichment; (4) audit + coverage. All shipped + pushed; awaiting V15 #4 deploy auth.
 
