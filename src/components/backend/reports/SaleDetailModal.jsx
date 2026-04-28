@@ -244,11 +244,29 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
             </Section>
           )}
 
+          {/* Phase 16.5-ter (2026-04-29) — cancelled details (staff who
+              cancelled, reason, refund method/amount). Per user directive:
+              "แสดงใน modal รายละเอียดของ list ที่ยกเลิกนั้นด้วยว่าใครยกเลิก
+              และระวังเรื่องพนังงานเป็นตัวเลขไม่ใช่ text" — staff NAME shown,
+              not raw id. */}
+          {isCancelled && sale.cancelled && (
+            <Section icon={Wallet} title="รายละเอียดการยกเลิก">
+              {sale.cancelled.staffName
+                ? <KV label="พนักงานที่ยกเลิก" value={sale.cancelled.staffName} />
+                : sale.cancelledBy ? <KV label="ผู้ยกเลิก" value={sale.cancelledBy} /> : null}
+              {sale.cancelled.reason && <KV label="เหตุผล" value={sale.cancelled.reason} />}
+              {sale.cancelled.refundMethod && <KV label="วิธีคืนเงิน" value={sale.cancelled.refundMethod} />}
+              {Number(sale.cancelled.refundAmount) > 0 && (
+                <KV label="จำนวนคืน" value={`${fmtMoney(sale.cancelled.refundAmount)} บาท`} />
+              )}
+              {sale.cancelled.at && <KV label="ยกเลิกเมื่อ" value={sale.cancelled.at} mono />}
+            </Section>
+          )}
+
           {/* Audit fields */}
-          {(sale.createdBy || sale.cancelledBy || sale.saleNote) && (
+          {(sale.createdBy || sale.saleNote) && (
             <Section icon={Wallet} title="ข้อมูลเพิ่มเติม">
               {sale.createdBy && <KV label="ผู้ทำรายการ" value={sale.createdBy} />}
-              {sale.cancelledBy && <KV label="ผู้ยกเลิก" value={sale.cancelledBy} />}
               {sale.saleNote && <KV label="หมายเหตุ" value={sale.saleNote} />}
               {sale.createdAt && <KV label="สร้างเมื่อ" value={sale.createdAt} mono />}
             </Section>

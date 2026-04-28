@@ -1327,20 +1327,24 @@ export async function addPicksToResolvedGroup(customerId, pickedFromCourseId, ad
 }
 
 /** Exchange a product within a customer's course */
-export async function exchangeCourseProduct(customerId, courseIndex, newProduct, reason = '') {
+export async function exchangeCourseProduct(customerId, courseIndex, newProduct, reason = '', opts = {}) {
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
   if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
 
   const oldCourse = courses[courseIndex];
+  // Phase 16.5-ter (2026-04-29) — capture staff identification on exchange.
+  // Coerced for V14 lock (no undefined leaves).
   const exchangeEntry = {
     timestamp: new Date().toISOString(),
-    oldProduct: oldCourse.product,
-    oldQty: oldCourse.qty,
-    newProduct: newProduct.name,
+    oldProduct: String(oldCourse.product || ''),
+    oldQty: String(oldCourse.qty || ''),
+    newProduct: String(newProduct.name || ''),
     newQty: buildQtyString(Number(newProduct.qty) || 1, newProduct.unit || ''),
-    reason,
+    reason: String(reason || ''),
+    staffId: String(opts.staffId || ''),
+    staffName: String(opts.staffName || ''),
   };
 
   courses[courseIndex] = {
@@ -2024,11 +2028,89 @@ export async function removeLinkedSaleCourses(saleId, { removeUsed = false } = {
   return { removedCount, keptUsedCount };
 }
 
-/** Cancel a sale with reason + refund tracking */
-export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount, evidenceUrl) {
+/**
+ * Phase 16.5-ter (2026-04-29) — flip course status on every course linked
+ * to a cancelled sale (NOT remove). Replaces `removeLinkedSaleCourses` for
+ * the new sale-cancel cascade.
+ *
+ * - kind='refund' (refundMethod ≠ 'ไม่คืนเงิน') → status='คืนเงิน'
+ * - kind='cancel' (refundMethod = 'ไม่คืนเงิน')   → status='ยกเลิก'
+ *
+ * Used + unused courses BOTH flip (per user directive: "Flip status ทั้งหมด").
+ * Writes one `be_course_changes` audit entry per affected course.
+ *
+ * Idempotent: courses already in terminal state (refunded/cancelled) are
+ * skipped — re-running is safe.
+ *
+ * @param {string} saleId
+ * @param {'refund'|'cancel'} kind
+ * @param {object} [opts] — { reason, actor, staffId, staffName }
+ * @returns {Promise<{flippedCount, customerId, targetStatus}>}
+ */
+export async function applySaleCancelToCourses(saleId, kind, opts = {}) {
+  if (!['refund', 'cancel'].includes(kind)) throw new Error('kind must be refund|cancel');
+  const targetStatus = kind === 'refund' ? 'คืนเงิน' : 'ยกเลิก';
+  const saleSnap = await getDoc(saleDoc(saleId));
+  if (!saleSnap.exists()) throw new Error('Sale not found');
+  const customerId = String(saleSnap.data().customerId || '');
+  if (!customerId) return { flippedCount: 0, customerId: '', targetStatus };
+  const custSnap = await getDoc(customerDoc(customerId));
+  if (!custSnap.exists()) return { flippedCount: 0, customerId, targetStatus };
+  const current = custSnap.data().courses || [];
+
+  const { buildChangeAuditEntry } = await import('./courseExchange.js');
+  const stamp = new Date().toISOString();
+  const flippedIndices = [];
+  const next = current.map((c, i) => {
+    if (String(c.linkedSaleId || '') !== String(saleId)) return c;
+    if (c.status === 'คืนเงิน' || c.status === 'ยกเลิก') return c; // idempotent skip
+    flippedIndices.push(i);
+    return {
+      ...c,
+      status: targetStatus,
+      ...(kind === 'refund'
+        ? { refundedAt: stamp, refundReason: String(opts.reason || '') }
+        : { cancelledAt: stamp, cancelReason: String(opts.reason || '') }),
+    };
+  });
+
+  if (flippedIndices.length === 0) return { flippedCount: 0, customerId, targetStatus };
+
+  const batch = writeBatch(db);
+  batch.update(customerDoc(customerId), { courses: next, updatedAt: stamp });
+  for (const i of flippedIndices) {
+    const audit = buildChangeAuditEntry({
+      customerId,
+      kind,
+      fromCourse: current[i],
+      toCourse: null,
+      refundAmount: null,
+      reason: opts.reason || `${kind === 'refund' ? 'คืนเงินจาก' : 'ยกเลิกจาก'}บิล ${saleId}`,
+      actor: opts.actor || '',
+      staffId: opts.staffId || '',
+      staffName: opts.staffName || '',
+    });
+    batch.set(courseChangeDoc(audit.changeId), audit);
+  }
+  await batch.commit();
+  return { flippedCount: flippedIndices.length, customerId, targetStatus };
+}
+
+/** Cancel a sale with reason + refund tracking + staff identification */
+export async function cancelBackendSale(saleId, reason, refundMethod, refundAmount, evidenceUrl, opts = {}) {
   await updateDoc(saleDoc(saleId), {
     status: 'cancelled',
-    cancelled: { at: new Date().toISOString(), reason: reason || '', refundMethod: refundMethod || '', refundAmount: refundAmount || 0, evidenceUrl: evidenceUrl || null },
+    cancelled: {
+      at: new Date().toISOString(),
+      reason: reason || '',
+      refundMethod: refundMethod || '',
+      refundAmount: refundAmount || 0,
+      evidenceUrl: evidenceUrl || null,
+      // Phase 16.5-ter (2026-04-29) — staff identification (NAME, not raw id)
+      // per user directive "ระวังเรื่องพนังงานเป็นตัวเลขไม่ใช่ text".
+      staffId: String(opts.staffId || ''),
+      staffName: String(opts.staffName || ''),
+    },
     'payment.status': 'cancelled',
     updatedAt: new Date().toISOString(),
   });
@@ -2739,6 +2821,8 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
       refundAmount: refundedAmount,
       reason: opts.reason || '',
       actor: opts.actor || '',
+      staffId: opts.staffId || '',
+      staffName: opts.staffName || '',
     });
     tx.set(courseChangeDoc(audit.changeId), audit);
 
@@ -2782,6 +2866,8 @@ export async function cancelCustomerCourse(customerId, courseId, reason, opts = 
       refundAmount: null,
       reason: reason || '',
       actor: opts.actor || '',
+      staffId: opts.staffId || '',
+      staffName: opts.staffName || '',
     });
     tx.set(courseChangeDoc(audit.changeId), audit);
 
@@ -8348,6 +8434,19 @@ export function mergeSellersWithBranchFilter(staffList, doctorList, { branchId }
 export async function listAllSellers({ branchId } = {}) {
   const [staffList, doctorList] = await Promise.all([listStaff(), listDoctors()]);
   return mergeSellersWithBranchFilter(staffList, doctorList, { branchId });
+}
+
+/**
+ * Phase 16.5-ter (2026-04-29) — staff-only variant for actions that should
+ * record a STAFF (not doctor) actor. User directive: "พนักงานในหน้าพนักงาน
+ * ของสาขานั้นๆเท่านั้น" — Cancel/Exchange in remaining-course tab + cancel-
+ * sale in SaleTab pick from be_staff (employees), branch-filtered, NOT doctors.
+ *
+ * Returns same {id, name}[] shape as listAllSellers for ActorPicker reuse.
+ */
+export async function listStaffByBranch({ branchId } = {}) {
+  const staffList = await listStaff();
+  return mergeSellersWithBranchFilter(staffList, [], { branchId });
 }
 
 // Phase 14.10-tris — be_membership_types listing (was master_data/membership_types)

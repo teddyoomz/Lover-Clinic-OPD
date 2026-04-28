@@ -27,8 +27,10 @@ import { downloadCSV } from '../../../lib/csvExport.js';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import CancelCourseModal from '../CancelCourseModal.jsx';
-import RefundCourseModal from '../RefundCourseModal.jsx';
 import ExchangeCourseModal from '../ExchangeCourseModal.jsx';
+// Phase 16.5-ter (2026-04-29): RefundCourseModal removed from this tab —
+// refund flow lives in tab=sales only. The component file is kept for
+// potential future reuse but has no consumers as of 16.5-ter.
 
 const COL_DEFS = [
   { key: 'customer', label: 'ลูกค้า' },
@@ -259,12 +261,6 @@ export default function RemainingCourseTab({ clinicSettings }) {
 
       <CancelCourseModal
         open={modalKind === 'cancel'}
-        row={modalRow}
-        onSuccess={handleModalSuccess}
-        onCancel={handleModalCancel}
-      />
-      <RefundCourseModal
-        open={modalKind === 'refund'}
         row={modalRow}
         onSuccess={handleModalSuccess}
         onCancel={handleModalCancel}

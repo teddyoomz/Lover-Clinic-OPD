@@ -38,10 +38,12 @@ describe('G1 RemainingCourseTab uses BranchContext + ReportShell + helpers', () 
     expect(TAB_SRC).toMatch(/filterCourses\([\s\S]*?branchId\b/);
   });
 
-  test('G1.5 tab renders 3 modals (Cancel + Refund + Exchange)', () => {
+  test('G1.5 Phase 16.5-ter — tab renders 2 modals (Cancel + Exchange); RefundCourseModal REMOVED', () => {
+    // User directive 2026-04-29: "เอาปุ่มคืนเงินออกจากหน้า tab=reports-
+    // remaining-course เรื่องแบบนี้ต้องไปทำหน้า tab=sales".
     expect(TAB_SRC).toMatch(/<CancelCourseModal\b/);
-    expect(TAB_SRC).toMatch(/<RefundCourseModal\b/);
     expect(TAB_SRC).toMatch(/<ExchangeCourseModal\b/);
+    expect(TAB_SRC).not.toMatch(/<RefundCourseModal\b/);
   });
 
   test('G1.6 tab uses BranchContext branchId NOT hardcoded "main"', () => {
@@ -177,10 +179,49 @@ describe('G5 row component contract', () => {
     expect(ROW_SRC).toMatch(/disabled=\{terminal\}/);
   });
 
-  test('G5.3 row exposes 3 action buttons (cancel/refund/exchange)', () => {
+  test('G5.3 Phase 16.5-ter — row exposes 2 action buttons (cancel + exchange); refund REMOVED', () => {
     expect(ROW_SRC).toMatch(/data-testid=\{[^}]*cancel-\$\{row\.courseId\}/);
-    expect(ROW_SRC).toMatch(/data-testid=\{[^}]*refund-\$\{row\.courseId\}/);
     expect(ROW_SRC).toMatch(/data-testid=\{[^}]*exchange-\$\{row\.courseId\}/);
+    // Refund button removed — user directive: refund flow lives in tab=sales only
+    expect(ROW_SRC).not.toMatch(/data-testid=\{[^}]*refund-\$\{row\.courseId\}/);
+  });
+
+  test('G5.3-bis no Receipt icon import (was used for refund kebab item)', () => {
+    expect(ROW_SRC).not.toMatch(/import\s+\{[^}]*Receipt[^}]*\}\s+from\s+['"]lucide-react/);
+  });
+
+  // ─── G8 Phase 16.5-ter — staff dropdown + sale-cancel cascade ─────────
+  test('G8.1 buildChangeAuditEntry accepts staffId + staffName + writes them', () => {
+    expect(COURSE_EXCH).toMatch(/staffId.*staffName/);
+    expect(COURSE_EXCH).toMatch(/staffId:\s*String\(staffId/);
+    expect(COURSE_EXCH).toMatch(/staffName:\s*String\(staffName/);
+  });
+
+  test('G8.2 listStaffByBranch helper exists in backendClient', () => {
+    expect(CLIENT_SRC).toMatch(/export async function listStaffByBranch/);
+  });
+
+  test('G8.3 applySaleCancelToCourses helper exists + flips status (refund/cancel)', () => {
+    expect(CLIENT_SRC).toMatch(/export async function applySaleCancelToCourses/);
+    const idx = CLIENT_SRC.indexOf('export async function applySaleCancelToCourses');
+    const slice = CLIENT_SRC.slice(idx, idx + 3000);
+    expect(slice).toMatch(/kind === 'refund' \? 'คืนเงิน'/);
+    expect(slice).toMatch(/'ยกเลิก'/);
+    expect(slice).toMatch(/writeBatch\(db\)/);
+  });
+
+  test('G8.4 cancelBackendSale persists staffId/staffName on cancelled object', () => {
+    const idx = CLIENT_SRC.indexOf('export async function cancelBackendSale');
+    const slice = CLIENT_SRC.slice(idx, idx + 1500);
+    expect(slice).toMatch(/staffId:\s*String\(opts\.staffId/);
+    expect(slice).toMatch(/staffName:\s*String\(opts\.staffName/);
+  });
+
+  test('G8.5 CancelCourseModal + ExchangeCourseModal use ActorPicker + listStaffByBranch', () => {
+    expect(CANCEL_MODAL).toMatch(/import ActorPicker/);
+    expect(CANCEL_MODAL).toMatch(/listStaffByBranch/);
+    expect(EXCH_MODAL).toMatch(/import ActorPicker/);
+    expect(EXCH_MODAL).toMatch(/listStaffByBranch/);
   });
 
   test('G5.4 row uses fmtMoney for value display', () => {

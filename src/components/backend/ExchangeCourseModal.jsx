@@ -9,7 +9,9 @@
 
 import { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { exchangeCourseProduct, listCourses } from '../../lib/backendClient.js';
+import { exchangeCourseProduct, listCourses, listStaffByBranch } from '../../lib/backendClient.js';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 /**
  * @param {object} props
@@ -19,8 +21,12 @@ import { exchangeCourseProduct, listCourses } from '../../lib/backendClient.js';
  *   - onCancel: () => void
  */
 export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) {
+  const { branchId } = useSelectedBranch();
   const [courses, setCourses] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [staff, setStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [actorId, setActorId] = useState('');
   const [search, setSearch] = useState('');
   const [pickedCourseId, setPickedCourseId] = useState('');
   const [reason, setReason] = useState('');
@@ -39,6 +45,18 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
     return () => { cancelled = true; };
   }, [open]);
 
+  // Phase 16.5-ter — load branch-filtered staff.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setStaffLoading(true);
+    listStaffByBranch({ branchId })
+      .then((list) => { if (!cancelled) setStaff(list || []); })
+      .catch(() => { if (!cancelled) setStaff([]); })
+      .finally(() => { if (!cancelled) setStaffLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, branchId]);
+
   if (!open || !row) return null;
 
   const lowerSearch = search.trim().toLowerCase();
@@ -47,8 +65,9 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
     : courses;
 
   const picked = courses.find(c => c.id === pickedCourseId) || null;
+  const actor = resolveActorUser(actorId, staff);
   const reasonOk = reason.trim().length > 0;
-  const canConfirm = !!picked && reasonOk && !submitting;
+  const canConfirm = !!picked && !!actor && reasonOk && !submitting;
 
   const handleConfirm = async () => {
     if (!canConfirm) return;
@@ -61,10 +80,11 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
         qty: products[0]?.qty || picked.qty || 1,
         unit: products[0]?.unit || '',
       };
-      await exchangeCourseProduct(row.customerId, row.courseIndex, newProduct, reason.trim());
-      setSearch('');
-      setPickedCourseId('');
-      setReason('');
+      await exchangeCourseProduct(row.customerId, row.courseIndex, newProduct, reason.trim(), {
+        staffId: actor.userId,
+        staffName: actor.userName,
+      });
+      setActorId(''); setSearch(''); setPickedCourseId(''); setReason('');
       onSuccess?.();
     } catch (e) {
       setError(e?.message || 'เปลี่ยนคอร์สไม่สำเร็จ');
@@ -74,10 +94,7 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
   };
 
   const handleCancel = () => {
-    setSearch('');
-    setPickedCourseId('');
-    setReason('');
-    setError('');
+    setActorId(''); setSearch(''); setPickedCourseId(''); setReason(''); setError('');
     onCancel?.();
   };
 
@@ -113,6 +130,16 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
             <div><span className="text-[var(--tx-muted)]">คอร์สเดิม: </span>
               <span className="text-[var(--tx-primary)] font-bold">{row.courseName}</span></div>
           </div>
+
+          <ActorPicker
+            value={actorId}
+            onChange={setActorId}
+            sellers={staff}
+            loading={staffLoading}
+            label="พนักงานที่ทำรายการ"
+            required
+            testId="exchange-course-staff"
+          />
 
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">

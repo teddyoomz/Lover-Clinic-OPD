@@ -1,50 +1,68 @@
 // ─── CancelCourseModal — Phase 16.5 (2026-04-29) ───────────────────────────
 // Soft-cancel a customer's course (no money refund). User selects from
-// RemainingCourseTab kebab → "ยกเลิก". Reason is required.
+// RemainingCourseTab kebab → "ยกเลิก".
 //
-// Calls backendClient.cancelCustomerCourse(customerId, courseId, reason).
+// Phase 16.5-ter (2026-04-29) — required staff dropdown (listStaffByBranch,
+// branch-filtered). Staff stored as id + NAME (per user directive
+// "ระวังเรื่องพนังงานเป็นตัวเลขไม่ใช่ text"). Reason still required.
+//
+// Calls backendClient.cancelCustomerCourse(customerId, courseId, reason, opts).
 // On success: caller closes modal + refreshes its row.
-//
-// Style mirrors ActorConfirmModal (canonical confirm-with-reason pattern).
-// V31 anti-silent-swallow: try/catch surfaces error inside modal banner.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { cancelCustomerCourse } from '../../lib/backendClient.js';
+import { cancelCustomerCourse, listStaffByBranch } from '../../lib/backendClient.js';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { auth } from '../../firebase.js';
 
 /**
  * @param {object} props
  *   - open: bool
- *   - row: { customerId, customerHN, customerName, courseId, courseName }
- *   - onSuccess: () => void  — caller refreshes + closes
+ *   - row: { customerId, customerHN, customerName, courseId, courseName, hasRealCourseId, courseIndex }
+ *   - onSuccess: () => void
  *   - onCancel: () => void
  */
 export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
+  const { branchId } = useSelectedBranch();
+  const [staff, setStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [actorId, setActorId] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setStaffLoading(true);
+    listStaffByBranch({ branchId })
+      .then((list) => { if (!cancelled) setStaff(list || []); })
+      .catch(() => { if (!cancelled) setStaff([]); })
+      .finally(() => { if (!cancelled) setStaffLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, branchId]);
+
   if (!open || !row) return null;
 
+  const actor = resolveActorUser(actorId, staff);
   const reasonOk = reason.trim().length > 0;
-  const canConfirm = reasonOk && !submitting;
+  const canConfirm = !!actor && reasonOk && !submitting;
 
   const handleConfirm = async () => {
     if (!canConfirm) return;
     setSubmitting(true);
     setError('');
     try {
-      const actor = auth?.currentUser?.email || auth?.currentUser?.uid || '';
-      // Phase 16.5 fix: pass courseIndex when row has no real courseId
-      // (ProClinic-cloned courses don't have one). Backend resolves via
-      // courseIndex fallback in applyCourseCancel.
+      const actorEmail = auth?.currentUser?.email || auth?.currentUser?.uid || '';
       const lookupCourseId = row.hasRealCourseId ? row.courseId : '';
       await cancelCustomerCourse(row.customerId, lookupCourseId, reason.trim(), {
-        actor,
+        actor: actorEmail,
         courseIndex: row.courseIndex,
+        staffId: actor.userId,
+        staffName: actor.userName,
       });
-      setReason('');
+      setActorId(''); setReason('');
       onSuccess?.();
     } catch (e) {
       setError(e?.message || 'ยกเลิกคอร์สไม่สำเร็จ');
@@ -54,8 +72,7 @@ export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
   };
 
   const handleCancel = () => {
-    setReason('');
-    setError('');
+    setActorId(''); setReason(''); setError('');
     onCancel?.();
   };
 
@@ -92,6 +109,16 @@ export default function CancelCourseModal({ open, row, onSuccess, onCancel }) {
             <div><span className="text-[var(--tx-muted)]">คอร์ส: </span>
               <span className="text-[var(--tx-primary)] font-bold">{row.courseName}</span></div>
           </div>
+
+          <ActorPicker
+            value={actorId}
+            onChange={setActorId}
+            sellers={staff}
+            loading={staffLoading}
+            label="พนักงานที่ทำรายการ"
+            required
+            testId="cancel-course-staff"
+          />
 
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">

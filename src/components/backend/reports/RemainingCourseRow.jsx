@@ -9,7 +9,7 @@
 // matching modal.
 
 import { useState, useRef, useEffect } from 'react';
-import { MoreVertical, X, Receipt, Repeat } from 'lucide-react';
+import { MoreVertical, X, Repeat } from 'lucide-react';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import {
   STATUS_ACTIVE, STATUS_USED, STATUS_REFUNDED, STATUS_CANCELLED,
@@ -88,7 +88,11 @@ export default function RemainingCourseRow({ row, onAction }) {
           <MoreVertical size={14} />
         </button>
         {open && !terminal && (
-          <div className="absolute right-0 top-full mt-1 z-10 w-40 rounded-md shadow-lg bg-[var(--bg-surface)] border border-[var(--bd)]">
+          <div className="absolute right-0 top-full mt-1 z-10 w-44 rounded-md shadow-lg bg-[var(--bg-surface)] border border-[var(--bd)]">
+            {/* Phase 16.5-ter (2026-04-29): "คืนเงิน" button REMOVED.
+                Refund flow lives ONLY in tab=sales (cancel-sale modal with
+                refundMethod !== 'ไม่คืนเงิน'). Per user directive: refund =
+                accounting-heavy → must originate from sale-cancel cascade. */}
             <button
               type="button"
               onClick={() => fire('cancel')}
@@ -96,14 +100,6 @@ export default function RemainingCourseRow({ row, onAction }) {
               data-testid={`remaining-course-action-cancel-${row.courseId}`}
             >
               <X size={12} className="text-rose-400" /> ยกเลิก
-            </button>
-            <button
-              type="button"
-              onClick={() => fire('refund')}
-              className="w-full text-left px-3 py-2 text-xs text-[var(--tx-primary)] hover:bg-amber-900/30 flex items-center gap-2"
-              data-testid={`remaining-course-action-refund-${row.courseId}`}
-            >
-              <Receipt size={12} className="text-amber-400" /> คืนเงิน
             </button>
             <button
               type="button"

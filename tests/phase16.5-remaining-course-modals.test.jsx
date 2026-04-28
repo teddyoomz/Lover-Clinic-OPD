@@ -16,12 +16,21 @@ const cancelMock = vi.fn();
 const refundMock = vi.fn();
 const exchangeMock = vi.fn();
 const listCoursesMock = vi.fn();
+const listStaffByBranchMock = vi.fn().mockResolvedValue([
+  { id: 'staff-1', name: 'นาง สมหญิง ใจดี' },
+  { id: 'staff-2', name: 'นางสาว วันใส รักษ์ดี' },
+]);
 
 vi.mock('../src/lib/backendClient.js', () => ({
   cancelCustomerCourse: (...a) => cancelMock(...a),
   refundCustomerCourse: (...a) => refundMock(...a),
   exchangeCourseProduct: (...a) => exchangeMock(...a),
   listCourses: (...a) => listCoursesMock(...a),
+  listStaffByBranch: (...a) => listStaffByBranchMock(...a),
+}));
+
+vi.mock('../src/lib/BranchContext.jsx', () => ({
+  useSelectedBranch: () => ({ branchId: 'BR-test', branches: [], selectBranch: () => {}, isReady: true }),
 }));
 
 vi.mock('../src/lib/financeUtils.js', () => ({
@@ -49,63 +58,97 @@ beforeEach(() => {
   refundMock.mockReset();
   exchangeMock.mockReset();
   listCoursesMock.mockReset();
+  listStaffByBranchMock.mockReset().mockResolvedValue([
+    { id: 'staff-1', name: 'นาง สมหญิง ใจดี' },
+    { id: 'staff-2', name: 'นางสาว วันใส รักษ์ดี' },
+  ]);
 });
+
+// Helper: wait for staff list to load + pick the first staff member.
+async function pickFirstStaff(testId = 'cancel-course-staff') {
+  // Wait for ActorPicker dropdown to render with staff options
+  await waitFor(() => expect(listStaffByBranchMock).toHaveBeenCalled());
+  await waitFor(() => {
+    const sel = document.querySelector(`[data-testid="${testId}"]`);
+    if (!sel || sel.options.length < 2) throw new Error('staff list not loaded yet');
+  });
+  const sel = document.querySelector(`[data-testid="${testId}"]`);
+  fireEvent.change(sel, { target: { value: 'staff-1' } });
+}
 
 // ─── M1 CancelCourseModal ────────────────────────────────────────────────
 describe('M1 CancelCourseModal', () => {
-  test('M1.1 renders with course summary + reason textarea + buttons', () => {
+  test('M1.1 renders with course summary + staff picker + reason textarea + buttons', async () => {
     render(<CancelCourseModal open={true} row={baseRow} onSuccess={() => {}} onCancel={() => {}} />);
     expect(screen.getByTestId('cancel-course-modal')).toBeInTheDocument();
     expect(screen.getByText(/HN001/)).toBeInTheDocument();
     expect(screen.getByText(/Botox 50U/)).toBeInTheDocument();
     expect(screen.getByTestId('cancel-course-reason')).toBeInTheDocument();
     expect(screen.getByTestId('cancel-course-submit')).toBeInTheDocument();
+    // Phase 16.5-ter — staff dropdown rendered + listStaffByBranch invoked
+    await waitFor(() => expect(listStaffByBranchMock).toHaveBeenCalled());
+    expect(document.querySelector('[data-testid="cancel-course-staff"]')).toBeTruthy();
   });
 
-  test('M1.2 submit disabled until reason filled', () => {
+  test('M1.2 Phase 16.5-ter — submit disabled until staff picked AND reason filled', async () => {
     render(<CancelCourseModal open={true} row={baseRow} onSuccess={() => {}} onCancel={() => {}} />);
+    await waitFor(() => expect(listStaffByBranchMock).toHaveBeenCalled());
     expect(screen.getByTestId('cancel-course-submit')).toBeDisabled();
+    // Reason alone — still disabled (staff missing)
     fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'admin error' } });
+    expect(screen.getByTestId('cancel-course-submit')).toBeDisabled();
+    // Pick staff — now enabled
+    await pickFirstStaff('cancel-course-staff');
     expect(screen.getByTestId('cancel-course-submit')).not.toBeDisabled();
   });
 
-  test('M1.3 submit calls cancelCustomerCourse + onSuccess (real courseId path)', async () => {
+  test('M1.3 submit passes staffId + staffName + courseIndex (real courseId)', async () => {
     cancelMock.mockResolvedValue({ changeId: 'cc-1', cancelledAt: '2026-04-29T00:00:00Z' });
     const onSuccess = vi.fn();
     render(<CancelCourseModal open={true} row={{ ...baseRow, hasRealCourseId: true }} onSuccess={onSuccess} onCancel={() => {}} />);
+    await pickFirstStaff('cancel-course-staff');
     fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'wrong entry' } });
     fireEvent.click(screen.getByTestId('cancel-course-submit'));
     await waitFor(() => expect(cancelMock).toHaveBeenCalledTimes(1));
-    // Phase 16.5: helper now receives courseIndex too (defensive courseIndex fallback)
     expect(cancelMock).toHaveBeenCalledWith('cust-1', 'crs-X', 'wrong entry', {
       actor: 'admin@test.local',
       courseIndex: 2,
+      staffId: 'staff-1',
+      staffName: 'นาง สมหญิง ใจดี',
     });
     expect(onSuccess).toHaveBeenCalled();
   });
 
-  test('M1.3-bis Phase 16.5 — legacy course (hasRealCourseId=false) → empty courseId + courseIndex', async () => {
+  test('M1.3-bis legacy course (hasRealCourseId=false) → empty courseId + courseIndex + staff', async () => {
     cancelMock.mockResolvedValue({ changeId: 'cc-2', cancelledAt: '2026-04-29T00:00:00Z' });
     const legacyRow = { ...baseRow, courseId: 'idx-2', hasRealCourseId: false };
     render(<CancelCourseModal open={true} row={legacyRow} onSuccess={() => {}} onCancel={() => {}} />);
+    await pickFirstStaff('cancel-course-staff');
     fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'r' } });
     fireEvent.click(screen.getByTestId('cancel-course-submit'));
     await waitFor(() => expect(cancelMock).toHaveBeenCalled());
-    expect(cancelMock).toHaveBeenCalledWith('cust-1', '', 'r', { actor: 'admin@test.local', courseIndex: 2 });
+    expect(cancelMock).toHaveBeenCalledWith('cust-1', '', 'r', {
+      actor: 'admin@test.local',
+      courseIndex: 2,
+      staffId: 'staff-1',
+      staffName: 'นาง สมหญิง ใจดี',
+    });
   });
 
   test('M1.4 error banner shown on backend failure (V31 anti-silent-swallow)', async () => {
     cancelMock.mockRejectedValue(new Error('course already cancelled'));
     render(<CancelCourseModal open={true} row={baseRow} onSuccess={() => {}} onCancel={() => {}} />);
+    await pickFirstStaff('cancel-course-staff');
     fireEvent.change(screen.getByTestId('cancel-course-reason'), { target: { value: 'r' } });
     fireEvent.click(screen.getByTestId('cancel-course-submit'));
     await waitFor(() => expect(screen.getByTestId('cancel-course-error')).toBeInTheDocument());
     expect(screen.getByTestId('cancel-course-error').textContent).toMatch(/already cancelled/);
   });
 
-  test('M1.5 close button + Esc fire onCancel + reset state', () => {
+  test('M1.5 close button fires onCancel + resets state', async () => {
     const onCancel = vi.fn();
     render(<CancelCourseModal open={true} row={baseRow} onSuccess={() => {}} onCancel={onCancel} />);
+    await waitFor(() => expect(listStaffByBranchMock).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('cancel-course-close'));
     expect(onCancel).toHaveBeenCalled();
   });
@@ -179,7 +222,7 @@ describe('M2 RefundCourseModal', () => {
 
 // ─── M3 ExchangeCourseModal ──────────────────────────────────────────────
 describe('M3 ExchangeCourseModal', () => {
-  test('M3.1 loads master courses on open + renders dropdown', async () => {
+  test('M3.1 loads master courses + staff list on open', async () => {
     listCoursesMock.mockResolvedValue([
       { id: 'm1', courseName: 'Premium Botox', price: 5000 },
       { id: 'm2', courseName: 'Hifu', price: 3000 },
@@ -187,7 +230,9 @@ describe('M3 ExchangeCourseModal', () => {
     render(<ExchangeCourseModal open={true} row={baseRow} onSuccess={() => {}} onCancel={() => {}} />);
     expect(screen.getByTestId('exchange-course-modal')).toBeInTheDocument();
     await waitFor(() => expect(listCoursesMock).toHaveBeenCalled());
+    await waitFor(() => expect(listStaffByBranchMock).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText(/Premium Botox/)).toBeInTheDocument());
+    expect(document.querySelector('[data-testid="exchange-course-staff"]')).toBeTruthy();
   });
 
   test('M3.2 search filters dropdown (case-insensitive substring)', async () => {
@@ -202,7 +247,7 @@ describe('M3 ExchangeCourseModal', () => {
     expect(screen.getByText(/Hifu/)).toBeInTheDocument();
   });
 
-  test('M3.3 submit disabled until course picked AND reason filled', async () => {
+  test('M3.3 Phase 16.5-ter — submit disabled until course picked AND staff picked AND reason filled', async () => {
     listCoursesMock.mockResolvedValue([
       { id: 'm1', courseName: 'Premium Botox', products: [{ name: 'P', qty: '5/5' }] },
     ]);
@@ -212,10 +257,13 @@ describe('M3 ExchangeCourseModal', () => {
     fireEvent.change(screen.getByTestId('exchange-course-picker'), { target: { value: 'm1' } });
     expect(screen.getByTestId('exchange-course-submit')).toBeDisabled();
     fireEvent.change(screen.getByTestId('exchange-course-reason'), { target: { value: 'r' } });
+    // Still disabled — staff not picked yet
+    expect(screen.getByTestId('exchange-course-submit')).toBeDisabled();
+    await pickFirstStaff('exchange-course-staff');
     expect(screen.getByTestId('exchange-course-submit')).not.toBeDisabled();
   });
 
-  test('M3.4 submit calls exchangeCourseProduct with COURSE INDEX (not courseId)', async () => {
+  test('M3.4 submit passes courseIndex + staff (V32-tris-bis signature + Phase 16.5-ter staff opts)', async () => {
     listCoursesMock.mockResolvedValue([
       { id: 'm1', courseName: 'Premium Botox', products: [{ name: 'BotoxNew', qty: '10/10', unit: 'U' }] },
     ]);
@@ -225,14 +273,14 @@ describe('M3 ExchangeCourseModal', () => {
     await waitFor(() => expect(screen.getByText(/Premium Botox/)).toBeInTheDocument());
     fireEvent.change(screen.getByTestId('exchange-course-picker'), { target: { value: 'm1' } });
     fireEvent.change(screen.getByTestId('exchange-course-reason'), { target: { value: 'upgrade' } });
+    await pickFirstStaff('exchange-course-staff');
     fireEvent.click(screen.getByTestId('exchange-course-submit'));
     await waitFor(() => expect(exchangeMock).toHaveBeenCalled());
-    // CRITICAL: helper signature is (customerId, courseINDEX, newProduct, reason)
     expect(exchangeMock).toHaveBeenCalledWith('cust-1', 2, {
       name: 'Premium Botox',
       qty: '10/10',
       unit: 'U',
-    }, 'upgrade');
+    }, 'upgrade', { staffId: 'staff-1', staffName: 'นาง สมหญิง ใจดี' });
     expect(onSuccess).toHaveBeenCalled();
   });
 
@@ -243,6 +291,7 @@ describe('M3 ExchangeCourseModal', () => {
     await waitFor(() => expect(screen.getByText(/^X/)).toBeInTheDocument());
     fireEvent.change(screen.getByTestId('exchange-course-picker'), { target: { value: 'm1' } });
     fireEvent.change(screen.getByTestId('exchange-course-reason'), { target: { value: 'r' } });
+    await pickFirstStaff('exchange-course-staff');
     fireEvent.click(screen.getByTestId('exchange-course-submit'));
     await waitFor(() => expect(screen.getByTestId('exchange-course-error')).toBeInTheDocument());
     expect(screen.getByTestId('exchange-course-error').textContent).toMatch(/Invalid course index/);

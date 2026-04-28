@@ -210,7 +210,7 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
  * 'exchange' and 'refund'. Cancel entries have refundAmount=null +
  * toCourse=null (only fromCourse populated).
  */
-export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, now }) {
+export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, staffId, staffName, now }) {
   if (!customerId) throw new Error('customerId required');
   if (!['exchange', 'refund', 'cancel'].includes(kind)) throw new Error('kind must be exchange|refund|cancel');
   const changeId = `cc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -239,6 +239,12 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
     refundAmount: typeof refundAmount === 'number' ? refundAmount : null,
     reason: String(reason || '').slice(0, 500),
     actor: String(actor || ''),
+    // Phase 16.5-ter (2026-04-29) — required staff identification (NAME, not
+    // raw id) per user directive "ระวังเรื่องพนังงานเป็นตัวเลขไม่ใช่ text".
+    // staffId is the be_staff doc id; staffName is the human-readable name.
+    // Both coerced to '' for V14 lock (no undefined leaves).
+    staffId: String(staffId || ''),
+    staffName: String(staffName || ''),
     createdAt,
   };
 }

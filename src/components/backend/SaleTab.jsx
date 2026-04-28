@@ -13,7 +13,7 @@ import {
   cancelBackendSale, updateSalePayment, assignCourseToCustomer,
   applyDepositToSale, reverseDepositUsage,
   deductWallet, refundToWallet, getCustomerMembership, earnPoints, reversePointsEarned,
-  analyzeSaleCancel, removeLinkedSaleCourses,
+  analyzeSaleCancel, applySaleCancelToCourses, listStaffByBranch,
   deductStockForSale, reverseStockForSale, analyzeStockImpact, summarizeSkipReasons,
   // Phase 14.10-tris (2026-04-26) — be_products + be_courses canonical
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
@@ -48,6 +48,7 @@ import { LocalInput, LocalTextarea } from '../form/LocalField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
 import WalletPicker from './WalletPicker.jsx';
+import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import DateField from '../DateField.jsx';
 // Phase 14.10-bis (2026-04-26) — SalePrintView wired into SaleTab so
 // every row can generate the same A4 receipt that QuotationTab already
@@ -191,6 +192,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [cancelReason, setCancelReason] = useState('');
   const [cancelRefundMethod, setCancelRefundMethod] = useState('เงินสด');
   const [cancelRefundAmount, setCancelRefundAmount] = useState('');
+  // Phase 16.5-ter (2026-04-29) — required staff dropdown on cancel-sale.
+  // Uses listStaffByBranch (be_staff branch-filtered, NO doctors) per user
+  // directive "พนักงานในหน้าพนักงานของสาขานั้นๆเท่านั้น".
+  const [cancelStaffId, setCancelStaffId] = useState('');
+  const [cancelStaffList, setCancelStaffList] = useState([]);
+  const [cancelStaffLoading, setCancelStaffLoading] = useState(false);
   const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
   const [cancelEvidencePath, setCancelEvidencePath] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
@@ -1119,7 +1126,16 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                               className="p-2.5 rounded hover:bg-emerald-900/20 text-emerald-400" title="รับชำระเงิน" aria-label="รับชำระเงิน"><DollarSign size={13} /></button>
                           )}
                           {sale.status !== 'cancelled' && (
-                            <button onClick={() => { setCancelModal(sale); setCancelReason(''); setCancelRefundMethod('เงินสด'); setCancelRefundAmount(String(sale.billing?.netTotal || 0)); }}
+                            <button onClick={async () => {
+                              setCancelModal(sale); setCancelReason(''); setCancelRefundMethod('เงินสด'); setCancelRefundAmount(String(sale.billing?.netTotal || 0));
+                              // Phase 16.5-ter — load branch-filtered staff for cancel-by dropdown
+                              setCancelStaffId(''); setCancelStaffLoading(true);
+                              try {
+                                const list = await listStaffByBranch({ branchId: BRANCH_ID });
+                                setCancelStaffList(list || []);
+                              } catch (e) { console.warn('[SaleTab] listStaffByBranch failed:', e); setCancelStaffList([]); }
+                              finally { setCancelStaffLoading(false); }
+                            }}
                               className="p-2.5 rounded hover:bg-red-900/20 text-red-400" title="ยกเลิก" aria-label="ยกเลิก"><X size={13} /></button>
                           )}
                         </div>
@@ -1394,6 +1410,20 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 </div>
               )}
 
+              {/* Phase 16.5-ter (2026-04-29) — required staff dropdown.
+                  Records WHO cancelled (branch-filtered be_staff). Saved
+                  to sale.cancelled.staffId/staffName + cascaded to every
+                  linked course's audit entry via applySaleCancelToCourses. */}
+              <ActorPicker
+                value={cancelStaffId}
+                onChange={setCancelStaffId}
+                sellers={cancelStaffList}
+                loading={cancelStaffLoading}
+                inputCls={inputCls}
+                label="พนักงานที่ยกเลิก"
+                required
+                testId="sale-cancel-staff"
+              />
               <div><label className={labelCls}>เหตุผลการยกเลิก</label><LocalTextarea value={cancelReason} onCommit={setCancelReason} rows={2} className={`${inputCls} resize-none`} placeholder="ระบุเหตุผล..." /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>วิธีคืนเงิน</label>
@@ -1442,9 +1472,23 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 // Reverse earned points
                 try { await reversePointsEarned(cid, saleId); }
                 catch (e) { console.warn('[SaleTab] points reverse on cancel failed:', e); }
-                // Remove linked courses from customer.courses (respect user's "also remove used" choice)
-                try { await removeLinkedSaleCourses(saleId, { removeUsed: cancelAlsoRemoveUsed }); }
-                catch (e) { console.warn('[SaleTab] remove linked courses on cancel failed:', e); }
+                // Phase 16.5-ter (2026-04-29) — flip course status (NOT remove).
+                // refundMethod === 'ไม่คืนเงิน' → kind='cancel' → status='ยกเลิก'
+                // otherwise (เงินสด/โอนธนาคาร/Wallet) → kind='refund' → status='คืนเงิน'
+                // User directive: "ถ้ายกเลิกแบบคืนเงินก็ต้องเปลี่ยนคอร์สนั้น
+                // มาอยู่ในสถานะคืนเงิน และถ้ายกเลิกแบบไม่คืนเงินก็ต้องไป
+                // อยู่ในสถานะยกเลิก". Replaces the old removeLinkedSaleCourses
+                // call which deleted courses outright (lost trace).
+                const cascadeKind = cancelRefundMethod === 'ไม่คืนเงิน' ? 'cancel' : 'refund';
+                const cancelActor = resolveActorUser(cancelStaffId, cancelStaffList);
+                try {
+                  await applySaleCancelToCourses(saleId, cascadeKind, {
+                    reason: cancelReason || '',
+                    actor: '',
+                    staffId: cancelActor?.userId || '',
+                    staffName: cancelActor?.userName || '',
+                  });
+                } catch (e) { console.warn('[SaleTab] applySaleCancelToCourses failed:', e); }
                 // Restore stock — hard error aborts the cancel flow
                 try { await reverseStockForSale(saleId); }
                 catch (e) {
@@ -1453,9 +1497,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   setCancelSaving(false);
                   return;
                 }
-                await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null);
-                setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); loadSales();
-              }} disabled={cancelSaving} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5">
+                await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null, {
+                  staffId: cancelActor?.userId || '',
+                  staffName: cancelActor?.userName || '',
+                });
+                setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); setCancelStaffId(''); loadSales();
+              }} disabled={cancelSaving || !resolveActorUser(cancelStaffId, cancelStaffList)} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5">
                 {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                 ยืนยันยกเลิก
               </button>
