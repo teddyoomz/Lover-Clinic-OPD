@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-29 (session 29) — Phase 16.5 Remaining Course tab SHIPPED + pushed (1 commit unpushed-to-prod)"
-status: "Production = cf54400 LIVE. master = 6aae9c3 (Phase 16.5 ready for deploy). 3424/3424 tests pass."
-current_focus: "Phase 16.5 done; awaiting deploy auth OR proceed to 16.3 System Settings (next sub-phase)"
+updated_at: "2026-04-29 EOD (session 29) — Phase 16 kickoff + 16.5 base/bis/ter/quater"
+status: "Production = cf54400 LIVE (V15 #4). master = 2aae710 with 5 commits unpushed-to-prod (Phase 16.5 family + P0 hotfix)."
+current_focus: "Phase 16.5 closed (4 sub-phases shipped). Awaiting deploy auth OR proceed to 16.3 System Settings."
 branch: "master"
-last_commit: "6aae9c3"
-production_commit: "cf54400"
+last_commit: "2aae710"
+tests: 3456
 production_url: "https://lover-clinic-app.vercel.app"
-tests: 3424
+production_commit: "cf54400"
 firestore_rules_version: 20
 storage_rules_version: 2
 ---
@@ -14,48 +14,24 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `cf54400` · production = `cf54400` (V15 #7 LIVE) · 0 commits unpushed-to-prod
-- **3312/3312** focused vitest pass · build clean · working tree clean
-- V15 #7 deployed 2026-04-29 (session 29) — Probe-Deploy-Probe 6/6+5/5 both sides ✓; HTTP smoke 200/200/401 ✓
-- Phantom branch cleanup complete: `BR-1777095572005-ae97f911` purged (51 ops; auditId `cleanup-phantom-branch-1777399906398`)
+- master = `2aae710` · production = `cf54400` (V15 #4 LIVE) · 5 commits unpushed-to-prod
+- **3456/3456** focused vitest pass (3312 → 3456 = +144 across all 16.5 sub-phases)
+- Build clean · working tree clean · firestore.rules unchanged this session
 
-## What this session shipped (2026-04-29 — session 29, ops-only)
-- V15 #7 combined deploy: vercel `lover-clinic-2gvg69lvr-…` aliased to `lover-clinic-app.vercel.app`; firebase rules re-published (no schema change)
-- Phantom branch cleanup via `/api/admin/cleanup-phantom-branch`: list (DRY-RUN) → delete (51 ops in 1 writeBatch) → verify all-zeros
-- Memory lock: `feedback_background_task_completion.md` — don't poll log files with grep when a Bash command runs in background; the task-notification signal is authoritative
+## What this session shipped (2026-04-29 — session 29)
+6 commits — see [`.agents/sessions/2026-04-29-session29-phase16-5-family.md`](.agents/sessions/2026-04-29-session29-phase16-5-family.md)
+- **V15 #7 deploy** + phantom branch BR-1777095572005-ae97f911 cleanup (51 ops via /api/admin/cleanup-phantom-branch)
+- **Phase 16.5 base** — Remaining Course tab + 3 modals (Cancel/Refund/Exchange) + cancelCustomerCourse helper + 5 test files (+112 tests)
+- **Phase 16.5-bis** — surface ProClinic-cloned courses (1384/1384 were skipped) + effective status promotion (qty=0 → 'ใช้หมดแล้ว') + pagination 20/page
+- **P0 hotfix** — buildChangeAuditEntry undefined-courseId crash (V14 lock pattern; coerce undefined → null/'')
+- **Phase 16.5-ter** — staff dropdowns (Cancel + Exchange + SaleTab cancel) + applySaleCancelToCourses flip-status cascade + SaleDetailModal staff display
+- **Phase 16.5-quater** — addQty bug fix (reverseQty math) + cancel REMOVES course from array + audit unification (kinds: add/exchange/share/cancel/refund/use) + NEW CourseHistoryTab + treatment-deduction emit on save
+- **Memory locks**: `feedback_no_real_action_in_preview_eval.md` (NEVER click real action btns in preview) + `feedback_no_prelaunch_cleanup_without_explicit_ask.md` (LOCKED OFF)
 
 ## Next action
-**Phase 16.5 shipped (commit `6aae9c3`).** Awaiting deploy auth OR continue to 16.3 System Settings (recommended next sub-phase).
+**Phase 16.5 closed.** Awaiting deploy auth (V18) OR proceed to **16.3 System Settings** (next sub-phase).
 
-## Phase 16.5 Remaining Course tab — shipped 2026-04-29
-- `src/lib/remainingCourseUtils.js` (5 pure helpers + Thai status enum)
-- `src/lib/courseExchange.js` extended — `applyCourseCancel` + `buildChangeAuditEntry kind:'cancel'`
-- `src/lib/backendClient.js` — NEW `cancelCustomerCourse` (runTransaction; mirrors refund)
-- 3 single-purpose modals: Cancel/Refund/Exchange
-- Tab + Row in `src/components/backend/reports/RemainingCourse{Tab,Row}.jsx`
-- nav entry + dashboard wiring + REPORT_LABELS update
-- 5 test files (+112 tests: utils 34 / cancel 18 / modals 15 / flow-simulate 16 / source-grep 29)
-- Browser preview ✓ (tab renders, 4 status options, empty state, export btn)
-
-## Live-QA verification (all passed 2026-04-29)
-- Assistants picker · advisor dropdown · location lock · customer-name new-tab · appt delete · calendar column-width · negative-stock repay · default-branch auto-pick · self-created treatment refresh — **9/9 ✓**
-
-## Carry-overs cleared (2026-04-29)
-- LineSettings creds — user configured channel access token + secret (working)
-- Customer ID backfill — confirmed not needed (read-time backfill in saleReportAggregator suffices)
-- TEST/E2E prefix discipline — confirmed not needed (drift catchers V33.10/.11/.12 already cover the rule)
-
-## Phase 16 — Polish & Final (open scope)
-- 16.1 Smart Audience tab (rule-builder over be_customers + be_sales)
-- 16.2 Clinic Report tab (consolidated dashboard — trend + retention + top services)
-- 16.3 System Settings tab (per-tab visibility + default ranges + feature flags)
-- 16.4 Order tab (be_orders — purchase orders separate from quotation/sale)
-- 16.5 Remaining Course tab (derived view be_customers[].courses[].qtyRemaining)
-- 16.6 Patient Referral — verify if covered by DocumentTemplatesTab docType
-- 16.7 Google Calendar OAuth (optional — user can skip)
-- 16.8 `/audit-all` full-stack run
-
-## Pre-launch cleanup (Rule H-bis — bedrock requirement before go-live)
-- Strip MasterDataTab.jsx · brokerClient.js · api/proclinic/* · cookie-relay/ · CloneTab.jsx
-- Drop pc_* Firestore rules (no remaining caller)
-- Probe-Deploy-Probe re-run after strip (probe list shrinks 6→4-5)
+## Outstanding user-triggered actions
+- V15 #8 combined deploy auth (5 commits ready: 6aae9c3 + ae865db + 51a4141 + 6c82d3c + 2aae710)
+- After deploy: live QA on 16.5 family — Remaining Course tab · cancel/exchange/refund flows · ProClinic course display · history tab · sale-cancel cascade · เพิ่มคงเหลือ button · staff dropdowns
+- V13 incident from this session: 1 unauthorized cancel on customer 2853 course 200 — REVERTED within 60s; audit entry kept (be_course_changes append-only)

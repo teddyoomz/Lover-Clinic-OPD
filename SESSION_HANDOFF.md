@@ -7,10 +7,10 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 (session 29) — V15 #7 combined deploy SHIPPED + phantom branch cleanup executed
+- **Date last updated**: 2026-04-29 EOD (session 29) — Phase 16 kickoff + 16.5 base/bis/ter/quater + V15 #7 deploy
 - **Branch**: `master`
-- **Last commit**: `cf54400 docs(agents): EOD 2026-04-29 — session 28 (Phase 15.7 family + Rule J)`
-- **Test count**: **3312** focused
+- **Last commit**: `2aae710 feat(course): Phase 16.5-quater — bug bundle + course-history tab + audit unification`
+- **Test count**: **3456** focused (+144 across 16.5 family)
 - **Build**: clean
 - **Deploy state**: ✅ **PRODUCTION = `cf54400`** (V15 #7 LIVE 2026-04-29) · vercel `lover-clinic-2gvg69lvr-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
   - V15 #7 Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 (pc_appointments DELETE) + 2/2 (clinic_settings strip) + 2/2 (opd_sessions DELETE V27-tris) = all 200; chat_conversations probes left (anon delete blocked by rule)
@@ -64,7 +64,27 @@ Then admin endpoint `/api/admin/cleanup-phantom-branch` (Phase 15.7-novies) exec
 
 **Phase 15 = COMPLETE.** Ready for Phase 16 (Polish & Final) OR pre-launch H-bis cleanup, whichever user picks first.
 
-### Session 2026-04-29 (session 29 cont'd) — Phase 16.5 Remaining Course tab shipped (commit `6aae9c3`)
+### Session 2026-04-29 EOD (session 29) — Phase 16 kickoff + 16.5 base/bis/ter/quater + V15 #7 deploy
+
+User shipped 7+ feature requests + bug reports across the day. Auto-mode session shipped 6 commits closing Phase 16.5 family in 4 sub-phases. V15 #7 combined deploy + phantom-branch cleanup also ran. **3312 → 3456 tests · 5 cumulative commits unpushed-to-prod**.
+
+**Commits this session** (newest first):
+- `2aae710` Phase 16.5-quater — bug bundle (qty fix + cancel-removes-course + Option B exchange + ExchangeModal V14 lock + retail dropdown beProductToMasterShape) + audit unification (kinds: add/exchange/share/cancel/refund/use) + NEW CourseHistoryTab + treatment-deduction emit
+- `6c82d3c` Phase 16.5-ter — staff dropdowns (Cancel/Exchange/SaleTab cancel) + applySaleCancelToCourses flip-status cascade + SaleDetailModal staff display
+- `51a4141` P0 hotfix — buildChangeAuditEntry undefined-courseId crash (V14 lock — coerce undefined → null/'' on every leaf)
+- `ae865db` Phase 16.5-bis — surface ProClinic-cloned courses (1384 had been skipped) + effective status promotion (qty=0/N + active → 'ใช้หมดแล้ว') + pagination 20/page + status-pick-wins-over-toggle
+- `49db77c` doc handoff after Phase 16.5 base
+- `6aae9c3` Phase 16.5 base — Remaining Course tab + cancelCustomerCourse helper + 3 action modals + 5 test files (+112 tests)
+
+**Earlier in session** (no commits): V15 #7 combined deploy (vercel + firebase rules) + 6/6 + 5/5 probe-deploy-probe + phantom branch BR-1777095572005-ae97f911 cleanup (51 ops via /api/admin/cleanup-phantom-branch).
+
+**2 memory rules locked**:
+- `feedback_no_real_action_in_preview_eval.md` — NEVER click real action btns in preview_eval (after I cancelled real customer 2853 course 200 during a P0 verify; reverted in 60s).
+- `feedback_no_prelaunch_cleanup_without_explicit_ask.md` — pre-launch H-bis cleanup never auto-triggers; user verbatim only.
+
+Detail: `.agents/sessions/2026-04-29-session29-phase16-5-family.md`
+
+### Session 2026-04-29 (session 29 — earlier) — Phase 16.5 Remaining Course tab shipped (commit `6aae9c3`)
 
 User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/order in parallel. Shipped 16.5 first via brainstorming → ExitPlanMode → TDD.
 
@@ -87,7 +107,30 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 
 **Spec**: `docs/superpowers/specs/2026-04-29-phase16-5-remaining-course-design.md`. Master Phase 16 plan: `~/.claude/projects/F--LoverClinic-app/memory/project_phase16_plan.md`.
 
-**Outstanding**: deploy auth (V18 — never carries forward). Then 16.3 System Settings → 16.2 Clinic Report → 16.1 Smart Audience → 16.4 Order intel decision → 16.8 /audit-all.
+**Outstanding** (next session): V15 #8 deploy auth (5 commits ready) → live QA on 16.5 family → 16.3 System Settings.
+
+## Resume Prompt
+
+```
+Resume LoverClinic — continue from 2026-04-29 EOD (session 29).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=2aae710, prod=cf54400 — 5 commits unpushed)
+3. .agents/active.md (3456 tests pass; Phase 16.5 family closed)
+4. .claude/rules/00-session-start.md (iron-clad + V-summary)
+5. .agents/sessions/2026-04-29-session29-phase16-5-family.md
+
+Status: master=2aae710, 3456/3456 tests pass, prod=cf54400 LIVE
+Next: V15 #8 deploy when authorized OR start 16.3 System Settings
+Outstanding (user-triggered):
+- V15 #8 combined deploy auth (5 commits)
+- After deploy: live QA Phase 16.5 family
+- Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger; NO real-action clicks in preview_eval (memory-locked).
+/session-start
+```
 
 ### Session 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits)
 
