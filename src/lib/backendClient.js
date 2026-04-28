@@ -1112,6 +1112,9 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
         unit: p.unit || 'ครั้ง',
         minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
         maxQty: p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null,
+        // 2026-04-28: per-option skipStockDeduction flag carried into the
+        // pick-at-treatment placeholder; persists when doctor picks.
+        skipStockDeduction: !!p.skipStockDeduction,
       })),
       assignedAt: new Date().toISOString(),
     });
@@ -1142,6 +1145,11 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       linkedTreatmentId,
       courseType: courseTypeTag,
       assignedAt: new Date().toISOString(),
+      // 2026-04-28: per-row "ไม่ตัดสต็อค" flag — fall back to course-level
+      // mainSkipStockDeduction (carried via masterCourse.skipStockDeduction
+      // at top level) when sub-product doesn't have its own override. This
+      // enables the deduct path to honor the flag at treatment time.
+      skipStockDeduction: !!(p.skipStockDeduction || masterCourse.skipStockDeduction),
     });
   }
 
@@ -1160,6 +1168,8 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       linkedTreatmentId,
       courseType: courseTypeTag,
       assignedAt: new Date().toISOString(),
+      // No-products fallback row inherits course-level flag.
+      skipStockDeduction: !!masterCourse.skipStockDeduction,
     });
   }
 
@@ -2214,6 +2224,11 @@ export function beCourseToMasterShape(c, opts = {}) {
       qty: Number(c.mainQty) || 0,
       unit: enriched.unit || enriched.mainUnitName || 'ครั้ง',
       isMainProduct: true,
+      // 2026-04-28: per-row "ไม่ตัดสต็อค" flag — propagated into every
+      // downstream consumer (buildPurchasedCourseEntry → customerCourses
+      // → selectedCourseItems → _normalizeStockItems → _deductOneItem).
+      // Default false (= deduct stock normally).
+      skipStockDeduction: !!c.skipStockDeduction,
     });
   }
   if (Array.isArray(c.courseProducts)) {
@@ -2228,6 +2243,7 @@ export function beCourseToMasterShape(c, opts = {}) {
         name: cp.productName || enriched.name || '',
         qty: Number(cp.qty) || 0,
         unit: cp.unit || enriched.unit || 'ครั้ง',
+        skipStockDeduction: !!cp.skipStockDeduction,
       });
     }
   }
@@ -4143,50 +4159,16 @@ async function _buildBatchFromOrderItem({
   const batchId = _genBatchId();
 
   // Auto opt-in stockConfig — preserved from the legacy createStockOrder
-  // flow. Skipped silently if no productId or product doesn't exist
-  // (rare post-migration). Errors are logged + swallowed because failing
-  // to opt-in is non-fatal for this receive operation; the batch still
-  // lands and admin can manually set trackStock later.
+  // flow. 2026-04-28 refactor: now delegates to shared helper
+  // `_ensureProductTracked` (V12 single-writer contract). Same behavior:
+  // best-effort opt-in on first receive; errors logged + swallowed
+  // because failing to opt-in is non-fatal for this receive operation
+  // (the batch still lands; admin can manually set trackStock later).
   if (optInStockConfig && item.productId) {
-    try {
-      const existing = await _getProductStockConfig(item.productId);
-      if (!existing) {
-        const beRef = doc(db, ...basePath(), 'be_products', String(item.productId));
-        const beSnap = await getDoc(beRef);
-        if (beSnap.exists()) {
-          await updateDoc(beRef, {
-            stockConfig: {
-              trackStock: true,
-              minAlert: 0,
-              unit: String(item.unit || ''),
-              isControlled: false,
-            },
-            _stockConfigSetBy: '_buildBatchFromOrderItem',
-            _stockConfigSetAt: now,
-          });
-        } else {
-          const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(item.productId));
-          const legacySnap = await getDoc(legacyRef);
-          if (legacySnap.exists()) {
-            await updateDoc(legacyRef, {
-              stockConfig: {
-                trackStock: true,
-                minAlert: 0,
-                unit: String(item.unit || ''),
-                isControlled: false,
-              },
-              _stockConfigSetBy: '_buildBatchFromOrderItem',
-              _stockConfigSetAt: now,
-            });
-          }
-        }
-      }
-    } catch (e) {
-      // Non-fatal; log + continue. NOT V31 silent-swallow: this is a
-      // best-effort optimization (auto-set on first stocked batch),
-      // not the primary side-effect.
-      console.warn('[_buildBatchFromOrderItem] failed to auto-set stockConfig for', item.productId, e);
-    }
+    await _ensureProductTracked(item.productId, {
+      setBy: '_buildBatchFromOrderItem',
+      unit: item.unit,
+    });
   }
 
   // 1) Create the batch doc (Phase 15.2: locationType + locationId added).
@@ -5060,6 +5042,70 @@ async function _getProductStockConfig(productId) {
   }
 }
 
+// ─── Shared opt-in helper (V12 single-writer contract) ─────────────────────
+// 2026-04-28: course-mediated treatments need products to be opted-in to
+// stock tracking the moment the doctor uses them. Previously this only
+// happened on first vendor-order receive (4145–4190 — _buildBatchFromOrderItem).
+// Treatments that consumed products which never went through a vendor order
+// silently SKIPped with note "product not yet configured for stock tracking"
+// — the V31 silent-swallow bug user reported in Image 1.
+//
+// This helper is the SINGLE writer for stockConfig.trackStock=true.
+// _buildBatchFromOrderItem now calls this. _deductOneItem now calls this
+// for context==='treatment'. Two callers, ONE writer — V12 multi-reader
+// sweep contract preserved.
+//
+// Idempotent: re-runs are no-op when already tracked. Returns the
+// post-upsert config (always trackStock:true on success) or null when the
+// product doc doesn't exist anywhere (rare post-migration; caller decides).
+async function _ensureProductTracked(productId, opts = {}) {
+  if (!productId) return null;
+  const setBy = String(opts.setBy || '_ensureProductTracked');
+  const unit = String(opts.unit || '');
+  const now = new Date().toISOString();
+
+  const existing = await _getProductStockConfig(productId);
+  if (existing && existing.trackStock === true) {
+    return existing; // Already tracked — no-op (idempotent)
+  }
+
+  const baseConfig = {
+    trackStock: true,
+    minAlert: existing?.minAlert ?? 0,
+    unit: existing?.unit || unit,
+    isControlled: !!existing?.isControlled,
+  };
+
+  try {
+    const beRef = doc(db, ...basePath(), 'be_products', String(productId));
+    const beSnap = await getDoc(beRef);
+    if (beSnap.exists()) {
+      await updateDoc(beRef, {
+        stockConfig: baseConfig,
+        _stockConfigSetBy: setBy,
+        _stockConfigSetAt: now,
+      });
+      return baseConfig;
+    }
+    const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
+    const legacySnap = await getDoc(legacyRef);
+    if (legacySnap.exists()) {
+      await updateDoc(legacyRef, {
+        stockConfig: baseConfig,
+        _stockConfigSetBy: setBy,
+        _stockConfigSetAt: now,
+      });
+      return baseConfig;
+    }
+    return null;
+  } catch (e) {
+    // Non-fatal — log + return null. Caller decides whether to throw
+    // (treatment context throws; sale context preserves silent-skip).
+    console.warn('[_ensureProductTracked] failed for', productId, e);
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Phase 8b — Sale/Treatment stock integration
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5100,6 +5146,10 @@ function _normalizeStockItems(items) {
       unit: String(it.unit || ''),
       itemType: it.itemType || 'product',
       isPremium: !!it.isPremium,
+      // 2026-04-28: per-item "ไม่ตัดสต็อค" flag — propagated from course
+      // schema → mapper → customerCourses → treatmentItems. _deductOneItem
+      // honors this for context==='course' (intentional skip with audit note).
+      skipStockDeduction: !!it.skipStockDeduction,
     }));
   }
   if (typeof items === 'object') {
@@ -5112,6 +5162,7 @@ function _normalizeStockItems(items) {
         unit: String(p.unit || ''),
         itemType: 'product',
         isPremium: !!p.isPremium,
+        skipStockDeduction: !!p.skipStockDeduction,
       });
     }
     for (const m of items.medications || []) {
@@ -5122,6 +5173,7 @@ function _normalizeStockItems(items) {
         unit: String(m.unit || ''),
         itemType: 'medication',
         isPremium: !!m.isPremium,
+        skipStockDeduction: !!m.skipStockDeduction,
       });
     }
     for (const c of items.consumables || []) {
@@ -5132,6 +5184,7 @@ function _normalizeStockItems(items) {
         unit: String(c.unit || ''),
         itemType: 'consumable',
         isPremium: !!c.isPremium,
+        skipStockDeduction: !!c.skipStockDeduction,
       });
     }
     for (const t of items.treatmentItems || []) {
@@ -5142,6 +5195,7 @@ function _normalizeStockItems(items) {
         unit: String(t.unit || ''),
         itemType: 'treatmentItem',
         isPremium: !!t.isPremium,
+        skipStockDeduction: !!t.skipStockDeduction,
       });
     }
     return out;
@@ -5156,7 +5210,7 @@ function _normalizeStockItems(items) {
  * already committed before re-throwing.
  */
 async function _deductOneItem({
-  item, saleId, treatmentId, branchId, movementType, customerId, user, preferNewest, extraLink,
+  item, saleId, treatmentId, branchId, movementType, customerId, user, preferNewest, extraLink, context,
 }) {
   const { stockUtils } = await _stockLib();
   const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric } = stockUtils;
@@ -5169,21 +5223,85 @@ async function _deductOneItem({
     return { productId: item.productId, skipped: true, reason: 'zero-qty', movements: [] };
   }
 
-  // Stock tracking is OPT-IN: only products with explicit stockConfig.trackStock===true
-  // are tracked. Missing stockConfig (cfg===null) OR trackStock===false → skip silently
-  // with an audit movement (batchId=null). This prevents existing cloned products from
-  // breaking sale/treatment flows before their first vendor order is placed.
-  const cfg = await _getProductStockConfig(item.productId);
-  const tracked = cfg && cfg.trackStock === true;
+  const baseDocPath = saleId
+    ? `artifacts/${appId}/public/data/be_sales/${saleId}`
+    : treatmentId
+      ? `artifacts/${appId}/public/data/be_treatments/${treatmentId}`
+      : '';
+
+  // ─── Decision tree (2026-04-28 — V31 silent-swallow fix) ─────────────
+  //
+  // 1. item.skipStockDeduction === true (user explicitly set "ไม่ตัดสต็อค"
+  //    on the course row) → emit a clearly-labeled SKIP movement with
+  //    reason 'course-skip' + Thai note. Distinct from the legacy
+  //    silent-skip "not-tracked" path so admin can tell intent apart in
+  //    the movement log.
+  //
+  // 2. context==='treatment' AND product not tracked → call shared
+  //    _ensureProductTracked helper to upsert stockConfig.trackStock=true,
+  //    re-fetch config, fall through to FIFO. If FIFO finds no batch at
+  //    branch, batchFifoAllocate throws → caller surfaces friendly Thai
+  //    error to admin (V31 fail-loud, NOT silent skip).
+  //
+  // 3. cfg && cfg.trackStock === true → real FIFO deduct (existing path).
+  //
+  // 4. Else (sale/manual context, untracked) → preserve legacy silent-skip
+  //    movement. Phase 12.x sale flows depend on this; widening here = too
+  //    big a blast radius for the V35.x stock fix. Sales that need to
+  //    block on un-tracked products should explicitly opt-in via the
+  //    item-level skipStockDeduction flag (or the user can configure the
+  //    product's trackStock manually).
+  if (item.skipStockDeduction === true) {
+    const movementId = _genMovementId();
+    const now = new Date().toISOString();
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: movementType,
+      batchId: null,
+      productId: item.productId,
+      productName: item.productName,
+      qty: -item.qty,
+      before: null,
+      after: null,
+      branchId,
+      sourceDocPath: baseDocPath,
+      linkedSaleId: saleId || null,
+      linkedTreatmentId: treatmentId || null,
+      ...(extraLink || {}),
+      revenueImpact: 0,
+      costBasis: 0,
+      isPremium: item.isPremium,
+      skipped: true,
+      user,
+      note: 'ผู้ใช้ตั้งค่าให้ไม่ตัดสต็อคในคอร์ส',
+      customerId: customerId || null,
+      createdAt: now,
+    });
+    return { productId: item.productId, skipped: true, reason: 'course-skip', movements: [{ movementId }] };
+  }
+
+  let cfg = await _getProductStockConfig(item.productId);
+  let tracked = cfg && cfg.trackStock === true;
+
+  // Treatment-context auto-init: if the product isn't tracked yet, opt it
+  // in lazily so course-mediated deductions actually decrement stock
+  // (Image 1 bug fix). Single-writer via _ensureProductTracked = V12
+  // safe. Sale context skips this branch — preserves legacy contract.
+  if (!tracked && context === 'treatment') {
+    const upserted = await _ensureProductTracked(item.productId, {
+      setBy: '_deductOneItem(treatment)',
+      unit: item.unit,
+    });
+    if (upserted && upserted.trackStock === true) {
+      cfg = upserted;
+      tracked = true;
+    }
+  }
+
   if (!tracked) {
     const reason = cfg && cfg.trackStock === false ? 'trackStock-false' : 'not-tracked';
     const movementId = _genMovementId();
     const now = new Date().toISOString();
-    const baseDocPath = saleId
-      ? `artifacts/${appId}/public/data/be_sales/${saleId}`
-      : treatmentId
-        ? `artifacts/${appId}/public/data/be_treatments/${treatmentId}`
-        : '';
     await setDoc(stockMovementDoc(movementId), {
       movementId,
       type: movementType,
@@ -5221,11 +5339,9 @@ async function _deductOneItem({
   }
 
   const committedMovements = [];
-  const baseDocPath = saleId
-    ? `artifacts/${appId}/public/data/be_sales/${saleId}`
-    : treatmentId
-      ? `artifacts/${appId}/public/data/be_treatments/${treatmentId}`
-      : '';
+  // baseDocPath already declared at the top of _deductOneItem (2026-04-28
+  // refactor — moved up so the skipStockDeduction + auto-init paths can
+  // share the same value without re-computing).
 
   try {
     for (const a of plan.allocations) {
@@ -5448,6 +5564,7 @@ export async function deductStockForSale(saleId, items, opts = {}) {
       const r = await _deductOneItem({
         item, saleId,
         branchId, movementType, customerId, user, preferNewest,
+        context: 'sale', // legacy silent-skip preserved for untracked products
       });
       if (r.skipped) skipped.push(r);
       else allocations.push(r);
@@ -5493,6 +5610,7 @@ export async function deductStockForTreatment(treatmentId, items, opts = {}) {
       const r = await _deductOneItem({
         item, treatmentId,
         branchId, movementType, customerId, user, preferNewest,
+        context: 'treatment', // V31 fix — auto-init untracked products + fail-loud on no-batch
       });
       if (r.skipped) skipped.push(r);
       else allocations.push(r);
@@ -7995,6 +8113,7 @@ export function mapMasterToCourse(src, id, now, existingCreatedAt) {
     isDf: (src.isDf == null && src.is_df == null) ? true : !!(src.isDf != null ? src.isDf : src.is_df),
     dfEditableGlobal: !!(src.dfEditableGlobal || src.df_editable_global),
     isHidden: !!(src.isHidden || src.is_hidden || src.is_hidden_for_sale),
+    skipStockDeduction: !!(src.skipStockDeduction || src.skip_stock_deduction),
     courseProducts: products.map(p => ({
       productId: String(p.productId || p.product_id || p.id || '').trim(),
       productName: String(p.productName || p.product_name || p.name || '').trim(),
@@ -8006,6 +8125,7 @@ export function mapMasterToCourse(src, id, now, existingCreatedAt) {
       // Same default-true rule as top-level isDf.
       isDf: (p.isDf == null && p.is_df == null) ? true : !!(p.isDf != null ? p.isDf : p.is_df),
       isHidden: !!(p.isHidden || p.is_hidden),
+      skipStockDeduction: !!(p.skipStockDeduction || p.skip_stock_deduction),
     })).filter(p => p.productId && p.qty > 0),
     orderBy: src.orderBy != null ? Number(src.orderBy) : null,
     status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',

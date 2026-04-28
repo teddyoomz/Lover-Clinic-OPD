@@ -153,6 +153,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
             isRequired: false,
             isDf: true,
             isHidden: false,
+            skipStockDeduction: false,
           },
         ],
       };
@@ -425,6 +426,21 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
             </div>
           )}
 
+          {/* Main-product flags row — 2026-04-28: skipStockDeduction
+              opt-out per main product. Default unchecked = deduct stock
+              normally when treatment consumes this course. */}
+          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-[var(--bd)]">
+            <label className="flex items-center gap-1.5 cursor-pointer" title="ไม่ตัดสต็อค (สินค้า/บริการหลักจะไม่ถูกตัดสต็อคเมื่อรักษาผ่านคอร์สนี้)">
+              <input type="checkbox" checked={!!form.skipStockDeduction}
+                onChange={(e) => update({ skipStockDeduction: e.target.checked })}
+                className="w-4 h-4 rounded accent-rose-500" />
+              <span className="text-xs text-[var(--tx-primary)]">ไม่ตัดสต็อค</span>
+            </label>
+            <span className="text-[10px] text-[var(--tx-muted)] italic">
+              ติ๊กเมื่อ "สินค้า/บริการหลัก" นี้ ไม่ต้องการให้ระบบตัดสต็อคเวลารักษาผ่านคอร์สนี้
+            </span>
+          </div>
+
           {isRealQtyCourse(form.courseType) && (
             <p className="text-[10px] text-amber-400 mt-2 italic">
               เหมาตามจริง: ไม่ต้องกรอกจำนวนล่วงหน้า — แพทย์จะระบุตอนทำการรักษา
@@ -519,7 +535,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
                  "ช่องกับคำบรรยายไม่ตรง". Fixed width 200px fits 3 checkbox
                  labels + trash button; header label "FLAGS" centered in
                  the same 200px slot. */}
-            <div className="grid grid-cols-[1fr_70px_70px_70px_200px] gap-1 text-[9px] text-[var(--tx-muted)] uppercase tracking-wider px-2">
+            <div className="grid grid-cols-[1fr_70px_70px_70px_260px] gap-1 text-[9px] text-[var(--tx-muted)] uppercase tracking-wider px-2">
               <div>สินค้า</div>
               <div className="text-right">ต่อครั้ง</div>
               <div className="text-right">ต่ำสุด</div>
@@ -528,7 +544,7 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
             </div>
             {(form.courseProducts || []).map((item) => (
               <div key={item.productId}
-                className="grid grid-cols-[1fr_70px_70px_70px_200px] gap-1 items-center p-2 rounded bg-[var(--bg-hover)] border border-[var(--bd)]">
+                className="grid grid-cols-[1fr_70px_70px_70px_260px] gap-1 items-center p-2 rounded bg-[var(--bg-hover)] border border-[var(--bd)]">
                 <div className="min-w-0 truncate text-xs font-semibold text-[var(--tx-primary)]">
                   {item.productName || item.productId}
                 </div>
@@ -561,6 +577,12 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
                       onChange={(e) => updateSubProduct(item.productId, { isHidden: e.target.checked })}
                       className="w-3 h-3 accent-gray-400" />
                     <span className="text-[9px] text-[var(--tx-muted)]">ซ่อน</span>
+                  </label>
+                  <label className="flex items-center gap-0.5 cursor-pointer" title="ไม่ตัดสต็อค (สินค้าชิ้นนี้จะไม่ถูกตัดสต็อคเมื่อรักษาผ่านคอร์สนี้)">
+                    <input type="checkbox" checked={!!item.skipStockDeduction}
+                      onChange={(e) => updateSubProduct(item.productId, { skipStockDeduction: e.target.checked })}
+                      className="w-3 h-3 accent-rose-500" />
+                    <span className="text-[9px] text-[var(--tx-muted)]">ไม่ตัด</span>
                   </label>
                   <button type="button" onClick={() => removeSubProduct(item.productId)}
                     aria-label={`ลบสินค้า ${item.productName || item.productId}`}

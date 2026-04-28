@@ -57,6 +57,7 @@ src/
 │   │                             manual master items (createMasterItem/update/delete for wallet_types + membership_types)
 │   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, isMembershipExpired, fmtMoney, fmtPoints (Phase 7)
 │   ├── stockUtils.js           — Phase 8a: Pure stock qty/allocation helpers. Exports: DEFAULT_BRANCH_ID, MOVEMENT_TYPES (1..14 enum), TRANSFER_STATUS (0..4), WITHDRAWAL_STATUS (0..3), BATCH_STATUS. Functions: deductQtyNumeric, reverseQtyNumeric, buildQtyNumeric, formatStockQty, hasExpired, daysToExpiry, isBatchDepleted, isBatchAvailable, batchFifoAllocate (FIFO/FEFO/LIFO + exactBatchId first)
+│   ├── migrateCoursesSkipStockClient.js — 2026-04-28: Firebase ID-token wrapper for /api/admin/migrate-courses-skip-stock. Exports listCoursesNeedingMigration() + commitCoursesSkipStockMigration(). Used by PermissionGroupsTab admin card.
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
@@ -66,6 +67,7 @@ src/
     └── PatientForm.jsx         — Patient intake/follow-up form (QR scan target)
 api/admin/                      — Privileged endpoints (production; Firebase Admin SDK) — Phase 12.0
 ├── users.js                    — actions: list, get, create, update, delete, grantAdmin, revokeAdmin. Token-gated via Admin SDK verifyIdToken + admin claim OR bootstrap UID. Self-protection (no delete-self, no revoke-own-admin unless bootstrap). Audited via /audit-firebase-admin-security (FA1-FA12).
+├── migrate-courses-skip-stock.js — 2026-04-28: Backfill `skipStockDeduction:false` flag on every be_courses doc + each courseProducts[i] sub-item. Two-phase action='list' (DRY-RUN) → action='commit'. Idempotent. Audit doc to be_admin_audit. Pure helper `planCourseSkipStockMigration(courseData)` exported for unit tests.
 └── _lib/adminAuth.js           — Admin SDK singleton + verifyAdminToken(req, res) helper
 api/webhook/                    — Chat webhook endpoints (FB/LINE)
 ├── facebook.js                 — FB webhook handler + processEchoMessage() for echo events

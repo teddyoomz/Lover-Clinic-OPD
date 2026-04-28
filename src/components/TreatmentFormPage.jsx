@@ -1014,6 +1014,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             unit: product.unit || '',
             price: '',
             fillLater: !!product.fillLater,
+            // 2026-04-28: per-row "ไม่ตัดสต็อค" flag — propagated from
+            // be_courses (or customer.courses[] for purchases done in
+            // earlier visits). When true, _deductOneItem emits a
+            // course-skip movement instead of touching the batch.
+            skipStockDeduction: !!product.skipStockDeduction,
           }];
         });
       }
@@ -2047,7 +2052,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // instead of falling back to the synthetic rowId. Without
           // this, fill-later treatments silently skipped stock and the
           // user reported "ใช้คอร์สเหมาแล้วไม่ตัดสต็อค".
-          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater })),
+          treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: !!t.skipStockDeduction })),
           medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
           labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
@@ -2645,7 +2650,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
               // Phase 14.4: per-doctor-per-course DF entries (canonical)
               dfEntries,
-              treatmentItems: treatmentItems.map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater })),
+              treatmentItems: treatmentItems.map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: !!t.skipStockDeduction })),
               billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
               insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
               payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },

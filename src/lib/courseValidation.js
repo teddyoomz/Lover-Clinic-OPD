@@ -147,7 +147,7 @@ export function validateCourse(form) {
     return ['minQty', 'จำนวนต่ำสุดต้องไม่เกินจำนวนสูงสุด'];
   }
 
-  for (const f of ['isVatIncluded', 'isDf', 'dfEditableGlobal', 'isHidden']) {
+  for (const f of ['isVatIncluded', 'isDf', 'dfEditableGlobal', 'isHidden', 'skipStockDeduction']) {
     if (form[f] != null && typeof form[f] !== 'boolean') {
       return [f, `${f} ต้องเป็น boolean`];
     }
@@ -186,7 +186,7 @@ export function validateCourse(form) {
       if (pmin != null && pmax != null && pmin > pmax) {
         return ['courseProducts', `courseProducts[${i}] ต่ำสุดต้องไม่เกินสูงสุด`];
       }
-      for (const bf of ['isRequired', 'isDf', 'isHidden']) {
+      for (const bf of ['isRequired', 'isDf', 'isHidden', 'skipStockDeduction']) {
         if (p[bf] != null && typeof p[bf] !== 'boolean') {
           return ['courseProducts', `courseProducts[${i}].${bf} ต้องเป็น boolean`];
         }
@@ -228,6 +228,7 @@ export function emptyCourseForm() {
     isDf: true,                      // Phase 12.2b — "มีค่ามือ" default on
     dfEditableGlobal: false,         // Phase 12.2b — "อนุญาตให้ทุกคนแก้ไขค่ามือ"
     isHidden: false,                 // Phase 12.2b — "ซ่อนการขาย"
+    skipStockDeduction: false,       // 2026-04-28 — "ไม่ตัดสต็อค" (default ติ๊ก = ตัดสต็อค)
     // Sub-items (secondary products)
     courseProducts: [],
     // Misc
@@ -270,6 +271,7 @@ export function normalizeCourse(form) {
     isDf: form.isDf == null ? true : !!form.isDf,
     dfEditableGlobal: !!form.dfEditableGlobal,
     isHidden: !!form.isHidden,
+    skipStockDeduction: !!form.skipStockDeduction,
     courseProducts: Array.isArray(form.courseProducts)
       ? form.courseProducts.map(p => ({
           productId: trim(p.productId),
@@ -281,6 +283,7 @@ export function normalizeCourse(form) {
           isRequired: !!p.isRequired,
           isDf: p.isDf == null ? true : !!p.isDf,
           isHidden: !!p.isHidden,
+          skipStockDeduction: !!p.skipStockDeduction,
         })).filter(p => p.productId && p.qty > 0)
       : [],
     orderBy: numOrNull(form.orderBy),

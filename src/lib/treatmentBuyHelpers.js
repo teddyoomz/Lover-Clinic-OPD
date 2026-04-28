@@ -224,6 +224,7 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         unit: p.unit || item.unit || 'ครั้ง',
         minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
         maxQty: p.maxQty != null && p.maxQty !== '' ? Number(p.maxQty) : null,
+        skipStockDeduction: !!p.skipStockDeduction,
       })),
       products: [], // populated by the pick modal's confirm handler
     };
@@ -252,6 +253,9 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
           unit: p.unit || item.unit || 'ครั้ง',
           fillLater,
           isBuffet,
+          // 2026-04-28: per-row "ไม่ตัดสต็อค" flag from be_courses; default
+          // false (= deduct stock normally on treatment consumption).
+          skipStockDeduction: !!p.skipStockDeduction,
         };
       })
     : [{
@@ -263,6 +267,10 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         unit: item.unit || 'คอร์ส',
         fillLater,
         isBuffet,
+        // self-fallback row carries the COURSE-level skipStockDeduction
+        // (item.skipStockDeduction). Buy-modal sometimes sets this on the
+        // top-level item directly when there are no sub-products.
+        skipStockDeduction: !!item.skipStockDeduction,
       }];
   return {
     courseId: `purchased-course-${item.id}-${now}`,
@@ -306,6 +314,9 @@ export function resolvePickedCourseEntry(placeholder, picks) {
     total: String(p.qty),
     unit: p.unit || '',
     fillLater: false,
+    // 2026-04-28: carry over the option's skipStockDeduction onto the picked
+    // row so the deduct path honors per-product opt-out for picked courses.
+    skipStockDeduction: !!p.skipStockDeduction,
   }));
   return {
     ...placeholder,
@@ -411,6 +422,11 @@ export function mapRawCoursesToForm(rawCourses) {
           unit: unit || 'ครั้ง',
           fillLater: isRealQty,
           isBuffet,
+          // 2026-04-28: read back skipStockDeduction from customer.courses[]
+          // entry. assignCourseToCustomer writes it onto each entry when the
+          // course is purchased; this hands it back to the form so the
+          // deduct path can honor it.
+          skipStockDeduction: !!c.skipStockDeduction,
         }],
       };
     })
