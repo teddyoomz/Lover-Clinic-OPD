@@ -80,31 +80,30 @@ describe('FS1 baseline flatten + filter + sort', () => {
 });
 
 // ─── FS2 cancel a course → verify post-state ────────────────────────────
-describe('FS2 cancel flow', () => {
-  test('FS2.1 cancel a1 → status=ยกเลิก + filtered out by hasRemainingOnly', () => {
+describe('FS2 cancel flow (Phase 16.5-quater — cancel removes course)', () => {
+  test('FS2.1 Phase 16.5-quater — cancel a1 REMOVES it from customer.courses[]', () => {
     const customers = seed();
     const { nextCourses } = applyCourseCancel(customers[0], 'a1', { reason: 'test cancel' });
     const c1Mutated = applyToCustomer(customers[0], nextCourses);
     const newCustomers = [c1Mutated, customers[1], customers[2]];
 
     const rows = flattenCustomerCourses(newCustomers);
-    const a1Row = rows.find(r => r.courseId === 'a1');
-    expect(a1Row.status).toBe(STATUS_CANCELLED);
-    expect(rows[0].cancelReason).toBeUndefined(); // not propagated to row by spec — that's fine
-
-    // hasRemainingOnly filters it out:
-    const filtered = filterCourses(rows, { hasRemainingOnly: true });
-    expect(filtered.find(r => r.courseId === 'a1')).toBeUndefined();
+    // a1 fully GONE from customer.courses[] (was: status flipped + stayed)
+    expect(rows.find(r => r.courseId === 'a1')).toBeUndefined();
+    // a2 (used-up) still in c1; b1 + cc1 in c2 + c3
+    expect(rows.map(r => r.courseId).sort()).toEqual(['a2', 'b1', 'cc1']);
   });
 
-  test('FS2.2 stats reflect cancellation', () => {
+  test('FS2.2 stats reflect cancel-removal (a1 gone)', () => {
     const customers = seed();
     const { nextCourses } = applyCourseCancel(customers[0], 'a1', { reason: 'r' });
     const newCustomers = [applyToCustomer(customers[0], nextCourses), customers[1], customers[2]];
     const stats = aggregateRemainingStats(flattenCustomerCourses(newCustomers));
-    expect(stats.byStatus[STATUS_ACTIVE]).toBe(2); // was 3, now 2
-    expect(stats.byStatus[STATUS_CANCELLED]).toBe(1);
-    expect(stats.customersWithRemaining).toBe(2); // c1 lost a1 (only active), still has nothing — wait c1 had a2(used). So c1 not counted
+    // 4 → 3 rows total; a1 is gone, no kind=cancel row in customer.courses[]
+    expect(stats.totalRows).toBe(3);
+    expect(stats.byStatus[STATUS_ACTIVE]).toBe(2); // b1 + cc1
+    expect(stats.byStatus[STATUS_CANCELLED]).toBe(0); // course removed, not flipped
+    expect(stats.customersWithRemaining).toBe(2); // c2 (b1) + c3 (cc1)
   });
 });
 
@@ -203,22 +202,23 @@ describe('FS8 branch isolation', () => {
 
 // ─── FS9 multi-mutation chain ────────────────────────────────────────────
 describe('FS9 multi-mutation chain', () => {
-  test('FS9.1 cancel a1 → refund b1 → re-flatten gives correct stats', () => {
+  test('FS9.1 Phase 16.5-quater — cancel a1 (removes) → refund b1 (flip)', () => {
     let customers = seed();
-    // Cancel a1
+    // Cancel a1 — REMOVES (Phase 16.5-quater)
     const { nextCourses: c1n } = applyCourseCancel(customers[0], 'a1', { reason: 'r' });
     customers = [applyToCustomer(customers[0], c1n), customers[1], customers[2]];
-    // Refund b1
+    // Refund b1 — still flips status (refund preserves array entry)
     const { nextCourses: c2n } = applyCourseRefund(customers[1], 'b1', 1500, { reason: 'r' });
     customers = [customers[0], applyToCustomer(customers[1], c2n), customers[2]];
 
     const rows = flattenCustomerCourses(customers);
     const stats = aggregateRemainingStats(rows);
-    expect(stats.byStatus[STATUS_ACTIVE]).toBe(1);  // only cc1 left
-    expect(stats.byStatus[STATUS_CANCELLED]).toBe(1);
-    expect(stats.byStatus[STATUS_REFUNDED]).toBe(1);
+    expect(stats.totalRows).toBe(3); // a1 removed; a2 + b1(refunded) + cc1
+    expect(stats.byStatus[STATUS_ACTIVE]).toBe(1);  // cc1 only
+    expect(stats.byStatus[STATUS_CANCELLED]).toBe(0); // a1 removed, not flipped
+    expect(stats.byStatus[STATUS_REFUNDED]).toBe(1); // b1 flipped (refund retained in array)
     expect(stats.byStatus['ใช้หมดแล้ว']).toBe(1);   // a2 unchanged
-    expect(stats.customersWithRemaining).toBe(1);   // only c3 has active+remaining
+    expect(stats.customersWithRemaining).toBe(1);   // only c3
   });
 });
 

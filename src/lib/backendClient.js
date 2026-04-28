@@ -827,6 +827,12 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
   const courses = [...(snap.data().courses || [])];
   const { parseQtyString, formatQtyString } = await import('./courseUtils.js');
   const preferNewest = !!opts?.preferNewest;
+  // Phase 16.5-quater (2026-04-29) — snapshot before mutation so we can diff
+  // and emit per-changed-course audit entries (kind='use') after commit.
+  // Only fires when caller passes opts.treatmentId (treatment-deduction
+  // context). Other callers (sale/exchange/share) emit their own audit
+  // entries with the appropriate kind.
+  const beforeSnapshot = courses.map((c) => ({ ...c }));
 
   const matchesDed = (c, d) => {
     const nameMatch = d.courseName ? c.name === d.courseName : true;
@@ -926,6 +932,42 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
   }
 
   await updateCustomer(customerId, { courses });
+
+  // Phase 16.5-quater — emit kind='use' audit per changed course when called
+  // from treatment-deduction context (opts.treatmentId set).
+  if (opts.treatmentId) {
+    try {
+      const { buildChangeAuditEntry } = await import('./courseExchange.js');
+      for (let i = 0; i < beforeSnapshot.length; i++) {
+        const beforeC = beforeSnapshot[i];
+        const afterC = courses[i];
+        if (!beforeC || !afterC) continue;
+        if (String(beforeC.qty || '') === String(afterC.qty || '')) continue;
+        const beforeP = parseQtyString(beforeC.qty || '');
+        const afterP = parseQtyString(afterC.qty || '');
+        const delta = (Number(beforeP.remaining) || 0) - (Number(afterP.remaining) || 0);
+        const audit = buildChangeAuditEntry({
+          customerId,
+          kind: 'use',
+          fromCourse: beforeC,
+          toCourse: null,
+          refundAmount: null,
+          reason: opts.reason || `ตัดคอร์สจากการรักษา`,
+          actor: opts.actor || '',
+          staffId: opts.staffId || '',
+          staffName: opts.staffName || '',
+          qtyDelta: delta > 0 ? -delta : null, // negative = consumed
+          qtyBefore: String(beforeC.qty || ''),
+          qtyAfter: String(afterC.qty || ''),
+          linkedTreatmentId: String(opts.treatmentId || ''),
+        });
+        await setDoc(courseChangeDoc(audit.changeId), audit);
+      }
+    } catch (e) {
+      console.warn('[deductCourseItems] audit emit failed:', e);
+    }
+  }
+
   return courses;
 }
 
@@ -983,18 +1025,57 @@ export async function reverseCourseDeduction(customerId, deductions, opts = {}) 
 }
 
 /**
- * Admin: add remaining qty to a course (increases both remaining AND total).
+ * Admin: add remaining qty to a course (increment REMAINING only, capped at TOTAL).
+ *
+ * Phase 16.5-quater fix (2026-04-29) — pre-fix used `addRemainingQty`
+ * (= `addRemaining` from courseUtils.js, which incremented BOTH remaining
+ * AND total). User report: "ปุ่มเพิ่มคงเหลือ … ไปเพิ่มจำนวนครั้งสูงสุดแทน
+ * เช่น 98/100 + 1 → 98/101". Switched to `reverseQty` which has the right
+ * math: `Math.min(remaining + amount, total)` → 98/100 + 1 → 99/100 ✓.
+ *
+ * Plus Phase 16.5-quater audit unification: writes a `be_course_changes`
+ * entry (kind='add') with qtyDelta + qtyBefore + qtyAfter + staff so the
+ * new ประวัติการใช้คอร์ส tab can show this action.
+ *
  * @param {string} customerId
  * @param {number} courseIndex
  * @param {number} addQty
+ * @param {object} [opts] — { actor, staffId, staffName, reason }
  */
-export async function addCourseRemainingQty(customerId, courseIndex, addQty) {
+export async function addCourseRemainingQty(customerId, courseIndex, addQty, opts = {}) {
   const snap = await getDoc(customerDoc(customerId));
   if (!snap.exists()) throw new Error('Customer not found');
   const courses = [...(snap.data().courses || [])];
   if (courseIndex < 0 || courseIndex >= courses.length) throw new Error('Invalid course index');
-  courses[courseIndex] = { ...courses[courseIndex], qty: addRemainingQty(courses[courseIndex].qty, addQty) };
+  const before = courses[courseIndex];
+  const beforeQty = String(before.qty || '');
+  const afterQtyStr = reverseQty(beforeQty, addQty);
+  courses[courseIndex] = { ...before, qty: afterQtyStr };
   await updateCustomer(customerId, { courses });
+
+  // Phase 16.5-quater — emit be_course_changes audit entry (kind='add')
+  try {
+    const { buildChangeAuditEntry } = await import('./courseExchange.js');
+    const audit = buildChangeAuditEntry({
+      customerId,
+      kind: 'add',
+      fromCourse: before,
+      toCourse: null,
+      refundAmount: null,
+      reason: opts.reason || `เพิ่มคงเหลือ +${addQty}`,
+      actor: opts.actor || '',
+      staffId: opts.staffId || '',
+      staffName: opts.staffName || '',
+      qtyDelta: Number(addQty) || 0,
+      qtyBefore: beforeQty,
+      qtyAfter: afterQtyStr,
+    });
+    await setDoc(courseChangeDoc(audit.changeId), audit);
+  } catch (e) {
+    // Non-fatal: log but don't block the qty mutation
+    console.warn('[addCourseRemainingQty] audit emit failed:', e);
+  }
+
   return courses[courseIndex];
 }
 
@@ -2065,9 +2146,12 @@ export async function applySaleCancelToCourses(saleId, kind, opts = {}) {
     if (String(c.linkedSaleId || '') !== String(saleId)) return c;
     if (c.status === 'คืนเงิน' || c.status === 'ยกเลิก') return c; // idempotent skip
     flippedIndices.push(i);
+    // Phase 16.5-quater — also persist staff on the course (cascade source)
     return {
       ...c,
       status: targetStatus,
+      staffId: String(opts.staffId || ''),
+      staffName: String(opts.staffName || ''),
       ...(kind === 'refund'
         ? { refundedAt: stamp, refundReason: String(opts.reason || '') }
         : { cancelledAt: stamp, cancelReason: String(opts.reason || '') }),
@@ -2808,7 +2892,13 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
     const customer = { id: cSnap.id, ...cSnap.data() };
 
     const { nextCourses, fromCourse, refundAmount: refundedAmount } = applyCourseRefund(
-      customer, courseId, refundAmount, { reason: opts.reason || '', courseIndex: opts.courseIndex },
+      customer, courseId, refundAmount, {
+        reason: opts.reason || '',
+        courseIndex: opts.courseIndex,
+        // Phase 16.5-quater — also persist staff on the course
+        staffId: opts.staffId || '',
+        staffName: opts.staffName || '',
+      },
     );
 
     tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });
@@ -2853,7 +2943,13 @@ export async function cancelCustomerCourse(customerId, courseId, reason, opts = 
     const customer = { id: cSnap.id, ...cSnap.data() };
 
     const { nextCourses, fromCourse, cancelledAt } = applyCourseCancel(
-      customer, courseId, { reason: reason || '', courseIndex: opts.courseIndex },
+      customer, courseId, {
+        reason: reason || '',
+        courseIndex: opts.courseIndex,
+        // Phase 16.5-quater — also persist staff on the course
+        staffId: opts.staffId || '',
+        staffName: opts.staffName || '',
+      },
     );
 
     tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });

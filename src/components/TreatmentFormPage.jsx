@@ -2103,7 +2103,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
         if (existingDeductions.length > 0) {
           const { deductCourseItems } = await import('../lib/backendClient.js');
-          await deductCourseItems(customerId, existingDeductions);
+          // Phase 16.5-quater (2026-04-29) — pass treatmentId + staff so the
+          // deduction emits a be_course_changes audit entry (kind='use'),
+          // visible in CustomerDetailView ประวัติการใช้คอร์ส tab.
+          const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
+          await deductCourseItems(customerId, existingDeductions, {
+            treatmentId,
+            staffId: doctorId || '',
+            staffName: treatingDoctor?.name || '',
+          });
         }
 
         // Phase 8b — Stock: on EDIT, reverse old treatment stock BEFORE the doc update.
@@ -2607,7 +2615,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         if (purchasedDeductions.length > 0) {
           try {
             const { deductCourseItems } = await import('../lib/backendClient.js');
-            await deductCourseItems(customerId, purchasedDeductions, { preferNewest: true });
+            // Phase 16.5-quater — same treatment-deduction audit emit
+            const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
+            await deductCourseItems(customerId, purchasedDeductions, {
+              preferNewest: true,
+              treatmentId,
+              staffId: doctorId || '',
+              staffName: treatingDoctor?.name || '',
+            });
           } catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }
         }
 

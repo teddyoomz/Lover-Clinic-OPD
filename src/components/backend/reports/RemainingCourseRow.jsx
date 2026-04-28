@@ -9,7 +9,7 @@
 // matching modal.
 
 import { useState, useRef, useEffect } from 'react';
-import { MoreVertical, X, Repeat } from 'lucide-react';
+import { MoreVertical, X } from 'lucide-react';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import {
   STATUS_ACTIVE, STATUS_USED, STATUS_REFUNDED, STATUS_CANCELLED,
@@ -75,6 +75,15 @@ export default function RemainingCourseRow({ row, onAction }) {
               data-testid={`remaining-course-status-${row.courseId}`}>
           {row.status}
         </span>
+        {/* Phase 16.5-quater — show who performed the cancel/refund. Stored
+            on the course doc (Phase 16.5-quater applyCourseCancel/applyCourseRefund
+            /applySaleCancelToCourses persist staffName field). */}
+        {terminal && row.staffName && (
+          <div className="text-[10px] text-[var(--tx-muted)] mt-0.5"
+               data-testid={`remaining-course-staff-${row.courseId}`}>
+            โดย: <span className="text-[var(--tx-secondary)]">{row.staffName}</span>
+          </div>
+        )}
       </td>
       <td className="px-3 py-2 text-xs relative" ref={ref}>
         <button
@@ -88,11 +97,11 @@ export default function RemainingCourseRow({ row, onAction }) {
           <MoreVertical size={14} />
         </button>
         {open && !terminal && (
-          <div className="absolute right-0 top-full mt-1 z-10 w-44 rounded-md shadow-lg bg-[var(--bg-surface)] border border-[var(--bd)]">
-            {/* Phase 16.5-ter (2026-04-29): "คืนเงิน" button REMOVED.
-                Refund flow lives ONLY in tab=sales (cancel-sale modal with
-                refundMethod !== 'ไม่คืนเงิน'). Per user directive: refund =
-                accounting-heavy → must originate from sale-cancel cascade. */}
+          <div className="absolute right-0 top-full mt-1 z-10 w-32 rounded-md shadow-lg bg-[var(--bg-surface)] border border-[var(--bd)]">
+            {/* Phase 16.5-ter: "คืนเงิน" button REMOVED — refund flow in tab=sales only.
+                Phase 16.5-quater (2026-04-29): "เปลี่ยนคอร์ส" button REMOVED — exchange
+                flow lives in CustomerDetailView ExchangeModal only. Per user directive:
+                "เอาปุ่มเปลี่ยนคอร์สในหน้า tab=reports-remaining-course ออกไปเลย". */}
             <button
               type="button"
               onClick={() => fire('cancel')}
@@ -100,14 +109,6 @@ export default function RemainingCourseRow({ row, onAction }) {
               data-testid={`remaining-course-action-cancel-${row.courseId}`}
             >
               <X size={12} className="text-rose-400" /> ยกเลิก
-            </button>
-            <button
-              type="button"
-              onClick={() => fire('exchange')}
-              className="w-full text-left px-3 py-2 text-xs text-[var(--tx-primary)] hover:bg-violet-900/30 flex items-center gap-2"
-              data-testid={`remaining-course-action-exchange-${row.courseId}`}
-            >
-              <Repeat size={12} className="text-violet-400" /> เปลี่ยนคอร์ส
             </button>
           </div>
         )}

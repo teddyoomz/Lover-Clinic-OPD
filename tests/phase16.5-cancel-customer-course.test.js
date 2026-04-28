@@ -25,16 +25,17 @@ const baseCustomer = {
 
 // ─── C1 applyCourseCancel pure ──────────────────────────────────────────
 describe('C1 applyCourseCancel', () => {
-  test('C1.1 valid cancel sets status=ยกเลิก + cancelledAt + cancelReason', () => {
+  test('C1.1 Phase 16.5-quater — valid cancel REMOVES course from array (was: flip status)', () => {
+    // User directive 2026-04-29: "คอร์สในตัวลูกค้าคนนั้นก็ต้องหายจริง".
+    // Cancel via RemainingCourse tab REMOVES the course; audit doc preserves
+    // the snapshot for ประวัติการใช้คอร์ส tab.
     const { nextCourses, fromCourse, cancelledAt } = applyCourseCancel(
       baseCustomer, 'c-1', { reason: 'admin entry mistake', now: '2026-04-29T12:00:00Z' },
     );
-    expect(nextCourses).toHaveLength(2); // course stays in array (audit integrity)
-    expect(nextCourses[0].status).toBe('ยกเลิก');
-    expect(nextCourses[0].cancelledAt).toBe('2026-04-29T12:00:00Z');
-    expect(nextCourses[0].cancelReason).toBe('admin entry mistake');
-    expect(nextCourses[1].status).toBe('กำลังใช้งาน'); // sibling untouched
-    expect(fromCourse.courseId).toBe('c-1');
+    expect(nextCourses).toHaveLength(1); // c-1 removed; only c-2 left
+    expect(nextCourses[0].courseId).toBe('c-2'); // sibling preserved
+    expect(nextCourses[0].status).toBe('กำลังใช้งาน'); // sibling untouched
+    expect(fromCourse.courseId).toBe('c-1'); // returned snapshot for audit
     expect(cancelledAt).toBe('2026-04-29T12:00:00Z');
   });
 
@@ -44,9 +45,10 @@ describe('C1 applyCourseCancel', () => {
     expect(() => applyCourseCancel(baseCustomer, null)).toThrow(/courseId or opts\.courseIndex required/);
   });
 
-  test('C1.2-bis Phase 16.5 — courseIndex fallback when courseId missing', () => {
+  test('C1.2-bis Phase 16.5 — courseIndex fallback when courseId missing (now removes course)', () => {
     // Real ProClinic-cloned courses don't have courseId. Caller passes
     // opts.courseIndex from the row instead.
+    // Phase 16.5-quater — cancel now REMOVES from array.
     const cloned = {
       courses: [
         { name: 'A', status: 'กำลังใช้งาน' }, // no courseId
@@ -56,9 +58,9 @@ describe('C1 applyCourseCancel', () => {
     const { nextCourses, fromCourse } = applyCourseCancel(cloned, '', {
       courseIndex: 1, reason: 'r',
     });
-    expect(nextCourses[1].status).toBe('ยกเลิก');
-    expect(nextCourses[0].status).toBe('กำลังใช้งาน'); // sibling untouched
-    expect(fromCourse.name).toBe('B');
+    expect(nextCourses).toHaveLength(1);
+    expect(nextCourses[0].name).toBe('A'); // index 0 preserved; index 1 removed
+    expect(fromCourse.name).toBe('B'); // returned snapshot for audit
   });
 
   test('C1.2-tris courseIndex out-of-range still throws course-not-found', () => {
@@ -69,9 +71,10 @@ describe('C1 applyCourseCancel', () => {
 
   test('C1.2-quater courseId resolves first; courseIndex ignored when courseId valid', () => {
     // If both provided, courseId wins. Index fallback only fires on miss.
+    // Phase 16.5-quater — cancel removes course from array.
     const { nextCourses } = applyCourseCancel(baseCustomer, 'c-1', { courseIndex: 1, reason: 'r' });
-    expect(nextCourses[0].status).toBe('ยกเลิก'); // c-1 (index 0), not c-2 (index 1)
-    expect(nextCourses[1].status).toBe('กำลังใช้งาน');
+    expect(nextCourses).toHaveLength(1);
+    expect(nextCourses[0].courseId).toBe('c-2'); // c-1 removed (resolved by id, not index)
   });
 
   test('C1.3 throws when course not found', () => {
@@ -100,24 +103,28 @@ describe('C1 applyCourseCancel', () => {
   });
 
   test('C1.6 empty reason allowed (UI gate enforces required, helper does not)', () => {
-    const { nextCourses } = applyCourseCancel(baseCustomer, 'c-1', {});
-    expect(nextCourses[0].cancelReason).toBe('');
+    // Phase 16.5-quater — cancel removes course; reason flows to audit, not array.
+    const { nextCourses, fromCourse } = applyCourseCancel(baseCustomer, 'c-1', {});
+    expect(nextCourses).toHaveLength(1); // c-1 removed
+    expect(fromCourse.courseId).toBe('c-1'); // snapshot has the cancelled course
   });
 
-  test('C1.7 preserves all other course fields untouched', () => {
+  test('C1.7 sibling courses preserved untouched after cancel', () => {
+    // Phase 16.5-quater — fields preserved on remaining siblings; cancelled
+    // course is removed (its full snapshot lives in be_course_changes).
     const rich = {
-      courses: [{
-        courseId: 'c-1', name: 'A', status: 'กำลังใช้งาน',
-        product: 'P', qty: '5/5', expiry: '2027-01-01', value: '500 บาท',
-        courseType: '5+1', source: 'sale', parentName: '',
-      }],
+      courses: [
+        { courseId: 'c-1', name: 'A', status: 'กำลังใช้งาน', product: 'P', qty: '5/5' },
+        { courseId: 'c-2', name: 'B', status: 'กำลังใช้งาน', product: 'Q', qty: '3/3', courseType: '5+1' },
+      ],
     };
-    const { nextCourses } = applyCourseCancel(rich, 'c-1', { reason: 'x' });
+    const { nextCourses, fromCourse } = applyCourseCancel(rich, 'c-1', { reason: 'x' });
+    expect(nextCourses).toHaveLength(1);
     expect(nextCourses[0]).toMatchObject({
-      courseId: 'c-1', name: 'A', product: 'P', qty: '5/5',
-      expiry: '2027-01-01', value: '500 บาท', courseType: '5+1',
-      source: 'sale', status: 'ยกเลิก', cancelReason: 'x',
+      courseId: 'c-2', name: 'B', product: 'Q', qty: '3/3', courseType: '5+1',
+      status: 'กำลังใช้งาน', // sibling untouched
     });
+    expect(fromCourse).toMatchObject({ courseId: 'c-1', name: 'A', product: 'P' });
   });
 });
 

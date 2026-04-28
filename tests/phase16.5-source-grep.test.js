@@ -38,11 +38,11 @@ describe('G1 RemainingCourseTab uses BranchContext + ReportShell + helpers', () 
     expect(TAB_SRC).toMatch(/filterCourses\([\s\S]*?branchId\b/);
   });
 
-  test('G1.5 Phase 16.5-ter — tab renders 2 modals (Cancel + Exchange); RefundCourseModal REMOVED', () => {
-    // User directive 2026-04-29: "เอาปุ่มคืนเงินออกจากหน้า tab=reports-
-    // remaining-course เรื่องแบบนี้ต้องไปทำหน้า tab=sales".
+  test('G1.5 Phase 16.5-quater — tab renders 1 modal (Cancel only); Refund + Exchange both REMOVED', () => {
+    // 16.5-ter removed Refund kebab. 16.5-quater removed Exchange kebab too —
+    // exchange flow lives in CustomerDetailView ExchangeModal only.
     expect(TAB_SRC).toMatch(/<CancelCourseModal\b/);
-    expect(TAB_SRC).toMatch(/<ExchangeCourseModal\b/);
+    expect(TAB_SRC).not.toMatch(/<ExchangeCourseModal\b/);
     expect(TAB_SRC).not.toMatch(/<RefundCourseModal\b/);
   });
 
@@ -126,11 +126,19 @@ describe('G3 status fallback + Thai enum + audit log', () => {
     expect(TAB_SRC).not.toMatch(/['"]status['"]:\s*['"](active|cancelled|refunded|used)['"]/);
   });
 
-  test('G3.4 applyCourseCancel preserves audit trail (does NOT remove course from array)', () => {
+  test('G3.4 Phase 16.5-quater — applyCourseCancel REMOVES course from array (was: flip status)', () => {
+    // User directive 2026-04-29: "คอร์สในตัวลูกค้าคนนั้นก็ต้องหายจริง".
+    // Audit doc preserves the snapshot for ประวัติการใช้คอร์ส tab.
     expect(COURSE_EXCH).toMatch(/applyCourseCancel/);
-    // Cancel should produce nextCourses by REPLACING the course, not slicing it out.
-    // Look for the pattern: prevCourses.slice(0, idx), cancelledCourse, prevCourses.slice(idx + 1)
-    expect(COURSE_EXCH).toMatch(/cancelledCourse,\s*\.{3}prevCourses\.slice\(idx \+ 1\)/);
+    // Pattern: prevCourses.slice(0, idx), ...prevCourses.slice(idx + 1)
+    // (slice-and-skip — the course is NOT inserted between the two slices)
+    expect(COURSE_EXCH).toMatch(/prevCourses\.slice\(0, idx\),\s*\.{3}prevCourses\.slice\(idx \+ 1\)/);
+    // Anti-regression: ensure the OLD pattern (cancelled course inserted)
+    // is gone. The 'cancelledCourse' identifier should NOT appear in the
+    // applyCourseCancel implementation.
+    const idx = COURSE_EXCH.indexOf('export function applyCourseCancel');
+    const slice = COURSE_EXCH.slice(idx, idx + 2000);
+    expect(slice).not.toMatch(/cancelledCourse/);
   });
 
   test('G3.5 cancelCustomerCourse writes to be_course_changes via courseChangeDoc', () => {
@@ -141,8 +149,8 @@ describe('G3 status fallback + Thai enum + audit log', () => {
     expect(slice).toMatch(/kind: 'cancel'/);
   });
 
-  test('G3.6 buildChangeAuditEntry kind validation includes cancel', () => {
-    expect(COURSE_EXCH).toMatch(/\['exchange', 'refund', 'cancel'\]/);
+  test('G3.6 Phase 16.5-quater — buildChangeAuditEntry kind enum extended (add/share/use)', () => {
+    expect(COURSE_EXCH).toMatch(/\['exchange', 'refund', 'cancel', 'add', 'share', 'use'\]/);
   });
 });
 
@@ -179,15 +187,15 @@ describe('G5 row component contract', () => {
     expect(ROW_SRC).toMatch(/disabled=\{terminal\}/);
   });
 
-  test('G5.3 Phase 16.5-ter — row exposes 2 action buttons (cancel + exchange); refund REMOVED', () => {
+  test('G5.3 Phase 16.5-quater — row exposes 1 action (cancel only); refund + exchange REMOVED', () => {
     expect(ROW_SRC).toMatch(/data-testid=\{[^}]*cancel-\$\{row\.courseId\}/);
-    expect(ROW_SRC).toMatch(/data-testid=\{[^}]*exchange-\$\{row\.courseId\}/);
-    // Refund button removed — user directive: refund flow lives in tab=sales only
     expect(ROW_SRC).not.toMatch(/data-testid=\{[^}]*refund-\$\{row\.courseId\}/);
+    expect(ROW_SRC).not.toMatch(/data-testid=\{[^}]*exchange-\$\{row\.courseId\}/);
   });
 
-  test('G5.3-bis no Receipt icon import (was used for refund kebab item)', () => {
+  test('G5.3-bis no Receipt or Repeat icon imports (used for refund + exchange kebab items)', () => {
     expect(ROW_SRC).not.toMatch(/import\s+\{[^}]*Receipt[^}]*\}\s+from\s+['"]lucide-react/);
+    expect(ROW_SRC).not.toMatch(/import\s+\{[^}]*Repeat[^}]*\}\s+from\s+['"]lucide-react/);
   });
 
   // ─── G8 Phase 16.5-ter — staff dropdown + sale-cancel cascade ─────────

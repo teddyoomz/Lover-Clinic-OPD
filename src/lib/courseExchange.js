@@ -121,12 +121,15 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
   }
 
   const refundedAt = opts.now || new Date().toISOString();
+  // Phase 16.5-quater — same staff persistence as applyCourseCancel.
   const refundedCourse = {
     ...target,
     status: 'คืนเงิน',
     refundedAt,
     refundAmount,
-    refundReason: opts.reason || '',
+    refundReason: String(opts.reason || ''),
+    staffId: String(opts.staffId || ''),
+    staffName: String(opts.staffName || ''),
   };
 
   const nextCourses = [
@@ -178,16 +181,17 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
   if (target.status === 'คืนเงิน') throw new Error('course already refunded');
 
   const cancelledAt = opts.now || new Date().toISOString();
-  const cancelledCourse = {
-    ...target,
-    status: 'ยกเลิก',
-    cancelledAt,
-    cancelReason: opts.reason || '',
-  };
-
+  // Phase 16.5-quater fix (2026-04-29 user directive): "คอร์สในตัวลูกค้าคน
+  // นั้นก็ต้องหายจริง และมาแสดงใน tab ประวัติการใช้คอร์ส". Cancel via
+  // RemainingCourse tab REMOVES the course from customer.courses[] entirely.
+  // The full snapshot is preserved in the be_course_changes audit doc which
+  // the ประวัติการใช้คอร์ส tab reads from.
+  //
+  // Distinct from sale-cascade (applySaleCancelToCourses) which FLIPS status
+  // (preserves course in array as terminal-state record). Distinct from
+  // applyCourseRefund which also flips.
   const nextCourses = [
     ...prevCourses.slice(0, idx),
-    cancelledCourse,
     ...prevCourses.slice(idx + 1),
   ];
 
@@ -210,9 +214,17 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
  * 'exchange' and 'refund'. Cancel entries have refundAmount=null +
  * toCourse=null (only fromCourse populated).
  */
-export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, staffId, staffName, now }) {
+export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, staffId, staffName, qtyDelta, qtyBefore, qtyAfter, toCustomerId, toCustomerName, linkedTreatmentId, now }) {
   if (!customerId) throw new Error('customerId required');
-  if (!['exchange', 'refund', 'cancel'].includes(kind)) throw new Error('kind must be exchange|refund|cancel');
+  // Phase 16.5-quater (2026-04-29) — extended kind enum:
+  //   'add'      — addCourseRemainingQty (เพิ่มคงเหลือ button) — qtyDelta + qtyBefore + qtyAfter
+  //   'share'    — shareCustomerCourse — toCustomerId + toCustomerName + qtyDelta
+  //   'exchange' — applyCourseExchange (existing)
+  //   'refund'   — applyCourseRefund (existing)
+  //   'cancel'   — applyCourseCancel (existing)
+  if (!['exchange', 'refund', 'cancel', 'add', 'share', 'use'].includes(kind)) {
+    throw new Error('kind must be exchange|refund|cancel|add|share|use');
+  }
   const changeId = `cc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const createdAt = now || new Date().toISOString();
   // Phase 16.5-bis P0 fix (2026-04-29 user report "Function Transaction.set()
@@ -241,10 +253,18 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
     actor: String(actor || ''),
     // Phase 16.5-ter (2026-04-29) — required staff identification (NAME, not
     // raw id) per user directive "ระวังเรื่องพนังงานเป็นตัวเลขไม่ใช่ text".
-    // staffId is the be_staff doc id; staffName is the human-readable name.
-    // Both coerced to '' for V14 lock (no undefined leaves).
     staffId: String(staffId || ''),
     staffName: String(staffName || ''),
+    // Phase 16.5-quater (2026-04-29) — qty/share metadata (kind-specific).
+    // V14 lock: coerce undefined → null (not the empty string we use for text).
+    qtyDelta: typeof qtyDelta === 'number' ? qtyDelta : null,
+    qtyBefore: String(qtyBefore || ''),
+    qtyAfter: String(qtyAfter || ''),
+    toCustomerId: String(toCustomerId || ''),
+    toCustomerName: String(toCustomerName || ''),
+    // Phase 16.5-quater 'use' kind metadata: linkedTreatmentId so the
+    // ประวัติการใช้คอร์ส tab can deep-link back to the treatment record.
+    linkedTreatmentId: String(linkedTreatmentId || ''),
     createdAt,
   };
 }

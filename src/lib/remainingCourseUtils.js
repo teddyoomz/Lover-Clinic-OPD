@@ -155,6 +155,13 @@ export function flattenCustomerCourses(customers) {
         lastUsedDate,
         totalSpent,
         rawValue: String(course.value || ''),
+        // Phase 16.5-quater (2026-04-29) — staff who cancelled/refunded
+        // (only set when status is terminal; persisted ON the course itself
+        // by applyCourseCancel/applyCourseRefund/applySaleCancelToCourses
+        // so RemainingCourseRow can render without a be_course_changes join).
+        staffName: String(course.staffName || ''),
+        staffId: String(course.staffId || ''),
+        cancelReason: String(course.cancelReason || course.refundReason || ''),
       });
     });
   }

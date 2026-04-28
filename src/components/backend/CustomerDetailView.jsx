@@ -32,6 +32,7 @@ import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
 import DateField from '../DateField.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
+import CourseHistoryTab from './CourseHistoryTab.jsx';
 import {
   TREATMENT_CERT_DOC_TYPES,
   TREATMENT_PRINT_DOC_TYPES,
@@ -125,7 +126,7 @@ export default function CustomerDetailView({
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
   const [treatmentsError, setTreatmentsError] = useState('');
-  const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired' | 'purchases'
+  const [courseTab, setCourseTab] = useState('active'); // 'active' | 'expired' | 'purchases' | 'history'
   const [customerSales, setCustomerSales] = useState([]);
   const [salesError, setSalesError] = useState('');
   const [expandedTreatment, setExpandedTreatment] = useState(null);
@@ -884,6 +885,16 @@ export default function CustomerDetailView({
                   <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-rose-900/30 text-rose-400' : 'bg-rose-50 text-rose-700'}`}>{customerSales.length}</span>
                 )}
               </button>
+              {/* Phase 16.5-quater (2026-04-29) — NEW course-mutation history
+                  tab. Shows kind=add|use|exchange|share|cancel|refund per
+                  user directive 2026-04-29. */}
+              <button onClick={() => setCourseTab('history')} role="tab" aria-selected={courseTab === 'history'}
+                className={`flex-1 py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  courseTab === 'history' ? `text-violet-400 border-b-2 border-violet-400 ${isDark ? 'bg-violet-900/10' : 'bg-violet-50'}` : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
+                }`}
+                data-testid="course-history-tab-trigger">
+                ประวัติการใช้คอร์ส
+              </button>
               {/* Assign course button */}
               <button onClick={() => onCreateSale?.(customer)}
                 className="px-2 py-2 text-teal-400 hover:text-teal-300 transition-colors" title="ขายคอร์สใหม่ให้ลูกค้า" aria-label="ขายคอร์สใหม่">
@@ -898,7 +909,9 @@ export default function CustomerDetailView({
                   <AlertCircle size={13} /> {salesError}
                 </div>
               )}
-              {courseTab === 'purchases' ? (
+              {courseTab === 'history' ? (
+                <CourseHistoryTab customerId={customerId} />
+              ) : courseTab === 'purchases' ? (
                 /* Purchase History */
                 customerSales.length === 0 && !salesError ? (
                   <div className="p-8 text-center text-sm text-[var(--tx-muted)]">ไม่มีประวัติการซื้อ</div>
@@ -1409,10 +1422,27 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
 
   useEffect(() => {
     // Phase 14.10-tris — be_products + listAllSellers
-    Promise.all([listProducts(), listAllSellers()])
-      .then(([p, s]) => { setProducts(p); setStaff(s); setLoading(false); })
+    // Phase 16.5-quater fix (2026-04-29 user issue #3): apply
+    // beProductToMasterShape adapter — listProducts() returns raw be_products
+    // docs with `productType` field, but the modal filters by `type`.
+    // Without the adapter, the สินค้าหน้าร้าน tab dropdown was always empty.
+    Promise.all([listProducts(), listAllSellers(), import('../../lib/backendClient.js')])
+      .then(([rawP, s, mod]) => {
+        const adapt = mod.beProductToMasterShape;
+        const adaptedP = (rawP || []).map(p => (typeof adapt === 'function' ? adapt(p) : p));
+        setProducts(adaptedP);
+        setStaff(s);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
+
+  // Phase 16.5-quater fix (issue #4): auto-set newQty='1' when an item is
+  // picked so the unit displays in the qty label immediately. User reported
+  // confusion about which unit applies to the new product/course.
+  useEffect(() => {
+    if (selected && !newQty) setNewQty('1');
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = products.filter(p => {
     const matchSearch = !search || (p.name || '').toLowerCase().includes(search.toLowerCase());
@@ -1510,33 +1540,94 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
             if (!qty) { alert('กรุณากรอกจำนวนที่จะเปลี่ยน'); return; }
             if (Number(qty) > currentParsed.remaining) { alert(`คงเหลือไม่พอ: มี ${currentParsed.remaining} ${currentParsed.unit} ต้องการ ${qty}`); return; }
             if (!selected) { alert('กรุณาเลือกสินค้าใหม่'); return; }
-            if (!newQty) { alert('กรุณากรอกจำนวนสินค้าใหม่'); return; }
+            if (!newQty || Number(newQty) <= 0) { alert('กรุณากรอกจำนวนสินค้าใหม่'); return; }
             if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
             setSaving(true);
             try {
-              const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/backendClient.js');
+              const bc = await import('../../lib/backendClient.js');
+              const { deductCourseItems, createBackendSale, assignCourseToCustomer, updateCustomer, getCustomer } = bc;
               const isRetail = selected.type === 'สินค้าหน้าร้าน';
-              // 1. Deduct from source course
-              await deductCourseItems(customerId, [{ courseIndex, deductQty: Number(qty), courseName: course.name }]);
-              // 2. Create sale record (price=0) for audit trail
+              const deductAmount = Number(qty);
+              // Phase 16.5-quater fix (V14 lock + Option B partial-qty per user
+              // 2026-04-29): coerce all leaves to safe primitives + remove
+              // course from customer.courses[] when remaining hits 0.
+
+              // 1. Deduct from source course (reduces qty; stays in array)
+              await deductCourseItems(customerId, [{ courseIndex, deductQty: deductAmount, courseName: course.name }]);
+
+              // 2. Sale record (price=0) for audit trail. V14 lock: every field coerced.
               await createBackendSale(JSON.parse(JSON.stringify({
-                customerId, customerName: customerName || '', customerHN: '',
+                customerId: String(customerId || ''),
+                customerName: String(customerName || ''),
+                customerHN: '',
                 saleDate: thaiTodayISO(),
-                saleNote: `เปลี่ยนสินค้า: ${qty}${currentParsed.unit} ${course.product} → ${newQty}${selected.unit || ''} ${selected.name}${isRetail ? ' (สินค้าหน้าร้าน - นำกลับบ้าน)' : ''}${reason ? ` | ${reason}` : ''}`,
-                items: { promotions: [], courses: [{ name: `เปลี่ยนสินค้า: ${course.product} → ${selected.name}`, qty: '1', unitPrice: '0', itemType: 'exchange' }], products: [], medications: [] },
+                saleNote: `เปลี่ยนสินค้า: ${deductAmount}${currentParsed.unit || ''} ${course.product || course.name} → ${newQty}${selected.unit || ''} ${selected.name}${isRetail ? ' (สินค้าหน้าร้าน - นำกลับบ้าน)' : ''}${reason ? ` | ${reason}` : ''}`,
+                items: { promotions: [], courses: [{ name: `เปลี่ยนสินค้า: ${course.product || course.name} → ${selected.name}`, qty: '1', unitPrice: '0', itemType: 'exchange' }], products: [], medications: [] },
                 billing: { subtotal: 0, billDiscount: 0, discountType: 'amount', netTotal: 0 },
                 payment: { status: 'paid', channels: [] },
-                sellers: [{ id: staffId, name: selectedStaff?.name || '', percent: '0', total: '0' }],
+                sellers: [{ id: String(staffId || ''), name: String(selectedStaff?.name || ''), percent: '0', total: '0' }],
                 source: 'exchange',
               })));
-              // 3. Create new course ONLY if not retail (retail = take home, no new course)
+
+              // 3. Create new course ONLY if not retail. V14 lock on all leaves.
               if (!isRetail) {
                 await assignCourseToCustomer(customerId, {
-                  name: selected.name,
-                  products: [{ name: selected.name, qty: Number(newQty), unit: selected.unit || '' }],
-                  source: 'exchange', parentName: `เปลี่ยนจาก: ${course.name}`,
+                  name: String(selected.name || ''),
+                  products: [{
+                    name: String(selected.name || ''),
+                    qty: Number(newQty) > 0 ? Number(newQty) : 1,
+                    unit: String(selected.unit || ''),
+                  }],
+                  source: 'exchange',
+                  parentName: `เปลี่ยนจาก: ${course.name || ''}`,
                 });
               }
+
+              // 4. Phase 16.5-quater (Option B per user): if remaining hits 0,
+              // SPLICE the source course out of customer.courses[]. The audit
+              // entry preserves the snapshot for ประวัติการใช้คอร์ส tab.
+              const wasFullExchange = deductAmount >= currentParsed.remaining;
+              if (wasFullExchange) {
+                const fresh = await getCustomer(customerId);
+                const cur = Array.isArray(fresh?.courses) ? [...fresh.courses] : [];
+                // Re-find by courseId or fallback to courseIndex (defensive)
+                let removeIdx = course.courseId
+                  ? cur.findIndex(c => c && String(c.courseId) === String(course.courseId))
+                  : -1;
+                if (removeIdx < 0) removeIdx = courseIndex;
+                if (removeIdx >= 0 && removeIdx < cur.length) {
+                  cur.splice(removeIdx, 1);
+                  await updateCustomer(customerId, { courses: cur });
+                }
+              }
+
+              // 5. Audit emit (kind='exchange') for ประวัติการใช้คอร์ส tab.
+              try {
+                const { buildChangeAuditEntry } = await import('../../lib/courseExchange.js');
+                const audit = buildChangeAuditEntry({
+                  customerId: String(customerId || ''),
+                  kind: 'exchange',
+                  fromCourse: course,
+                  toCourse: isRetail
+                    ? { courseId: null, name: `${selected.name} (สินค้าหน้าร้าน)`, value: '' }
+                    : { courseId: null, name: String(selected.name || ''), value: '' },
+                  refundAmount: null,
+                  reason: String(reason || ''),
+                  actor: '',
+                  staffId: String(staffId || ''),
+                  staffName: String(selectedStaff?.name || ''),
+                  qtyDelta: -deductAmount,
+                  qtyBefore: String(course.qty || ''),
+                  qtyAfter: wasFullExchange ? '0' : `${Math.max(0, currentParsed.remaining - deductAmount)} / ${currentParsed.total}${currentParsed.unit ? ' ' + currentParsed.unit : ''}`,
+                });
+                const courseChangeDocPath = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data', 'be_course_changes', audit.changeId];
+                const { doc: makeDoc, setDoc: setD } = await import('firebase/firestore');
+                const { db } = await import('../../firebase.js');
+                await setD(makeDoc(db, ...courseChangeDocPath), audit);
+              } catch (auditErr) {
+                console.warn('[ExchangeModal] audit emit failed:', auditErr);
+              }
+
               await onDone();
             } catch (e) { alert(e.message); }
             finally { setSaving(false); }
@@ -1680,6 +1771,36 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
                 source: 'share',
                 shareDetail: { fromCustomerId, fromCustomerName, toCustomerId: toId, toCustomerName: toName, courseName: course.name, product: course.product, qty: Number(shareQty), unit: currentParsed.unit },
               })));
+
+              // Phase 16.5-quater (2026-04-29) — emit audit entry (kind='share')
+              // for the ประวัติการใช้คอร์ส tab on BOTH customers (from + to).
+              try {
+                const { buildChangeAuditEntry } = await import('../../lib/courseExchange.js');
+                const { doc: makeDoc, setDoc: setD } = await import('firebase/firestore');
+                const { db } = await import('../../firebase.js');
+                const basePath = ['artifacts', 'loverclinic-opd-4c39b', 'public', 'data', 'be_course_changes'];
+                // Outgoing on source customer
+                const auditOut = buildChangeAuditEntry({
+                  customerId: String(fromCustomerId || ''),
+                  kind: 'share',
+                  fromCourse: course,
+                  toCourse: null,
+                  refundAmount: null,
+                  reason: String(`แชร์ให้ ${toName}`),
+                  actor: '',
+                  staffId: String(staffId || ''),
+                  staffName: String(selectedStaff?.name || ''),
+                  qtyDelta: -Number(shareQty),
+                  qtyBefore: String(course.qty || ''),
+                  qtyAfter: `${Math.max(0, currentParsed.remaining - Number(shareQty))} / ${currentParsed.total}${currentParsed.unit ? ' ' + currentParsed.unit : ''}`,
+                  toCustomerId: String(toId || ''),
+                  toCustomerName: String(toName || ''),
+                });
+                await setD(makeDoc(db, ...basePath, auditOut.changeId), auditOut);
+              } catch (auditErr) {
+                console.warn('[ShareModal] audit emit failed:', auditErr);
+              }
+
               await onDone();
             } catch (e) { alert(e.message); }
             finally { setSaving(false); }
