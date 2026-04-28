@@ -20,6 +20,9 @@ import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
+// Phase 15.6 / V35 (2026-04-28) — searchable product picker (Rule C1).
+// Tier-scoped: caller passes pre-filtered availableProducts as options.
+import ProductSelectField from './ProductSelectField.jsx';
 // Phase 15.4 post-deploy bug 3 (2026-04-28) — Adjust detail modal mirroring
 // Transfer/Withdrawal pattern. User report: "รายการหน้าปรับสต็อคจะต้องกด
 // เข้าไปดูรายละเอียดในแต่ละรายการได้เหมือนหน้าอื่นๆ".
@@ -376,20 +379,20 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>สินค้า *</label>
-            <select
+            {/* Phase 15.4 post-deploy s23 — TIER-SCOPED: only products with
+                active batches at this branch/warehouse appear in dropdown.
+                Prevents user from picking branch-only products at central
+                tab (and vice versa). Phase 15.6 / V35 — wrapped in shared
+                searchable ProductSelectField; tier scope still enforced
+                upstream via availableProducts. */}
+            <ProductSelectField
               value={productId}
-              onChange={e => onPickProduct(e.target.value)}
-              className={inputCls}
-              data-testid="adjust-product-select"
+              options={availableProducts}
+              onChange={(id) => onPickProduct(id)}
               disabled={availableProductIds === null}
-            >
-              <option value="">— เลือกสินค้า —</option>
-              {/* Phase 15.4 post-deploy s23 — TIER-SCOPED: only products with
-                  active batches at this branch/warehouse appear in dropdown.
-                  Prevents user from picking branch-only products at central
-                  tab (and vice versa). */}
-              {availableProducts.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
-            </select>
+              testId="adjust-product-select"
+              fieldKey="adjust-product"
+            />
             {productsLoading && <div className="text-[10px] text-[var(--tx-muted)] mt-1">กำลังโหลดรายการสินค้า...</div>}
             {!productsLoading && availableProductIds !== null && availableProducts.length === 0 && (
               <div className="text-[10px] text-orange-400 mt-1" data-testid="adjust-no-products">

@@ -19,6 +19,8 @@ import {
   ShoppingBag, Plus, Loader2, AlertCircle, CheckCircle2, ArrowLeft, X,
   PackageCheck, XCircle, Search,
 } from 'lucide-react';
+// Phase 15.6 / V35 (2026-04-28) — searchable product picker (Rule C1).
+import ProductSelectField from './ProductSelectField.jsx';
 import {
   listCentralStockOrders, createCentralStockOrder,
   receiveCentralStockOrder, cancelCentralStockOrder,
@@ -572,15 +574,13 @@ function CentralOrderCreateForm({ centralWarehouseId, vendors, products, unitGro
                     <tr key={idx} className="border-t border-[var(--bd)]">
                       <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
                       <td className="px-2 py-2">
-                        <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)}
-                          className={inputCls} data-testid={`cpo-product-${idx}`}>
-                          <option value="">— เลือกสินค้า —</option>
-                          {products.map(p => (
-                            <option key={p.id || p.productId} value={p.id || p.productId}>
-                              {p.productName || p.name}
-                            </option>
-                          ))}
-                        </select>
+                        <ProductSelectField
+                          value={it.productId}
+                          options={products}
+                          onChange={(id) => onPickProduct(idx, id)}
+                          testId={`cpo-product-${idx}`}
+                          fieldKey={`cpo-item-${idx}-product`}
+                        />
                       </td>
                       <td className="px-2 py-2">
                         <input type="number" min="0" step="0.01" value={it.qty}

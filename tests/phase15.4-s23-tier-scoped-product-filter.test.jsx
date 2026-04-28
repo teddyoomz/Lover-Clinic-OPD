@@ -67,24 +67,32 @@ describe('Phase 15.4 S23.B — dropdown uses tier-scoped availableProducts', () 
     expect(adjustPanelSrc).toMatch(/availableProductIds\.has\(String\(p\.id\)\)/);
   });
 
-  it('S23.B.2 — products dropdown maps availableProducts (NOT raw products)', () => {
-    // Find the <select> with data-testid="adjust-product-select"
+  it('S23.B.2 — products picker passes availableProducts to ProductSelectField (V35 migration)', () => {
+    // Phase 15.6 / V35 migration: <select>{availableProducts.map(...)} replaced
+    // by <ProductSelectField options={availableProducts} ... />. Tier scope
+    // still enforced upstream — picker is a presentation wrapper.
     const idx = adjustPanelSrc.indexOf('adjust-product-select');
     expect(idx).toBeGreaterThan(0);
-    // Within 800 chars of the select, find the .map() — should be on availableProducts
-    const block = adjustPanelSrc.slice(idx, idx + 800);
-    expect(block).toMatch(/availableProducts\.map\(/);
-    // Anti-regression: the same select should NOT do products.map() (the unfiltered one)
+    // Look back ~600 chars from testid to find the props block
+    const block = adjustPanelSrc.slice(Math.max(0, idx - 600), idx + 200);
+    // V35 shape: ProductSelectField with options={availableProducts}
+    expect(block).toMatch(/ProductSelectField/);
+    expect(block).toMatch(/options=\{availableProducts\}/);
+    // Anti-regression: NO raw products.map() in the picker block
     expect(block).not.toMatch(/\{products\.map\(/);
   });
 
-  it('S23.B.3 — V21 anti-regression: previous unfiltered pattern is gone in main dropdown block', () => {
-    // The OLD pattern was `{products.map(p => <option key={p.id}...>)}` directly
-    // in the main สินค้า * dropdown. New pattern uses availableProducts.
-    const idx = adjustPanelSrc.indexOf('— เลือกสินค้า —');
+  it('S23.B.3 — V21 + V35 anti-regression: no raw products.map in product picker block', () => {
+    // V21 lock: the OLD pattern was `{products.map(...)}` directly in the
+    // <select>. V35 migration: <select> replaced by ProductSelectField.
+    // The placeholder string is now the component's internal default; gate
+    // by the testid wrapper instead.
+    const idx = adjustPanelSrc.indexOf('adjust-product-select');
     expect(idx).toBeGreaterThan(0);
-    const block = adjustPanelSrc.slice(idx, idx + 600);
-    expect(block).toMatch(/availableProducts\.map/);
+    const block = adjustPanelSrc.slice(Math.max(0, idx - 600), idx + 200);
+    // V35: tier-scope passed to picker via options={availableProducts}
+    expect(block).toMatch(/options=\{availableProducts\}/);
+    // V21 anti-regression: NO raw `{products.map(` in the picker block
     expect(block).not.toMatch(/\{products\.map/);
   });
 

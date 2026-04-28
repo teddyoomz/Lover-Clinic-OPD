@@ -22,6 +22,9 @@ import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared smart-unit-dropdown (Rule C1 Rule-of-3).
 // Was inlined here; extracted so Adjust/Transfer/Withdrawal/CentralPO can reuse.
 import UnitField from './UnitField.jsx';
+// Phase 15.6 / V35 (2026-04-28) — shared searchable product picker (Rule C1).
+// Replaces inline <select>{products.map(...)} blocks.
+import ProductSelectField from './ProductSelectField.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager (item 1 of s19 user EOD).
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
@@ -559,10 +562,13 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
                 </div>
                 <div>
                   <label className="text-[10px] text-[var(--tx-muted)] uppercase tracking-wider font-bold block mb-1">สินค้า *</label>
-                  <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)} className={inputCls}>
-                    <option value="">— เลือกสินค้า —</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
-                  </select>
+                  <ProductSelectField
+                    value={it.productId}
+                    options={products}
+                    onChange={(id) => onPickProduct(idx, id)}
+                    testId={`order-product-mobile-${idx}`}
+                    fieldKey={`item-${idx}-product`}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -630,12 +636,13 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
                   <tr key={idx} className="border-t border-[var(--bd)]">
                     <td className="px-2 py-2 text-[var(--tx-muted)] text-center">{idx + 1}</td>
                     <td className="px-2 py-2">
-                      <select value={it.productId} onChange={e => onPickProduct(idx, e.target.value)} className={inputCls}>
-                        <option value="">— เลือกสินค้า —</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>{productDisplayName(p)}</option>
-                        ))}
-                      </select>
+                      <ProductSelectField
+                        value={it.productId}
+                        options={products}
+                        onChange={(id) => onPickProduct(idx, id)}
+                        testId={`order-product-desktop-${idx}`}
+                        fieldKey={`item-${idx}-product`}
+                      />
                     </td>
                     <td className="px-2 py-2">
                       <input type="number" min="0" step="0.01" value={it.qty}

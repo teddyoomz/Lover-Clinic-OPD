@@ -101,8 +101,17 @@ describe('product-display P3 — StockAdjustPanel', () => {
     expect(block[0]).toContain('productDisplayName(p)');
   });
 
-  it('P3.3 dropdown <option> renders productDisplayName(p) (NOT p.name)', () => {
-    expect(adjustPanelSrc).toMatch(/<option key=\{p\.id\} value=\{p\.id\}>\{productDisplayName\(p\)\}<\/option>/);
+  it('P3.3 picker renders product name via composeProductDisplayName (V35 migration)', () => {
+    // Phase 15.6 / V35: <option> blocks replaced by ProductSelectField.
+    // The shared component uses composeProductDisplayName from
+    // productSearchUtils.js, which in turn calls productDisplayName from
+    // productValidation.js — same canonical lookup, same V12 lock.
+    expect(adjustPanelSrc).toMatch(/<ProductSelectField[\s\S]{0,200}options=\{availableProducts\}/);
+    // V21/V35 anti-regression: NO inline <option> blocks survive in adjust panel
+    const stripped = adjustPanelSrc
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*\n/g, '\n');
+    expect(stripped).not.toMatch(/<option[^>]*>\{productDisplayName\(p\)\}<\/option>/);
   });
 
   it('P3.4 V12 LOCK — no `{p.name}` rendering survives in StockAdjustPanel', () => {
@@ -140,11 +149,18 @@ describe('product-display P4 — OrderPanel', () => {
     expect(stripped).not.toMatch(/<option[^>]*>\s*\{p\.name\}\s*<\/option>/);
   });
 
-  it('P4.4 BOTH dropdowns use productDisplayName (compact + table forms)', () => {
-    // compact form (~line 418)
-    expect(orderPanelSrc).toMatch(/products\.map\(p\s*=>\s*<option[^>]+>\{productDisplayName\(p\)\}<\/option>\)/);
-    // table form (~line 484) is broken across multiple lines
-    expect(orderPanelSrc).toMatch(/<option key=\{p\.id\} value=\{p\.id\}>\{productDisplayName\(p\)\}<\/option>/);
+  it('P4.4 BOTH pickers (mobile + desktop) use ProductSelectField (V35 migration)', () => {
+    // Phase 15.6 / V35: <option> blocks replaced by shared ProductSelectField.
+    // The component internally uses composeProductDisplayName which wraps
+    // productDisplayName — same canonical lookup, same V12 lock.
+    // Both call sites pass options={products}.
+    const matches = orderPanelSrc.match(/<ProductSelectField[\s\S]{0,300}options=\{products\}/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    // V21/V35 anti-regression: NO inline products.map(p => <option ...>) blocks
+    const stripped = orderPanelSrc
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*\n/g, '\n');
+    expect(stripped).not.toMatch(/products\.map\(p\s*=>\s*<option[^>]+>\{productDisplayName\(p\)\}<\/option>\)/);
   });
 });
 
