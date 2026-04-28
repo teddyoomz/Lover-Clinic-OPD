@@ -5329,7 +5329,20 @@ async function _deductOneItem({
   }
 
   // Fetch candidate batches
-  const batches = await listStockBatches({ productId: item.productId, branchId, status: BATCH_STATUS.ACTIVE });
+  // 2026-04-28 hotfix V35.3 (post V15 #6): user reported [IV Drip] Aura
+  // bright x 1 ครั้ง treatment showed "ไม่มีสต็อคที่สาขานี้" SKIP movement
+  // even though StockBalancePanel showed 31 amp at the branch. Root cause:
+  // Phase 15.4 + V35 Phase 15.6 audited 5 stock UI panels for the
+  // includeLegacyMain flag but missed THIS reader. Default-branch (BR-XXX)
+  // batches with legacy `branchId='main'` (pre-V20 multi-branch data) were
+  // fetched by Balance Panel but invisible to FIFO → 0 allocations →
+  // shortfall path → silent-skip movement without batch decrement.
+  // Same V12 (multi-reader sweep) lesson: when adding an opt-in flag, ALL
+  // readers must be audited. Treatment + sale always run at branch tier
+  // (never central) so unconditional `includeLegacyMain: true` is safe;
+  // central tier branches (WH-XXX) won't match a 'main' branchId so the
+  // dual query returns nothing extra anyway.
+  const batches = await listStockBatches({ productId: item.productId, branchId, status: BATCH_STATUS.ACTIVE, includeLegacyMain: true });
   const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, branchId, preferNewest });
 
   if (plan.shortfall > 0) {
