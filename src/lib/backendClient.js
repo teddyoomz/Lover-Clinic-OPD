@@ -5343,7 +5343,17 @@ async function _deductOneItem({
   // central tier branches (WH-XXX) won't match a 'main' branchId so the
   // dual query returns nothing extra anyway.
   const batches = await listStockBatches({ productId: item.productId, branchId, status: BATCH_STATUS.ACTIVE, includeLegacyMain: true });
-  const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, branchId, preferNewest });
+  // V35.3-bis (2026-04-28 same-day fix): do NOT pass `branchId` to
+  // batchFifoAllocate. listStockBatches already filtered with
+  // includeLegacyMain (legacy `branchId='main'` batches included for
+  // default-branch BR-XXX queries). batchFifoAllocate has its own
+  // strict-equality branchId filter (`b.branchId !== opts.branchId`)
+  // which would re-filter the legacy batches OUT — exactly the bug
+  // user reported at 18:46 (still got "ไม่มีสต็อคที่สาขานี้" SKIP after
+  // V35.3 first cut). Pre-filter at the listStockBatches layer is the
+  // single source of truth; batchFifoAllocate operates on the
+  // already-filtered list.
+  const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, preferNewest });
 
   if (plan.shortfall > 0) {
     // 2026-04-28 hotfix (V15 #5 post-deploy bug "Stock insufficient for [IV

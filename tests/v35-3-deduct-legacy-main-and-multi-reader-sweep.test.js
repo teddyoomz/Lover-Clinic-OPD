@@ -118,6 +118,24 @@ describe('V35.3.B — _deductOneItem now passes includeLegacyMain:true', () => {
     expect(slice).toMatch(/listStockBatches\(\{[^}]*includeLegacyMain:\s*true[^}]*\}\)/);
   });
 
+  it('B.1-bis V35.3-bis: batchFifoAllocate call MUST NOT pass branchId (legacy-main filter regression)', () => {
+    // V35.3-bis (2026-04-28 same-day): user reported the V35.3 first cut
+    // didn't actually fix the bug. Root cause was batchFifoAllocate's
+    // own strict-equality branchId filter (`b.branchId !== opts.branchId`)
+    // re-filtering legacy 'main' batches OUT after listStockBatches had
+    // included them. Fix: drop branchId from the batchFifoAllocate call;
+    // listStockBatches is the single source of truth for branch filtering.
+    const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
+    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    const callMatch = slice.match(/batchFifoAllocate\([^,]+,\s*item\.qty,\s*\{[^}]+\}\)/);
+    expect(callMatch).toBeTruthy();
+    const callOptsMatch = callMatch[0].match(/\{[^}]+\}/);
+    expect(callOptsMatch[0]).toMatch(/productId/);
+    expect(callOptsMatch[0]).toMatch(/preferNewest/);
+    // Critical: branchId MUST NOT be in the opts — listStockBatches handled it
+    expect(callOptsMatch[0]).not.toMatch(/\bbranchId\b/);
+  });
+
   it('B.2 V35.3 institutional-memory comment present (anti-V12 marker)', () => {
     // The fix block contains the V35.3 marker so future readers see the
     // pattern (and the test grep will fail if someone strips the comment).
