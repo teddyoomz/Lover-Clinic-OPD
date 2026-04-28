@@ -9941,3 +9941,22 @@ export async function convertQuotationToSale(quotationId) {
 
   return { saleId, alreadyConverted: false };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 15.7-novies (2026-04-29) — phantom branch purge
+// ═══════════════════════════════════════════════════════════════════════════
+// Client SDK CANNOT delete be_stock_batches / be_stock_movements /
+// be_stock_orders / be_stock_transfers — firestore.rules has
+// `allow delete: if false` on all four (audit-immutability per S3 + V19).
+//
+// Use the firebase-admin endpoint instead:
+//
+//   POST /api/admin/cleanup-phantom-branch
+//   { action: 'list', phantomId: 'BR-1777095572005-ae97f911' }     → DRY-RUN counts
+//   { action: 'delete', phantomId: '...', confirm: true }          → actual delete
+//
+// The endpoint uses firebase-admin SDK (bypasses rules) so it can
+// purge audit-immutable collections too. It mirrors the cleanup-test-*
+// pattern (Phase 15.6) — admin-token verified, two-phase list→delete.
+//
+// Spec: docs/superpowers/specs/2026-04-29-br-phantom-cleanup-design.md
