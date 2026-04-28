@@ -16,6 +16,8 @@ import {
 import {
   getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listenToHolidays,
   listenToScheduleByDay, listDoctors,
+  // Phase 15.7-sexies (2026-04-28) — delete from calendar modal
+  deleteBackendAppointment,
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
@@ -71,7 +73,7 @@ function dateStr(d) {
 }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
-export default function AppointmentTab({ clinicSettings, theme }) {
+export default function AppointmentTab({ clinicSettings, theme, onOpenCustomer }) {
   const isDark = theme !== 'light';
 
   // ── State ──
@@ -622,6 +624,26 @@ export default function AppointmentTab({ clinicSettings, theme }) {
           skipStaffScheduleCheck={false}
           onClose={() => setFormMode(null)}
           onSaved={refreshAfterSave}
+          // Phase 15.7-sexies (2026-04-28) — delete + open-customer wiring.
+          // Delete only available in edit mode (modal hides the button when
+          // onDelete absent). The actual delete + close happen here so
+          // AppointmentTab owns the side-effect; the day-grid auto-refreshes
+          // via listenToAppointmentsByDate listener (no manual reload needed).
+          onDelete={formMode.mode === 'edit' && formMode.appt ? async () => {
+            const id = formMode.appt.appointmentId || formMode.appt.id;
+            if (!id) return;
+            await deleteBackendAppointment(id);
+            setFormMode(null);
+            // listener auto-refreshes the day grid + the mini-calendar bubble
+          } : undefined}
+          // Open the customer's detail page from the modal. Caller (BackendDashboard)
+          // injects this; if not provided (legacy embed), the customer name
+          // renders as static text per AppointmentFormModal's onOpenCustomer
+          // prop guard.
+          onOpenCustomer={onOpenCustomer ? (customerId) => {
+            setFormMode(null); // close modal so customer page is visible
+            onOpenCustomer(customerId);
+          } : undefined}
         />
       )}
     </div>

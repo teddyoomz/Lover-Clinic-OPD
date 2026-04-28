@@ -24,7 +24,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Calendar, X, Loader2, CheckCircle2, AlertCircle,
+  Calendar, X, Loader2, CheckCircle2, AlertCircle, Trash2,
 } from 'lucide-react';
 import {
   createBackendAppointment, updateBackendAppointment,
@@ -108,6 +108,19 @@ function defaultFormData(overrides = {}) {
  * @param {Object} [props.theme]
  * @param {() => void} props.onSaved
  * @param {() => void} props.onClose
+ * @param {(customerId: string) => void} [props.onOpenCustomer] — Phase 15.7-sexies
+ *        Optional callback fired when admin clicks the customer name in the
+ *        modal. Receives the customerId (be_customers doc id, falls back to
+ *        proClinicId per the V33 parity invariant). When omitted, the
+ *        customer name renders as static text (current modal-from-customer-
+ *        page behaviour). Wired by AppointmentTab so admin can jump to
+ *        ข้อมูลลูกค้า directly from the calendar.
+ * @param {() => Promise<void> | void} [props.onDelete] — Phase 15.7-sexies
+ *        Optional callback fired when admin clicks the "ลบนัดหมาย" button.
+ *        Edit mode only. Caller is responsible for confirm() + actual
+ *        deleteBackendAppointment(...) + closing the modal. The button is
+ *        hidden when this prop is omitted (CustomerDetailView already has
+ *        its own cancel button outside the modal).
  */
 export default function AppointmentFormModal({
   mode,
@@ -124,6 +137,8 @@ export default function AppointmentFormModal({
   theme,
   onSaved,
   onClose,
+  onOpenCustomer,
+  onDelete,
 }) {
   const isDark = theme !== 'light';
   // Phase 14.7.H follow-up A — branch-aware appointment writes.
@@ -419,9 +434,26 @@ export default function AppointmentFormModal({
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
             {lockedCustomer || formData.customerName ? (
               <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
-                <span className="text-xs text-[var(--tx-heading)] font-bold">
-                  {formData.customerName || '-'} {formData.customerHN && <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span>}
-                </span>
+                {/* Phase 15.7-sexies (2026-04-28) — clickable customer name
+                    when onOpenCustomer is provided. AppointmentTab uses this
+                    so admin can jump from a calendar slot to ข้อมูลลูกค้า
+                    directly. CustomerDetailView omits the prop → static text
+                    (we're already on the customer page). */}
+                {onOpenCustomer && formData.customerId ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenCustomer(formData.customerId); }}
+                    className={`text-xs font-bold underline-offset-4 hover:underline transition-colors ${isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-700 hover:text-sky-900'} text-left`}
+                    title="เปิดหน้าข้อมูลลูกค้า"
+                    data-testid="appt-modal-open-customer"
+                  >
+                    {formData.customerName || '-'} {formData.customerHN && <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span>}
+                  </button>
+                ) : (
+                  <span className="text-xs text-[var(--tx-heading)] font-bold">
+                    {formData.customerName || '-'} {formData.customerHN && <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span>}
+                  </span>
+                )}
                 {!lockedCustomer && (
                   <button onClick={() => update({ customerId:'', customerName:'', customerHN:'' })} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ล้าง"><X size={14}/></button>
                 )}
@@ -642,7 +674,33 @@ export default function AppointmentFormModal({
           </label>
           {error && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12}/>{error}</div>}
         </div>
-        <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center justify-end gap-2">
+        <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center gap-2">
+          {/* Phase 15.7-sexies (2026-04-28) — delete button (edit mode + onDelete provided).
+              Pinned to LEFT (visually + semantically distinct from the right-side
+              save/cancel pair) so admin doesn't accidentally hit it. Confirm dialog
+              + delete + close are the caller's responsibility. */}
+          {mode === 'edit' && onDelete && (
+            <button
+              onClick={async () => {
+                if (saving) return;
+                if (!window.confirm('ลบนัดหมายนี้? การลบจะถาวร — ไม่สามารถกู้คืนได้')) return;
+                try {
+                  setSaving(true);
+                  await onDelete();
+                } catch (e) {
+                  setError(e?.message || 'ลบนัดหมายไม่สำเร็จ');
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+              data-testid="appointment-form-delete"
+              className="px-3 py-2 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-all disabled:opacity-50 flex items-center gap-1.5"
+              title="ลบนัดหมายนี้"
+            >
+              <Trash2 size={12} /> ลบนัดหมาย
+            </button>
+          )}
+          <div className="flex-1" />
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">ยกเลิก</button>
           <button onClick={handleSave} disabled={saving}
             data-testid="appointment-form-save"

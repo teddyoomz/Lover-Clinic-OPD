@@ -412,7 +412,27 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'appointments' ? (
-          <AppointmentTab clinicSettings={clinicSettings} theme={theme} />
+          <AppointmentTab
+            clinicSettings={clinicSettings}
+            theme={theme}
+            // Phase 15.7-sexies (2026-04-28) — admin can click a customer
+            // name in the appointment edit modal to jump straight to the
+            // customer's data tab. We mirror the existing URL-driven flow
+            // (line 131): fetch the customer doc, set viewingCustomer +
+            // switch to customers tab. id-first precedence (V33-aware).
+            onOpenCustomer={async (customerId) => {
+              if (!customerId) return;
+              try {
+                const c = await getCustomer(customerId);
+                if (c) {
+                  setViewingCustomer(c);
+                  setActiveTab('customers');
+                }
+              } catch (e) {
+                console.error('[BackendDashboard] onOpenCustomer failed:', e);
+              }
+            }}
+          />
         ) : activeTab === 'sales' ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)}
             onFormClose={() => {
