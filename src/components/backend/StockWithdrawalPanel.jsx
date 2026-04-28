@@ -46,20 +46,22 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
   const [locations, setLocations] = useState([]);
   const [detailId, setDetailId] = useState(null);
   // 2026-04-27 actor tracking
+  // Phase 15.5A (2026-04-28) — branch filter via filterLocationId when present.
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { withdrawal, next }
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setSellersLoading(true);
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: filterLocationId });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) { console.error('[StockWithdrawalPanel] listAllSellers failed:', e); }
       finally { if (!cancelled) setSellersLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [filterLocationId]);
 
   // Phase 15.1 — when caller supplies filterLocationId, only show withdrawals
   // where source OR destination matches it (central-warehouse-focused view).

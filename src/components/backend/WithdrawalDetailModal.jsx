@@ -1,11 +1,20 @@
-// ─── WithdrawalDetailModal — read-only detail view for a single withdrawal ──
+// ─── WithdrawalDetailModal — detail view + Phase 15.5B approve/reject ──────
 // Click row in StockWithdrawalPanel → this modal shows items + status + route.
+// Phase 15.5B (2026-04-28): admins (custom claim `admin: true` OR
+// permission-group meta) can approve/reject pending (status=0) withdrawals
+// remotely via /api/admin/stock-withdrawal-approve. Approve = soft (records
+// audit + metadata, status STAYS at 0 — warehouse still does the dispatch).
+// Reject = flips 0→3 + records audit + reason.
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Loader2, ClipboardCheck, AlertCircle, ArrowRightLeft, Package } from 'lucide-react';
+import { X, Loader2, ClipboardCheck, AlertCircle, ArrowRightLeft, Package, CheckCircle2, Ban } from 'lucide-react';
 import {
   getStockWithdrawal, getStockBatch, listStockLocations,
 } from '../../lib/backendClient.js';
+import {
+  approveStockWithdrawal, rejectStockWithdrawal,
+} from '../../lib/stockWithdrawalApprovalClient.js';
+import { useTabAccess } from '../../hooks/useTabAccess.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 
 const STATUS_INFO = {
@@ -24,12 +33,20 @@ const BADGE_CLS = {
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDateTime = fmtSlashDateTime;
 
-export default function WithdrawalDetailModal({ withdrawalId, onClose }) {
+export default function WithdrawalDetailModal({ withdrawalId, onClose, onAfterAction }) {
   const [data, setData] = useState(null);
   const [batches, setBatches] = useState({});
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Phase 15.5B (2026-04-28) — admin approve/reject state
+  const { isAdmin } = useTabAccess();
+  const [actionPending, setActionPending] = useState(null); // 'approve' | 'reject' | null
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [rejectModal, setRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [approvalNote, setApprovalNote] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -53,6 +70,42 @@ export default function WithdrawalDetailModal({ withdrawalId, onClose }) {
   }, [withdrawalId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Phase 15.5B (2026-04-28) — admin approve/reject handlers.
+  // Approve = soft (status STAYS at 0; warehouse still does the dispatch).
+  // Reject = flips status 0→3 + records audit + reason.
+  const handleApprove = useCallback(async () => {
+    setActionError(''); setActionSuccess('');
+    setActionPending('approve');
+    try {
+      await approveStockWithdrawal({ withdrawalId, note: approvalNote.trim() });
+      setActionSuccess('อนุมัติสำเร็จ — รอวอร์เฮาส์ส่งสินค้า');
+      setApprovalNote('');
+      await load(); // refresh modal data
+      onAfterAction?.(); // signal parent to refresh list
+    } catch (e) {
+      setActionError(e.message || 'อนุมัติไม่สำเร็จ');
+    } finally {
+      setActionPending(null);
+    }
+  }, [withdrawalId, approvalNote, load, onAfterAction]);
+
+  const handleReject = useCallback(async () => {
+    setActionError(''); setActionSuccess('');
+    setActionPending('reject');
+    try {
+      await rejectStockWithdrawal({ withdrawalId, reason: rejectReason.trim() });
+      setActionSuccess('ปฏิเสธสำเร็จ — สถานะเปลี่ยนเป็นยกเลิก');
+      setRejectReason('');
+      setRejectModal(false);
+      await load();
+      onAfterAction?.();
+    } catch (e) {
+      setActionError(e.message || 'ปฏิเสธไม่สำเร็จ');
+    } finally {
+      setActionPending(null);
+    }
+  }, [withdrawalId, rejectReason, load, onAfterAction]);
 
   const locationName = (id) => locations.find(l => l.id === id)?.name || id || '-';
   const status = data ? Number(data.status) : 0;
@@ -199,9 +252,132 @@ export default function WithdrawalDetailModal({ withdrawalId, onClose }) {
                 </table>
               </div>
             </div>
+
+            {/* Phase 15.5B (2026-04-28) — admin approve/reject UI.
+                Visible only when:
+                  - User is admin (custom claim or permission group meta)
+                  - status === 0 (PENDING_APPROVAL)
+                  - Approval not yet recorded (data.approvedAt absent) — for approve button
+                Reject is shown until status flips to non-zero. */}
+            {isAdmin && status === 0 && (
+              <div
+                className="bg-amber-950/30 rounded-xl p-4 border border-amber-900/50 space-y-3"
+                data-testid="withdrawal-admin-action-section"
+              >
+                <div className="flex items-start gap-2">
+                  <ClipboardCheck size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-300 font-bold">
+                    การอนุมัติ (Admin only)
+                    <div className="text-[10px] text-[var(--tx-muted)] font-normal mt-0.5">
+                      อนุมัติ = บันทึก audit + รอวอร์เฮาส์ส่งสินค้า · ปฏิเสธ = เปลี่ยนเป็นยกเลิก
+                    </div>
+                  </div>
+                </div>
+                {actionError && (
+                  <div className="bg-red-950/40 border border-red-800 rounded p-2 text-[11px] text-red-400 flex items-start gap-1.5" data-testid="withdrawal-action-error">
+                    <AlertCircle size={12} className="flex-shrink-0 mt-0.5" /> {actionError}
+                  </div>
+                )}
+                {actionSuccess && (
+                  <div className="bg-emerald-950/40 border border-emerald-800 rounded p-2 text-[11px] text-emerald-400 flex items-start gap-1.5" data-testid="withdrawal-action-success">
+                    <CheckCircle2 size={12} className="flex-shrink-0 mt-0.5" /> {actionSuccess}
+                  </div>
+                )}
+                {data.approvedAt ? (
+                  <div className="bg-emerald-950/30 border border-emerald-900/50 rounded p-2 text-[11px] text-emerald-400">
+                    ✓ อนุมัติแล้วโดย <strong>{data.approvedByUser?.userName || '-'}</strong> เมื่อ {fmtDateTime(data.approvedAt)}
+                    {data.approvalNote && <div className="text-[10px] text-[var(--tx-muted)] mt-1 italic">หมายเหตุ: {data.approvalNote}</div>}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">หมายเหตุการอนุมัติ (optional)</label>
+                    <input
+                      type="text"
+                      value={approvalNote}
+                      onChange={(e) => setApprovalNote(e.target.value)}
+                      maxLength={500}
+                      placeholder="(ถ้ามี)"
+                      className="w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]"
+                      disabled={!!actionPending}
+                      data-testid="withdrawal-approval-note"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  {!data.approvedAt && (
+                    <button
+                      onClick={handleApprove}
+                      disabled={!!actionPending}
+                      className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      data-testid="withdrawal-approve-btn"
+                    >
+                      {actionPending === 'approve' ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                      อนุมัติ
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setActionError(''); setActionSuccess(''); setRejectModal(true); }}
+                    disabled={!!actionPending}
+                    className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    data-testid="withdrawal-reject-btn"
+                  >
+                    <Ban size={12} /> ปฏิเสธ
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Phase 15.5B (2026-04-28) — reject reason modal */}
+      {rejectModal && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4"
+          onClick={() => !actionPending && setRejectModal(false)}
+          data-testid="withdrawal-reject-modal"
+        >
+          <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-[var(--tx-heading)] flex items-center gap-2">
+              <Ban size={16} className="text-red-400" /> ปฏิเสธคำขอเบิก?
+            </h3>
+            <p className="text-[11px] text-[var(--tx-muted)]">
+              สถานะจะถูกเปลี่ยนเป็น <strong className="text-red-400">ยกเลิก</strong> และไม่สามารถย้อนกลับได้
+            </p>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">เหตุผล (optional)</label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                maxLength={500}
+                placeholder="ระบุเหตุผล (ถ้ามี)"
+                rows={3}
+                className="w-full px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] resize-none"
+                disabled={!!actionPending}
+                data-testid="withdrawal-reject-reason"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setRejectModal(false)}
+                disabled={!!actionPending}
+                className="px-4 py-1.5 rounded-lg text-xs bg-[var(--bg-hover)] text-[var(--tx-primary)] border border-[var(--bd)]"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={!!actionPending}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                data-testid="withdrawal-reject-confirm-btn"
+              >
+                {actionPending === 'reject' ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
+                ปฏิเสธ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

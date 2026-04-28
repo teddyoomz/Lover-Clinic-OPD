@@ -7448,27 +7448,73 @@ export async function listDoctors() {
 // Use this INSTEAD of `getAllMasterDataItems('staff')` /
 // `getAllMasterDataItems('doctors')` in any backend UI that needs to
 // display sellable staff.
-export async function listAllSellers() {
-  const [staffList, doctorList] = await Promise.all([listStaff(), listDoctors()]);
+/**
+ * Pure helper exposed for testability — given staff + doctor arrays, return
+ * the merged + branch-filtered seller list for ActorPicker dropdowns.
+ *
+ * Phase 15.5A (2026-04-28) extracted from listAllSellers so unit tests can
+ * call it without mocking Firestore. Same dedup contract: later entries
+ * (doctors) override earlier (staff) for the same id.
+ *
+ * @param {Array} staffList
+ * @param {Array} doctorList
+ * @param {object} [opts]
+ * @param {string} [opts.branchId] — filter to sellers with this branch in branchIds[]
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function mergeSellersWithBranchFilter(staffList, doctorList, { branchId } = {}) {
   const buildName = (x) => {
     const parts = [x.firstname || x.firstName || '', x.lastname || x.lastName || ''].filter(Boolean);
     const composed = parts.join(' ').trim();
     return composed || x.nickname || x.name || x.fullName || '';
   };
+  // Phase 15.5A — branch filter with legacy-fallback safety:
+  //   - When `branchId` given: filter to sellers whose `branchIds[]` contains it.
+  //   - Legacy fallback: sellers with NO `branchIds[]` field (or empty array
+  //     after filtering falsy entries) are visible everywhere — we can't
+  //     determine their branch assignment so safer to show than hide.
+  //     Admin should backfill branchIds[] over time.
+  //   - When `branchId` not given (or empty/null): no filter, returns all
+  //     (preserves pre-15.5A behavior for historical display in reports +
+  //     customer detail).
+  const matchesBranch = (x) => {
+    if (!branchId) return true; // no filter
+    const ids = Array.isArray(x.branchIds) ? x.branchIds.filter(Boolean) : [];
+    if (ids.length === 0) return true; // legacy fallback (visible everywhere)
+    return ids.map(String).includes(String(branchId));
+  };
   const expand = (x) => {
     const out = [];
     const name = buildName(x);
     if (!name) return out;
+    if (!matchesBranch(x)) return out;
     const ids = new Set([x.id, x.staffId, x.doctorId, x.proClinicId]
       .filter((v) => v != null && String(v).trim() !== ''));
     for (const id of ids) out.push({ id: String(id), name });
     return out;
   };
-  const merged = [...staffList.flatMap(expand), ...doctorList.flatMap(expand)];
+  const safeStaff = Array.isArray(staffList) ? staffList : [];
+  const safeDoctors = Array.isArray(doctorList) ? doctorList : [];
+  const merged = [...safeStaff.flatMap(expand), ...safeDoctors.flatMap(expand)];
   // Dedupe by id — later entries (doctors) override earlier (staff) for same id
   const byId = new Map();
   merged.forEach((opt) => { byId.set(opt.id, opt); });
   return Array.from(byId.values());
+}
+
+/**
+ * List all sellers (be_staff + be_doctors merged) for ActorPicker dropdowns.
+ *
+ * Phase 15.5A (2026-04-28) — optional `branchId` filter delegates to
+ * `mergeSellersWithBranchFilter`. See that helper's JSDoc for filter semantics.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.branchId] — filter to sellers assigned to this branch
+ * @returns {Promise<Array<{id: string, name: string}>>}
+ */
+export async function listAllSellers({ branchId } = {}) {
+  const [staffList, doctorList] = await Promise.all([listStaff(), listDoctors()]);
+  return mergeSellersWithBranchFilter(staffList, doctorList, { branchId });
 }
 
 // Phase 14.10-tris — be_membership_types listing (was master_data/membership_types)

@@ -64,13 +64,16 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
   const [productsLoading, setProductsLoading] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState(null);
   // 2026-04-27 actor tracking — eager-load sellers (be_staff + be_doctors)
+  // Phase 15.5A (2026-04-28) — branch-filter the list; sellers with empty
+  // branchIds[] still appear (legacy fallback). Re-fetches when BRANCH_ID changes.
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setSellersLoading(true);
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: BRANCH_ID });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) {
         console.error('[StockAdjustPanel] listAllSellers failed:', e);
@@ -79,7 +82,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [BRANCH_ID]);
 
   const loadAdjustments = useCallback(async () => {
     setLoading(true);

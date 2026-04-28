@@ -154,7 +154,11 @@ describe('actor-tracking A3 — 5 panels wired', () => {
 
     it(`A3.${name} eager-loads sellers via useEffect on mount`, () => {
       expect(src).toMatch(/setSellers\(/);
-      expect(src).toMatch(/listAllSellers\(\)/);
+      // Phase 15.5A (2026-04-28) — listAllSellers now accepts a {branchId}
+      // arg for tier-scoped filtering. Each panel must pass branchId; the
+      // exact var name varies per panel (BRANCH_ID / centralWarehouseId /
+      // filterLocationId) so just match the call shape.
+      expect(src).toMatch(/listAllSellers\s*\(\s*\{\s*branchId:\s*\w+\s*\}\s*\)/);
     });
 
     it(`A3.${name} renders ActorPicker with testId="${testId}"`, () => {

@@ -49,14 +49,17 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
   const [detailId, setDetailId] = useState(null);
   // 2026-04-27 actor tracking — eager-load sellers + pending-action state
   // for the ActorConfirmModal (replaces confirm()+prompt() for 4 transitions)
+  // Phase 15.5A (2026-04-28) — branch filter via filterLocationId when present
+  // (central tab pass-through), else no filter (stock tab shows all).
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { transfer, next }
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setSellersLoading(true);
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: filterLocationId });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) {
         console.error('[StockTransferPanel] listAllSellers failed:', e);
@@ -65,7 +68,7 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [filterLocationId]);
 
   // Phase 15.1 — when caller supplies filterLocationId, only show transfers
   // where source OR destination matches it (central-warehouse-focused view).

@@ -86,11 +86,14 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [cancelTarget, setCancelTarget] = useState(null);
+  // Phase 15.5A (2026-04-28) — branch-filter sellers; legacy fallback for
+  // staff with empty branchIds[] keeps them visible.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setSellersLoading(true);
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: BRANCH_ID });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) {
         console.error('[OrderPanel] listAllSellers failed:', e);
@@ -99,7 +102,7 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [BRANCH_ID]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);

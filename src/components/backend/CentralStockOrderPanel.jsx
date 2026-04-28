@@ -97,17 +97,20 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   const [pendingPrefill, setPendingPrefill] = useState(null);
   // Phase 15.4 post-deploy s22 — row-click detail modal state
   const [detailOrderId, setDetailOrderId] = useState(null);
+  // Phase 15.5A (2026-04-28) — sellers filtered by central warehouse id;
+  // legacy staff with empty branchIds[] still visible (fallback).
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setSellersLoading(true);
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: centralWarehouseId });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) { console.error('[CentralStockOrderPanel] listAllSellers failed:', e); }
       finally { if (!cancelled) setSellersLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [centralWarehouseId]);
 
   const loadOrders = useCallback(async () => {
     if (!centralWarehouseId) {
