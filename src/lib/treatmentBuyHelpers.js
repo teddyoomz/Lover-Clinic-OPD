@@ -605,14 +605,29 @@ export function buildCustomerCourseGroups(customerCourses) {
     const linkedSaleId = c.linkedSaleId == null ? '' : String(c.linkedSaleId);
     const linkedTreatmentId = c.linkedTreatmentId == null ? '' : String(c.linkedTreatmentId);
     const parentName = String(c.parentName || '').trim();
-    // Legacy fallback: when name + all link fields empty, use courseId so
-    // unrelated legacy entries don't collapse together.
-    const fallbackId = (!courseName && !linkedSaleId && !linkedTreatmentId)
-      ? String(c.courseId || '')
-      : '';
-    const key = fallbackId
-      ? `__fallback__|${fallbackId}`
-      : `${courseName}|${linkedSaleId}|${linkedTreatmentId}|${parentName}`;
+    let key;
+    // 2026-04-28 fix (post V35.3-bis): buy-this-visit entries (isAddon:true)
+    // from buildPurchasedCourseEntry have empty linkedSaleId AND
+    // linkedTreatmentId because they're not yet persisted. Without
+    // isAddon-aware key, they MERGED with legacy ProClinic-cloned courses
+    // that ALSO have empty link fields (clone path doesn't stamp
+    // linkedSaleId). User-reported bug: "ทั้งคอร์สที่ซ้ำที่มีอยู่เดิม
+    // ขึ้นถึงจะไม่แสดงผล". Discriminate via the synthetic courseId
+    // (buildPurchasedCourseEntry makes unique:
+    // `purchased-course-{itemId}-{now}`) so each buy lands in its own
+    // group, never collapsed into legacy groups of same name.
+    if (c.isAddon && c.courseId) {
+      key = `__addon__|${c.courseId}`;
+    } else {
+      // Legacy fallback: when name + all link fields empty, use courseId
+      // so unrelated legacy entries don't collapse together.
+      const fallbackId = (!courseName && !linkedSaleId && !linkedTreatmentId)
+        ? String(c.courseId || '')
+        : '';
+      key = fallbackId
+        ? `__fallback__|${fallbackId}`
+        : `${courseName}|${linkedSaleId}|${linkedTreatmentId}|${parentName}`;
+    }
 
     let group;
     if (indexByKey.has(key)) {

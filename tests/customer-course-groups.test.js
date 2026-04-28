@@ -160,6 +160,64 @@ describe('buildCustomerCourseGroups', () => {
     });
   });
 
+  it('BCC.13 buy-this-visit (isAddon:true) does NOT merge with legacy entries of same name (no linkedSaleId)', () => {
+    // 2026-04-28 user-reported regression after the V15 #6 + grouping
+    // first-cut deploy: "ทั้งคอร์สที่ซ้ำที่มีอยู่เดิม ขึ้นถึงจะไม่
+    // แสดงผล". Customer 2853 had legacy `[IV Drip] Aura bright x 2 ครั้ง`
+    // entries with NO linkedSaleId (cloned from ProClinic — clone path
+    // doesn't stamp linkedSaleId). When user bought a NEW one in this
+    // visit (also no linkedSaleId because not yet persisted), the BCC
+    // merged it into the legacy group. Fix: isAddon entries use a
+    // synthetic-courseId-based key so they never collapse with legacy.
+    const entries = [
+      // Legacy ProClinic clone (no linkedSaleId)
+      { courseId: 'be-0', courseName: '[IV Drip] Aura bright x 2', products: [{ rowId: 'be-row-0', name: 'Fluimucil' }] },
+      { courseId: 'be-1', courseName: '[IV Drip] Aura bright x 2', products: [{ rowId: 'be-row-1', name: 'DHNP Vit C' }] },
+      // New buy-this-visit
+      {
+        courseId: 'purchased-course-CRS-1-1700000000000',
+        courseName: '[IV Drip] Aura bright x 2',
+        isAddon: true,
+        purchasedItemId: 'CRS-1', purchasedItemType: 'course',
+        products: [{ rowId: 'purchased-row-1', name: 'New buy product' }],
+      },
+    ];
+    const groups = buildCustomerCourseGroups(entries);
+    expect(groups).toHaveLength(2);
+    // Legacy group: 2 products (Fluimucil + DHNP)
+    expect(groups[0].isAddon).toBe(false);
+    expect(groups[0].products).toHaveLength(2);
+    // Addon group: 1 product (New buy product) + isAddon flag set
+    expect(groups[1].isAddon).toBe(true);
+    expect(groups[1].products).toHaveLength(1);
+    expect(groups[1].products[0].name).toBe('New buy product');
+  });
+
+  it('BCC.14 multiple buy-this-visit entries with same courseName each gets own group', () => {
+    // Edge case: user buys "X" twice in the same visit (different click events).
+    // Each buy gets a unique synthetic courseId from buildPurchasedCourseEntry
+    // (`purchased-course-{itemId}-{now}` with different itemId or now).
+    // Should appear as 2 separate addon groups.
+    const entries = [
+      {
+        courseId: 'purchased-course-CRS-A-1700000000001',
+        courseName: 'Same Course Name',
+        isAddon: true, purchasedItemId: 'CRS-A',
+        products: [{ rowId: 'r1', name: 'P1' }],
+      },
+      {
+        courseId: 'purchased-course-CRS-A-1700000000002',
+        courseName: 'Same Course Name',
+        isAddon: true, purchasedItemId: 'CRS-A',
+        products: [{ rowId: 'r2', name: 'P2' }],
+      },
+    ];
+    const groups = buildCustomerCourseGroups(entries);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].isAddon).toBe(true);
+    expect(groups[1].isAddon).toBe(true);
+  });
+
   it('BCC.12 idempotent — running twice = same shape', () => {
     const entries = [
       { courseId: 'c1', courseName: 'A', linkedSaleId: 'INV-1', products: [{ rowId: 'r1', name: 'P1' }] },
