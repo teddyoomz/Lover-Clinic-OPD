@@ -478,12 +478,23 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         ) : (
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
           <div className="overflow-x-auto">
-            <div style={{ minWidth: rooms.length * 160 + 60 }}>
+            {/* Phase 15.7-quinquies (2026-04-28) — column width scales with
+                roomCount so the virtual "ไม่ระบุห้อง" column doesn't fall
+                off the right edge on common viewports. ≤4 rooms get
+                generous 160px each; 5-6 rooms get 130px (Thai column
+                headers still fit); 7+ rooms get 110px (tighter but
+                everything visible). minWidth uses the same per-col size
+                so horizontal scroll is the LAST resort, not the default. */}
+            {(() => {
+              const _colWidth = rooms.length >= 7 ? 110 : rooms.length >= 5 ? 130 : 160;
+              const _colMinClass = rooms.length >= 7 ? 'min-w-[110px]' : rooms.length >= 5 ? 'min-w-[130px]' : 'min-w-[160px]';
+              return (
+            <div style={{ minWidth: rooms.length * _colWidth + 60 }}>
               {/* Room header row */}
               <div className="flex border-b border-[var(--bd)] sticky top-0 z-10 bg-[var(--bg-elevated)]">
                 <div className="w-[60px] flex-shrink-0 py-2 px-1 text-center text-[11px] font-bold text-[var(--tx-muted)]">เวลา</div>
                 {rooms.map(room => (
-                  <div key={room} className="flex-1 min-w-[140px] py-2 px-2 text-center text-xs font-bold text-sky-400 border-l border-[var(--bd)]">
+                  <div key={room} className={`flex-1 ${_colMinClass} py-2 px-2 text-center text-xs font-bold text-sky-400 border-l border-[var(--bd)] truncate`} title={room}>
                     {room}
                   </div>
                 ))}
@@ -505,7 +516,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                         const span = Math.max(1, endIdx - startIdx);
                         const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
                         return (
-                          <div key={room} className="flex-1 min-w-[140px] border-l border-[var(--bd)]/30 px-0.5 relative" style={{ height: SLOT_H }}>
+                          <div key={room} className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 px-0.5 relative`} style={{ height: SLOT_H }}>
                             <button onClick={() => openEdit(appt)}
                               className={`absolute left-0.5 right-0.5 top-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden transition-all hover:ring-1 hover:ring-sky-400 z-[5] ${st.bg} border border-[var(--bd)]/50`}
                               style={{ height: span * SLOT_H - 4 }}>
@@ -582,7 +593,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                       return (
                         <div key={room}
                           onClick={() => !occupied && openCreate(selectedDate, time, room === UNASSIGNED_ROOM ? '' : room)}
-                          className={`flex-1 min-w-[140px] border-l border-[var(--bd)]/30 ${occupied ? '' : 'cursor-pointer hover:bg-sky-900/5'}`}
+                          className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 ${occupied ? '' : 'cursor-pointer hover:bg-sky-900/5'}`}
                           style={{ height: SLOT_H }} />
                       );
                     })}
@@ -590,6 +601,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                 ))}
               </div>
             </div>
+              );
+            })()}
           </div>
         </div>
         )}
