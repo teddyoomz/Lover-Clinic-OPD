@@ -318,8 +318,40 @@ export default function CustomerDetailView({
   // Sort treatments newest-first. `rebuildTreatmentSummary` writes them in desc order
   // on every backend save, but customers cloned from ProClinic keep ProClinic's ordering
   // until their next rebuild — defensively re-sort client-side so the latest always tops.
+  //
+  // Phase 15.7-quater (2026-04-28) — derive PRIMARILY from the live `treatments[]`
+  // state (driven by listenToCustomerTreatments listener). For V33 self-created
+  // customers (LC-* prefix), the customer.treatmentSummary denormalized field
+  // would only refresh after the parent's onSaved callback re-fetched the
+  // customer doc — and that path used proClinicId only (broken for LC-*).
+  // Reading from `treatments` state means a new save fires the listener →
+  // setTreatments → this useMemo recomputes → list refreshes WITHOUT depending
+  // on the parent prop.
+  //
+  // We map to the SAME shape that `rebuildTreatmentSummary` writes (id/date/
+  // doctor/assistants/branch/cc/dx/createdBy) so render code (line 674+) is
+  // unchanged.
+  //
+  // Fallback: if `treatments` is empty (initial load before listener resolves)
+  // OR not yet ready, use the denormalized customer.treatmentSummary so the
+  // first paint from cached customer data still shows something.
   const treatmentSummary = useMemo(() => {
-    const list = [...(customer?.treatmentSummary || [])];
+    let list;
+    if (Array.isArray(treatments) && treatments.length > 0) {
+      list = treatments.map(t => ({
+        id: t.treatmentId || t.id,
+        date: t.detail?.treatmentDate || '',
+        doctor: t.detail?.doctorName || '',
+        assistants: (t.detail?.assistantNames || t.detail?.assistants || t.detail?.assistantIds || [])
+          .map(a => typeof a === 'string' ? a : (a?.name || '')),
+        branch: t.detail?.branch || '',
+        cc: t.detail?.symptoms || '',
+        dx: t.detail?.diagnosis || '',
+        createdBy: t.createdBy || 'cloned',
+      }));
+    } else {
+      list = [...(customer?.treatmentSummary || [])];
+    }
     list.sort((a, b) => {
       const da = a?.date || '';
       const db = b?.date || '';
@@ -330,7 +362,7 @@ export default function CustomerDetailView({
       return db.localeCompare(da);
     });
     return list;
-  }, [customer?.treatmentSummary]);
+  }, [treatments, customer?.treatmentSummary]);
 
   // Pagination derivation — slice 5 per page, clamp page if list shrinks.
   const treatmentTotalPages = Math.max(1, Math.ceil(treatmentSummary.length / TREATMENT_PAGE_SIZE));

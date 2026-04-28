@@ -531,7 +531,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           onClose={() => setTreatmentFormMode(null)}
           onSaved={async () => {
             setTreatmentFormMode(null);
-            const refreshed = await getCustomer(viewingCustomer?.proClinicId);
+            // Phase 15.7-quater (2026-04-28) — V33 self-created customers
+            // (LC-* prefix) have proClinicId=null. Pre-fix used only
+            // proClinicId → getCustomer(undefined) → null → setViewingCustomer
+            // never fired → customer.treatmentSummary stayed stale →
+            // ประวัติการรักษา section showed OLD entries until F5. Mirror
+            // the same `id || proClinicId` precedence used at lines 318/325
+            // when opening TreatmentFormPage.
+            const refreshed = await getCustomer(viewingCustomer?.id || viewingCustomer?.proClinicId);
             if (refreshed) setViewingCustomer(refreshed);
           }}
         />
