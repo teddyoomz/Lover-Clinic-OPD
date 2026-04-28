@@ -22,6 +22,8 @@ import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.4 fix — gate legacy-main fallback to branch-tier source only.
 import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
+// Phase 15.7-bis (2026-04-28) — banner UX for auto-repay of negative balances.
+import { formatNegativeRepayBanner, hasNegativeRepay } from '../../lib/negativeRepayBanner.js';
 // Phase 15.6 / V35.1 (2026-04-28) — searchable batch picker (Rule C1).
 import BatchSelectField from './BatchSelectField.jsx';
 
@@ -52,6 +54,7 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { withdrawal, next }
+  const [repayBanner, setRepayBanner] = useState('');
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -117,6 +120,17 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
           </button>
         </div>
       </div>
+
+      {/* Phase 15.7-bis — repay banner when receive auto-cleared negative balances. */}
+      {repayBanner && (
+        <div
+          className="bg-emerald-950/40 border border-emerald-800 rounded-lg p-3 text-xs text-emerald-300 whitespace-pre-line flex items-start gap-2"
+          data-testid="negative-repay-banner"
+        >
+          <span className="flex-1">{repayBanner}</span>
+          <button onClick={() => setRepayBanner('')} className="text-emerald-400 hover:text-emerald-200 text-xs" aria-label="ปิด">×</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">
@@ -217,7 +231,14 @@ export default function StockWithdrawalPanel({ clinicSettings, theme, filterLoca
           const next = pendingAction.next;
           const extra = { user: actor };
           if (next === 3) extra.canceledNote = reason;
-          await updateStockWithdrawalStatus(w.withdrawalId, next, extra);
+          const result = await updateStockWithdrawalStatus(w.withdrawalId, next, extra);
+          // Phase 15.7-bis — banner when withdrawal-receive (status 1→2)
+          // auto-cleared negative balances at the destination.
+          if (next === 2 && hasNegativeRepay(result?.repays)) {
+            setRepayBanner(formatNegativeRepayBanner(result.repays));
+          } else if (next !== 2) {
+            setRepayBanner('');
+          }
           setPendingAction(null);
           await load();
         }}

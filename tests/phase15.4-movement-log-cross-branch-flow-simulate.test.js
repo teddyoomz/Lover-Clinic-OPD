@@ -434,7 +434,11 @@ describe('Phase 15.4 ML.C — writer sets branchIds[] on transfer movements', ()
   });
 
   it('ML.C.2 — RECEIVE movement has branchIds: [src, dst]', () => {
-    const recIdx = fnSlice.indexOf('MOVEMENT_TYPES.RECEIVE');
+    // Phase 15.7-bis (2026-04-28): _repayNegativeBalances helper invocation
+    // also references MOVEMENT_TYPES.RECEIVE (as `movementType:` arg) before
+    // the actual setDoc. Anchor specifically on the setDoc's `type:` field
+    // so we read the real movement record body.
+    const recIdx = fnSlice.indexOf('type: MOVEMENT_TYPES.RECEIVE');
     expect(recIdx).toBeGreaterThan(0);
     const block = fnSlice.slice(recIdx, recIdx + 1000);
     expect(block).toMatch(/branchIds:\s*\[\s*cur\.sourceLocationId,\s*cur\.destinationLocationId\s*\]\.filter\(Boolean\)/);
@@ -465,7 +469,9 @@ describe('Phase 15.4 ML.D — writer sets branchIds[] on withdrawal movements', 
   });
 
   it('ML.D.2 — WITHDRAWAL_CONFIRM movement has branchIds: [src, dst]', () => {
-    const conIdx = fnSlice.indexOf('MOVEMENT_TYPES.WITHDRAWAL_CONFIRM');
+    // Phase 15.7-bis: anchor on `type: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM`
+    // so we read the actual setDoc body, not the helper arg.
+    const conIdx = fnSlice.indexOf('type: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM');
     expect(conIdx).toBeGreaterThan(0);
     const block = fnSlice.slice(conIdx, conIdx + 1000);
     expect(block).toMatch(/branchIds:\s*\[\s*cur\.sourceLocationId,\s*cur\.destinationLocationId\s*\]\.filter\(Boolean\)/);

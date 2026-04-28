@@ -23,6 +23,8 @@ import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.4 fix — gate legacy-main fallback to branch-tier source only.
 import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
+// Phase 15.7-bis (2026-04-28) — banner UX for auto-repay of negative balances.
+import { formatNegativeRepayBanner, hasNegativeRepay } from '../../lib/negativeRepayBanner.js';
 // Phase 15.6 / V35.1 (2026-04-28) — searchable batch picker (Rule C1).
 // Replaces inline <select>{batches.map(...)} so admin can search by
 // productName / batchId / unit / etc when source has many batches.
@@ -58,6 +60,7 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { transfer, next }
+  const [repayBanner, setRepayBanner] = useState('');
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -132,6 +135,17 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
           </button>
         </div>
       </div>
+
+      {/* Phase 15.7-bis — repay banner when receive auto-cleared negative balances. */}
+      {repayBanner && (
+        <div
+          className="bg-emerald-950/40 border border-emerald-800 rounded-lg p-3 text-xs text-emerald-300 whitespace-pre-line flex items-start gap-2"
+          data-testid="negative-repay-banner"
+        >
+          <span className="flex-1">{repayBanner}</span>
+          <button onClick={() => setRepayBanner('')} className="text-emerald-400 hover:text-emerald-200 text-xs" aria-label="ปิด">×</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">
@@ -234,7 +248,15 @@ export default function StockTransferPanel({ clinicSettings, theme, filterLocati
           const extra = { user: actor };
           if (next === 3) extra.canceledNote = reason;
           if (next === 4) extra.rejectedNote = reason;
-          await updateStockTransferStatus(t.transferId, next, extra);
+          const result = await updateStockTransferStatus(t.transferId, next, extra);
+          // Phase 15.7-bis — surface banner when receive (status 1→2)
+          // auto-cleared negative balances at the destination.
+          if (next === 2 && hasNegativeRepay(result?.repays)) {
+            setRepayBanner(formatNegativeRepayBanner(result.repays));
+            // banner stays until next user action
+          } else if (next !== 2) {
+            setRepayBanner('');
+          }
           setPendingAction(null);
           await load();
         }}

@@ -45,6 +45,8 @@ import { auth } from '../../firebase.js';
 import { thaiTodayISO } from '../../utils.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
+// Phase 15.7-bis (2026-04-28) — banner UX for auto-repay of negative balances.
+import { formatNegativeRepayBanner, hasNegativeRepay } from '../../lib/negativeRepayBanner.js';
 import {
   validateCentralStockOrder,
   emptyCentralStockOrderForm,
@@ -93,6 +95,7 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);  // { kind:'receive'|'cancel', order }
+  const [repayBanner, setRepayBanner] = useState('');
   // Phase 15.4 post-deploy s22 — Central Balance "+" button hands a product
   // here for pre-filled Central PO creation. Mirrors OrderPanel.jsx pattern
   // for branch-tier prefill.
@@ -244,6 +247,17 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
         </div>
       </div>
 
+      {/* Phase 15.7-bis — repay banner when central receive auto-cleared negative balances. */}
+      {repayBanner && (
+        <div
+          className="bg-emerald-950/40 border border-emerald-800 rounded-lg p-3 text-xs text-emerald-300 whitespace-pre-line flex items-start gap-2"
+          data-testid="negative-repay-banner"
+        >
+          <span className="flex-1">{repayBanner}</span>
+          <button onClick={() => setRepayBanner('')} className="text-emerald-400 hover:text-emerald-200 text-xs" aria-label="ปิด">×</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-12 text-[var(--tx-muted)] text-xs">
           <Loader2 size={16} className="animate-spin mr-2" /> กำลังโหลด...
@@ -369,9 +383,16 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
               centralOrderProductId: it.centralOrderProductId,
               qty: it.qty,
             }));
-            await receiveCentralStockOrder(order.orderId, receipts, { user: actor });
+            const result = await receiveCentralStockOrder(order.orderId, receipts, { user: actor });
+            // Phase 15.7-bis — banner when central receive auto-cleared negatives.
+            if (hasNegativeRepay(result?.repays)) {
+              setRepayBanner(formatNegativeRepayBanner(result.repays));
+            } else {
+              setRepayBanner('');
+            }
           } else {
             await cancelCentralStockOrder(order.orderId, { reason, user: actor });
+            setRepayBanner('');
           }
           setPendingAction(null);
           await loadOrders();

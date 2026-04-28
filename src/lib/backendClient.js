@@ -4105,6 +4105,174 @@ async function _assertProductExists(productId, contextLabel) {
 }
 
 /**
+ * Phase 15.7-bis (2026-04-28) — Auto-repay negative balances when incoming
+ * positive qty arrives at a product+branch. Used by every batch-creator
+ * (import / transfer-receive / withdrawal-receive) BEFORE creating a new
+ * batch with `qty.remaining = qtyNum`.
+ *
+ * Flow:
+ *   1. Query active batches at productId+branchId (legacy-main fallback for
+ *      default-branch view per V35.3).
+ *   2. Plan repay via stockUtils.applyNegativeRepay (FIFO oldest first).
+ *   3. For each repay step: runTransaction — read-verify-update batch.qty +
+ *      write a +repay movement with `negativeRepay: true` marker.
+ *   4. Return totalRepaid + leftover so caller can size the new batch.
+ *
+ * User directive: "นำเข้าไปแล้วไม่รวมกับอันเดิม" — incoming positives MUST
+ * repay existing negatives at the same product+branch first. Auto-repay
+ * is silent (no admin click required) but the return value carries
+ * `repaidBatches[]` so callers can surface a banner/toast (Phase 15.7-bis UX).
+ *
+ * @param {object} args
+ * @param {string} args.productId
+ * @param {string} args.branchId — branch OR central warehouse ID
+ * @param {number} args.incomingQty
+ * @param {number} args.movementType — MOVEMENT_TYPES.IMPORT / RECEIVE / WITHDRAWAL_CONFIRM
+ * @param {string} args.sourceDocPath — for audit trail
+ * @param {string} [args.linkedField] — e.g. 'linkedOrderId' or 'linkedTransferId'
+ * @param {string} [args.linkedFieldValue]
+ * @param {number} [args.cost] — per-unit cost (used to compute repay costBasis)
+ * @param {boolean} [args.isPremium]
+ * @param {object} [args.user] — actor record
+ * @param {string} args.now — ISO timestamp
+ * @param {string} [args.note]
+ * @returns {Promise<{
+ *   repaidBatches: Array<{batchId:string, productName:string, repayAmt:number, before:number, after:number, movementId:string}>,
+ *   totalRepaid: number,
+ *   leftover: number,
+ * }>}
+ */
+async function _repayNegativeBalances({
+  productId, branchId, incomingQty,
+  movementType, sourceDocPath,
+  linkedField, linkedFieldValue,
+  cost = 0, isPremium = false,
+  user, now, note,
+}) {
+  const need = Number(incomingQty);
+  if (!Number.isFinite(need) || need <= 0) {
+    return { repaidBatches: [], totalRepaid: 0, leftover: 0 };
+  }
+  if (!productId || !branchId) {
+    return { repaidBatches: [], totalRepaid: 0, leftover: need };
+  }
+
+  const { stockUtils } = await _stockLib();
+  const { BATCH_STATUS, applyNegativeRepay } = stockUtils;
+
+  // Fetch active batches at branch+product (legacy-main fallback for
+  // default-branch — mirrors _deductOneItem V35.3-bis pattern).
+  const batches = await listStockBatches({
+    productId,
+    branchId,
+    status: BATCH_STATUS.ACTIVE,
+    includeLegacyMain: true,
+  });
+
+  const { repayPlan, leftover } = applyNegativeRepay(batches, need);
+  if (repayPlan.length === 0) {
+    return { repaidBatches: [], totalRepaid: 0, leftover: need };
+  }
+
+  // Execute each repay step — own transaction so concurrent writers see
+  // consistent qty. Mirror `_deductOneItem` negative-push tx shape but in
+  // reverse (qty goes UP not DOWN, status flips back to ACTIVE if was
+  // depleted, never set to depleted on positive movement).
+  const repaidBatches = [];
+  let totalRepaid = 0;
+  for (const step of repayPlan) {
+    const batchRef = stockBatchDoc(step.batchId);
+    const movementId = _genMovementId();
+    const txResult = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(batchRef);
+      if (!snap.exists()) {
+        // Mid-flight delete — skip (caller writes a normal new batch with
+        // the leftover instead).
+        return null;
+      }
+      const b = snap.data();
+      if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) {
+        return null; // skip cancelled/expired (caller absorbs into new batch)
+      }
+      const beforeRemaining = Number(b.qty?.remaining) || 0;
+      // Re-check: if the batch was repaid concurrently to ≥0 we skip
+      // (no debt left). The plan was based on a stale read.
+      if (beforeRemaining >= 0) return null;
+      // Recompute repay amount to handle concurrent partial repay
+      const debt = Math.abs(beforeRemaining);
+      const repayAmt = Math.min(debt, step.repayAmt);
+      if (repayAmt <= 0) return null;
+
+      const newRemaining = beforeRemaining + repayAmt;
+      const newQty = { remaining: newRemaining, total: Number(b.qty?.total) || 0 };
+      // Status: if remaining still negative or 0 → depending; ≥0 → ACTIVE.
+      const newStatus = newRemaining > 0
+        ? BATCH_STATUS.ACTIVE
+        : newRemaining === 0
+          ? BATCH_STATUS.DEPLETED
+          : BATCH_STATUS.ACTIVE; // still negative → debt remains, batch stays active so admin sees it
+
+      tx.update(batchRef, {
+        qty: newQty,
+        status: newStatus,
+        updatedAt: now,
+      });
+
+      // Inline movement object literal — the audit-stock-flow source-grep
+      // (INV.7.4) checks each `tx.set(stockMovementDoc(...)` block carries
+      // a `sourceDocPath` field. Spread the optional linkedField LAST so
+      // V14 (no undefined leaves) holds: when linkedField/value is missing,
+      // the spread is `{}`.
+      const linkedSpread = (linkedField && linkedFieldValue)
+        ? { [linkedField]: String(linkedFieldValue) }
+        : {};
+      tx.set(stockMovementDoc(movementId), {
+        movementId,
+        type: movementType,
+        batchId: step.batchId,
+        productId: b.productId || productId,
+        productName: b.productName || '',
+        qty: repayAmt, // positive — incoming qty applied to repay
+        before: beforeRemaining,
+        after: newRemaining,
+        branchId: b.branchId || branchId,
+        sourceDocPath: String(sourceDocPath || ''),
+        ...linkedSpread,
+        revenueImpact: 0,
+        costBasis: Number(cost || 0) * repayAmt,
+        isPremium: !!isPremium,
+        // Phase 15.7-bis marker — distinguishes from regular IMPORT/RECEIVE
+        // movement on a fresh batch. Audit log + admin banner key off this.
+        negativeRepay: true,
+        user: user || null,
+        note: String(note || `Repay negative balance (incoming +${repayAmt} ${b.unit || ''})`).trim(),
+        createdAt: now,
+      });
+
+      return {
+        batchId: step.batchId,
+        productName: b.productName || '',
+        repayAmt,
+        before: beforeRemaining,
+        after: newRemaining,
+        movementId,
+      };
+    });
+
+    if (txResult) {
+      repaidBatches.push(txResult);
+      totalRepaid += txResult.repayAmt;
+    }
+  }
+
+  return {
+    repaidBatches,
+    totalRepaid,
+    leftover: Math.max(0, need - totalRepaid),
+  };
+}
+
+/**
  * V35.2-quinquies (2026-04-28) — ATOMIC FK pre-validation for batch creators.
  *
  * Bug fix: prior pattern was per-item _assertProductExists inside the create
@@ -4156,7 +4324,6 @@ async function _buildBatchFromOrderItem({
   );
   const cost = Number(item.cost) || 0;
   const isPremium = !!item.isPremium;
-  const batchId = _genBatchId();
 
   // Auto opt-in stockConfig — preserved from the legacy createStockOrder
   // flow. 2026-04-28 refactor: now delegates to shared helper
@@ -4171,65 +4338,98 @@ async function _buildBatchFromOrderItem({
     });
   }
 
-  // 1) Create the batch doc (Phase 15.2: locationType + locationId added).
-  await setDoc(stockBatchDoc(batchId), {
-    batchId,
+  // Phase 15.7-bis (2026-04-28) — auto-repay negative balances before
+  // creating new batch. User report: "นำเข้าไปแล้วไม่รวมกับอันเดิม". The
+  // incoming qty first repays existing negative batches at this
+  // product+location FIFO (oldest debt first); only the leftover becomes
+  // a new batch. This mirrors physical reality: imported stock that
+  // settles a prior overdraw shouldn't double-count as fresh inventory.
+  const repayResult = await _repayNegativeBalances({
     productId: String(item.productId || ''),
-    productName: String(item.productName || ''),
     branchId: String(locationId),
-    locationType: locationType || 'branch',
-    locationId: String(locationId),
-    orderProductId,
-    sourceOrderId: String(orderId),
-    receivedAt: now,
-    expiresAt: item.expiresAt || null,
-    unit: String(item.unit || ''),
-    qty: buildQtyNumeric(qtyNum),
-    originalCost: cost,
-    isPremium,
-    status: BATCH_STATUS.ACTIVE,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // 2) Append IMPORT movement (V14: build object without any undefined leaves).
-  const movementId = _genMovementId();
-  const movementDoc = {
-    movementId,
-    type: MOVEMENT_TYPES.IMPORT,
-    batchId,
-    productId: String(item.productId || ''),
-    productName: String(item.productName || ''),
-    qty: qtyNum,
-    before: 0,
-    after: qtyNum,
-    branchId: String(locationId),
+    incomingQty: qtyNum,
+    movementType: MOVEMENT_TYPES.IMPORT,
     sourceDocPath: String(sourceDocPath),
-    revenueImpact: 0,
-    costBasis: cost * qtyNum,
+    linkedField,
+    linkedFieldValue: orderId,
+    cost,
     isPremium,
     user,
-    note: String(note || ''),
-    createdAt: now,
-  };
-  // Branch order writes linkedOrderId; central PO writes linkedCentralOrderId.
-  // BOTH fields participate in listStockMovements filtering (mapFields).
-  movementDoc[linkedField] = String(orderId);
-  await setDoc(stockMovementDoc(movementId), movementDoc);
+    now,
+    note: String(note || `Import repay (Order ${orderId})`),
+  });
+  const leftover = repayResult.leftover;
 
-  return {
-    batchId,
-    movementId,
-    resolvedItem: {
-      orderProductId,
+  let batchId = null;
+  let movementId = null;
+  if (leftover > 0) {
+    batchId = _genBatchId();
+    // 1) Create the batch doc with leftover qty (Phase 15.2: locationType + locationId added).
+    await setDoc(stockBatchDoc(batchId), {
       batchId,
       productId: String(item.productId || ''),
       productName: String(item.productName || ''),
-      qty: qtyNum,
+      branchId: String(locationId),
+      locationType: locationType || 'branch',
+      locationId: String(locationId),
+      orderProductId,
+      sourceOrderId: String(orderId),
+      receivedAt: now,
+      expiresAt: item.expiresAt || null,
+      unit: String(item.unit || ''),
+      qty: buildQtyNumeric(leftover),
+      originalCost: cost,
+      isPremium,
+      status: BATCH_STATUS.ACTIVE,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2) Append IMPORT movement (V14: no undefined leaves).
+    movementId = _genMovementId();
+    const movementDoc = {
+      movementId,
+      type: MOVEMENT_TYPES.IMPORT,
+      batchId,
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      qty: leftover,
+      before: 0,
+      after: leftover,
+      branchId: String(locationId),
+      sourceDocPath: String(sourceDocPath),
+      revenueImpact: 0,
+      costBasis: cost * leftover,
+      isPremium,
+      user,
+      note: String(note || ''),
+      createdAt: now,
+    };
+    // Branch order writes linkedOrderId; central PO writes linkedCentralOrderId.
+    movementDoc[linkedField] = String(orderId);
+    await setDoc(stockMovementDoc(movementId), movementDoc);
+  }
+  // If leftover === 0, the entire incoming qty was absorbed by negative
+  // repay. No new batch needed. The repay movements (with negativeRepay:true)
+  // ARE the audit trail for this item.
+
+  return {
+    batchId,        // null when leftover===0
+    movementId,     // null when leftover===0
+    repayResult,    // Phase 15.7-bis: surfaced for caller-side banner UX
+    resolvedItem: {
+      orderProductId,
+      batchId,      // null OK — caller stores order line metadata regardless
+      productId: String(item.productId || ''),
+      productName: String(item.productName || ''),
+      qty: qtyNum,  // FULL incoming qty for the order line (not leftover)
       cost,
       expiresAt: item.expiresAt || null,
       isPremium,
       unit: String(item.unit || ''),
+      // Phase 15.7-bis — line-level repay summary for callers that surface UX
+      negativeRepayApplied: repayResult.totalRepaid,
+      negativeRepayBatchIds: repayResult.repaidBatches.map(r => r.batchId),
     },
   };
 }
@@ -4269,11 +4469,13 @@ export async function createStockOrder(data, opts = {}) {
 
   const batchIds = [];
   const resolvedItems = [];
+  // Phase 15.7-bis — collect repay summary across items for caller UX banner.
+  const repays = [];
 
   // Phase 15.2 — delegate per-line batch+movement creation to shared helper.
   // Branch tier: linkedField='linkedOrderId', locationType='branch'.
   for (const [idx, item] of items.entries()) {
-    const { batchId, resolvedItem } = await _buildBatchFromOrderItem({
+    const { batchId, resolvedItem, repayResult } = await _buildBatchFromOrderItem({
       item, idx,
       locationId: branchId,
       locationType: 'branch',
@@ -4286,6 +4488,15 @@ export async function createStockOrder(data, opts = {}) {
     });
     batchIds.push(batchId);
     resolvedItems.push(resolvedItem);
+    if (repayResult && repayResult.totalRepaid > 0) {
+      repays.push({
+        productId: String(item.productId || ''),
+        productName: String(item.productName || ''),
+        totalRepaid: repayResult.totalRepaid,
+        leftover: repayResult.leftover,
+        repaidBatches: repayResult.repaidBatches,
+      });
+    }
   }
 
   // Finally: create the order doc (with resolved batchIds baked in).
@@ -4304,7 +4515,7 @@ export async function createStockOrder(data, opts = {}) {
     updatedAt: now,
   });
 
-  return { orderId, batchIds, success: true };
+  return { orderId, batchIds, success: true, repays };
 }
 
 /**
@@ -4661,6 +4872,7 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
   const movementIds = [];
   const updatedItems = [...(order.items || [])];
   const newlyReceivedLineIds = [];
+  const repays = []; // Phase 15.7-bis — accumulate repay summary for caller UX
 
   for (const r of receipts) {
     const lineId = String(r.centralOrderProductId || '').trim();
@@ -4693,8 +4905,9 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
 
     // Delegate to shared helper — central tier writes locationType:'central'
     // + linkedCentralOrderId. Branch order writes linkedOrderId via the
-    // same helper (Rule C1).
-    const { batchId, movementId } = await _buildBatchFromOrderItem({
+    // same helper (Rule C1). Phase 15.7-bis: helper now auto-repays
+    // negative balances at central warehouse before creating new batch.
+    const { batchId, movementId, repayResult } = await _buildBatchFromOrderItem({
       item: line,
       idx: orderIdx >= 0 ? orderIdx : 0,
       locationId: order.centralWarehouseId,
@@ -4708,7 +4921,7 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
     });
 
     batchIds.push(batchId);
-    movementIds.push(movementId);
+    if (movementId) movementIds.push(movementId);
     if (orderIdx >= 0) {
       updatedItems[orderIdx] = {
         ...updatedItems[orderIdx],
@@ -4717,6 +4930,15 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
       };
     }
     newlyReceivedLineIds.push(lineId);
+    if (repayResult && repayResult.totalRepaid > 0) {
+      repays.push({
+        productId: String(line.productId || ''),
+        productName: String(line.productName || ''),
+        totalRepaid: repayResult.totalRepaid,
+        leftover: repayResult.leftover,
+        repaidBatches: repayResult.repaidBatches,
+      });
+    }
   }
 
   // Flip order status.
@@ -4733,7 +4955,7 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
     updatedAt: now,
   });
 
-  return { orderId, status: newStatus, batchIds, movementIds, alreadyReceived: false };
+  return { orderId, status: newStatus, batchIds, movementIds, alreadyReceived: false, repays };
 }
 
 /**
@@ -6261,50 +6483,75 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
     // a stale productId. Forces admin to run /api/admin/cleanup-orphan-stock
     // first if any source batch is orphaned.
     await _assertProductExists(item.productId, `createStockTransfer:receive item=${item.sourceBatchId}`);
-    const newBatchId = _genBatchId();
-    await setDoc(stockBatchDoc(newBatchId), {
-      batchId: newBatchId,
-      productId: item.productId,
-      productName: item.productName,
-      branchId: cur.destinationLocationId,
-      orderProductId: `${transferId}-${item.sourceBatchId}`,
-      sourceOrderId: null,
-      sourceBatchId: item.sourceBatchId,
-      receivedAt: now,
-      expiresAt: item.expiresAt,
-      unit: item.unit,
-      qty: buildQtyNumeric(item.qty),
-      originalCost: item.cost,
-      isPremium: item.isPremium,
-      status: BATCH_STATUS.ACTIVE,
-      createdAt: now,
-      updatedAt: now,
-    });
-    const mvtId = _genMovementId();
-    await setDoc(stockMovementDoc(mvtId), {
-      movementId: mvtId,
-      type: MOVEMENT_TYPES.RECEIVE,
-      batchId: newBatchId,
-      productId: item.productId,
-      productName: item.productName,
-      qty: item.qty,
-      before: 0,
-      after: item.qty,
-      branchId: cur.destinationLocationId,
-      // Phase 15.4 (s19 items 3+4) — multi-branch visibility:
-      // both source + destination see this RECEIVE movement.
-      branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
+
+    // Phase 15.7-bis (2026-04-28) — auto-repay negatives at destination
+    // before creating a new batch. User directive: incoming positives
+    // (transfer-in is a positive) must repay existing negatives FIFO.
+    const repayResult = await _repayNegativeBalances({
+      productId: String(item.productId || ''),
+      branchId: String(cur.destinationLocationId || ''),
+      incomingQty: Number(item.qty) || 0,
+      movementType: MOVEMENT_TYPES.RECEIVE,
       sourceDocPath: docPath,
-      linkedTransferId: transferId,
-      revenueImpact: null,
-      costBasis: item.cost * item.qty,
-      isPremium: item.isPremium,
-      skipped: false,
+      linkedField: 'linkedTransferId',
+      linkedFieldValue: transferId,
+      cost: Number(item.cost) || 0,
+      isPremium: !!item.isPremium,
       user,
-      note: '',
-      createdAt: now,
+      now,
+      note: `Transfer receive repay (Transfer ${transferId})`,
     });
-    return newBatchId;
+    const leftover = repayResult.leftover;
+
+    let newBatchId = null;
+    if (leftover > 0) {
+      newBatchId = _genBatchId();
+      await setDoc(stockBatchDoc(newBatchId), {
+        batchId: newBatchId,
+        productId: item.productId,
+        productName: item.productName,
+        branchId: cur.destinationLocationId,
+        orderProductId: `${transferId}-${item.sourceBatchId}`,
+        sourceOrderId: null,
+        sourceBatchId: item.sourceBatchId,
+        receivedAt: now,
+        expiresAt: item.expiresAt,
+        unit: item.unit,
+        qty: buildQtyNumeric(leftover),
+        originalCost: item.cost,
+        isPremium: item.isPremium,
+        status: BATCH_STATUS.ACTIVE,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const mvtId = _genMovementId();
+      await setDoc(stockMovementDoc(mvtId), {
+        movementId: mvtId,
+        type: MOVEMENT_TYPES.RECEIVE,
+        batchId: newBatchId,
+        productId: item.productId,
+        productName: item.productName,
+        qty: leftover,
+        before: 0,
+        after: leftover,
+        branchId: cur.destinationLocationId,
+        // Phase 15.4 (s19 items 3+4) — multi-branch visibility:
+        // both source + destination see this RECEIVE movement.
+        branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
+        sourceDocPath: docPath,
+        linkedTransferId: transferId,
+        revenueImpact: null,
+        costBasis: item.cost * leftover,
+        isPremium: item.isPremium,
+        skipped: false,
+        user,
+        note: '',
+        createdAt: now,
+      });
+    }
+    // Return shape: legacy callers expect { destBatchId } string. Surface
+    // repay info via attached fields so caller can accumulate per-item.
+    return { newBatchId, repayResult };
   }
 
   // Helper: reverse an export movement (for cancel/reject)
@@ -6340,11 +6587,22 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
   }
   else if (curStatus === 1 && next === 2) {
     const updatedItems = [];
+    const repays = []; // Phase 15.7-bis — accumulate per-item repays for UX
     for (const it of cur.items) {
-      const destBatchId = await _receiveAtDestination(it);
-      updatedItems.push({ ...it, destinationBatchId: destBatchId });
+      const { newBatchId, repayResult } = await _receiveAtDestination(it);
+      updatedItems.push({ ...it, destinationBatchId: newBatchId });
+      if (repayResult && repayResult.totalRepaid > 0) {
+        repays.push({
+          productId: String(it.productId || ''),
+          productName: String(it.productName || ''),
+          totalRepaid: repayResult.totalRepaid,
+          leftover: repayResult.leftover,
+          repaidBatches: repayResult.repaidBatches,
+        });
+      }
     }
     await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
+    return { transferId, status: next, success: true, repays };
   }
   else if (curStatus === 1 && (next === 3 || next === 4)) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
@@ -6534,46 +6792,67 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
     // createStockTransfer:_receiveAtDestination above. Refuses orphan
     // materialization at the withdrawal destination tier.
     await _assertProductExists(item.productId, `createStockWithdrawal:receive item=${item.sourceBatchId}`);
-    const newBatchId = _genBatchId();
-    await setDoc(stockBatchDoc(newBatchId), {
-      batchId: newBatchId,
-      productId: item.productId,
-      productName: item.productName,
-      branchId: cur.destinationLocationId,
-      orderProductId: `${withdrawalId}-${item.sourceBatchId}`,
-      sourceOrderId: null,
-      sourceBatchId: item.sourceBatchId,
-      receivedAt: now,
-      expiresAt: item.expiresAt,
-      unit: item.unit,
-      qty: buildQtyNumeric(item.qty),
-      originalCost: item.cost,
-      isPremium: item.isPremium,
-      status: BATCH_STATUS.ACTIVE,
-      createdAt: now, updatedAt: now,
-    });
-    const mvtId = _genMovementId();
-    await setDoc(stockMovementDoc(mvtId), {
-      movementId: mvtId,
-      type: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM,
-      batchId: newBatchId,
-      productId: item.productId,
-      productName: item.productName,
-      qty: item.qty,
-      before: 0,
-      after: item.qty,
-      branchId: cur.destinationLocationId,
-      // Phase 15.4 (s19 items 3+4) — multi-branch visibility.
-      branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
+
+    // Phase 15.7-bis (2026-04-28) — auto-repay negatives at destination.
+    const repayResult = await _repayNegativeBalances({
+      productId: String(item.productId || ''),
+      branchId: String(cur.destinationLocationId || ''),
+      incomingQty: Number(item.qty) || 0,
+      movementType: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM,
       sourceDocPath: docPath,
-      linkedWithdrawalId: withdrawalId,
-      revenueImpact: null,
-      costBasis: item.cost * item.qty,
-      isPremium: item.isPremium,
-      skipped: false,
-      user, note: '', createdAt: now,
+      linkedField: 'linkedWithdrawalId',
+      linkedFieldValue: withdrawalId,
+      cost: Number(item.cost) || 0,
+      isPremium: !!item.isPremium,
+      user,
+      now,
+      note: `Withdrawal receive repay (Withdrawal ${withdrawalId})`,
     });
-    return newBatchId;
+    const leftover = repayResult.leftover;
+
+    let newBatchId = null;
+    if (leftover > 0) {
+      newBatchId = _genBatchId();
+      await setDoc(stockBatchDoc(newBatchId), {
+        batchId: newBatchId,
+        productId: item.productId,
+        productName: item.productName,
+        branchId: cur.destinationLocationId,
+        orderProductId: `${withdrawalId}-${item.sourceBatchId}`,
+        sourceOrderId: null,
+        sourceBatchId: item.sourceBatchId,
+        receivedAt: now,
+        expiresAt: item.expiresAt,
+        unit: item.unit,
+        qty: buildQtyNumeric(leftover),
+        originalCost: item.cost,
+        isPremium: item.isPremium,
+        status: BATCH_STATUS.ACTIVE,
+        createdAt: now, updatedAt: now,
+      });
+      const mvtId = _genMovementId();
+      await setDoc(stockMovementDoc(mvtId), {
+        movementId: mvtId,
+        type: MOVEMENT_TYPES.WITHDRAWAL_CONFIRM,
+        batchId: newBatchId,
+        productId: item.productId,
+        productName: item.productName,
+        qty: leftover,
+        before: 0,
+        after: leftover,
+        branchId: cur.destinationLocationId,
+        // Phase 15.4 (s19 items 3+4) — multi-branch visibility.
+        branchIds: [cur.sourceLocationId, cur.destinationLocationId].filter(Boolean),
+        sourceDocPath: docPath,
+        linkedWithdrawalId: withdrawalId,
+        revenueImpact: null,
+        costBasis: item.cost * leftover,
+        isPremium: item.isPremium,
+        skipped: false,
+        user, note: '', createdAt: now,
+      });
+    }
+    return { newBatchId, repayResult };
   }
 
   async function _reverseExport(sourceBatchId) {
@@ -6595,11 +6874,22 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
   }
   else if (curStatus === 1 && next === 2) {
     const updatedItems = [];
+    const repays = []; // Phase 15.7-bis — accumulate per-item repays for UX
     for (const it of cur.items) {
-      const destBatchId = await _receiveAtDestination(it);
-      updatedItems.push({ ...it, destinationBatchId: destBatchId });
+      const { newBatchId, repayResult } = await _receiveAtDestination(it);
+      updatedItems.push({ ...it, destinationBatchId: newBatchId });
+      if (repayResult && repayResult.totalRepaid > 0) {
+        repays.push({
+          productId: String(it.productId || ''),
+          productName: String(it.productName || ''),
+          totalRepaid: repayResult.totalRepaid,
+          leftover: repayResult.leftover,
+          repaidBatches: repayResult.repaidBatches,
+        });
+      }
     }
     await updateDoc(ref, { items: updatedItems, updatedAt: new Date().toISOString() });
+    return { withdrawalId, status: next, success: true, repays };
   }
   else if (curStatus === 1 && next === 3) {
     for (const it of cur.items) await _reverseExport(it.sourceBatchId);
@@ -7895,7 +8185,21 @@ export async function getDoctor(doctorId) {
 
 export async function listDoctors() {
   const snap = await getDocs(doctorsCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Phase 15.7-bis (2026-04-28) — compose `name` field at source. be_doctors
+  // stores firstname/lastname/nickname (ProClinic schema, lowercase) but
+  // consumers (AppointmentFormModal picker, AppointmentTab grid via
+  // doctorMap, DepositPanel picker, TreatmentFormPage assistants picker)
+  // render `{d.name}` directly. Pre-fix d.name was undefined → empty
+  // checkboxes in pickers (user report 2026-04-28: "ไม่แสดงชื่อแพทย์และ
+  // ผู้ช่วยเลย ในการนัดหมาย"). Source-level fix benefits every caller.
+  // Composition order mirrors mergeSellersWithBranchFilter:7937-7942.
+  const items = snap.docs.map(d => {
+    const data = d.data();
+    const parts = [data.firstname || data.firstName || '', data.lastname || data.lastName || ''].filter(Boolean);
+    const composed = parts.join(' ').trim();
+    const composedName = data.name || composed || data.nickname || data.fullName || '';
+    return { id: d.id, ...data, name: composedName };
+  });
   items.sort((a, b) => {
     // Doctors first, assistants second, then newest-first by updatedAt.
     const pa = a.position === 'แพทย์' ? 0 : 1;

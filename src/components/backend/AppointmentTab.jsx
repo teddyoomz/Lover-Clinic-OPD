@@ -201,12 +201,42 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     });
   }, [monthAppts, dayAppts]);
 
-  const rooms = allKnownRooms;
+  // Phase 15.7-bis (2026-04-28) — calendar badge/grid mismatch fix.
+  // User reports (29/4 + 30/4 + 6/5): mini-calendar bubble counts ALL
+  // appointments for the date (e.g. 4 on 29/4) but the grid shows only 1
+  // — because the previous apptMap had two silent-drop bugs:
+  //   1. `if (a.startTime && a.roomName)` filter dropped appts with no
+  //      roomName (legacy/imported data) entirely.
+  //   2. Map keyed by `startTime|roomName` overwrote duplicates — last
+  //      appt at the same slot+room "wins"; collisions invisible.
+  // Fix: array-valued apptMap (multi-render per cell) + virtual
+  // "ไม่ระบุห้อง" column for roomless appts. effectiveRoom() resolves the
+  // column for both the map key + the occupied check.
+  const UNASSIGNED_ROOM = '— ไม่ระบุห้อง —';
+  const effectiveRoom = (a) => (a && a.roomName ? String(a.roomName).trim() : UNASSIGNED_ROOM);
 
-  // Pre-compute appointment lookup map for O(1) access in time grid
+  const rooms = useMemo(() => {
+    const set = new Set(allKnownRooms);
+    if (dayAppts.some(a => !a?.roomName)) set.add(UNASSIGNED_ROOM);
+    return [...set];
+  }, [allKnownRooms, dayAppts]);
+
+  // Pre-compute appointment lookup map for O(1) access in time grid.
+  // Phase 15.7-bis: array-valued so duplicates at same startTime+room
+  // BOTH render. Sort within each cell by createdAt asc so first-created
+  // appears as the primary (deterministic).
   const apptMap = useMemo(() => {
     const map = {};
-    dayAppts.forEach(a => { if (a.startTime && a.roomName) map[`${a.startTime}|${a.roomName}`] = a; });
+    dayAppts.forEach(a => {
+      if (!a.startTime) return;
+      const room = effectiveRoom(a);
+      const key = `${a.startTime}|${room}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(a);
+    });
+    for (const k of Object.keys(map)) {
+      map[k].sort((x, y) => String(x.createdAt || '').localeCompare(String(y.createdAt || '')));
+    }
     return map;
   }, [dayAppts]);
 
@@ -465,9 +495,11 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                   <div key={time} className="flex border-b border-[var(--bd)]/30" style={{ height: SLOT_H }}>
                     <div className="w-[60px] flex-shrink-0 text-xs text-[var(--tx-muted)] text-right pr-2 pt-0.5 font-mono">{time}</div>
                     {rooms.map(room => {
-                      // O(1) lookup via pre-computed map
-                      const appt = apptMap[`${time}|${room}`];
-                      if (appt) {
+                      // Phase 15.7-bis — O(1) lookup, array-valued so duplicates render.
+                      const apptList = apptMap[`${time}|${room}`];
+                      if (apptList && apptList.length > 0) {
+                        const appt = apptList[0]; // primary (oldest createdAt)
+                        const dupCount = apptList.length - 1;
                         const startIdx = TIME_SLOTS.indexOf(appt.startTime);
                         const endIdx = appt.endTime ? TIME_SLOTS.indexOf(appt.endTime) : startIdx + 1;
                         const span = Math.max(1, endIdx - startIdx);
@@ -480,6 +512,20 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                               <div className="flex items-center gap-1">
                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                                 <span className="text-xs font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
+                                {/* Phase 15.7-bis — collision indicator: shows when ≥2
+                                    appts share this exact startTime+room key. Click on
+                                    the badge expands the list (handled by stopPropagation
+                                    at this layer; below we render stacked previews for
+                                    the dupes). */}
+                                {dupCount > 0 && (
+                                  <span
+                                    className="ml-auto px-1 py-0 rounded text-[9px] font-bold bg-amber-900/50 text-amber-300 border border-amber-700"
+                                    title={`มีนัดซ้ำที่เวลานี้ ${apptList.length} ราย — กดเพื่อแก้นัดแรก; รายอื่นด้านล่าง`}
+                                    data-testid="appt-collision-badge"
+                                  >
+                                    +{dupCount}
+                                  </span>
+                                )}
                               </div>
                               {span > 1 && (() => {
                                 const assistantNames = resolveAssistantNames(appt, doctorMap);
@@ -500,17 +546,42 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                                 );
                               })()}
                             </button>
+                            {/* Phase 15.7-bis — list duplicate appts as small clickable
+                                pills directly under the primary, so admin can edit each.
+                                Sits inside the same cell so visual rhythm stays. */}
+                            {dupCount > 0 && (
+                              <div className="absolute left-0.5 right-0.5 z-[6] pointer-events-none" style={{ top: span * SLOT_H + 1 }}>
+                                <div className="flex flex-wrap gap-0.5 pointer-events-auto">
+                                  {apptList.slice(1).map((dup, di) => {
+                                    const dupSt = STATUSES.find(s => s.value === dup.status) || STATUSES[0];
+                                    return (
+                                      <button
+                                        key={dup.appointmentId || dup.id || di}
+                                        onClick={(e) => { e.stopPropagation(); openEdit(dup); }}
+                                        className={`text-[9px] px-1 py-0.5 rounded border ${dupSt.bg} border-[var(--bd)]/50 truncate max-w-[120px]`}
+                                        title={`ซ้ำ #${di + 2}: ${dup.customerName || '-'}`}
+                                        data-testid="appt-collision-dupe"
+                                      >
+                                        ↪ {dup.customerName || '-'}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       }
-                      // Check if this slot is occupied by a multi-slot appointment (skip rendering)
+                      // Check if this slot is occupied by a multi-slot appointment (skip rendering).
+                      // Phase 15.7-bis — use effectiveRoom() so the virtual ไม่ระบุห้อง
+                      // column also recognises its own multi-slot appointments.
                       const occupied = dayAppts.some(a => {
-                        if (a.roomName !== room || !a.startTime || !a.endTime) return false;
+                        if (effectiveRoom(a) !== room || !a.startTime || !a.endTime) return false;
                         return time > a.startTime && time < a.endTime;
                       });
                       return (
                         <div key={room}
-                          onClick={() => !occupied && openCreate(selectedDate, time, room)}
+                          onClick={() => !occupied && openCreate(selectedDate, time, room === UNASSIGNED_ROOM ? '' : room)}
                           className={`flex-1 min-w-[140px] border-l border-[var(--bd)]/30 ${occupied ? '' : 'cursor-pointer hover:bg-sky-900/5'}`}
                           style={{ height: SLOT_H }} />
                       );

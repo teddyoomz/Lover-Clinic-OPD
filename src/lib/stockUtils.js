@@ -351,6 +351,73 @@ export function batchFifoAllocate(batches, deductQty, opts = {}) {
 }
 
 /**
+ * Phase 15.7-bis (2026-04-28) — Pure helper that plans a negative-balance
+ * repay against incoming positive qty (e.g. import / transfer-receive /
+ * withdrawal-receive). Mirrors batchFifoAllocate's drain-FIFO semantics
+ * but in reverse — oldest debt repaid first.
+ *
+ * User report (2026-04-28 post Phase 15.7 ship): "ตอนตัดตัดได้ แต่ตอน
+ * นำเข้าไปใหม่ ทำไมนำเข้าไปแล้วไม่รวมกับอันเดิม". Pre-fix: import created
+ * a NEW batch alongside the existing negative batch — admin saw +500
+ * row in movement log + a -76 row, but the totals didn't merge. User
+ * wants the +500 to first repay the -76 before becoming a fresh batch.
+ *
+ * Behavior:
+ *   - Filter to batches where qty.remaining < 0 (negatives only)
+ *   - Sort by createdAt ASC (FIFO — oldest debt repaid first)
+ *   - For each: take min(abs(neg.remaining), leftover) — repay that batch
+ *   - Plan stops when leftover === 0 OR no more negatives
+ *
+ * Returns:
+ *   - repayPlan: [{ batchId, repayAmt, before, after, batch }] (batch
+ *     reference preserved so caller can read productName, branchId, etc.)
+ *   - leftover: number — remaining incoming qty after all repays. Caller
+ *     uses this to size the new batch (or skip creating one if 0).
+ *
+ * @param {Array<object>} batches — typically all active batches at branch+product
+ * @param {number} incomingQty
+ * @returns {{ repayPlan: Array<{batchId:string, repayAmt:number, before:number, after:number, batch:object}>, leftover: number }}
+ */
+export function applyNegativeRepay(batches, incomingQty) {
+  const need = toNumber(incomingQty);
+  if (need <= 0) return { repayPlan: [], leftover: Math.max(0, need) };
+  if (!Array.isArray(batches) || batches.length === 0) {
+    return { repayPlan: [], leftover: need };
+  }
+
+  // Negative batches only, oldest first (FIFO repay)
+  const negatives = batches
+    .filter((b) => b && Number(b.qty?.remaining) < 0)
+    .sort((a, b) => {
+      const ca = String(a.createdAt || '');
+      const cb = String(b.createdAt || '');
+      return ca.localeCompare(cb); // oldest first
+    });
+
+  if (negatives.length === 0) return { repayPlan: [], leftover: need };
+
+  let leftover = need;
+  const repayPlan = [];
+  for (const b of negatives) {
+    if (leftover <= 0) break;
+    const remaining = Number(b.qty?.remaining) || 0;
+    const debt = Math.abs(remaining); // 26 if remaining=-26
+    const repayAmt = Math.min(debt, leftover);
+    if (repayAmt <= 0) continue;
+    repayPlan.push({
+      batchId: String(b.batchId),
+      repayAmt,
+      before: remaining,
+      after: remaining + repayAmt,
+      batch: b,
+    });
+    leftover -= repayAmt;
+  }
+
+  return { repayPlan, leftover };
+}
+
+/**
  * Phase 15.7 (2026-04-28) — Pure helper that picks the target batch for a
  * shortfall overage push (the batch whose qty.remaining will go NEGATIVE).
  *

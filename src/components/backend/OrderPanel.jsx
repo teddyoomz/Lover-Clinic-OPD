@@ -70,6 +70,8 @@ const fmtDate = (iso) => fmtSlashDateTime(iso, { withTime: false });
 // Fix: explicit `import` + separate `export`. Re-export still works for
 // external callers (tests etc.) and the local binding is now in scope.
 import { getUnitOptionsForProduct } from '../../lib/unitFieldHelpers.js';
+// Phase 15.7-bis (2026-04-28) — banner UX for auto-repay of negative balances.
+import { formatNegativeRepayBanner, hasNegativeRepay } from '../../lib/negativeRepayBanner.js';
 export { getUnitOptionsForProduct };
 
 export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPrefillConsumed }) {
@@ -392,6 +394,9 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  // Phase 15.7-bis (2026-04-28) — banner shown when incoming order qty
+  // auto-repaid existing negative balances at the same product+branch.
+  const [repayBanner, setRepayBanner] = useState('');
 
   function mkEmptyItem() {
     return { productId: '', productName: '', qty: '', cost: '', unit: '', expiresAt: '', isPremium: false };
@@ -454,9 +459,18 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
           isPremium: !!it.isPremium,
         })),
       };
-      await createStockOrder(payload, { user: actorUser });
-      setSuccess(true);
-      setTimeout(onSaved, 600);
+      const result = await createStockOrder(payload, { user: actorUser });
+      // Phase 15.7-bis — surface repay banner if incoming qty cleared
+      // any existing negative balances. UX hold: 2.5s before onSaved
+      // so admin sees the banner.
+      if (hasNegativeRepay(result?.repays)) {
+        setRepayBanner(formatNegativeRepayBanner(result.repays));
+        setSuccess(true);
+        setTimeout(onSaved, 2500);
+      } else {
+        setSuccess(true);
+        setTimeout(onSaved, 600);
+      }
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');
       setSaving(false);
@@ -487,6 +501,16 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
       {error && (
         <div className="bg-red-950/40 border border-red-800 rounded-lg p-3 text-xs text-red-400 flex items-start gap-2">
           <AlertCircle size={14} className="flex-shrink-0 mt-0.5" /> {error}
+        </div>
+      )}
+      {/* Phase 15.7-bis — repay banner: shows when incoming order qty
+          auto-cleared negative balances at the same product+branch. */}
+      {repayBanner && (
+        <div
+          className="bg-emerald-950/40 border border-emerald-800 rounded-lg p-3 text-xs text-emerald-300 whitespace-pre-line"
+          data-testid="negative-repay-banner"
+        >
+          {repayBanner}
         </div>
       )}
 
