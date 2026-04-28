@@ -16,7 +16,7 @@ Run these in order (17 total):
 
 **Tier 1 — backend integrity (money/stock/cascade, 45 invariants)**:
 1. `/audit-money-flow` (M1–M15)
-2. `/audit-stock-flow` (S1–S20) — V34 (2026-04-28) added S16-S20: per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline
+2. `/audit-stock-flow` (S1–S25) — V34 (2026-04-28) added S16-S20: per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline. Phase 15.5 (2026-04-28) added S21-S25: per-product warning thresholds, anti-hardcoded-threshold, ActorPicker branchIds[] filter (5 panels), withdrawal approval admin endpoint, unit dropdown enrichment
 3. `/audit-cascade-logic` (C1–C15)
 
 **Tier 2 — data + system integrity (47 invariants)**:
@@ -85,7 +85,7 @@ Run these in order (17 total):
 
 ## Passing (counts per skill)
 - audit-money-flow: X/15
-- audit-stock-flow: Y/20
+- audit-stock-flow: Y/25
 - audit-cascade-logic: Z/15
 - ... etc.
 

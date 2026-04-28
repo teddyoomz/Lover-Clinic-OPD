@@ -183,3 +183,90 @@ For every call site in tests, the branchId / warehouseId / customerId / productI
 Grep: "AUDIT-V34" in src/, output_mode=content, -n=true
 ```
 Locate every deferred-bug flag added during V34 systemic audit (Phase 2). Future maintainers can pick these up + close them in V35.
+
+---
+
+## Phase 15.5 patterns (S21-S25, added 2026-04-28)
+
+### S21 — Per-product warning thresholds wired to balance panel
+
+```
+Grep: "alertDayBeforeExpire|alertQtyBeforeOutOfStock|alertQtyBeforeMaxStock" in src/components/backend/StockBalancePanel.jsx, output_mode=content, -n=true
+```
+Expected: each field name appears ≥ 2× (in `productThresholdMap` setter + aggregator pass-through). The 3 helpers `isExpiryWarning` / `isLowStockWarning` / `isOverStockWarning` must each return `false` when their threshold is `null`.
+
+```
+Grep: "isExpiryWarning|isLowStockWarning|isOverStockWarning" in src/components/backend/StockBalancePanel.jsx, output_mode=content, -n=true, -C=2
+```
+Read the panel's useEffect that calls `listProducts()` → builds `productThresholdMap`. Confirm 3 fields are read.
+
+### S22 — No hardcoded thresholds (anti-regression)
+
+```
+Grep: "<=\\s*30\\b|<=\\s*5\\b" in src/components/backend/StockBalancePanel.jsx, output_mode=content, -n=true
+```
+Expected: matches ONLY in display-only contexts (e.g. expiryClass color logic for visual cue), NOT in `displayed`-memo filter logic. If a match is inside `if (showExpiringOnly|showLowStockOnly|showOverStockOnly)` block → VIOLATION.
+
+```
+Grep: "showExpiringOnly|showLowStockOnly|showOverStockOnly" in src/components/backend/StockBalancePanel.jsx, output_mode=content, -A=2
+```
+Each filter branch must call the per-product helper, NOT inline threshold math.
+
+### S23 — ActorPicker branchIds[] filter (5 panels)
+
+```
+Grep: "listAllSellers\\s*\\(\\s*\\{\\s*branchId:" in src/components/backend/, output_mode=files_with_matches
+```
+Expected: 5 hits — StockAdjustPanel + OrderPanel + CentralStockOrderPanel + StockTransferPanel + StockWithdrawalPanel.
+
+Anti-regression:
+```
+Grep: "listAllSellers\\s*\\(\\s*\\)" in src/components/backend/Stock*Panel.jsx src/components/backend/OrderPanel.jsx src/components/backend/CentralStockOrderPanel.jsx, output_mode=content
+```
+Expected: ZERO hits. Bare `listAllSellers()` call in any stock-mutation panel = filter bypass.
+
+```
+Grep: "mergeSellersWithBranchFilter" in src/lib/backendClient.js, output_mode=content, -n=true
+```
+Expected: pure helper exported + invoked by `listAllSellers`.
+
+### S24 — Withdrawal approval endpoint contract
+
+```
+Read: api/admin/stock-withdrawal-approve.js (full file)
+```
+Confirm ALL of:
+- `verifyAdminToken` imported + called with `(req, res)` + `if (!caller) return`
+- `req.method !== 'POST'` → 405
+- `req.method === 'OPTIONS'` → 204
+- `db.batch()` invoked per action + `batch.commit()` per action (≥ 2 each)
+- `type: 15` (handleApprove) + `type: 16` (handleReject)
+- `qty: 0` + `skipped: true` on both audit movements
+- Approve `batch.update(withdrawalRef, ...)` payload does NOT include `status:` (soft approval)
+- Reject payload includes `status: 3` (CANCELLED)
+- `.slice(0, 500)` cap on note + reason
+- `alreadyApproved: true` idempotent return on duplicate approve
+- `Number(data.status) !== 0` status guard before action
+
+```
+Grep: "stock-withdrawal-approve" in src/, output_mode=files_with_matches
+```
+Expected: src/lib/stockWithdrawalApprovalClient.js (Bearer ID-token wrapper) + src/components/backend/WithdrawalDetailModal.jsx (UI buttons gated by `useTabAccess().isAdmin`).
+
+### S25 — Unit dropdown master + product merge
+
+```
+Grep: "unitDatalistOptions" in src/components/backend/ProductFormModal.jsx, output_mode=content, -n=true, -B=1 -A=3
+```
+Expected: `useMemo` declaration with deps `[units, productUnits]` + datalist render iterating it. Master loop iterates `units` first (source: 'master'), product loop iterates `productUnits` second (source: 'product'), both check `seen.has(name)` for dedup.
+
+Anti-regression:
+```
+Grep: "units\\.flatMap\\(u\\s*=>" in src/components/backend/ProductFormModal.jsx, output_mode=content
+```
+Expected: ZERO (old shape removed; new merged form replaces it).
+
+```
+Grep: "listProducts\\(\\)\\.catch" in src/components/backend/ProductFormModal.jsx, output_mode=content
+```
+Expected: 1 match (non-fatal product fetch — degrades to empty array without breaking the form if listProducts fails).

@@ -36,3 +36,6 @@ skills-lock.json
 .agents/private/
 # Runtime lock files for scheduled-tasks MCP (never commit)
 .claude/scheduled_tasks.lock
+
+# Vitest coverage output (Phase 15.5 / 2026-04-28)
+coverage/

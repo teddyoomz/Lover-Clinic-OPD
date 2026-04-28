@@ -155,6 +155,54 @@ Each invariant: **What**, **Why**, **Where**, **How**, **Severity if violated**.
 
 ---
 
+## Phase 15.5 invariants (S21–S25, added 2026-04-28)
+
+> Origin: Phase 15.5 four-feature bundle — 15.5A ActorPicker `branchIds[]`
+> filter (5 stock-mutation forms) + 15.5B Withdrawal approval admin endpoint
+> + Item 1 per-product balance warnings + Item 2 unit dropdown enrichment.
+> These invariants lock the new patterns so future regressions get caught.
+
+### S21 — Per-product warning thresholds drive balance panel
+**What**: `StockBalancePanel.jsx` reads `alertDayBeforeExpire`, `alertQtyBeforeOutOfStock`, `alertQtyBeforeMaxStock` from each product's master record (via `productThresholdMap`) and uses them to drive (a) per-row badges (b) filter checkbox visibility (c) expiry text color. Products without a configured threshold show no warning for that dimension — admin opt-in policy.
+**Why**: User directive 2026-04-28 — warnings must be per-product, not global. If a future refactor reverts to hardcoded thresholds, admins lose control over per-product policy. Per-product config is the legal authority for "near-expiry / near-out / over-stock" alerts.
+**Where**: `src/components/backend/StockBalancePanel.jsx` (eager-load useEffect → productThresholdMap state → aggregator pass-through → 3 helpers `isExpiryWarning`/`isLowStockWarning`/`isOverStockWarning` → 3 filter checkboxes → 4 row badges)
+**How**: Grep `productThresholdMap` + `isExpiryWarning|isLowStockWarning|isOverStockWarning`. Confirm 3 fields read from product. The 3 helpers must EACH return false if their respective threshold is null/undefined.
+
+### S22 — No hardcoded ≤30/≤5 thresholds (anti-regression)
+**What**: balance panel's filter logic must NOT contain raw `<= 30` (days) or `<= 5` (qty) comparisons. All filtering goes through per-product helpers.
+**Why**: Easy regression vector — someone "improving" the filter could re-introduce a default. Locked by source-grep test B6/B7 in `tests/phase15.5-item1-balance-warnings.test.js`. Default fallbacks would defeat the per-product opt-in design.
+**Where**: `src/components/backend/StockBalancePanel.jsx` displayed-memo + render block
+**How**: grep `<=\s*30\|<=\s*5` in displayed/render block. Should match ZERO IN FILTER LOGIC. Display-only contexts (e.g. expiryClass color logic for visual cue) are exempt — filter must use per-product helpers exclusively.
+
+### S23 — ActorPicker `branchIds[]` filter wired on 5 stock-mutation forms
+**What**: `listAllSellers({branchId})` filter is invoked from StockAdjustPanel + OrderPanel + CentralStockOrderPanel + StockTransferPanel + StockWithdrawalPanel — each passes the appropriate branch context (`BRANCH_ID` / `centralWarehouseId` / `filterLocationId`). Pure helper `mergeSellersWithBranchFilter` exists for testability.
+**Why**: Multi-branch clinic Phase 15 requirement — admin recording stock movement should pick from sellers assigned to current branch only (legacy fallback for empty `branchIds[]` preserved so pre-V20 staff data isn't hidden).
+**Where**: 5 panel files in `src/components/backend/` + `src/lib/backendClient.js:mergeSellersWithBranchFilter` (pure helper) + `listAllSellers({branchId})` (Firestore wrapper)
+**How**: grep `listAllSellers\s*\(\s*\{\s*branchId:` in 5 panels. Each must match. No `listAllSellers()` (no args) call in stock-mutation panels. Reports/sale tab/customer detail intentionally NO filter (need historical seller name lookups).
+
+### S24 — Withdrawal approval admin endpoint pattern
+**What**: `api/admin/stock-withdrawal-approve.js` follows audit-firebase-admin-security FA1-FA12 + Phase 15.5B-specific contracts:
+- verifyAdminToken gate (admin claim or bootstrap UID)
+- POST-only method gate, OPTIONS preflight handled
+- Atomic `db.batch()` per action (withdrawal update + audit movement together)
+- type=15 WITHDRAWAL_APPROVE / type=16 WITHDRAWAL_REJECT (qty=0 audit-only, ride V19 movement-update rule)
+- Approve = SOFT (status STAYS at 0; warehouse still does dispatch)
+- Reject = flips status 0→3 + audit + reason
+- Input bound 500 chars on note/reason
+- Idempotent approve (alreadyApproved early-return)
+- V14 lock: normalizeAuditUser ensures no undefined user fields
+**Why**: New admin endpoints carry stock-mutation potential — must follow the existing privileged-endpoint contract. FA1-FA12 catch most patterns; S24 specifically tests the approve-soft / reject-hard semantics so a future "let's auto-flip status on approve" doesn't skip the warehouse dispatch + bypass `_exportFromSource`.
+**Where**: `api/admin/stock-withdrawal-approve.js`
+**How**: grep `verifyAdminToken|type:\s*15|type:\s*16|skipped:\s*true|db\.batch\(\)|status:\s*3|alreadyApproved` — all must match. Confirm approve's `batch.update(withdrawalRef, ...)` payload does NOT include `status:`.
+
+### S25 — Product unit dropdown merges master + existing product units
+**What**: ProductFormModal datalist `#product-unit-list` populated from `listProductUnitGroups()` AND `listProducts()` (extracts `mainUnitName` from existing products), deduped + Thai-locale sorted, master takes precedence on collision. Pure helper `unitDatalistOptions` useMemo locks the merge algorithm.
+**Why**: Admin productivity (Item 2 user directive 2026-04-28) — typed-once units immediately available on next form open without round-trip through ProductUnitsTab. Closed loop: admin types "ขวด" once + saves → next product creation sees "ขวด" in dropdown.
+**Where**: `src/components/backend/ProductFormModal.jsx` `unitDatalistOptions` useMemo + datalist render
+**How**: grep `unitDatalistOptions\s*=\s*useMemo` + `listProducts\(\)\.catch` + `localeCompare\(b,\s*['\"]th['\"]\)`. All must match. Anti-regression: NO `units\.flatMap\(u\s*=>` in datalist render block (old shape removed).
+
+---
+
 ## Accepted risks
 
 - Decimal precision for qty (e.g., 0.01 U, 0.5 mg). JavaScript number type sufficient at 2-decimal precision per Phase 8 tests (0.01 round-trips exact). Audit no code paths introduce cumulative drift.
