@@ -161,6 +161,52 @@ describe('C2 buildChangeAuditEntry kind:cancel', () => {
     expect(rf.kind).toBe('refund');
     expect(rf.refundAmount).toBe(100);
   });
+
+  // ─── C2-P0 — V14 lock: NO undefined leaves in audit entry ────────────
+  test('C2-P0.1 fromCourse w/ undefined courseId (legacy ProClinic clone) → null, NOT undefined', () => {
+    // Pre-fix: tx.set crashed with `Unsupported field value: undefined (found
+    // in field fromCourse.courseId)`. Post-fix: legacy course missing
+    // courseId still produces a valid Firestore-acceptable audit entry.
+    const entry = buildChangeAuditEntry({
+      customerId: 'cust-1',
+      kind: 'cancel',
+      fromCourse: { name: 'Legacy', status: 'กำลังใช้งาน', value: '500 บาท' }, // NO courseId
+      toCourse: null,
+      reason: 'r',
+      actor: 'admin',
+    });
+    expect(entry.fromCourse.courseId).toBeNull();
+    expect(entry.fromCourse.courseId).not.toBeUndefined();
+  });
+
+  test('C2-P0.2 V14 lock: walk audit entry → NO undefined leaves anywhere', () => {
+    // Adversarial: every fromCourse field undefined.
+    const entry = buildChangeAuditEntry({
+      customerId: 'x',
+      kind: 'cancel',
+      fromCourse: {}, // every field undefined
+      toCourse: undefined,
+      reason: undefined,
+      actor: undefined,
+    });
+    const walk = (obj, path = '') => {
+      if (obj === undefined) throw new Error(`undefined leaf at ${path}`);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        for (const k of Object.keys(obj)) walk(obj[k], `${path}.${k}`);
+      }
+    };
+    expect(() => walk(entry)).not.toThrow();
+  });
+
+  test('C2-P0.3 toCourse w/ undefined courseId also coerced to null', () => {
+    const entry = buildChangeAuditEntry({
+      customerId: 'x',
+      kind: 'exchange',
+      fromCourse: { courseId: 'a', name: 'A' },
+      toCourse: { name: 'B' }, // NO courseId
+    });
+    expect(entry.toCourse.courseId).toBeNull();
+  });
 });
 
 // ─── C3 cancelCustomerCourse backend wrapper (source-grep) ──────────────

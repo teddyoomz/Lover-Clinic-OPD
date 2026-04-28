@@ -215,20 +215,26 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
   if (!['exchange', 'refund', 'cancel'].includes(kind)) throw new Error('kind must be exchange|refund|cancel');
   const changeId = `cc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const createdAt = now || new Date().toISOString();
+  // Phase 16.5-bis P0 fix (2026-04-29 user report "Function Transaction.set()
+  // called with invalid data. Unsupported field value: undefined (found in
+  // field fromCourse.courseId)"): legacy ProClinic-cloned courses have NO
+  // courseId field → undefined → Firestore tx.set rejects. V14 lock pattern:
+  // walk output, coerce all undefined leaves to safe primitives (null for
+  // optional refs, '' for strings).
   return {
     changeId,
     customerId: String(customerId),
     kind,
     fromCourse: fromCourse ? {
-      courseId: fromCourse.courseId,
-      name: fromCourse.name,
-      status: fromCourse.status,
-      value: fromCourse.value,
+      courseId: fromCourse.courseId || null,
+      name: String(fromCourse.name || ''),
+      status: String(fromCourse.status || ''),
+      value: String(fromCourse.value || ''),
     } : null,
     toCourse: toCourse ? {
-      courseId: toCourse.courseId,
-      name: toCourse.name,
-      value: toCourse.value,
+      courseId: toCourse.courseId || null,
+      name: String(toCourse.name || ''),
+      value: String(toCourse.value || ''),
     } : null,
     refundAmount: typeof refundAmount === 'number' ? refundAmount : null,
     reason: String(reason || '').slice(0, 500),
