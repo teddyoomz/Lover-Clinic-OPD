@@ -310,15 +310,20 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             onEditCustomer={() => setEditingCustomer(viewingCustomer)}
             onCreateTreatment={() => setTreatmentFormMode({
               mode: 'create',
-              customerId: viewingCustomer.proClinicId,
-              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || '',
+              // 2026-04-28: customer.id is the canonical Firestore doc id;
+              // proClinicId is denormalized + null for V33-created customers
+              // (LC-YY###### prefix). Pre-fix passed null → TreatmentFormPage's
+              // customerId-null guard blocked the save → user reported
+              // "ลูกค้าใหม่กดบันทึกการรักษาไม่ได้".
+              customerId: viewingCustomer.id || viewingCustomer.proClinicId,
+              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || viewingCustomer.hn_no || '',
               patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
               patientData: viewingCustomer.patientData,
             })}
             onEditTreatment={(treatmentId) => setTreatmentFormMode({
               mode: 'edit',
-              customerId: viewingCustomer.proClinicId,
-              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || '',
+              customerId: viewingCustomer.id || viewingCustomer.proClinicId,
+              customerHN: viewingCustomer.proClinicHN || viewingCustomer.hn || viewingCustomer.hn_no || '',
               treatmentId,
               patientName: `${viewingCustomer.patientData?.prefix || ''} ${viewingCustomer.patientData?.firstName || ''} ${viewingCustomer.patientData?.lastName || ''}`.trim(),
               patientData: viewingCustomer.patientData,

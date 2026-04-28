@@ -180,6 +180,14 @@ export default function AppointmentFormModal({
   const [customerSearch, setCustomerSearch] = useState('');
   const [doctors, setDoctors] = useState([]);
   const [staff, setStaff] = useState([]);
+  // 2026-04-28: assistants picker MUST filter by position (mirror
+  // TreatmentFormPage:601, 618-620). Pre-fix rendered ALL doctors as
+  // assistants — confusing UX and conflated with the doctor-picker.
+  // User reported "ผู้ช่วยแพทย์ ไม่มีรายชื่อปรากฎ" — actually meant the
+  // wrong list (or empty when none have position='ผู้ช่วยแพทย์').
+  const assistants = useMemo(() => {
+    return doctors.filter((d) => String(d?.position || '').trim() === 'ผู้ช่วยแพทย์');
+  }, [doctors]);
   const [rooms, setRooms] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(ROOMS_CACHE_KEY) || '[]');
@@ -485,29 +493,38 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
-          {/* Assistants (multi-select chips) */}
+          {/* Assistants (multi-select chips) — 2026-04-28: filtered by
+              position='ผู้ช่วยแพทย์' (mirror TreatmentFormPage). Empty-state
+              hint surfaces the cause when no assistants are configured (vs
+              silently empty list). */}
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
-            <div className="flex flex-wrap gap-1.5">
-              {doctors.map(d => {
-                const checked = formData.assistantIds?.includes(String(d.id)) || false;
-                return (
-                  <label key={d.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg cursor-pointer border transition-all ${checked
-                    ? (isDark ? 'bg-sky-900/30 border-sky-700/40 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-700')
-                    : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-                    <input type="checkbox" checked={checked}
-                      onChange={e => {
-                        const id = String(d.id);
-                        update({ assistantIds: e.target.checked
-                          ? [...(formData.assistantIds || []), id].slice(0, 5)
-                          : (formData.assistantIds || []).filter(x => x !== id),
-                        });
-                      }} className="accent-sky-500 w-3 h-3" />
-                    {d.name}
-                  </label>
-                );
-              })}
-            </div>
+            {assistants.length === 0 ? (
+              <p className="text-[10px] text-amber-400 italic">
+                ยังไม่มีผู้ช่วยแพทย์ใน be_doctors — ตั้งค่าตำแหน่ง 'ผู้ช่วยแพทย์' ในหน้า "แพทย์ &amp; ผู้ช่วย"
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {assistants.map(d => {
+                  const checked = formData.assistantIds?.includes(String(d.id)) || false;
+                  return (
+                    <label key={d.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg cursor-pointer border transition-all ${checked
+                      ? (isDark ? 'bg-sky-900/30 border-sky-700/40 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-700')
+                      : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
+                      <input type="checkbox" checked={checked}
+                        onChange={e => {
+                          const id = String(d.id);
+                          update({ assistantIds: e.target.checked
+                            ? [...(formData.assistantIds || []), id].slice(0, 5)
+                            : (formData.assistantIds || []).filter(x => x !== id),
+                          });
+                        }} className="accent-sky-500 w-3 h-3" />
+                      {d.name}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
           {/* Channel + Status */}
           <div className="grid grid-cols-2 gap-3">

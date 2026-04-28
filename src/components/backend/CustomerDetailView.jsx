@@ -109,6 +109,14 @@ export default function CustomerDetailView({
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const pd = customer?.patientData || {};
+  // 2026-04-28: V33-created customers (LC-YY###### doc id) have
+  // `proClinicId: null` (born inside our system, no ProClinic ID). Listener
+  // subscriptions + modal customerId props were hardcoded to
+  // `customer.proClinicId` → V33 customers silent-failed (empty appointments,
+  // empty sales, modals couldn't operate). Canonical identity is the
+  // Firestore doc id; proClinicId is denormalized for ProClinic-cloned
+  // customers only. Fallback to id resolves both shapes.
+  const customerId = customer?.id || customer?.proClinicId || null;
 
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
@@ -166,10 +174,10 @@ export default function CustomerDetailView({
     return () => Promise.resolve(customerAppointments);
   }, [customerAppointments]);
   useEffect(() => {
-    if (!customer?.proClinicId) return;
+    if (!customerId) return;
     setApptLoading(true);
     const unsubscribe = listenToCustomerAppointments(
-      customer.proClinicId,
+      customerId,
       (data) => {
         setCustomerAppointments(Array.isArray(data) ? data : []);
         setApptLoading(false);
@@ -180,7 +188,7 @@ export default function CustomerDetailView({
       },
     );
     return () => unsubscribe();
-  }, [customer?.proClinicId]);
+  }, [customerId]);
   // Compute next upcoming appointment (date >= today, sorted ascending)
   const nextUpcomingAppt = useMemo(() => {
     const today = thaiTodayISO();
@@ -202,11 +210,11 @@ export default function CustomerDetailView({
   // timeline modal showed stale data until full page reload. The listener
   // also picks up edits from other tabs / other admins for free.
   useEffect(() => {
-    if (!customer?.proClinicId) return;
+    if (!customerId) return;
     setTreatmentsLoading(true);
     setTreatmentsError('');
     const unsubscribe = listenToCustomerTreatments(
-      customer.proClinicId,
+      customerId,
       (data) => {
         setTreatments(data);
         setTreatmentsLoading(false);
@@ -218,7 +226,7 @@ export default function CustomerDetailView({
       },
     );
     return () => unsubscribe();
-  }, [customer?.proClinicId]);
+  }, [customerId]);
 
   // Phase 14.7.H follow-up F (2026-04-26) — finance summary now flows via
   // listenToCustomerFinance (bundles 4 inner listeners: deposits + wallets
@@ -234,10 +242,10 @@ export default function CustomerDetailView({
     return () => Promise.resolve(finSummary);
   }, [finSummary]);
   useEffect(() => {
-    if (!customer?.proClinicId) return;
+    if (!customerId) return;
     setFinLoading(true);
     const unsubscribe = listenToCustomerFinance(
-      customer.proClinicId,
+      customerId,
       (summary) => {
         setFinSummary(summary);
         setFinLoading(false);
@@ -249,17 +257,17 @@ export default function CustomerDetailView({
       },
     );
     return () => unsubscribe();
-  }, [customer?.proClinicId]);
+  }, [customerId]);
 
   // Load customer sales for purchase history tab
   useEffect(() => {
-    if (!customer?.proClinicId) return;
+    if (!customerId) return;
     setSalesError('');
     // Phase 14.7.H follow-up B (2026-04-26) — listener variant. Any sale
     // created in SaleTab (this tab or another) auto-surfaces in the
     // "ประวัติการซื้อ" tab without F5.
     const unsubscribe = listenToCustomerSales(
-      customer.proClinicId,
+      customerId,
       setCustomerSales,
       (err) => {
         console.error('[CustomerDetailView] sales listener failed:', err);
@@ -267,7 +275,7 @@ export default function CustomerDetailView({
       },
     );
     return () => unsubscribe();
-  }, [customer?.proClinicId]);
+  }, [customerId]);
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
   const hn = customer?.proClinicHN || '';
@@ -1006,11 +1014,11 @@ export default function CustomerDetailView({
             course={allCourses[addQtyModal.courseIndex]}
             courseIndex={addQtyModal.courseIndex}
             courseName={addQtyModal.courseName}
-            customerId={customer.proClinicId}
+            customerId={customerId}
             customerName={name}
             onClose={() => setAddQtyModal(null)}
             onDone={async () => {
-              const refreshed = await getCustomer(customer.proClinicId);
+              const refreshed = await getCustomer(customerId);
               if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
               setAddQtyModal(null);
             }}
@@ -1020,12 +1028,12 @@ export default function CustomerDetailView({
           {exchangeModal && <ExchangeModal
             course={exchangeModal.course}
             courseIndex={exchangeModal.courseIndex}
-            customerId={customer.proClinicId}
+            customerId={customerId}
             customerName={name}
             isDark={isDark}
             onClose={() => setExchangeModal(null)}
             onDone={async () => {
-              const refreshed = await getCustomer(customer.proClinicId);
+              const refreshed = await getCustomer(customerId);
               if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
               setExchangeModal(null);
             }}
@@ -1035,12 +1043,12 @@ export default function CustomerDetailView({
           {shareModal && <ShareModal
             course={shareModal.course}
             courseIndex={shareModal.courseIndex}
-            fromCustomerId={customer.proClinicId}
+            fromCustomerId={customerId}
             fromCustomerName={name}
             isDark={isDark}
             onClose={() => setShareModal(null)}
             onDone={async () => {
-              const refreshed = await getCustomer(customer.proClinicId);
+              const refreshed = await getCustomer(customerId);
               if (refreshed && onCustomerUpdated) onCustomerUpdated(refreshed);
               setShareModal(null);
             }}
@@ -1513,7 +1521,15 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
       import('../../lib/backendClient.js').then(m => m.getAllCustomers()),
       // Phase 14.10-tris — listAllSellers (be_*)
       listAllSellers(),
-    ]).then(([c, s]) => { setCustomers(c.filter(c => c.proClinicId !== fromCustomerId)); setStaff(s); setLoading(false); }).catch(() => setLoading(false));
+    ]).then(([c, s]) => {
+      // 2026-04-28 V33 customer fallback — compare against doc.id since
+      // V33-created customers have proClinicId=null, so the prior strict
+      // proClinicId comparison would NEVER filter out the source (or
+      // accidentally filter out customers with null proClinicId).
+      setCustomers(c.filter((cust) => (cust.id || cust.proClinicId) !== fromCustomerId));
+      setStaff(s);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [fromCustomerId]);
 
   const filteredCust = customers.filter(c => {

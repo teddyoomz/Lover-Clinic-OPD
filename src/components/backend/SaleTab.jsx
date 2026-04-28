@@ -1088,7 +1088,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700'}`}>แชร์คอร์ส</span>
                           )}
                           {sale.source === 'treatment' && (
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD Card</span>
                           )}
                           {sale.source === 'addRemaining' && (
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
