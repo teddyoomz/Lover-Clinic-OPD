@@ -64,6 +64,31 @@ Then admin endpoint `/api/admin/cleanup-phantom-branch` (Phase 15.7-novies) exec
 
 **Phase 15 = COMPLETE.** Ready for Phase 16 (Polish & Final) OR pre-launch H-bis cleanup, whichever user picks first.
 
+### Session 2026-04-29 (session 29 cont'd) — Phase 16.5 Remaining Course tab shipped (commit `6aae9c3`)
+
+User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/order in parallel. Shipped 16.5 first via brainstorming → ExitPlanMode → TDD.
+
+**Architecture**:
+- Derived data strategy (no new collection — flatten `be_customers[].courses[]` client-side)
+- Thai status enum: `กำลังใช้งาน` / `ใช้หมดแล้ว` / `คืนเงิน` / `ยกเลิก` (matches existing `courseExchange.js` convention)
+- Practical 8-col table + practical filter set (search + status + course-type + has-remaining toggle + BranchContext)
+- 3 single-purpose modals (Cancel/Refund/Exchange) — first UI surface for `refundCustomerCourse` + `exchangeCourseProduct` (existed in backend since V32-tris-bis but no UI) + NEW `cancelCustomerCourse` (16.5 added)
+- All modals: try/catch + error banner (V31 anti-silent-swallow)
+
+**Files** (12 new + 4 modified):
+- NEW: `src/lib/remainingCourseUtils.js` · 3 modals · `RemainingCourseTab.jsx` · `RemainingCourseRow.jsx` · 5 test files · spec doc
+- MOD: `src/lib/courseExchange.js` (applyCourseCancel + audit-kind:cancel) · `backendClient.js` (cancelCustomerCourse runTransaction) · `navConfig.js` (Clock icon entry) · `BackendDashboard.jsx` (lazy import + render case + REPORT_LABELS)
+
+**Tests**: 3312 → 3424 (+112). Pass: utils 34 / cancel 18 / modals 15 / flow-simulate 16 / source-grep 29.
+
+**Build**: clean — `RemainingCourseTab-BpWYKFHD.js` 26.65 kB chunk; total bundle gzip increase ~9 kB.
+
+**Browser preview verified**: navigated to `/?backend=1&tab=reports-remaining-course` → tab renders with title "คอร์สคงเหลือ" + 4 filter controls + 4 status options (กำลังใช้งาน/ใช้หมดแล้ว/คืนเงิน/ยกเลิก) + course-type filter + has-remaining toggle + Export CSV button + empty state ("ยังไม่มีคอร์สคงเหลือ"). No new console errors.
+
+**Spec**: `docs/superpowers/specs/2026-04-29-phase16-5-remaining-course-design.md`. Master Phase 16 plan: `~/.claude/projects/F--LoverClinic-app/memory/project_phase16_plan.md`.
+
+**Outstanding**: deploy auth (V18 — never carries forward). Then 16.3 System Settings → 16.2 Clinic Report → 16.1 Smart Audience → 16.4 Order intel decision → 16.8 /audit-all.
+
 ### Session 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits)
 
 User shipped 9 directives across the day → Phase 15.7 family (base → novies, 9 sub-phases). Auto-mode session shipped 12 commits. **2927 → 3312 tests · 24 cumulative commits unpushed-to-prod**.

@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-29 (session 29) — V15 #7 SHIPPED + phantom branch cleaned + all carry-overs cleared"
-status: "Production = cf54400 LIVE (V15 #7). Phantom branch BR-...ae97f911 purged. Live-QA all passed. Carry-overs all resolved."
-current_focus: "Phase 15 closed; ready to start Phase 16 (Polish & Final) OR pre-launch H-bis cleanup"
+updated_at: "2026-04-29 (session 29) — Phase 16.5 Remaining Course tab SHIPPED + pushed (1 commit unpushed-to-prod)"
+status: "Production = cf54400 LIVE. master = 6aae9c3 (Phase 16.5 ready for deploy). 3424/3424 tests pass."
+current_focus: "Phase 16.5 done; awaiting deploy auth OR proceed to 16.3 System Settings (next sub-phase)"
 branch: "master"
-last_commit: "cf54400"
+last_commit: "6aae9c3"
 production_commit: "cf54400"
 production_url: "https://lover-clinic-app.vercel.app"
-tests: 3312
+tests: 3424
 firestore_rules_version: 20
 storage_rules_version: 2
 ---
@@ -25,7 +25,17 @@ storage_rules_version: 2
 - Memory lock: `feedback_background_task_completion.md` — don't poll log files with grep when a Bash command runs in background; the task-notification signal is authoritative
 
 ## Next action
-**Phase 15 closed — ready for Phase 16 OR pre-launch cleanup, whichever user picks.**
+**Phase 16.5 shipped (commit `6aae9c3`).** Awaiting deploy auth OR continue to 16.3 System Settings (recommended next sub-phase).
+
+## Phase 16.5 Remaining Course tab — shipped 2026-04-29
+- `src/lib/remainingCourseUtils.js` (5 pure helpers + Thai status enum)
+- `src/lib/courseExchange.js` extended — `applyCourseCancel` + `buildChangeAuditEntry kind:'cancel'`
+- `src/lib/backendClient.js` — NEW `cancelCustomerCourse` (runTransaction; mirrors refund)
+- 3 single-purpose modals: Cancel/Refund/Exchange
+- Tab + Row in `src/components/backend/reports/RemainingCourse{Tab,Row}.jsx`
+- nav entry + dashboard wiring + REPORT_LABELS update
+- 5 test files (+112 tests: utils 34 / cancel 18 / modals 15 / flow-simulate 16 / source-grep 29)
+- Browser preview ✓ (tab renders, 4 status options, empty state, export btn)
 
 ## Live-QA verification (all passed 2026-04-29)
 - Assistants picker · advisor dropdown · location lock · customer-name new-tab · appt delete · calendar column-width · negative-stock repay · default-branch auto-pick · self-created treatment refresh — **9/9 ✓**
