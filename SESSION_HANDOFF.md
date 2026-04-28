@@ -7,20 +7,50 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 session 22+23 — central tab wiring + tier-scoped product filter (2 commits, NOT deployed)
+- **Date last updated**: 2026-04-28 V15 #3 combined deploy LIVE (V34 + s22 + s23 shipped)
 - **Branch**: `master`
-- **Last commit**: `93c71d6 fix(stock): s23 — tier-scoped product filter in AdjustCreateForm`
-- **Test count**: **2275** focused (+61 since s21: 2214 → 2275)
+- **Last commit**: `da15849 fix(stock): V34 — ADJUST_ADD silent qty-cap on full-capacity batch`
+- **Test count**: **2389** focused (+114 since s21: 2275 → 2389; +73 from V34 + 41 V33.11 helper tests + 12 prefix drift catcher)
 - **Build**: clean
-- **Deploy state**: ⏳ **PRODUCTION = `e46eda2`** (V15 #2 LIVE) · master 2 commits ahead, awaiting V15 #3 combined deploy
-  - Vercel (s21): `lover-clinic-gbhf7r5hv-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 55s deploy
-  - Firestore rules: released to `cloud.firestore` (no rule changes in s21; redeployed clean)
-  - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 ✓
-  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 200
-- **Rule B probe list extended permanently**: 6 positive + 4 negative (added `be_central_stock_orders` negative on this deploy)
+- **Deploy state**: ✅ **PRODUCTION = `da15849`** (V15 #3 LIVE, 2026-04-28 ~12:42) · master = production
+  - Vercel (V15 #3): `lover-clinic-9cama0xir-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 44s deploy
+  - Firestore rules: released to `cloud.firestore` (no rule changes in this deploy; idempotent re-publish)
+  - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 = 200 + 2/2 strip = 200
+  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 401 (LINE sig check on empty body — expected)
+- **Rule B probe list**: 6 positive + 4 negative (be_central_stock_orders + be_customer_link_tokens + be_link_requests + be_link_attempts)
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
-- **SCHEMA_VERSION**: 17 (this deploy: central stock orders + 4 cross-branch movement field additions)
+- **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-28 V34 + V15 #3 deploy (auto-mode, "deploy" authorized)
+
+**V34 — ADJUST_ADD silent qty-cap bug fix** (production-affecting since stock system shipped):
+User reported "ทดลองปรับสต็อคคลังกลาง ผ่านทุกปุ่ม แล้วยอดไม่เปลี่ยน". Phase 0 preview_eval diagnostic confirmed `reverseQtyNumeric({total:10, remaining:10}, 20)` → `{remaining:10, total:10}` silent cap. createStockAdjustment used reverseQtyNumeric (cap-at-total semantic for refunds) for type='add' adjustments. Fix: NEW `adjustAddQtyNumeric(qty, amount)` helper with soft-cap math (`{remaining: remaining + amt, total: max(total, remaining + amt)}`); reverseQtyNumeric semantics preserved for `_reverseOneMovement` refund paths.
+
+**Phase 2 systemic audit** (12 mutation sites read):
+- 2 P0 atomicity fixes shipped: `cancelStockOrder` + `updateStockOrder` cost cascade migrated to `writeBatch`
+- 4 P0 + 4 P1 deferred with `AUDIT-V34` source comments (deductStockForSale partial-rollback, updateStockTransferStatus CAS+external-work, receiveCentralStockOrder concurrent-receive, etc.)
+
+**Phase 3-5 tooling**:
+- 61 invariant tests in `tests/v34-stock-invariants.test.js` + shared `tests/helpers/stockInvariants.js`
+- audit-stock-flow upgraded S1-S15 → S1-S20 (per-tier conservation, time-travel, concurrent-tx, listener alignment, test-prefix)
+- V33.11 stock-test prefix discipline (`tests/helpers/testStockBranch.js` + 12-test drift catcher)
+
+**Phase 6**:
+- V34 entry compact in `00-session-start.md` § 2 + verbose in `v-log-archive.md`
+- Rule I item (b) hardened for stock paths (preview_eval round-trip NON-NEGOTIABLE for stock mutations)
+
+**Production damage AVERTED by deploy** — every hour the V34 fix wasn't live = admin clinic potentially silent-no-op adjusting full-capacity batches. 4 known historical artifacts on chanel batch (3 user tests yesterday + 1 V34 verify) recoverable via V35 replay-with-new-logic migration script.
+
+Detail: `.claude/rules/v-log-archive.md` V34 entry + `tests/v34-*.test.js` files.
+
+### Session 2026-04-28 session 22+23 (s22+s23 shipped to V15 #3)
+
+User reported 5 issues post-s21. s22 wired StockBalancePanel "ปรับ"/"+" buttons → CentralStockTab navigates with prefillProduct. NEW `CentralOrderDetailModal.jsx`. Both Order panels: clickable rows + inline product summary. s23 added tier-scoped product filter in AdjustCreateForm — central adjust dropdown shows ONLY products with batches at current tier (was leaking branch products → user confusion).
+
+Tests: +61 (39 s22 + 22 s23). All in V15 #3 deploy.
+
+Detail: `.agents/sessions/2026-04-28-session22-23-central-tab-wiring-and-tier-filter.md`
 
 ### Session 2026-04-28 session 22+23 (2 commits, NOT deployed) — Central tab wiring + tier-scoped product filter
 
