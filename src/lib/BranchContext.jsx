@@ -207,9 +207,20 @@ export function mergeBranchIntoClinic(clinicSettings, branch) {
     if (typeof branchVal === 'string' && branchVal.trim()) return branchVal;
     return csVal;
   };
+  // 2026-04-28 user directive: clinic name on receipts/quotations should be
+  // "<brand> <branch>" (e.g. "Lover Clinic นครราชสีมา") so customer sees
+  // both the brand AND the specific branch they bought from. cs.clinicName
+  // is the brand (from clinic_settings/main); branch.name is the branch
+  // identifier (e.g. "นครราชสีมา"). Concat with single space.
+  const brandName = (typeof cs.clinicName === 'string' && cs.clinicName.trim()) ? cs.clinicName.trim() : '';
+  const branchName = (typeof branch.name === 'string' && branch.name.trim()) ? branch.name.trim() : '';
+  let effectiveClinicName;
+  if (brandName && branchName) effectiveClinicName = `${brandName} ${branchName}`;
+  else if (branchName) effectiveClinicName = branchName;
+  else effectiveClinicName = brandName || cs.clinicName;
   return {
     ...cs,
-    clinicName: pick(branch.name, cs.clinicName),
+    clinicName: effectiveClinicName,
     clinicNameEn: pick(branch.nameEn, cs.clinicNameEn),
     address: pick(branch.address, cs.address),
     phone: pick(branch.phone, cs.phone),

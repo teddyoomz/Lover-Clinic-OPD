@@ -82,27 +82,90 @@ function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { mi
 
 // 2026-04-28: flatten sale.items (grouped shape: { promotions, courses,
 // products, medications }) into a flat list for inline summary in the
-// sales-list table. Each entry has `productName` + `qty` so the existing
-// `formatOrderItemsSummary` helper (Phase 15.4 s22) can render
-// "Botox x10 · Filler x2 · +N รายการ".
+// sales-list table. Each entry has `productName` + `qty` + `category`
+// so the redesigned cell can show colored category indicators per row.
 function flattenSaleItemsForSummary(sale) {
   const items = sale?.items;
   if (!items) return [];
   if (Array.isArray(items)) {
+    // Legacy flat shape — no category info; inherit from itemType field
     return items.map((it) => ({
       productName: it?.name || it?.productName || '',
       qty: it?.qty,
+      category: it?.itemType === 'course' ? 'course'
+        : it?.itemType === 'promotion' ? 'promotion'
+        : it?.itemType === 'medication' ? 'medication'
+        : 'product',
     }));
   }
   const out = [];
-  for (const arr of [items.promotions, items.courses, items.products, items.medications]) {
+  const groups = [
+    { arr: items.promotions, category: 'promotion' },
+    { arr: items.courses, category: 'course' },
+    { arr: items.products, category: 'product' },
+    { arr: items.medications, category: 'medication' },
+  ];
+  for (const { arr, category } of groups) {
     if (Array.isArray(arr)) {
       for (const x of arr) {
-        if (x) out.push({ productName: x.name || x.productName || '', qty: x.qty });
+        if (x) out.push({
+          productName: x.name || x.productName || '',
+          qty: x.qty,
+          category,
+        });
       }
     }
   }
   return out;
+}
+
+// 2026-04-28: category visual config — colored 6px dot + Thai short label
+// for SaleTab list inline display. Keeps the row scannable: admin can
+// instantly tell course-vs-product-vs-medication-vs-promotion mix at
+// a glance without reading every line.
+const CATEGORY_VISUAL = {
+  promotion: { dotClass: 'bg-violet-500', label: 'โปรฯ', textColor: 'text-violet-300' },
+  course: { dotClass: 'bg-rose-500', label: 'คอร์ส', textColor: 'text-rose-300' },
+  product: { dotClass: 'bg-emerald-500', label: 'สินค้า', textColor: 'text-emerald-300' },
+  medication: { dotClass: 'bg-amber-500', label: 'ยา', textColor: 'text-amber-300' },
+};
+
+// Compact inline cell renderer for the sales-list "รายการขาย" column.
+// Shows up to 2 items with colored category dots; collapses overflow into
+// "+N รายการ" tag. Title attribute exposes the FULL list for hover tooltip.
+function SaleItemsCell({ items, isDark }) {
+  const safe = Array.isArray(items) ? items.filter((i) => i?.productName) : [];
+  if (safe.length === 0) {
+    return <span className="text-[var(--tx-muted)] italic text-xs">—</span>;
+  }
+  const TOP = 2;
+  const shown = safe.slice(0, TOP);
+  const hidden = safe.length - shown.length;
+  // Tooltip: "<category-label> · <name> ×<qty>" lines, all items
+  const tooltip = safe.map((it) => {
+    const c = CATEGORY_VISUAL[it.category] || CATEGORY_VISUAL.product;
+    const qtyStr = Number(it.qty) > 0 ? ` ×${it.qty}` : '';
+    return `${c.label} · ${it.productName}${qtyStr}`;
+  }).join('\n');
+  return (
+    <div className="space-y-0.5 max-w-[260px]" title={tooltip}>
+      {shown.map((it, i) => {
+        const cfg = CATEGORY_VISUAL[it.category] || CATEGORY_VISUAL.product;
+        const qtyStr = Number(it.qty) > 0 ? ` ×${it.qty}` : '';
+        return (
+          <div key={i} className="flex items-center gap-1.5 text-xs leading-tight">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dotClass}`} aria-hidden />
+            <span className="truncate text-[var(--tx-secondary)]">{it.productName}<span className="text-[var(--tx-muted)] font-mono">{qtyStr}</span></span>
+          </div>
+        );
+      })}
+      {hidden > 0 && (
+        <div className={`text-[10px] font-bold pl-3 ${isDark ? 'text-violet-400' : 'text-violet-700'}`}>
+          +{hidden} รายการ
+        </div>
+      )}
+    </div>
+  );
 }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
@@ -1004,13 +1067,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         {sale.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{sale.customerHN}</span>}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
-                      {/* 2026-04-28: รายการขาย column — inline summary so admin
-                          can scan items without opening detail modal. Phase
-                          15.4 s22 helper. Truncate at md screen + max 3 items. */}
-                      <td className="px-3 py-2 text-[var(--tx-secondary)] text-xs max-w-[260px]">
-                        <div className="truncate" title={formatOrderItemsSummary(flattenSaleItemsForSummary(sale), { max: 99 })}>
-                          {formatOrderItemsSummary(flattenSaleItemsForSummary(sale), { max: 3 }) || <span className="text-[var(--tx-muted)] italic">—</span>}
-                        </div>
+                      {/* 2026-04-28 redesign: รายการขาย column — colored
+                          category dots + compact stack + +N counter +
+                          full-list tooltip on hover. Replaced the prior
+                          plain-text summary which was hard to scan
+                          (user-reported "ลายตาและอ่านยากมาก"). */}
+                      <td className="px-3 py-2">
+                        <SaleItemsCell items={flattenSaleItemsForSummary(sale)} isDark={isDark} />
                       </td>
                       {/* 2026-04-28: yodroum column now ALWAYS shows amount;
                           source badge appears INLINE next to amount when set

@@ -111,12 +111,11 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="text-[11px] tracking-[0.3em] uppercase text-neutral-500 mb-1">ใบเสนอราคา</div>
+              {/* 2026-04-28: clinic name = "<brand> <branch>" via
+                  mergeBranchIntoClinic. clinicNameEn subtitle removed. */}
               <div className="text-3xl font-black leading-tight" style={{ color: accent }}>
                 {clinic.clinicName || 'LoverClinic'}
               </div>
-              {clinic.clinicNameEn && (
-                <div className="text-xs text-neutral-600 mt-0.5 italic">{clinic.clinicNameEn}</div>
-              )}
               {/* 2026-04-28 polish: clinic contact block — address on its own
                   line + phone/taxId on a single inline row separated by a
                   bullet for visual rhythm. Mirrors SalePrintView header. */}

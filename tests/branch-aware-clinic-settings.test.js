@@ -32,14 +32,37 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
   });
 
   it('A.2 branch fields override clinicSettings (name/address/phone/taxId)', () => {
-    const cs = { clinicName: 'Global', address: 'Global address', phone: '02-1', taxId: 'TAX-1', accentColor: '#dc2626' };
-    const branch = { id: 'BR-1', name: 'Branch A', address: 'BA address', phone: '02-2', taxId: 'TAX-2', nameEn: 'Branch A EN' };
+    const cs = { clinicName: 'Lover Clinic', address: 'Global address', phone: '02-1', taxId: 'TAX-1', accentColor: '#dc2626' };
+    const branch = { id: 'BR-1', name: 'นครราชสีมา', address: 'BA address', phone: '02-2', taxId: 'TAX-2', nameEn: 'Korat' };
     const out = mergeBranchIntoClinic(cs, branch);
-    expect(out.clinicName).toBe('Branch A');
-    expect(out.clinicNameEn).toBe('Branch A EN');
+    // 2026-04-28: clinicName CONCATS as "<brand> <branch>" (user directive)
+    expect(out.clinicName).toBe('Lover Clinic นครราชสีมา');
+    expect(out.clinicNameEn).toBe('Korat');
     expect(out.address).toBe('BA address');
     expect(out.phone).toBe('02-2');
     expect(out.taxId).toBe('TAX-2');
+  });
+
+  it('A.2-bis clinicName concat — brand-only when no branch.name', () => {
+    const cs = { clinicName: 'Lover Clinic' };
+    const branch = { id: 'BR-1', address: 'A' };
+    expect(mergeBranchIntoClinic(cs, branch).clinicName).toBe('Lover Clinic');
+  });
+
+  it('A.2-tris clinicName concat — branch-only when no brand', () => {
+    const cs = {};
+    const branch = { name: 'นครราชสีมา' };
+    expect(mergeBranchIntoClinic(cs, branch).clinicName).toBe('นครราชสีมา');
+  });
+
+  it('A.2-quater clinicName concat — single space separator', () => {
+    const cs = { clinicName: 'Lover Clinic' };
+    const branch = { name: 'นครราชสีมา' };
+    expect(mergeBranchIntoClinic(cs, branch).clinicName).toBe('Lover Clinic นครราชสีมา');
+    // Whitespace stripped before concat
+    const cs2 = { clinicName: '  Lover Clinic  ' };
+    const branch2 = { name: '  นครราชสีมา  ' };
+    expect(mergeBranchIntoClinic(cs2, branch2).clinicName).toBe('Lover Clinic นครราชสีมา');
   });
 
   it('A.3 brand assets (accentColor / logo) keep coming from clinicSettings', () => {
@@ -52,10 +75,10 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
   });
 
   it('A.4 empty branch field falls back to clinicSettings (defensive)', () => {
-    const cs = { clinicName: 'Global', address: 'Global address', phone: '02-1' };
+    const cs = { clinicName: 'Lover Clinic', address: 'Global address', phone: '02-1' };
     const branch = { name: 'Branch A', address: '', phone: '   ' }; // empty / whitespace
     const out = mergeBranchIntoClinic(cs, branch);
-    expect(out.clinicName).toBe('Branch A');
+    expect(out.clinicName).toBe('Lover Clinic Branch A');
     expect(out.address).toBe('Global address'); // empty branch → fallback
     expect(out.phone).toBe('02-1'); // whitespace branch → fallback
   });
@@ -68,12 +91,16 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
     expect(out.website).toBe('https://x.test');
   });
 
-  it('A.6 idempotent — running twice = same shape', () => {
+  it('A.6 deterministic — same raw inputs always produce same output', () => {
+    // 2026-04-28: clinicName CONCATS, so re-feeding the merged output
+    // would double-concat. Determinism is on RAW inputs (always pass the
+    // raw cs + branch to the helper, never the merged result).
     const cs = { clinicName: 'G', address: 'GA' };
     const branch = { name: 'B', address: 'BA' };
-    const once = mergeBranchIntoClinic(cs, branch);
-    const twice = mergeBranchIntoClinic(once, branch);
-    expect(twice).toEqual(once);
+    const a = mergeBranchIntoClinic(cs, branch);
+    const b = mergeBranchIntoClinic(cs, branch);
+    expect(b).toEqual(a);
+    expect(a.clinicName).toBe('G B');
   });
 });
 
@@ -116,6 +143,21 @@ describe('BAC.C — SaleTab table — รายการขาย column + amoun
     expect(saleTabSrc).toMatch(/items\.courses/);
     expect(saleTabSrc).toMatch(/items\.products/);
     expect(saleTabSrc).toMatch(/items\.medications/);
+  });
+
+  it('C.3-bis รายการขาย uses NEW SaleItemsCell component (redesign)', () => {
+    // 2026-04-28: redesigned cell — colored category dots + compact stack +
+    // +N counter + tooltip. Replaces plain-text formatOrderItemsSummary
+    // output (user reported "ลายตาและอ่านยากมาก").
+    expect(saleTabSrc).toMatch(/function SaleItemsCell\(/);
+    expect(saleTabSrc).toMatch(/<SaleItemsCell items=\{flattenSaleItemsForSummary/);
+    // Category visual config exists
+    expect(saleTabSrc).toMatch(/CATEGORY_VISUAL\s*=\s*\{[\s\S]+?promotion[\s\S]+?course[\s\S]+?product[\s\S]+?medication/);
+    // Helper now returns category per item
+    expect(saleTabSrc).toMatch(/category:\s*['"]promotion['"]/);
+    expect(saleTabSrc).toMatch(/category:\s*['"]course['"]/);
+    expect(saleTabSrc).toMatch(/category:\s*['"]product['"]/);
+    expect(saleTabSrc).toMatch(/category:\s*['"]medication['"]/);
   });
 
   it('C.4 ยอดรวม cell shows amount AND badge together (no XOR)', () => {
