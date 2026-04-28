@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-04-28 (post V15 #3 deploy — V34 + s22 + s23 LIVE; Phase 15.5 next)"
-status: "Production = da15849 LIVE (V15 #3). V34 ADJUST_ADD silent qty-cap fix + s22/s23 central tab UX fixes shipped. Master = production. Awaiting Phase 15.5A+B implementation."
-current_focus: "Phase 15.5A — ActorPicker branchIds[] filter; Phase 15.5B — withdrawal approval admin endpoint"
+updated_at: "2026-04-28 EOD — Phase 15.5 complete (4 features) + audit S21-S25 + coverage spot-check; awaiting V15 #4 deploy auth"
+status: "Production = da15849 LIVE (V15 #3). Master = ac75ad0 with 4 commits unpushed-to-prod (15.5A + 15.5B + Item1+2 + audit)."
+current_focus: "Awaiting user 'deploy' auth for V15 #4 combined deploy"
 branch: "master"
-last_commit: "da15849"
-tests: 2389
+last_commit: "ac75ad0"
+tests: 2527
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "da15849"
 firestore_rules_version: 19
@@ -14,38 +14,21 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `da15849` · production = `da15849` LIVE (V15 #3, deployed 2026-04-28 ~12:42)
-- **2389/2389** focused vitest pass · build clean
+- master = `ac75ad0` · production = `da15849` (V15 #3 LIVE) · 4 commits unpushed-to-prod
+- **2527/2527** focused vitest pass · build clean
 - Working tree clean
 
-## V15 #3 deploy summary (just completed)
-- **Vercel**: `lover-clinic-9cama0xir-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` (44s deploy)
-- **Firestore rules**: released to `cloud.firestore` (no rule changes; idempotent re-publish)
-- **Pre-probe**: 6/6 positive = 200, 4/4 negative = 403 ✓ (incl. be_central_stock_orders, be_customer_link_tokens, be_link_requests, be_link_attempts negative)
-- **Post-probe**: same 6/6 + 4/4 ✓
-- **Cleanup**: pc_appointments probe docs deleted (4/4 = 200), clinic_settings probe field stripped (2/2 = 200)
-- **HTTP smoke**: root 200, /admin 200, /api/webhook/line 401 (LINE sig check on empty body — expected, not 5xx)
-
-## Production code shipped this deploy
-- `da15849` V34 — `adjustAddQtyNumeric` helper (soft-cap math) fixes ADJUST_ADD silent qty-cap on full-capacity batches; cancelStockOrder + updateStockOrder cost cascade migrated to writeBatch (atomicity); audit-stock-flow upgraded S1-S15 → S1-S20; V33.11 stock-test prefix discipline; 4 AUDIT-V34 deferred concurrency flags for V35
-- `93c71d6` s23 — central adjust dropdown tier-scoped product filter
-- `25ed70a` s22 — central tab "ปรับ"/"+" buttons wired + CentralOrderDetailModal + inline product summary
+## What this session shipped (2026-04-28)
+4 commits ([detail](.agents/sessions/2026-04-28-session24-phase15-5-bundle.md))
+- `d037cf0` Phase 15.5A ActorPicker branchIds[] filter (5 stock-mutation forms; pure helper `mergeSellersWithBranchFilter`; 28 tests) + Phase 15.5B Withdrawal approval admin endpoint (`/api/admin/stock-withdrawal-approve` + client wrapper + WithdrawalDetailModal admin UI; 51 tests)
+- `89c5607` Item 1 per-product balance warnings (alertDayBeforeExpire/QtyBeforeOutOfStock/QtyBeforeMaxStock drive StockBalancePanel badges + filters; hardcoded ≤30/≤5 removed; 38 tests) + Item 2 unit dropdown enrichment (ProductFormModal datalist merges master + existing product units, Thai-locale sort; 21 tests)
+- `ac75ad0` audit-stock-flow S1-S20 → S1-S25 (Phase 15.5 pattern lock) + Phase H coverage spot-check (admin endpoint 89.47% lines / client 100% / pure helpers 85-100%; UI render gaps documented as acceptable)
+- Test count 2417 → 2527 (+110)
 
 ## Next action
-**Phase 15.5 implementation**:
-- **A**: ActorPicker `branchIds[]` filter — staff/doctor dropdown filtered by current branch (legacy fallback for empty branchIds[])
-- **B**: Withdrawal approval admin endpoint — `/api/admin/stock-withdrawal-approve` (POST, Bearer ID-token, admin-gated, calls updateStockWithdrawalStatus 0→1 or 0→3)
-
-Phase 15.5 ships as V15 #4 deploy (awaits new "deploy" auth per V18).
+**Awaiting user "deploy" authorization** for V15 #4 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe).
 
 ## Outstanding user-triggered actions (NOT auto-run)
-- Live QA on production V15 #3:
-  - V34 fix: ลอง ADJUST_ADD บน batch ที่ remaining===total → ต้องเห็น qty เพิ่มจริง
-  - s22/s23: central tab "ปรับ"/"+" navigate, dropdown filter, vendor PO detail modal
+- V15 #4 deploy auth (per V18, doesn't roll over). 4 commits ready: 248416e + d037cf0 + 89c5607 + ac75ad0
+- Live QA after deploy: 4 features (15.5A actor filter, 15.5B approve/reject buttons, Item 1 per-product warnings on balance panel, Item 2 unit dropdown shows existing product units)
 - Carry-over: admin LineSettings creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix
-- After Phase 15.5: V15 #4 deploy auth
-
-## V34 historical artifacts in production (recoverable via V35 migration)
-- 4 zero-effect ADJUST_ADD movements on chanel batch (3 user yesterday + 1 V34 verify earlier today)
-- Movement log shows +N entries but batch.qty unchanged
-- Recoverable via replay-with-new-logic migration script (deferred to V35)

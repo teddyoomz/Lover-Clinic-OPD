@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 V15 #3 combined deploy LIVE (V34 + s22 + s23 shipped)
+- **Date last updated**: 2026-04-28 EOD — Phase 15.5 bundle (4 features) + audit S21-S25 + coverage spot-check
 - **Branch**: `master`
-- **Last commit**: `da15849 fix(stock): V34 — ADJUST_ADD silent qty-cap on full-capacity batch`
-- **Test count**: **2389** focused (+114 since s21: 2275 → 2389; +73 from V34 + 41 V33.11 helper tests + 12 prefix drift catcher)
+- **Last commit**: `ac75ad0 chore(audit): Phase G + H — audit-stock-flow S21-S25 + coverage spot-check`
+- **Test count**: **2527** focused (+138 this session: 28 + 51 + 38 + 21)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `da15849`** (V15 #3 LIVE, 2026-04-28 ~12:42) · master = production
+- **Deploy state**: ⏳ **PRODUCTION = `da15849`** (V15 #3 LIVE) · master 4 commits ahead, awaiting V15 #4 combined deploy
   - Vercel (V15 #3): `lover-clinic-9cama0xir-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` — 44s deploy
   - Firestore rules: released to `cloud.firestore` (no rule changes in this deploy; idempotent re-publish)
   - Probe-Deploy-Probe: pre 6/6 + 4/4 negative ✓; post 6/6 + 4/4 negative ✓; cleanup 4/4 = 200 + 2/2 strip = 200
@@ -21,6 +21,28 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-28 EOD — Phase 15.5 bundle (4 features) + audit S21-S25 + coverage spot-check (NOT deployed)
+
+User chained 4 directives across the session: (1) ลุย Phase 15.5 (15.5A actor filter + 15.5B withdrawal approval); (2) per-product balance warnings; (3) ProductFormModal unit dropdown enrichment; (4) audit + coverage. All shipped + pushed; awaiting V15 #4 deploy auth.
+
+**4 commits**:
+- `d037cf0` 15.5A ActorPicker branchIds[] filter on 5 stock-mutation panels + pure helper `mergeSellersWithBranchFilter` (28 tests). 15.5B `/api/admin/stock-withdrawal-approve.js` admin endpoint + `stockWithdrawalApprovalClient.js` + WithdrawalDetailModal approve/reject UI with reason modal (51 tests). Soft-approve (status STAYS at 0) + hard-reject (status 0→3) + type=15/16 audit movements + atomic db.batch + idempotency.
+- `89c5607` Item 1 per-product balance warnings (alertDayBeforeExpire / QtyBeforeOutOfStock / QtyBeforeMaxStock — already in productValidation schema, now drive StockBalancePanel via productThresholdMap; 3 helpers + 4 row badges + 3 filter checkboxes; hardcoded ≤30/≤5 thresholds REMOVED; 38 tests). Item 2 ProductFormModal unit dropdown merges master + existing product units (deduped + Thai-locale sort + non-fatal listProducts catch; 21 tests).
+- `ac75ad0` audit-stock-flow S1-S20 → S1-S25 (Phase 15.5 patterns: per-product warnings + anti-hardcoded + ActorPicker filter + withdrawal approval contract + dropdown enrichment) + audit-all tier-1 line update + Phase H coverage spot-check via @vitest/coverage-v8.
+
+**Tests**: 2389 → 2527 (+138). Build clean.
+
+**Coverage spot-check** (Phase 15.5 files):
+- api/admin/stock-withdrawal-approve.js: 89.47% lines / 100% funcs ✓
+- src/lib/stockWithdrawalApprovalClient.js: 100% / 100% ✓
+- src/lib/productValidation.js: 91.95% lines / 100% funcs ✓
+- tests/helpers/{stockInvariants,testStockBranch}.js: 85-95% ✓
+- UI components (StockBalancePanel + ProductFormModal + WithdrawalDetailModal + 5 stock panels): 0-5% (source-grep tests cover structural correctness — 138 grep assertions across the 4 features). Documented as acceptable; future RTL render tests would close ~150 LOC.
+
+All P0 paths covered. No deploy blocker.
+
+Detail: `.agents/sessions/2026-04-28-session24-phase15-5-bundle.md`
 
 ### Session 2026-04-28 V34 + V15 #3 deploy (auto-mode, "deploy" authorized)
 
@@ -683,32 +705,35 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 s22+s23 EOD.
+Resume LoverClinic — continue from 2026-04-28 EOD (Phase 15.5 bundle complete; V15 #4 awaiting deploy auth).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=93c71d6, prod=e46eda2 — 2 commits unpushed)
-3. .agents/active.md (2275 tests pass; s22+s23 NOT deployed)
+2. SESSION_HANDOFF.md (master=ac75ad0, prod=da15849 — 4 commits unpushed)
+3. .agents/active.md (2527 tests pass; Phase 15.5 NOT deployed)
 4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-28-session22-23-central-tab-wiring-and-tier-filter.md
+5. .agents/sessions/2026-04-28-session24-phase15-5-bundle.md
 
-Status: master=93c71d6, 2275/2275 tests pass, prod=e46eda2 LIVE.
-2 commits ready for V15 #3: s22 (central tab wiring + Order detail UX) +
-s23 (tier-scoped product filter in AdjustCreateForm).
+Status: master=ac75ad0, 2527/2527 tests pass, prod=da15849 LIVE (V15 #3).
+4 commits ready for V15 #4 combined deploy:
+- 248416e docs(V15 #3 handoff)
+- d037cf0 Phase 15.5A ActorPicker filter + 15.5B withdrawal approval endpoint
+- 89c5607 Item 1 per-product warnings + Item 2 unit dropdown enrichment
+- ac75ad0 audit-stock-flow S21-S25 + coverage spot-check
 
-Next: V15 #3 combined deploy when user authorizes (Probe-Deploy-Probe required
-per Rule B; rules version unchanged in s22/s23 but probe still mandatory).
+Next: V15 #4 combined deploy when user authorizes (vercel + firestore:rules
+parallel; Probe-Deploy-Probe Rule B 6+/4-; rules unchanged but probe mandatory).
 
 After deploy live QA:
-- Central adjust: dropdown shows ONLY products in คลังกลาง (not branch products)
-- Empty central → CTA "สร้าง Order นำเข้าก่อน"
-- Balance row "ปรับ"/"+" buttons in central tab now navigate correctly
-- Vendor PO list (both tiers): row-click → detail modal + inline product summary
+- 15.5A: ActorPicker dropdown filters by current branch in 5 stock-mutation forms
+- 15.5B: WithdrawalDetailModal shows อนุมัติ/ปฏิเสธ buttons (admin only, status=0); reject opens reason modal
+- Item 1: StockBalancePanel rows show ใกล้หมดอายุ/ใกล้หมด/เกินสต็อก badges per-product threshold; 3 filter checkboxes work
+- Item 2: ProductFormModal "หน่วย" dropdown lists existing product units alongside master units
 
 Outstanding (admin tasks): LineSettingsTab creds + webhook URL · backfill
-customer IDs · TEST-/E2E- prefix.
+customer IDs · TEST-/E2E- prefix on test stock writes.
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B.
 
 /session-start
 ```
