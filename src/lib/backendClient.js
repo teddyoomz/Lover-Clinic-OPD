@@ -8129,7 +8129,21 @@ export async function getStaff(staffId) {
 
 export async function listStaff() {
   const snap = await getDocs(staffCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Phase 15.7-octies (2026-04-29) — compose `name` field at source
+  // (mirror of listDoctors Phase 15.7-bis fix). be_staff stores
+  // firstname/lastname/nickname (lowercase, ProClinic schema) but
+  // consumers (AppointmentFormModal advisor picker, ActorPicker, etc.)
+  // render `{s.name}` directly. Pre-fix s.name was undefined → empty
+  // dropdown options (user report 2026-04-29: "ที่ปรึกษา ตอนนี้บั๊ค
+  // ไม่แสดงอะไรเลย"). Source-level fix benefits every caller.
+  // Composition order mirrors mergeSellersWithBranchFilter:8245-8250.
+  const items = snap.docs.map(d => {
+    const data = d.data();
+    const parts = [data.firstname || data.firstName || '', data.lastname || data.lastName || ''].filter(Boolean);
+    const composed = parts.join(' ').trim();
+    const composedName = data.name || composed || data.nickname || data.fullName || '';
+    return { id: d.id, ...data, name: composedName };
+  });
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';

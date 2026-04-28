@@ -37,12 +37,16 @@ import {
   // Phase 14.10-tris (2026-04-26) — load doctors + staff from be_* canonical
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
   listDoctors, listStaff,
+  // Phase 15.7-octies (2026-04-29) — advisor dropdown uses listAllSellers
+  // (staff + doctors merged + branch-filtered + composed names) per user
+  // directive: "ที่ปรึกษา ... แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
+  listAllSellers,
 } from '../../lib/backendClient.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
-import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 
 // Constants — duplicated from AppointmentTab (will collapse into a shared
 // constants module in a follow-up Rule-of-3 sweep). Keep values identical.
@@ -147,7 +151,11 @@ export default function AppointmentFormModal({
 }) {
   const isDark = theme !== 'light';
   // Phase 14.7.H follow-up A — branch-aware appointment writes.
-  const { branchId: selectedBranchId } = useSelectedBranch();
+  // Phase 15.7-octies (2026-04-29) — also pull `branches` so we can render
+  // the locked location field with the human-readable branch name + load
+  // listAllSellers with the branch filter for the advisor dropdown.
+  const { branchId: selectedBranchId, branches } = useSelectedBranch();
+  const currentBranchName = resolveBranchName(selectedBranchId, branches) || (selectedBranchId === 'main' ? 'สาขาหลัก (main)' : selectedBranchId || 'สาขาหลัก');
 
   // ── Form data ──
   const [formData, setFormData] = useState(() => {
@@ -199,7 +207,12 @@ export default function AppointmentFormModal({
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [doctors, setDoctors] = useState([]);
-  const [staff, setStaff] = useState([]);
+  // Phase 15.7-octies (2026-04-29) — advisor dropdown uses merged
+  // staff + doctors filtered by branch (via listAllSellers). User
+  // directive: "แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
+  // Replaces the prior `staff` state which was raw be_staff (V33 schema
+  // missing composed `name` → empty dropdown options).
+  const [advisorOptions, setAdvisorOptions] = useState([]);
   // Phase 15.7 (2026-04-28) — REVERSED 2026-04-28-AM directive. User's
   // ACTUAL spec: "ผู้ช่วยแพทย์ (สูงสุด 5 คน) หมายความว่า ให้เอาแพทย์และ
   // ผู้ช่วยที่มีทั้งหมดมาให้เลือก แต่ select ได้แค่ 5 คน". Show ALL doctors
@@ -220,12 +233,17 @@ export default function AppointmentFormModal({
   useEffect(() => {
     // Load doctors + staff on mount (one-shot — masters change rarely).
     // Phase 14.10-tris — switched from master_data to be_* canonical.
+    // Phase 15.7-octies — advisor list now sources from listAllSellers
+    // (merged staff + doctors with branch filter + composed names).
     Promise.all([
       listDoctors().catch(() => []),
-      listStaff().catch(() => []),
-    ]).then(([d, s]) => {
+      listAllSellers({ branchId: selectedBranchId }).catch(() => []),
+    ]).then(([d, sellers]) => {
       setDoctors((d || []).filter(x => x.status !== 'พักใช้งาน'));
-      setStaff((s || []).filter(x => x.status !== 'พักใช้งาน'));
+      // listAllSellers already returns {id, name} composed shape and dedupes
+      // ids across staff + doctors. Sort alphabetically for picker UX.
+      const sorted = (sellers || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));
+      setAdvisorOptions(sorted);
     });
     // Load customers ONLY if customer is not locked (saves a heavy fetch
     // when CustomerDetailView opens this modal — the customer is already
@@ -233,7 +251,7 @@ export default function AppointmentFormModal({
     if (!lockedCustomer) {
       getAllCustomers().then(c => setCustomers(c || [])).catch(() => setCustomers([]));
     }
-  }, [lockedCustomer]);
+  }, [lockedCustomer, selectedBranchId]);
 
   // Phase 14.7.H follow-up H (2026-04-26): listenToHolidays so the modal's
   // skipHolidayCheck confirm prompt fires against the latest holiday set
@@ -371,7 +389,12 @@ export default function AppointmentFormModal({
         assistantIds: assistantIdsForSave,
         assistantNames: assistantNamesForSave,
         roomName: formData.roomName,
-        channel: formData.channel, appointmentTo: formData.appointmentTo, location: formData.location || '',
+        channel: formData.channel, appointmentTo: formData.appointmentTo,
+        // Phase 15.7-octies (2026-04-29) — location is now LOCKED to the
+        // current branch (resolved via useSelectedBranch + resolveBranchName).
+        // Falls back to formData.location for legacy edit-mode appts that
+        // already had a freeform location string (preserved on save).
+        location: currentBranchName || formData.location || '',
         expectedSales: formData.expectedSales || '', preparation: formData.preparation || '',
         customerNote: formData.customerNote || '', notes: formData.notes,
         appointmentColor: formData.appointmentColor || '',
@@ -524,10 +547,14 @@ export default function AppointmentFormModal({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ที่ปรึกษา</label>
-              <select value={formData.advisorId} onChange={e => { const s = staff.find(x => String(x.id) === e.target.value); update({ advisorId: e.target.value, advisorName: s?.name || '' }); }}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+              {/* Phase 15.7-octies (2026-04-29) — advisor dropdown shows
+                  merged พนักงาน + ผู้ช่วย at the current branch, with
+                  composed names from listAllSellers. */}
+              <select value={formData.advisorId} onChange={e => { const s = advisorOptions.find(x => String(x.id) === e.target.value); update({ advisorId: e.target.value, advisorName: s?.name || '' }); }}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500"
+                data-testid="advisor-select">
                 <option value="">ไม่ระบุ</option>
-                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {advisorOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
@@ -617,8 +644,21 @@ export default function AppointmentFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานที่นัด</label>
-              <input type="text" value={formData.location} onChange={e => update({ location: e.target.value })} placeholder="คลินิก สาขา..."
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
+              {/* Phase 15.7-octies (2026-04-29) — locked to current branch.
+                  User: "ให้ล็อคเป็นสาขาที่สร้างหรือแก้ไขนัดนั้นๆเลย".
+                  Pre-fix was a freeform input which let admin type any
+                  string (creating per-appt drift across the dataset).
+                  Now reads from useSelectedBranch() + resolveBranchName.
+                  Saved on the appt doc as `location: currentBranchName`
+                  in the build-payload step (V20 multi-branch alignment). */}
+              <div
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--bd)] text-xs text-[var(--tx-secondary)] flex items-center gap-2 cursor-not-allowed"
+                title={`ล็อคเป็นสาขาที่กำลังใช้งาน (${currentBranchName})`}
+                data-testid="appt-location-locked"
+              >
+                <span className="text-[var(--tx-muted)]">🔒</span>
+                <span className="font-bold">{currentBranchName}</span>
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ยอดขายที่คาดหวัง</label>
