@@ -593,30 +593,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
-          // Phase 14.1 (2026-04-24): exact-match assistant position + pass
-          // defaultDfGroupId so DF modal can auto-populate group on pick.
-          // Legacy data with missing/unknown position is logged (dev only) so
-          // the user can fix it in DoctorFormModal — silent-drop would hide
-          // active assistants from the picker.
-          const assistantPositionNames = ['ผู้ช่วยแพทย์'];
-          const doctorPositionNames = ['แพทย์'];
-          if (import.meta.env?.DEV) {
-            const unknown = allDoctors.filter(d => {
-              const p = String(d.position || '').trim();
-              return !doctorPositionNames.includes(p) && !assistantPositionNames.includes(p);
-            });
-            if (unknown.length) {
-              console.warn('[TreatmentForm] doctors with missing/unknown position — will not appear in assistant picker:',
-                unknown.map(d => ({ id: d.id, name: d.name, position: d.position })));
-            }
-          }
+          // Phase 15.7 (2026-04-28) — REVERSED Phase 14.1 directive. User's
+          // ACTUAL spec (post V15 #4): "ผู้ช่วยแพทย์ (สูงสุด 5 คน) หมายความว่า
+          // ให้เอาแพทย์และผู้ช่วยที่มีทั้งหมดมาให้เลือก แต่ select ได้แค่ 5 คน".
+          // Show ALL be_doctors records (any position, including missing/blank)
+          // in the assistant picker; max-5 enforced on SELECTION via the
+          // toggleAssistant prev.length>=5 gate (line ~931). Same change at
+          // AppointmentFormModal:189.
           const backendOptions = {
             doctors: allDoctors.map(d => ({
               id: d.id, name: d.name, position: d.position,
               defaultDfGroupId: d.defaultDfGroupId || '',
             })),
             assistants: allDoctors
-              .filter(d => assistantPositionNames.includes(String(d.position || '').trim()))
               .map(d => ({ id: d.id, name: d.name, defaultDfGroupId: d.defaultDfGroupId || '' })),
             // Phase 12.2b follow-up (2026-04-25): bloodTypeOptions must
             // be objects {id, name} because the render maps `b.id` +

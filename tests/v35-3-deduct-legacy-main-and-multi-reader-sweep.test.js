@@ -143,30 +143,35 @@ describe('V35.3.B — _deductOneItem now passes includeLegacyMain:true', () => {
     expect(backendClientSrc).toMatch(/hotfix.*V35\.3.*post V15 #6/i);
   });
 
-  it('B.3 throw is defensive fallback (no caller passes context other than treatment/sale)', () => {
-    // V35.3-ter (2026-04-28): user-confirmed both treatment AND sale
-    // shortfall now silent-skip. The throw remains as defensive fallback
-    // for unexpected callers that don't pass `context` opt.
+  it('B.3 throw is defensive fallback (Phase 15.7: shortfall now allows negative deduct)', () => {
+    // Phase 15.7 (2026-04-28): treatment+sale shortfall now PUSHES the
+    // overage onto a target batch (negativeOverage marker). The throw
+    // remains as defensive fallback for non-supported contexts.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
   });
 
   it('B.4 V35.3-ter: auto-init fires for BOTH treatment AND sale context', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
     // The auto-init branch now matches both contexts
     expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
   });
 
-  it('B.5 V35.3-ter: shortfall silent-skip fires for BOTH treatment AND sale context', () => {
+  it('B.5 Phase 15.7: shortfall pushes negative onto FIFO-last batch (NOT silent-skip)', () => {
+    // Phase 15.7 (2026-04-28 user-confirmed): sale + treatment paths PUSH
+    // overage onto FIFO-last batch via pickNegativeTargetBatch + emit a
+    // movement with negativeOverage:true. Replaces the prior V35.3-ter
+    // silent-skip pattern.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
     expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
-    // Friendly Thai notes preserved
-    expect(slice).toMatch(/ไม่มีสต็อคที่สาขานี้/);
-    expect(slice).toMatch(/สต็อคไม่พอที่สาขานี้/);
+    // Phase 15.7 negative-push markers
+    expect(slice).toMatch(/negativeOverage:\s*true/);
+    expect(slice).toMatch(/pickNegativeTargetBatch/);
+    expect(slice).toMatch(/สต็อคติดลบ/);
   });
 });
 

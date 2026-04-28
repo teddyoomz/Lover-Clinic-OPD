@@ -21,7 +21,11 @@ import {
   // Phase 14.7 — appointments-on-customer-detail (+ เพิ่มนัดหมาย, ดูทั้งหมด, etc.)
   getCustomerAppointments, listenToCustomerAppointments,
   createBackendAppointment, updateBackendAppointment, deleteBackendAppointment,
+  // Phase 15.7 (2026-04-28) — load doctors for the assistant-name fallback
+  // resolver (legacy appts written before assistantNames denorm).
+  listDoctors,
 } from '../../lib/backendClient.js';
+import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
@@ -163,6 +167,13 @@ export default function CustomerDetailView({
   const [apptLoading, setApptLoading] = useState(false);
   const [showApptListModal, setShowApptListModal] = useState(false);
   const [apptFormModal, setApptFormModal] = useState(null); // { mode: 'create'|'edit', appt? }
+  // Phase 15.7 (2026-04-28) — doctor lookup map for assistant-name resolver
+  // fallback (legacy appts written before assistantNames denorm).
+  const [doctorsList, setDoctorsList] = useState([]);
+  useEffect(() => {
+    listDoctors().then(setDoctorsList).catch(() => setDoctorsList([]));
+  }, []);
+  const doctorMap = useMemo(() => buildDoctorMap(doctorsList), [doctorsList]);
   // Phase 14.7.H follow-up B (2026-04-26) — appointments now flow via
   // onSnapshot listener so creating a new appointment in AppointmentTab
   // (or another tab) auto-refreshes the customer-page card without F5.
@@ -583,6 +594,7 @@ export default function CustomerDetailView({
                 <AppointmentCard
                   appt={nextUpcomingAppt}
                   isDark={isDark}
+                  doctorMap={doctorMap}
                   onEdit={() => setApptFormModal({ mode: 'edit', appt: nextUpcomingAppt })}
                   onCancel={async () => {
                     if (!confirm('ยกเลิกนัดหมายนี้?')) return;
@@ -1231,6 +1243,7 @@ export default function CustomerDetailView({
           appointments={customerAppointments}
           customer={customer}
           isDark={isDark}
+          doctorMap={doctorMap}
           onClose={() => setShowApptListModal(false)}
           onEdit={(appt) => { setShowApptListModal(false); setApptFormModal({ mode: 'edit', appt }); }}
           onCancel={async (appt) => {
@@ -1957,7 +1970,7 @@ function fmtApptTime(appt) {
  * Render one appointment row. Used both in the next-upcoming card and the
  * "view all" modal list. Action buttons: print / edit / cancel.
  */
-function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = false }) {
+function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = false, doctorMap }) {
   if (!appt) return null;
   const dateStr = appt.date ? formatThaiDateFull(appt.date) : '-';
   const time = fmtApptTime(appt);
@@ -1965,6 +1978,10 @@ function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = fals
   const branch = appt.branch || appt.branchName || '';
   const room = appt.roomName || '';
   const note = appt.notes || appt.customerNote || '';
+  // Phase 15.7 (2026-04-28) — render assistant names alongside doctor.
+  // Resolver picks denorm `assistantNames` when present, else falls back
+  // to `assistantIds` + doctorMap lookup (legacy appts).
+  const assistantNames = resolveAssistantNames(appt, doctorMap);
   return (
     <div className={`${dense ? 'p-3' : 'p-3'} rounded-lg border ${isDark ? 'border-[var(--bd)] bg-black/20' : 'border-gray-200 bg-white'}`} data-testid="customer-appt-row">
       <div className="flex items-start gap-3">
@@ -1975,6 +1992,11 @@ function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = fals
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--tx-muted)]">
             {doctor && <span className="flex items-center gap-1"><Users size={11} />{doctor}</span>}
+            {assistantNames.length > 0 && (
+              <span className="flex items-center gap-1 text-violet-300" data-testid="customer-appt-assistants">
+                + ผู้ช่วย: {assistantNames.join(', ')}
+              </span>
+            )}
             {branch && <span className="flex items-center gap-1"><MapPin size={11} />{branch}</span>}
             {room && <span>{room}</span>}
           </div>
@@ -2006,7 +2028,7 @@ function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = fals
   );
 }
 
-function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit, onCancel }) {
+function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit, onCancel, doctorMap }) {
   // Sort: upcoming-asc first, then past-desc
   const today = thaiTodayISO();
   const sorted = useMemo(() => {
@@ -2038,6 +2060,7 @@ function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit,
                 key={appt.appointmentId || appt.id}
                 appt={appt}
                 isDark={isDark}
+                doctorMap={doctorMap}
                 onEdit={() => onEdit(appt)}
                 onCancel={() => onCancel(appt)}
               />

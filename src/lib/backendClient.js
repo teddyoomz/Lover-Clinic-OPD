@@ -5213,7 +5213,10 @@ async function _deductOneItem({
   item, saleId, treatmentId, branchId, movementType, customerId, user, preferNewest, extraLink, context,
 }) {
   const { stockUtils } = await _stockLib();
-  const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric } = stockUtils;
+  // Phase 15.7 (2026-04-28) — pickNegativeTargetBatch added for negative-stock
+  // overage push (FIFO-last batch goes negative). MOVEMENT_TYPES retained for
+  // existing audit-log integration. BATCH_STATUS unchanged.
+  const { MOVEMENT_TYPES, BATCH_STATUS, batchFifoAllocate, deductQtyNumeric, pickNegativeTargetBatch } = stockUtils;
 
   if (!item.productId) {
     // Manual/one-off item — emit a skipped movement for audit continuity.
@@ -5359,53 +5362,79 @@ async function _deductOneItem({
   // already-filtered list.
   const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, preferNewest });
 
-  if (plan.shortfall > 0) {
-    // V35.3-ter (2026-04-28 — user-confirmed): silent-skip on shortfall
-    // for BOTH treatment AND sale contexts. Pre-fix sale path threw
-    // "Stock insufficient" → blocked sale save. User-confirmed sale UX:
-    // emit SKIP movement so sale can save; admin sees the SKIP row + can
-    // fix by either receiving stock at the branch OR explicitly setting
-    // `trackStock=false` on service-only products. Mirrors treatment UX.
-    // Note: shouldn't be reached for "manual" / undefined context in
-    // practice (deductStockForSale + deductStockForTreatment are the only
-    // callers and both pass explicit context). Throw retained as defensive
-    // fallback.
-    if (context === 'treatment' || context === 'sale') {
-      const allocated = item.qty - plan.shortfall;
-      const movementId = _genMovementId();
+  // Phase 15.7 (2026-04-28) — negative-stock allowance for tracked products.
+  // User directive post V15 #4: "หากเกิดการรักษา ตัดคอร์ส ขาย หรืออื่นใด ที่
+  // สินค้าหรือคอร์สหรือบริการใดๆที่สต็อคไม่พอ ปล่อยให้ตัดได้แบบปัจจุบันนี่แหละ
+  // แต่เพิ่มระบบ สต็อคติดลบ ไว้". When `plan.shortfall > 0` we now PUSH the
+  // overage onto a target batch instead of writing a silent-skip audit.
+  // Target selection (pickNegativeTargetBatch in stockUtils): FIFO-last
+  // allocation → most-recent batch at branch+product → synthetic AUTO-NEG
+  // batch on-the-fly. Allocations still drain positive batches FIFO first;
+  // only the remaining shortfall lands on the negative batch.
+  //
+  // Repay flow: admin uses adjust ADD / transfer-in / receive-import /
+  // withdrawal-receive to bring qty.remaining back ≥ 0. batchFifoAllocate
+  // continues to skip negative batches (`if (available <= 0) continue`),
+  // so future deducts won't auto-pile on the negative — they go to fresh
+  // positive lots first, repay can be deliberate via Adjust panel.
+  //
+  // Why FIFO-last (not synthetic-per-shortfall)? User-confirmed via
+  // AskUserQuestion 2026-04-28 — "FIFO-last batch goes negative". Single
+  // batch carries the negative, real before/after numbers in movement log,
+  // no schema noise from per-shortfall synthetic batches. Synthetic batch
+  // ONLY created in the genuinely-zero-batches case (Fallback C).
+
+  // Resolve negative-target batch BEFORE tx loops so we can create the
+  // synthetic in its own setDoc (no nested transactions). Only matters
+  // when shortfall > 0 AND context is treatment|sale (non-supported
+  // contexts retain the legacy throw fallback below).
+  let negativeTargetBatchId = null;
+  let negativeTargetBatch = null;
+  if (plan.shortfall > 0 && (context === 'treatment' || context === 'sale')) {
+    negativeTargetBatchId = pickNegativeTargetBatch({
+      allocations: plan.allocations,
+      branchBatches: batches,
+      branchId,
+      productId: item.productId,
+    });
+    if (!negativeTargetBatchId) {
+      // Fallback C: no batches whatsoever at branch+product. Create a
+      // synthetic AUTO-NEG batch. qty starts at {total:0, remaining:0};
+      // the negative-push tx below will drive remaining negative. Status
+      // stays 'active' so StockBalancePanel surfaces the negative row.
+      // V35 FK invariant: product must exist in be_products before any
+      // batch is written. Throws PRODUCT_NOT_FOUND if missing — admin
+      // sees the friendly error instead of a phantom synthetic batch.
+      await _assertProductExists(item.productId, 'negative-stock-synthetic-batch');
+      const newId = _genBatchId();
       const now = new Date().toISOString();
-      const reason = allocated === 0 ? 'no-batch-at-branch' : 'shortfall';
-      const note = allocated === 0
-        ? `ไม่มีสต็อคที่สาขานี้ (${branchId}) — เปิด trackStock แล้วแต่ batch ยังไม่ได้รับเข้า`
-        : `สต็อคไม่พอที่สาขานี้ (มี ${allocated} ต้องการ ${item.qty})`;
-      await setDoc(stockMovementDoc(movementId), {
-        movementId,
-        type: movementType,
-        batchId: null,
+      negativeTargetBatch = {
+        batchId: newId,
+        lot: `AUTO-NEG-${Date.now()}`,
         productId: item.productId,
         productName: item.productName,
-        qty: -item.qty,
-        before: null,
-        after: null,
+        unit: item.unit || '',
         branchId,
-        sourceDocPath: baseDocPath,
-        linkedSaleId: saleId || null,
-        linkedTreatmentId: treatmentId || null,
-        ...(extraLink || {}),
-        revenueImpact: 0,
-        costBasis: 0,
-        isPremium: item.isPremium,
-        skipped: true,
-        user,
-        note,
-        customerId: customerId || null,
+        // Phase 15.2 location-type discriminator — synthetic batches at
+        // branch tier carry locationType:'branch' so MovementLogPanel +
+        // StockBalancePanel filters work without legacy-main hacks.
+        locationType: 'branch',
+        qty: { total: 0, remaining: 0 },
+        originalCost: 0,
+        cost: 0,
+        receivedAt: now,
+        expiresAt: null,
+        status: BATCH_STATUS.ACTIVE,
+        notes: 'AUTO synthetic batch — created to absorb negative-stock overage (no prior batch existed at branch)',
         createdAt: now,
-      });
-      return { productId: item.productId, skipped: true, reason, movements: [{ movementId }] };
+        updatedAt: now,
+        // Phase 15.7 marker so admin / audits can identify auto-created
+        // negative batches separately from real lots.
+        autoNegative: true,
+      };
+      await setDoc(stockBatchDoc(newId), negativeTargetBatch);
+      negativeTargetBatchId = newId;
     }
-    throw new Error(
-      `Stock insufficient for ${item.productName} (${item.productId}): need ${item.qty}, allocated ${item.qty - plan.shortfall}, shortfall ${plan.shortfall}`
-    );
   }
 
   const committedMovements = [];
@@ -5471,6 +5500,82 @@ async function _deductOneItem({
       });
 
       committedMovements.push(txResult);
+    }
+
+    // Phase 15.7 — negative-stock push for the remaining shortfall. Runs
+    // AFTER positive allocations so the FIFO-last batch (if it was just
+    // drained to 0) is the natural carrier. tx-isolated so concurrent
+    // writers see consistent qty.
+    if (plan.shortfall > 0 && (context === 'treatment' || context === 'sale') && negativeTargetBatchId) {
+      const batchRef = stockBatchDoc(negativeTargetBatchId);
+      const movementId = _genMovementId();
+      const txResult = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(batchRef);
+        if (!snap.exists()) throw new Error(`Batch ${negativeTargetBatchId} vanished pre-negative-push`);
+        const b = snap.data();
+        // Allow status='depleted' (we may have just drained it ourselves
+        // in the loop above). Reject only cancelled/expired (real
+        // structural issues). On negative push we lift status back to
+        // 'active' so StockBalancePanel + listStockBatches({status:'active'})
+        // pick up the row — admin must SEE the debt to repay it.
+        if (b.status === BATCH_STATUS.CANCELLED || b.status === BATCH_STATUS.EXPIRED) {
+          throw new Error(`Batch ${negativeTargetBatchId} became ${b.status} pre-negative-push`);
+        }
+        const beforeRemaining = Number(b.qty?.remaining) || 0;
+        const newRemaining = beforeRemaining - plan.shortfall;
+        const newQty = { remaining: newRemaining, total: Number(b.qty?.total) || 0 };
+        // Negative remaining = active debt; only flip to DEPLETED on exact 0
+        const newStatus = newRemaining === 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
+        const now = new Date().toISOString();
+
+        tx.update(batchRef, {
+          qty: newQty,
+          status: newStatus,
+          updatedAt: now,
+        });
+
+        tx.set(stockMovementDoc(movementId), {
+          movementId,
+          type: movementType,
+          batchId: negativeTargetBatchId,
+          productId: b.productId || item.productId,
+          productName: b.productName || item.productName,
+          qty: -plan.shortfall,
+          before: beforeRemaining,
+          after: newRemaining,
+          branchId: b.branchId || branchId,
+          sourceDocPath: baseDocPath,
+          linkedSaleId: saleId || null,
+          linkedTreatmentId: treatmentId || null,
+          ...(extraLink || {}),
+          revenueImpact: item.isPremium ? 0 : null,
+          costBasis: (Number(b.originalCost) || 0) * plan.shortfall,
+          isPremium: !!item.isPremium,
+          skipped: false,
+          // Phase 15.7 marker so admin / audits / movement log can flag
+          // negative-overage entries (vs normal positive deducts).
+          negativeOverage: true,
+          user,
+          note: `สต็อคติดลบ — ตัดเกินคงเหลืออีก ${plan.shortfall} ${item.unit || ''}`.trim(),
+          customerId: customerId || null,
+          createdAt: now,
+        });
+
+        return {
+          batchId: negativeTargetBatchId,
+          qty: plan.shortfall,
+          movementId,
+          before: beforeRemaining,
+          after: newRemaining,
+          negativeOverage: true,
+        };
+      });
+      committedMovements.push(txResult);
+    } else if (plan.shortfall > 0 && context !== 'treatment' && context !== 'sale') {
+      // Non-supported context (manual/etc) — preserve legacy throw fallback.
+      throw new Error(
+        `Stock insufficient for ${item.productName} (${item.productId}): need ${item.qty}, allocated ${item.qty - plan.shortfall}, shortfall ${plan.shortfall}`
+      );
     }
   } catch (err) {
     // Compensate: reverse everything committed so far for THIS item
@@ -5755,12 +5860,42 @@ export async function analyzeStockImpact({ saleId, treatmentId } = {}) {
   const movements = await listStockMovements({ ...filters, includeReversed: false });
   const batchesSeen = new Map();
   const warnings = [];
+  // Phase 15.7 (2026-04-28) — collect per-item skip reasons for the cancel
+  // modal. Pre-fix the modal said "trackStock=false — ไม่กระทบสต็อก" as a
+  // blanket disclaimer, which is misleading because the actual reason can
+  // be (a) course-item skipStockDeduction=true (the user's "ไม่ตัดสต็อค"
+  // checkbox in the course definition) or (b) product-level trackStock=false
+  // (admin opted-out of stock tracking for a service product). User wants
+  // a precise per-reason breakdown. Each entry: {movementId, productName,
+  // reason, courseName?, qty}. reason values mirror _deductOneItem's
+  // `return { ..., reason }` shape: 'course-skip' | 'trackStock-false' |
+  // 'not-tracked' | 'no-batch-at-branch' | 'shortfall'.
+  const skipReasons = [];
   let canReverseFully = true;
   let totalQtyToRestore = 0;
 
   for (const m of movements) {
     if (m.skipped) {
-      warnings.push(`${m.productName} skipped (trackStock=false) — no batch to restore`);
+      // Read the explicit reason hint from the movement's note. _deductOneItem
+      // writes deterministic Thai notes per branch which we map back to the
+      // reason taxonomy. Fallback: 'trackStock-false' (legacy default).
+      const note = String(m.note || '');
+      let reason = 'trackStock-false';
+      if (note.includes('ไม่ตัดสต็อคในคอร์ส')) reason = 'course-skip';
+      else if (note.includes('not yet configured')) reason = 'not-tracked';
+      else if (note.includes('ไม่มีสต็อคที่สาขานี้')) reason = 'no-batch-at-branch';
+      else if (note.includes('สต็อคไม่พอที่สาขานี้')) reason = 'shortfall';
+      else if (note.includes('trackStock=false')) reason = 'trackStock-false';
+
+      skipReasons.push({
+        movementId: m.movementId,
+        productId: m.productId,
+        productName: m.productName,
+        reason,
+        qty: Math.abs(Number(m.qty) || 0),
+        note: m.note || '',
+      });
+      warnings.push(`${m.productName} skipped (${reason}) — no batch to restore`);
       continue;
     }
     if (!m.batchId) {
@@ -5798,7 +5933,42 @@ export async function analyzeStockImpact({ saleId, treatmentId } = {}) {
     warnings,
     canReverseFully,
     totalQtyToRestore,
+    // Phase 15.7 — per-skip-reason detail for the cancel modal copy.
+    skipReasons,
   };
+}
+
+/**
+ * Phase 15.7 (2026-04-28) — Pure helper that groups skipReasons by reason
+ * type for the cancel-invoice modal copy. Each group carries:
+ *   - count          → total items in this reason
+ *   - totalQty       → sum of qty across items
+ *   - itemNames      → unique productNames (deduped, max 5 in display)
+ *
+ * Reason taxonomy (mirrors _deductOneItem return.reason):
+ *   - 'course-skip'         → user toggled "ไม่ตัดสต็อค" on the course's product item
+ *   - 'trackStock-false'    → admin set product.stockConfig.trackStock=false
+ *   - 'not-tracked'         → product never tracked + auto-init failed
+ *   - 'no-batch-at-branch'  → tracked but zero batches at branch
+ *   - 'shortfall'           → tracked + batches but insufficient qty
+ *
+ * Returns an object keyed by reason. Empty groups are omitted.
+ */
+export function summarizeSkipReasons(skipReasons) {
+  const groups = {};
+  if (!Array.isArray(skipReasons) || skipReasons.length === 0) return groups;
+  for (const s of skipReasons) {
+    if (!s || !s.reason) continue;
+    if (!groups[s.reason]) {
+      groups[s.reason] = { reason: s.reason, count: 0, totalQty: 0, itemNames: [] };
+    }
+    const g = groups[s.reason];
+    g.count += 1;
+    g.totalQty += Number(s.qty) || 0;
+    const name = String(s.productName || '').trim();
+    if (name && !g.itemNames.includes(name)) g.itemNames.push(name);
+  }
+  return groups;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -86,23 +86,29 @@ describe('V33CR.B — CustomerDetailView customerId fallback', () => {
 });
 
 // ============================================================================
-describe('V33CR.C — AppointmentFormModal assistants filter by position', () => {
-  it('C.1 assistants useMemo filters doctors by position === ผู้ช่วยแพทย์', () => {
-    expect(apptModalSrc).toMatch(/const assistants\s*=\s*useMemo\(/);
-    expect(apptModalSrc).toMatch(/d\?\.position[\s\S]+?===\s*['"]ผู้ช่วยแพทย์['"]/);
+describe('V33CR.C — AppointmentFormModal assistants picker (Phase 15.7: show all, max-5 select)', () => {
+  it('C.1 Phase 15.7: assistants useMemo returns ALL doctors (no position filter)', () => {
+    // Phase 15.7 (2026-04-28) reversed the V33CR position filter per user
+    // directive "ให้เอาแพทย์และผู้ช่วยที่มีทั้งหมดมาให้เลือก แต่ select ได้
+    // แค่ 5 คน". The assistants list is now the full doctors array; max-5
+    // is enforced on selection only.
+    expect(apptModalSrc).toMatch(/const\s+assistants\s*=\s*useMemo\(\s*\(\)\s*=>\s*doctors\s*,\s*\[doctors\]\s*\)/);
+    // Anti-regression: NO position filter
+    expect(apptModalSrc).not.toMatch(/doctors\.filter\([^)]*position[^)]*===\s*['"]ผู้ช่วยแพทย์['"]/);
   });
 
-  it('C.2 assistants render uses filtered list (assistants), not raw doctors', () => {
-    // Find the JSX section between the assistants <label> and its closing </div>
+  it('C.2 assistants render uses the assistants memo (which is just the doctors array)', () => {
     const block = apptModalSrc.match(/ผู้ช่วยแพทย์ \(สูงสุด 5 คน\)<\/label>[\s\S]+?(?=\{\/\* Channel)/);
     expect(block?.[0]).toMatch(/\{assistants\.map\(d\s*=>/);
-    // Anti-regression: must NOT iterate raw `doctors.map(...)` for assistants
-    expect(block?.[0]).not.toMatch(/\{doctors\.map\(d\s*=>/);
   });
 
-  it('C.3 empty-state hint surfaces when no assistants configured', () => {
+  it('C.3 empty-state hint surfaces when be_doctors is empty (Phase 15.7 wording)', () => {
+    // Phase 15.7 wording is generic — adds doctors OR assistants — since
+    // both qualify for the picker now.
     expect(apptModalSrc).toMatch(/assistants\.length\s*===\s*0/);
-    expect(apptModalSrc).toMatch(/ยังไม่มีผู้ช่วยแพทย์ใน be_doctors/);
+    expect(apptModalSrc).toMatch(/เพิ่มแพทย์\/ผู้ช่วยแพทย์/);
+    // Anti-regression: pre-fix narrow wording is gone
+    expect(apptModalSrc).not.toMatch(/ตั้งค่าตำแหน่ง 'ผู้ช่วยแพทย์'/);
   });
 });
 

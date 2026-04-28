@@ -294,6 +294,16 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         endTime: apptEndTime,
         doctorId: apptDoctorId, doctorName: apptDoctorName,
         assistantIds: apptAssistantIds,
+        // Phase 15.7 (2026-04-28) — denorm `assistantNames` so render-time
+        // consumers (AppointmentTab, CustomerDetailView) can show names
+        // without a doctorMap lookup. resolveAssistantNames falls back to
+        // doctorMap if absent so legacy data still renders.
+        assistantNames: (apptAssistantIds || [])
+          .map((id) => {
+            const d = doctors.find((x) => String(x.id) === String(id));
+            return d ? String(d.name || '').trim() : '';
+          })
+          .filter(Boolean),
         roomName: apptRoomName,
         channel: apptChannel,
         purpose: apptPurpose,

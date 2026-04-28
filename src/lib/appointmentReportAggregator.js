@@ -57,8 +57,16 @@ function deriveDetail(appt) {
   return `ห้องตรวจ: ${room} · นัดมาเพื่อ: ${to} · การเตรียมตัว: ${prep}`;
 }
 
-/** Resolve assistantIds[] → comma-joined names via staff map; fallback to '-'. */
+/** Resolve assistant names. Phase 15.7 (2026-04-28): prefer denormalized
+ *  `assistantNames` field (written at save time), fall back to ID lookup
+ *  via staffIndex for legacy appts.
+ */
 function deriveAssistantNames(appt, staffIndex) {
+  // Phase 15.7 — use denorm when present
+  if (Array.isArray(appt?.assistantNames) && appt.assistantNames.length > 0) {
+    const names = appt.assistantNames.map(n => String(n || '').trim()).filter(Boolean);
+    if (names.length > 0) return names.join(', ');
+  }
   const ids = Array.isArray(appt?.assistantIds) ? appt.assistantIds : [];
   if (ids.length === 0) return '-';
   const names = ids

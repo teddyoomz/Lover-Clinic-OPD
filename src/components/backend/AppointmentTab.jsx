@@ -21,6 +21,10 @@ import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
+// Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
+// rendering "+ ผู้ช่วย: A, B, C" below the doctor name. Helper falls back
+// to doctorMap lookup for legacy appts that lack assistantNames denorm.
+import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -108,6 +112,11 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   useEffect(() => {
     listDoctors().then(setDoctors).catch(() => setDoctors([]));
   }, []);
+  // Phase 15.7 (2026-04-28) — doctor lookup map for assistant-name resolution
+  // on legacy appointments that lack the denormalized `assistantNames` field.
+  // Helper resolveAssistantNames in src/lib/appointmentDisplay.js falls back
+  // to ID lookup when denorm is absent.
+  const doctorMap = useMemo(() => buildDoctorMap(doctors), [doctors]);
   const [todaysSchedules, setTodaysSchedules] = useState([]);
   const [todaysSchedulesLoading, setTodaysSchedulesLoading] = useState(false);
   useEffect(() => {
@@ -472,11 +481,24 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                                 <span className="text-xs font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
                               </div>
-                              {span > 1 && (
-                                <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
-                                  {appt.doctorName && `${appt.doctorName}`}{appt.appointmentTo && ` · ${appt.appointmentTo}`}
-                                </p>
-                              )}
+                              {span > 1 && (() => {
+                                const assistantNames = resolveAssistantNames(appt, doctorMap);
+                                return (
+                                  <>
+                                    <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
+                                      {appt.doctorName && `${appt.doctorName}`}{appt.appointmentTo && ` · ${appt.appointmentTo}`}
+                                    </p>
+                                    {/* Phase 15.7 — assistant names below doctor row.
+                                        Hidden if no assistants, or if grid slot is too short
+                                        (span >= 2 only — span 1 has barely room for doctor). */}
+                                    {assistantNames.length > 0 && span >= 2 && (
+                                      <p className="text-[8px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
+                                        + {assistantNames.join(', ')}
+                                      </p>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </button>
                           </div>
                         );

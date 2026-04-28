@@ -641,32 +641,37 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     expect(stockDiffSrc).not.toMatch(/skipStockDeduction/);
   });
 
-  it('K.2 throw retained as defensive fallback (treatment+sale handled by silent-skip)', () => {
-    // V35.3-ter: both treatment AND sale silent-skip on shortfall.
-    // Throw remains for unknown context (defensive — never reached in
-    // practice since deductStockForSale + deductStockForTreatment are
-    // the only callers and both pass explicit context).
+  it('K.2 throw retained as defensive fallback (Phase 15.7: shortfall now allows negative deduct)', () => {
+    // Phase 15.7 (2026-04-28): treatment+sale shortfall NO LONGER silent-skips
+    // — instead the deduct goes through with the FIFO-last batch going
+    // negative. The throw remains for non-treatment/non-sale contexts as
+    // defensive fallback (`Stock insufficient` text). Pre-fix V35.3-ter
+    // silent-skip pattern is GONE for the supported contexts; user-confirmed
+    // via AskUserQuestion 2026-04-28: "FIFO-last batch goes negative".
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Defensive throw for non-supported contexts is preserved.
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
+    // Phase 15.7 marker present.
+    expect(slice).toMatch(/Phase 15\.7/);
   });
 
-  it('K.2-bis V35.3-ter: BOTH treatment AND sale context shortfall emit silent-skip', () => {
-    // V35.3-ter (2026-04-28 user-confirmed): sale path also silent-skips
-    // on shortfall (was: throw "Stock insufficient" → blocked sale save).
-    // Mirrors treatment UX. User explicitly chose Option 1 in plan-time
-    // AskUserQuestion: "Silent-skip เหมือน treatment".
+  it('K.2-bis Phase 15.7: shortfall now writes negativeOverage marker (NOT silent-skip)', () => {
+    // Phase 15.7 (2026-04-28 user-confirmed): sale + treatment paths PUSH
+    // negative onto FIFO-last batch instead of silent-skip. Movement carries
+    // real before/after numbers + negativeOverage:true. Replaces the prior
+    // V35.3-ter silent-skip pattern.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Treatment+sale gate still narrows the negative-push path.
     expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
-    expect(slice).toMatch(/no-batch-at-branch/);
-    expect(slice).toMatch(/ไม่มีสต็อคที่สาขานี้/);
-    // Silent-skip return must come BEFORE the throw (defensive fallback).
-    const ctxIdx = slice.search(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
-    const throwIdx = slice.indexOf('throw new Error');
-    expect(ctxIdx).toBeGreaterThan(0);
-    expect(throwIdx).toBeGreaterThan(ctxIdx);
+    // negativeOverage marker on the new movement
+    expect(slice).toMatch(/negativeOverage:\s*true/);
+    // Thai user-facing note for the negative push
+    expect(slice).toMatch(/สต็อคติดลบ/);
+    // pickNegativeTargetBatch helper drives target selection
+    expect(slice).toMatch(/pickNegativeTargetBatch/);
   });
 
   it('K.3 V14 — no undefined leaves in mapper output (!! coercion at every layer)', () => {

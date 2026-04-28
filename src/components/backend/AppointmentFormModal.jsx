@@ -180,14 +180,15 @@ export default function AppointmentFormModal({
   const [customerSearch, setCustomerSearch] = useState('');
   const [doctors, setDoctors] = useState([]);
   const [staff, setStaff] = useState([]);
-  // 2026-04-28: assistants picker MUST filter by position (mirror
-  // TreatmentFormPage:601, 618-620). Pre-fix rendered ALL doctors as
-  // assistants — confusing UX and conflated with the doctor-picker.
-  // User reported "ผู้ช่วยแพทย์ ไม่มีรายชื่อปรากฎ" — actually meant the
-  // wrong list (or empty when none have position='ผู้ช่วยแพทย์').
-  const assistants = useMemo(() => {
-    return doctors.filter((d) => String(d?.position || '').trim() === 'ผู้ช่วยแพทย์');
-  }, [doctors]);
+  // Phase 15.7 (2026-04-28) — REVERSED 2026-04-28-AM directive. User's
+  // ACTUAL spec: "ผู้ช่วยแพทย์ (สูงสุด 5 คน) หมายความว่า ให้เอาแพทย์และ
+  // ผู้ช่วยที่มีทั้งหมดมาให้เลือก แต่ select ได้แค่ 5 คน". Show ALL doctors
+  // + assistants in the picker (any user with be_doctors record), MAX-5
+  // is enforced on SELECTION only via .slice(0, 5) in onChange.
+  // Position-filter removed: a doctor may be picked as an assistant for a
+  // procedure (cross-role coverage), and assistant-only position is too
+  // narrow. Same change applied at TreatmentFormPage:618-620.
+  const assistants = useMemo(() => doctors, [doctors]);
   const [rooms, setRooms] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(ROOMS_CACHE_KEY) || '[]');
@@ -330,13 +331,26 @@ export default function AppointmentFormModal({
 
       // Build payload — IDENTICAL shape to AppointmentTab.handleSave per
       // user directive "wiring ให้ถูกต้องเหมือนกันด้วย".
+      // Phase 15.7 (2026-04-28) — denormalize `assistantNames` at save so
+      // AppointmentTab + CustomerDetailView can render names without a
+      // doctorMap lookup. Legacy appts (assistantIds only) still resolve via
+      // resolveAssistantNames(appt, doctorMap) fallback in render code.
+      const assistantIdsForSave = formData.assistantIds || [];
+      const assistantNamesForSave = assistantIdsForSave
+        .map((id) => {
+          const d = doctors.find((x) => String(x.id) === String(id));
+          return d ? String(d.name || '').trim() : '';
+        })
+        .filter(Boolean);
       const payload = {
         customerId: formData.customerId, customerName: formData.customerName, customerHN: formData.customerHN,
         date: formData.date, startTime: formData.startTime, endTime: formData.endTime || formData.startTime,
         appointmentType: formData.appointmentType || 'sales',
         advisorId: formData.advisorId || '', advisorName: formData.advisorName || '',
         doctorId: formData.doctorId, doctorName: formData.doctorName,
-        assistantIds: formData.assistantIds || [], roomName: formData.roomName,
+        assistantIds: assistantIdsForSave,
+        assistantNames: assistantNamesForSave,
+        roomName: formData.roomName,
         channel: formData.channel, appointmentTo: formData.appointmentTo, location: formData.location || '',
         expectedSales: formData.expectedSales || '', preparation: formData.preparation || '',
         customerNote: formData.customerNote || '', notes: formData.notes,
@@ -493,15 +507,14 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
-          {/* Assistants (multi-select chips) — 2026-04-28: filtered by
-              position='ผู้ช่วยแพทย์' (mirror TreatmentFormPage). Empty-state
-              hint surfaces the cause when no assistants are configured (vs
-              silently empty list). */}
+          {/* Assistants (multi-select chips) — Phase 15.7 (2026-04-28):
+              picker shows ALL doctors + assistants (no position filter);
+              max-5 enforced on SELECTION only. User-confirmed wording. */}
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
             {assistants.length === 0 ? (
               <p className="text-[10px] text-amber-400 italic">
-                ยังไม่มีผู้ช่วยแพทย์ใน be_doctors — ตั้งค่าตำแหน่ง 'ผู้ช่วยแพทย์' ในหน้า "แพทย์ &amp; ผู้ช่วย"
+                ยังไม่มีรายชื่อใน be_doctors — เพิ่มแพทย์/ผู้ช่วยแพทย์ในหน้า "แพทย์ &amp; ผู้ช่วย"
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5">

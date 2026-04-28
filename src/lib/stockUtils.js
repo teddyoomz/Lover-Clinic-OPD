@@ -350,6 +350,59 @@ export function batchFifoAllocate(batches, deductQty, opts = {}) {
   return { allocations, shortfall: Math.max(0, remaining) };
 }
 
+/**
+ * Phase 15.7 (2026-04-28) — Pure helper that picks the target batch for a
+ * shortfall overage push (the batch whose qty.remaining will go NEGATIVE).
+ *
+ * Selection priority:
+ *   1. If `allocations` has entries (FIFO drain produced partials), return
+ *      the LAST allocated batchId — already touched in the deduct loop, so
+ *      adding the negative on top of it keeps the movement count down.
+ *   2. Otherwise (no positive allocations), pick the most-recently-created
+ *      batch at this branch+product (sort by createdAt DESC). This gives
+ *      admin a deterministic target that reflects "the latest lot the
+ *      branch ever knew about".
+ *   3. Otherwise (no batches whatsoever at branch+product), return null —
+ *      caller must create a synthetic AUTO-NEG batch on-the-fly.
+ *
+ * Why "FIFO-last batch goes negative" was the user's chosen design (see
+ * AskUserQuestion 2026-04-28): single batch carries the negative, real
+ * before/after numbers in movement log, no schema noise from per-shortfall
+ * synthetic batches, repay flow is "adjust ADD on the same lot" or "import
+ * a new batch and let admin clear the negative manually".
+ *
+ * @param {object} args
+ * @param {Array<{batchId:string}>} args.allocations - from batchFifoAllocate
+ * @param {Array<object>} args.branchBatches - all batches at the branch (any status)
+ * @param {string} args.branchId
+ * @param {string} args.productId
+ * @returns {string | null} target batchId, or null if no candidate exists
+ */
+export function pickNegativeTargetBatch({ allocations, branchBatches, branchId, productId } = {}) {
+  if (Array.isArray(allocations) && allocations.length > 0) {
+    const last = allocations[allocations.length - 1];
+    if (last && last.batchId) return String(last.batchId);
+  }
+  const candidates = (Array.isArray(branchBatches) ? branchBatches : [])
+    .filter((b) => {
+      if (!b || !b.batchId) return false;
+      if (productId && String(b.productId) !== String(productId)) return false;
+      // Phase 15.7: legacy 'main' batches at default branch — caller is
+      // expected to have already widened the read via includeLegacyMain;
+      // if branchId is supplied here we still match strict-equality so
+      // central-tier callers don't accidentally pick a branch lot.
+      if (branchId && String(b.branchId) !== String(branchId)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const ca = String(a.createdAt || '');
+      const cb = String(b.createdAt || '');
+      return cb.localeCompare(ca); // newest first
+    });
+  if (candidates[0]) return String(candidates[0].batchId);
+  return null;
+}
+
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
 function toNumber(v) {

@@ -37,6 +37,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showOverStockOnly, setShowOverStockOnly] = useState(false);
+  // Phase 15.7 (2026-04-28) — negative-stock filter. The user-facing list
+  // ("ยอดคงเหลือ") needs a way to surface products whose totalRemaining is
+  // below zero (introduced by the new negative-stock allowance in
+  // _deductOneItem). Filter is checkbox-driven and shows ONLY rows where
+  // sum(batches[i].qty.remaining) < 0.
+  const [showNegativeStockOnly, setShowNegativeStockOnly] = useState(false);
   const [locations, setLocations] = useState([{ id: 'main', name: 'สาขาหลัก', kind: 'branch' }]);
   // Phase 15.5 / Item 1 — per-product threshold lookup map keyed by productId
   // Shape: { [productId]: { alertDayBeforeExpire, alertQtyBeforeOutOfStock, alertQtyBeforeMaxStock } }
@@ -227,6 +233,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     if (p.alertQtyBeforeMaxStock == null) return false;
     return Number(p.totalRemaining) > Number(p.alertQtyBeforeMaxStock);
   }, []);
+  // Phase 15.7 (2026-04-28) — negative stock badge predicate. Triggered
+  // when totalRemaining < 0 (set by Phase 15.7 negative-stock allowance
+  // in _deductOneItem). Distinct from "หมด" (=0) so admin sees DEBT
+  // (need to import/transfer/adjust to repay) vs OUT-OF-STOCK (just need
+  // to import). Highest-priority badge in row render.
+  const isNegativeStockWarning = useCallback((p) => {
+    return Number(p.totalRemaining) < 0;
+  }, []);
 
   const displayed = useMemo(() => {
     let list = products;
@@ -240,8 +254,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     if (showExpiringOnly) list = list.filter(isExpiryWarning);
     if (showLowStockOnly) list = list.filter(isLowStockWarning);
     if (showOverStockOnly) list = list.filter(isOverStockWarning);
+    // Phase 15.7 — negative-stock filter (totalRemaining < 0)
+    if (showNegativeStockOnly) list = list.filter(isNegativeStockWarning);
     return list;
-  }, [products, search, showExpiringOnly, showLowStockOnly, showOverStockOnly, isExpiryWarning, isLowStockWarning, isOverStockWarning]);
+  }, [products, search, showExpiringOnly, showLowStockOnly, showOverStockOnly, showNegativeStockOnly, isExpiryWarning, isLowStockWarning, isOverStockWarning, isNegativeStockWarning]);
 
   const totalValue = useMemo(() => products.reduce((s, p) => s + p.valueCost, 0), [products]);
 
@@ -298,6 +314,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
             <input type="checkbox" checked={showOverStockOnly} onChange={e => setShowOverStockOnly(e.target.checked)} className="accent-violet-500" />
             เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)
           </label>
+          {/* Phase 15.7 (2026-04-28) — negative-stock filter. Surfaces
+              products whose totalRemaining < 0 (debt). Admin can drill in
+              and use Adjust ADD / Transfer In / Receive Import / Withdrawal
+              Receive to repay the debt. */}
+          <label className="flex items-center gap-2 text-[11px] text-rose-300 cursor-pointer" data-testid="filter-negative-stock">
+            <input type="checkbox" checked={showNegativeStockOnly} onChange={e => setShowNegativeStockOnly(e.target.checked)} className="accent-rose-500" />
+            ติดลบ (ต้องเติมสต็อค)
+          </label>
         </div>
       </div>
 
@@ -347,7 +371,11 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                   isExpiring ? 'text-orange-400' :
                   'text-[var(--tx-primary)]';
                 // Phase 15.5 / Item 1 — qty badges now use per-product thresholds.
-                const outOfStock = p.totalRemaining <= 0;
+                // Phase 15.7 — outOfStock (=== 0 exactly) split from negative
+                // (< 0). They're different states: out-of-stock means "buy more",
+                // negative means "buy more AND repay accounting debt".
+                const isNegative = isNegativeStockWarning(p);
+                const outOfStock = !isNegative && p.totalRemaining <= 0;
                 const isLow = isLowStockWarning(p);
                 const isOver = isOverStockWarning(p);
                 const isExpanded = !!expandedRows[String(p.productId)];
@@ -356,6 +384,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                   <tr className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`} data-testid="balance-row">
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {p.productName || `Product ${p.productId}`}
+                      {/* Phase 15.7 — ติดลบ badge has highest priority. Visually
+                          distinct (rose, bold, ALL CAPS feel) so admin spots
+                          the debt at a glance. Not shown alongside หมด — the
+                          two states are mutually exclusive (see isNegative
+                          gate above). */}
+                      {isNegative && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-rose-900/40 text-rose-300 border border-rose-700/60 font-bold" data-testid="badge-negative-stock" title="สต็อคติดลบ — ตัดเกินคงเหลือ ต้องนำเข้า/โอนเข้า/ปรับเพิ่ม/รับเบิกเข้า เพื่อเติม">ติดลบ</span>}
                       {outOfStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800" data-testid="badge-out-of-stock">หมด</span>}
                       {isLow && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800" data-testid="badge-low-stock">ใกล้หมด</span>}
                       {isOver && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-violet-900/30 text-violet-400 border border-violet-800" data-testid="badge-over-stock">เกินสต็อก</span>}
@@ -380,7 +414,13 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                         <span className="text-[var(--tx-muted)]">{p.batches.length}</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>
+                    <td
+                      className={`px-3 py-2 text-right font-mono font-bold ${isNegative ? 'text-rose-400' : 'text-emerald-400'}`}
+                      data-testid="balance-row-total"
+                      title={isNegative ? 'สต็อคติดลบ — ต้องนำเข้า/โอน/ปรับ/เบิกเข้า เพื่อปรับยอด' : undefined}
+                    >
+                      {fmtQty(p.totalRemaining)} {p.unit}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]" data-testid="td-capacity">
                       {/* V35.2-tris (2026-04-28) — column now shows the per-product
                           QtyBeforeMaxStock threshold directly (not batch.qty.total).
