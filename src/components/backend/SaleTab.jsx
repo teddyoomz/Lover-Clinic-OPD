@@ -18,6 +18,11 @@ import {
   // Phase 14.10-tris (2026-04-26) — be_products + be_courses canonical
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
   listProducts, listCourses,
+  // 2026-04-28: shared course→master-shape converter (Rule C1 single-source).
+  // Same helper TreatmentFormPage uses; propagates skipStockDeduction onto
+  // each products[i] (V15 #5 commit aa760b1) so the flag survives the
+  // SaleTab buy chain into assignCourseToCustomer.
+  beCourseToMasterShape,
   // Phase 14.10-tris (2026-04-26) — listAllSellers is the unified helper
   // backed by be_staff + be_doctors (canonical OUR data). Master_data is
   // dev-only seed per Rule H-bis; the real CRUD writes to be_*. User
@@ -323,7 +328,16 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     ]);
     setCustomers(c);
     setSellers(sellerList);
-    setMedProducts(p.map(x => ({ id: x.id, name: x.name, price: x.price, unit: x.unit, category: x.category, type: x.type })));
+    // 2026-04-28 fix: be_products uses productName / productCategory / productType.
+    // Pre-fix `x.name` was undefined → "ยากลับบ้าน" picker empty list.
+    setMedProducts(p.map(x => ({
+      id: x.id || x.productId,
+      name: x.productName || x.name || '',
+      price: x.price != null ? x.price : (x.salePrice != null ? x.salePrice : 0),
+      unit: x.unit || x.mainUnitName || '',
+      category: x.productCategory || x.category || '',
+      type: x.productType || x.type || '',
+    })));
   }, [customers.length, sellers.length]);
 
   // ── Open buy modal ──
@@ -356,17 +370,46 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             products: p.products || [],
           }));
       } else if (type === 'product') {
+        // 2026-04-28 fix: be_products docs use `productName` / `productCategory`
+        // / `productType` (NOT `name` / `category` / `type`). Pre-fix mapping
+        // read undefined → buyFilteredItems filter `i.name.toLowerCase()`
+        // threw → user saw empty list. Plus `p.type === 'สินค้าหน้าร้าน'`
+        // matched 0/323 products because real field is `productType`.
+        // Alias both shapes (be_products canonical + master_data legacy).
         const all = await listProducts();
-        items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, itemType: 'product' }));
+        items = all
+          .filter(p => {
+            const pType = p.productType || p.type || '';
+            return pType === 'สินค้าหน้าร้าน';
+          })
+          .map(p => ({
+            id: p.id || p.productId,
+            name: p.productName || p.name || '',
+            price: p.price != null ? p.price : (p.salePrice != null ? p.salePrice : 0),
+            unit: p.unit || p.mainUnitName || '',
+            category: p.productCategory || p.category || '',
+            itemType: 'product',
+            // V14 — preserve skipStockDeduction if ever set at product level
+            // (currently a course-row-only flag; harmless if absent on products).
+            skipStockDeduction: !!p.skipStockDeduction,
+          }));
       } else {
         // 'course'
         const all = await listCourses();
+        // 2026-04-28 fix: use beCourseToMasterShape (Rule C1 single source
+        // of truth — same helper TreatmentFormPage uses). Pre-fix inline
+        // mapping read `c.name` / `c.price` / `c.category` / `c.products`
+        // which DO NOT EXIST on raw be_courses (real fields are
+        // courseName/salePrice/courseCategory/courseProducts) → empty list.
+        // beCourseToMasterShape propagates skipStockDeduction per
+        // products[i] (V15 #5) so the flag survives the buy chain into
+        // assignCourseToCustomer.
+        //
         // Phase 12.2b follow-up (2026-04-25): preserve courseType +
         // daysBeforeExpire + period + unit so the full buy chain carries
         // the validity window through to assignCourseToCustomer. Prior
         // whitelist silently dropped these fields → expiry='' on every
-        // customer.courses entry ("เหมือนไม่มีวันหมดอายุ" bug). Accept
-        // both camelCase (be_courses) + snake_case (legacy master_data).
+        // customer.courses entry ("เหมือนไม่มีวันหมดอายุ" bug).
         //
         // Skip "shadow" courses — ProClinic sync emits archive/template
         // copies alongside each real course (same name, different id,
@@ -376,20 +419,30 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         items = all
           .filter(c => {
             const ct = c.courseType || c.course_type || '';
-            const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
-            // Real courses always have BOTH a courseType AND a positive price
+            const price = c.price != null ? Number(c.price)
+              : (c.salePrice != null ? Number(c.salePrice) : null);
             return !!ct && price != null && price > 0;
           })
-          .map(c => ({
-            id: c.id, name: c.name, price: c.price, category: c.category,
-            unit: c.unit || '',
-            itemType: 'course',
-            products: c.products,
-            courseType: c.courseType || c.course_type || '',
-            daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
-              : (c.days_before_expire != null ? c.days_before_expire : null),
-            period: c.period != null ? c.period : null,
-          }));
+          .map(c => {
+            const shape = beCourseToMasterShape(c);
+            return {
+              id: shape.id,
+              name: shape.name || c.courseName || '',
+              price: shape.price != null ? shape.price : (c.salePrice ?? 0),
+              category: shape.course_category || c.courseCategory || '',
+              unit: c.unit || '',
+              itemType: 'course',
+              products: shape.products || [],
+              courseType: c.courseType || c.course_type || '',
+              daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
+                : (c.days_before_expire != null ? c.days_before_expire : null),
+              period: c.period != null ? c.period : null,
+              // 2026-04-28: course-level skipStockDeduction → fallback for
+              // assignCourseToCustomer when sub-product doesn't have its own
+              // override (backendClient.js:1146 honors `masterCourse.skipStockDeduction`).
+              skipStockDeduction: !!c.skipStockDeduction,
+            };
+          });
       }
       cats = [...new Set(items.map(i => i.category).filter(Boolean))].sort();
       setBuyItems(prev => ({ ...prev, [type]: items }));
@@ -412,6 +465,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       courseType: i.courseType || '',
       daysBeforeExpire: i.daysBeforeExpire != null ? i.daysBeforeExpire : null,
       period: i.period != null ? i.period : null,
+      // 2026-04-28: preserve skipStockDeduction flag through buy chain.
+      // assignCourseToCustomer at backendClient.js:1146 uses this as
+      // course-level fallback for sub-products that don't have their own
+      // override. Per-product flags ride through the products[] array
+      // (already populated by beCourseToMasterShape with the flag).
+      skipStockDeduction: !!i.skipStockDeduction,
     }));
     setPurchasedItems(prev => [...prev, ...newItems]);
     setBuyModalOpen(false);
@@ -420,7 +479,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const buyFilteredItems = useMemo(() => {
     let items = buyItems[buyModalType] || [];
     if (buySelectedCat) items = items.filter(i => i.category === buySelectedCat);
-    if (buyQuery) { const q = buyQuery.toLowerCase(); items = items.filter(i => i.name.toLowerCase().includes(q)); }
+    if (buyQuery) {
+      const q = buyQuery.toLowerCase();
+      // 2026-04-28 defensive: if a malformed item slips through with no
+      // name (legacy data, partial migration), don't throw — drop it from
+      // the filtered list. Pre-fix `i.name.toLowerCase()` on undefined
+      // threw TypeError → entire modal rendered empty.
+      items = items.filter(i => (i?.name || '').toLowerCase().includes(q));
+    }
     return items;
   }, [buyItems, buyModalType, buySelectedCat, buyQuery]);
 
@@ -672,6 +738,15 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 linkedSaleId: newSaleId,
                 courseType: course.courseType || '',
                 daysBeforeExpire: course.daysBeforeExpire ?? null,
+                // 2026-04-28: course-level skipStockDeduction flag.
+                // backendClient.js:1146 uses this as fallback per
+                // customer.courses[i] entry when sub-product doesn't have
+                // its own override. Per-row flags ride through `prods` from
+                // beCourseToMasterShape. Without this fallback, a course
+                // with skipStockDeduction set ONLY at top level (no per-row
+                // override) silently lost the flag at sale-time → treatment
+                // would later still deduct stock.
+                skipStockDeduction: !!course.skipStockDeduction,
               });
             } catch (e) { console.warn('[SaleTab] assign course failed:', e); }
           }
