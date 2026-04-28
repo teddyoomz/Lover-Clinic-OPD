@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-04-28 EOD — Phase 15.6 / V35 stock bug sweep + V15 #4 deploy + production cleanup (82 docs)"
-status: "Production = 79a974c LIVE (V15 #4). 5 user-reported stock issues fixed. 82 docs cleaned."
-current_focus: "Phase 15.6 / V35 deployed + cleaned. Awaiting next directive."
+updated_at: "2026-04-28 EOD (session 26) — V35.1+V35.2 portal/cleanup/partial-commit/null-customer; awaiting V15 #5 auth"
+status: "Production = c36888e LIVE (V15 #4). Master = 72bf0ca with 4 commits unpushed-to-prod."
+current_focus: "Awaiting user 'deploy' auth for V15 #5 combined deploy"
 branch: "master"
-last_commit: "79a974c"
-tests: 2740
+last_commit: "72bf0ca"
+tests: 2783
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "79a974c"
+production_commit: "c36888e"
 firestore_rules_version: 20
 storage_rules_version: 2
 ---
@@ -14,28 +14,21 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `79a974c` · production = `79a974c` (V15 #4 LIVE) · in sync
-- **2740/2740** focused vitest pass · build clean
-- Working tree clean
+- master = `72bf0ca` · production = `c36888e` (V15 #4 LIVE) · 4 commits unpushed-to-prod
+- **2783/2783** focused vitest pass · build clean · working tree clean
+- 64 phantoms cleaned via direct admin SDK earlier (audited in be_admin_audit)
 
-## What this session shipped (2026-04-28 — V35)
-2 commits ([detail](.agents/sessions/2026-04-28-session24-phase15-5-bundle.md) + V35 commit bodies)
-- `6075136` Phase 15.6 P0 — Issues 1+2+3+5: StockBalancePanel includeLegacyMain fix; SaleTab handleDelete try/catch; 3 cleanup endpoints (orphan-stock + test-products + test-sales) with be_admin_audit collection lockdown; FK validation via _assertProductExists at 3 batch creators; capacity tooltip + per-row target sub-label; V33.12 testSale.js prefix discipline; V35 entry + audit-stock-flow S26-S28; +170 tests
-- `79a974c` Phase 15.6 Phase D — Issue 4: shared ProductSelectField (typeahead, outside-click, 50-cap, Thai-locale aware) + productSearchUtils helpers; migrated 4 stock pickers (OrderPanel mobile+desktop, CentralStockOrderPanel, StockAdjustPanel — preserves tier-scope upstream); 43 tests + flipped 4 V21 anti-regression tests for V35 architecture
+## What this session shipped (2026-04-28 — session 26)
+4 commits ([detail](.agents/sessions/2026-04-28-session26-v35-1-v35-2-bundle.md))
+- `8ad853c` V35.1+V35.2: Portal dropdowns, BatchSelectField, per-lot expansion, canonical-name display, FK gate, regex extended; +43 tests
+- `513da1c` V35.2-tris+V35.1-tris+: ความจุ column = QtyBeforeMaxStock direct; flip-up dropdown when below constrained; HARD_CAP 720; scroll-into-view
+- `038b3d5` V35.2-quater: removed "นำเข้าจากข้อมูลพื้นฐาน" button (state + import + 2 button sites); listStockOrders + listCentralStockOrders sort createdAt DESC primary
+- `72bf0ca` V35.2-quinquies/sexies: read-side FK gate REVERTED (was hiding new imports); _assertAllProductsExist atomic pre-validation in createStockOrder + receiveCentralStockOrder; customerDoc null-guard; TreatmentFormPage null-customer early-return
 
-Test count 2527 → 2740 (+213).
+## Next action
+**Awaiting user "deploy" authorization** for V15 #5 combined deploy (vercel + firestore:rules + Probe-Deploy-Probe). 4 commits will ship.
 
-## V15 #4 deploy + production cleanup
-- Pre-probe: 6/6 positive + 5/5 negative (be_admin_audit added) ✓
-- Vercel + Firebase rules deployed in parallel ✓
-- Post-probe: 6/6 + 5/5 ✓; cleanup 4/4 + strip 2/2 ✓; HTTP smoke 200/200/401 ✓
-- **Cleanup deleted 82 docs**:
-  - 31 orphan batches (cleanup-orphan-stock endpoint)
-  - 9 cascade batches (direct admin SDK — productIds were in be_products so orphan endpoint didn't catch them)
-  - 40 test products ADVS-/ADVT-* (cleanup-test-products endpoint)
-  - 2 user-named test sales (direct admin SDK — saleId stored as FIELD inside INV-20260425-0004/0005 docs, not as doc.id)
-- All deletes audited in `be_admin_audit` collection
-
-## Outstanding (carry-over)
-- Non-stock product picker migrations (CourseFormModal, PromotionFormModal, QuotationFormModal, SaleTab line items) — same ProductSelectField, just bigger surface. Deferred to follow-up sub-phase.
-- Admin tasks: LineSettings creds + webhook URL · backfill customer IDs · TEST-/E2E- prefix adoption · session checkpoint write at .agents/sessions/2026-04-28-session25-phase15-6-v35-deploy.md
+## Outstanding user-triggered actions
+- V15 #5 deploy auth (per V18, doesn't roll over)
+- Live QA after deploy: dropdown flip-up + max size; ความจุ column shows QtyBeforeMaxStock; order partial-commit prevention; treatment null-customer error UX
+- Carry-over: LineSettings creds · customer ID backfill · TEST-/E2E- prefix discipline

@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 EOD — Phase 15.6 / V35 stock bug sweep + Phase D + V15 #4 deploy + production cleanup (82 docs)
+- **Date last updated**: 2026-04-28 EOD (session 26) — V35.1+V35.2 portal/per-lot/cleanup/partial-commit/null-customer
 - **Branch**: `master`
-- **Last commit**: `79a974c feat(stock): Phase 15.6 / V35 Phase D — searchable ProductSelectField + migrate 4 stock pickers`
-- **Test count**: **2740** focused (+213 from V35 session: 170 P0 + 43 Phase D)
+- **Last commit**: `72bf0ca fix(stock+treatment): V35.2-quinquies/sexies — partial-commit prevention + null-customerId guard`
+- **Test count**: **2783** focused (+43 in session 26 net)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `79a974c`** (V15 #4 LIVE) · 6 commits shipped: 248416e + d037cf0 + 89c5607 + ac75ad0 + 6075136 + 79a974c
+- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 4 commits ahead, awaiting V15 #5 combined deploy · 6 commits shipped: 248416e + d037cf0 + 89c5607 + ac75ad0 + 6075136 + 79a974c
   - Vercel (V15 #4): `lover-clinic-kfrlkir4l-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
   - Firestore rules: released to `cloud.firestore` (be_admin_audit added)
   - Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 + strip 2/2 = 200
@@ -36,6 +36,22 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-28 (session 26) — V35.1+V35.2 portal/per-lot/cleanup/partial-commit/null-customer
+
+User shipped 10 reports across the day post-V15 #4. Auto-mode session shipped 4 commits addressing dropdown UX, phantom-product cleanup, partial-commit prevention, null-customer crash. **2740 → 2783 tests · 4 commits unpushed-to-prod**.
+
+**Commits**:
+- `8ad853c` V35.1+V35.2 — Portal dropdowns + BatchSelectField + per-lot expansion + canonical-name + 64 phantoms cleaned
+- `513da1c` V35.2-tris/V35.1-tris+ — ความจุ=QtyBeforeMaxStock direct + flip-up dropdown + HARD_CAP 720
+- `038b3d5` V35.2-quater — "นำเข้าจากข้อมูลพื้นฐาน" button removal + sort newest-first
+- `72bf0ca` V35.2-quinquies/sexies — atomic _assertAllProductsExist pre-validation + customerDoc null-guard + TreatmentFormPage early-return
+
+**Production cleanup (already shipped via direct admin SDK, audited in be_admin_audit)**:
+- 14 ADVX/ADVO/ADVW test products + 18 batches
+- 32 test-branch batches (ADVB-/STK-TRT-/STK-SALE-/ADVSA-/V20 BR-)
+
+Detail: `.agents/sessions/2026-04-28-session26-v35-1-v35-2-bundle.md`
 
 ### Session 2026-04-28 — Phase 15.6 / V35 stock bug sweep + Phase D + V15 #4 deploy + production cleanup
 
@@ -743,33 +759,27 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 EOD (Phase 15.5 bundle complete; V15 #4 awaiting deploy auth).
+Resume LoverClinic — continue from 2026-04-28 EOD (session 26).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ac75ad0, prod=da15849 — 4 commits unpushed)
-3. .agents/active.md (2527 tests pass; Phase 15.5 NOT deployed)
-4. .claude/rules/00-session-start.md (iron-clad A-I + V-summary)
-5. .agents/sessions/2026-04-28-session24-phase15-5-bundle.md
+2. SESSION_HANDOFF.md (master=72bf0ca, prod=c36888e — 4 commits unpushed)
+3. .agents/active.md (2783 tests pass; V35.1+V35.2 NOT deployed)
+4. .claude/rules/00-session-start.md (iron-clad + V-summary)
+5. .agents/sessions/2026-04-28-session26-v35-1-v35-2-bundle.md
 
-Status: master=ac75ad0, 2527/2527 tests pass, prod=da15849 LIVE (V15 #3).
-4 commits ready for V15 #4 combined deploy:
-- 248416e docs(V15 #3 handoff)
-- d037cf0 Phase 15.5A ActorPicker filter + 15.5B withdrawal approval endpoint
-- 89c5607 Item 1 per-product warnings + Item 2 unit dropdown enrichment
-- ac75ad0 audit-stock-flow S21-S25 + coverage spot-check
+Status: master=72bf0ca, 2783/2783 tests pass, prod=c36888e LIVE (V15 #4).
 
-Next: V15 #4 combined deploy when user authorizes (vercel + firestore:rules
-parallel; Probe-Deploy-Probe Rule B 6+/4-; rules unchanged but probe mandatory).
+Next: V15 #5 combined deploy when authorized. 4 commits ready:
+- 8ad853c V35.1+V35.2 portal/per-lot/canonical-name + 64 phantoms cleaned
+- 513da1c V35.2-tris ความจุ→QtyBeforeMaxStock + V35.1-tris+ flip-up dropdown
+- 038b3d5 V35.2-quater button removal + sort newest-first
+- 72bf0ca V35.2-quinquies/sexies partial-commit prevention + null-customer guard
 
-After deploy live QA:
-- 15.5A: ActorPicker dropdown filters by current branch in 5 stock-mutation forms
-- 15.5B: WithdrawalDetailModal shows อนุมัติ/ปฏิเสธ buttons (admin only, status=0); reject opens reason modal
-- Item 1: StockBalancePanel rows show ใกล้หมดอายุ/ใกล้หมด/เกินสต็อก badges per-product threshold; 3 filter checkboxes work
-- Item 2: ProductFormModal "หน่วย" dropdown lists existing product units alongside master units
+After deploy live QA: dropdown flip-up + max size; ความจุ=QtyBeforeMaxStock;
+order partial-commit prevention; treatment null-customer guard UX.
 
-Outstanding (admin tasks): LineSettingsTab creds + webhook URL · backfill
-customer IDs · TEST-/E2E- prefix on test stock writes.
+Outstanding (admin): V15 #5 deploy auth · LineSettings creds · customer ID backfill.
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B.
 
