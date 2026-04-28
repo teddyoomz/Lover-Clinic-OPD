@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 EOD (session 27) — V35.3-ter + V33-customer-id + UX polish bundle (12 commits)
+- **Date last updated**: 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits this session, 24 cumulative unpushed)
 - **Branch**: `master`
-- **Last commit**: `eae90c9 fix(customer+appt): V33-customer treatment-save + assistants filter + OPD Card label`
-- **Test count**: **2927** focused (+144 in session 27 net)
+- **Last commit**: `28308ad chore(rules): Rule J — superpowers auto-trigger + session boot`
+- **Test count**: **3312** focused (+385 cumulative across sessions 27→28)
 - **Build**: clean
-- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 12 commits ahead, awaiting V15 #7 combined deploy · 12 commits shipped: 2149eae + f0e3042 + aa760b1 + c2fe55a + 397d9ff + a16c700 + 023c1a6 + c48eda4 + 409ed8d + 9ffbe14 + f206887 + eae90c9
+- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 24 commits ahead, awaiting V15 #7 combined deploy · session 28 commits: e6afd35 + 7ec6cb7 + 1a8e36d + 7dbdfd7 + 453abb1 + 140229c + 8ae753d + f310231 + 3a16b27 + 28308ad (10 visible) plus session 27 carry-over
   - Vercel (V15 #4): `lover-clinic-kfrlkir4l-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
   - Firestore rules: released to `cloud.firestore` (be_admin_audit added)
   - Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 + strip 2/2 = 200
@@ -36,6 +36,31 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits)
+
+User shipped 9 directives across the day → Phase 15.7 family (base → novies, 9 sub-phases). Auto-mode session shipped 12 commits. **2927 → 3312 tests · 24 cumulative commits unpushed-to-prod**.
+
+**Commits this session**:
+- `e6afd35` Phase 15.7-ter — StockBalancePanel auto-picks default branch
+- `7ec6cb7` Phase 15.7-quater — treatment history real-time + V33 parity audit
+- (Phase 15.7 base + bis shipped earlier in same arc — see prior commits)
+- `1a8e36d` Phase 15.7-bis bundle (5 fixes — negative repay, calendar badge, etc.)
+- `7dbdfd7` Phase 15.7-quinquies — calendar column width scales with roomCount
+- `140229c` Phase 15.7-sexies — appt modal delete + clickable customer name
+- `8ae753d` Phase 15.7-septies — customer-name opens NEW TAB
+- `f310231` Phase 15.7-octies — advisor listAllSellers + location lock
+- `3a16b27` Phase 15.7-novies — admin endpoint cleanup-phantom-branch.js (47 tests)
+- `28308ad` Rule J — superpowers auto-trigger + session boot (3-layer)
+
+**Key shipments**:
+- Negative-stock system: allow deduct past zero, FIFO-oldest auto-repay on incoming positives, ติดลบ badge + filter
+- V33 self-created customer parity (id-first resolution, treatment history listener, advisor dropdown)
+- Appointment modal: delete button + customer-name new-tab + advisor branch-filtered + location locked
+- Phantom branch BR-1777095572005-ae97f911 cleanup: spec doc + admin endpoint (firebase-admin SDK bypasses audit-immutability rules) + 47 regression tests
+- 3-layer superpowers boot: skill descriptions auto-trigger + Rule J in CLAUDE.md/00-session-start.md + user-level CLAUDE.md session boot
+
+Detail: `.agents/sessions/2026-04-29-session28-phase15.7-family.md`
 
 ### Session 2026-04-28 EOD (session 27) — V35.3-ter + V33-customer-id + UX polish bundle (12 commits)
 
@@ -779,24 +804,25 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 EOD (session 27).
+Resume LoverClinic — continue from 2026-04-29 EOD (session 28).
 
 Read in order BEFORE any tool call:
+0. Skill(skill="using-superpowers")  ← Rule J session boot (NEW 2026-04-29)
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=eae90c9, prod=c36888e — 12 commits unpushed)
-3. .agents/active.md (2927 tests pass; bundle NOT deployed)
-4. .claude/rules/00-session-start.md (iron-clad + V-summary)
-5. .agents/sessions/2026-04-28-session27-eod-bundle.md
+2. SESSION_HANDOFF.md (master=28308ad, prod=c36888e — 24 commits unpushed)
+3. .agents/active.md (3312 tests pass; bundle NOT deployed)
+4. .claude/rules/00-session-start.md (iron-clad A-J + V-summary)
+5. .agents/sessions/2026-04-29-session28-phase15.7-family.md
 
-Status: master=eae90c9, 2927/2927 tests pass, prod=c36888e LIVE (V15 #4).
+Status: master=28308ad, 3312/3312 tests pass, prod=c36888e LIVE (V15 #4).
 
-Next: V15 #7 combined deploy when authorized. 12 commits ready (course skip-stock + V35.3 trio + TFP grouping + SaleTab buy + receipt polish + branch-aware PDFs + sales-list redesign + V33-customer-id).
+Next: V15 #7 combined deploy when authorized. 24 commits ready (Phase 15.7 base→novies family + Rule J superpowers boot).
 
-After deploy live QA: V33 customer treatment-save · sale-side stock deduct · branch-aware receipt header · assistants picker · "จาก OPD Card" label · รายการขาย column visual.
+After deploy: run /api/admin/cleanup-phantom-branch action:list → action:delete to nuke 49 BR-1777095572005-ae97f911 phantom-branch docs + 2 staff updates. Live QA: assistants picker · advisor dropdown · location lock · customer-name new-tab · appt delete button · negative stock badge.
 
-Outstanding (admin): V15 #7 deploy auth · LineSettings creds · customer ID backfill · backfill skipStockDeduction button (in PermissionGroupsTab).
+Outstanding (admin): V15 #7 deploy auth · phantom-branch cleanup execution · LineSettings creds · customer ID backfill · TEST-/E2E- prefix discipline.
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger.
 
 /session-start
 ```
