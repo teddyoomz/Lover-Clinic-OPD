@@ -423,7 +423,10 @@ describe('Phase 15.4 ML.H — MovementLogPanel passes includeLegacyMain only at 
 describe('Phase 15.4 ML.C — writer sets branchIds[] on transfer movements', () => {
   // Slice updateStockTransferStatus
   const fnStart = backendSrc.indexOf('export async function updateStockTransferStatus');
-  const fnSlice = backendSrc.slice(fnStart, fnStart + 8000);
+  // V36 (2026-04-29): function body grew by ~600 chars from the
+  // _ensureProductTracked call added to _receiveAtDestination. Slice
+  // expanded 8000 → 12000 to keep the RECEIVE setDoc body within window.
+  const fnSlice = backendSrc.slice(fnStart, fnStart + 12000);
 
   it('ML.C.1 — EXPORT_TRANSFER movement has branchIds: [src, dst]', () => {
     // Find the EXPORT_TRANSFER block
@@ -459,7 +462,9 @@ describe('Phase 15.4 ML.C — writer sets branchIds[] on transfer movements', ()
 
 describe('Phase 15.4 ML.D — writer sets branchIds[] on withdrawal movements', () => {
   const fnStart = backendSrc.indexOf('export async function updateStockWithdrawalStatus');
-  const fnSlice = backendSrc.slice(fnStart, fnStart + 8000);
+  // V36 (2026-04-29): same expansion as ML.C — _ensureProductTracked in
+  // _receiveAtDestination grew the function body by ~600 chars.
+  const fnSlice = backendSrc.slice(fnStart, fnStart + 12000);
 
   it('ML.D.1 — EXPORT_WITHDRAWAL movement has branchIds: [src, dst]', () => {
     const expIdx = fnSlice.indexOf('MOVEMENT_TYPES.EXPORT_WITHDRAWAL');

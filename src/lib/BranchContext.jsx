@@ -61,23 +61,51 @@ export function BranchProvider({ children }) {
       unsubscribe = onSnapshot(branchesCol(), (snap) => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setBranches(list);
-        // First-load default-branch resolution.
+        // V36 (2026-04-29) — phantom-branch defensive fallback. Pre-V36
+        // logic only validated the cached selectedBranchId on FIRST snapshot
+        // (when isReady===false). If branches changed after that (e.g.
+        // admin deleted a branch via cleanup-phantom-branch endpoint while
+        // the page was already open OR the user's localStorage retained a
+        // since-deleted branch from a prior session), selectedBranchId
+        // stayed stale → all stock writes attributed to a phantom branch
+        // → user reported "Movement log สาขาหายไปหมด" because the reader
+        // filter excluded everything.
+        //
+        // V36 fix: validate current selectedBranchId on EVERY snapshot.
+        // If the current selection no longer matches any branch doc AND
+        // it's not the legacy 'main' fallback, fall back to default branch
+        // or 'main'. This re-fires even after isReady=true so admin can
+        // delete a branch and the UI immediately re-resolves.
+        const currentSel = (() => {
+          try { return window.localStorage?.getItem(STORAGE_KEY) || ''; } catch { return ''; }
+        })();
+        const selectionStillValid = currentSel === FALLBACK_ID ||
+          (list.length > 0 && list.some(b => (b.branchId || b.id) === currentSel));
+
         if (!isReady && list.length > 0) {
-          const cached = (() => {
-            try { return window.localStorage?.getItem(STORAGE_KEY); } catch { return null; }
-          })();
-          const cachedStillValid = cached && list.some(b => (b.branchId || b.id) === cached);
-          if (!cachedStillValid) {
+          // First-load default-branch resolution.
+          if (!selectionStillValid) {
             const def = list.find(b => b.isDefault) || list[0];
             const id = def?.branchId || def?.id || FALLBACK_ID;
             setSelectedBranchIdState(id);
             try { window.localStorage?.setItem(STORAGE_KEY, id); } catch {}
           }
           setIsReady(true);
-        } else if (list.length === 0 && !isReady) {
+        } else if (!isReady && list.length === 0) {
           // No branches in Firestore yet — keep FALLBACK_ID so existing
           // hardcoded 'main' callsites continue to work unchanged.
+          if (!selectionStillValid) {
+            setSelectedBranchIdState(FALLBACK_ID);
+            try { window.localStorage?.setItem(STORAGE_KEY, FALLBACK_ID); } catch {}
+          }
           setIsReady(true);
+        } else if (isReady && !selectionStillValid) {
+          // V36 fallback: branch doc disappeared (admin cleanup OR phantom
+          // never existed). Re-resolve to default-branch or main fallback.
+          const def = list.find(b => b.isDefault) || list[0];
+          const id = def?.branchId || def?.id || FALLBACK_ID;
+          setSelectedBranchIdState(id);
+          try { window.localStorage?.setItem(STORAGE_KEY, id); } catch {}
         }
       }, () => setIsReady(true));
     } catch {

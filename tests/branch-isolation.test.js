@@ -54,7 +54,11 @@ describe('BR1: BranchContext + useSelectedBranch hook', () => {
 
   it('BR1.5: auto-selects isDefault=true branch when localStorage cache is empty/stale', () => {
     expect(SRC).toMatch(/list\.find\(b\s*=>\s*b\.isDefault\)/);
-    expect(SRC).toMatch(/cachedStillValid\s*=/);
+    // V36 (2026-04-29) — renamed cachedStillValid → selectionStillValid
+    // when adding the post-mount validity check (phantom branch fallback).
+    // Either name satisfies the contract: there's a validity boolean +
+    // it's used to decide whether to re-resolve the default branch.
+    expect(SRC).toMatch(/(cachedStillValid|selectionStillValid)\s*=/);
   });
 
   it('BR1.6: exports resolveSelectedBranchId for non-React callers', () => {

@@ -393,12 +393,16 @@ describe('CSS.F — _ensureProductTracked single-writer + vendor-receive refacto
     expect(block?.[0]).not.toMatch(/setDoc\([^)]*stockConfig/);
   });
 
-  it('F.6 V12 single-writer contract — _ensureProductTracked called from EXACTLY 2 sites (vendor + treatment)', () => {
+  it('F.6 V12 single-writer contract — _ensureProductTracked called from ALL batch-creating writers (vendor + treatment + V36 transfer + V36 withdrawal)', () => {
     // grep all callers
     const callMatches = backendClientSrc.match(/_ensureProductTracked\(/g) || [];
-    // 1 declaration (function name itself in `async function _ensureProductTracked(`)
-    // + 2 callers (vendor + _deductOneItem) = 3 occurrences total
-    expect(callMatches.length).toBe(3);
+    // 1 declaration + 4 callers (vendor + _deductOneItem + V36 transfer-receive + V36 withdrawal-receive)
+    // V36 (2026-04-29) added 2 more callers per the multi-writer-sweep audit:
+    //   - updateStockTransferStatus._receiveAtDestination (~line 6750)
+    //   - updateStockWithdrawalStatus._receiveAtDestination (~line 7070)
+    // Pre-V36, those paths created destination-tier batches WITHOUT flipping
+    // stockConfig.trackStock=true → subsequent treatment deduct silent-SKIPped.
+    expect(callMatches.length).toBe(5);
   });
 });
 
@@ -423,7 +427,11 @@ describe('CSS.G — _deductOneItem decision tree + context threading', () => {
     // function declaration and its closing brace).
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     expect(fnStart).toBeGreaterThan(0);
-    const slice = backendClientSrc.slice(fnStart, fnStart + 6000);
+    // V36 (2026-04-29) — slice grew from 6000 → 8000 because the V36
+    // fail-loud throw block (TRACKED_UPSERT_FAILED) added ~1500 chars
+    // between the auto-init branch and the silent-skip emit. Increased
+    // window so this test remains valid for the post-V36 layout.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
     expect(slice).toMatch(/item\.skipStockDeduction\s*===\s*true/);
     expect(slice).toMatch(/note:\s*['"]ผู้ใช้ตั้งค่าให้ไม่ตัดสต็อคในคอร์ส['"]/);
     expect(slice).toMatch(/reason:\s*['"]course-skip['"]/);
@@ -434,14 +442,17 @@ describe('CSS.G — _deductOneItem decision tree + context threading', () => {
     // products silent-skipped despite having batches. Extended auto-init
     // to fire on both contexts so sale + treatment behave identically.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 6000);
+    // V36 (2026-04-29) — slice 6000 → 8000 (V36 fail-loud throw block
+    // added ~1500 chars between auto-init and silent-skip).
+    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
     expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
     expect(slice).toMatch(/_ensureProductTracked\(item\.productId/);
   });
 
   it('G.6 decision tree branch 4 — silent-skip remains for unknown/manual context only (V21 anti-regression)', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 6000);
+    // V36 (2026-04-29) — slice 6000 → 8000 to keep silent-skip emit in window.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
     // Silent-skip note still exists as defensive fallback for callers
     // that don't pass a known context (treatment/sale handled above).
     expect(slice).toMatch(/product not yet configured for stock tracking/);

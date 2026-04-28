@@ -5523,31 +5523,40 @@ async function _ensureProductTracked(productId, opts = {}) {
     isControlled: !!existing?.isControlled,
   };
 
+  // V36 (2026-04-29) — switch from updateDoc → setDoc({merge:true}) so the
+  // helper doesn't silently fail when (a) the be_products doc exists but with
+  // no stockConfig field, or (b) the doc is missing entirely. setDoc with
+  // merge upserts the field without clobbering siblings AND creates the doc
+  // when missing. Returns null ONLY when the product genuinely doesn't exist
+  // in EITHER be_products OR master_data/products/items — that is the
+  // genuine "config-impossible" state which the caller (V36 fail-loud)
+  // surfaces as TRACKED_UPSERT_FAILED in treatment context.
   try {
     const beRef = doc(db, ...basePath(), 'be_products', String(productId));
     const beSnap = await getDoc(beRef);
     if (beSnap.exists()) {
-      await updateDoc(beRef, {
+      await setDoc(beRef, {
         stockConfig: baseConfig,
         _stockConfigSetBy: setBy,
         _stockConfigSetAt: now,
-      });
+      }, { merge: true });
       return baseConfig;
     }
     const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
     const legacySnap = await getDoc(legacyRef);
     if (legacySnap.exists()) {
-      await updateDoc(legacyRef, {
+      await setDoc(legacyRef, {
         stockConfig: baseConfig,
         _stockConfigSetBy: setBy,
         _stockConfigSetAt: now,
-      });
+      }, { merge: true });
       return baseConfig;
     }
     return null;
   } catch (e) {
     // Non-fatal — log + return null. Caller decides whether to throw
-    // (treatment context throws; sale context preserves silent-skip).
+    // (V36: treatment context throws TRACKED_UPSERT_FAILED; sale context
+    // preserves silent-skip per V35.3-ter contract).
     console.warn('[_ensureProductTracked] failed for', productId, e);
     return null;
   }
@@ -5749,7 +5758,32 @@ async function _deductOneItem({
     if (upserted && upserted.trackStock === true) {
       cfg = upserted;
       tracked = true;
+    } else if (context === 'treatment') {
+      // V36 (2026-04-29) — fail-loud config-impossible. Fires ONLY when the
+      // product genuinely doesn't exist in EITHER be_products OR
+      // master_data/products/items (the auto-init upsert via setDoc-merge
+      // returned null). Does NOT fire on shortfall or no-batch-at-branch —
+      // those continue to route through the Phase 15.7 negative-stock
+      // allowance (pickNegativeTargetBatch + AUTO-NEG synthesis below).
+      // Sale context preserves silent-skip per V35.3-ter explicit user
+      // contract — only treatment context throws.
+      // Caller (deductStockForTreatment) catches err.code and surfaces a
+      // friendly error to the React form so admin can fix the product
+      // master then retry. Was: silent SKIP movement that misled admin
+      // into thinking stock deducted while qty.remaining never moved
+      // (V31 silent-swallow anti-pattern; comment-vs-code drift —
+      // line 5694 promised V31 fail-loud but the code did silent skip).
+      const err = new Error(
+        `ไม่สามารถตั้งค่าการตัดสต็อคของสินค้า "${item.productName || item.productId}" ` +
+        `ได้ — สินค้านี้ไม่มีอยู่ใน database (be_products หรือ master_data) ` +
+        `กรุณาเพิ่มสินค้าใน "ข้อมูลพื้นฐาน → สินค้า" ก่อน`
+      );
+      err.code = 'TRACKED_UPSERT_FAILED';
+      err.productId = item.productId;
+      err.productName = item.productName;
+      throw err;
     }
+    // sale context: fall through to legacy silent-skip below (V35.3-ter).
   }
 
   if (!tracked) {
@@ -6709,6 +6743,21 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
     // first if any source batch is orphaned.
     await _assertProductExists(item.productId, `createStockTransfer:receive item=${item.sourceBatchId}`);
 
+    // V36 (2026-04-29) — multi-writer-sweep: every batch-creating writer MUST
+    // route through _ensureProductTracked so the destination tier's product
+    // gets stockConfig.trackStock=true set. Pre-V36, transfer-receive
+    // created batches WITHOUT flipping the flag → subsequent treatment
+    // deduct on those batches silently SKIPped with note "product not yet
+    // configured for stock tracking" because _getProductStockConfig saw
+    // stockConfig missing/false. V12 multi-writer mirror of the V35
+    // multi-reader sweep: when introducing an opt-in flag, audit ALL
+    // writers, not just the canonical one. Idempotent (no-op if already
+    // tracked). Audit-stock-flow S29 enforces.
+    await _ensureProductTracked(item.productId, {
+      setBy: 'updateStockTransferStatus._receiveAtDestination',
+      unit: item.unit,
+    });
+
     // Phase 15.7-bis (2026-04-28) — auto-repay negatives at destination
     // before creating a new batch. User directive: incoming positives
     // (transfer-in is a positive) must repay existing negatives FIFO.
@@ -7017,6 +7066,15 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
     // createStockTransfer:_receiveAtDestination above. Refuses orphan
     // materialization at the withdrawal destination tier.
     await _assertProductExists(item.productId, `createStockWithdrawal:receive item=${item.sourceBatchId}`);
+
+    // V36 (2026-04-29) — multi-writer-sweep: mirror of the transfer-receive
+    // fix above. Withdrawal-receive creates a NEW batch at the destination
+    // tier; pre-V36 it skipped _ensureProductTracked → subsequent treatment
+    // deduct silent-SKIPped. Idempotent. Audit-stock-flow S29 enforces.
+    await _ensureProductTracked(item.productId, {
+      setBy: 'updateStockWithdrawalStatus._receiveAtDestination',
+      unit: item.unit,
+    });
 
     // Phase 15.7-bis (2026-04-28) — auto-repay negatives at destination.
     const repayResult = await _repayNegativeBalances({
