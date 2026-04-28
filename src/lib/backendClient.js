@@ -5283,13 +5283,17 @@ async function _deductOneItem({
   let cfg = await _getProductStockConfig(item.productId);
   let tracked = cfg && cfg.trackStock === true;
 
-  // Treatment-context auto-init: if the product isn't tracked yet, opt it
-  // in lazily so course-mediated deductions actually decrement stock
-  // (Image 1 bug fix). Single-writer via _ensureProductTracked = V12
-  // safe. Sale context skips this branch — preserves legacy contract.
-  if (!tracked && context === 'treatment') {
+  // V35.3-ter (2026-04-28 — user-confirmed): auto-init for BOTH treatment
+  // AND sale context. Pre-fix sale-side silent-skipped untracked products
+  // → user reported "ขายของจาก tab=sales แล้ว...สุดท้ายก็ไม่มีการตัดสต็อคจริง".
+  // Lazy upsert of stockConfig.trackStock=true so course/product/medication
+  // deductions actually decrement stock. Single-writer via
+  // _ensureProductTracked = V12 safe. Service products (no batches by
+  // design) → admin sets `stockConfig.trackStock=false` explicitly via
+  // ProductFormModal to opt out.
+  if (!tracked && (context === 'treatment' || context === 'sale')) {
     const upserted = await _ensureProductTracked(item.productId, {
-      setBy: '_deductOneItem(treatment)',
+      setBy: `_deductOneItem(${context})`,
       unit: item.unit,
     });
     if (upserted && upserted.trackStock === true) {
@@ -5356,16 +5360,17 @@ async function _deductOneItem({
   const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, preferNewest });
 
   if (plan.shortfall > 0) {
-    // 2026-04-28 hotfix (V15 #5 post-deploy bug "Stock insufficient for [IV
-    // Drip] Aura bright"): for treatment context, branch may legitimately
-    // have NO active batch yet for a course-mediated product (admin hasn't
-    // received vendor stock for that branch yet, or used master tier only).
-    // Throwing here BLOCKS treatment save — V31 fail-loud was too aggressive
-    // for the legacy data shape. Emit a silent-skip movement instead so the
-    // treatment can save; admin sees the SKIP row in movement log + can fix
-    // by either receiving stock at the branch OR ticking "ไม่ตัดสต็อค" on
-    // the course row. Sale context still throws (sales must hold stock).
-    if (context === 'treatment') {
+    // V35.3-ter (2026-04-28 — user-confirmed): silent-skip on shortfall
+    // for BOTH treatment AND sale contexts. Pre-fix sale path threw
+    // "Stock insufficient" → blocked sale save. User-confirmed sale UX:
+    // emit SKIP movement so sale can save; admin sees the SKIP row + can
+    // fix by either receiving stock at the branch OR explicitly setting
+    // `trackStock=false` on service-only products. Mirrors treatment UX.
+    // Note: shouldn't be reached for "manual" / undefined context in
+    // practice (deductStockForSale + deductStockForTreatment are the only
+    // callers and both pass explicit context). Throw retained as defensive
+    // fallback.
+    if (context === 'treatment' || context === 'sale') {
       const allocated = item.qty - plan.shortfall;
       const movementId = _genMovementId();
       const now = new Date().toISOString();

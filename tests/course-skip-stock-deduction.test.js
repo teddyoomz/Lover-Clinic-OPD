@@ -413,7 +413,7 @@ describe('CSS.G — _deductOneItem decision tree + context threading', () => {
     expect(fnBlock?.[0]).toMatch(/context:\s*['"]treatment['"]/);
   });
 
-  it('G.3 deductStockForSale passes context:"sale" (preserves silent-skip blast-radius guard)', () => {
+  it('G.3 deductStockForSale passes context:"sale" (V35.3-ter: same auto-init+silent-skip as treatment)', () => {
     const fnBlock = backendClientSrc.match(/export async function deductStockForSale[\s\S]+?\n\}/);
     expect(fnBlock?.[0]).toMatch(/context:\s*['"]sale['"]/);
   });
@@ -429,20 +429,24 @@ describe('CSS.G — _deductOneItem decision tree + context threading', () => {
     expect(slice).toMatch(/reason:\s*['"]course-skip['"]/);
   });
 
-  it('G.5 decision tree branch 2 — context==="treatment" + untracked auto-init via _ensureProductTracked', () => {
+  it('G.5 decision tree branch 2 — V35.3-ter auto-init for BOTH treatment AND sale context', () => {
+    // V35.3-ter (2026-04-28 user-confirmed): user reported sale-path
+    // products silent-skipped despite having batches. Extended auto-init
+    // to fire on both contexts so sale + treatment behave identically.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     const slice = backendClientSrc.slice(fnStart, fnStart + 6000);
-    expect(slice).toMatch(/!tracked\s*&&\s*context\s*===\s*['"]treatment['"]/);
+    expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
     expect(slice).toMatch(/_ensureProductTracked\(item\.productId/);
   });
 
-  it('G.6 decision tree branch 4 — sale/manual untracked still emits silent-skip (legacy path preserved)', () => {
+  it('G.6 decision tree branch 4 — silent-skip remains for unknown/manual context only (V21 anti-regression)', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     const slice = backendClientSrc.slice(fnStart, fnStart + 6000);
-    // The silent-skip note for non-tracked still exists for sale/manual context
+    // Silent-skip note still exists as defensive fallback for callers
+    // that don't pass a known context (treatment/sale handled above).
     expect(slice).toMatch(/product not yet configured for stock tracking/);
-    // V21 anti-regression — the old single-path behavior (silent-skip for ALL contexts)
-    // is gone; check the auto-init branch comes BEFORE the silent-skip emit.
+    // V21 anti-regression — auto-init branch must come BEFORE silent-skip
+    // emit so the auto-init has a chance to fire first.
     const autoInitIdx = slice.search(/_ensureProductTracked\(item\.productId/);
     const silentSkipIdx = slice.search(/product not yet configured for stock tracking/);
     expect(autoInitIdx).toBeGreaterThan(0);
@@ -637,31 +641,32 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     expect(stockDiffSrc).not.toMatch(/skipStockDeduction/);
   });
 
-  it('K.2 V31 — sale context still throws on FIFO shortfall (legacy fail-loud preserved)', () => {
-    // Sale context MUST throw on shortfall (admin needs to know stock missing).
-    // Treatment context emits silent-skip movement instead (so save isn't blocked).
+  it('K.2 throw retained as defensive fallback (treatment+sale handled by silent-skip)', () => {
+    // V35.3-ter: both treatment AND sale silent-skip on shortfall.
+    // Throw remains for unknown context (defensive — never reached in
+    // practice since deductStockForSale + deductStockForTreatment are
+    // the only callers and both pass explicit context).
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
   });
 
-  it('K.2-bis 2026-04-28 hotfix — treatment context shortfall emits silent-skip (does NOT throw)', () => {
-    // Hotfix after V15 #5 post-deploy report: "Stock insufficient for
-    // [IV Drip] Aura bright x 1 ครั้ง (1125): need 1, allocated 0, shortfall 1"
-    // Treatment save was blocked. Fix: shortfall in treatment context →
-    // silent-skip movement with reason 'no-batch-at-branch' or 'shortfall'.
+  it('K.2-bis V35.3-ter: BOTH treatment AND sale context shortfall emit silent-skip', () => {
+    // V35.3-ter (2026-04-28 user-confirmed): sale path also silent-skips
+    // on shortfall (was: throw "Stock insufficient" → blocked sale save).
+    // Mirrors treatment UX. User explicitly chose Option 1 in plan-time
+    // AskUserQuestion: "Silent-skip เหมือน treatment".
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
-    expect(slice).toMatch(/if \(context === ['"]treatment['"]\)/);
+    expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
     expect(slice).toMatch(/no-batch-at-branch/);
     expect(slice).toMatch(/ไม่มีสต็อคที่สาขานี้/);
-    // Confirm the throw is in an else-branch (sale context only) — by
-    // checking the treatment-context return appears before the throw.
-    const treatmentCtxIdx = slice.indexOf("if (context === 'treatment')");
+    // Silent-skip return must come BEFORE the throw (defensive fallback).
+    const ctxIdx = slice.search(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
     const throwIdx = slice.indexOf('throw new Error');
-    expect(treatmentCtxIdx).toBeGreaterThan(0);
-    expect(throwIdx).toBeGreaterThan(treatmentCtxIdx);
+    expect(ctxIdx).toBeGreaterThan(0);
+    expect(throwIdx).toBeGreaterThan(ctxIdx);
   });
 
   it('K.3 V14 — no undefined leaves in mapper output (!! coercion at every layer)', () => {

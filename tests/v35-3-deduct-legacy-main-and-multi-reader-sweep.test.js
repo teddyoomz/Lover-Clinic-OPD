@@ -143,11 +143,30 @@ describe('V35.3.B — _deductOneItem now passes includeLegacyMain:true', () => {
     expect(backendClientSrc).toMatch(/hotfix.*V35\.3.*post V15 #6/i);
   });
 
-  it('B.3 V31 fail-loud throw still preserved for sale context (not gutted by hotfix)', () => {
+  it('B.3 throw is defensive fallback (no caller passes context other than treatment/sale)', () => {
+    // V35.3-ter (2026-04-28): user-confirmed both treatment AND sale
+    // shortfall now silent-skip. The throw remains as defensive fallback
+    // for unexpected callers that don't pass `context` opt.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
     const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
+  });
+
+  it('B.4 V35.3-ter: auto-init fires for BOTH treatment AND sale context', () => {
+    const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
+    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    // The auto-init branch now matches both contexts
+    expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
+  });
+
+  it('B.5 V35.3-ter: shortfall silent-skip fires for BOTH treatment AND sale context', () => {
+    const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
+    const slice = backendClientSrc.slice(fnStart, fnStart + 12000);
+    expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
+    // Friendly Thai notes preserved
+    expect(slice).toMatch(/ไม่มีสต็อคที่สาขานี้/);
+    expect(slice).toMatch(/สต็อคไม่พอที่สาขานี้/);
   });
 });
 
