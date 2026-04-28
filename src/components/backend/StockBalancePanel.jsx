@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse } from 'lucide-react';
-import { listStockBatches, listStockLocations } from '../../lib/backendClient.js';
+import { listStockBatches, listStockLocations, listProducts } from '../../lib/backendClient.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
@@ -17,9 +17,21 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Phase 15.5 / Item 1 (2026-04-28) — per-product warning thresholds replace
+  // the old hardcoded 30-day expiry + ≤5 qty UI filters. Three product fields
+  // (already in schema; editable via ProductFormModal) drive per-row badges:
+  //   - alertDayBeforeExpire   → "ใกล้หมดอายุ" badge when nextExpiry within N days
+  //   - alertQtyBeforeOutOfStock → "ใกล้หมด" badge when remaining ≤ N
+  //   - alertQtyBeforeMaxStock → "เกินสต็อก" badge when remaining > N
+  // Filter checkboxes show only products whose corresponding threshold is
+  // currently triggered (products w/o threshold OR not breaching = hidden).
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showOverStockOnly, setShowOverStockOnly] = useState(false);
   const [locations, setLocations] = useState([{ id: 'main', name: 'สาขาหลัก', kind: 'branch' }]);
+  // Phase 15.5 / Item 1 — per-product threshold lookup map keyed by productId
+  // Shape: { [productId]: { alertDayBeforeExpire, alertQtyBeforeOutOfStock, alertQtyBeforeMaxStock } }
+  const [productThresholdMap, setProductThresholdMap] = useState({});
   // Phase 15.1 (2026-04-27) — defaultLocationId pre-selects a specific
   // location (e.g. central warehouse from CentralStockTab). lockLocation
   // hides the dropdown when caller wants the location fixed.
@@ -32,6 +44,35 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         const locs = await listStockLocations();
         if (!cancelled && Array.isArray(locs) && locs.length) setLocations(locs);
       } catch (e) { console.error('[StockBalance] listStockLocations failed:', e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Phase 15.5 / Item 1 — load product threshold map (alertDayBeforeExpire +
+  // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock per productId).
+  // Used to drive per-row warning badges + filter logic. Refetches on mount;
+  // no listener (admin updates via ProductFormModal will reflect on next mount).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const products = await listProducts();
+        if (cancelled) return;
+        const map = {};
+        for (const p of (Array.isArray(products) ? products : [])) {
+          const pid = String(p?.id ?? p?.productId ?? '');
+          if (!pid) continue;
+          const numOrNull = (v) => (v == null || v === '') ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+          map[pid] = {
+            alertDayBeforeExpire: numOrNull(p.alertDayBeforeExpire),
+            alertQtyBeforeOutOfStock: numOrNull(p.alertQtyBeforeOutOfStock),
+            alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
+          };
+        }
+        setProductThresholdMap(map);
+      } catch (e) {
+        console.error('[StockBalance] listProducts threshold-map failed:', e);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -59,12 +100,17 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const currentLocation = locations.find(l => l.id === locationId) || { name: locationId, kind: 'branch' };
   const isCentral = currentLocation.kind === 'central';
 
-  // Group by productId, sum remaining
+  // Group by productId, sum remaining + attach per-product warning thresholds.
+  // Phase 15.5 / Item 1 (2026-04-28): each row carries alertDayBeforeExpire +
+  // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock pulled from the per-
+  // product threshold map. Filter checkboxes use these thresholds; row badges
+  // render based on whether each threshold is breached.
   const products = useMemo(() => {
     const byProduct = new Map();
     for (const b of batches) {
       if (!b.productId) continue;
       if (!byProduct.has(b.productId)) {
+        const t = productThresholdMap[String(b.productId)] || {};
         byProduct.set(b.productId, {
           productId: b.productId,
           productName: b.productName,
@@ -75,6 +121,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           nextExpiry: null,
           expired: 0,
           valueCost: 0,
+          // Phase 15.5 / Item 1 — per-product warning thresholds (null if unset)
+          alertDayBeforeExpire: t.alertDayBeforeExpire ?? null,
+          alertQtyBeforeOutOfStock: t.alertQtyBeforeOutOfStock ?? null,
+          alertQtyBeforeMaxStock: t.alertQtyBeforeMaxStock ?? null,
         });
       }
       const p = byProduct.get(b.productId);
@@ -96,7 +146,24 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
       });
     }
     return Array.from(byProduct.values()).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
-  }, [batches]);
+  }, [batches, productThresholdMap]);
+
+  // Phase 15.5 / Item 1 — pure helpers exported on shape for testability.
+  // Each returns true when the per-product threshold is configured AND breached.
+  const isExpiryWarning = useCallback((p) => {
+    if (p.alertDayBeforeExpire == null) return false;
+    if (!p.nextExpiry) return false;
+    const days = (new Date(p.nextExpiry).getTime() - Date.now()) / 86400000;
+    return days <= Number(p.alertDayBeforeExpire);
+  }, []);
+  const isLowStockWarning = useCallback((p) => {
+    if (p.alertQtyBeforeOutOfStock == null) return false;
+    return Number(p.totalRemaining) <= Number(p.alertQtyBeforeOutOfStock) && Number(p.totalRemaining) > 0;
+  }, []);
+  const isOverStockWarning = useCallback((p) => {
+    if (p.alertQtyBeforeMaxStock == null) return false;
+    return Number(p.totalRemaining) > Number(p.alertQtyBeforeMaxStock);
+  }, []);
 
   const displayed = useMemo(() => {
     let list = products;
@@ -104,19 +171,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
       const q = search.toLowerCase();
       list = list.filter(p => (p.productName || '').toLowerCase().includes(q) || String(p.productId).includes(q));
     }
-    if (showExpiringOnly) {
-      const now = Date.now();
-      list = list.filter(p => {
-        if (!p.nextExpiry) return false;
-        const days = (new Date(p.nextExpiry).getTime() - now) / 86400000;
-        return days <= 30;
-      });
-    }
-    if (showLowStockOnly) {
-      list = list.filter(p => p.totalRemaining <= 5);
-    }
+    // Phase 15.5 / Item 1 — filters now use per-product thresholds.
+    // Products without a configured threshold for a given dimension are
+    // hidden from that dimension's filter (no false positives).
+    if (showExpiringOnly) list = list.filter(isExpiryWarning);
+    if (showLowStockOnly) list = list.filter(isLowStockWarning);
+    if (showOverStockOnly) list = list.filter(isOverStockWarning);
     return list;
-  }, [products, search, showExpiringOnly, showLowStockOnly]);
+  }, [products, search, showExpiringOnly, showLowStockOnly, showOverStockOnly, isExpiryWarning, isLowStockWarning, isOverStockWarning]);
 
   const totalValue = useMemo(() => products.reduce((s, p) => s + p.valueCost, 0), [products]);
 
@@ -157,13 +219,21 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
             <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาสินค้า..."
               className="w-full pl-9 pr-3 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
           </div>
-          <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer">
+          {/* Phase 15.5 / Item 1 — filter labels reflect that thresholds are
+              per-product (set via ProductFormModal alertDayBeforeExpire +
+              alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock). Products
+              without a threshold for a dimension don't appear under that filter. */}
+          <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer" data-testid="filter-near-expiry">
             <input type="checkbox" checked={showExpiringOnly} onChange={e => setShowExpiringOnly(e.target.checked)} className="accent-orange-500" />
-            ใกล้หมดอายุ (≤30 วัน)
+            ใกล้หมดอายุ (ตั้งใน <em>แจ้งก่อนหมดอายุ</em>)
           </label>
-          <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer">
+          <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer" data-testid="filter-low-stock">
             <input type="checkbox" checked={showLowStockOnly} onChange={e => setShowLowStockOnly(e.target.checked)} className="accent-red-500" />
-            สต็อกน้อย (≤5)
+            ใกล้หมด (ตั้งใน <em>แจ้งใกล้หมด</em>)
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-[var(--tx-muted)] cursor-pointer" data-testid="filter-over-stock">
+            <input type="checkbox" checked={showOverStockOnly} onChange={e => setShowOverStockOnly(e.target.checked)} className="accent-violet-500" />
+            เกินสต็อก (ตั้งใน <em>แจ้งเกินสต็อก</em>)
           </label>
         </div>
       </div>
@@ -196,18 +266,27 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
             <tbody>
               {displayed.map(p => {
                 const days = p.nextExpiry ? Math.floor((new Date(p.nextExpiry).getTime() - Date.now()) / 86400000) : null;
+                // Phase 15.5 / Item 1 — expiry color uses per-product threshold
+                // (alertDayBeforeExpire) instead of hardcoded 30. If threshold
+                // unset, expiry text stays neutral (admin must opt-in).
+                const expiryThreshold = p.alertDayBeforeExpire;
+                const isExpiring = expiryThreshold != null && days != null && days >= 0 && days <= Number(expiryThreshold);
                 const expiryClass = days == null ? 'text-[var(--tx-muted)]' :
                   days < 0 ? 'text-red-400 font-bold' :
-                  days <= 30 ? 'text-orange-400' :
+                  isExpiring ? 'text-orange-400' :
                   'text-[var(--tx-primary)]';
-                const lowStock = p.totalRemaining <= 5 && p.totalRemaining > 0;
+                // Phase 15.5 / Item 1 — qty badges now use per-product thresholds.
                 const outOfStock = p.totalRemaining <= 0;
+                const isLow = isLowStockWarning(p);
+                const isOver = isOverStockWarning(p);
                 return (
-                  <tr key={p.productId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`}>
+                  <tr key={p.productId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`} data-testid="balance-row">
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {p.productName || `Product ${p.productId}`}
-                      {outOfStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800">หมด</span>}
-                      {lowStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800">ใกล้หมด</span>}
+                      {outOfStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800" data-testid="badge-out-of-stock">หมด</span>}
+                      {isLow && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800" data-testid="badge-low-stock">ใกล้หมด</span>}
+                      {isOver && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-violet-900/30 text-violet-400 border border-violet-800" data-testid="badge-over-stock">เกินสต็อก</span>}
+                      {isExpiring && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800" data-testid="badge-near-expiry">ใกล้หมดอายุ</span>}
                     </td>
                     <td className="px-3 py-2 text-center text-[var(--tx-muted)]">{p.batches.length}</td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>

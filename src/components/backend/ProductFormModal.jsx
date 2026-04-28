@@ -3,10 +3,10 @@
 // from existing be_product_groups + be_product_units (Phase 11.2 + 11.3)
 // so new products inherit the same taxonomy as synced ones.
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveProduct, listProductGroups, listProductUnitGroups } from '../../lib/backendClient.js';
+import { saveProduct, listProductGroups, listProductUnitGroups, listProducts } from '../../lib/backendClient.js';
 import {
   STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS,
   validateProduct, emptyProductForm, generateProductId,
@@ -20,18 +20,62 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
   const [error, setError] = useState('');
   const [groups, setGroups] = useState([]);
   const [units, setUnits] = useState([]);
+  // Phase 15.5 / Item 2 (2026-04-28) — eager-load existing products' mainUnitName
+  // values to enrich the unit datalist. Refetch on each modal mount (R1 real-time:
+  // closing + reopening modal picks up newly-saved units immediately).
+  const [productUnits, setProductUnits] = useState([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [g, u] = await Promise.all([listProductGroups(), listProductUnitGroups()]);
+        const [g, u, p] = await Promise.all([
+          listProductGroups(),
+          listProductUnitGroups(),
+          listProducts().catch(() => []), // non-fatal — datalist degrades gracefully
+        ]);
         setGroups(g);
         setUnits(u);
+        // Extract unique non-empty mainUnitName values from existing products
+        const seen = new Set();
+        const productUnitOpts = [];
+        for (const prod of (Array.isArray(p) ? p : [])) {
+          const u = typeof prod?.mainUnitName === 'string' ? prod.mainUnitName.trim() : '';
+          if (!u) continue;
+          if (seen.has(u)) continue;
+          seen.add(u);
+          productUnitOpts.push(u);
+        }
+        productUnitOpts.sort((a, b) => a.localeCompare(b, 'th'));
+        setProductUnits(productUnitOpts);
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลอ้างอิงล้มเหลว');
       }
     })();
   }, []);
+
+  // Phase 15.5 / Item 2 — merged datalist options (master units + existing
+  // product units, deduped). Master takes precedence (key shape preserved).
+  const unitDatalistOptions = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    // Master units first (be_product_units groups → flat)
+    for (const u of units) {
+      if (!u || typeof u !== 'object') continue;
+      for (const x of (u.units || [])) {
+        const name = typeof x?.name === 'string' ? x.name.trim() : '';
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        out.push({ key: `master-${u.unitGroupId || u.id}-${name}`, value: name, source: 'master' });
+      }
+    }
+    // Then product-derived units not already in master
+    for (const name of productUnits) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ key: `product-${name}`, value: name, source: 'product' });
+    }
+    return out;
+  }, [units, productUnits]);
 
   const update = useCallback((patch) => setForm(prev => ({ ...prev, ...patch })), []);
 
@@ -125,10 +169,13 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
           <input type="text" list="product-unit-list" value={form.mainUnitName} onChange={(e) => update({ mainUnitName: e.target.value })}
             placeholder="เช่น ครั้ง / amp. / ชิ้น"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
-          <datalist id="product-unit-list">
-            {units.flatMap(u => (u.units || []).map((x, i) => (
-              <option key={`${u.unitGroupId || u.id}-${i}`} value={x.name} />
-            )))}
+          {/* Phase 15.5 / Item 2 (2026-04-28) — datalist merges master units
+              (be_product_units) WITH units already used in be_products. Lets
+              admin pick existing in-system units even if no master entry. */}
+          <datalist id="product-unit-list" data-testid="product-unit-datalist">
+            {unitDatalistOptions.map((opt) => (
+              <option key={opt.key} value={opt.value} data-source={opt.source} />
+            ))}
           </datalist>
         </div>
       </div>
