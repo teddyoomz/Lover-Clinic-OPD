@@ -189,9 +189,11 @@ describe('Phase 15.5/Item 1 — IT.B source-grep guards', () => {
   });
 
   it('B4 aggregator attaches per-product thresholds to row state', () => {
-    expect(PANEL_SRC).toMatch(/alertDayBeforeExpire:\s*t\.alertDayBeforeExpire/);
-    expect(PANEL_SRC).toMatch(/alertQtyBeforeOutOfStock:\s*t\.alertQtyBeforeOutOfStock/);
-    expect(PANEL_SRC).toMatch(/alertQtyBeforeMaxStock:\s*t\.alertQtyBeforeMaxStock/);
+    // V35.2 (2026-04-28) — variable renamed from `t` to `tEntry` for clarity.
+    // Optional-chaining + nullish-coalesce form: `tEntry?.alertX ?? null`.
+    expect(PANEL_SRC).toMatch(/alertDayBeforeExpire:\s*tEntry\?\.alertDayBeforeExpire/);
+    expect(PANEL_SRC).toMatch(/alertQtyBeforeOutOfStock:\s*tEntry\?\.alertQtyBeforeOutOfStock/);
+    expect(PANEL_SRC).toMatch(/alertQtyBeforeMaxStock:\s*tEntry\?\.alertQtyBeforeMaxStock/);
   });
 
   it('B5 helpers exist (isExpiryWarning + isLowStockWarning + isOverStockWarning)', () => {

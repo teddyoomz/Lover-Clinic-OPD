@@ -4,23 +4,28 @@
 // สาขาและ tab คลังกลางสามารถ search ได้ด้วย ไม่ใช่เลือกได้อย่างเดียว สินค้า
 // เยอะต้อง search ได้". 253+ products → plain <select> unusable.
 //
-// Mirror of StaffSelectField (V32-tris) shape: typeahead input + dropdown +
-// outside-click close + 50-result cap with overflow message + Thai sort.
-//
 // onChange signature: (id: string, record: object) => void
 //   - id is the productId (caller usually stores this on the line item)
 //   - record is the full product doc — caller uses it to pull unit, name,
-//     cost, group, etc. Caller decides which fields to lift onto the row.
+//     cost, group, etc.
 //
 // Tier scope: caller passes pre-filtered `options` (e.g.
 // StockAdjustPanel.availableProducts already filters by current tier's
-// active batches) — this component does NOT enforce scope. Single
-// responsibility: search + select.
+// active batches) — this component does NOT enforce scope.
 //
-// Rule C1 lock — Phase 15.6 audit S28 grep-checks each backend product
-// picker imports from this file. No inline <select>{products.map(...)}.
+// Phase 15.6-bis (2026-04-28) — V35.1 portal-positioned dropdown.
+// User report: "dropdown เลือกสินค้า ในหน้า สร้าง Order นำเข้า โดน box
+// modal limit แล้วบังไว้ทำให้โชว์ dropdown ออกมาได้". Pre-fix: dropdown
+// rendered as `position: absolute z-50` inside the input wrapper. Any
+// ancestor with `overflow: hidden | auto | scroll` clipped it. The
+// item-list scroll container in OrderPanel was the culprit. Fix: render
+// dropdown via React Portal to document.body with `position: fixed`
+// coords computed from the input's getBoundingClientRect. Reposition on
+// scroll/resize while open. No ancestor can clip a fixed-positioned body
+// child. Same fix benefits BatchSelectField.
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown } from 'lucide-react';
 import {
   composeProductDisplayName,
@@ -31,9 +36,9 @@ import {
 /**
  * @param {object} props
  * @param {string} props.value — currently selected productId
- * @param {(id: string, record: object) => void} props.onChange — picker callback
+ * @param {(id: string, record: object) => void} props.onChange
  * @param {Array} props.options — pre-filtered product list
- * @param {string} [props.placeholder] — input placeholder
+ * @param {string} [props.placeholder]
  * @param {boolean} [props.disabled]
  * @param {string} [props.testId] — data-testid (default 'product-select-field')
  * @param {string} [props.fieldKey] — for `data-field` attr (scrollToError)
@@ -51,13 +56,93 @@ export default function ProductSelectField({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const ref = useRef(null);
+  const [coords, setCoords] = useState(null);
+  const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
+  // Compute portal coords from the input's bounding rect.
+  // V35.1 fix: dropdown rendered in document.body so ancestor overflow
+  // can't clip; positioning has to be computed manually.
+  //
+  // V35.1-bis (2026-04-28) — smart positioning: if there's not enough
+  // space below the input, flip the dropdown UPWARD (anchor to input.top).
+  // Always cap maxHeight to fit visible viewport so internal scroll works
+  // and the dropdown never extends beyond the screen edge.
+  // User report: "dropdown ออกมาด้านนอกแล้ว แต่ แสดงผลได้น้อยเนื่องจาก
+  // ติด dropdown ของทั้ง page มันเลื่อนลงไม่ได้" — pre-fix max-h-72 was
+  // a fixed 288px cap that could still extend beyond viewport when input
+  // was near bottom. Page scroll is locked because position:fixed
+  // dropdown isn't part of the page scroll context.
+  const recomputeCoords = () => {
+    if (!inputRef.current) return;
+    const r = inputRef.current.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const GAP = 4;          // px between input and dropdown
+    const MARGIN = 8;       // px from viewport edge
+    const spaceBelow = vh - r.bottom - GAP - MARGIN;
+    const spaceAbove = r.top - GAP - MARGIN;
+    // Open downward unless space below < 160px AND space above > space below
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    if (openUp) {
+      const maxHeight = Math.max(120, Math.min(spaceAbove, 480));
+      setCoords({
+        bottom: vh - r.top + GAP,  // anchor to input.top (use bottom CSS prop)
+        left: r.left,
+        width: r.width,
+        maxHeight,
+        flipUp: true,
+      });
+    } else {
+      const maxHeight = Math.max(120, Math.min(spaceBelow, 480));
+      setCoords({
+        top: r.bottom + GAP,
+        left: r.left,
+        width: r.width,
+        maxHeight,
+        flipUp: false,
+      });
+    }
+  };
+
+  // Reposition on open + scroll + resize (any of these can move the input)
+  useLayoutEffect(() => {
+    if (!open) return;
+    // V35.1-tris (2026-04-28) — when dropdown opens AND space below is
+    // limited (e.g. input near bottom of viewport in a long form), scroll
+    // the page so the input sits ~120px from viewport top. Gives the
+    // dropdown the full screen below to expand. User report: "ในรูปที่ 1
+    // คือปัจจุบัน dropdown มันสั้นไป ทำให้หน้าเพจทั้งเพจเลื่อนลงมาได้
+    // เพื่อให้ dropdown มันโชว์ได้ยาวขึ้น".
+    if (inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      const spaceBelow = vh - r.bottom;
+      // Scroll up only when below is < 320px AND input isn't already near top.
+      if (spaceBelow < 320 && r.top > 160) {
+        const targetOffsetFromTop = 120;
+        const delta = r.top - targetOffsetFromTop;
+        window.scrollBy({ top: delta, behavior: 'auto' });
+      }
+    }
+    recomputeCoords();
+    const onScroll = () => recomputeCoords();
+    const onResize = () => recomputeCoords();
+    window.addEventListener('scroll', onScroll, true);  // capture true → reposition on ANY ancestor scroll
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open]);
+
+  // Close on outside-click. Wrapper OR dropdown click → keep open.
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) {
+      const inWrapper = wrapperRef.current?.contains(e.target);
+      const inDropdown = dropdownRef.current?.contains(e.target);
+      if (!inWrapper && !inDropdown) {
         setOpen(false);
         setQuery('');
       }
@@ -69,20 +154,76 @@ export default function ProductSelectField({
   const safe = Array.isArray(options) ? options : [];
   const filtered = useMemo(() => filterProductsByQuery(safe, query), [safe, query]);
 
-  // Display the currently-selected product's name in the closed input.
-  // When list comes from a different scope (tier change), value may not
-  // resolve — fall back to id so admin sees something rather than empty.
   const selected = useMemo(() => {
     if (!value) return null;
     return safe.find(p => String(p?.id ?? p?.productId ?? '') === String(value)) || null;
   }, [safe, value]);
   const closedDisplay = selected ? composeProductDisplayName(selected) : (value ? `id: ${value}` : '');
 
+  const dropdown = open && !disabled && coords ? createPortal(
+    <div
+      ref={dropdownRef}
+      data-testid={`${testId}-dropdown`}
+      data-flip-up={coords.flipUp ? 'true' : 'false'}
+      className="fixed z-[1000] overflow-auto rounded-lg bg-[var(--bg-surface)] border border-[var(--bd)] shadow-xl"
+      style={{
+        ...(coords.flipUp
+          ? { bottom: coords.bottom, left: coords.left, width: coords.width }
+          : { top: coords.top, left: coords.left, width: coords.width }),
+        maxHeight: coords.maxHeight,
+      }}
+    >
+      {safe.length === 0 ? (
+        <div className="px-3 py-3 text-xs text-[var(--tx-muted)]">ไม่มีสินค้าให้เลือก</div>
+      ) : filtered.length === 0 ? (
+        <div className="px-3 py-3 text-xs text-[var(--tx-muted)]">
+          ไม่พบสินค้าตรงกับ "{query}"
+        </div>
+      ) : (
+        <>
+          {filtered.slice(0, 50).map((p, i) => {
+            const id = String(p?.id ?? p?.productId ?? '');
+            const isActive = id === String(value || '');
+            return (
+              <button
+                key={id || i}
+                type="button"
+                data-product-id={id}
+                className={`w-full text-left px-3 py-2 text-xs border-b border-[var(--bd)] last:border-b-0 hover:bg-[var(--bg-hover)] ${isActive ? 'bg-[var(--bg-hover)]' : ''}`}
+                onClick={() => {
+                  onChange(id, p);
+                  setOpen(false);
+                  setQuery('');
+                }}
+              >
+                <div className="font-bold text-[var(--tx-primary)]">
+                  {composeProductDisplayName(p)}
+                </div>
+                {composeProductSubtitle(p) && (
+                  <div className="text-[10px] text-[var(--tx-muted)]">
+                    {composeProductSubtitle(p)}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+          {filtered.length > 50 && (
+            <div className="px-3 py-2 text-[10px] text-[var(--tx-muted)] bg-[var(--bg-hover)]">
+              แสดง 50 รายการแรก จาก {filtered.length} — พิมพ์ค้นหาเพื่อกรองให้แคบลง
+            </div>
+          )}
+        </>
+      )}
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div className={`relative ${className}`} ref={ref} data-testid={testId}>
+    <div className={`relative ${className}`} ref={wrapperRef} data-testid={testId}>
       <div className="relative">
         <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none" />
         <input
+          ref={inputRef}
           type="text"
           value={open ? query : closedDisplay}
           placeholder={placeholder}
@@ -94,52 +235,7 @@ export default function ProductSelectField({
         />
         <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none" />
       </div>
-
-      {open && !disabled && (
-        <div className="absolute z-50 mt-1 w-full max-h-72 overflow-auto rounded-lg bg-[var(--bg-surface)] border border-[var(--bd)] shadow-xl">
-          {safe.length === 0 ? (
-            <div className="px-3 py-3 text-xs text-[var(--tx-muted)]">ไม่มีสินค้าให้เลือก</div>
-          ) : filtered.length === 0 ? (
-            <div className="px-3 py-3 text-xs text-[var(--tx-muted)]">
-              ไม่พบสินค้าตรงกับ "{query}"
-            </div>
-          ) : (
-            <>
-              {filtered.slice(0, 50).map((p, i) => {
-                const id = String(p?.id ?? p?.productId ?? '');
-                const isActive = id === String(value || '');
-                return (
-                  <button
-                    key={id || i}
-                    type="button"
-                    data-product-id={id}
-                    className={`w-full text-left px-3 py-2 text-xs border-b border-[var(--bd)] last:border-b-0 hover:bg-[var(--bg-hover)] ${isActive ? 'bg-[var(--bg-hover)]' : ''}`}
-                    onClick={() => {
-                      onChange(id, p);
-                      setOpen(false);
-                      setQuery('');
-                    }}
-                  >
-                    <div className="font-bold text-[var(--tx-primary)]">
-                      {composeProductDisplayName(p)}
-                    </div>
-                    {composeProductSubtitle(p) && (
-                      <div className="text-[10px] text-[var(--tx-muted)]">
-                        {composeProductSubtitle(p)}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-              {filtered.length > 50 && (
-                <div className="px-3 py-2 text-[10px] text-[var(--tx-muted)] bg-[var(--bg-hover)]">
-                  แสดง 50 รายการแรก จาก {filtered.length} — พิมพ์ค้นหาเพื่อกรองให้แคบลง
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }

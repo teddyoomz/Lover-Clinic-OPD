@@ -187,14 +187,34 @@ describe('Phase 15.6 SBL.D — pure simulate of includeLegacyMain derivation', (
 });
 
 // =============================================================================
-describe('Phase 15.6 SBL.E — V21 anti-regression: no bare listStockBatches in StockBalancePanel', () => {
-  it('SBL.E.1 — StockBalancePanel must NOT have a listStockBatches call without includeLegacyMain key', () => {
-    // Find ALL listStockBatches calls and assert each has includeLegacyMain
+describe('Phase 15.6 SBL.E — V21 anti-regression: location-scoped listStockBatches calls all gate by includeLegacyMain', () => {
+  it('SBL.E.1 — Every location-scoped listStockBatches call (with branchId) passes includeLegacyMain', () => {
+    // V35.2 (2026-04-28) — relaxed: cross-tier batch counter intentionally
+    // calls listStockBatches({ status: 'active' }) WITHOUT branchId to load
+    // ALL active batches across tiers (powers the "+N ที่อื่นๆ" hint).
+    // The legacy-main rule only applies to LOCATION-SCOPED reads (calls
+    // that pass branchId). Walk every match: if it has branchId, must
+    // also have includeLegacyMain.
     const calls = [...balanceSrc.matchAll(/listStockBatches\([^)]*\)/g)];
     expect(calls.length).toBeGreaterThan(0);
     for (const m of calls) {
-      expect(m[0], `bare listStockBatches missing includeLegacyMain: ${m[0]}`).toMatch(/includeLegacyMain/);
+      const hasBranchId = /branchId\s*:/.test(m[0]);
+      if (hasBranchId) {
+        expect(m[0], `branchId-scoped listStockBatches missing includeLegacyMain: ${m[0]}`)
+          .toMatch(/includeLegacyMain/);
+      }
     }
+  });
+
+  it('SBL.E.2 — V35.2-bis: cross-tier load removed; per-lot expansion uses local batches array', () => {
+    // V35.2-bis (2026-04-28) — cross-tier load reverted per user clarification:
+    // "batch หมายถึง lot ที่นำเข้าแล้ววันหมดอายุมันต่างกัน ... เพื่อให้
+    // โชว์ในตารางยอดคงเหลือ". User wanted PER-LOT detail, NOT cross-tier
+    // count. Implementation: expandable row → render p.batches[] inline
+    // (no extra Firestore read needed; .batches IS the lot list).
+    expect(balanceSrc).toMatch(/data-testid="balance-lot-row"/);
+    expect(balanceSrc).toMatch(/expandedRows/);
+    expect(balanceSrc).toMatch(/toggleExpandRow/);
   });
 });
 

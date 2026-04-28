@@ -30,7 +30,12 @@ const APP_ID = 'loverclinic-opd-4c39b';
 // Test/E2E product prefix patterns. Extend cautiously — every entry here
 // is permanently scannable for cleanup. Do NOT add real-product prefixes
 // (e.g. 'ALG-', 'BTX-') — those represent real clinic SKUs.
-const TEST_PRODUCT_ID_PATTERN = /^(ADVS-|ADVT-|TEST-PROD-|E2E-PROD-|TEST-|E2E-)/;
+//
+// V35.2 (2026-04-28) — extended to cover Phase 8 adversarial variants
+// ADVX-/ADVO-/ADVW- (sales/orders/withdrawals adversarial test scaffolds).
+// User's first cleanup found 40 ADVS-/ADVT-* products + their batches; the
+// 14 ADVX-/ADVO-/ADVW-* leftovers slipped past the original regex.
+const TEST_PRODUCT_ID_PATTERN = /^(ADVS-|ADVT-|ADVX-|ADVO-|ADVW-|TEST-PROD-|E2E-PROD-|TEST-|E2E-)/;
 
 let cachedDb = null;
 function getAdminFirestore() {

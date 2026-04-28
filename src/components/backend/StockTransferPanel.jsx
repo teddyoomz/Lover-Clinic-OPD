@@ -23,6 +23,10 @@ import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.4 fix — gate legacy-main fallback to branch-tier source only.
 import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
+// Phase 15.6 / V35.1 (2026-04-28) — searchable batch picker (Rule C1).
+// Replaces inline <select>{batches.map(...)} so admin can search by
+// productName / batchId / unit / etc when source has many batches.
+import BatchSelectField from './BatchSelectField.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 const fmtDate = fmtSlashDateTime;
@@ -377,14 +381,13 @@ function TransferCreateForm({ locations, sellers, sellersLoading, onClose, onSav
                     <tr key={idx} className="border-t border-[var(--bd)]">
                       <td className="px-2 py-2 text-center text-[var(--tx-muted)]">{idx + 1}</td>
                       <td className="px-2 py-2">
-                        <select value={it.sourceBatchId} onChange={e => updateItem(idx, { sourceBatchId: e.target.value })} className={inputCls}>
-                          <option value="">— เลือก batch —</option>
-                          {batches.map(x => (
-                            <option key={x.batchId} value={x.batchId}>
-                              {x.productName} — ...{x.batchId.slice(-8)} ({fmtQty(x.qty.remaining)}/{fmtQty(x.qty.total)} {x.unit}{x.expiresAt ? `, หมด ${x.expiresAt}` : ''})
-                            </option>
-                          ))}
-                        </select>
+                        <BatchSelectField
+                          value={it.sourceBatchId}
+                          options={batches}
+                          onChange={(id) => updateItem(idx, { sourceBatchId: id })}
+                          testId={`transfer-batch-${idx}`}
+                          fieldKey={`transfer-item-${idx}-batch`}
+                        />
                       </td>
                       {/* Phase 15.4 item 7 — auto-show unit (read-only) so user doesn't confuse units */}
                       <td className="px-2 py-2 text-[var(--tx-primary)] text-[11px]" data-testid={`transfer-unit-${idx}`}>

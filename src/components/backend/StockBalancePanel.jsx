@@ -6,7 +6,7 @@
 // reduces client-side. With <10k active batches this is instant. If the
 // clinic ever scales past that, move to backend aggregation.
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info } from 'lucide-react';
 import { listStockBatches, listStockLocations, listProducts } from '../../lib/backendClient.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
@@ -41,6 +41,18 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // Phase 15.5 / Item 1 — per-product threshold lookup map keyed by productId
   // Shape: { [productId]: { alertDayBeforeExpire, alertQtyBeforeOutOfStock, alertQtyBeforeMaxStock } }
   const [productThresholdMap, setProductThresholdMap] = useState({});
+  // V35.2-bis (2026-04-28) — clarification from user: "batch ที่หมายถึง
+  // หมายถึง lot ที่นำเข้าแล้ววันหมดอายุมันต่างกันอะ ที่เวลากดเข้าไปหน้า
+  // ปรับสต็อคอันไหนมี lot มากกว่า 1 ก็จะสามารถเลือกปรับแต่งตาม lot ได้
+  // แบบนั้นแหละที่ผมจะหมายถึง เพื่อให้โชว์ในตารางยอดคงเหลือ".
+  // → Admin wants to see PER-LOT detail in balance table (each lot has
+  // its own expiry + remaining qty). Implementation: clickable batches
+  // count → expand row to show one sub-row per lot with FEFO sort.
+  // Track which productIds are expanded.
+  const [expandedRows, setExpandedRows] = useState({});
+  const toggleExpandRow = useCallback((pid) => {
+    setExpandedRows(prev => ({ ...prev, [String(pid)]: !prev[String(pid)] }));
+  }, []);
   // Phase 15.1 (2026-04-27) — defaultLocationId pre-selects a specific
   // location (e.g. central warehouse from CentralStockTab). lockLocation
   // hides the dropdown when caller wants the location fixed.
@@ -59,8 +71,17 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
 
   // Phase 15.5 / Item 1 — load product threshold map (alertDayBeforeExpire +
   // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock per productId).
-  // Used to drive per-row warning badges + filter logic. Refetches on mount;
-  // no listener (admin updates via ProductFormModal will reflect on next mount).
+  // Used to drive per-row warning badges + filter logic.
+  //
+  // Phase 15.6 / V35.2 (2026-04-28) — also store product.productName so the
+  // panel renders the CANONICAL product name (from be_products) instead of
+  // the denormalized batch.productName which is often stale or junky after
+  // ProClinic re-syncs (e.g. batch shows "Acetin 6" while product name is
+  // "Acetin"; user searched Products tab for "Acetin 6", got nothing,
+  // concluded phantom). Also tracks productId set so balance panel can
+  // FILTER OUT batches whose productId is not in be_products (FK violation
+  // shouldn't render even if the batch survived; defense-in-depth on top of
+  // Phase 15.6 cleanup endpoint + write-time _assertProductExists).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -76,6 +97,8 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
             alertDayBeforeExpire: numOrNull(p.alertDayBeforeExpire),
             alertQtyBeforeOutOfStock: numOrNull(p.alertQtyBeforeOutOfStock),
             alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
+            // Canonical name from be_products (preferred over batch.productName)
+            canonicalName: String(p.productName || p.name || '').trim(),
           };
         }
         setProductThresholdMap(map);
@@ -85,6 +108,11 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // V35.2-bis: cross-tier map removed — user clarified they want per-lot
+  // detail (NOT cross-tier counts). Per-lot detail surfaced via expandable
+  // rows below; no extra Firestore query needed (panel already has all
+  // location-scoped batches loaded; .batches array IS the lot list).
 
   // Phase 15.1 — sync locationId when caller updates defaultLocationId
   // (e.g. CentralStockTab loads warehouses async then passes the first one).
@@ -127,15 +155,30 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock pulled from the per-
   // product threshold map. Filter checkboxes use these thresholds; row badges
   // render based on whether each threshold is breached.
+  // V35.2 (2026-04-28) — gate: only filter batches by FK once productThresholdMap
+  // has loaded. Initial render before listProducts() resolves gets empty map,
+  // which would otherwise hide ALL batches. mapLoaded sentinel checks that
+  // the map has at least one entry (any clinic with batches has products).
+  const mapLoaded = Object.keys(productThresholdMap).length > 0;
   const products = useMemo(() => {
     const byProduct = new Map();
     for (const b of batches) {
       if (!b.productId) continue;
+      // Phase 15.6 / V35.2 (2026-04-28) — defense-in-depth FK gate at READ side.
+      // User report: "ทำไม Acetin 6 กับ Aloe gel 010 และสินค้าอื่นๆที่ไม่มีใน
+      // database สินค้าของเรา ยังมาปรากฎในหน้าคงเหลือ ถ้าไม่มีในระบบสินค้าให้
+      // ลบทิ้งไปเลย ห้ามมาปรากฎ". Even if a batch's productId references a
+      // be_products doc that's been deleted (race; or dev wrote a batch via
+      // a path that bypassed _assertProductExists), don't render it.
+      const tEntry = productThresholdMap[String(b.productId)];
+      if (mapLoaded && !tEntry) continue; // productId NOT in be_products → hide
       if (!byProduct.has(b.productId)) {
-        const t = productThresholdMap[String(b.productId)] || {};
+        // V35.2 — prefer canonical product.productName over batch.productName
+        // (denormalized; often junky after re-syncs e.g. "Acetin 6" vs canonical "Acetin")
+        const displayName = (tEntry?.canonicalName) || b.productName || '';
         byProduct.set(b.productId, {
           productId: b.productId,
-          productName: b.productName,
+          productName: displayName,
           unit: b.unit,
           totalRemaining: 0,
           totalCapacity: 0,
@@ -144,9 +187,9 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           expired: 0,
           valueCost: 0,
           // Phase 15.5 / Item 1 — per-product warning thresholds (null if unset)
-          alertDayBeforeExpire: t.alertDayBeforeExpire ?? null,
-          alertQtyBeforeOutOfStock: t.alertQtyBeforeOutOfStock ?? null,
-          alertQtyBeforeMaxStock: t.alertQtyBeforeMaxStock ?? null,
+          alertDayBeforeExpire: tEntry?.alertDayBeforeExpire ?? null,
+          alertQtyBeforeOutOfStock: tEntry?.alertQtyBeforeOutOfStock ?? null,
+          alertQtyBeforeMaxStock: tEntry?.alertQtyBeforeMaxStock ?? null,
         });
       }
       const p = byProduct.get(b.productId);
@@ -310,8 +353,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 const outOfStock = p.totalRemaining <= 0;
                 const isLow = isLowStockWarning(p);
                 const isOver = isOverStockWarning(p);
+                const isExpanded = !!expandedRows[String(p.productId)];
                 return (
-                  <tr key={p.productId} className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`} data-testid="balance-row">
+                  <Fragment key={p.productId}>
+                  <tr className="border-t border-[var(--bd)] hover:bg-[var(--bg-hover)]" title={`Batches:\n${p.batches.map(b => `  …${b.batchId.slice(-8)}: ${fmtQty(b.qty.remaining)} ${b.unit || ''} (exp ${b.expiresAt || '-'})`).join('\n')}`} data-testid="balance-row">
                     <td className="px-3 py-2 text-[var(--tx-primary)]">
                       {p.productName || `Product ${p.productId}`}
                       {outOfStock && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-red-900/30 text-red-400 border border-red-800" data-testid="badge-out-of-stock">หมด</span>}
@@ -319,7 +364,25 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                       {isOver && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-violet-900/30 text-violet-400 border border-violet-800" data-testid="badge-over-stock">เกินสต็อก</span>}
                       {isExpiring && <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-orange-900/30 text-orange-400 border border-orange-800" data-testid="badge-near-expiry">ใกล้หมดอายุ</span>}
                     </td>
-                    <td className="px-3 py-2 text-center text-[var(--tx-muted)]">{p.batches.length}</td>
+                    <td className="px-3 py-2 text-center" data-testid="td-batches">
+                      {/* V35.2-bis — clickable batches count → expand per-lot detail
+                          inline. User: "batch หมายถึง lot ที่นำเข้าแล้ววันหมดอายุ
+                          มันต่างกัน". Multi-lot products (>1 batch) show button.
+                          Single-lot products show plain text (no expansion needed). */}
+                      {p.batches.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleExpandRow(p.productId); }}
+                          className="px-2 py-0.5 rounded text-[10px] bg-rose-900/20 hover:bg-rose-900/40 text-rose-400 border border-rose-800 hover:border-rose-600 inline-flex items-center gap-1"
+                          data-testid="balance-expand-lots"
+                        >
+                          {p.batches.length} lots
+                          <span className="text-[8px]">{expandedRows[String(p.productId)] ? '▲' : '▼'}</span>
+                        </button>
+                      ) : (
+                        <span className="text-[var(--tx-muted)]">{p.batches.length}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>
                     <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]" data-testid="td-capacity">
                       {fmtQty(p.totalCapacity)}
@@ -349,6 +412,32 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                       </button>
                     </td>
                   </tr>
+                  {/* V35.2-bis — expanded per-lot detail rows (FEFO sorted).
+                      Shows lot id (last 8), qty (remaining/total), expiry,
+                      cost. Admin can adjust per-lot via รายการ adjust panel. */}
+                  {isExpanded && p.batches.length > 1 && p.batches.map((b, bi) => {
+                    const lotDays = b.expiresAt ? Math.floor((new Date(b.expiresAt).getTime() - Date.now()) / 86400000) : null;
+                    const lotExpClass = lotDays == null ? 'text-[var(--tx-muted)]' :
+                      lotDays < 0 ? 'text-red-400 font-bold' :
+                      'text-[var(--tx-primary)]';
+                    return (
+                      <tr key={`${p.productId}-lot-${b.batchId || bi}`} className="border-t border-[var(--bd)] bg-[var(--bg-hover)]/30" data-testid="balance-lot-row">
+                        <td className="px-3 py-1 pl-8 text-[10px] text-[var(--tx-muted)]" colSpan={2}>
+                          ↳ Lot …{String(b.batchId || '').slice(-8)}
+                          {b.isPremium && <span className="ml-1 px-1 rounded text-[8px] bg-rose-900/30 text-rose-400 border border-rose-800">premium</span>}
+                        </td>
+                        <td className="px-3 py-1 text-right font-mono text-[11px] text-emerald-400">{fmtQty(b.qty?.remaining || 0)} {b.unit || ''}</td>
+                        <td className="px-3 py-1 text-right font-mono text-[10px] text-[var(--tx-muted)]">{fmtQty(b.qty?.total || 0)}</td>
+                        <td className="px-3 py-1 text-right font-mono text-[10px] text-orange-400">฿{fmtQty((b.qty?.remaining || 0) * (b.originalCost || 0))}</td>
+                        <td className={`px-3 py-1 text-center text-[11px] ${lotExpClass}`}>
+                          {b.expiresAt || '-'}
+                          {lotDays != null && <div className="text-[8px]">{lotDays < 0 ? `หมดแล้ว ${-lotDays}d` : `อีก ${lotDays}d`}</div>}
+                        </td>
+                        <td className="px-3 py-1 text-center text-[10px] text-[var(--tx-muted)]">@฿{fmtQty(b.originalCost || 0)}/หน่วย</td>
+                      </tr>
+                    );
+                  })}
+                  </Fragment>
                 );
               })}
             </tbody>
