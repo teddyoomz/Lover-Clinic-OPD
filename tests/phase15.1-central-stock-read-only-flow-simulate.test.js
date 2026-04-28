@@ -239,7 +239,10 @@ describe('Phase 15.1 F6 — anti-regression (V12 multi-reader sweep)', () => {
   it('F6.1 StockBalancePanel still uses internal location dropdown when NOT locked', () => {
     // The dropdown markup must still exist (just conditionally rendered now).
     expect(balancePanelSrc).toContain('สถานที่:');
-    expect(balancePanelSrc).toMatch(/value=\{locationId\}\s+onChange=\{e\s*=>\s*setLocationId\(e\.target\.value\)\}/);
+    // Phase 15.7-ter (2026-04-28) — onChange now ALSO flips the
+    // userPickedLocation flag so the auto-pick effect doesn't override
+    // admin's manual choice. Both setters must fire on change.
+    expect(balancePanelSrc).toMatch(/value=\{locationId\}\s+onChange=\{e\s*=>\s*\{\s*setLocationId\(e\.target\.value\);\s*setUserPickedLocation\(true\)/);
   });
 
   it('F6.2 StockBalancePanel default location is "main" when no override', () => {

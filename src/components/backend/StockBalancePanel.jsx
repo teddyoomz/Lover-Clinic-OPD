@@ -63,6 +63,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // location (e.g. central warehouse from CentralStockTab). lockLocation
   // hides the dropdown when caller wants the location fixed.
   const [locationId, setLocationId] = useState(defaultLocationId || 'main');
+  // Phase 15.7-ter (2026-04-28) — track whether admin manually picked a
+  // location so subsequent branch-list async-load doesn't override their
+  // choice. Pre-fix: panel default 'main' literal + StockTab not passing
+  // defaultLocationId → admin sees empty page even when default branch has
+  // stock. User report: "นำเข้า Allergan แล้ว ในหน้ายอดคงเหลือหายไปเลย" —
+  // data was actually 924 at default branch but locationId='main' filtered
+  // it out.
+  const [userPickedLocation, setUserPickedLocation] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +82,22 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Phase 15.7-ter — auto-pick the default branch when branches arrive.
+  // Skips if (a) caller passed defaultLocationId (caller takes over),
+  // (b) admin already manually picked a location, or (c) no default branch
+  // is configured.
+  useEffect(() => {
+    if (defaultLocationId) return;
+    if (userPickedLocation) return;
+    if (!Array.isArray(branches) || branches.length === 0) return;
+    const def = branches.find((b) => b && b.isDefault);
+    const defId = def && (def.branchId || def.id);
+    if (defId && defId !== locationId) {
+      setLocationId(String(defId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branches, defaultLocationId]);
 
   // Phase 15.5 / Item 1 — load product threshold map (alertDayBeforeExpire +
   // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock per productId).
@@ -283,7 +307,7 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           {!lockLocation && (
             <div className="flex items-center gap-2">
               <label className="text-[10px] uppercase tracking-wider text-[var(--tx-muted)] font-bold">สถานที่:</label>
-              <select value={locationId} onChange={e => setLocationId(e.target.value)}
+              <select value={locationId} onChange={e => { setLocationId(e.target.value); setUserPickedLocation(true); }}
                 className="px-2.5 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 min-w-[180px]">
                 {locations.map(l => (
                   <option key={l.id} value={l.id}>
