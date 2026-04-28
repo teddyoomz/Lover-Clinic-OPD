@@ -560,3 +560,109 @@ export function buildCustomerPromotionGroups(customerCourses, customerPromotions
   });
   return Object.values(groups);
 }
+
+/**
+ * 2026-04-28: group flat customerCourses entries (non-promotion) by
+ * purchase event so the "ข้อมูลการใช้คอร์ส" panel renders ONE course
+ * header + N nested product rows instead of repeating the header for
+ * every product entry.
+ *
+ * Why this exists: `be_customers.courses[]` schema stores 1 entry per
+ * **product** (assignCourseToCustomer:1122-1146 loops products and
+ * pushes one entry each). `mapRawCoursesToForm` mirrors this 1:1.
+ * The pre-grouping render at TreatmentFormPage:3657 mapped each entry
+ * directly → for a course with 4 products, the user saw `[IV Drip] Aura
+ * bright x 2 ...` repeated 4 times before each product row. User
+ * directive (verbatim): "อะไรที่มาจากคอร์สเดียวกัน โปรโมชั่นเดียวกัน
+ * จัดให้อยู่ใน Group ย่อยเดียวกัน ให้ดูง่าย ไม่รกแบบนี้".
+ *
+ * Grouping key (V13 — group by PURCHASE not by NAME, per user
+ * confirmation at plan time): tuple of
+ *   `(courseName, linkedSaleId||'', linkedTreatmentId||'', parentName||'')`
+ * joined with `|`. Same name + different linkedSaleId = separate
+ * groups (preserves "bought twice = 2 groups" semantic). All-null
+ * grouping fields fall back to `courseId` so legacy data without
+ * sale/treatment links never accidentally collapses with unrelated
+ * entries.
+ *
+ * Promotion-linked entries (`promotionId` truthy) are FILTERED OUT —
+ * they belong to `buildCustomerPromotionGroups` which renders them
+ * under the promotion path.
+ *
+ * Pure — no side effects — so the render-time useMemo is testable
+ * without mounting TreatmentFormPage.
+ *
+ * @param {Array<object>} customerCourses — [{ courseId, courseName, parentName?, linkedSaleId?, linkedTreatmentId?, promotionId?, courseType?, isRealQty?, isBuffet?, isPickAtTreatment?, needsPickSelection?, availableProducts?, products: object[] }]
+ * @returns {Array<{ groupId, courseName, parentName, source, linkedSaleId, linkedTreatmentId, courseType, isRealQty, isBuffet, isPickAtTreatment, needsPickSelection, availableProducts, _pickedFromCourseId, _pickGroupOptions, products: object[] }>}
+ */
+export function buildCustomerCourseGroups(customerCourses) {
+  const list = Array.isArray(customerCourses) ? customerCourses : [];
+  const out = [];
+  const indexByKey = new Map();
+  for (const c of list) {
+    if (!c || c.promotionId) continue; // promotion-linked → handled by buildCustomerPromotionGroups
+    const courseName = String(c.courseName || '').trim();
+    const linkedSaleId = c.linkedSaleId == null ? '' : String(c.linkedSaleId);
+    const linkedTreatmentId = c.linkedTreatmentId == null ? '' : String(c.linkedTreatmentId);
+    const parentName = String(c.parentName || '').trim();
+    // Legacy fallback: when name + all link fields empty, use courseId so
+    // unrelated legacy entries don't collapse together.
+    const fallbackId = (!courseName && !linkedSaleId && !linkedTreatmentId)
+      ? String(c.courseId || '')
+      : '';
+    const key = fallbackId
+      ? `__fallback__|${fallbackId}`
+      : `${courseName}|${linkedSaleId}|${linkedTreatmentId}|${parentName}`;
+
+    let group;
+    if (indexByKey.has(key)) {
+      group = out[indexByKey.get(key)];
+    } else {
+      group = {
+        groupId: `cgrp-${out.length}-${key.length > 0 ? key.slice(0, 64) : 'empty'}`,
+        // Preserve courseId of the FIRST entry as the group's representative
+        // courseId. Used for: (a) <div key=...> React key when render
+        // doesn't use groupId, (b) setPickModalCourseId for pick-at-treatment,
+        // (c) any other course-level operation that targets a specific
+        // be_customers.courses[] entry.
+        courseId: c.courseId || `cgrp-${out.length}`,
+        courseName,
+        parentName,
+        source: c.source || '',
+        linkedSaleId: c.linkedSaleId || null,
+        linkedTreatmentId: c.linkedTreatmentId || null,
+        courseType: String(c.courseType || ''),
+        isRealQty: !!c.isRealQty,
+        isBuffet: !!c.isBuffet,
+        isPickAtTreatment: !!c.isPickAtTreatment,
+        needsPickSelection: !!c.needsPickSelection,
+        availableProducts: Array.isArray(c.availableProducts) ? c.availableProducts : null,
+        // Buy-this-visit markers — first-entry-wins per group. All entries
+        // in a group share the same purchase event so isAddon /
+        // purchasedItemId / purchasedItemType are identical across entries.
+        // Render uses these for the "(ซื้อเพิ่ม)" badge + remove-purchase
+        // Trash button.
+        isAddon: !!c.isAddon,
+        purchasedItemId: c.purchasedItemId || null,
+        purchasedItemType: c.purchasedItemType || null,
+        // Phase 14.7.H follow-up I markers — propagate to group level so
+        // "reopen pick-at-treatment" UI can decide which entry surfaces
+        // the reopen button (mirrors mapRawCoursesToForm shape).
+        _pickedFromCourseId: c._pickedFromCourseId || null,
+        _pickGroupOptions: Array.isArray(c._pickGroupOptions) ? c._pickGroupOptions : null,
+        products: [],
+      };
+      indexByKey.set(key, out.length);
+      out.push(group);
+    }
+    // Preserve product order. Each customerCourses entry currently has
+    // exactly ONE product (mirror of be_customers.courses[i] which is
+    // per-product). Spread defensively in case future shape changes.
+    if (Array.isArray(c.products)) {
+      for (const p of c.products) {
+        if (p) group.products.push(p);
+      }
+    }
+  }
+  return out;
+}

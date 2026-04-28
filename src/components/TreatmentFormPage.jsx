@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm } from '../lib/treatmentBuyHelpers.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -1801,6 +1801,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // unit-test coverage without remounting TreatmentFormPage.
     return buildCustomerPromotionGroups(options?.customerCourses, options?.customerPromotions);
   }, [options]);
+
+  // 2026-04-28: group flat customerCourses entries by purchase event so
+  // the "ข้อมูลการใช้คอร์ส" panel renders ONE course header + N nested
+  // product rows (instead of repeating the header for every product —
+  // user reported "[IV Drip] Aura bright x 2" header showing 4 times for
+  // a 4-product course). Promotion-linked entries handled by
+  // customerPromotionGroups above; this helper only groups non-promotion
+  // courses. Pure render-side aggregation — flat customerCourses array
+  // remains the source of truth for selectedCourseItems / deductCourseItems
+  // / treatmentCoursesForDf which all read by rowId or courseIndex.
+  const customerCourseGroups = useMemo(() => {
+    return buildCustomerCourseGroups(options?.customerCourses || []);
+  }, [options?.customerCourses]);
 
   // ── Seller commission auto-calc ──
   useEffect(() => {
@@ -3646,16 +3659,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <span className="text-xs text-gray-500">จำนวน</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto overflow-x-auto">
-                      {/* Phase 12.2b Step 6 (2026-04-24): every course —
-                          existing OR purchased-this-visit — renders via
-                          ONE map. "(ซื้อเพิ่ม)" badge + Trash live on the
-                          header itself (ProClinic Image-1 style) instead
-                          of a separate flat list at the bottom. Skip any
-                          promotion-linked course (courses with
-                          `promotionId` render inside the promotion column
-                          group header — double-render guard). */}
-                      {customerCourses.filter(c => !c.promotionId).map(course => (
-                        <div key={course.courseId}>
+                      {/* 2026-04-28: render via `customerCourseGroups`
+                          (built by buildCustomerCourseGroups). Same shape
+                          as a single course entry but with multiple
+                          products[] flattened from N customerCourses
+                          entries that share the same purchase event
+                          (courseName + linkedSaleId + linkedTreatmentId
+                          + parentName). Result: ONE header per purchase
+                          + N nested product rows, instead of repeating
+                          the header for every product. User report
+                          (verbatim): "อะไรที่มาจากคอร์สเดียวกัน โปรโมชั่น
+                          เดียวกัน จัดให้อยู่ใน Group ย่อยเดียวกัน".
+                          Promotion-linked entries handled by
+                          customerPromotionGroups separately. */}
+                      {customerCourseGroups.map(course => (
+                        <div key={course.groupId}>
                           <div className={`flex items-center justify-between px-3 py-1 border-b text-xs font-bold ${isDark ? 'border-[#1a1a1a] bg-[#0c0c0c] text-teal-400/80' : 'border-gray-100 bg-teal-50/50 text-teal-700'}`}>
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="truncate">{course.courseName}</span>

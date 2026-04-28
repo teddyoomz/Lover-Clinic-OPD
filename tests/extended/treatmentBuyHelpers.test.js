@@ -491,3 +491,8 @@ describe('findMissingFillLaterQty — Phase 12.2b Step 7 save-time validator', (
     expect(findMissingFillLaterQty(items)?.id).toBe('real-bad');
   });
 });
+
+// BCC group moved to top-level tests/customer-course-groups.test.js (2026-04-28)
+// so it runs in default `npm test` suite. The BCC helper is exported from
+// treatmentBuyHelpers.js but tested in the top-level file because vitest 4
+// CLI dropped --include flag, breaking npm run test:extended.
