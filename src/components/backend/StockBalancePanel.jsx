@@ -155,23 +155,21 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // alertQtyBeforeOutOfStock + alertQtyBeforeMaxStock pulled from the per-
   // product threshold map. Filter checkboxes use these thresholds; row badges
   // render based on whether each threshold is breached.
-  // V35.2 (2026-04-28) — gate: only filter batches by FK once productThresholdMap
-  // has loaded. Initial render before listProducts() resolves gets empty map,
-  // which would otherwise hide ALL batches. mapLoaded sentinel checks that
-  // the map has at least one entry (any clinic with batches has products).
-  const mapLoaded = Object.keys(productThresholdMap).length > 0;
+  // V35.2-quinquies (2026-04-28) — read-side FK gate REVERTED.
+  // Reason: productThresholdMap is loaded once on mount; products imported
+  // AFTER mount weren't in the map → their batches were filtered out. User
+  // report: "ปุ่มสร้าง Order ใหม่ ของสต็อคสาขา ไม่สามารถนำเข้าของเข้าคลังสาขา
+  // ได้จริง ยอดในหน้าคงเหลือไม่เปลี่ยนแปลง ... แต่มีปรากฏใน movement log".
+  // Truth: import succeeded (movement written + batch written) but balance
+  // panel filtered the batch out because the product wasn't in the stale
+  // map. Phantom-product prevention is now solely write-side via
+  // _assertProductExists (V35.2 in backendClient.js) + cleanup endpoints.
   const products = useMemo(() => {
     const byProduct = new Map();
     for (const b of batches) {
       if (!b.productId) continue;
-      // Phase 15.6 / V35.2 (2026-04-28) — defense-in-depth FK gate at READ side.
-      // User report: "ทำไม Acetin 6 กับ Aloe gel 010 และสินค้าอื่นๆที่ไม่มีใน
-      // database สินค้าของเรา ยังมาปรากฎในหน้าคงเหลือ ถ้าไม่มีในระบบสินค้าให้
-      // ลบทิ้งไปเลย ห้ามมาปรากฎ". Even if a batch's productId references a
-      // be_products doc that's been deleted (race; or dev wrote a batch via
-      // a path that bypassed _assertProductExists), don't render it.
+      // Threshold lookup (no longer used to FILTER; only for canonical name + thresholds).
       const tEntry = productThresholdMap[String(b.productId)];
-      if (mapLoaded && !tEntry) continue; // productId NOT in be_products → hide
       if (!byProduct.has(b.productId)) {
         // V35.2 — prefer canonical product.productName over batch.productName
         // (denormalized; often junky after re-syncs e.g. "Acetin 6" vs canonical "Acetin")

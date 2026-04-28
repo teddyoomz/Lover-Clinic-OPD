@@ -9,7 +9,22 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 
 const customersCol = () => collection(db, ...basePath(), 'be_customers');
-const customerDoc = (id) => doc(db, ...basePath(), 'be_customers', String(id));
+// V35.2-sexies (2026-04-28) — hard-guard against null/undefined/empty/string-"null"
+// customerId. Pre-fix: `String(null)` = "null" → silently routed writes to
+// `be_customers/null` doc. User reported "หน้าสร้างการรักษาใหม่ ขึ้นว่า
+// No document to update: ... be_customers/null". Now throws loudly so
+// callers get a clear stack instead of mystery-doc data corruption.
+const customerDoc = (id) => {
+  const sid = String(id ?? '').trim();
+  if (!sid || sid === 'null' || sid === 'undefined') {
+    throw new Error(
+      `customerDoc requires a valid customerId, got: ${JSON.stringify(id)}. ` +
+      `Caller likely lost the id during a navigation transition or read it ` +
+      `from a stale closure. Pass the resolved customerId explicitly.`
+    );
+  }
+  return doc(db, ...basePath(), 'be_customers', sid);
+};
 const treatmentsCol = () => collection(db, ...basePath(), 'be_treatments');
 const treatmentDoc = (id) => doc(db, ...basePath(), 'be_treatments', String(id));
 
@@ -4073,6 +4088,37 @@ async function _assertProductExists(productId, contextLabel) {
   }
 }
 
+/**
+ * V35.2-quinquies (2026-04-28) — ATOMIC FK pre-validation for batch creators.
+ *
+ * Bug fix: prior pattern was per-item _assertProductExists inside the create
+ * loop. If item N failed FK, items 0..N-1 already had batches+movements
+ * written but no order doc → partial commit → user reports "ยอดคงเหลือ
+ * ไม่เปลี่ยน" (no balance change because StockBalancePanel V35.2 read-side
+ * gate hid the orphans, since reverted) but "มีปรากฏใน movement log" (the
+ * partial movements survived).
+ *
+ * Fix: validate ALL items' productIds BEFORE any setDoc. Throws on first
+ * missing → no batches/movements/order written. All-or-nothing.
+ *
+ * V14 lock: throws Error objects (no undefined leaves to setDoc).
+ *
+ * Used by: createStockOrder (branch tier) + receiveCentralStockOrder.
+ *
+ * @param {Array<{productId: string|number}>} items
+ * @param {string} contextLabel — for forensic error messages
+ */
+async function _assertAllProductsExist(items, contextLabel) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) return;
+  // Sequential to keep error messages clean (parallel would mask the first
+  // failure). For typical orders (1-10 items) latency is negligible.
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    await _assertProductExists(it?.productId, `${contextLabel} item#${i + 1}`);
+  }
+}
+
 async function _buildBatchFromOrderItem({
   item, idx, locationId, locationType, orderId,
   sourceDocPath, linkedField, user, now, note,
@@ -4227,6 +4273,11 @@ export async function createStockOrder(data, opts = {}) {
 
   const items = Array.isArray(data?.items) ? data.items : [];
   if (items.length === 0) throw new Error('Order must have at least one item');
+
+  // V35.2-quinquies (2026-04-28) — pre-validate ALL productIds atomically
+  // BEFORE any setDoc. Prevents partial commits where items 0..N-1 wrote
+  // batches+movements but item N's FK throw left no order doc.
+  await _assertAllProductsExist(items, 'createStockOrder');
 
   const orderId = _genOrderId();
   const branchId = String(data.branchId || DEFAULT_BRANCH_ID);
@@ -4591,6 +4642,16 @@ export async function receiveCentralStockOrder(orderId, receipts, opts = {}) {
   if (order.status === 'received') {
     return { orderId, status: 'received', batchIds: [], movementIds: [], alreadyReceived: true };
   }
+
+  // V35.2-quinquies — pre-validate FK for all to-be-received lines BEFORE
+  // any setDoc. Avoids partial commits (some lines materialize as batches
+  // while others throw mid-loop). Only validate lines we're about to receive.
+  const existingReceivedSet = new Set(order.receivedLineIds || []);
+  const itemsByLineIdMap = new Map((order.items || []).map(it => [it.centralOrderProductId, it]));
+  const linesToReceive = (Array.isArray(receipts) ? receipts : [])
+    .map(r => itemsByLineIdMap.get(String(r?.centralOrderProductId || '').trim()))
+    .filter(line => line && !existingReceivedSet.has(line.centralOrderProductId) && !line.receivedBatchId);
+  await _assertAllProductsExist(linesToReceive, `receiveCentralStockOrder ${orderId}`);
 
   const now = new Date().toISOString();
   const user = _normalizeAuditUser(opts.user);
