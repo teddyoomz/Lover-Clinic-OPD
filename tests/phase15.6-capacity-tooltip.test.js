@@ -1,12 +1,14 @@
-// ─── Phase 15.6 — ความจุ column tooltip + sub-label (Issue 2) ────────────────
-// User report (verbatim, 2026-04-28):
+// ─── Phase 15.6 — ความจุ column = per-product แจ้งเกินสต็อก threshold ────────
+// User report (round 1, 2026-04-28):
 //   "ความจุทั้งในหน้าสต็อคและ Central stock คือปริมาณเดียวกันกับ
 //    แจ้งเกินสต็อก (qty) ของสินค้านั้นๆ"
+// Round 1 fix (V35): tooltip + per-row sub-label "(เป้าหมาย: N)".
 //
-// Verdict: NO bug. ความจุ = sum(batch.qty.total) across batches per product
-// (capacity at batch creation). User's observation is partial coincidence
-// on rows where defaults align. Fix: tooltip + per-row sub-label so admin
-// sees both concepts (capacity vs threshold) side-by-side without confusion.
+// Round 2 (V35.2-tris, 2026-04-28): user changed direction:
+//   "แถวของความจุ ให้แสดง แจ้งเกินสต็อก (qty) ของสินค้านั้นๆเลย
+//    ไม่ต้องแสดงเป้าหมายอะไรแล้ว"
+// → Column now shows alertQtyBeforeMaxStock directly. Sub-label removed.
+// '-' rendered when threshold unset.
 //
 // Coverage:
 //   CT.A — header has explanatory tooltip (title attribute + Info icon)
@@ -33,8 +35,7 @@ describe('Phase 15.6 CT.A — ความจุ header tooltip', () => {
     expect(balanceSrc).toMatch(/data-testid="th-capacity"/);
   });
 
-  it('CT.A.3 — header span has title attribute referencing both concepts', () => {
-    expect(balanceSrc).toMatch(/title="[^"]*capacity[^"]*"/i);
+  it('CT.A.3 — header span has title referencing แจ้งเกินสต็อก (V35.2-tris)', () => {
     expect(balanceSrc).toMatch(/title="[^"]*แจ้งเกินสต็อก[^"]*"/);
   });
 
@@ -48,37 +49,45 @@ describe('Phase 15.6 CT.A — ความจุ header tooltip', () => {
 });
 
 // =============================================================================
-describe('Phase 15.6 CT.B — per-row sub-label "(เป้าหมาย: N)"', () => {
+describe('Phase 15.6 CT.B — V35.2-tris cell renders alertQtyBeforeMaxStock directly', () => {
   it('CT.B.1 — capacity cell has data-testid="td-capacity"', () => {
     expect(balanceSrc).toMatch(/data-testid="td-capacity"/);
   });
 
-  it('CT.B.2 — sub-label has data-testid="td-capacity-target"', () => {
-    expect(balanceSrc).toMatch(/data-testid="td-capacity-target"/);
+  it('CT.B.2 — cell uses alertQtyBeforeMaxStock with "-" fallback (V35.2-tris)', () => {
+    // Pattern: `{p.alertQtyBeforeMaxStock != null ? fmtQty(p.alertQtyBeforeMaxStock) : '-'}`
+    expect(balanceSrc).toMatch(/p\.alertQtyBeforeMaxStock\s*!=\s*null\s*\?\s*fmtQty\(p\.alertQtyBeforeMaxStock\)\s*:\s*['"]-['"]/);
   });
 
-  it('CT.B.3 — sub-label rendered conditionally on alertQtyBeforeMaxStock != null', () => {
-    expect(balanceSrc).toMatch(/p\.alertQtyBeforeMaxStock\s*!=\s*null\s*&&/);
+  it('CT.B.3 — V35.2-tris sub-label "(เป้าหมาย: N)" REMOVED', () => {
+    // Round-1 sub-label dropped per user directive
+    expect(balanceSrc).not.toMatch(/\(เป้าหมาย:/);
+    expect(balanceSrc).not.toMatch(/data-testid="td-capacity-target"/);
   });
 
-  it('CT.B.4 — sub-label text reads "(เป้าหมาย: N)"', () => {
-    expect(balanceSrc).toMatch(/\(เป้าหมาย:/);
-  });
-
-  it('CT.B.5 — totalCapacity value (sum batch.qty.total) preserved', () => {
-    // V21 anti-regression: must not REPLACE totalCapacity with QtyBeforeMaxStock
+  it('CT.B.4 — totalCapacity aggregator still computed (used by lot-row total col)', () => {
+    // p.totalCapacity is still summed from batches because lot-row expansion
+    // displays per-lot qty.total. Just no longer rendered in main column.
     expect(balanceSrc).toMatch(/p\.totalCapacity\s*\+=\s*Number\(b\.qty\?\.total/);
-    expect(balanceSrc).toMatch(/fmtQty\(p\.totalCapacity\)/);
+  });
+
+  it('CT.B.5 — V21 anti-regression: main column NOT showing fmtQty(p.totalCapacity)', () => {
+    // The previous render `fmtQty(p.totalCapacity)` for the main capacity
+    // cell is replaced. Lot rows still use it (allowed). Check by scoping
+    // search to within the data-testid="td-capacity" block.
+    const m = balanceSrc.match(/data-testid="td-capacity"[\s\S]{0,800}<\/td>/);
+    expect(m, 'td-capacity block not found').not.toBeNull();
+    expect(m[0]).not.toMatch(/fmtQty\(p\.totalCapacity\)/);
   });
 });
 
 // =============================================================================
 describe('Phase 15.6 CT.C — institutional memory markers', () => {
-  it('CT.C.1 — Phase 15.6 / Issue 2 comment present', () => {
-    expect(balanceSrc).toMatch(/Phase 15\.6\s*\/\s*Issue 2/);
+  it('CT.C.1 — V35.2-tris marker present (round 2 directive — แจ้งเกินสต็อก direct)', () => {
+    expect(balanceSrc).toMatch(/V35\.2-tris/);
   });
 
-  it('CT.C.2 — clarification noted: capacity vs threshold distinction', () => {
+  it('CT.C.2 — แจ้งเกินสต็อก reference present (column meaning)', () => {
     expect(balanceSrc).toMatch(/แจ้งเกินสต็อก/);
   });
 });

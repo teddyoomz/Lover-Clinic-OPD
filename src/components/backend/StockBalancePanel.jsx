@@ -322,13 +322,12 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 <th className="px-3 py-2 text-left font-bold">สินค้า</th>
                 <th className="px-3 py-2 text-center font-bold w-16">Batches</th>
                 <th className="px-3 py-2 text-right font-bold w-24">คงเหลือ</th>
-                {/* Phase 15.6 / Issue 2 (2026-04-28) — tooltip clarifies that
-                    ความจุ = sum of batch.qty.total across batches per product
-                    (capacity at batch creation, NOT the per-product
-                    "แจ้งเกินสต็อก" threshold from ProductFormModal). Sub-label
-                    on each row shows the threshold side-by-side when set. */}
+                {/* V35.2-tris (2026-04-28) — column now displays per-product
+                    "แจ้งเกินสต็อก" threshold (alertQtyBeforeMaxStock) directly.
+                    User: "แถวของความจุ ให้แสดง แจ้งเกินสต็อก (qty) ของสินค้า
+                    นั้นๆเลย ไม่ต้องแสดงเป้าหมายอะไรแล้ว". '-' when unset. */}
                 <th className="px-3 py-2 text-right font-bold w-28" data-testid="th-capacity">
-                  <span title="ผลรวมต้นเริ่มต้นของทุก batch (capacity at batch creation, summed across batches per product). ไม่ใช่ค่า 'แจ้งเกินสต็อก' ที่ตั้งในข้อมูลสินค้า — ดู (เป้าหมาย: N) ใต้แต่ละแถว" className="inline-flex items-center gap-1 cursor-help">
+                  <span title="ค่า 'แจ้งเกินสต็อก' (max-stock alert qty) ที่ตั้งในข้อมูลสินค้า — ปรับใน ProductFormModal. ' - ' = ยังไม่ได้ตั้งค่า" className="inline-flex items-center gap-1 cursor-help">
                     ความจุ <Info size={10} aria-hidden className="text-[var(--tx-muted)]" />
                   </span>
                 </th>
@@ -385,12 +384,11 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                     </td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>
                     <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]" data-testid="td-capacity">
-                      {fmtQty(p.totalCapacity)}
-                      {p.alertQtyBeforeMaxStock != null && (
-                        <div className="text-[9px] text-[var(--tx-muted)] opacity-70" data-testid="td-capacity-target">
-                          (เป้าหมาย: {fmtQty(p.alertQtyBeforeMaxStock)})
-                        </div>
-                      )}
+                      {/* V35.2-tris (2026-04-28) — column now shows the per-product
+                          QtyBeforeMaxStock threshold directly (not batch.qty.total).
+                          User: "แถวของความจุ ให้แสดง แจ้งเกินสต็อก (qty) ของสินค้า
+                          นั้นๆเลย ไม่ต้องแสดงเป้าหมายอะไรแล้ว". '-' when threshold unset. */}
+                      {p.alertQtyBeforeMaxStock != null ? fmtQty(p.alertQtyBeforeMaxStock) : '-'}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-orange-400">฿{fmtQty(p.valueCost)}</td>
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>

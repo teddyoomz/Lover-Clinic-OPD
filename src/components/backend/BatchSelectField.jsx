@@ -53,27 +53,29 @@ export default function BatchSelectField({
     const MARGIN = 8;
     const spaceBelow = vh - r.bottom - GAP - MARGIN;
     const spaceAbove = r.top - GAP - MARGIN;
-    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    // V35.1-tris+ (round 2) — flip up when below is constrained AND above
+    // has meaningfully more room. Mirrors ProductSelectField.
+    const openUp = (spaceBelow < 400 && spaceAbove > spaceBelow * 1.3) ||
+                   (spaceBelow < 160);
+    const HARD_CAP = 720; // V35.1-tris+ cap raised
     if (openUp) {
-      const maxHeight = Math.max(120, Math.min(spaceAbove, 480));
+      const maxHeight = Math.max(120, Math.min(spaceAbove, HARD_CAP));
       setCoords({ bottom: vh - r.top + GAP, left: r.left, width: r.width, maxHeight, flipUp: true });
     } else {
-      const maxHeight = Math.max(120, Math.min(spaceBelow, 480));
+      const maxHeight = Math.max(120, Math.min(spaceBelow, HARD_CAP));
       setCoords({ top: r.bottom + GAP, left: r.left, width: r.width, maxHeight, flipUp: false });
     }
   };
 
   useLayoutEffect(() => {
     if (!open) return;
-    // V35.1-tris — scroll page so input sits ~120px from viewport top
-    // when below is constrained. Mirrors ProductSelectField.
+    // V35.1-tris+ — always lift input toward top when dropdown opens
+    // so dropdown gets max viewport room. Mirrors ProductSelectField.
     if (inputRef.current) {
       const r = inputRef.current.getBoundingClientRect();
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-      const spaceBelow = vh - r.bottom;
-      if (spaceBelow < 320 && r.top > 160) {
-        const targetOffsetFromTop = 120;
-        const delta = r.top - targetOffsetFromTop;
+      const TARGET_TOP = 120;
+      if (r.top > TARGET_TOP + 50) {
+        const delta = r.top - TARGET_TOP;
         window.scrollBy({ top: delta, behavior: 'auto' });
       }
     }

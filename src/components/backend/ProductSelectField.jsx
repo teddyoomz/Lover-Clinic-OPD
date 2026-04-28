@@ -83,9 +83,19 @@ export default function ProductSelectField({
     const spaceBelow = vh - r.bottom - GAP - MARGIN;
     const spaceAbove = r.top - GAP - MARGIN;
     // Open downward unless space below < 160px AND space above > space below
-    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    // V35.1-tris+ (round 2) — flip up when below is constrained AND above
+    // has meaningfully more room. Original threshold (spaceBelow < 160)
+    // missed the common case where below = 200-400px while above is 500+
+    // and the page can't scroll further (user report: "scrollbar ขวาสุด
+    // ก็ยังเลื่อนลงมาไม่ได้").
+    const openUp = (spaceBelow < 400 && spaceAbove > spaceBelow * 1.3) ||
+                   (spaceBelow < 160);
+    // V35.1-tris+ — cap raised from 480 to 720 (~15 rows at 48px each).
+    // The scroll-into-view step above lifts the input toward viewport top,
+    // so spaceBelow is usually large; let the cap follow.
+    const HARD_CAP = 720;
     if (openUp) {
-      const maxHeight = Math.max(120, Math.min(spaceAbove, 480));
+      const maxHeight = Math.max(120, Math.min(spaceAbove, HARD_CAP));
       setCoords({
         bottom: vh - r.top + GAP,  // anchor to input.top (use bottom CSS prop)
         left: r.left,
@@ -94,7 +104,7 @@ export default function ProductSelectField({
         flipUp: true,
       });
     } else {
-      const maxHeight = Math.max(120, Math.min(spaceBelow, 480));
+      const maxHeight = Math.max(120, Math.min(spaceBelow, HARD_CAP));
       setCoords({
         top: r.bottom + GAP,
         left: r.left,
@@ -108,20 +118,18 @@ export default function ProductSelectField({
   // Reposition on open + scroll + resize (any of these can move the input)
   useLayoutEffect(() => {
     if (!open) return;
-    // V35.1-tris (2026-04-28) — when dropdown opens AND space below is
-    // limited (e.g. input near bottom of viewport in a long form), scroll
-    // the page so the input sits ~120px from viewport top. Gives the
-    // dropdown the full screen below to expand. User report: "ในรูปที่ 1
-    // คือปัจจุบัน dropdown มันสั้นไป ทำให้หน้าเพจทั้งเพจเลื่อนลงมาได้
-    // เพื่อให้ dropdown มันโชว์ได้ยาวขึ้น".
+    // V35.1-tris+ (2026-04-28) — when dropdown opens, lift the input toward
+    // the top of the viewport so the dropdown gets max possible space below.
+    // User report (round 2): "scrollbar ขวาสุด ก็ยังเลื่อนลงมาไม่ได้อยู่ดี
+    // dropdown มันสั้นไป แสดงรายการสินค้าน้อยไป". Pre-fix threshold was
+    // spaceBelow < 320 (rare hit); now always scroll if input is more than
+    // 50px past the target row. This guarantees ≥ ~70% of viewport for the
+    // dropdown to expand.
     if (inputRef.current) {
       const r = inputRef.current.getBoundingClientRect();
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-      const spaceBelow = vh - r.bottom;
-      // Scroll up only when below is < 320px AND input isn't already near top.
-      if (spaceBelow < 320 && r.top > 160) {
-        const targetOffsetFromTop = 120;
-        const delta = r.top - targetOffsetFromTop;
+      const TARGET_TOP = 120;       // input lands ~120px from viewport top
+      if (r.top > TARGET_TOP + 50) {
+        const delta = r.top - TARGET_TOP;
         window.scrollBy({ top: delta, behavior: 'auto' });
       }
     }
