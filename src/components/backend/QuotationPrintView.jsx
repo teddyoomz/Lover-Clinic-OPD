@@ -107,22 +107,43 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
           <div className="absolute -top-[18mm] -left-[16mm] h-2 w-[210mm]" style={{ background: accent }} aria-hidden />
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] tracking-[0.3em] uppercase text-neutral-500 mb-1">Quotation · ใบเสนอราคา</div>
+              <div className="text-[11px] tracking-[0.3em] uppercase text-neutral-500 mb-1">ใบเสนอราคา</div>
               <div className="text-3xl font-black leading-tight" style={{ color: accent }}>
                 {clinic.clinicName || 'LoverClinic'}
               </div>
               {clinic.clinicNameEn && (
-                <div className="text-xs text-neutral-600 mt-0.5">{clinic.clinicNameEn}</div>
+                <div className="text-xs text-neutral-600 mt-0.5 italic">{clinic.clinicNameEn}</div>
               )}
-              {clinic.address && (
-                <div className="text-[11px] text-neutral-600 mt-1.5 leading-relaxed max-w-sm">
-                  {clinic.address}
+              {/* 2026-04-28 polish: clinic contact block — address on its own
+                  line + phone/taxId on a single inline row separated by a
+                  bullet for visual rhythm. Mirrors SalePrintView header. */}
+              {(clinic.address || clinic.phone || clinic.taxId) && (
+                <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed max-w-md space-y-0.5">
+                  {clinic.address && (
+                    <div>
+                      <span className="text-neutral-500 font-semibold mr-1.5">ที่อยู่:</span>
+                      {clinic.address}
+                    </div>
+                  )}
+                  {(clinic.phone || clinic.taxId) && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {clinic.phone && (
+                        <span>
+                          <span className="text-neutral-500 font-semibold mr-1.5">โทร:</span>
+                          {clinic.phone}
+                        </span>
+                      )}
+                      {clinic.phone && clinic.taxId && <span className="text-neutral-300">•</span>}
+                      {clinic.taxId && (
+                        <span>
+                          <span className="text-neutral-500 font-semibold mr-1.5">เลขผู้เสียภาษี:</span>
+                          {clinic.taxId}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="text-[11px] text-neutral-600 mt-0.5 flex items-center gap-3 flex-wrap">
-                {clinic.phone && <span>โทร: {clinic.phone}</span>}
-                {clinic.taxId && <span>เลขผู้เสียภาษี: {clinic.taxId}</span>}
-              </div>
             </div>
 
             {(() => {
@@ -205,33 +226,34 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
                 <tr key={`${r.kind}-${i}`} className="border-b border-neutral-200 align-top">
                   <td className="py-2 px-2 text-neutral-500">{i + 1}</td>
                   <td className="py-2 px-2">
-                    <div className="flex items-start gap-2">
-                      <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border border-neutral-300 text-neutral-600 uppercase tracking-wider shrink-0 mt-0.5"
+                    {/* 2026-04-28 alignment fix (mirrors SalePrintView): badge
+                        + name on items-center row; metadata moved out as
+                        siblings so badge stays aligned with single-line name. */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border border-neutral-300 text-neutral-600 uppercase tracking-wider shrink-0 leading-none"
                         style={{ borderColor: `${accent}40`, color: accent }}>{r.label}</span>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-neutral-900">{r.name}</div>
-                        {r.isPremium && <div className="text-[9px] text-amber-600 font-bold uppercase">ของแถม</div>}
-                        {r.kind === 'med' && (
-                          <div className="text-[10px] text-neutral-600 mt-0.5 leading-snug space-y-0.5">
-                            {r.genericName && <div>{r.genericName}</div>}
-                            {r.indications && <div>ข้อบ่งใช้: {r.indications}</div>}
-                            {(r.dosageAmount || r.dosageUnit) && (
-                              <div>
-                                ครั้งละ {r.dosageAmount} {r.dosageUnit}
-                                {r.timesPerDay && ` · วันละ ${r.timesPerDay} ครั้ง`}
-                              </div>
-                            )}
-                            {r.administrationMethod && (
-                              <div>
-                                {ADMIN_METHOD_LABEL[r.administrationMethod] || r.administrationMethod}
-                                {r.administrationMethod === 'interval' && r.administrationMethodHour ? ` ${r.administrationMethodHour} ชม.` : ''}
-                                {r.administrationTimes?.length > 0 && ` · ${r.administrationTimes.map((t) => ADMIN_TIME_LABEL[t] || t).join(' · ')}`}
-                              </div>
-                            )}
+                      <div className="font-semibold text-neutral-900 truncate min-w-0">{r.name}</div>
+                    </div>
+                    {r.isPremium && <div className="text-[9px] text-amber-600 font-bold uppercase mt-0.5 ml-[3.25rem]">ของแถม</div>}
+                    {r.kind === 'med' && (
+                      <div className="text-[10px] text-neutral-600 mt-0.5 leading-snug space-y-0.5 ml-[3.25rem]">
+                        {r.genericName && <div>{r.genericName}</div>}
+                        {r.indications && <div>ข้อบ่งใช้: {r.indications}</div>}
+                        {(r.dosageAmount || r.dosageUnit) && (
+                          <div>
+                            ครั้งละ {r.dosageAmount} {r.dosageUnit}
+                            {r.timesPerDay && ` · วันละ ${r.timesPerDay} ครั้ง`}
+                          </div>
+                        )}
+                        {r.administrationMethod && (
+                          <div>
+                            {ADMIN_METHOD_LABEL[r.administrationMethod] || r.administrationMethod}
+                            {r.administrationMethod === 'interval' && r.administrationMethodHour ? ` ${r.administrationMethodHour} ชม.` : ''}
+                            {r.administrationTimes?.length > 0 && ` · ${r.administrationTimes.map((t) => ADMIN_TIME_LABEL[t] || t).join(' · ')}`}
                           </div>
                         )}
                       </div>
-                    </div>
+                    )}
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums">{r.qty}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{fmtMoney(r.price)}</td>

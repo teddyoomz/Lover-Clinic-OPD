@@ -169,7 +169,7 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
       data-testid="sale-print-overlay">
       <div className="print:hidden sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-neutral-800">
         <div className="max-w-4xl mx-auto flex items-center gap-2 px-4 py-3">
-          <h2 className="text-sm font-bold text-white flex-1">พรีวิว · ใบขาย</h2>
+          <h2 className="text-sm font-bold text-white flex-1">พรีวิว · ใบเสร็จ</h2>
           <button onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white transition">
             <Printer size={14} /> พิมพ์
@@ -190,22 +190,44 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
           <div className="absolute -top-[18mm] -left-[16mm] h-2 w-[210mm]" style={{ background: accent }} aria-hidden />
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] tracking-[0.3em] uppercase text-neutral-500 mb-1">Invoice · ใบขาย / ใบเสร็จ</div>
+              <div className="text-[11px] tracking-[0.3em] uppercase text-neutral-500 mb-1">ใบเสร็จ</div>
               <div className="text-3xl font-black leading-tight" style={{ color: accent }}>
                 {clinic.clinicName || 'LoverClinic'}
               </div>
               {clinic.clinicNameEn && (
-                <div className="text-xs text-neutral-600 mt-0.5">{clinic.clinicNameEn}</div>
+                <div className="text-xs text-neutral-600 mt-0.5 italic">{clinic.clinicNameEn}</div>
               )}
-              {clinic.address && (
-                <div className="text-[11px] text-neutral-600 mt-1.5 leading-relaxed max-w-sm">
-                  {clinic.address}
+              {/* 2026-04-28 polish: clinic contact block — address on its own
+                  line + phone/taxId on a single inline row separated by a
+                  bullet for visual rhythm. Compact, formal, matches accent
+                  bar above. */}
+              {(clinic.address || clinic.phone || clinic.taxId) && (
+                <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed max-w-md space-y-0.5">
+                  {clinic.address && (
+                    <div>
+                      <span className="text-neutral-500 font-semibold mr-1.5">ที่อยู่:</span>
+                      {clinic.address}
+                    </div>
+                  )}
+                  {(clinic.phone || clinic.taxId) && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {clinic.phone && (
+                        <span>
+                          <span className="text-neutral-500 font-semibold mr-1.5">โทร:</span>
+                          {clinic.phone}
+                        </span>
+                      )}
+                      {clinic.phone && clinic.taxId && <span className="text-neutral-300">•</span>}
+                      {clinic.taxId && (
+                        <span>
+                          <span className="text-neutral-500 font-semibold mr-1.5">เลขผู้เสียภาษี:</span>
+                          {clinic.taxId}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="text-[11px] text-neutral-600 mt-0.5 flex items-center gap-3 flex-wrap">
-                {clinic.phone && <span>โทร: {clinic.phone}</span>}
-                {clinic.taxId && <span>เลขผู้เสียภาษี: {clinic.taxId}</span>}
-              </div>
             </div>
             {(() => {
               // Same as QuotationPrintView — prefer logoUrlLight (the black-red
@@ -292,20 +314,24 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                 <tr key={i} className="border-b border-neutral-200 align-top">
                   <td className="py-2 px-2 text-neutral-500">{i + 1}</td>
                   <td className="py-2 px-2">
-                    <div className="flex items-start gap-2">
-                      <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 mt-0.5"
+                    {/* 2026-04-28 alignment fix: badge + name on a single
+                        items-center row so the badge vertically aligns
+                        with the item name (was: items-start + mt-0.5
+                        nudge → badge floated below name baseline).
+                        Multi-line metadata moved out as siblings so
+                        items-center stays clean for single-line names. */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 leading-none"
                         style={{ borderColor: `${accent}40`, color: accent }}>{r.label}</span>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-neutral-900">{r.name}</div>
-                        {r.isPremium && <div className="text-[9px] text-amber-600 font-bold uppercase">ของแถม</div>}
-                        {r.kind === 'med' && r.medication && (
-                          <div className="text-[10px] text-neutral-600 mt-0.5 leading-snug">
-                            {r.medication.genericName && <div>{r.medication.genericName}</div>}
-                            {r.medication.dosageAmount && <div>ครั้งละ {r.medication.dosageAmount} {r.medication.dosageUnit}</div>}
-                          </div>
-                        )}
-                      </div>
+                      <div className="font-semibold text-neutral-900 truncate min-w-0">{r.name}</div>
                     </div>
+                    {r.isPremium && <div className="text-[9px] text-amber-600 font-bold uppercase mt-0.5 ml-[3.25rem]">ของแถม</div>}
+                    {r.kind === 'med' && r.medication && (
+                      <div className="text-[10px] text-neutral-600 mt-0.5 leading-snug ml-[3.25rem]">
+                        {r.medication.genericName && <div>{r.medication.genericName}</div>}
+                        {r.medication.dosageAmount && <div>ครั้งละ {r.medication.dosageAmount} {r.medication.dosageUnit}</div>}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums">{r.qty}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{fmtMoney(r.price)}</td>
@@ -373,7 +399,7 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
           </div>
           <div className="text-center">
             <div className="border-t border-neutral-400 pt-2">
-              <div className="font-semibold">ผู้ออกใบขาย</div>
+              <div className="font-semibold">ผู้ออกใบเสร็จ</div>
               <div className="text-neutral-700 mt-0.5">
                 ( {sellerDisplay || '............................................'} )
               </div>
