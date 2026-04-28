@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-28 EOD (session 26) — V35.1+V35.2 portal/per-lot/cleanup/partial-commit/null-customer
+- **Date last updated**: 2026-04-28 EOD (session 27) — V35.3-ter + V33-customer-id + UX polish bundle (12 commits)
 - **Branch**: `master`
-- **Last commit**: `72bf0ca fix(stock+treatment): V35.2-quinquies/sexies — partial-commit prevention + null-customerId guard`
-- **Test count**: **2783** focused (+43 in session 26 net)
+- **Last commit**: `eae90c9 fix(customer+appt): V33-customer treatment-save + assistants filter + OPD Card label`
+- **Test count**: **2927** focused (+144 in session 27 net)
 - **Build**: clean
-- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 4 commits ahead, awaiting V15 #5 combined deploy · 6 commits shipped: 248416e + d037cf0 + 89c5607 + ac75ad0 + 6075136 + 79a974c
+- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 12 commits ahead, awaiting V15 #7 combined deploy · 12 commits shipped: 2149eae + f0e3042 + aa760b1 + c2fe55a + 397d9ff + a16c700 + 023c1a6 + c48eda4 + 409ed8d + 9ffbe14 + f206887 + eae90c9
   - Vercel (V15 #4): `lover-clinic-kfrlkir4l-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
   - Firestore rules: released to `cloud.firestore` (be_admin_audit added)
   - Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 + strip 2/2 = 200
@@ -36,6 +36,26 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-28 EOD (session 27) — V35.3-ter + V33-customer-id + UX polish bundle (12 commits)
+
+User shipped 12 directives across the day. Auto+plan-mode session shipped 12 commits addressing course skip-stock flag, 3 stock multi-reader-sweep iterations (V35.3/bis/ter), TFP grouping, SaleTab buy fix, branch-aware PDFs, and V33-customer-id-resolution (5th V12 occurrence). **2783 → 2927 tests · 12 commits unpushed-to-prod**.
+
+**Commits**:
+- `2149eae` "ไม่ตัดสต็อค" course flag + treatment silent-skip (V15 #5)
+- `f0e3042` treatment shortfall silent-skip not throw (V15 #6 hotfix)
+- `aa760b1` V35.3 — _deductOneItem missing includeLegacyMain (3rd V12 miss)
+- `c2fe55a` TFP "ข้อมูลการใช้คอร์ส" grouping by purchase event
+- `397d9ff` V35.3-bis — drop branchId from batchFifoAllocate (real fix)
+- `a16c700` BCC isAddon-key discriminator (no merge with legacy entries)
+- `023c1a6` SaleTab buy-modal field-name + skipStockDeduction propagation
+- `c48eda4` V35.3-ter — sale-context auto-init + silent-skip parity with treatment
+- `409ed8d` Receipt heading rename + clinic header polish + badge alignment
+- `9ffbe14` Branch-aware clinic info + sales-list inline items + OPD amount visible
+- `f206887` Sales-list redesign + concat clinic name with branch
+- `eae90c9` V33-customer treatment-save + assistants filter + OPD Card label
+
+Detail: `.agents/sessions/2026-04-28-session27-eod-bundle.md`
 
 ### Session 2026-04-28 (session 26) — V35.1+V35.2 portal/per-lot/cleanup/partial-commit/null-customer
 
@@ -759,27 +779,22 @@ None new. Session 3 built on prior V13/V14/V18/V19/V20/V21 lessons:
 Paste this into the next Claude session (or invoke `/session-start`):
 
 ```
-Resume LoverClinic — continue from 2026-04-28 EOD (session 26).
+Resume LoverClinic — continue from 2026-04-28 EOD (session 27).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=72bf0ca, prod=c36888e — 4 commits unpushed)
-3. .agents/active.md (2783 tests pass; V35.1+V35.2 NOT deployed)
+2. SESSION_HANDOFF.md (master=eae90c9, prod=c36888e — 12 commits unpushed)
+3. .agents/active.md (2927 tests pass; bundle NOT deployed)
 4. .claude/rules/00-session-start.md (iron-clad + V-summary)
-5. .agents/sessions/2026-04-28-session26-v35-1-v35-2-bundle.md
+5. .agents/sessions/2026-04-28-session27-eod-bundle.md
 
-Status: master=72bf0ca, 2783/2783 tests pass, prod=c36888e LIVE (V15 #4).
+Status: master=eae90c9, 2927/2927 tests pass, prod=c36888e LIVE (V15 #4).
 
-Next: V15 #5 combined deploy when authorized. 4 commits ready:
-- 8ad853c V35.1+V35.2 portal/per-lot/canonical-name + 64 phantoms cleaned
-- 513da1c V35.2-tris ความจุ→QtyBeforeMaxStock + V35.1-tris+ flip-up dropdown
-- 038b3d5 V35.2-quater button removal + sort newest-first
-- 72bf0ca V35.2-quinquies/sexies partial-commit prevention + null-customer guard
+Next: V15 #7 combined deploy when authorized. 12 commits ready (course skip-stock + V35.3 trio + TFP grouping + SaleTab buy + receipt polish + branch-aware PDFs + sales-list redesign + V33-customer-id).
 
-After deploy live QA: dropdown flip-up + max size; ความจุ=QtyBeforeMaxStock;
-order partial-commit prevention; treatment null-customer guard UX.
+After deploy live QA: V33 customer treatment-save · sale-side stock deduct · branch-aware receipt header · assistants picker · "จาก OPD Card" label · รายการขาย column visual.
 
-Outstanding (admin): V15 #5 deploy auth · LineSettings creds · customer ID backfill.
+Outstanding (admin): V15 #7 deploy auth · LineSettings creds · customer ID backfill · backfill skipStockDeduction button (in PermissionGroupsTab).
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B.
 
