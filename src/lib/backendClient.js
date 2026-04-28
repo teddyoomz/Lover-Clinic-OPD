@@ -5333,6 +5333,48 @@ async function _deductOneItem({
   const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, branchId, preferNewest });
 
   if (plan.shortfall > 0) {
+    // 2026-04-28 hotfix (V15 #5 post-deploy bug "Stock insufficient for [IV
+    // Drip] Aura bright"): for treatment context, branch may legitimately
+    // have NO active batch yet for a course-mediated product (admin hasn't
+    // received vendor stock for that branch yet, or used master tier only).
+    // Throwing here BLOCKS treatment save — V31 fail-loud was too aggressive
+    // for the legacy data shape. Emit a silent-skip movement instead so the
+    // treatment can save; admin sees the SKIP row in movement log + can fix
+    // by either receiving stock at the branch OR ticking "ไม่ตัดสต็อค" on
+    // the course row. Sale context still throws (sales must hold stock).
+    if (context === 'treatment') {
+      const allocated = item.qty - plan.shortfall;
+      const movementId = _genMovementId();
+      const now = new Date().toISOString();
+      const reason = allocated === 0 ? 'no-batch-at-branch' : 'shortfall';
+      const note = allocated === 0
+        ? `ไม่มีสต็อคที่สาขานี้ (${branchId}) — เปิด trackStock แล้วแต่ batch ยังไม่ได้รับเข้า`
+        : `สต็อคไม่พอที่สาขานี้ (มี ${allocated} ต้องการ ${item.qty})`;
+      await setDoc(stockMovementDoc(movementId), {
+        movementId,
+        type: movementType,
+        batchId: null,
+        productId: item.productId,
+        productName: item.productName,
+        qty: -item.qty,
+        before: null,
+        after: null,
+        branchId,
+        sourceDocPath: baseDocPath,
+        linkedSaleId: saleId || null,
+        linkedTreatmentId: treatmentId || null,
+        ...(extraLink || {}),
+        revenueImpact: 0,
+        costBasis: 0,
+        isPremium: item.isPremium,
+        skipped: true,
+        user,
+        note,
+        customerId: customerId || null,
+        createdAt: now,
+      });
+      return { productId: item.productId, skipped: true, reason, movements: [{ movementId }] };
+    }
     throw new Error(
       `Stock insufficient for ${item.productName} (${item.productId}): need ${item.qty}, allocated ${item.qty - plan.shortfall}, shortfall ${plan.shortfall}`
     );

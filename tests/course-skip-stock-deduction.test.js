@@ -637,12 +637,31 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     expect(stockDiffSrc).not.toMatch(/skipStockDeduction/);
   });
 
-  it('K.2 V31 — non-silent-swallow on the auto-init path (treatment context throws if FIFO no-batch)', () => {
-    // Look for the FIFO shortfall throw — proves fail-loud preserved.
+  it('K.2 V31 — sale context still throws on FIFO shortfall (legacy fail-loud preserved)', () => {
+    // Sale context MUST throw on shortfall (admin needs to know stock missing).
+    // Treatment context emits silent-skip movement instead (so save isn't blocked).
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
+  });
+
+  it('K.2-bis 2026-04-28 hotfix — treatment context shortfall emits silent-skip (does NOT throw)', () => {
+    // Hotfix after V15 #5 post-deploy report: "Stock insufficient for
+    // [IV Drip] Aura bright x 1 ครั้ง (1125): need 1, allocated 0, shortfall 1"
+    // Treatment save was blocked. Fix: shortfall in treatment context →
+    // silent-skip movement with reason 'no-batch-at-branch' or 'shortfall'.
+    const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
+    const slice = backendClientSrc.slice(fnStart, fnStart + 10000);
+    expect(slice).toMatch(/if \(context === ['"]treatment['"]\)/);
+    expect(slice).toMatch(/no-batch-at-branch/);
+    expect(slice).toMatch(/ไม่มีสต็อคที่สาขานี้/);
+    // Confirm the throw is in an else-branch (sale context only) — by
+    // checking the treatment-context return appears before the throw.
+    const treatmentCtxIdx = slice.indexOf("if (context === 'treatment')");
+    const throwIdx = slice.indexOf('throw new Error');
+    expect(treatmentCtxIdx).toBeGreaterThan(0);
+    expect(throwIdx).toBeGreaterThan(treatmentCtxIdx);
   });
 
   it('K.3 V14 — no undefined leaves in mapper output (!! coercion at every layer)', () => {
