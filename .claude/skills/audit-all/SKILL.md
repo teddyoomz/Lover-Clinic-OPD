@@ -16,7 +16,7 @@ Run these in order (17 total):
 
 **Tier 1 — backend integrity (money/stock/cascade, 45 invariants)**:
 1. `/audit-money-flow` (M1–M15)
-2. `/audit-stock-flow` (S1–S25) — V34 (2026-04-28) added S16-S20: per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline. Phase 15.5 (2026-04-28) added S21-S25: per-product warning thresholds, anti-hardcoded-threshold, ActorPicker branchIds[] filter (5 panels), withdrawal approval admin endpoint, unit dropdown enrichment
+2. `/audit-stock-flow` (S1–S28) — V34 (2026-04-28) added S16-S20: per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline. Phase 15.5 (2026-04-28) added S21-S25: per-product warning thresholds, anti-hardcoded-threshold, ActorPicker branchIds[] filter (5 panels), withdrawal approval admin endpoint, unit dropdown enrichment. V35 / Phase 15.6 (2026-04-28) added S26-S28: default-branch view passes includeLegacyMain, FK validation via _assertProductExists at every batch creator, ProductSelectField extracted (Rule C1 lock)
 3. `/audit-cascade-logic` (C1–C15)
 
 **Tier 2 — data + system integrity (47 invariants)**:

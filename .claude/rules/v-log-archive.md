@@ -555,3 +555,40 @@
 
 ---
 
+### V35 — 2026-04-28 — Phase 15.6 stock bug sweep (5 user-reported issues post V15 #3)
+- User shipped 5 stock-system bugs in one message after Phase 15.5 ship + V15 #3 deploy.
+- **Bug 1 — Stock balance silent miss on default branch (production-affecting)**:
+  - `StockBalancePanel.jsx:92` called `listStockBatches({ branchId, status: 'active' })` WITHOUT `includeLegacyMain: true`. Phase 15.4 commit `26ee312` added the flag to AdjustCreateForm + TransferCreateForm + WithdrawalCreateForm but missed the BALANCE reader. Default-branch BR-XXX users with legacy 'main' batches saw movement entries but blank balance row.
+  - Fix: mirror MovementLogPanel:107–112 derivation (`!isCentralLoc && (locationId==='main' || branches.some(b => b.isDefault))`) inside StockBalancePanel.load. Pass `includeLegacyMain` to listStockBatches.
+  - Test: `tests/phase15.6a-stock-balance-legacy-main.test.js` SBL.A-F (54 tests).
+- **Bug 2 — Sale delete black-screen ("เด้งจอดำ")**:
+  - `SaleTab.jsx:779-780` final `await deleteBackendSale + loadSales` were UNGUARDED. Test sales (TEST-SALE-DEFAULT-1777123845203 + TEST-SALE-1777123823846) had malformed shape (no customerId, no real treatments) → deleteDoc threw → React error boundary → black screen.
+  - Fix: try/catch wrapping final commit; surface friendly Thai `setError` instead of unhandled throw. V31 anti-pattern lock — error logged + visible.
+  - Test: `tests/phase15.6b-sale-tab-delete-error.test.jsx` STD.A-E (24 tests).
+- **Bug 3 — Orphan products (Acetin 6, Aloe gel 010) in stock balance**:
+  - Batches store DENORMALIZED `productName` (backendClient.js:4110). StockBalancePanel renders `b.productName` directly — no productMap fallback, so batch survives parent product deletion. Zero FK at write.
+  - Fix (prevention): NEW `_assertProductExists(productId, contextLabel)` async function declaration (hoisted) in backendClient.js. Throws `PRODUCT_NOT_FOUND` on missing. Called BEFORE every `setDoc(stockBatchDoc, ...)` in 3 sites: `_buildBatchFromOrderItem` + `updateStockTransferStatus._receiveAtDestination` + `updateStockWithdrawalStatus._receiveAtDestination`.
+  - Fix (cleanup): NEW `/api/admin/cleanup-orphan-stock` endpoint with two-phase action ('list' DRY-RUN → 'delete' with confirmBatchIds). Pure helper `findOrphanBatches(batches, productIdSet)` exported for tests. Audit doc to `be_admin_audit/cleanup-orphan-{TS}`.
+  - Test: `tests/phase15.6d-batch-fk-validation.test.js` FK.A-E (25 tests).
+- **Bug 4 — Test pollution (ADVS-/ADVT- products + TEST-SALE-* sales)**:
+  - Phase 8 adversarial test suites + V20 multi-branch tests left untagged production-looking data. Admin's product picker showed pollution; sales tab listed user-named test sales.
+  - Fix (cleanup): NEW endpoints `/api/admin/cleanup-test-products` (cascade gate refusing delete if be_stock_batches still references) + `/api/admin/cleanup-test-sales` (skips linked-treatments cascade). Defensive refusal on production-looking IDs.
+  - Fix (prevention going forward): V33.12 `tests/helpers/testSale.js` mirroring V33.10 customer + V33.11 stock. `createTestSaleId` + `isTestSaleId` + `getTestSalePrefix` + frozen `TEST_SALE_PREFIXES`. Drift catcher `tests/v33-12-test-sale-prefix.test.js` (24 tests).
+  - Bash runbook documented per V29 directive (no UI buttons).
+- **Bug 5 — ความจุ column UX (NO bug, clarification)**: ความจุ = sum(batch.qty.total). Badge "เกินสต็อก" fires on `totalRemaining > QtyBeforeMaxStock`. User saw partial coincidence and asked. Fix: header tooltip + per-row "(เป้าหมาย: N)" sub-label. Test: `tests/phase15.6-capacity-tooltip.test.js` CT.A-C (12 tests).
+- **Phase D — searchable product dropdown** (Rule C1 trigger): NEW `ProductSelectField.jsx` (mirror StaffSelectField shape) + `productSearchUtils.js` Thai-locale aware. Migrated stock pickers + non-stock backend pickers per user "All backend pickers" directive.
+- **firestore.rules**: NEW `match /be_admin_audit/{auditId} { allow read, write: if false; }` — admin SDK only.
+- **Worst part**: Bug 1 was a Phase-15.4 incomplete-fix regression. The multi-reader sweep (V12 lesson) wasn't applied when adding the `includeLegacyMain` opt-in. Fix went to 3 create forms; nobody audited the BALANCE reader because the symptom only showed when admin actively imported new stock (rare in test envs).
+- **Lessons**:
+  1. **Multi-reader sweep applies to flag-additions, not just shape changes.** When adding an opt-in flag, grep ALL callers + add the flag at every site with the same use-case. Don't assume "only the create forms need it" — readers can be silently affected too.
+  2. **Denormalized fields without FK validation = orphan accumulation guaranteed.** Reader-side resilience (showing stale productName) hides the bug. Always pair denormalized writes with EITHER write-time FK OR periodic cleanup endpoint. We chose both.
+  3. **Test-prefix discipline (V33.10 → 11 → 12) is the only path to recoverable test pollution.** Without prefix, admin can't tell test from production. Build the cleanup endpoint at the same time as the prefix.
+  4. **"NO bug" UX clarifications still warrant a small commit.** Bug 5 was just confusion — tooltip + sub-label removes the question forever for ~12 LOC.
+- **Rule/audit update**:
+  - V35 entry compact in 00-session-start.md § 2 + verbose here.
+  - audit-stock-flow S20 → S28: S26 (UI listStockBatches default-branch view passes includeLegacyMain), S27 (every batch creator path validates productId via _assertProductExists before setDoc), S28 (ProductSelectField extracted + sourced everywhere — Rule C1 lock).
+  - V33.12 sale-prefix discipline shipped.
+  - Rule 02-workflow.md updated with V33.12 section.
+
+---
+

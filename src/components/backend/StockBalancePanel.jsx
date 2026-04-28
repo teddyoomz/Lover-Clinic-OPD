@@ -7,13 +7,22 @@
 // clinic ever scales past that, move to backend aggregation.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse } from 'lucide-react';
+import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info } from 'lucide-react';
 import { listStockBatches, listStockLocations, listProducts } from '../../lib/backendClient.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
+// Phase 15.6 (2026-04-28) — legacy-main fallback for default-branch view.
+// Mirrors MovementLogPanel pattern (which has had this since Phase 15.4 s19).
+// Without this, batches written with branchId='main' (pre-V20 / legacy seed)
+// disappear from the balance panel when admin views default branch BR-XXX.
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, defaultLocationId, lockLocation }) {
+  // Phase 15.6 (2026-04-28) — branches list for default-branch detection
+  // (legacy-main fallback decision). useSelectedBranch is the canonical
+  // source of branch metadata (matches MovementLogPanel:107–112 pattern).
+  const { branches } = useSelectedBranch();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -89,11 +98,24 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await listStockBatches({ branchId: locationId, status: 'active' });
+      // Phase 15.6 (Issue 1, 2026-04-28) — legacy-main fallback for default-branch
+      // view. Pre-V20 / legacy seed batches were written with branchId='main'.
+      // Without this opt-in, default-branch BR-XXX view filters them out → admin
+      // sees movement log entries but empty balance row. Mirrors MovementLogPanel
+      // pattern. Gate: NOT central tier AND (locationId='main' OR isDefault branch).
+      const currentLoc = locations.find(l => l.id === locationId) || { kind: 'branch' };
+      const isCentralLoc = currentLoc.kind === 'central';
+      const includeLegacyMain = !isCentralLoc && (
+        String(locationId) === 'main' ||
+        (Array.isArray(branches) && branches.some(
+          (b) => (b.branchId || b.id) === locationId && b.isDefault === true
+        ))
+      );
+      const list = await listStockBatches({ branchId: locationId, status: 'active', includeLegacyMain });
       setBatches(list);
     } catch (e) { console.error('[StockBalance] load failed:', e); setBatches([]); }
     finally { setLoading(false); }
-  }, [locationId]);
+  }, [locationId, locations, branches]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -257,7 +279,16 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                 <th className="px-3 py-2 text-left font-bold">สินค้า</th>
                 <th className="px-3 py-2 text-center font-bold w-16">Batches</th>
                 <th className="px-3 py-2 text-right font-bold w-24">คงเหลือ</th>
-                <th className="px-3 py-2 text-right font-bold w-24">ความจุ</th>
+                {/* Phase 15.6 / Issue 2 (2026-04-28) — tooltip clarifies that
+                    ความจุ = sum of batch.qty.total across batches per product
+                    (capacity at batch creation, NOT the per-product
+                    "แจ้งเกินสต็อก" threshold from ProductFormModal). Sub-label
+                    on each row shows the threshold side-by-side when set. */}
+                <th className="px-3 py-2 text-right font-bold w-28" data-testid="th-capacity">
+                  <span title="ผลรวมต้นเริ่มต้นของทุก batch (capacity at batch creation, summed across batches per product). ไม่ใช่ค่า 'แจ้งเกินสต็อก' ที่ตั้งในข้อมูลสินค้า — ดู (เป้าหมาย: N) ใต้แต่ละแถว" className="inline-flex items-center gap-1 cursor-help">
+                    ความจุ <Info size={10} aria-hidden className="text-[var(--tx-muted)]" />
+                  </span>
+                </th>
                 <th className="px-3 py-2 text-right font-bold w-28">มูลค่าทุน</th>
                 <th className="px-3 py-2 text-center font-bold w-28">หมดอายุถัดไป</th>
                 <th className="px-3 py-2 text-center font-bold w-28">ACTIONS</th>
@@ -290,7 +321,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                     </td>
                     <td className="px-3 py-2 text-center text-[var(--tx-muted)]">{p.batches.length}</td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">{fmtQty(p.totalRemaining)} {p.unit}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]">{fmtQty(p.totalCapacity)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-[var(--tx-muted)]" data-testid="td-capacity">
+                      {fmtQty(p.totalCapacity)}
+                      {p.alertQtyBeforeMaxStock != null && (
+                        <div className="text-[9px] text-[var(--tx-muted)] opacity-70" data-testid="td-capacity-target">
+                          (เป้าหมาย: {fmtQty(p.alertQtyBeforeMaxStock)})
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono text-orange-400">฿{fmtQty(p.valueCost)}</td>
                     <td className={`px-3 py-2 text-center ${expiryClass}`}>
                       {p.nextExpiry || '-'}

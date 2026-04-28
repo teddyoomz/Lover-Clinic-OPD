@@ -142,6 +142,34 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
   catcher: `tests/v33-11-stock-test-prefix.test.js` asserts the rule +
   helper file are present.
 
+### 🆕 Test sale-doc prefix (V33.12 — Phase 15.6 directive codified)
+- **Every test that writes a real Firestore sale doc** (preview_eval scripts,
+  integration tests via firebase-admin SDK, E2E fixtures touching
+  `be_sales` / `be_vendor_sales`) MUST use a sale ID with prefix
+  `TEST-SALE-` or `E2E-SALE-`. Mock-only tests don't need it.
+- Use the canonical helper:
+  ```js
+  import { createTestSaleId } from 'tests/helpers/testSale.js';
+  const saleId = createTestSaleId();                       // 'TEST-SALE-<ts>'
+  const saleId = createTestSaleId({ prefix: 'E2E' });      // 'E2E-SALE-<ts>'
+  const saleId = createTestSaleId({ suffix: 'DEFAULT' });  // 'TEST-SALE-<ts>-DEFAULT'
+  ```
+- `isTestSaleId(id)` + `getTestSalePrefix(id)` — admin-side cleanup helpers
+  (mirror of V33.10 + V33.11). The cleanup endpoint
+  `/api/admin/cleanup-test-sales` uses this regex to identify candidates.
+- **Why**: Phase 15.6 (2026-04-28) found two leftover test sales in
+  production from V20 multi-branch testing — `TEST-SALE-DEFAULT-1777123845203`
+  and `TEST-SALE-1777123823846`. The original tests didn't enforce a prefix
+  convention so admin couldn't tell test docs from production. V33.12
+  closes that gap. Plus admin clicking delete on a test sale via SaleTab
+  triggered "เด้งจอดำ" (unhandled error in malformed-doc cascade) — Phase
+  15.6 A.2 wraps the delete handler; this prefix discipline prevents
+  accumulation in the first place.
+- **Anti-pattern**: hardcoding sale IDs like `'TEST-SALE-DEFAULT-{ts}'`
+  inline in tests that hit Firestore. Drift catcher:
+  `tests/v33-12-test-sale-prefix.test.js` asserts the rule + helper file
+  are present.
+
 ### CODEBASE_MAP.md
 อัพเดท `F:\LoverClinic-app\CODEBASE_MAP.md` ทุกครั้งที่เพิ่ม/ลบ/rename/restructure ไฟล์ใน `src/` หรือ `api/` — source of truth สำหรับ onboarding + future sessions.
 

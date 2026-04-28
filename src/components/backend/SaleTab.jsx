@@ -776,8 +776,19 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       alert(`คืนสต็อกล้มเหลว: ${e.message}\nยกเลิกการลบใบเสร็จ`);
       return;
     }
-    await deleteBackendSale(saleId);
-    loadSales();
+    // Phase 15.6 / Issue 5 (2026-04-28) — wrap delete + reload in try/catch.
+    // Test sales (TEST-SALE-DEFAULT-*, TEST-SALE-*) sometimes have malformed
+    // shapes (missing customerId, no real treatments). Without this guard,
+    // a deleteDoc throw or a loadSales error in the listener bubbles up to
+    // the React error boundary → black screen. V31 anti-pattern lock: surface
+    // a friendly Thai error in setError instead of swallowing silently.
+    try {
+      await deleteBackendSale(saleId);
+      loadSales();
+    } catch (e) {
+      console.error('[SaleTab] handleDelete final commit failed:', e);
+      setError(`ลบใบขายไม่สำเร็จ — เอกสารอาจมีโครงสร้างผิดปกติ (${e?.message || 'unknown error'})`);
+    }
   };
 
   // ════════════════════ RENDER ════════════════════

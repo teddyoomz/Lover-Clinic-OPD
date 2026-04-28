@@ -1,6 +1,6 @@
 ---
 name: audit-stock-flow
-description: "Audit stock conservation across batches, movements, transfers, and withdrawals in the LoverClinic backend. Grep-checks 25 invariants and reports violations as a punch list. Use after stock-related changes, before releases, or when reconciling physical stock against Firestore. Read-only (no Edit/Write/Bash)."
+description: "Audit stock conservation across batches, movements, transfers, and withdrawals in the LoverClinic backend. Grep-checks 28 invariants and reports violations as a punch list. Use after stock-related changes, before releases, or when reconciling physical stock against Firestore. Read-only (no Edit/Write/Bash)."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob"
@@ -11,7 +11,7 @@ allowed-tools: "Read, Grep, Glob"
 **Purpose**: Detect places where stock quantities can vanish, appear free, or drift from the movement log ledger. FIFO/FEFO correctness, batch integrity, audit-trail completeness. READ-ONLY.
 
 ## Scope
-**25 invariants across 7 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28):
+**28 invariants across 8 subsystems** (V34 added S16–S20 on 2026-04-28; Phase 15.5 added S21–S25 on 2026-04-28; Phase 15.6 / V35 added S26–S28 on 2026-04-28):
 - **Batch integrity**: qty caps, append-only log, status transitions
 - **FIFO/FEFO allocation**: sort ordering monotonic, exactBatchId override, skip-expired/depleted
 - **Movement log**: reversedByMovementId chain intact, user+sourceDocPath always set
@@ -19,6 +19,7 @@ allowed-tools: "Read, Grep, Glob"
 - **Order lifecycle**: cancel-blocked-if-consumed, qty-edit-blocked
 - **V34 conservation + UI** (S16-S20): per-tier sum-check, replay/time-travel, concurrent tx safety, component listener alignment, test-prefix discipline
 - **Phase 15.5 patterns** (S21-S25): per-product warning thresholds, anti-hardcoded-threshold, ActorPicker branchIds[] filter (5 panels), withdrawal approval admin endpoint, unit dropdown enrichment
+- **Phase 15.6 / V35 patterns** (S26-S28): default-branch view passes includeLegacyMain to listStockBatches, every batch creator validates productId via _assertProductExists before setDoc (FK), ProductSelectField extracted + sourced everywhere (Rule C1 lock)
 
 ## How to run
 1. Read [checklist.md](checklist.md) — full invariant catalog S1–S15

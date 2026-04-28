@@ -300,6 +300,14 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // ── Backend: Phase 15.6 (2026-04-28) Admin cleanup audit log ──
+      // Written ONLY by /api/admin/cleanup-* endpoints (firebase-admin SDK
+      // bypasses rules). Lists deleted batch / product / sale IDs + caller
+      // email + timestamp for forensic review. Client SDK locked.
+      match /be_admin_audit/{auditId} {
+        allow read, write: if false;
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

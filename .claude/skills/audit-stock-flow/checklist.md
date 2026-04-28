@@ -201,6 +201,24 @@ Each invariant: **What**, **Why**, **Where**, **How**, **Severity if violated**.
 **Where**: `src/components/backend/ProductFormModal.jsx` `unitDatalistOptions` useMemo + datalist render
 **How**: grep `unitDatalistOptions\s*=\s*useMemo` + `listProducts\(\)\.catch` + `localeCompare\(b,\s*['\"]th['\"]\)`. All must match. Anti-regression: NO `units\.flatMap\(u\s*=>` in datalist render block (old shape removed).
 
+### S26 — Default-branch view passes includeLegacyMain to listStockBatches (V35)
+**What**: Every UI consumer of `listStockBatches` that runs on a default-branch view (locationId='main' OR be_branches.isDefault===true) MUST pass `includeLegacyMain: true`. Pre-V20 batches written with branchId='main' would otherwise be filtered out → admin sees movement entries but blank balance row.
+**Why**: Phase 15.4 commit 26ee312 added this opt-in to AdjustCreateForm + TransferCreateForm + WithdrawalCreateForm but MISSED StockBalancePanel. V35 closes that gap. Multi-reader sweep (V12 lesson) applies to flag-additions: when adding an opt-in flag, audit ALL readers + add the flag everywhere needed. Don't assume "only the create forms need it".
+**Where**: `src/components/backend/StockBalancePanel.jsx` (V35 fix), `StockAdjustPanel.jsx`, `StockTransferPanel.jsx`, `StockWithdrawalPanel.jsx` (all 4 sites currently audited)
+**How**: grep `listStockBatches\([^)]*\)` in `src/components/backend/Stock*.jsx` + assert each call has `includeLegacyMain` key. Pair with logic check: `currentLocation.kind === 'central'` excludes legacy fallback. New UI consumers MUST be added to this list OR use a different (non-batch) reader.
+
+### S27 — FK validation: every batch creator validates productId before setDoc (V35)
+**What**: NEW shared `_assertProductExists(productId, contextLabel)` async function declaration in backendClient.js. Throws `PRODUCT_NOT_FOUND` if productId doesn't resolve to a be_products doc. Called BEFORE `setDoc(stockBatchDoc, ...)` in 3 sites: `_buildBatchFromOrderItem` (purchase order receive — used by createStockOrder + receiveCentralStockOrder), `updateStockTransferStatus._receiveAtDestination`, `updateStockWithdrawalStatus._receiveAtDestination`.
+**Why**: be_stock_batches stores DENORMALIZED `productName`. Without FK validation at write, deleted/typo'd productIds accumulate as orphan batches that StockBalancePanel renders as "ghost products" (e.g. "Acetin 6", "Aloe gel 010" from Phase 8 + ProClinic seed). Reader-side resilience hides the bug. Cleanup endpoint (`/api/admin/cleanup-orphan-stock`) handles existing pollution; this audit prevents new orphans.
+**Where**: `src/lib/backendClient.js` `_assertProductExists` helper + 3 call sites
+**How**: grep `setDoc\(stockBatchDoc\(` in `src/lib/backendClient.js` — every match MUST be preceded (within ~4000 chars look-back) by `await _assertProductExists\(`. Helper itself: grep `^async function _assertProductExists\b` (declaration, not const — must be hoisted). Anti-regression: any future setDoc(stockBatchDoc) without an upstream FK guard is a violation.
+
+### S28 — ProductSelectField extracted + sourced everywhere (Rule C1 lock, V35 Phase D)
+**What**: NEW shared `src/components/backend/ProductSelectField.jsx` typeahead picker (mirror of StaffSelectField shape) + `src/lib/productSearchUtils.js` `filterProductsByQuery` helper. Replaces inline `<select>` product pickers across stock + non-stock backend forms. Tier-scoped filtering via `options` prop (passed pre-filtered by caller).
+**Why**: 253 products in plain `<select>` dropdowns is unusable. Rule C1 Rule of 3 trigger: 4+ stock pickers + 4+ non-stock backend forms = 8+ call sites for the same UX → extract once.
+**Where**: `src/components/backend/ProductSelectField.jsx` (new), `src/lib/productSearchUtils.js` (new), call sites: OrderPanel.jsx (mobile + desktop), CentralStockOrderPanel.jsx, StockAdjustPanel.jsx, CourseFormModal.jsx, PromotionFormModal.jsx, QuotationFormModal.jsx, SaleTab.jsx, +any others discovered via grep.
+**How**: grep `import\s+ProductSelectField` in backend forms — N matches expected. Anti-regression: NO bare `<select>...{products.map(...)}</select>` blocks for product picking in `src/components/backend/**` (except where the selector binds to non-product entities). New backend forms with product pickers MUST use ProductSelectField.
+
 ---
 
 ## Accepted risks

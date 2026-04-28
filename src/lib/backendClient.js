@@ -4037,6 +4037,34 @@ export async function listStockMovements(filters = {}) {
  *   - optInStockConfig: default true — auto-set stockConfig.trackStock=true on the product doc
  * @returns {{ batchId, movementId, resolvedItem }}
  */
+// Phase 15.6 (Issue 3, 2026-04-28) — FK validation for batch creators.
+// User report: "ตามภาพ Acetin 6 คืออะไร Aloe gel 010 คืออะไร ในข้อมูลหน้า
+// tab=products ไม่มีสินค้านี้ด้วยซ้ำ make sure ว่าจะไม่มีสินค้าที่ไม่มี
+// ตัวตนในระบบไปเข้าระบบคลังได้ ทั้งคลังสาขาและคลังกลาง"
+//
+// Throws PRODUCT_NOT_FOUND if the productId doesn't resolve to a be_products
+// doc — prevents orphan accumulation at write time. Used by all 3 batch-
+// creating sites: _buildBatchFromOrderItem (purchase order receive), and
+// the two _receiveAtDestination helpers in createStockTransfer +
+// createStockWithdrawal. Function declaration so it's hoisted to top of
+// module scope (callable from earlier line numbers).
+//
+// V14 lock: helper throws Error objects (no undefined fields, no setDoc).
+async function _assertProductExists(productId, contextLabel) {
+  const id = String(productId || '');
+  if (!id) {
+    throw new Error(`PRODUCT_NOT_FOUND (${contextLabel || 'batch'}): empty productId`);
+  }
+  const product = await getProduct(id);
+  if (!product) {
+    throw new Error(
+      `PRODUCT_NOT_FOUND (${contextLabel || 'batch'}): productId="${id}" not in be_products. ` +
+      `Either the product was deleted, the ProClinic seed is stale, or this is a typo. ` +
+      `Run /api/admin/cleanup-orphan-stock to inspect orphan batches.`
+    );
+  }
+}
+
 async function _buildBatchFromOrderItem({
   item, idx, locationId, locationType, orderId,
   sourceDocPath, linkedField, user, now, note,
@@ -4049,6 +4077,10 @@ async function _buildBatchFromOrderItem({
   if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
     throw new Error(`Item #${idx + 1} invalid qty: ${item.qty}`);
   }
+  // Phase 15.6 (Issue 3) — FK validation: refuse to create a batch for a
+  // product that isn't in be_products. Prevents the orphan pattern that
+  // surfaced as "Acetin 6" / "Aloe gel 010" in the user's screenshot.
+  await _assertProductExists(item.productId, `_buildBatchFromOrderItem item#${idx + 1}`);
   const orderProductId = String(
     item.orderProductId || item.centralOrderProductId || `${orderId}-${idx}`
   );
@@ -5793,6 +5825,11 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
 
   // Helper: create destination batch + emit RECEIVE movement
   async function _receiveAtDestination(item) {
+    // Phase 15.6 (Issue 3, 2026-04-28) — FK validation: refuse to materialize
+    // an orphan batch on the destination tier even if the source batch had
+    // a stale productId. Forces admin to run /api/admin/cleanup-orphan-stock
+    // first if any source batch is orphaned.
+    await _assertProductExists(item.productId, `createStockTransfer:receive item=${item.sourceBatchId}`);
     const newBatchId = _genBatchId();
     await setDoc(stockBatchDoc(newBatchId), {
       batchId: newBatchId,
@@ -6062,6 +6099,10 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
   }
 
   async function _receiveAtDestination(item) {
+    // Phase 15.6 (Issue 3, 2026-04-28) — FK validation. Same rationale as
+    // createStockTransfer:_receiveAtDestination above. Refuses orphan
+    // materialization at the withdrawal destination tier.
+    await _assertProductExists(item.productId, `createStockWithdrawal:receive item=${item.sourceBatchId}`);
     const newBatchId = _genBatchId();
     await setDoc(stockBatchDoc(newBatchId), {
       batchId: newBatchId,

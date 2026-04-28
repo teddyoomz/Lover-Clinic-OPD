@@ -80,6 +80,7 @@ const COLLECTION_MATRIX = {
   // V33.9 — be_customer_link_tokens removed (QR-token flow stripped).
   'be_link_requests':      { scope: 'global', reason: 'LINE link-request approval queue (V32-tris-quater — admin-mediated; client SDK blocked)' },
   'be_link_attempts':      { scope: 'global', reason: 'LINE link-request rate-limit tracker (V32-tris-quater — 5/24h cap; client SDK blocked)' },
+  'be_admin_audit':        { scope: 'global', reason: 'Phase 15.6 / V35 admin cleanup audit log (cleanup-orphan-stock + cleanup-test-products + cleanup-test-sales). Admin SDK only writes; client SDK blocked.' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },
